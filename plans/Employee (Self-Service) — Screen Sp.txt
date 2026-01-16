@@ -1,0 +1,404 @@
+Employee (Self-Service) — Screen Specs (v1)
+1) Login
+
+Purpose
+Allow employee to access their personal portal securely.
+
+Components
+
+Email
+
+Password
+
+Login button
+
+Actions
+
+Submit login
+
+Validations
+
+Email format
+
+Required fields
+
+Rate-limit after repeated failures
+
+Audit logs
+
+Login success / login failure (include IP)
+
+API needs
+
+POST /auth/login
+
+2) Change Password
+
+Purpose
+Employee can change their own password.
+
+Components
+
+Current password
+
+New password
+
+Confirm new password
+
+Actions
+
+Save changes
+
+Validations
+
+New password strength policy
+
+New password ≠ old password
+
+Confirm password match
+
+Audit logs
+
+Password change event
+
+API needs
+
+POST /auth/change-password
+
+3) Employee Home (Dashboard)
+
+Purpose
+Provide employee with a simple overview and navigation.
+
+Components
+
+Welcome message (Emp Full Name)
+
+Summary cards:
+
+Employment Status
+
+Next Payroll Date (optional)
+
+Remaining Leave Balance
+
+Quick links:
+
+My Profile
+
+My Payslips
+
+Request Leave
+
+Actions
+
+Navigate to self-service modules
+
+Validations
+
+RBAC: only Employee
+
+Audit logs
+
+Optional: dashboard viewed
+
+API needs
+
+GET /employee/summary
+
+4) My Profile (View Only)
+
+Purpose
+Allow employee to view their personal and employment data.
+
+Components
+
+Personal information:
+
+Emp Full Name
+
+Nationality
+
+Date Of Birth
+
+Mobile Number
+
+Employment information:
+
+Position Name
+
+department
+
+Joining Date
+
+Contract Expiry Date
+
+Sponsor Code
+
+Documents (read-only):
+
+Passport Number / Passport Expiry
+
+ID / ID Expiry
+
+Health Card / Health Card Expiry
+
+Actions
+
+None (view only)
+
+Validations
+
+Employee can view only their own record
+
+Audit logs
+
+Optional: profile viewed
+
+API needs
+
+GET /employee/profile
+
+5) My Employment Status
+
+Purpose
+Clearly show current employment state.
+
+Components
+
+Employment status (Active / On Leave / Inactive)
+
+Contract status
+
+Allowed Overtime (Yes / No)
+
+Actions
+
+None
+
+Validations
+
+Employee-only access
+
+Audit logs
+
+Optional: status viewed
+
+API needs
+
+GET /employee/status
+
+6) My Payslips
+
+Purpose
+Allow employee to view and download their payslips.
+
+Components
+
+Payslip list table:
+
+Month / Year
+
+Net Salary
+
+Payment Mode
+
+Status
+
+Download button (PDF)
+
+Actions
+
+Download payslip
+
+Validations
+
+Employee can access only their own payslips
+
+Only finalized payroll payslips visible
+
+Audit logs
+
+Payslip viewed
+
+Payslip downloaded
+
+API needs
+
+GET /employee/payslips
+
+GET /employee/payslips/{id}/download
+
+7) Payslip Details (Optional Inline View)
+
+Purpose
+Show detailed breakdown of a payslip.
+
+Components
+
+Salary breakdown:
+
+Basic Salary
+
+Transportation Allowance
+
+Accommodation Allowance
+
+Telephone Allowance
+
+Petrol Allowance
+
+Other Allowance
+
+Deductions (if any)
+
+Total Salary
+
+Net Salary
+
+Actions
+
+Download PDF
+
+Validations
+
+Read-only
+
+Audit logs
+
+Payslip details viewed
+
+API needs
+
+GET /employee/payslips/{id}
+
+8) Leave Request (Submit)
+
+Purpose
+Allow employee to submit a leave request.
+
+Components
+
+Leave type dropdown
+
+Start date
+
+End date
+
+Number of days (auto-calculated)
+
+Reason (optional)
+
+Submit button
+
+Actions
+
+Submit leave request
+
+Validations
+
+Dates valid
+
+End date ≥ start date
+
+Sufficient leave balance (if paid leave)
+
+Audit logs
+
+Leave request submitted
+
+API needs
+
+POST /leave-requests
+
+9) My Leave Requests
+
+Purpose
+Allow employee to track leave requests.
+
+Components
+
+Leave requests table:
+
+Leave Type
+
+Start Date
+
+End Date
+
+Days
+
+Status (Submitted / Approved / Rejected)
+
+HR comment (if rejected)
+
+Actions
+
+View leave request details
+
+Cancel request (if still submitted, optional)
+
+Validations
+
+Employee can see only their own requests
+
+Audit logs
+
+Leave request viewed
+
+Leave request cancelled (if allowed)
+
+API needs
+
+GET /employee/leave-requests
+
+POST /leave-requests/{id}/cancel (optional)
+
+10) My Leave Balance
+
+Purpose
+Show available leave balances.
+
+Components
+
+Leave balance table:
+
+Leave Type
+
+Opening Balance
+
+Used
+
+Remaining
+
+Actions
+
+None
+
+Validations
+
+Employee-only access
+
+Audit logs
+
+Optional: leave balance viewed
+
+API needs
+
+GET /employee/leave-balance
+
+Employee Global UI Rules
+
+Simple, clean UI (no admin/HR actions visible)
+
+All screens are read-only except Leave Request submission
+
+Employee can access only their own data
+
+Header menu:
+
+Change Password
+
+Logout
+
+All sensitive views (profile, payslips) require authentication

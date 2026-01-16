@@ -1,0 +1,456 @@
+System Admin — Screen Specs (v1)
+1) Login
+
+Purpose: Allow Admin to access the system securely.
+
+Components
+
+Email
+
+Password
+
+“Remember me” (optional)
+
+Login button
+
+“Forgot password?” link (optional)
+
+Actions
+
+Submit login
+
+Validations
+
+Email format
+
+Required fields
+
+Rate-limit after repeated failures
+
+Audit logs
+
+Log: login success / login failure (include IP)
+
+API needs
+
+POST /auth/login
+
+2) Change Password
+
+Purpose: Admin can change their password.
+
+Components
+
+Current password
+
+New password
+
+Confirm new password
+
+Actions
+
+Save changes
+
+Validations
+
+New password strength policy
+
+New password ≠ old password
+
+Confirm match
+
+Audit logs
+
+Password change event
+
+API needs
+
+POST /auth/change-password
+
+3) Admin Dashboard (Admin Home)
+
+Purpose: Quick overview + navigation.
+
+Components
+
+Cards:
+
+Total Users
+
+Active Users
+
+Disabled Users
+
+Recent Audit Events (last 10)
+
+Quick actions:
+
+Create User
+
+Invite User
+
+View Audit Logs
+
+Actions
+
+Navigate to modules
+
+Validations
+
+RBAC: only System Admin
+
+Audit logs
+
+Optional: dashboard viewed (not required)
+
+API needs
+
+GET /admin/summary
+
+GET /audit-logs?limit=10
+
+4) User Management (List)
+
+Purpose: Manage all user accounts and access.
+
+Components
+
+Table columns:
+
+Full Name
+
+Email
+
+Role(s)
+
+Status (Active/Disabled)
+
+Last Login
+
+Created Date
+
+Search bar: name/email
+
+Filters: role, status
+
+Buttons:
+
+Create User
+
+Invite User
+
+Disable / Activate
+
+Reset Password
+
+View User Details
+
+Actions
+
+Search / filter users
+
+Disable/activate user
+
+Open user details
+
+Navigate to role assignment
+
+Validations
+
+Prevent disabling your own account (recommended)
+
+Confirm before disable
+
+RBAC enforced
+
+Audit logs
+
+Disable user
+
+Activate user
+
+API needs
+
+GET /users
+
+PATCH /users/{id}/status
+
+5) Create User Account
+
+Purpose: Create a user manually (without invite).
+
+Components
+
+Full Name
+
+Email
+
+Role selection (System Admin / HR Manager / Employee)
+
+Temporary password (optional if “set password on first login”)
+
+Status (Active default)
+
+Actions
+
+Create user
+
+Cancel
+
+Validations
+
+Email unique
+
+Role required
+
+Password policy (if set here)
+
+Audit logs
+
+User created (who created whom)
+
+API needs
+
+POST /users
+
+6) Invite User
+
+Purpose: Invite users to set their password and join.
+
+Components
+
+Email
+
+Role selection
+
+Invite expiry (e.g., 24h/72h/7d)
+
+Send Invite button
+
+Invite list table:
+
+email, role, status (sent/accepted/expired), sent date, expiry date
+
+Actions
+
+Send invite
+
+Resend invite
+
+Revoke invite
+
+Validations
+
+Email not already registered (or warn)
+
+Role required
+
+Expiry required
+
+Audit logs
+
+Invite sent / resent / revoked
+
+Invite accepted (tracked when user finishes signup)
+
+API needs
+
+POST /invites
+
+GET /invites
+
+POST /invites/{id}/resend
+
+DELETE /invites/{id}
+
+7) Roles & Permissions (Assignment)
+
+Purpose: Control access by role (simple v1).
+
+v1 rule: Only assign one of:
+
+System Admin
+
+HR Manager
+
+Employee
+
+Components
+
+User selector (search users)
+
+Current role display
+
+Role dropdown
+
+Save button
+
+Actions
+
+Assign role
+
+Remove/replace role
+
+Validations
+
+Role required
+
+Confirm if user currently has a role
+
+Optional: prevent removing last System Admin
+
+Audit logs
+
+Role changed (old → new)
+
+API needs
+
+GET /users/{id}
+
+PUT /users/{id}/role
+
+8) Reset User Password
+
+Purpose: Admin resets a user password securely.
+
+Options
+
+Option A: Generate temporary password
+
+Option B: Send reset link to email
+
+Components
+
+User selection
+
+Reset method selection
+
+Confirm dialog
+
+Result: temporary password display OR “reset link sent”
+
+Actions
+
+Reset password
+
+Validations
+
+Confirm action
+
+Optional: force password change at next login
+
+Audit logs
+
+Password reset initiated (by admin)
+
+API needs
+
+POST /users/{id}/reset-password
+
+9) Audit Logs (System-wide)
+
+Purpose: Security and compliance tracking.
+
+Components
+
+Filter panel:
+
+Date range
+
+User
+
+Action type (login, user create, role change, import attempt…)
+
+Entity type (User, Employee, Payroll Run…)
+
+Table:
+
+Date/Time
+
+User
+
+Action
+
+Entity + Entity ID
+
+IP Address
+
+Export button (CSV)
+
+Actions
+
+Filter / search
+
+Export
+
+Validations
+
+RBAC: only System Admin
+
+Audit logs
+
+Optional: export action logged
+
+API needs
+
+GET /audit-logs
+
+GET /audit-logs/export
+
+10) System Settings
+
+Purpose: Configure global system behavior (v1 minimal).
+
+v1 Settings recommended
+
+Password policy:
+
+min length
+
+complexity flags
+
+expiry days (optional)
+
+Session settings:
+
+session timeout minutes
+
+max login attempts
+
+Invite settings:
+
+default invite expiry
+
+Components
+
+Settings form (grouped sections)
+
+Save button
+
+Actions
+
+Update settings
+
+Validations
+
+Numeric ranges (min/max)
+
+Confirm before save
+
+Audit logs
+
+Settings updated (with changed keys)
+
+API needs
+
+GET /settings
+
+PUT /settings
+
+System Admin Global UI Rules
+
+Header: user menu (Change Password, Logout)
+
+Role Guard: if not System Admin → redirect to “Unauthorized”
+
+Audit everything: user creation, status changes, role changes, password resets, settings updates, login events

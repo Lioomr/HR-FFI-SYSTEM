@@ -1,0 +1,626 @@
+HR Manager — Screen Specs (v1)
+1) Login
+
+Purpose
+Allow HR Manager to access the system securely.
+
+Components
+
+Email
+
+Password
+
+Login button
+
+Actions
+
+Submit login
+
+Validations
+
+Email format
+
+Required fields
+
+Rate-limit after repeated failures
+
+Audit logs
+
+Login success / login failure (include IP)
+
+API needs
+
+POST /auth/login
+
+2) Change Password
+
+Purpose
+HR Manager can change their own password.
+
+Components
+
+Current password
+
+New password
+
+Confirm new password
+
+Actions
+
+Save changes
+
+Validations
+
+New password strength policy
+
+New password ≠ old password
+
+Confirm password match
+
+Audit logs
+
+Password change event
+
+API needs
+
+POST /auth/change-password
+
+3) HR Dashboard
+
+Purpose
+Provide overview of HR operations and shortcuts.
+
+Components
+
+Cards:
+
+Total Employees
+
+Active Employees
+
+Expiring Documents (Passport / ID / Health Card)
+
+Pending Leave Requests
+
+Quick actions:
+
+Add Employee
+
+Upload Excel
+
+Run Payroll
+
+View Leave Requests
+
+Actions
+
+Navigate to HR modules
+
+Validations
+
+RBAC: only HR Manager
+
+Audit logs
+
+Optional: dashboard viewed
+
+API needs
+
+GET /hr/summary
+
+4) Employee List
+
+Purpose
+View and search all employees.
+
+Components
+
+Table columns:
+
+Emp Full Name
+
+Nationality
+
+Position Name
+
+department
+
+Joining Date
+
+Employment Status
+
+Search bar (name / mobile / ID)
+
+Filters:
+
+department
+
+Position
+
+Status
+
+Buttons:
+
+Create Employee
+
+Import from Excel
+
+Actions
+
+Search / filter employees
+
+Open employee profile
+
+Validations
+
+RBAC enforced
+
+Audit logs
+
+Optional: employee list viewed
+
+API needs
+
+GET /employees
+
+5) Employee Profile (View)
+
+Purpose
+View full employee information.
+
+Components
+
+Personal information section
+
+Employment information section
+
+Salary & allowance summary
+
+Documents & expiry dates
+
+Contract dates
+
+Actions
+
+Edit employee
+
+View documents
+
+Validations
+
+HR Manager access only
+
+Audit logs
+
+Employee profile viewed
+
+API needs
+
+GET /employees/{id}
+
+6) Employee Profile (Create / Edit)
+
+Purpose
+Create or update employee data.
+
+Components
+
+Fields (exact labels):
+
+Emp Full Name
+
+Employee number (this is for phone number)
+
+Nationality
+
+Position Name
+
+Passport Number / Passport Expiry
+
+ID / ID Expiry
+
+Date Of Birth
+
+JOB OFFER
+
+Joining Date
+
+Contract date
+
+Contract Expiry Date
+
+Task Group Name
+
+Health Card / Health Card Expiry
+
+Mobile Number
+
+Sponsor Code
+
+department
+
+Allowed Overtime
+
+Salary fields:
+
+Basic Salary
+
+Transportation Allowance
+
+Accommodation Allowance
+
+Telephone Allowance
+
+Petrol Allowance
+
+Other Allowance
+
+Total Salary
+
+Actions
+
+Save employee
+
+Cancel
+
+Validations
+
+Required fields
+
+Date fields valid
+
+Numeric salary fields
+
+Total Salary consistency (optional warning)
+
+Audit logs
+
+Employee created
+
+Employee updated
+
+API needs
+
+POST /employees
+
+PUT /employees/{id}
+
+7) Departments Management
+
+Purpose
+Manage departments.
+
+Components
+
+Department list
+
+Create / Edit department
+
+Actions
+
+Add department
+
+Edit department
+
+Validations
+
+Unique department name
+
+Audit logs
+
+Department created / updated
+
+API needs
+
+GET /departments
+
+POST /departments
+
+8) Positions Management
+
+Purpose
+Manage job positions.
+
+Components
+
+Position list
+
+Create / Edit position
+
+Actions
+
+Add position
+
+Edit position
+
+Validations
+
+Unique position name
+
+Audit logs
+
+Position created / updated
+
+API needs
+
+GET /positions
+
+POST /positions
+
+9) Task Group Management
+
+Purpose
+Manage task groups.
+
+Components
+
+Task group list
+
+Create / Edit task group
+
+Actions
+
+Add task group
+
+Edit task group
+
+Validations
+
+Unique task group name
+
+Audit logs
+
+Task group created / updated
+
+API needs
+
+GET /task-groups
+
+POST /task-groups
+
+10) Sponsors Management
+
+Purpose
+Manage sponsor codes.
+
+Components
+
+Sponsor list
+
+Create / Edit sponsor
+
+Actions
+
+Add sponsor
+
+Edit sponsor
+
+Validations
+
+Unique Sponsor Code
+
+Audit logs
+
+Sponsor created / updated
+
+API needs
+
+GET /sponsors
+
+POST /sponsors
+
+11) Employee Import (Excel Upload)
+
+Purpose
+Bulk-create employees via Excel file.
+
+Components
+
+File upload field (.xlsx)
+
+Upload button
+
+Validation summary
+
+Download error report (if failed)
+
+Actions
+
+Upload file
+
+Validate
+
+Import (only if valid)
+
+Validations
+
+Exact column names
+
+Required fields
+
+Date formats
+
+Salary consistency
+
+All-or-nothing rule
+
+Audit logs
+
+Import attempted
+
+Import succeeded / failed
+
+API needs
+
+POST /employees/import/excel
+
+12) Import Result
+
+Purpose
+Show import outcome.
+
+Components
+
+Success message OR error table
+
+Download error file
+
+Back button
+
+Actions
+
+Download error report
+
+Re-upload file
+
+Audit logs
+
+Import result viewed
+
+API needs
+
+handled by upload endpoint response
+
+13) Payroll Dashboard
+
+Purpose
+Manage monthly payroll.
+
+Components
+
+Payroll runs table:
+
+Month / Year
+
+Status
+
+Total amount
+
+Buttons:
+
+Create Payroll Run
+
+Actions
+
+Open payroll run
+
+Create new run
+
+Validations
+
+Only one run per month
+
+Audit logs
+
+Payroll dashboard viewed
+
+API needs
+
+GET /payroll-runs
+
+14) Payroll Run Review
+
+Purpose
+Review calculated payroll before finalization.
+
+Components
+
+Employee salary table
+
+Totals summary
+
+Finalize button
+
+Actions
+
+Review
+
+Finalize payroll
+
+Validations
+
+Cannot edit finalized payroll
+
+Audit logs
+
+Payroll reviewed
+
+Payroll finalized
+
+API needs
+
+GET /payroll-runs/{id}
+
+POST /payroll-runs/{id}/finalize
+
+15) Leave Requests (Inbox)
+
+Purpose
+Approve or reject leave requests.
+
+Components
+
+Leave requests table
+
+Filters: status, date, employee
+
+Actions
+
+Open leave request
+
+Validations
+
+HR Manager access only
+
+Audit logs
+
+Leave request viewed
+
+API needs
+
+GET /leave-requests
+
+16) Leave Request Details
+
+Purpose
+Decide on leave requests.
+
+Components
+
+Employee info
+
+Leave dates & type
+
+Approve / Reject buttons
+
+Comment field
+
+Actions
+
+Approve
+
+Reject
+
+Validations
+
+Decision required
+
+Audit logs
+
+Leave approved / rejected
+
+API needs
+
+POST /leave-requests/{id}/approve
+
+POST /leave-requests/{id}/reject
+
+HR Manager Global UI Rules
+
+Header: user menu (Change Password, Logout)
+
+RBAC enforced on all screens
+
+Audit all create/update/approve actions
+
+Use exact field labels matching Excel & database
