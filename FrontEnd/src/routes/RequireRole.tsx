@@ -2,9 +2,10 @@ import { Navigate, Outlet } from "react-router-dom";
 import { useAuthStore, type Role } from "../auth/authStore";
 
 export default function RequireRole({ roles }: { roles: Role[] }) {
-  const role = useAuthStore((s) => s.user?.role);
+  const user = useAuthStore((s) => s.user);
 
-  if (!role || !roles.includes(role)) {
+  // Strict check: Must have user object AND role must be in allowed list
+  if (!user || !user.role || !roles.includes(user.role)) {
     return <Navigate to="/unauthorized" replace />;
   }
 

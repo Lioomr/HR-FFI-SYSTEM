@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { clearToken, getToken, setToken } from "../services/api/tokenStorage";
+import { clearToken, getToken, setToken, getStoredUser, setStoredUser } from "../services/api/tokenStorage";
 
 export type Role = "SystemAdmin" | "HRManager" | "Employee";
 
@@ -25,6 +25,8 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   login: (user, token) => {
     if (token) setToken(token);
+    // Persist user with new helper
+    setStoredUser(user);
     set({ isAuthenticated: true, user });
   },
 
@@ -35,10 +37,26 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   hydrateFromStorage: () => {
     const token = getToken();
-    if (!token) return;
-    // If you have /auth/me, we’ll call it to load user.
-    // For now: just mark unauthenticated until real /me exists.
-    // Keep it strict:
-    set({ isAuthenticated: false, user: null });
+    const storedUser = getStoredUser();
+
+    if (token && storedUser) {
+      // Best case: restore everything
+      set({
+        isAuthenticated: true,
+        user: {
+          id: storedUser.id,
+          email: storedUser.email,
+          role: storedUser.role as Role,
+        },
+      });
+    } else if (token) {
+      // Legacy/Fallback: Token exists but no user data.
+      // We mark authenticated so RequireAuth passes,
+      // but user is null so RequireRole will block (safety).
+      set({ isAuthenticated: true, user: null });
+    } else {
+      // No token = definitely logged out
+      set({ isAuthenticated: false, user: null });
+    }
   },
 }));

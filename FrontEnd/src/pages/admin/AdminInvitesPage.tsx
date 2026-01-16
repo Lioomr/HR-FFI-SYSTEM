@@ -157,7 +157,6 @@ export default function AdminInvitesPage() {
       const res = await createInvite({
         email: values.email,
         role: values.role,
-        expires_in_hours: 168,
       });
 
       if (isApiError(res)) {

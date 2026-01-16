@@ -11,7 +11,7 @@ export type InvitesListParams = {
 export type CreateInviteRequest = {
   email: string;
   role: Role;
-  expires_in_hours: number;
+  expires_in_hours?: number;
 };
 
 export async function listInvites(params: InvitesListParams = {}) {
