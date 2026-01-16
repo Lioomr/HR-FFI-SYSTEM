@@ -1,0 +1,309 @@
+0) Global API Rules (v1)
+
+Base
+
+All endpoints are JSON except upload/download.
+
+Auth required on all except login.
+
+Auth
+
+Authorization: Bearer <token> (or session cookie, your choice later)
+
+Standard Responses
+
+Success: { "status": "success", "data": ... }
+
+Error: { "status": "error", "message": "...", "errors": [...] }
+
+Pagination (for list screens)
+
+?page=1&page_size=25
+
+Audit
+
+Server writes audit logs for sensitive actions automatically.
+
+1) Authentication APIs (All Roles)
+Login Screen
+
+POST /auth/login
+
+body: { "email": "", "password": "" }
+
+returns: token/session + user role
+
+Change Password Screen
+
+POST /auth/change-password
+
+body: { "current_password": "", "new_password": "" }
+
+Logout (Header Action)
+
+POST /auth/logout
+
+2) System Admin APIs (Per Screen)
+Admin Dashboard
+
+GET /admin/summary
+
+returns: users counts + invite counts + recent audit preview
+
+GET /audit-logs?limit=10
+
+User Management (List)
+
+GET /users?search=&role=&status=&page=&page_size=
+
+PATCH /users/{user_id}/status
+
+body: { "is_active": true|false }
+
+GET /users/{user_id} (for “View User Details” if you include it)
+
+Create User Account
+
+POST /users
+
+body: { "full_name":"", "email":"", "role":"SystemAdmin|HRManager|Employee", "is_active": true }
+
+Invite User
+
+POST /invites
+
+body: { "email":"", "role":"...", "expires_in_hours": 72 }
+
+GET /invites?status=&page=&page_size=
+
+POST /invites/{invite_id}/resend
+
+DELETE /invites/{invite_id} (revoke)
+
+Roles & Permissions
+
+PUT /users/{user_id}/role
+
+body: { "role":"SystemAdmin|HRManager|Employee" }
+
+Reset User Password
+
+POST /users/{user_id}/reset-password
+
+body example A: { "mode":"temporary_password" }
+
+body example B: { "mode":"reset_link" }
+
+Audit Logs
+
+GET /audit-logs?user_id=&action=&entity=&date_from=&date_to=&page=&page_size=
+
+GET /audit-logs/export?user_id=&action=&entity=&date_from=&date_to=
+
+returns: file download (CSV)
+
+System Settings
+
+GET /settings
+
+PUT /settings
+
+body: { "password_policy": {...}, "session": {...}, "invites": {...} }
+
+3) HR Manager APIs (Per Screen)
+HR Dashboard
+
+GET /hr/summary
+
+returns: employee counts, expiring docs counts, pending leave, payroll status
+
+Employee List
+
+GET /employees?search=&department=&position=&status=&page=&page_size=
+
+Employee Profile (View)
+
+GET /employees/{employee_id}
+
+Employee Profile (Create/Edit)
+
+POST /employees
+
+PUT /employees/{employee_id}
+
+✅ Important (matches your DB/excel labels): Employee payload keys are the exact names, e.g.:
+
+{
+  "Emp Full Name": "Ahmed Hassan",
+  "Nationality": "Egyptian",
+  "Position Name": "Engineer",
+  "Joining Date": "2024-06-01",
+  "Basic Salary": 3500,
+  "Payment Mode": "Bank Transfer"
+}
+
+Departments Management
+
+GET /departments
+
+POST /departments body: { "department": "Construction" }
+
+PUT /departments/{id} body: { "department": "New Name" }
+
+DELETE /departments/{id} (optional v1)
+
+Positions Management
+
+GET /positions
+
+POST /positions body: { "Position Name": "Accountant" }
+
+PUT /positions/{id} body: { "Position Name": "..." }
+
+Task Group Management
+
+GET /task-groups
+
+POST /task-groups body: { "Task Group Name": "..." }
+
+PUT /task-groups/{id} body: { "Task Group Name": "..." }
+
+Sponsors Management
+
+GET /sponsors
+
+POST /sponsors body: { "Sponsor Code": "SP-001" }
+
+PUT /sponsors/{id} body: { "Sponsor Code": "..." }
+
+Contracts Management
+
+GET /contracts?employee_id=&page=&page_size=
+
+POST /contracts
+
+PUT /contracts/{contract_id}
+
+(Contracts can also be embedded in employee endpoints later.)
+
+Document Expiry Dashboard
+
+GET /employees/expiries?days=30
+
+returns: employees with Passport/ID/Health Card expiring within N days
+
+Excel Import (All-or-Nothing)
+Employee Import (Upload)
+
+POST /employees/import/excel
+
+multipart form: file=@employees.xlsx
+
+returns:
+
+success: { "status":"success", "inserted_rows": 52 }
+
+failure: { "status":"failed", "inserted_rows": 0, "errors_file_url": "..." }
+
+Import History
+
+GET /imports/employees?page=&page_size=
+
+shows prior uploads, status, who uploaded, timestamps
+
+Download Import Error File (if failed)
+
+GET /imports/employees/{import_id}/errors-file
+
+returns: CSV/XLSX download
+
+4) Payroll APIs (HR)
+Payroll Dashboard
+
+GET /payroll-runs?year=&page=&page_size=
+
+Create Payroll Run
+
+POST /payroll-runs
+
+body: { "year": 2026, "month": 1 }
+
+Payroll Run Review
+
+GET /payroll-runs/{run_id}
+
+GET /payroll-runs/{run_id}/items?page=&page_size=
+
+Finalize Payroll (Lock)
+
+POST /payroll-runs/{run_id}/finalize
+
+Payslip Generation
+
+POST /payroll-runs/{run_id}/generate-payslips
+
+Payroll Reports / Exports
+
+GET /payroll-runs/{run_id}/export?format=csv|pdf
+
+5) Leave APIs (HR + Employee)
+Leave Types & Policies (HR)
+
+GET /leave-types
+
+POST /leave-types
+
+PUT /leave-types/{id}
+
+Leave Requests Inbox (HR)
+
+GET /leave-requests?status=submitted&employee_id=&date_from=&date_to=&page=&page_size=
+
+Leave Request Details (HR)
+
+GET /leave-requests/{id}
+
+POST /leave-requests/{id}/approve body: { "comment": "" }
+
+POST /leave-requests/{id}/reject body: { "comment": "" }
+
+Leave Balances (HR)
+
+GET /leave-balances?employee_id=&year=
+
+6) Employee Self-Service APIs (Per Screen)
+Employee Home (Dashboard)
+
+GET /employee/summary
+
+My Profile (View)
+
+GET /employee/profile
+
+My Employment Status
+
+GET /employee/status
+
+My Payslips
+
+GET /employee/payslips?page=&page_size=
+
+GET /employee/payslips/{payslip_id}
+
+GET /employee/payslips/{payslip_id}/download (PDF)
+
+Leave Request (Submit)
+
+POST /leave-requests
+
+body: { "leave_type_id": 1, "start_date": "2026-01-10", "end_date":"2026-01-12", "reason": "" }
+
+My Leave Requests
+
+GET /employee/leave-requests?page=&page_size=
+
+GET /leave-requests/{id} (restricted to owner)
+
+My Leave Balance
+
+GET /employee/leave-balance?year=

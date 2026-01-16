@@ -1,0 +1,68 @@
+UI/UX To-Do Checklist (v1)
+1) UI Library
+
+ Pick UI library: Ant Design
+
+2) Base Layout
+
+ Create base layout: SideMenu (role-based)
+
+Admin menu items
+
+HR menu items
+
+Employee menu items
+
+Active route highlight
+
+Collapsible sidebar (optional)
+
+3) Theme / Colors
+
+ Define color variables
+
+Primary Orange: #FF7F3E
+
+Background/White: #FFF6E9
+
+(Recommended to add neutrals for text/borders)
+
+Text: #1F1F1F
+
+Muted text: #6B6B6B
+
+Border: #E5E5E5
+
+4) Shared Components (Default AntD)
+
+ Define button components (Default)
+
+Primary / Default / Danger usage rules
+
+ Define form components (Default)
+
+label placement rules
+
+required field indicator *
+
+ Define table component (Default)
+
+pagination defaults
+
+row actions pattern
+
+ Define modal component (Default)
+
+confirm/cancel pattern
+
+danger modal rule for destructive actions
+
+5) States (Default)
+
+ Define empty/loading/error states (Default)
+
+Empty: “No data available”
+
+Loading: spinner/skeleton
+
+Error: safe message + retry button

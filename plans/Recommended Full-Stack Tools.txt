@@ -1,0 +1,85 @@
+Recommended Full-Stack Tools (Production-ready)
+Backend (API + Admin)
+
+Python + Django
+
+Django REST Framework (DRF) for APIs
+
+drf-spectacular (OpenAPI/Swagger docs)
+
+django-allauth (optional) for auth flows (invites/reset email flows can be custom too)
+
+RBAC approach:
+
+Simple v1: Django Groups = roles (SystemAdmin/HRManager/Employee)
+
+Finer control later: django-guardian (object-level permissions) or custom permission classes
+
+Database + Caching
+
+PostgreSQL (best default for HR/payroll systems)
+
+Redis (rate limiting, caching, sessions, background jobs support)
+
+Background Jobs (Payslips later, imports, emails)
+
+Celery + Redis (async tasks)
+
+Celery Beat (scheduled jobs: expiry reminders, monthly payroll checks)
+
+Frontend
+
+Pick one of these two paths:
+
+React + TypeScript (best for role-based dashboards)
+
+UI: MUI or Ant Design (fast enterprise UI)
+
+Forms: react-hook-form + zod/yup
+
+Or simpler first: Django templates (fast MVP, less JS).
+(If you expect many dashboards/tables, React will age better.)
+
+File Storage
+
+Dev: local storage
+
+Prod: S3-compatible storage (AWS S3 / MinIO) for:
+
+uploaded Excel files
+
+error reports
+
+payslip PDFs (later)
+
+Web Server + Deployment
+
+Docker (dev/prod parity)
+
+Gunicorn (Django app server)
+
+Nginx (reverse proxy, TLS termination, upload limits)
+
+CI/CD: GitHub Actions
+
+Secrets: environment variables or secret manager (later)
+
+Security/Quality Tooling
+
+pip-audit (dependency vulnerabilities)
+
+Bandit (Python security linter)
+
+Ruff (lint) + Black (format)
+
+pytest (+ pytest-django) for tests
+
+django-axes (optional but great) for brute-force protection
+
+django-ratelimit or DRF throttling for rate limits
+
+Observability:
+
+Sentry (errors)
+
+Prometheus + Grafana (metrics) (optional early)

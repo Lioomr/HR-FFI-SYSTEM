@@ -1,0 +1,246 @@
+1) Threat Model (What we must defend against)
+
+Credential attacks: brute force, password spraying, credential stuffing
+
+Session/token attacks: stolen tokens, replay, CSRF (if cookies), fixation
+
+Privilege escalation: employee accessing HR/admin endpoints
+
+Injection: SQL injection, command injection
+
+File upload attacks: malicious Excel, zip bombs, oversized files
+
+Data leakage: ID/passport/salary exposed via APIs or logs
+
+XSS & CSRF: malicious scripts or cross-site requests
+
+DoS: repeated heavy endpoints (import/payroll) + large uploads
+
+Supply chain / dependency risk: unsafe packages
+
+2) Authentication & Session Security (Must-have)
+
+Passwords
+
+Store hashed passwords only (Argon2/bcrypt)
+
+Enforce policy:
+
+min length (12+ recommended)
+
+block common passwords
+
+Add account lockout or progressive delay after failures
+
+MFA (recommended)
+
+Add optional MFA for System Admin + HR Manager as soon as possible
+
+Sessions/Tokens
+Choose one approach and enforce it strictly:
+
+If JWT: short-lived access token + refresh token rotation + blacklist on logout
+
+If cookies: HttpOnly + Secure + SameSite + CSRF tokens
+
+Login protections
+
+Rate limit /auth/login by:
+
+IP
+
+username/email
+
+Detect suspicious patterns and alert
+
+3) Authorization (RBAC) – Your #1 Safety Control
+
+Enforce RBAC server-side on every endpoint
+
+Never rely on frontend checks
+
+Use explicit permissions like:
+
+admin.users.manage
+
+hr.employees.write
+
+employee.self.read
+
+Golden rule
+
+Employee endpoints must always scope by current user:
+
+never accept employee_id to fetch “my data”
+
+use /employee/profile not /employees/{id} for Employee role
+
+4) SQL Injection & ORM Safety
+
+Always use ORM parameter binding (no string SQL concatenation)
+
+If raw SQL is ever needed:
+
+use parameterized queries only
+
+Apply least-privilege DB user:
+
+app user should not have superuser rights
+
+5) File Upload Security (Excel Import)
+
+This is a high-risk feature. v1 controls:
+
+Accept only
+
+.xlsx (reject .xls, .csv if you want strict)
+
+Validate MIME type + file signature (not extension only)
+
+Limit
+
+Max file size (example: 5–10 MB)
+
+Max rows (example: 5,000)
+
+Max columns (exact expected)
+
+Timeouts on parsing
+
+Scan + sanitize
+
+Do not execute macros (xlsx normally doesn’t, but still validate)
+
+Store uploads in private storage, never public
+
+Generate a new filename (don’t trust user filename)
+
+All-or-nothing import
+
+Validate everything first
+
+Only then insert inside a DB transaction (rollback on any error)
+
+Audit
+
+Log: who uploaded, when, file hash, result (success/failure)
+
+6) API Hardening
+
+Rate limiting
+
+Login endpoints: strict
+
+Import/payroll endpoints: strict and role-limited
+
+Read endpoints: moderate
+
+Input validation
+
+Validate all request bodies with schemas
+
+Reject unexpected fields (prevents mass-assignment attacks)
+
+Error handling
+
+Never expose stack traces to client
+
+Return generic auth errors (“invalid credentials”)
+
+For validation, return safe row-level errors
+
+Headers
+
+Set security headers:
+
+HSTS
+
+X-Content-Type-Options
+
+CSP (if applicable)
+
+X-Frame-Options / frame-ancestors
+
+7) CSRF/XSS Protection
+
+If using cookie-based auth: CSRF tokens required
+
+Sanitize any user-entered text shown in UI (e.g., leave reason/comments)
+
+Use output encoding in templates/UI
+
+8) Data Protection (HR/Payroll Sensitive)
+
+Encryption in transit
+
+HTTPS everywhere (TLS)
+
+Encryption at rest (recommended)
+
+Encrypt backups
+
+Consider encrypting very sensitive fields (passport/id numbers) at DB/app level
+
+Logging rules
+
+Never log:
+
+passwords
+
+tokens
+
+full passport/ID numbers
+
+salary details
+
+Mask sensitive fields in logs (e.g., ****5678)
+
+9) Deployment Security Basics (v1)
+
+Separate environments: Dev / Staging / Prod
+
+Secrets in environment variables / secret manager (never in repo)
+
+Rotate secrets regularly
+
+Use WAF / reverse proxy rules (basic request filtering)
+
+Daily backups + restore test schedule
+
+Monitoring:
+
+auth failures spike
+
+import failures spike
+
+unusual payroll actions
+
+10) Security Acceptance Checklist (v1 “go live” gate)
+
+Before production:
+
+✅ RBAC tests: Employee cannot access HR/Admin APIs
+
+✅ Rate limiting works on login + import + payroll
+
+✅ Upload limits enforced
+
+✅ Audit logs for all privileged actions
+
+✅ No sensitive fields in logs
+
+✅ HTTPS only + secure headers
+
+✅ Backups enabled + restore test done
+
+The API mapping decision you made (snake_case JSON ↔ spaced DB columns)
+
+We’ll implement a mapping layer:
+
+Example:
+
+JSON: emp_full_name
+
+DB: "Emp Full Name"
+
+This prevents developer mistakes and keeps DB consistent with HR Excel.
