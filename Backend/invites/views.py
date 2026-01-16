@@ -84,7 +84,10 @@ class InvitesListCreateView(APIView):
 
         email = s.validated_data["email"]
         role = s.validated_data["role"]
-        expires_in_hours = s.validated_data["expires_in_hours"]
+        expires_in_hours = s.validated_data.get("expires_in_hours")
+        if not expires_in_hours:
+            settings_obj = SystemSettings.get_solo()
+            expires_in_hours = settings_obj.default_invite_expiry_hours
 
         # Prevent inviting an already registered user (Phase 1-friendly)
         if User.objects.filter(email__iexact=email).exists():

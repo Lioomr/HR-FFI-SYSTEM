@@ -11,7 +11,7 @@ ALLOWED_ROLES = {"SystemAdmin", "HRManager", "Employee"}
 class InviteCreateSerializer(serializers.Serializer):
     email = serializers.EmailField()
     role = serializers.CharField()
-    expires_in_hours = serializers.IntegerField(min_value=1)
+    expires_in_hours = serializers.IntegerField(min_value=1, required=False)
 
     def validate_role(self, value: str) -> str:
         if value not in ALLOWED_ROLES:

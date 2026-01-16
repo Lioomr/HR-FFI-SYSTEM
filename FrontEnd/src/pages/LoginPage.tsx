@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Alert, Button, Card, Checkbox, Form, Input, Space, Typography } from "antd";
 import { LockOutlined, MailOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
@@ -18,34 +18,48 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
 
   const login = useAuthStore((s) => s.login);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
 
-  async function onFinish(values: LoginFormValues) {
-  setError(null);
-  setSubmitting(true);
-
-  try {
-    // Try real backend login first:
-    const res = await loginApi({ email: values.email, password: values.password });
-
-    if (isApiError(res)) {
-      setError(res.message || "Login failed.");
-      return;
+  // If already logged in, redirect to dashboard
+  useEffect(() => {
+    if (isAuthenticated && user?.role) {
+      if (user.role === "SystemAdmin") navigate("/admin/dashboard", { replace: true });
+      else if (user.role === "HRManager") navigate("/hr/dashboard", { replace: true });
+      else navigate("/employee/home", { replace: true });
     }
+  }, [isAuthenticated, user, navigate]);
 
-    login(res.data.user, res.data.token);
+  async function onFinish(values: LoginFormValues) {
+    setError(null);
+    setSubmitting(true);
 
-    const role = res.data.user.role;
-    if (role === "SystemAdmin") navigate("/admin/dashboard", { replace: true });
-    else if (role === "HRManager") navigate("/hr/dashboard", { replace: true });
-    else navigate("/employee/home", { replace: true });
-  } catch (e: any) {
-    // If backend not running yet, show a clear message:
-    setError("Backend not connected (API login failed). Start the backend or set VITE_API_BASE_URL.");
-  } finally {
-    setSubmitting(false);
+    try {
+      // Try real backend login first:
+      const res = await loginApi({ email: values.email, password: values.password });
+
+      if (isApiError(res)) {
+        setError(res.message || "Login failed.");
+        return;
+      }
+
+      login(res.data.user, res.data.token);
+
+      // Navigation handled by useEffect or explicit here?
+      // Explicit here is safer for "just logged in" event which might be faster than effect
+      const role = res.data.user.role;
+      if (role === "SystemAdmin") navigate("/admin/dashboard", { replace: true });
+      else if (role === "HRManager") navigate("/hr/dashboard", { replace: true });
+      else navigate("/employee/home", { replace: true });
+
+    } catch (e: any) {
+      // If backend not running yet, show a clear message:
+      setError("Backend not connected (API login failed). Start the backend or set VITE_API_BASE_URL.");
+    } finally {
+      setSubmitting(false);
+    }
   }
-}
 
   return (
     <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 16 }}>
