@@ -7,6 +7,7 @@ import Unauthorized403Page from "../Unauthorized403Page";
 import { getAdminSummary } from "../../services/api/adminApi";
 import { listAuditLogs } from "../../services/api/auditApi";
 import { isApiError, type AdminSummary } from "../../services/api/apiTypes";
+import { isForbidden } from "../../services/api/httpErrors";
 
 type AuditPreview = {
   id: string | number;
@@ -69,8 +70,8 @@ export default function AdminDashboardPage() {
       );
       setMode("ok");
     } catch (err: any) {
-      const status = err?.response?.status;
-      if (status === 403) {
+      // Use centralized error helper instead of hardcoded status check
+      if (isForbidden(err)) {
         setUnauthorized(true);
         return;
       }

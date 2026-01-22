@@ -1,10 +1,10 @@
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { routes } from "./routes/routes";
+
+const router = createBrowserRouter(routes);
+
 function App() {
-  return (
-    <div style={{ padding: 24 }}>
-      <h1>FFI HR System</h1>
-      <p>Frontend initialized successfully.</p>
-    </div>
-  );
+  return <RouterProvider router={router} />;
 }
 
 export default App;

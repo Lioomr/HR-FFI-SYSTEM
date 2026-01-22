@@ -11,7 +11,12 @@ import AdminUsersListPage from "../pages/admin/AdminUsersListPage";
 import AdminUserCreatePage from "../pages/admin/AdminUserCreatePage";
 import AdminInvitesPage from "../pages/admin/AdminInvitesPage";
 import AdminAuditLogsPage from "../pages/admin/AdminAuditLogsPage";
+
 import AdminSettingsPage from "../pages/admin/AdminSettingsPage";
+import EmployeeAttendancePage from "../pages/employee/AttendancePage";
+import EmployeeLeavesPage from "../pages/employee/EmployeeLeavesPage";
+import HrAttendancePage from "../pages/hr/AttendancePage";
+import HrLeaveBalancesPage from "../pages/hr/HrLeaveBalancesPage";
 import RouteErrorBoundary from "./RouteErrorBoundary";
 
 
@@ -54,7 +59,7 @@ export const routes = [
     children: [
       {
         element: <BaseLayout />,
-         errorElement: <RouteErrorBoundary />,
+        errorElement: <RouteErrorBoundary />,
         children: [
           // System Admin (SystemAdmin)
           {
@@ -71,21 +76,39 @@ export const routes = [
             ],
           },
 
-          // HR (placeholders)
+          // HR Manager routes
           {
-            element: <RequireRole roles={["HRManager"]} />,
+            element: <RequireRole roles={["HRManager", "SystemAdmin"]} />,
             children: [
-              { path: "hr", element: <Navigate to="/hr/dashboard" replace /> },
+              { path: "hr", element: <Navigate to="/hr/employees" replace /> },
               { path: "hr/dashboard", element: <Placeholder title="HR Dashboard" /> },
+
+              // Employee Management
+              { path: "hr/employees", element: <Placeholder title="Employees" /> },
+              { path: "hr/employees/create", element: <Placeholder title="Create Employee" /> },
+              { path: "hr/employees/:id", element: <Placeholder title="View Employee" /> },
+              { path: "hr/employees/:id/edit", element: <Placeholder title="Edit Employee" /> },
+
+              // Reference Data
+              { path: "hr/departments", element: <Placeholder title="Departments" /> },
+              { path: "hr/positions", element: <Placeholder title="Positions" /> },
+              { path: "hr/task-groups", element: <Placeholder title="Task Groups" /> },
+              { path: "hr/sponsors", element: <Placeholder title="Sponsors" /> },
+
+              // Existing pages
+              { path: "hr/attendance", element: <HrAttendancePage /> },
+              { path: "hr/leave-balances", element: <HrLeaveBalancesPage /> },
             ],
           },
 
           // Employee (placeholders)
           {
-            element: <RequireRole roles={["Employee"]} />,
+            element: <RequireRole roles={["Employee", "SystemAdmin", "HRManager"]} />,
             children: [
-              { path: "employee", element: <Navigate to="/employee/home" replace /> },
+              { path: "employee", element: <Navigate to="/employee/attendance" replace /> },
               { path: "employee/home", element: <Placeholder title="Employee Home" /> },
+              { path: "employee/attendance", element: <EmployeeAttendancePage /> },
+              { path: "employee/leaves", element: <EmployeeLeavesPage /> },
             ],
           },
         ],
