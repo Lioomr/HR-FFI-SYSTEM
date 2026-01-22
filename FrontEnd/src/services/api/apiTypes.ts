@@ -1,17 +1,37 @@
+/**
+ * API error item - can be an object with field/message/code or a simple string
+ */
+export type ApiErrorItem = 
+  | { field?: string; message: string; code?: string }
+  | string;
+
+/**
+ * Successful API response envelope
+ */
 export type ApiSuccess<T> = {
   status: "success";
   data: T;
   message?: string;
 };
 
+/**
+ * Error API response envelope (Global API Rules v1)
+ * errors is contractually an array, not an object map
+ */
 export type ApiError = {
   status: "error";
   message: string;
-  errors?: Record<string, string[]>;
+  errors?: ApiErrorItem[];
 };
 
+/**
+ * Union type for all API responses
+ */
 export type ApiResponse<T> = ApiSuccess<T> | ApiError;
 
+/**
+ * Type guard to check if an API response is an error
+ */
 export function isApiError<T>(res: ApiResponse<T>): res is ApiError {
   return res.status === "error";
 }
@@ -97,4 +117,12 @@ export type SettingsDto = {
     max_login_attempts: number;
   };
   updated_at: string;
+};
+
+export type LeaveBalance = {
+  leave_type_id: number;
+  leave_type_name: string;
+  opening_balance: string; // Decimal as string from backend
+  used: string;
+  remaining: string;
 };

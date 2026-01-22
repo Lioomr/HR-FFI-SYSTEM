@@ -7,3 +7,7 @@ def get_role(user):
 class IsSystemAdmin(BasePermission):
     def has_permission(self, request, view):
         return request.user.is_authenticated and get_role(request.user) == "SystemAdmin"
+
+class IsHRManagerOrAdmin(BasePermission):
+    def has_permission(self, request, view):
+        return request.user and request.user.is_authenticated and get_role(request.user) in ["SystemAdmin", "HRManager"]

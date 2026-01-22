@@ -105,9 +105,8 @@ export default function AdminUsersListPage() {
           return;
         }
 
-        const items = Array.isArray(res.data as unknown)
-          ? (res.data as UserDto[])
-          : res.data.items || [];
+        // res.data is UsersListResponse which has { items: UserDto[] }
+        const items = res.data.items || [];
 
         setRows(items.map(toUserRow));
         setMode(items.length === 0 ? "empty" : "ok");

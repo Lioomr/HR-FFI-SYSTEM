@@ -1,8 +1,13 @@
 from rest_framework.views import exception_handler
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
+from django.http import Http404
 
 def custom_exception_handler(exc, context):
+    print(f"DEBUG_EXC: {type(exc)} {exc}")
+    if isinstance(exc, Http404):
+        return Response({"status": "error", "message": "Not found"}, status=404)
+
     resp = exception_handler(exc, context)
 
     if resp is None:

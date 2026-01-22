@@ -30,6 +30,9 @@ INSTALLED_APPS = [
     "admin_portal",
     "audit",
     "invites",
+    "employees",
+    "leaves",
+    "attendance",
 ]
 
 MIDDLEWARE = [
