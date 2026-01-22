@@ -17,8 +17,11 @@ import EmployeeAttendancePage from "../pages/employee/AttendancePage";
 import EmployeeLeavesPage from "../pages/employee/EmployeeLeavesPage";
 import HrAttendancePage from "../pages/hr/AttendancePage";
 import HrLeaveBalancesPage from "../pages/hr/HrLeaveBalancesPage";
+import DepartmentsPage from "../pages/hr/reference/DepartmentsPage";
+import PositionsPage from "../pages/hr/reference/PositionsPage";
+import TaskGroupsPage from "../pages/hr/reference/TaskGroupsPage";
+import SponsorsPage from "../pages/hr/reference/SponsorsPage";
 import RouteErrorBoundary from "./RouteErrorBoundary";
-
 
 
 
@@ -90,10 +93,10 @@ export const routes = [
               { path: "hr/employees/:id/edit", element: <Placeholder title="Edit Employee" /> },
 
               // Reference Data
-              { path: "hr/departments", element: <Placeholder title="Departments" /> },
-              { path: "hr/positions", element: <Placeholder title="Positions" /> },
-              { path: "hr/task-groups", element: <Placeholder title="Task Groups" /> },
-              { path: "hr/sponsors", element: <Placeholder title="Sponsors" /> },
+              { path: "hr/departments", element: <DepartmentsPage /> },
+              { path: "hr/positions", element: <PositionsPage /> },
+              { path: "hr/task-groups", element: <TaskGroupsPage /> },
+              { path: "hr/sponsors", element: <SponsorsPage /> },
 
               // Existing pages
               { path: "hr/attendance", element: <HrAttendancePage /> },
