@@ -21,6 +21,11 @@ import DepartmentsPage from "../pages/hr/reference/DepartmentsPage";
 import PositionsPage from "../pages/hr/reference/PositionsPage";
 import TaskGroupsPage from "../pages/hr/reference/TaskGroupsPage";
 import SponsorsPage from "../pages/hr/reference/SponsorsPage";
+import EmployeesListPage from "../pages/hr/employees/EmployeesListPage";
+import CreateEmployeePage from "../pages/hr/employees/CreateEmployeePage";
+import ViewEmployeePage from "../pages/hr/employees/ViewEmployeePage";
+import EditEmployeePage from "../pages/hr/employees/EditEmployeePage";
+import HRDashboardPage from "../pages/hr/dashboard/HRDashboardPage";
 import RouteErrorBoundary from "./RouteErrorBoundary";
 
 
@@ -84,13 +89,13 @@ export const routes = [
             element: <RequireRole roles={["HRManager", "SystemAdmin"]} />,
             children: [
               { path: "hr", element: <Navigate to="/hr/employees" replace /> },
-              { path: "hr/dashboard", element: <Placeholder title="HR Dashboard" /> },
+              { path: "hr/dashboard", element: <HRDashboardPage /> },
 
               // Employee Management
-              { path: "hr/employees", element: <Placeholder title="Employees" /> },
-              { path: "hr/employees/create", element: <Placeholder title="Create Employee" /> },
-              { path: "hr/employees/:id", element: <Placeholder title="View Employee" /> },
-              { path: "hr/employees/:id/edit", element: <Placeholder title="Edit Employee" /> },
+              { path: "hr/employees", element: <EmployeesListPage /> },
+              { path: "hr/employees/create", element: <CreateEmployeePage /> },
+              { path: "hr/employees/:id", element: <ViewEmployeePage /> },
+              { path: "hr/employees/:id/edit", element: <EditEmployeePage /> },
 
               // Reference Data
               { path: "hr/departments", element: <DepartmentsPage /> },
