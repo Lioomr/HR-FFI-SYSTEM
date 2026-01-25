@@ -33,6 +33,7 @@ INSTALLED_APPS = [
     "employees",
     "leaves",
     "attendance",
+    "hr_reference",
 ]
 
 MIDDLEWARE = [

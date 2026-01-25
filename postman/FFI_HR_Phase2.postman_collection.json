@@ -1,0 +1,331 @@
+{
+  "info": {
+    "name": "FFI HR Phase 2",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Reference Data",
+      "item": [
+        {
+          "name": "Create Department",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{hr_token}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "url": {"raw": "{{base_url}}/api/hr/departments/", "host": ["{{base_url}}"], "path": ["api","hr","departments"], "trailingSlash": true},
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"ENG\",\n  \"name\": \"Engineering\",\n  \"description\": \"Core team\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  var json = pm.response.json();",
+                  "  if (json && json.data && json.data.id) {",
+                  "    pm.environment.set('dept_id', json.data.id);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Position",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{hr_token}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "url": {"raw": "{{base_url}}/api/hr/positions/", "host": ["{{base_url}}"], "path": ["api","hr","positions"], "trailingSlash": true},
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"MGR\",\n  \"name\": \"Manager\",\n  \"description\": \"Team manager\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  var json = pm.response.json();",
+                  "  if (json && json.data && json.data.id) {",
+                  "    pm.environment.set('pos_id', json.data.id);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Task Group",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{hr_token}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "url": {"raw": "{{base_url}}/api/hr/task-groups/", "host": ["{{base_url}}"], "path": ["api","hr","task-groups"], "trailingSlash": true},
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"PROJ\",\n  \"name\": \"Project Team\",\n  \"description\": \"Project tasks\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  var json = pm.response.json();",
+                  "  if (json && json.data && json.data.id) {",
+                  "    pm.environment.set('tg_id', json.data.id);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Sponsor",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{hr_token}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "url": {"raw": "{{base_url}}/api/hr/sponsors/", "host": ["{{base_url}}"], "path": ["api","hr","sponsors"], "trailingSlash": true},
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"SPONSOR-001\",\n  \"name\": \"Acme Sponsor\",\n  \"description\": \"Primary sponsor\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  var json = pm.response.json();",
+                  "  if (json && json.data && json.data.id) {",
+                  "    pm.environment.set('sponsor_id', json.data.id);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sponsor Duplicate (422)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{hr_token}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "url": {"raw": "{{base_url}}/api/hr/sponsors/", "host": ["{{base_url}}"], "path": ["api","hr","sponsors"], "trailingSlash": true},
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"SPONSOR-001\",\n  \"name\": \"Dup\"\n}"
+            }
+          }
+        },
+        {
+          "name": "List Departments",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{hr_token}}"}
+            ],
+            "url": {"raw": "{{base_url}}/api/hr/departments/", "host": ["{{base_url}}"], "path": ["api","hr","departments"], "trailingSlash": true}
+          }
+        }
+      ]
+    },
+    {
+      "name": "Employees",
+      "item": [
+        {
+          "name": "Create Employee (unlinked)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{hr_token}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "url": {"raw": "{{base_url}}/employees", "host": ["{{base_url}}"], "path": ["employees"]},
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"full_name\": \"Ali Hassan\",\n  \"employee_number\": \"555-1234\",\n  \"nationality\": \"Egyptian\",\n  \"passport_no\": \"P1234567\",\n  \"passport_expiry\": \"2027-01-01\",\n  \"national_id\": \"NID-001\",\n  \"id_expiry\": \"2030-01-01\",\n  \"date_of_birth\": \"1995-06-01\",\n  \"mobile\": \"555-7777\",\n\n  \"department_id\": {{dept_id}},\n  \"position_id\": {{pos_id}},\n  \"task_group_id\": {{tg_id}},\n  \"sponsor_id\": {{sponsor_id}},\n  \"job_offer\": \"Offer A\",\n  \"join_date\": \"2026-01-10\",\n  \"contract_date\": \"2026-01-10\",\n  \"contract_expiry\": \"2027-01-10\",\n  \"allowed_overtime\": 10,\n\n  \"health_card\": \"HC-123\",\n  \"health_card_expiry\": \"2027-01-10\",\n\n  \"basic_salary\": 5000,\n  \"transportation_allowance\": 300,\n  \"accommodation_allowance\": 800,\n  \"telephone_allowance\": 50,\n  \"petrol_allowance\": 100,\n  \"other_allowance\": 0,\n  \"total_salary\": 6250\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  var json = pm.response.json();",
+                  "  if (json && json.data && json.data.id) {",
+                  "    pm.environment.set('emp_id', json.data.id);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Employees (paged)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{hr_token}}"}
+            ],
+            "url": {
+              "raw": "{{base_url}}/employees?page=1&page_size=10",
+              "host": ["{{base_url}}"],
+              "path": ["employees"],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "page_size", "value": "10"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Employees (unpaged)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{hr_token}}"}
+            ],
+            "url": {"raw": "{{base_url}}/employees", "host": ["{{base_url}}"], "path": ["employees"]}
+          }
+        },
+        {
+          "name": "Employees Search",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{hr_token}}"}
+            ],
+            "url": {"raw": "{{base_url}}/employees?search=Ali", "host": ["{{base_url}}"], "path": ["employees"], "query": [{"key":"search","value":"Ali"}]}
+          }
+        },
+        {
+          "name": "Employees Filter (department)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{hr_token}}"}
+            ],
+            "url": {"raw": "{{base_url}}/employees?department=ENG", "host": ["{{base_url}}"], "path": ["employees"], "query": [{"key":"department","value":"ENG"}]}
+          }
+        },
+        {
+          "name": "Employees Filter (position)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{hr_token}}"}
+            ],
+            "url": {"raw": "{{base_url}}/employees?position=MGR", "host": ["{{base_url}}"], "path": ["employees"], "query": [{"key":"position","value":"MGR"}]}
+          }
+        },
+        {
+          "name": "Employees Filter (task_group)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{hr_token}}"}
+            ],
+            "url": {"raw": "{{base_url}}/employees?task_group=PROJ", "host": ["{{base_url}}"], "path": ["employees"], "query": [{"key":"task_group","value":"PROJ"}]}
+          }
+        },
+        {
+          "name": "Employees Filter (sponsor)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{hr_token}}"}
+            ],
+            "url": {"raw": "{{base_url}}/employees?sponsor=SPONSOR-001", "host": ["{{base_url}}"], "path": ["employees"], "query": [{"key":"sponsor","value":"SPONSOR-001"}]}
+          }
+        },
+        {
+          "name": "Employees Filter (status)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{hr_token}}"}
+            ],
+            "url": {"raw": "{{base_url}}/employees?status=ACTIVE", "host": ["{{base_url}}"], "path": ["employees"], "query": [{"key":"status","value":"ACTIVE"}]}
+          }
+        },
+        {
+          "name": "Update Employee",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{hr_token}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "url": {"raw": "{{base_url}}/employees/{{emp_id}}", "host": ["{{base_url}}"], "path": ["employees","{{emp_id}}"]},
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"full_name\": \"Ali Hassan\",\n  \"department_id\": {{dept_id}},\n  \"position_id\": {{pos_id}},\n  \"join_date\": \"2026-01-10\",\n  \"mobile\": \"555-9999\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete Employee (blocked)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{hr_token}}"}
+            ],
+            "url": {"raw": "{{base_url}}/employees/{{emp_id}}", "host": ["{{base_url}}"], "path": ["employees","{{emp_id}}"]}
+          }
+        },
+        {
+          "name": "Employees List (Employee token forbidden)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{emp_token}}"}
+            ],
+            "url": {"raw": "{{base_url}}/employees", "host": ["{{base_url}}"], "path": ["employees"]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "HR Summary",
+      "item": [
+        {
+          "name": "Get HR Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{hr_token}}"}
+            ],
+            "url": {"raw": "{{base_url}}/hr/summary", "host": ["{{base_url}}"], "path": ["hr","summary"]}
+          }
+        }
+      ]
+    }
+  ]
+}
