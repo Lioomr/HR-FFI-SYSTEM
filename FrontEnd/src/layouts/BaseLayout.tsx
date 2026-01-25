@@ -79,12 +79,13 @@ export default function BaseLayout() {
   ];
 
   const hrItems: MenuProps["items"] = [
+    { key: "/hr/dashboard", icon: <DashboardOutlined />, label: <Link to="/hr/dashboard">HR Dashboard</Link> },
     { key: "/hr/employees", icon: <TeamOutlined />, label: <Link to="/hr/employees">Employees</Link> },
     { key: "/hr/departments", icon: <ApartmentOutlined />, label: <Link to="/hr/departments">Departments</Link> },
     { key: "/hr/positions", icon: <IdcardOutlined />, label: <Link to="/hr/positions">Positions</Link> },
     { key: "/hr/task-groups", icon: <GroupOutlined />, label: <Link to="/hr/task-groups">Task Groups</Link> },
     { key: "/hr/sponsors", icon: <SafetyOutlined />, label: <Link to="/hr/sponsors">Sponsors</Link> },
-    { key: "/hr/dashboard", icon: <DashboardOutlined />, label: <Link to="/hr/dashboard">HR Dashboard</Link> },
+    
   ];
 
   const employeeItems: MenuProps["items"] = [
