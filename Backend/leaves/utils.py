@@ -98,11 +98,10 @@ def calculate_leave_balance(user, year):
         remaining = opening + quota - used
         
         balances.append({
-            "leave_type_id": lt.id,
-            "leave_type_name": lt.name,
-            "opening_balance": f"{opening:.1f}", # Format as string for API consistency
-            "used": f"{used:.1f}",
-            "remaining": f"{remaining:.1f}"
+            "leave_type": lt.name,
+            "total_days": float(opening + quota),
+            "used_days": float(used),
+            "remaining_days": float(remaining),
         })
         
     return balances

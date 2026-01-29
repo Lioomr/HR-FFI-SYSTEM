@@ -10,6 +10,7 @@ from rest_framework.response import Response
 
 from core.permissions import IsSystemAdmin
 from core.responses import success, error
+from core.pagination import StandardPagination
 from audit.utils import audit
 from .serializers import (
     UserListSerializer, CreateUserSerializer,
@@ -53,9 +54,10 @@ class UsersListCreateView(APIView):
         elif status_param == "inactive":
             qs = qs.filter(is_active=False)
 
-        # Let DRF pagination handle if you later switch this to GenericAPIView + pagination.
-        data = UserListSerializer(qs, many=True).data
-        return success({"items": data})
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(qs, request)
+        data = UserListSerializer(page, many=True).data
+        return paginator.get_paginated_response(data)
 
     def post(self, request):
         s = CreateUserSerializer(data=request.data)
@@ -86,6 +88,10 @@ class UserStatusView(APIView):
         s.is_valid(raise_exception=True)
 
         new_active = s.validated_data["is_active"]
+
+        # Prevent self-disable
+        if request.user.id == user.id and not new_active:
+            return error("Cannot disable your own account.", status=422)
 
         # Prevent disabling the last active system admin
         if user.is_active and not new_active and is_last_active_system_admin(user):

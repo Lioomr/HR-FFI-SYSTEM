@@ -31,6 +31,7 @@ INSTALLED_APPS = [
     "audit",
     "invites",
     "employees",
+    "payroll",
     "leaves",
     "attendance",
     "hr_reference",
@@ -116,10 +117,22 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+# Private uploads (not served publicly)
+PRIVATE_UPLOAD_ROOT = BASE_DIR / "private_uploads"
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+LOGIN_FAILURE_LIMIT = 5
+LOGIN_FAILURE_WINDOW_SECONDS = 900
+LOGIN_LOCKOUT_SECONDS = 900
+LOGIN_THROTTLE_RATE = "10/min"
+EMPLOYEE_IMPORT_THROTTLE_RATE = "5/min"
+PAYROLL_FINALIZE_THROTTLE_RATE = "5/min"
+PAYROLL_GENERATE_PAYSLIPS_THROTTLE_RATE = "5/min"
+PAYROLL_EXPORT_THROTTLE_RATE = "10/min"
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
@@ -133,6 +146,13 @@ REST_FRAMEWORK = {
     ),
     "DEFAULT_PAGINATION_CLASS": "core.pagination.StandardPagination",
     "PAGE_SIZE": 25,
+    "DEFAULT_THROTTLE_RATES": {
+        "login": LOGIN_THROTTLE_RATE,
+        "employee_import": EMPLOYEE_IMPORT_THROTTLE_RATE,
+        "payroll_finalize": PAYROLL_FINALIZE_THROTTLE_RATE,
+        "payroll_generate_payslips": PAYROLL_GENERATE_PAYSLIPS_THROTTLE_RATE,
+        "payroll_export": PAYROLL_EXPORT_THROTTLE_RATE,
+    },
     "EXCEPTION_HANDLER": "core.exceptions.custom_exception_handler",
 }
 

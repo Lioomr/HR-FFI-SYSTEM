@@ -9,6 +9,7 @@ urlpatterns = [
     path("", include("invites.urls")),
     path("", include("audit.urls")),
     path("", include("employees.urls")),
+    path("", include("payroll.urls")),
     path("hr/summary", HrSummaryView.as_view()),
     path("api/", include("employees.urls")),
     path("api/hr/", include("hr_reference.urls")),

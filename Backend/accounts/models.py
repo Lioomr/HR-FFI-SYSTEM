@@ -46,3 +46,21 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.email
+
+
+class LoginAttempt(models.Model):
+    email = models.CharField(max_length=254, db_index=True)
+    ip_address = models.CharField(max_length=45, db_index=True)
+    failed_count = models.PositiveIntegerField(default=0)
+    first_failed_at = models.DateTimeField(auto_now_add=True)
+    last_failed_at = models.DateTimeField(auto_now=True)
+    locked_until = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ("email", "ip_address")
+        indexes = [
+            models.Index(fields=["email", "ip_address"]),
+        ]
+
+    def __str__(self):
+        return f"{self.email} @ {self.ip_address}"

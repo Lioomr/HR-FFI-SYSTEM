@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from core.permissions import get_role
 from hr_reference.models import Department, Position, TaskGroup, Sponsor
 from .models import EmployeeProfile
+from .models import EmployeeImport
 
 User = get_user_model()
 
@@ -186,3 +187,24 @@ class EmployeeProfileWriteSerializer(serializers.ModelSerializer):
         if not value.strip():
             raise serializers.ValidationError("Full name is required.")
         return value
+
+
+class EmployeeImportSerializer(serializers.ModelSerializer):
+    uploader = serializers.SerializerMethodField()
+
+    class Meta:
+        model = EmployeeImport
+        fields = [
+            "id",
+            "status",
+            "inserted_rows",
+            "row_count",
+            "created_at",
+            "uploader",
+            "error_summary",
+        ]
+
+    def get_uploader(self, obj):
+        if obj.uploader:
+            return obj.uploader.email
+        return None
