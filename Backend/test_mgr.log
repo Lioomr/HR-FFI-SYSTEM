@@ -1,0 +1,57 @@
+Creating test database for alias 'default'...
+
+.FFFF
+======================================================================
+FAIL: test_manager_approve_workflow (leaves.tests.test_manager_workflow.ManagerWorkflowTests)
+Manager approval transitions to PENDING_HR
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "D:\FFI HR SYSTEM\Backend\leaves\tests\test_manager_workflow.py", line 136, in test_manager_approve_workflow
+    response = self.client.post(url, {"data": {"decision_reason": "Enjoy!"}}) # Helper might wrap data, here raw
+  File "C:\Users\lioom\AppData\Local\Programs\Python\Python310\lib\site-packages\rest_framework\test.py", line 299, in post
+    response = super().post(
+  File "C:\Users\lioom\AppData\Local\Programs\Python\Python310\lib\site-packages\rest_framework\test.py", line 212, in post
+    data, content_type = self._encode_data(data, format, content_type)
+  File "C:\Users\lioom\AppData\Local\Programs\Python\Python310\lib\site-packages\rest_framework\test.py", line 183, in _encode_data
+    ret = renderer.render(data)
+  File "C:\Users\lioom\AppData\Local\Programs\Python\Python310\lib\site-packages\rest_framework\renderers.py", line 915, in render
+    assert not isinstance(value, dict), (
+AssertionError: Test data contained a dictionary value for key 'data', but multipart uploads do not support nested data. You may want to consider using format='json' in this test case.
+
+======================================================================
+FAIL: test_manager_sees_only_reports (leaves.tests.test_manager_workflow.ManagerWorkflowTests)
+Manager should see their reports' requests but not independent employee's.
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "D:\FFI HR SYSTEM\Backend\leaves\tests\test_manager_workflow.py", line 119, in test_manager_sees_only_reports
+    self.assertEqual(len(results), 1)
+AssertionError: 2 != 1
+
+======================================================================
+FAIL: test_submission_with_manager_sets_pending_manager (leaves.tests.test_manager_workflow.ManagerWorkflowTests)
+Employee with manager -> Status PENDING_MANAGER
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "D:\FFI HR SYSTEM\Backend\leaves\tests\test_manager_workflow.py", line 75, in test_submission_with_manager_sets_pending_manager
+    self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+AssertionError: 500 != 201
+
+======================================================================
+FAIL: test_submission_without_manager_sets_pending_hr (leaves.tests.test_manager_workflow.ManagerWorkflowTests)
+Employee without manager -> Status PENDING_HR
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "D:\FFI HR SYSTEM\Backend\leaves\tests\test_manager_workflow.py", line 90, in test_submission_without_manager_sets_pending_hr
+    self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+AssertionError: 500 != 201
+
+----------------------------------------------------------------------
+Ran 5 tests in 11.316s
+
+FAILED (failures=4)
+Destroying test database for alias 'default'...
+
+Found 5 test(s).
+System check identified no issues (0 silenced).
+DEBUG_EXC: <class 'AttributeError'> PENDING
+DEBUG_EXC: <class 'AttributeError'> PENDING

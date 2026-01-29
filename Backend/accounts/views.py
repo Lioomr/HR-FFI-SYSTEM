@@ -2,26 +2,33 @@ from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
-from rest_framework import status
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 
 from .serializers import LoginSerializer, ChangePasswordSerializer
+from .throttles import LoginRateThrottle
 from .permissions import get_role
-from core.responses import success, error
+from core.responses import success
 
 class LoginView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [LoginRateThrottle]
 
     def post(self, request):
-        s = LoginSerializer(data=request.data)
-        if not s.is_valid():
-            # 422 handled by exception handler only when raise_exception=True
-            return error("Validation error", s.errors, status=422)
+        s = LoginSerializer(data=request.data, context={"request": request})
+        s.is_valid(raise_exception=True)
 
         user = s.validated_data["user"]
         refresh = RefreshToken.for_user(user)
         access = str(refresh.access_token)
+
+        from audit.utils import audit
+        audit(
+            request,
+            action="login_success",
+            entity="auth",
+            metadata={"email": user.email},
+        )
 
         return success({
             "token": access,

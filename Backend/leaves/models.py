@@ -41,11 +41,10 @@ class LeaveType(models.Model):
 
 class LeaveRequest(models.Model):
     class RequestStatus(models.TextChoices):
-        PENDING_MANAGER = "PENDING_MANAGER", _("Pending Manager Approval")
-        PENDING_HR = "PENDING_HR", _("Pending HR Approval")
-        APPROVED = "APPROVED", _("Approved")
-        REJECTED = "REJECTED", _("Rejected")
-        CANCELLED = "CANCELLED", _("Cancelled")
+        SUBMITTED = "submitted", _("Submitted")
+        APPROVED = "approved", _("Approved")
+        REJECTED = "rejected", _("Rejected")
+        CANCELLED = "cancelled", _("Cancelled")
 
     employee = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -65,7 +64,7 @@ class LeaveRequest(models.Model):
     status = models.CharField(
         max_length=20,
         choices=RequestStatus.choices,
-        default=RequestStatus.PENDING_HR
+        default=RequestStatus.SUBMITTED
     )
     
     
@@ -104,7 +103,8 @@ class LeaveRequest(models.Model):
     # Existing generic field, assume it maps to HR reason for now unless we migrate it.
     decision_reason = models.TextField(blank=True, help_text=_("Reason for rejection or approval note (Legacy/HR)."))
 
-    
+    is_active = models.BooleanField(default=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

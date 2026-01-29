@@ -1,4 +1,5 @@
 from django.utils import timezone
+from datetime import date
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -8,6 +9,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from core.permissions import get_role
 from audit.utils import audit
 from core.responses import success, error
+from core.pagination import StandardPagination
 
 from .models import LeaveType, LeaveRequest
 from .serializers import (
@@ -17,11 +19,28 @@ from .serializers import (
     LeaveRequestActionSerializer,
     LeaveBalanceSerializer
 )
-from .permissions import IsHRManagerOrAdmin, IsLeaveRequestOwner, IsActiveEmployee, IsOwnerOrHR, IsManagerOfEmployee
+from .permissions import (
+    IsHRManagerOrAdmin,
+    IsLeaveRequestOwner,
+    IsActiveEmployee,
+    IsOwnerOrHR,
+    IsManagerOfEmployee,
+    IsEmployeeOnly,
+)
 from .utils import calculate_leave_balance
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
+
+def _flatten_errors(error_dict):
+    errors = []
+    for field, messages in error_dict.items():
+        if isinstance(messages, (list, tuple)):
+            for msg in messages:
+                errors.append(f"{field}: {msg}")
+        else:
+            errors.append(f"{field}: {messages}")
+    return errors
 
 class LeaveTypeViewSet(viewsets.ModelViewSet):
     queryset = LeaveType.objects.all()
@@ -42,10 +61,10 @@ class LeaveTypeViewSet(viewsets.ModelViewSet):
         qs = self.get_queryset()
         
         if role == "Employee":
-             qs = qs.filter(is_active=True)
+            qs = qs.filter(is_active=True)
              
         serializer = self.get_serializer(qs, many=True)
-        return success(serializer.data)
+        return Response(serializer.data)
 
     def perform_create(self, serializer):
         instance = serializer.save()
@@ -89,9 +108,12 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         role = get_role(user)
+        base_qs = LeaveRequest.objects.filter(is_active=True).select_related(
+            "employee", "leave_type", "decided_by", "manager_decision_by"
+        )
         if role in ["SystemAdmin", "HRManager"]:
-            return LeaveRequest.objects.all().select_related("employee", "leave_type", "decided_by", "manager_decision_by")
-        return LeaveRequest.objects.filter(employee=user).select_related("employee", "leave_type", "decided_by", "manager_decision_by")
+            return base_qs
+        return base_qs.filter(employee=user)
 
     def get_serializer_class(self):
         if self.action == "create":
@@ -100,28 +122,30 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action == "create":
-            # Employee creates own; HR/Admin can also create (technically allowed)
-             return [IsAuthenticated()]
+            return [IsAuthenticated(), IsEmployeeOnly()]
 
         if self.action in ["list", "retrieve"]:
-             # HR/Admin OR Owner
-             return [IsAuthenticated(), IsOwnerOrHR()]
+             # HR/Admin OR Owner (retrieve), HR-only for list enforced in list()
+            return [IsAuthenticated(), IsOwnerOrHR()]
 
         if self.action in ["approve", "reject"]:
              # HR/Admin only
-             return [IsAuthenticated(), IsHRManagerOrAdmin()]
+            return [IsAuthenticated(), IsHRManagerOrAdmin()]
 
         if self.action == "cancel":
              # Owner only
-             return [IsAuthenticated(), IsLeaveRequestOwner()]
+            return [IsAuthenticated(), IsLeaveRequestOwner()]
 
         # For update/partial_update/destroy (standard CRUD)
         # Default restricted to HR/Admin
         return [IsAuthenticated(), IsHRManagerOrAdmin()]
 
     def create(self, request, *args, **kwargs):
+        if "employee_id" in request.data:
+            return error("Validation error", errors=["employee_id is not allowed."], status=422)
         serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        if not serializer.is_valid():
+            return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
         self.perform_create(serializer)
         
         # Return read-serializer
@@ -131,88 +155,146 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         # Determine initial status
-        user = self.request.user
-        initial_status = LeaveRequest.RequestStatus.PENDING_HR
-        
-        if hasattr(user, 'employee_profile') and user.employee_profile.manager:
-            initial_status = LeaveRequest.RequestStatus.PENDING_MANAGER
-            
+        initial_status = LeaveRequest.RequestStatus.SUBMITTED
         instance = serializer.save(employee=self.request.user, status=initial_status)
         
         # Audit
-        audit(self.request, "leave_request_created", entity="leave_request", entity_id=instance.id, metadata={
-            "type": instance.leave_type.code,
-            "start": str(instance.start_date),
-            "end": str(instance.end_date),
-            "initial_status": initial_status
-        })
+        audit(
+            self.request,
+            "submit",
+            entity="LeaveRequest",
+            entity_id=instance.id,
+            metadata={
+                "leave_type": instance.leave_type.name,
+                "start_date": str(instance.start_date),
+                "end_date": str(instance.end_date),
+            },
+        )
 
     def list(self, request, *args, **kwargs):
-        return super().list(request, *args, **kwargs)
+        role = get_role(request.user)
+        if role not in ["SystemAdmin", "HRManager"]:
+            return error("Forbidden", errors=["Forbidden."], status=status.HTTP_403_FORBIDDEN)
+        qs = self.get_queryset()
+        params = request.query_params
+        status_param = params.get("status")
+        if status_param:
+            allowed = {
+                LeaveRequest.RequestStatus.SUBMITTED,
+                LeaveRequest.RequestStatus.APPROVED,
+                LeaveRequest.RequestStatus.REJECTED,
+                LeaveRequest.RequestStatus.CANCELLED,
+            }
+            if status_param not in allowed:
+                return error("Validation error", errors=["Invalid status."], status=422)
+            qs = qs.filter(status=status_param)
+        employee_id = params.get("employee_id")
+        if employee_id:
+            qs = qs.filter(employee_id=employee_id)
+        date_from = params.get("date_from")
+        if date_from:
+            qs = qs.filter(start_date__gte=date_from)
+        date_to = params.get("date_to")
+        if date_to:
+            qs = qs.filter(end_date__lte=date_to)
+        page = self.paginate_queryset(qs)
+        serializer = self.get_serializer(page if page is not None else qs, many=True)
+        if page is not None:
+            return self.get_paginated_response(serializer.data)
+        return Response(
+            {
+                "status": "success",
+                "data": {
+                    "items": serializer.data,
+                    "page": 1,
+                    "page_size": len(serializer.data),
+                    "count": len(serializer.data),
+                    "total_pages": 1,
+                },
+            }
+        )
 
     def retrieve(self, request, *args, **kwargs):
-        response = super().retrieve(request, *args, **kwargs)
-        return success(response.data)
+        role = get_role(request.user)
+        qs = self.get_queryset()
+        if role not in ["SystemAdmin", "HRManager"]:
+            qs = qs.filter(employee=request.user)
+        try:
+            instance = qs.get(pk=kwargs.get("pk"))
+        except LeaveRequest.DoesNotExist:
+            return error("Not found", errors=["Not found."], status=404)
+        return success(LeaveRequestSerializer(instance).data)
 
     def destroy(self, request, *args, **kwargs):
-        return error("Hard delete is not allowed.", status=status.HTTP_405_METHOD_NOT_ALLOWED)
+        return error(
+            "Hard delete is not allowed.",
+            errors=["Hard delete is not allowed."],
+            status=status.HTTP_405_METHOD_NOT_ALLOWED,
+        )
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsHRManagerOrAdmin])
     def approve(self, request, pk=None):
-        instance = self.get_object()
+        try:
+            instance = self.get_queryset().get(pk=pk)
+        except LeaveRequest.DoesNotExist:
+            return error("Not found", errors=["Not found."], status=404)
         
-        # HR can only approve PENDING_HR
-        if instance.status != LeaveRequest.RequestStatus.PENDING_HR:
-             return error("HR can only approve requests that are Pending HR Approval.", status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        if instance.status != LeaveRequest.RequestStatus.SUBMITTED:
+             return error("Validation error", errors=["Only submitted requests can be approved."], status=422)
         
         s = LeaveRequestActionSerializer(data=request.data)
-        s.is_valid(raise_exception=True)
+        if not s.is_valid():
+            return error("Validation error", errors=_flatten_errors(s.errors), status=422)
 
         instance.status = LeaveRequest.RequestStatus.APPROVED
         instance.decided_by = request.user
         instance.decided_at = timezone.now()
-        # Explicit new field + legacy field for compatibility
-        note = s.validated_data.get("decision_reason", "")
-        instance.hr_decision_note = note 
-        instance.decision_reason = note
+        note = s.validated_data.get("comment", "")
+        instance.hr_decision_note = note
         instance.save()
 
-        audit(request, "leave_request_approved_hr", entity="leave_request", entity_id=instance.id)
+        audit(request, "approve", entity="LeaveRequest", entity_id=instance.id)
         return success(LeaveRequestSerializer(instance).data)
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsHRManagerOrAdmin])
     def reject(self, request, pk=None):
-        instance = self.get_object()
+        try:
+            instance = self.get_queryset().get(pk=pk)
+        except LeaveRequest.DoesNotExist:
+            return error("Not found", errors=["Not found."], status=404)
         
-        # HR can only reject PENDING_HR (or maybe PENDING_MANAGER if they want to override? Spec says HR approve/reject from PENDING_HR)
-        if instance.status != LeaveRequest.RequestStatus.PENDING_HR:
-             return error("HR can only reject requests that are Pending HR Approval.", status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        if instance.status != LeaveRequest.RequestStatus.SUBMITTED:
+             return error("Validation error", errors=["Only submitted requests can be rejected."], status=422)
 
         s = LeaveRequestActionSerializer(data=request.data)
-        s.is_valid(raise_exception=True)
+        if not s.is_valid():
+            return error("Validation error", errors=_flatten_errors(s.errors), status=422)
+        comment = (s.validated_data.get("comment") or "").strip()
+        if not comment:
+            return error("Validation error", errors=["comment is required."], status=422)
 
         instance.status = LeaveRequest.RequestStatus.REJECTED
         instance.decided_by = request.user
         instance.decided_at = timezone.now()
-        note = s.validated_data.get("decision_reason", "")
-        instance.hr_decision_note = note
-        instance.decision_reason = note 
+        instance.hr_decision_note = comment
         instance.save()
         
-        audit(request, "leave_request_rejected_hr", entity="leave_request", entity_id=instance.id)
+        audit(request, "reject", entity="LeaveRequest", entity_id=instance.id)
         return success(LeaveRequestSerializer(instance).data)
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsLeaveRequestOwner])
     def cancel(self, request, pk=None):
-        instance = self.get_object()
-        # Allow cancel if PENDING_MANAGER or PENDING_HR
-        if instance.status not in [LeaveRequest.RequestStatus.PENDING_MANAGER, LeaveRequest.RequestStatus.PENDING_HR]:
-            return error("Only pending requests can be cancelled by the employee.", status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        try:
+            instance = LeaveRequest.objects.get(pk=pk, employee=request.user, is_active=True)
+        except LeaveRequest.DoesNotExist:
+            return error("Not found", errors=["Not found."], status=404)
+        if instance.status != LeaveRequest.RequestStatus.SUBMITTED:
+            return error("Validation error", errors=["Only submitted requests can be cancelled."], status=422)
 
         instance.status = LeaveRequest.RequestStatus.CANCELLED
         instance.save()
         
-        audit(request, "leave_request_cancelled", entity="leave_request", entity_id=instance.id)
+        audit(request, "cancel", entity="LeaveRequest", entity_id=instance.id)
         return success(LeaveRequestSerializer(instance).data)
 
 
@@ -230,7 +312,8 @@ class ManagerLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         # Only requests where the employee's manager is the current user
         return LeaveRequest.objects.filter(
-            employee__employee_profile__manager=self.request.user
+            employee__employee_profile__manager=self.request.user,
+            is_active=True,
         ).select_related("employee", "leave_type")
 
     def list(self, request, *args, **kwargs):
@@ -244,40 +327,43 @@ class ManagerLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
     def approve(self, request, pk=None):
         instance = self.get_object()
         
-        if instance.status != LeaveRequest.RequestStatus.PENDING_MANAGER:
-            return error("Manager can only approve requests that are Pending Manager Approval.", status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        if instance.status != LeaveRequest.RequestStatus.SUBMITTED:
+            return error("Validation error", errors=["Only submitted requests can be approved."], status=422)
         
         s = LeaveRequestActionSerializer(data=request.data)
-        s.is_valid(raise_exception=True)
+        if not s.is_valid():
+            return error("Validation error", errors=_flatten_errors(s.errors), status=422)
 
-        # Transition to PENDING_HR
-        instance.status = LeaveRequest.RequestStatus.PENDING_HR
+        instance.status = LeaveRequest.RequestStatus.APPROVED
         instance.manager_decision_by = request.user
         instance.manager_decision_at = timezone.now()
-        instance.manager_decision_note = s.validated_data.get("decision_reason", "")
+        instance.manager_decision_note = s.validated_data.get("comment", "")
         instance.save()
 
-        audit(request, "leave_request_approved_manager", entity="leave_request", entity_id=instance.id)
+        audit(request, "approve", entity="LeaveRequest", entity_id=instance.id)
         return success(LeaveRequestSerializer(instance).data)
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsManagerOfEmployee])
     def reject(self, request, pk=None):
         instance = self.get_object()
 
-        if instance.status != LeaveRequest.RequestStatus.PENDING_MANAGER:
-            return error("Manager can only reject requests that are Pending Manager Approval.", status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        if instance.status != LeaveRequest.RequestStatus.SUBMITTED:
+            return error("Validation error", errors=["Only submitted requests can be rejected."], status=422)
         
         s = LeaveRequestActionSerializer(data=request.data)
-        s.is_valid(raise_exception=True)
+        if not s.is_valid():
+            return error("Validation error", errors=_flatten_errors(s.errors), status=422)
+        comment = (s.validated_data.get("comment") or "").strip()
+        if not comment:
+            return error("Validation error", errors=["comment is required."], status=422)
 
-        # Transition to REJECTED (Final)
         instance.status = LeaveRequest.RequestStatus.REJECTED
         instance.manager_decision_by = request.user
         instance.manager_decision_at = timezone.now()
-        instance.manager_decision_note = s.validated_data.get("decision_reason", "")
+        instance.manager_decision_note = comment
         instance.save()
 
-        audit(request, "leave_request_rejected_manager", entity="leave_request", entity_id=instance.id)
+        audit(request, "reject", entity="LeaveRequest", entity_id=instance.id)
         return success(LeaveRequestSerializer(instance).data)
 
 
@@ -293,14 +379,14 @@ class LeaveBalanceViewSet(viewsets.ViewSet):
         year = request.query_params.get("year")
 
         if not employee_id:
-            return error("employee_id is required.", status=status.HTTP_400_BAD_REQUEST)
+            return error("Validation error", errors=["employee_id is required."], status=422)
         if not year:
-             return error("year is required.", status=status.HTTP_400_BAD_REQUEST)
+            return error("Validation error", errors=["year is required."], status=422)
         
         try:
-             year = int(year)
+            year = int(year)
         except ValueError:
-             return error("year must be a valid integer.", status=status.HTTP_400_BAD_REQUEST)
+            return error("Validation error", errors=["year must be a valid integer."], status=422)
 
         # Get Employee User
         from employees.models import EmployeeProfile
@@ -308,7 +394,7 @@ class LeaveBalanceViewSet(viewsets.ViewSet):
             profile = EmployeeProfile.objects.get(id=employee_id)
             user = profile.user
         except (EmployeeProfile.DoesNotExist, ValueError):
-             return error("Employee not found.", status=status.HTTP_404_NOT_FOUND)
+            return error("Not found", errors=["Not found."], status=404)
 
         balances = calculate_leave_balance(user, year)
         
@@ -325,18 +411,18 @@ class EmployeeLeaveBalanceView(APIView):
     Employee endpoint for viewing their own leave balance.
     GET /employee/leave-balance/?year=...
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsEmployeeOnly]
 
     def get(self, request):
         year = request.query_params.get("year")
-        
+
         if not year:
-             return error("year is required.", status=status.HTTP_400_BAD_REQUEST)
-        
-        try:
-             year = int(year)
-        except ValueError:
-             return error("year must be a valid integer.", status=status.HTTP_400_BAD_REQUEST)
+            year = date.today().year
+        else:
+            try:
+                year = int(year)
+            except ValueError:
+                return error("Validation error", errors=["year must be a valid integer."], status=422)
 
         balances = calculate_leave_balance(request.user, year)
         
@@ -345,3 +431,37 @@ class EmployeeLeaveBalanceView(APIView):
 
         serializer = LeaveBalanceSerializer(balances, many=True)
         return success(serializer.data)
+
+
+class EmployeeLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = LeaveRequestSerializer
+    permission_classes = [IsAuthenticated, IsEmployeeOnly]
+    pagination_class = None
+
+    def get_queryset(self):
+        return LeaveRequest.objects.filter(
+            employee=self.request.user,
+            is_active=True,
+        ).select_related("employee", "leave_type", "decided_by")
+
+    def list(self, request, *args, **kwargs):
+        if "employee_id" in request.query_params:
+            return error("Validation error", errors=["employee_id is not allowed."], status=422)
+        qs = self.get_queryset()
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(qs, request, view=self)
+        serializer = self.get_serializer(page if page is not None else qs, many=True)
+        if page is not None:
+            return paginator.get_paginated_response(serializer.data)
+        return Response(
+            {
+                "status": "success",
+                "data": {
+                    "items": serializer.data,
+                    "page": 1,
+                    "page_size": len(serializer.data),
+                    "count": len(serializer.data),
+                    "total_pages": 1,
+                },
+            }
+        )

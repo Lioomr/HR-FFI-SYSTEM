@@ -45,3 +45,11 @@ class IsManagerOfEmployee(BasePermission):
         if not hasattr(obj.employee, 'employee_profile'):
             return False
         return obj.employee.employee_profile.manager == request.user
+
+
+class IsEmployeeOnly(BasePermission):
+    """
+    Allows access only to Employee role.
+    """
+    def has_permission(self, request, view):
+        return request.user and request.user.is_authenticated and get_role(request.user) == "Employee"

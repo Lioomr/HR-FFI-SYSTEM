@@ -3,6 +3,7 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from hr_reference.models import Department, Position, TaskGroup, Sponsor
+from .storage import PrivateUploadStorage
 
 
 class EmployeeProfile(models.Model):
@@ -114,3 +115,43 @@ class EmployeeProfile(models.Model):
     def __str__(self):
         email = self.user.email if self.user else ""
         return f"{self.employee_id} - {email}".strip()
+
+
+class EmployeeImport(models.Model):
+    class Status(models.TextChoices):
+        SUCCESS = "success", _("Success")
+        FAILED = "failed", _("Failed")
+
+    uploader = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="employee_imports",
+    )
+    original_filename = models.CharField(max_length=255)
+    stored_file = models.FileField(
+        storage=PrivateUploadStorage(),
+        upload_to="employee_imports/",
+    )
+    errors_file = models.FileField(
+        storage=PrivateUploadStorage(),
+        upload_to="employee_imports/errors/",
+        null=True,
+        blank=True,
+    )
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.FAILED,
+    )
+    row_count = models.PositiveIntegerField(default=0)
+    inserted_rows = models.PositiveIntegerField(default=0)
+    file_hash = models.CharField(max_length=64, blank=True)
+    error_summary = models.JSONField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = _("Employee Import")
+        verbose_name_plural = _("Employee Imports")

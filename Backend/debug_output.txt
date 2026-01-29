@@ -1,0 +1,40 @@
+--- Running: py manage.py test leaves.tests.test_manager_workflow ---
+STDOUT:
+Found 5 test(s).
+System check identified no issues (0 silenced).
+DEBUG_FULL_RESPONSE: {'status': 'success', 'data': {'items': [{'id': 1, 'employee': {'id': 2, 'email': 'employee@example.com', 'full_name': ''}, 'leave_type': {'id': 1, 'name': 'Annual Leave', 'code': 'ANNUAL', 'is_paid': True, 'requires_attachment': False, 'is_active': True, 'annual_quota': '0.00', 'allow_carry_over': False, 'max_carry_over': None, 'created_at': '2026-01-22T01:38:35.074713Z', 'updated_at': '2026-01-22T01:38:35.074713Z'}, 'decided_by': None, 'start_date': '2026-06-01', 'end_date': '2026-06-05', 'reason': '', 'status': 'PENDING_MANAGER', 'manager_decision_at': None, 'manager_decision_note': '', 'hr_decision_note': '', 'decided_at': None, 'decision_reason': '', 'created_at': '2026-01-22T01:38:37.260826Z', 'updated_at': '2026-01-22T01:38:37.260826Z', 'manager_decision_by': None}], 'page': 1, 'page_size': 25, 'count': 1, 'total_pages': 1}}
+DEBUG_RESULTS: [{'id': 1, 'employee': {'id': 2, 'email': 'employee@example.com', 'full_name': ''}, 'leave_type': {'id': 1, 'name': 'Annual Leave', 'code': 'ANNUAL', 'is_paid': True, 'requires_attachment': False, 'is_active': True, 'annual_quota': '0.00', 'allow_carry_over': False, 'max_carry_over': None, 'created_at': '2026-01-22T01:38:35.074713Z', 'updated_at': '2026-01-22T01:38:35.074713Z'}, 'decided_by': None, 'start_date': '2026-06-01', 'end_date': '2026-06-05', 'reason': '', 'status': 'PENDING_MANAGER', 'manager_decision_at': None, 'manager_decision_note': '', 'hr_decision_note': '', 'decided_at': None, 'decision_reason': '', 'created_at': '2026-01-22T01:38:37.260826Z', 'updated_at': '2026-01-22T01:38:37.260826Z', 'manager_decision_by': None}]
+
+STDERR:
+Creating test database for alias 'default'...
+
+.....
+----------------------------------------------------------------------
+Ran 5 tests in 11.396s
+
+OK
+Destroying test database for alias 'default'...
+
+
+--- Running: py manage.py test leaves.tests.test_existing ---
+STDOUT:
+Found 15 test(s).
+System check identified no issues (0 silenced).
+DEBUG_EMP_BAL: {'status': 'success', 'data': [{'leave_type_id': 1, 'leave_type_name': 'Annual Leave', 'opening_balance': '0.00', 'used': '0.00', 'remaining': '21.00'}, {'leave_type_id': 2, 'leave_type_name': 'Sick Leave', 'opening_balance': '5.00', 'used': '0.00', 'remaining': '15.00'}]}
+DEBUG_EXC: <class 'rest_framework.exceptions.PermissionDenied'> You do not have permission to perform this action.
+DEBUG_EXC: <class 'rest_framework.exceptions.PermissionDenied'> You do not have permission to perform this action.
+DEBUG_EXC: <class 'rest_framework.exceptions.ValidationError'> {'non_field_errors': [ErrorDetail(string='You already have a pending or approved leave request for this period.', code='invalid')]}
+DEBUG_EXC: <class 'rest_framework.exceptions.ValidationError'> {'end_date': [ErrorDetail(string='End date must be after start date.', code='invalid')]}
+DEBUG_EXC: <class 'django.http.response.Http404'> No LeaveRequest matches the given query.
+
+STDERR:
+Creating test database for alias 'default'...
+
+...............
+----------------------------------------------------------------------
+Ran 15 tests in 26.882s
+
+OK
+Destroying test database for alias 'default'...
+
+

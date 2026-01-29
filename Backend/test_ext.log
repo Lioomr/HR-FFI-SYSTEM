@@ -1,0 +1,34 @@
+Creating test database for alias 'default'...
+
+.......F....F..
+======================================================================
+FAIL: test_create_leave_request_flow (leaves.tests.test_existing.LeaveManagementTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "D:\FFI HR SYSTEM\Backend\leaves\tests\test_existing.py", line 92, in test_create_leave_request_flow
+    self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+AssertionError: 500 != 201
+
+======================================================================
+FAIL: test_overlapping_requests_forbidden (leaves.tests.test_existing.LeaveManagementTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "D:\FFI HR SYSTEM\Backend\leaves\tests\test_existing.py", line 178, in test_overlapping_requests_forbidden
+    self.assertTrue(response.status_code in [status.HTTP_400_BAD_REQUEST, status.HTTP_422_UNPROCESSABLE_ENTITY])
+AssertionError: False is not true
+
+----------------------------------------------------------------------
+Ran 15 tests in 28.301s
+
+FAILED (failures=2)
+Destroying test database for alias 'default'...
+
+Found 15 test(s).
+System check identified no issues (0 silenced).
+DEBUG_EMP_BAL: {'status': 'success', 'data': [{'leave_type_id': 1, 'leave_type_name': 'Annual Leave', 'opening_balance': '0.00', 'used': '0.00', 'remaining': '21.00'}, {'leave_type_id': 2, 'leave_type_name': 'Sick Leave', 'opening_balance': '5.00', 'used': '0.00', 'remaining': '15.00'}]}
+DEBUG_EXC: <class 'rest_framework.exceptions.PermissionDenied'> You do not have permission to perform this action.
+DEBUG_EXC: <class 'AttributeError'> PENDING
+DEBUG_EXC: <class 'rest_framework.exceptions.PermissionDenied'> You do not have permission to perform this action.
+DEBUG_EXC: <class 'AttributeError'> PENDING
+DEBUG_EXC: <class 'rest_framework.exceptions.ValidationError'> {'end_date': [ErrorDetail(string='End date must be after start date.', code='invalid')]}
+DEBUG_EXC: <class 'django.http.response.Http404'> No LeaveRequest matches the given query.

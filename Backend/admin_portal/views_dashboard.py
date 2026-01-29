@@ -10,6 +10,7 @@ from core.responses import success
 
 from invites.models import Invite
 from audit.models import AuditLog
+from audit.serializers import AuditLogSerializer
 
 User = get_user_model()
 
@@ -43,6 +44,7 @@ class AdminSummaryView(APIView):
         # ---- Audit activity ----
         audit_today = AuditLog.objects.filter(created_at__gte=start_today).count()
         audit_last_7_days = AuditLog.objects.filter(created_at__gte=start_7d).count()
+        recent_audits = AuditLog.objects.select_related("actor").order_by("-created_at")[:10]
 
         # Optional: small breakdown for "activity cards"
         actions_today = (
@@ -76,6 +78,7 @@ class AdminSummaryView(APIView):
             "audit": {
                 "today": audit_today,
                 "last_7_days": audit_last_7_days,
+                "recent": AuditLogSerializer(recent_audits, many=True).data,
                 "top_actions_today": list(top_actions_today),
             },
             "server_time": now.isoformat(),
