@@ -141,3 +141,105 @@ export async function updateEmployee(
   );
   return data;
 }
+
+
+
+/**
+ * Import Status: Aligning with common backend states.
+ * Using string union to capture likely states, but staying flexible if backend differs slightly.
+ */
+export type ImportStatus = "pending" | "processing" | "success" | "failed" | string;
+
+/**
+ * Import Result Detail
+ */
+export interface ImportResult {
+  import_id: string;
+  status: ImportStatus;
+  total_rows?: number;
+  inserted_rows?: number;
+  failed_rows?: number;
+  error_file_url?: string; // May be deprecated in favor of explicit endpoint
+  created_at: string;
+  error_summary?: string[];
+}
+
+/**
+ * Import History Item
+ */
+export interface ImportHistoryItem {
+  id: string;
+  file_name: string;
+  uploaded_by: string;
+  uploaded_at: string;
+  status: ImportStatus;
+  inserted_rows: number;
+  total_rows: number;
+  has_error_file: boolean;
+  error_file_url?: string;
+}
+
+/**
+ * Upload employees Excel file
+ * Endpoint: POST /employees/import/excel
+ */
+export async function importEmployees(file: File): Promise<ApiResponse<{ import_id: string }>> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const { data } = await api.post<ApiResponse<{ import_id: string }>>(
+    "/employees/import/excel",
+    formData,
+    {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    }
+  );
+  return data;
+}
+
+/**
+ * Get status of a specific import
+ * Endpoint: GET /imports/employees/{importId} (Assumed based on history path)
+ * Wait - verify if spec endpoint for status was given. 
+ * User said: "History under /imports/employees... (and error-file download via /imports/employees/{import_id}/errors-file)"
+ * AND "GET /employees/import/{importId}" was flagged as wrong? 
+ * Actually user said "But the authoritative contract requires: POST /employees/import/excel ... History under /imports/employees..."
+ * They didn't explicitly rename the single status endpoint, but implied /imports structure.
+ * Safe bet: GET /imports/employees/{importId} for detail if history is there.
+ * Let's assume /imports/employees/{id} aligns with Restful structure.
+ */
+export async function getImportStatus(importId: string): Promise<ApiResponse<ImportResult>> {
+  const { data } = await api.get<ApiResponse<ImportResult>>(`/imports/employees/${importId}`);
+  return data;
+}
+
+/**
+ * Get import history
+ * Endpoint: GET /imports/employees/history
+ */
+export async function getImportHistory(params?: {
+  page?: number;
+  page_size?: number;
+  status?: string;
+  date_from?: string;
+  date_to?: string;
+}): Promise<ApiResponse<{ results: ImportHistoryItem[]; count: number }>> {
+  const { data } = await api.get<ApiResponse<{ results: ImportHistoryItem[]; count: number }>>(
+    "/imports/employees/history",
+    { params }
+  );
+  return data;
+}
+
+/**
+ * Download error file as Blob (Authenticated)
+ * Endpoint: GET /imports/employees/{import_id}/errors-file
+ */
+export async function downloadImportErrors(importId: string): Promise<Blob> {
+  const response = await api.get(`/imports/employees/${importId}/errors-file`, {
+    responseType: "blob",
+  });
+  return response.data;
+}
