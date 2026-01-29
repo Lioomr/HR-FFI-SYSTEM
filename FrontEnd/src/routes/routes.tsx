@@ -26,6 +26,23 @@ import CreateEmployeePage from "../pages/hr/employees/CreateEmployeePage";
 import ViewEmployeePage from "../pages/hr/employees/ViewEmployeePage";
 import EditEmployeePage from "../pages/hr/employees/EditEmployeePage";
 import HRDashboardPage from "../pages/hr/dashboard/HRDashboardPage";
+import ImportEmployeesEntryPage from "../pages/hr/import/ImportEmployeesEntryPage";
+import ImportResultPage from "../pages/hr/import/ImportResultPage";
+
+import ImportHistoryPage from "../pages/hr/import/ImportHistoryPage";
+import PayrollDashboardPage from "../pages/hr/payroll/PayrollDashboardPage";
+import CreatePayrollRunPage from "../pages/hr/payroll/CreatePayrollRunPage";
+import PayrollRunDetailsPage from "../pages/hr/payroll/PayrollRunDetailsPage";
+import EmployeePayslipsListPage from "../pages/employee/payslips/EmployeePayslipsListPage";
+import EmployeePayslipDetailsPage from "../pages/employee/payslips/EmployeePayslipDetailsPage";
+
+import RequestLeavePage from "../pages/employee/leave/RequestLeavePage";
+import MyLeaveRequestsPage from "../pages/employee/leave/MyLeaveRequestsPage";
+import MyLeaveBalancePage from "../pages/employee/leave/MyLeaveBalancePage";
+
+import LeaveInboxPage from "../pages/hr/leave/LeaveInboxPage";
+import LeaveRequestDetailsPage from "../pages/hr/leave/LeaveRequestDetailsPage";
+
 import RouteErrorBoundary from "./RouteErrorBoundary";
 
 
@@ -103,6 +120,20 @@ export const routes = [
               { path: "hr/task-groups", element: <TaskGroupsPage /> },
               { path: "hr/sponsors", element: <SponsorsPage /> },
 
+              // Import Employees
+              { path: "hr/import/employees", element: <ImportEmployeesEntryPage /> },
+              { path: "hr/import/employees/:import_id/result", element: <ImportResultPage /> },
+              { path: "hr/import/employees/history", element: <ImportHistoryPage /> },
+
+              // Payroll
+              { path: "hr/payroll", element: <PayrollDashboardPage /> },
+              { path: "hr/payroll/create", element: <CreatePayrollRunPage /> },
+              { path: "hr/payroll/:run_id", element: <PayrollRunDetailsPage /> },
+
+              // Leave Management (HR)
+              { path: "hr/leave/requests", element: <LeaveInboxPage /> },
+              { path: "hr/leave/requests/:id", element: <LeaveRequestDetailsPage /> },
+
               // Existing pages
               { path: "hr/attendance", element: <HrAttendancePage /> },
               { path: "hr/leave-balances", element: <HrLeaveBalancesPage /> },
@@ -117,6 +148,13 @@ export const routes = [
               { path: "employee/home", element: <Placeholder title="Employee Home" /> },
               { path: "employee/attendance", element: <EmployeeAttendancePage /> },
               { path: "employee/leaves", element: <EmployeeLeavesPage /> },
+              { path: "employee/payslips", element: <EmployeePayslipsListPage /> },
+              { path: "employee/payslips/:id", element: <EmployeePayslipDetailsPage /> },
+
+              // Employee Leave
+              { path: "employee/leave/request", element: <RequestLeavePage /> },
+              { path: "employee/leave/requests", element: <MyLeaveRequestsPage /> },
+              { path: "employee/leave/balance", element: <MyLeaveBalancePage /> },
             ],
           },
         ],

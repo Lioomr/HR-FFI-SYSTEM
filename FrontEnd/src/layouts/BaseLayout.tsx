@@ -12,6 +12,8 @@ import {
   IdcardOutlined,
   GroupOutlined,
   SafetyOutlined,
+  UploadOutlined,
+  DollarOutlined,
 } from "@ant-design/icons";
 import type { MenuProps } from "antd";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -85,12 +87,18 @@ export default function BaseLayout() {
     { key: "/hr/positions", icon: <IdcardOutlined />, label: <Link to="/hr/positions">Positions</Link> },
     { key: "/hr/task-groups", icon: <GroupOutlined />, label: <Link to="/hr/task-groups">Task Groups</Link> },
     { key: "/hr/sponsors", icon: <SafetyOutlined />, label: <Link to="/hr/sponsors">Sponsors</Link> },
-    
+    { type: "divider" },
+    { key: "/hr/import/employees", icon: <UploadOutlined />, label: <Link to="/hr/import/employees">Import Employees</Link> },
+    { key: "/hr/payroll", icon: <DollarOutlined />, label: <Link to="/hr/payroll">Payroll</Link> },
+    { key: "/hr/leave/requests", icon: <CalendarOutlined />, label: <Link to="/hr/leave/requests">Leave Inbox</Link> },
   ];
 
   const employeeItems: MenuProps["items"] = [
     { key: "/employee/attendance", icon: <CalendarOutlined />, label: <Link to="/employee/attendance">Attendance</Link> },
-    { key: "/employee/leaves", icon: <FileSearchOutlined />, label: <Link to="/employee/leaves">My Leaves</Link> },
+    { key: "/employee/leave/balance", icon: <FileSearchOutlined />, label: <Link to="/employee/leave/balance">Leave Balance</Link> },
+    { key: "/employee/leave/requests", icon: <CalendarOutlined />, label: <Link to="/employee/leave/requests">My Requests</Link> },
+    // { key: "/employee/leaves", icon: <FileSearchOutlined />, label: <Link to="/employee/leaves">My Leaves</Link> }, // Deprecated/Replaced
+    { key: "/employee/payslips", icon: <DollarOutlined />, label: <Link to="/employee/payslips">My Payslips</Link> },
     { key: "/employee/home", icon: <DashboardOutlined />, label: <Link to="/employee/home">Home</Link> },
   ];
 
