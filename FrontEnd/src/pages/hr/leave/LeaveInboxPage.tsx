@@ -61,6 +61,8 @@ export default function LeaveInboxPage() {
             case 'approved': return 'green';
             case 'rejected': return 'red';
             case 'submitted': return 'blue';
+            case 'pending_manager': return 'orange';
+            case 'pending_hr': return 'purple';
             case 'pending': return 'gold';
             case 'cancelled': return 'default';
             default: return 'default';
@@ -70,14 +72,13 @@ export default function LeaveInboxPage() {
     const columns: ColumnsType<LeaveRequest> = [
         {
             title: "Employee",
-            dataIndex: "employee_name",
-            key: "employee_name",
-            render: (val, r) => val || `ID: ${r.employee_id}`
+            key: "employee",
+            render: (_, record) => record.employee?.full_name || `ID: ${record.employee?.id}`
         },
         {
             title: "Leave Type",
-            dataIndex: "leave_type_name",
-            key: "leave_type_name",
+            key: "leave_type",
+            render: (_, record) => record.leave_type?.name || "-"
         },
         {
             title: "Start Date",
@@ -86,8 +87,8 @@ export default function LeaveInboxPage() {
         },
         {
             title: "Days",
-            dataIndex: "days_requested",
-            key: "days_requested",
+            dataIndex: "days", // Match backend
+            key: "days",
             align: 'center'
         },
         {
@@ -95,7 +96,7 @@ export default function LeaveInboxPage() {
             dataIndex: "status",
             key: "status",
             render: (status) => {
-                const display = status?.charAt(0).toUpperCase() + status?.slice(1).toLowerCase();
+                const display = (status?.charAt(0).toUpperCase() + status?.slice(1).toLowerCase()).replace('_', ' ');
                 return (
                     <Tag color={getStatusColor(status)}>
                         {display}
@@ -139,6 +140,8 @@ export default function LeaveInboxPage() {
                             <Form.Item label="Status" name="status">
                                 <Select placeholder="Filter by Status" allowClear>
                                     <Option value="submitted">Submitted</Option>
+                                    <Option value="pending_manager">Pending Manager</Option>
+                                    <Option value="pending_hr">Pending HR</Option>
                                     <Option value="approved">Approved</Option>
                                     <Option value="rejected">Rejected</Option>
                                     <Option value="cancelled">Cancelled</Option>

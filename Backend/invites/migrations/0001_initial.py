@@ -7,7 +7,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
@@ -16,24 +15,55 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
-            name='Invite',
+            name="Invite",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('email', models.EmailField(db_index=True, max_length=254)),
-                ('role', models.CharField(max_length=32)),
-                ('token', models.CharField(db_index=True, max_length=64, unique=True)),
-                ('status', models.CharField(choices=[('sent', 'Sent'), ('accepted', 'Accepted'), ('revoked', 'Revoked'), ('expired', 'Expired')], default='sent', max_length=16)),
-                ('sent_at', models.DateTimeField(default=django.utils.timezone.now)),
-                ('expires_at', models.DateTimeField()),
-                ('revoked_at', models.DateTimeField(blank=True, null=True)),
-                ('resend_count', models.PositiveIntegerField(default=0)),
-                ('last_resent_at', models.DateTimeField(blank=True, null=True)),
-                ('created_by', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='created_invites', to=settings.AUTH_USER_MODEL)),
-                ('revoked_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='revoked_invites', to=settings.AUTH_USER_MODEL)),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("email", models.EmailField(db_index=True, max_length=254)),
+                ("role", models.CharField(max_length=32)),
+                ("token", models.CharField(db_index=True, max_length=64, unique=True)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("sent", "Sent"),
+                            ("accepted", "Accepted"),
+                            ("revoked", "Revoked"),
+                            ("expired", "Expired"),
+                        ],
+                        default="sent",
+                        max_length=16,
+                    ),
+                ),
+                ("sent_at", models.DateTimeField(default=django.utils.timezone.now)),
+                ("expires_at", models.DateTimeField()),
+                ("revoked_at", models.DateTimeField(blank=True, null=True)),
+                ("resend_count", models.PositiveIntegerField(default=0)),
+                ("last_resent_at", models.DateTimeField(blank=True, null=True)),
+                (
+                    "created_by",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="created_invites",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "revoked_by",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="revoked_invites",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-sent_at'],
-                'indexes': [models.Index(fields=['status'], name='invites_inv_status_443834_idx'), models.Index(fields=['expires_at'], name='invites_inv_expires_44c800_idx')],
+                "ordering": ["-sent_at"],
+                "indexes": [
+                    models.Index(fields=["status"], name="invites_inv_status_443834_idx"),
+                    models.Index(fields=["expires_at"], name="invites_inv_expires_44c800_idx"),
+                ],
             },
         ),
     ]

@@ -11,36 +11,38 @@ const LeaveBalanceTable: React.FC<LeaveBalanceTableProps> = ({ balances, loading
     const columns = [
         {
             title: "Leave Type",
-            dataIndex: "leave_type_name",
-            key: "leave_type_name",
+            dataIndex: "leave_type",
+            key: "leave_type",
             render: (text: string) => <strong>{text}</strong>,
         },
         {
-            title: "Opening Balance",
-            dataIndex: "opening_balance",
-            key: "opening_balance",
-            render: (val: string) => <span>{parseFloat(val).toFixed(1)}</span>,
+            title: "Total",
+            dataIndex: "total_days",
+            key: "total_days",
+            render: (val: number) => <span>{Number(val || 0).toFixed(1)}</span>,
         },
         {
             title: "Used",
-            dataIndex: "used",
-            key: "used",
-            render: (val: string) => {
-                const num = parseFloat(val);
+            dataIndex: "used_days",
+            key: "used_days",
+            render: (val: number) => {
+                const num = Number(val || 0);
                 return <span style={{ color: num > 0 ? "orange" : "inherit" }}>{num.toFixed(1)}</span>;
             },
         },
         {
             title: "Remaining",
-            dataIndex: "remaining",
-            key: "remaining",
-            render: (val: string) => {
-                const num = parseFloat(val);
+            dataIndex: "remaining_days",
+            key: "remaining_days",
+            render: (val: number) => {
+                const num = Number(val || 0);
                 const color = num <= 0 ? "red" : num < 5 ? "orange" : "green";
                 return <Tag color={color}>{num.toFixed(1)} Days</Tag>;
             },
         },
     ];
+
+
 
     return (
         <Table
@@ -51,6 +53,7 @@ const LeaveBalanceTable: React.FC<LeaveBalanceTableProps> = ({ balances, loading
             pagination={false}
             bordered
             size="middle"
+            scroll={{ x: 600 }}
         />
     );
 };

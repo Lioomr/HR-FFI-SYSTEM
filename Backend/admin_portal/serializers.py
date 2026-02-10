@@ -6,16 +6,40 @@ User = get_user_model()
 
 ROLE_CHOICES = ("SystemAdmin", "HRManager", "Employee")
 
+
 class UserListSerializer(serializers.ModelSerializer):
+    linked_employee_id = serializers.SerializerMethodField()
+    linked_employee_name = serializers.SerializerMethodField()
     role = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["id", "full_name", "email", "is_active", "role", "is_staff", "is_superuser"]
+        fields = [
+            "id",
+            "full_name",
+            "email",
+            "is_active",
+            "role",
+            "is_staff",
+            "is_superuser",
+            "linked_employee_id",
+            "linked_employee_name",
+        ]
 
     def get_role(self, obj):
         g = obj.groups.first()
         return g.name if g else "Employee"
+
+    def get_linked_employee_id(self, obj):
+        if hasattr(obj, "employee_profile"):
+            return obj.employee_profile.id
+        return None
+
+    def get_linked_employee_name(self, obj):
+        if hasattr(obj, "employee_profile"):
+            return obj.employee_profile.full_name
+        return None
+
 
 class CreateUserSerializer(serializers.Serializer):
     full_name = serializers.CharField(max_length=255)
@@ -46,11 +70,14 @@ class CreateUserSerializer(serializers.Serializer):
         user.groups.add(group)
         return user
 
+
 class UpdateStatusSerializer(serializers.Serializer):
     is_active = serializers.BooleanField()
 
+
 class UpdateRoleSerializer(serializers.Serializer):
     role = serializers.ChoiceField(choices=ROLE_CHOICES)
+
 
 class ResetPasswordSerializer(serializers.Serializer):
     mode = serializers.ChoiceField(choices=("temporary_password", "reset_link"))

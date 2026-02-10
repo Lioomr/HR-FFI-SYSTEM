@@ -31,18 +31,10 @@ class EmployeeProfileReadSerializer(serializers.ModelSerializer):
     sponsor = serializers.SerializerMethodField()
     passport = serializers.CharField(source="passport_no", read_only=True)
 
-    department_id = serializers.PrimaryKeyRelatedField(
-        source="department_ref", read_only=True
-    )
-    position_id = serializers.PrimaryKeyRelatedField(
-        source="position_ref", read_only=True
-    )
-    task_group_id = serializers.PrimaryKeyRelatedField(
-        source="task_group_ref", read_only=True
-    )
-    sponsor_id = serializers.PrimaryKeyRelatedField(
-        source="sponsor_ref", read_only=True
-    )
+    department_id = serializers.PrimaryKeyRelatedField(source="department_ref", read_only=True)
+    position_id = serializers.PrimaryKeyRelatedField(source="position_ref", read_only=True)
+    task_group_id = serializers.PrimaryKeyRelatedField(source="task_group_ref", read_only=True)
+    sponsor_id = serializers.PrimaryKeyRelatedField(source="sponsor_ref", read_only=True)
 
     class Meta:
         model = EmployeeProfile
@@ -147,6 +139,12 @@ class EmployeeProfileWriteSerializer(serializers.ModelSerializer):
         allow_null=True,
     )
     join_date = serializers.DateField(source="hire_date", required=True)
+    user_id = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(),
+        source="user",
+        required=False,
+        allow_null=True,
+    )
 
     class Meta:
         model = EmployeeProfile
@@ -180,6 +178,7 @@ class EmployeeProfileWriteSerializer(serializers.ModelSerializer):
             "petrol_allowance",
             "other_allowance",
             "total_salary",
+            "user_id",
         ]
         read_only_fields = ["id", "employee_id"]
 

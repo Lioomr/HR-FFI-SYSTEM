@@ -42,6 +42,11 @@ import MyLeaveBalancePage from "../pages/employee/leave/MyLeaveBalancePage";
 
 import LeaveInboxPage from "../pages/hr/leave/LeaveInboxPage";
 import LeaveRequestDetailsPage from "../pages/hr/leave/LeaveRequestDetailsPage";
+import HRAttendancePage from "../pages/hr/attendance/HRAttendancePage";
+
+import MyProfilePage from "../pages/employee/MyProfilePage";
+import UserProfilePage from "../pages/shared/UserProfilePage";
+import DashboardPage from "../pages/employee/DashboardPage";
 
 import RouteErrorBoundary from "./RouteErrorBoundary";
 
@@ -97,7 +102,7 @@ export const routes = [
               { path: "admin/invites", element: <AdminInvitesPage /> },
               { path: "admin/audit-logs", element: <AdminAuditLogsPage /> },
               { path: "admin/settings", element: <AdminSettingsPage /> },
-
+              { path: "admin/profile", element: <UserProfilePage /> },
             ],
           },
 
@@ -107,6 +112,8 @@ export const routes = [
             children: [
               { path: "hr", element: <Navigate to="/hr/employees" replace /> },
               { path: "hr/dashboard", element: <HRDashboardPage /> },
+              { path: "hr/profile", element: <UserProfilePage /> },
+              { path: "hr/attendance", element: <HRAttendancePage /> },
 
               // Employee Management
               { path: "hr/employees", element: <EmployeesListPage /> },
@@ -140,12 +147,15 @@ export const routes = [
             ],
           },
 
+
           // Employee (placeholders)
           {
             element: <RequireRole roles={["Employee", "SystemAdmin", "HRManager"]} />,
             children: [
-              { path: "employee", element: <Navigate to="/employee/attendance" replace /> },
-              { path: "employee/home", element: <Placeholder title="Employee Home" /> },
+              { path: "employee", element: <Navigate to="/employee/dashboard" replace /> },
+              { path: "employee/home", element: <Navigate to="/employee/dashboard" replace /> },
+              { path: "employee/dashboard", element: <DashboardPage /> },
+              { path: "employee/profile", element: <MyProfilePage /> },
               { path: "employee/attendance", element: <EmployeeAttendancePage /> },
               { path: "employee/leaves", element: <EmployeeLeavesPage /> },
               { path: "employee/payslips", element: <EmployeePayslipsListPage /> },

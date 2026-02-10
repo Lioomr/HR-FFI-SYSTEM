@@ -14,7 +14,19 @@ class Migration(migrations.Migration):
                 ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
                 ("year", models.PositiveIntegerField()),
                 ("month", models.PositiveIntegerField()),
-                ("status", models.CharField(choices=[("DRAFT", "Draft"), ("COMPLETED", "Completed"), ("PAID", "Paid"), ("CANCELLED", "Cancelled")], default="DRAFT", max_length=20)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("DRAFT", "Draft"),
+                            ("COMPLETED", "Completed"),
+                            ("PAID", "Paid"),
+                            ("CANCELLED", "Cancelled"),
+                        ],
+                        default="DRAFT",
+                        max_length=20,
+                    ),
+                ),
                 ("total_net", models.DecimalField(decimal_places=2, default=0, max_digits=12)),
                 ("total_employees", models.PositiveIntegerField(default=0)),
                 ("created_at", models.DateTimeField(auto_now_add=True)),
@@ -36,7 +48,12 @@ class Migration(migrations.Migration):
                 ("total_allowances", models.DecimalField(decimal_places=2, default=0, max_digits=12)),
                 ("total_deductions", models.DecimalField(decimal_places=2, default=0, max_digits=12)),
                 ("net_salary", models.DecimalField(decimal_places=2, default=0, max_digits=12)),
-                ("payroll_run", models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name="items", to="payroll.payrollrun")),
+                (
+                    "payroll_run",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, related_name="items", to="payroll.payrollrun"
+                    ),
+                ),
             ],
             options={
                 "ordering": ["id"],

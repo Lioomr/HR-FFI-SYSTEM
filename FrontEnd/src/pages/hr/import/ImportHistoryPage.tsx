@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Table, Tag, Button, Space, DatePicker, Select, Card, Tooltip, message } from "antd";
-import { ReloadOutlined, DownloadOutlined, FileExcelOutlined } from "@ant-design/icons";
+import { ReloadOutlined, DownloadOutlined } from "@ant-design/icons";
 import { getImportHistory, downloadImportErrors } from "../../../services/api/employeesApi";
 import type { ImportHistoryItem } from "../../../services/api/employeesApi";
 import { unwrapEnvelope } from "../../../utils/dataUtils";
@@ -37,13 +37,13 @@ const ImportHistoryPage: React.FC = () => {
             }
 
             const response = await getImportHistory(params);
-            const { results, count } = unwrapEnvelope(response);
+            const unwrapped = unwrapEnvelope(response);
 
-            // Should verify if normalizeListData is actually needed here or if the API returns direct structure
-            // Based on employeesApi.ts -> getImportHistory returns ApiResponse<{ results: ..., count: ... }>
-            // So unwrapEnvelope gives { results, count } directly.
+            // StandardPagination returns { items, count, page, page_size, total_pages }
+            const items = unwrapped.items || unwrapped.results || [];
+            const count = unwrapped.count || 0;
 
-            setData(results);
+            setData(items);
             setTotal(count);
         } catch (error) {
             console.error(error);
@@ -80,21 +80,16 @@ const ImportHistoryPage: React.FC = () => {
     const columns: ColumnsType<ImportHistoryItem> = [
         {
             title: "Date",
-            dataIndex: "uploaded_at",
-            key: "uploaded_at",
+            dataIndex: "created_at",
+            key: "created_at",
             render: (val: string) => dayjs(val).format("YYYY-MM-DD HH:mm"),
         },
         {
             title: "Uploaded By",
-            dataIndex: "uploaded_by",
-            key: "uploaded_by",
+            dataIndex: "uploader",
+            key: "uploader",
         },
-        {
-            title: "File Name",
-            dataIndex: "file_name",
-            key: "file_name",
-            render: (text) => <Space><FileExcelOutlined /> {text}</Space>
-        },
+        // Backend does not return filename, so column removed.
         {
             title: "Status",
             dataIndex: "status",
@@ -109,9 +104,16 @@ const ImportHistoryPage: React.FC = () => {
             },
         },
         {
+            title: "Total Rows",
+            dataIndex: "row_count",
+            key: "row_count",
+            align: 'center',
+        },
+        {
             title: "Inserted",
             dataIndex: "inserted_rows",
             key: "inserted_rows",
+            align: 'center',
             render: (val, record) => {
                 const status = record.status?.toLowerCase();
                 return (status === "completed" || status === "success") ? val : "-";
@@ -121,7 +123,7 @@ const ImportHistoryPage: React.FC = () => {
             title: "Actions",
             key: "actions",
             render: (_, record) => (
-                record.has_error_file ? (
+                record.status?.toLowerCase() === 'failed' ? (
                     <Tooltip title="Download Error File">
                         <Button
                             type="link"

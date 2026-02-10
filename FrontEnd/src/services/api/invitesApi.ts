@@ -16,26 +16,26 @@ export type CreateInviteRequest = {
 
 export async function listInvites(params: InvitesListParams = {}) {
   const { data } = await api.get<ApiResponse<PaginatedResponse<InviteDto>>>(
-    "/invites",
+    "/invites/",
     { params }
   );
   return data;
 }
 
 export async function createInvite(payload: CreateInviteRequest) {
-  const { data } = await api.post<ApiResponse<InviteDto>>("/invites", payload);
+  const { data } = await api.post<ApiResponse<InviteDto>>("/invites/", payload);
   return data;
 }
 
 export async function resendInvite(inviteId: number | string) {
   const { data } = await api.post<ApiResponse<InviteDto>>(
-    `/invites/${inviteId}/resend`,
+    `/invites/${inviteId}/resend/`,
     {}
   );
   return data;
 }
 
 export async function revokeInvite(inviteId: number | string) {
-  const { data } = await api.delete<ApiResponse<{}>>(`/invites/${inviteId}`);
+  const { data } = await api.delete<ApiResponse<{}>>(`/invites/${inviteId}/`);
   return data;
 }

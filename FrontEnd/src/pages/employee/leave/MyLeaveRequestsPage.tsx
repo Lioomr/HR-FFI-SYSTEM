@@ -78,7 +78,9 @@ export default function MyLeaveRequestsPage() {
             case 'approved': return 'green';
             case 'rejected': return 'red';
             case 'submitted': return 'blue';
-            case 'pending': return 'gold'; // Fallback if old data exists
+            case 'pending_manager': return 'orange';
+            case 'pending_hr': return 'purple';
+            case 'pending': return 'gold'; // Fallback
             case 'cancelled': return 'default';
             default: return 'default';
         }
@@ -87,9 +89,8 @@ export default function MyLeaveRequestsPage() {
     const columns: ColumnsType<LeaveRequest> = [
         {
             title: "Leave Type",
-            dataIndex: "leave_type_name", // Assuming backend sends name, or we join it. DTO has leave_type_name? Yes
-            key: "leave_type_name",
-            render: (val) => val || "Leave"
+            key: "leave_type",
+            render: (_, record) => record.leave_type?.name || "Leave"
         },
         {
             title: "Start Date",
@@ -103,8 +104,8 @@ export default function MyLeaveRequestsPage() {
         },
         {
             title: "Days",
-            dataIndex: "days_requested",
-            key: "days_requested",
+            dataIndex: "days", // Match backend/interface
+            key: "days",
             align: 'center'
         },
         {
@@ -118,8 +119,8 @@ export default function MyLeaveRequestsPage() {
             dataIndex: "status",
             key: "status",
             render: (status) => {
-                // Display normalized text
-                const display = status?.charAt(0).toUpperCase() + status?.slice(1).toLowerCase();
+                // Display normalized text. Replace underscore with space
+                const display = (status?.charAt(0).toUpperCase() + status?.slice(1).toLowerCase()).replace('_', ' ');
                 return (
                     <Tag color={getStatusColor(status)}>
                         {display}
@@ -131,21 +132,26 @@ export default function MyLeaveRequestsPage() {
             title: "Actions",
             key: "actions",
             align: 'center',
-            render: (_, record) => (
-                <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
-                    {canCancel && (record.status?.toLowerCase() === 'submitted' || record.status === 'PENDING') && (
-                        <Tooltip title="Cancel Request">
-                            <Button
-                                danger
-                                icon={<CloseCircleOutlined />}
-                                size="small"
-                                loading={cancellingId === record.id}
-                                onClick={() => handleCancel(record.id)}
-                            />
-                        </Tooltip>
-                    )}
-                </div>
-            ),
+            render: (_, record) => {
+                const s = record.status?.toLowerCase();
+                const isPending = s === 'submitted' || s === 'pending_manager' || s === 'pending_hr' || s === 'pending';
+
+                return (
+                    <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+                        {canCancel && isPending && (
+                            <Tooltip title="Cancel Request">
+                                <Button
+                                    danger
+                                    icon={<CloseCircleOutlined />}
+                                    size="small"
+                                    loading={cancellingId === record.id}
+                                    onClick={() => handleCancel(record.id)}
+                                />
+                            </Tooltip>
+                        )}
+                    </div>
+                )
+            },
         },
     ];
 

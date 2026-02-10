@@ -9,10 +9,10 @@ from datetime import timedelta, date as date_type
 
 from .models import AttendanceRecord
 from .serializers import (
-    AttendanceRecordSerializer, 
+    AttendanceRecordSerializer,
     AttendanceOverrideSerializer,
     CheckInResponseSerializer,
-    CheckOutResponseSerializer
+    CheckOutResponseSerializer,
 )
 from .permissions import IsAttendanceOwner, IsHRManagerOrAdmin
 from core.permissions import get_role
@@ -20,8 +20,10 @@ from core.responses import success, error
 from audit.utils import audit
 from employees.models import EmployeeProfile
 
+
 class AttendanceThrottle(UserRateThrottle):
-    rate = '10/min'
+    rate = "10/min"
+
 
 class AttendanceRecordViewSet(viewsets.ModelViewSet):
     serializer_class = AttendanceRecordSerializer
@@ -34,7 +36,7 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         role = get_role(user)
-        
+
         # Date Filter Logic (Default: Last 30 days)
         queryset = AttendanceRecord.objects.all().select_related("employee_profile__user")
         date_from_str = self.request.query_params.get("date_from")
@@ -64,7 +66,7 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
             if employee_id:
                 queryset = queryset.filter(employee_profile_id=employee_id)
             return queryset
-        
+
         # Employee Scope (for me_list action)
         return queryset.filter(employee_profile__user=user)
 
@@ -72,23 +74,28 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         # Strict separation: global list/retrieve ONLY for HR/Admin
         if self.action in ["list", "retrieve"]:
             return [IsAuthenticated(), IsHRManagerOrAdmin()]
-        
+
         # Employee-only actions
         if self.action in ["me_list", "me_check_in", "me_check_out"]:
             return [IsAuthenticated()]
-        
+
         # HR/Admin write actions
         if self.action in ["create", "update", "partial_update", "destroy"]:
             return [IsAuthenticated(), IsHRManagerOrAdmin()]
-        
+
         return [IsAuthenticated()]
 
     def list(self, request, *args, **kwargs):
         # Check for date filter error
-        if hasattr(self, '_date_filter_error'):
+        if hasattr(self, "_date_filter_error"):
             return error(f"Invalid date filter: {self._date_filter_error}", status=status.HTTP_400_BAD_REQUEST)
-        
+
         response = super().list(request, *args, **kwargs)
+        
+        # Avoid double wrapping if pagination already added the envelope
+        if isinstance(response.data, dict) and response.data.get("status") == "success":
+            return response
+            
         return success(response.data)
 
     def retrieve(self, request, *args, **kwargs):
@@ -97,27 +104,34 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         return error("Attendance records cannot be deleted.", status=status.HTTP_405_METHOD_NOT_ALLOWED)
-    
+
     def partial_update(self, request, *args, **kwargs):
         # HR Override logic (PATCH routes here)
         instance = self.get_object()
         s = AttendanceOverrideSerializer(instance, data=request.data, partial=True)
         s.is_valid(raise_exception=True)
-        
+
         # Set override metadata
         instance.is_overridden = True
         instance.source = AttendanceRecord.Source.HR
         instance.updated_by = request.user
-        
+
         # Apply validated changes
         for attr, value in s.validated_data.items():
             setattr(instance, attr, value)
         instance.save()
-        
-        audit(request, "attendance.override", entity="attendance_record", entity_id=instance.id, metadata=s.validated_data)
-        
+
+        # Serialize metadata to ensure datetimes are strings
+        from django.core.serializers.json import DjangoJSONEncoder
+        import json
+        serialized_metadata = json.loads(json.dumps(s.validated_data, cls=DjangoJSONEncoder))
+
+        audit(
+            request, "attendance.override", entity="attendance_record", entity_id=instance.id, metadata=serialized_metadata
+        )
+
         return success(AttendanceRecordSerializer(instance).data)
-    
+
     def update(self, request, *args, **kwargs):
         # Route PUT to same override logic as PATCH
         return self.partial_update(request, *args, **kwargs)
@@ -126,7 +140,7 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
     def me_check_in(self, request):
         user = request.user
         today = timezone.localdate()
-        
+
         try:
             profile = EmployeeProfile.objects.get(user=user)
         except EmployeeProfile.DoesNotExist:
@@ -139,12 +153,12 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
             employee_profile=profile,
             date=today,
             check_in_at=timezone.now(),
-            status=AttendanceRecord.Status.PRESENT,
+            status=AttendanceRecord.Status.PENDING,
             source=AttendanceRecord.Source.EMPLOYEE,
             created_by=user,
-            updated_by=user
+            updated_by=user,
         )
-        
+
         audit(request, "attendance.check_in", entity="attendance_record", entity_id=record.id)
         return success(CheckInResponseSerializer(record).data, status=status.HTTP_201_CREATED)
 
@@ -152,7 +166,7 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
     def me_check_out(self, request):
         user = request.user
         today = timezone.localdate()
-        
+
         try:
             profile = EmployeeProfile.objects.get(user=user)
         except EmployeeProfile.DoesNotExist:
@@ -169,7 +183,7 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         record.check_out_at = timezone.now()
         record.updated_by = user
         record.save()
-        
+
         audit(request, "attendance.check_out", entity="attendance_record", entity_id=record.id)
         return success(CheckOutResponseSerializer(record).data)
 
@@ -177,15 +191,12 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
     def me_list(self, request):
         # Employee-scoped list (get_queryset already filters to own records)
         queryset = self.filter_queryset(self.get_queryset())
-        
+
         page = self.paginate_queryset(queryset)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
-            paginated_response = self.get_paginated_response(serializer.data)
-            # Wrap the paginated response
-            return success(paginated_response.data)
+            # Return proper paginated response directly (already enveloped)
+            return self.get_paginated_response(serializer.data)
 
         serializer = self.get_serializer(queryset, many=True)
         return success(serializer.data)
-
-

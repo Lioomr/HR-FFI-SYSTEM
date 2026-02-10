@@ -2,28 +2,36 @@ import secrets
 import string
 
 from django.contrib.auth import get_user_model
+import secrets
+import string
+
+from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.db.models import Q
 from rest_framework.views import APIView
 from rest_framework import status
 from rest_framework.response import Response
 
-from core.permissions import IsSystemAdmin
+from core.permissions import IsSystemAdmin, IsHRManagerOrAdmin
 from core.responses import success, error
 from core.pagination import StandardPagination
 from audit.utils import audit
 from .serializers import (
-    UserListSerializer, CreateUserSerializer,
-    UpdateStatusSerializer, UpdateRoleSerializer,
-    ResetPasswordSerializer
+    UserListSerializer,
+    CreateUserSerializer,
+    UpdateStatusSerializer,
+    UpdateRoleSerializer,
+    ResetPasswordSerializer,
 )
 
 User = get_user_model()
 
 ROLE_SYSTEM_ADMIN = "SystemAdmin"
 
+
 def system_admin_count():
     return User.objects.filter(groups__name=ROLE_SYSTEM_ADMIN, is_active=True).count()
+
 
 def is_last_active_system_admin(user: User) -> bool:
     # if this user is an active system admin and it's the only one
@@ -31,12 +39,14 @@ def is_last_active_system_admin(user: User) -> bool:
         return False
     return user.groups.filter(name=ROLE_SYSTEM_ADMIN).exists() and system_admin_count() <= 1
 
+
 def generate_temp_password(length=12):
     alphabet = string.ascii_letters + string.digits
     return "".join(secrets.choice(alphabet) for _ in range(length))
 
+
 class UsersListCreateView(APIView):
-    permission_classes = [IsSystemAdmin]
+    permission_classes = [IsHRManagerOrAdmin]
 
     def get(self, request):
         search = request.query_params.get("search", "").strip()
@@ -61,16 +71,42 @@ class UsersListCreateView(APIView):
 
     def post(self, request):
         s = CreateUserSerializer(data=request.data)
-        s.is_valid(raise_exception=True)
+        
+        # Validate and return user-friendly errors
+        if not s.is_valid():
+            # Extract the first error message for user-friendly display
+            errors = s.errors
+            if errors:
+                # Get first field with error
+                first_field = next(iter(errors.keys()))
+                first_error = errors[first_field]
+                
+                # Extract message from list if needed
+                if isinstance(first_error, list) and len(first_error) > 0:
+                    error_message = str(first_error[0])
+                else:
+                    error_message = str(first_error)
+                
+                return error(error_message, errors=errors, status=422)
+            
+            return error("Validation failed", errors=errors, status=422)
+        
         user = s.save()
 
-        audit(request, "user_created", entity="user", entity_id=user.id, metadata={
-            "email": user.email,
-            "role": user.groups.first().name if user.groups.exists() else "Employee",
-            "is_active": user.is_active,
-        })
+        audit(
+            request,
+            "user_created",
+            entity="user",
+            entity_id=user.id,
+            metadata={
+                "email": user.email,
+                "role": user.groups.first().name if user.groups.exists() else "Employee",
+                "is_active": user.is_active,
+            },
+        )
 
         return success(UserListSerializer(user).data, status=status.HTTP_201_CREATED)
+
 
 class UserDetailView(APIView):
     permission_classes = [IsSystemAdmin]
@@ -78,6 +114,7 @@ class UserDetailView(APIView):
     def get(self, request, user_id):
         user = User.objects.get(pk=user_id)
         return success(UserListSerializer(user).data)
+
 
 class UserStatusView(APIView):
     permission_classes = [IsSystemAdmin]
@@ -100,11 +137,10 @@ class UserStatusView(APIView):
         user.is_active = new_active
         user.save(update_fields=["is_active"])
 
-        audit(request, "user_status_changed", entity="user", entity_id=user.id, metadata={
-            "is_active": user.is_active
-        })
+        audit(request, "user_status_changed", entity="user", entity_id=user.id, metadata={"is_active": user.is_active})
 
         return success(UserListSerializer(user).data)
+
 
 class UserRoleView(APIView):
     permission_classes = [IsSystemAdmin]
@@ -128,6 +164,7 @@ class UserRoleView(APIView):
         audit(request, "user_role_changed", entity="user", entity_id=user.id, metadata={"role": new_role})
 
         return success(UserListSerializer(user).data)
+
 
 class UserResetPasswordView(APIView):
     permission_classes = [IsSystemAdmin]

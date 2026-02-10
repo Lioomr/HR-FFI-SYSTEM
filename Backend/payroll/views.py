@@ -248,9 +248,7 @@ class PayrollRunViewSet(
 
         if export_format == "csv":
             response = HttpResponse(content_type="text/csv")
-            response["Content-Disposition"] = (
-                f'attachment; filename="payroll_run_{run.id}_csv.csv"'
-            )
+            response["Content-Disposition"] = f'attachment; filename="payroll_run_{run.id}_csv.csv"'
             writer = csv.writer(response)
             writer.writerow(
                 [
@@ -292,9 +290,7 @@ class PayrollRunViewSet(
         pdf_bytes = _build_pdf_bytes(header_lines)
         audit(request, "payroll_exported", entity="PayrollRun", entity_id=run.id)
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
-        response["Content-Disposition"] = (
-            f'attachment; filename="payroll_run_{run.id}_pdf.pdf"'
-        )
+        response["Content-Disposition"] = f'attachment; filename="payroll_run_{run.id}_pdf.pdf"'
         response["Content-Length"] = str(len(pdf_bytes))
         return response
 

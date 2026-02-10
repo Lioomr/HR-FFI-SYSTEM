@@ -110,7 +110,7 @@ export default function MyLeaveBalancePage() {
                 <Table
                     dataSource={balances}
                     columns={columns}
-                    rowKey="leave_type"
+                    rowKey="leave_type_id"
                     pagination={false}
                     locale={{ emptyText: "No leave balance data found." }}
                 />

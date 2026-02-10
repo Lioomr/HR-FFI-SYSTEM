@@ -8,7 +8,7 @@ import type { ApiResponse, ApiError } from "./apiTypes";
  * if (isApiError(response)) {
  *   console.error(response.message);
  * } else {
- *   console.log(response.data);
+
  * }
  */
 export function isApiError<T>(res: ApiResponse<T>): res is ApiError {
@@ -22,7 +22,7 @@ export function isApiError<T>(res: ApiResponse<T>): res is ApiError {
  * @example
  * try {
  *   const data = unwrapApiData(await someApi.getData());
- *   console.log(data);
+
  * } catch (error) {
  *   console.error(error.message);
  * }

@@ -21,13 +21,15 @@ class AuditPagination(PageNumberPagination):
     max_page_size = 200
 
     def get_paginated_response(self, data):
-        return success({
-            "items": data,
-            "page": self.page.number,
-            "page_size": self.get_page_size(self.request),
-            "count": self.page.paginator.count,
-            "total_pages": self.page.paginator.num_pages,
-        })
+        return success(
+            {
+                "items": data,
+                "page": self.page.number,
+                "page_size": self.get_page_size(self.request),
+                "count": self.page.paginator.count,
+                "total_pages": self.page.paginator.num_pages,
+            }
+        )
 
 
 def apply_filters(qs, params):
@@ -72,10 +74,10 @@ def apply_filters(qs, params):
     search = params.get("search")
     if search:
         qs = qs.filter(
-            Q(action__icontains=search) |
-            Q(entity__icontains=search) |
-            Q(entity_id__icontains=search) |
-            Q(actor__email__icontains=search)
+            Q(action__icontains=search)
+            | Q(entity__icontains=search)
+            | Q(entity_id__icontains=search)
+            | Q(actor__email__icontains=search)
         )
 
     return qs
@@ -115,25 +117,29 @@ class AuditLogsExportView(APIView):
         resp["Content-Disposition"] = 'attachment; filename="audit_logs.csv"'
 
         writer = csv.writer(resp)
-        writer.writerow([
-            "id",
-            "timestamp",
-            "actor_email",
-            "action",
-            "entity",
-            "entity_id",
-            "ip_address",
-        ])
+        writer.writerow(
+            [
+                "id",
+                "timestamp",
+                "actor_email",
+                "action",
+                "entity",
+                "entity_id",
+                "ip_address",
+            ]
+        )
 
         for log in qs.iterator(chunk_size=2000):
-            writer.writerow([
-                log.id,
-                log.created_at.isoformat(),
-                log.actor.email if log.actor else "",
-                log.action,
-                log.entity,
-                log.entity_id,
-                log.ip_address or "",
-            ])
+            writer.writerow(
+                [
+                    log.id,
+                    log.created_at.isoformat(),
+                    log.actor.email if log.actor else "",
+                    log.action,
+                    log.entity,
+                    log.entity_id,
+                    log.ip_address or "",
+                ]
+            )
 
         return resp

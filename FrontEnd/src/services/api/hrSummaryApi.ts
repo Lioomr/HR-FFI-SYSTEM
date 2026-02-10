@@ -7,12 +7,29 @@ import type { ApiResponse } from "./apiTypes";
 export interface HRSummary {
   total_employees: number;
   active_employees: number;
+  expiring_docs: number;
+  pending_leaves: number;
+  pending_approvals: Array<{
+    id: number;
+    name: string;
+    action: string;
+    time: string;
+    avatar: string;
+  }>;
+  recent_activity: Array<{
+    key: string;
+    employee: string;
+    action: string;
+    date: string;
+    status: string;
+    statusColor: string;
+  }>;
 }
 
 /**
  * Get HR summary metrics
  */
 export async function getHrSummary(): Promise<ApiResponse<HRSummary>> {
-  const { data } = await api.get<ApiResponse<HRSummary>>("/hr/summary");
+  const { data } = await api.get<ApiResponse<HRSummary>>("/api/hr/summary/");
   return data;
 }

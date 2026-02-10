@@ -29,8 +29,20 @@ class Migration(migrations.Migration):
                 ("status", models.CharField(default="PAID", max_length=20)),
                 ("created_at", models.DateTimeField(auto_now_add=True)),
                 ("updated_at", models.DateTimeField(auto_now=True)),
-                ("employee", models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name="payslips", to=settings.AUTH_USER_MODEL)),
-                ("payroll_run", models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name="payslips", to="payroll.payrollrun")),
+                (
+                    "employee",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="payslips",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "payroll_run",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, related_name="payslips", to="payroll.payrollrun"
+                    ),
+                ),
             ],
             options={
                 "ordering": ["-year", "-month", "-id"],

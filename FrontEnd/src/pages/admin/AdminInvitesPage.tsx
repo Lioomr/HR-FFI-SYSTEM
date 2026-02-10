@@ -175,7 +175,18 @@ export default function AdminInvitesPage() {
         setUnauthorized(true);
         return;
       }
-      setError(e?.message || "Failed to send invite.");
+
+      const data = e?.apiData || e?.response?.data;
+      if (data?.errors && Array.isArray(data.errors)) {
+        // errors is [{ field: "...", message: "..." }, ...]
+        const firstError = data.errors.map((err: any) => err.message).join(" ");
+        setError(firstError);
+      } else if (data?.errors) {
+        const firstError = Object.values(data.errors).flat().join(" ");
+        setError(firstError);
+      } else {
+        setError(e?.message || "Failed to send invite.");
+      }
     } finally {
       setSending(false);
     }

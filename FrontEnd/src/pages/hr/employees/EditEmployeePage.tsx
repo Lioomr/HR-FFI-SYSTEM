@@ -135,6 +135,7 @@ export default function EditEmployeePage() {
 
             // Handle form validation errors
             if (err.errorFields) {
+                notifyError("Please fix the validation errors in the form.");
                 return;
             }
 

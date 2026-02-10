@@ -4,9 +4,9 @@ from .views import EmployeeProfileViewSet, EmployeeImportHistoryViewSet
 
 router = DefaultRouter()
 router.trailing_slash = "/?"
-router.register(r'employees', EmployeeProfileViewSet, basename='employees')
-router.register(r'imports/employees', EmployeeImportHistoryViewSet, basename='employee-imports')
+router.register(r"employees", EmployeeProfileViewSet, basename="employees")
+router.register(r"imports/employees/history", EmployeeImportHistoryViewSet, basename="employee-imports")
 
 urlpatterns = [
-    path('', include(router.urls)),
+    path("", include(router.urls)),
 ]

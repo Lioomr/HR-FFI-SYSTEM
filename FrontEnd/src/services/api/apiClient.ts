@@ -8,6 +8,8 @@ export const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+
+
 // Attach token
 api.interceptors.request.use((config) => {
   const token = getToken();
@@ -20,6 +22,7 @@ api.interceptors.response.use(
   (res) => res,
   (err) => {
     const status = err?.response?.status;
+    const data = err?.response?.data;
 
     if (status === 401) {
       clearToken();
@@ -27,6 +30,20 @@ api.interceptors.response.use(
       useAuthStore.getState().logout();
       // Optional: hard redirect to login (works even outside router context)
       window.location.href = "/login";
+    }
+
+    // Try to extract a user-friendly message
+    let friendlyMessage = err.message;
+    if (data?.message) {
+      friendlyMessage = data.message;
+    } else if (typeof data === "string") {
+      friendlyMessage = data;
+    }
+
+    // Attach it to the error object so components can just use error.message
+    if (err) {
+      err.message = friendlyMessage;
+      err.apiData = data; // Keep raw data for validation errors
     }
 
     return Promise.reject(err);

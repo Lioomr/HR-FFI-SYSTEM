@@ -19,8 +19,32 @@ export interface Employee {
   sponsor?: string;
   employment_status?: "ACTIVE" | "SUSPENDED" | "TERMINATED";
   hire_date?: string;
+  department_id?: number;
+  position_id?: number;
+  task_group_id?: number;
+  sponsor_id?: number;
   manager_id?: number;
   manager_name?: string;
+  nationality?: string;
+  employee_number?: string;
+  passport_no?: string;
+  passport_expiry?: string;
+  national_id?: string;
+  id_expiry?: string;
+  date_of_birth?: string;
+  job_offer?: string;
+  contract_date?: string;
+  contract_expiry?: string;
+  allowed_overtime?: number;
+  health_card?: string;
+  health_card_expiry?: string;
+  basic_salary?: number;
+  transportation_allowance?: number;
+  accommodation_allowance?: number;
+  telephone_allowance?: number;
+  petrol_allowance?: number;
+  other_allowance?: number;
+  total_salary?: number;
   created_at?: string;
   updated_at?: string;
 }
@@ -145,49 +169,48 @@ export async function updateEmployee(
 
 
 /**
- * Import Status: Aligning with common backend states.
- * Using string union to capture likely states, but staying flexible if backend differs slightly.
+ * Import Status: Aligning with Backend Enum
  */
 export type ImportStatus = "pending" | "processing" | "success" | "failed" | string;
 
 /**
- * Import Result Detail
+ * Import Result Detail (Matches EmployeeImportSerializer)
  */
 export interface ImportResult {
-  import_id: string;
+  id: string; // Backend 'id'
   status: ImportStatus;
-  total_rows?: number;
-  inserted_rows?: number;
-  failed_rows?: number;
-  error_file_url?: string; // May be deprecated in favor of explicit endpoint
+  row_count: number; // Backend 'row_count'
+  inserted_rows: number;
   created_at: string;
+  uploader: string; // Email of uploader
   error_summary?: string[];
 }
 
 /**
- * Import History Item
+ * Import History Item (Matches EmployeeImportSerializer)
  */
 export interface ImportHistoryItem {
   id: string;
-  file_name: string;
-  uploaded_by: string;
-  uploaded_at: string;
   status: ImportStatus;
+  row_count: number;
   inserted_rows: number;
-  total_rows: number;
-  has_error_file: boolean;
-  error_file_url?: string;
+  created_at: string;
+  uploader: string;
+  error_summary?: string[];
+  // Backend does NOT return original_filename, so we cannot display it unless we add it to backend.
+  // We will omit it for now to match backend.
 }
 
 /**
  * Upload employees Excel file
  * Endpoint: POST /employees/import/excel
+ * Backend return: { "inserted_rows": number } (Synchronous)
  */
-export async function importEmployees(file: File): Promise<ApiResponse<{ import_id: string }>> {
+export async function importEmployees(file: File): Promise<ApiResponse<{ inserted_rows: number }>> {
   const formData = new FormData();
   formData.append("file", file);
 
-  const { data } = await api.post<ApiResponse<{ import_id: string }>>(
+  const { data } = await api.post<ApiResponse<{ inserted_rows: number }>>(
     "/employees/import/excel",
     formData,
     {
@@ -201,17 +224,10 @@ export async function importEmployees(file: File): Promise<ApiResponse<{ import_
 
 /**
  * Get status of a specific import
- * Endpoint: GET /imports/employees/{importId} (Assumed based on history path)
- * Wait - verify if spec endpoint for status was given. 
- * User said: "History under /imports/employees... (and error-file download via /imports/employees/{import_id}/errors-file)"
- * AND "GET /employees/import/{importId}" was flagged as wrong? 
- * Actually user said "But the authoritative contract requires: POST /employees/import/excel ... History under /imports/employees..."
- * They didn't explicitly rename the single status endpoint, but implied /imports structure.
- * Safe bet: GET /imports/employees/{importId} for detail if history is there.
- * Let's assume /imports/employees/{id} aligns with Restful structure.
+ * Endpoint: GET /imports/employees/{id}
  */
-export async function getImportStatus(importId: string): Promise<ApiResponse<ImportResult>> {
-  const { data } = await api.get<ApiResponse<ImportResult>>(`/imports/employees/${importId}`);
+export async function getImportStatus(id: string): Promise<ApiResponse<ImportResult>> {
+  const { data } = await api.get<ApiResponse<ImportResult>>(`/imports/employees/${id}`);
   return data;
 }
 
@@ -225,8 +241,9 @@ export async function getImportHistory(params?: {
   status?: string;
   date_from?: string;
   date_to?: string;
-}): Promise<ApiResponse<{ results: ImportHistoryItem[]; count: number }>> {
-  const { data } = await api.get<ApiResponse<{ results: ImportHistoryItem[]; count: number }>>(
+}): Promise<ApiResponse<{ items: ImportHistoryItem[]; count: number; page?: number; page_size?: number; total_pages?: number }>> {
+  // Backend StandardPagination structure is { items: [], count: ..., page, page_size, total_pages }
+  const { data } = await api.get<ApiResponse<{ items: ImportHistoryItem[]; count: number; page?: number; page_size?: number; total_pages?: number }>>(
     "/imports/employees/history",
     { params }
   );
@@ -239,6 +256,17 @@ export async function getImportHistory(params?: {
  */
 export async function downloadImportErrors(importId: string): Promise<Blob> {
   const response = await api.get(`/imports/employees/${importId}/errors-file`, {
+    responseType: "blob",
+  });
+  return response.data;
+}
+
+/**
+ * Download import template
+ * Endpoint: GET /employees/import-template
+ */
+export async function downloadImportTemplate(): Promise<Blob> {
+  const response = await api.get("/employees/import-template", {
     responseType: "blob",
   });
   return response.data;
