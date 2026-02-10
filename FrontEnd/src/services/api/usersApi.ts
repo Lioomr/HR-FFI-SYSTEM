@@ -7,6 +7,7 @@ export type UsersListParams = {
   search?: string;
   role?: Role;
   status?: "active" | "inactive";
+  page_size?: number;
 };
 
 export type CreateUserRequest = {
@@ -35,14 +36,14 @@ export type ResetPasswordResponse = {
 };
 
 export async function listUsers(params: UsersListParams = {}) {
-  const { data } = await api.get<ApiResponse<UsersListResponse>>("/users", {
+  const { data } = await api.get<ApiResponse<UsersListResponse>>("/users/", {
     params,
   });
   return data;
 }
 
 export async function createUser(payload: CreateUserRequest) {
-  const { data } = await api.post<ApiResponse<UserDto>>("/users", payload);
+  const { data } = await api.post<ApiResponse<UserDto>>("/users/", payload);
   return data;
 }
 
@@ -51,7 +52,7 @@ export async function updateUserStatus(
   payload: UpdateUserStatusRequest
 ) {
   const { data } = await api.patch<ApiResponse<UserDto>>(
-    `/users/${userId}/status`,
+    `/users/${userId}/status/`,
     payload
   );
   return data;
@@ -62,7 +63,7 @@ export async function updateUserRole(
   payload: UpdateUserRoleRequest
 ) {
   const { data } = await api.put<ApiResponse<UserDto>>(
-    `/users/${userId}/role`,
+    `/users/${userId}/role/`,
     payload
   );
   return data;
@@ -73,8 +74,12 @@ export async function resetUserPassword(
   payload: ResetPasswordRequest
 ) {
   const { data } = await api.post<ApiResponse<ResetPasswordResponse>>(
-    `/users/${userId}/reset-password`,
+    `/users/${userId}/reset-password/`,
     payload
   );
+  return data;
+}
+export async function getMe() {
+  const { data } = await api.get<ApiResponse<UserDto>>("/auth/me");
   return data;
 }

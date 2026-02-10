@@ -13,11 +13,11 @@ from core.pagination import StandardPagination
 
 from .models import LeaveType, LeaveRequest
 from .serializers import (
-    LeaveTypeSerializer, 
-    LeaveRequestSerializer, 
+    LeaveTypeSerializer,
+    LeaveRequestSerializer,
     LeaveRequestCreateSerializer,
     LeaveRequestActionSerializer,
-    LeaveBalanceSerializer
+    LeaveBalanceSerializer,
 )
 from .permissions import (
     IsHRManagerOrAdmin,
@@ -32,6 +32,7 @@ from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
+
 def _flatten_errors(error_dict):
     errors = []
     for field, messages in error_dict.items():
@@ -42,16 +43,17 @@ def _flatten_errors(error_dict):
             errors.append(f"{field}: {messages}")
     return errors
 
+
 class LeaveTypeViewSet(viewsets.ModelViewSet):
     queryset = LeaveType.objects.all()
     serializer_class = LeaveTypeSerializer
-    permission_classes = [IsAuthenticated] # Overridden by get_permissions
+    permission_classes = [IsAuthenticated]  # Overridden by get_permissions
 
     def get_permissions(self):
         # List/Retrieve: Anyone authenticated can try, but logic filters content
         if self.action in ["list", "retrieve"]:
             return [IsAuthenticated()]
-        
+
         # Write actions: HR/Admin only
         return [IsAuthenticated(), IsHRManagerOrAdmin()]
 
@@ -59,12 +61,12 @@ class LeaveTypeViewSet(viewsets.ModelViewSet):
         # Employees only see active leave types; HR/Admin see all
         role = get_role(request.user)
         qs = self.get_queryset()
-        
+
         if role == "Employee":
             qs = qs.filter(is_active=True)
-             
+
         serializer = self.get_serializer(qs, many=True)
-        return Response(serializer.data)
+        return success(serializer.data)
 
     def perform_create(self, serializer):
         instance = serializer.save()
@@ -73,7 +75,7 @@ class LeaveTypeViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         instance = serializer.save()
         audit(self.request, "leave_type_updated", entity="leave_type", entity_id=instance.id, metadata=serializer.data)
-    
+
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
         self.perform_destroy(instance)
@@ -83,7 +85,13 @@ class LeaveTypeViewSet(viewsets.ModelViewSet):
         # Soft-delete implementation
         instance.is_active = False
         instance.save()
-        audit(self.request, "leave_type_deactivated", entity="leave_type", entity_id=instance.id, metadata={"name": instance.name})
+        audit(
+            self.request,
+            "leave_type_deactivated",
+            entity="leave_type",
+            entity_id=instance.id,
+            metadata={"name": instance.name},
+        )
 
     # Wrap responses
     def retrieve(self, request, *args, **kwargs):
@@ -93,7 +101,7 @@ class LeaveTypeViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         response = super().create(request, *args, **kwargs)
         return success(response.data, status=response.status_code)
-    
+
     def update(self, request, *args, **kwargs):
         response = super().update(request, *args, **kwargs)
         return success(response.data)
@@ -109,7 +117,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         user = self.request.user
         role = get_role(user)
         base_qs = LeaveRequest.objects.filter(is_active=True).select_related(
-            "employee", "leave_type", "decided_by", "manager_decision_by"
+            "employee", "employee__employee_profile", "leave_type", "decided_by", "manager_decision_by"
         )
         if role in ["SystemAdmin", "HRManager"]:
             return base_qs
@@ -125,15 +133,15 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated(), IsEmployeeOnly()]
 
         if self.action in ["list", "retrieve"]:
-             # HR/Admin OR Owner (retrieve), HR-only for list enforced in list()
+            # HR/Admin OR Owner (retrieve), HR-only for list enforced in list()
             return [IsAuthenticated(), IsOwnerOrHR()]
 
         if self.action in ["approve", "reject"]:
-             # HR/Admin only
+            # HR/Admin only
             return [IsAuthenticated(), IsHRManagerOrAdmin()]
 
         if self.action == "cancel":
-             # Owner only
+            # Owner only
             return [IsAuthenticated(), IsLeaveRequestOwner()]
 
         # For update/partial_update/destroy (standard CRUD)
@@ -147,7 +155,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         if not serializer.is_valid():
             return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
         self.perform_create(serializer)
-        
+
         # Return read-serializer
         instance = serializer.instance
         read_serializer = LeaveRequestSerializer(instance)
@@ -155,9 +163,19 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         # Determine initial status
-        initial_status = LeaveRequest.RequestStatus.SUBMITTED
+        user = self.request.user
+        has_manager = False
+        # Check if user has a manager
+        if hasattr(user, "employee_profile") and user.employee_profile.manager:
+            has_manager = True
+
+        if has_manager:
+            initial_status = LeaveRequest.RequestStatus.PENDING_MANAGER
+        else:
+            initial_status = LeaveRequest.RequestStatus.PENDING_HR
+
         instance = serializer.save(employee=self.request.user, status=initial_status)
-        
+
         # Audit
         audit(
             self.request,
@@ -179,15 +197,15 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         params = request.query_params
         status_param = params.get("status")
         if status_param:
-            allowed = {
-                LeaveRequest.RequestStatus.SUBMITTED,
-                LeaveRequest.RequestStatus.APPROVED,
-                LeaveRequest.RequestStatus.REJECTED,
-                LeaveRequest.RequestStatus.CANCELLED,
-            }
-            if status_param not in allowed:
-                return error("Validation error", errors=["Invalid status."], status=422)
+            # allowed = {
+            #     LeaveRequest.RequestStatus.SUBMITTED,
+            #     LeaveRequest.RequestStatus.APPROVED,
+            #     LeaveRequest.RequestStatus.REJECTED,
+            #     LeaveRequest.RequestStatus.CANCELLED,
+            # }
+            # Relax validation or allow all for list
             qs = qs.filter(status=status_param)
+
         employee_id = params.get("employee_id")
         if employee_id:
             qs = qs.filter(employee_id=employee_id)
@@ -238,10 +256,12 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             instance = self.get_queryset().get(pk=pk)
         except LeaveRequest.DoesNotExist:
             return error("Not found", errors=["Not found."], status=404)
-        
-        if instance.status != LeaveRequest.RequestStatus.SUBMITTED:
-             return error("Validation error", errors=["Only submitted requests can be approved."], status=422)
-        
+
+        allowed_statuses = [LeaveRequest.RequestStatus.SUBMITTED, LeaveRequest.RequestStatus.PENDING_HR]
+
+        if instance.status not in allowed_statuses:
+            return error("Validation error", errors=["Request is not in a state to be approved by HR."], status=422)
+
         s = LeaveRequestActionSerializer(data=request.data)
         if not s.is_valid():
             return error("Validation error", errors=_flatten_errors(s.errors), status=422)
@@ -262,9 +282,17 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             instance = self.get_queryset().get(pk=pk)
         except LeaveRequest.DoesNotExist:
             return error("Not found", errors=["Not found."], status=404)
-        
-        if instance.status != LeaveRequest.RequestStatus.SUBMITTED:
-             return error("Validation error", errors=["Only submitted requests can be rejected."], status=422)
+
+        # HR can reject at any pending stage? Or only pending HR?
+        # Let's allow rejecting from PENDING_HR or SUBMITTED
+        allowed_statuses = [
+            LeaveRequest.RequestStatus.SUBMITTED,
+            LeaveRequest.RequestStatus.PENDING_HR,
+            LeaveRequest.RequestStatus.PENDING_MANAGER,
+        ]
+
+        if instance.status not in allowed_statuses:
+            return error("Validation error", errors=["Request cannot be rejected."], status=422)
 
         s = LeaveRequestActionSerializer(data=request.data)
         if not s.is_valid():
@@ -278,7 +306,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         instance.decided_at = timezone.now()
         instance.hr_decision_note = comment
         instance.save()
-        
+
         audit(request, "reject", entity="LeaveRequest", entity_id=instance.id)
         return success(LeaveRequestSerializer(instance).data)
 
@@ -288,12 +316,19 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             instance = LeaveRequest.objects.get(pk=pk, employee=request.user, is_active=True)
         except LeaveRequest.DoesNotExist:
             return error("Not found", errors=["Not found."], status=404)
-        if instance.status != LeaveRequest.RequestStatus.SUBMITTED:
-            return error("Validation error", errors=["Only submitted requests can be cancelled."], status=422)
+
+        allowed_statuses = [
+            LeaveRequest.RequestStatus.SUBMITTED,
+            LeaveRequest.RequestStatus.PENDING_HR,
+            LeaveRequest.RequestStatus.PENDING_MANAGER,
+        ]
+
+        if instance.status not in allowed_statuses:
+            return error("Validation error", errors=["Only pending requests can be cancelled."], status=422)
 
         instance.status = LeaveRequest.RequestStatus.CANCELLED
         instance.save()
-        
+
         audit(request, "cancel", entity="LeaveRequest", entity_id=instance.id)
         return success(LeaveRequestSerializer(instance).data)
 
@@ -302,8 +337,9 @@ class ManagerLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
     """
     Endpoints for managers to view and act on their direct reports' leave requests.
     """
+
     serializer_class = LeaveRequestSerializer
-    permission_classes = [IsAuthenticated] # Filtering logic handles scope
+    permission_classes = [IsAuthenticated]  # Filtering logic handles scope
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ["status", "leave_type"]
     ordering_fields = ["created_at", "start_date"]
@@ -326,15 +362,19 @@ class ManagerLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsManagerOfEmployee])
     def approve(self, request, pk=None):
         instance = self.get_object()
-        
-        if instance.status != LeaveRequest.RequestStatus.SUBMITTED:
-            return error("Validation error", errors=["Only submitted requests can be approved."], status=422)
-        
+
+        allowed_statuses = [LeaveRequest.RequestStatus.SUBMITTED, LeaveRequest.RequestStatus.PENDING_MANAGER]
+
+        if instance.status not in allowed_statuses:
+            return error(
+                "Validation error", errors=["Request is not in a state to be approved by manager."], status=422
+            )
+
         s = LeaveRequestActionSerializer(data=request.data)
         if not s.is_valid():
             return error("Validation error", errors=_flatten_errors(s.errors), status=422)
 
-        instance.status = LeaveRequest.RequestStatus.APPROVED
+        instance.status = LeaveRequest.RequestStatus.PENDING_HR
         instance.manager_decision_by = request.user
         instance.manager_decision_at = timezone.now()
         instance.manager_decision_note = s.validated_data.get("comment", "")
@@ -347,9 +387,13 @@ class ManagerLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
     def reject(self, request, pk=None):
         instance = self.get_object()
 
-        if instance.status != LeaveRequest.RequestStatus.SUBMITTED:
-            return error("Validation error", errors=["Only submitted requests can be rejected."], status=422)
-        
+        allowed_statuses = [LeaveRequest.RequestStatus.SUBMITTED, LeaveRequest.RequestStatus.PENDING_MANAGER]
+
+        if instance.status not in allowed_statuses:
+            return error(
+                "Validation error", errors=["Request is not in a state to be rejected by manager."], status=422
+            )
+
         s = LeaveRequestActionSerializer(data=request.data)
         if not s.is_valid():
             return error("Validation error", errors=_flatten_errors(s.errors), status=422)
@@ -372,6 +416,7 @@ class LeaveBalanceViewSet(viewsets.ViewSet):
     HR/Admin endpoint for viewing any employee's leave balance.
     GET /leave-balances/?employee_id=...&year=...
     """
+
     permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
 
     def list(self, request):
@@ -382,7 +427,7 @@ class LeaveBalanceViewSet(viewsets.ViewSet):
             return error("Validation error", errors=["employee_id is required."], status=422)
         if not year:
             return error("Validation error", errors=["year is required."], status=422)
-        
+
         try:
             year = int(year)
         except ValueError:
@@ -390,6 +435,7 @@ class LeaveBalanceViewSet(viewsets.ViewSet):
 
         # Get Employee User
         from employees.models import EmployeeProfile
+
         try:
             profile = EmployeeProfile.objects.get(id=employee_id)
             user = profile.user
@@ -397,20 +443,25 @@ class LeaveBalanceViewSet(viewsets.ViewSet):
             return error("Not found", errors=["Not found."], status=404)
 
         balances = calculate_leave_balance(user, year)
-        
+
         # Audit
-        audit(request, "leave_balance.viewed_hr", entity="employee_profile", entity_id=profile.id, metadata={"year": year})
+        audit(
+            request, "leave_balance.viewed_hr", entity="employee_profile", entity_id=profile.id, metadata={"year": year}
+        )
 
         serializer = LeaveBalanceSerializer(balances, many=True)
         return success(serializer.data)
 
+
 from rest_framework.views import APIView
+
 
 class EmployeeLeaveBalanceView(APIView):
     """
     Employee endpoint for viewing their own leave balance.
     GET /employee/leave-balance/?year=...
     """
+
     permission_classes = [IsAuthenticated, IsEmployeeOnly]
 
     def get(self, request):
@@ -425,7 +476,7 @@ class EmployeeLeaveBalanceView(APIView):
                 return error("Validation error", errors=["year must be a valid integer."], status=422)
 
         balances = calculate_leave_balance(request.user, year)
-        
+
         # Audit
         audit(request, "leave_balance.viewed", entity="user", entity_id=request.user.id, metadata={"year": year})
 
@@ -464,4 +515,30 @@ class EmployeeLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
                     "total_pages": 1,
                 },
             }
+        )
+
+
+from .models import LeaveBalanceAdjustment
+from .serializers import LeaveBalanceAdjustmentSerializer
+
+
+class LeaveBalanceAdjustmentViewSet(viewsets.ModelViewSet):
+    """
+    CRUD for manual leave balance adjustments.
+    """
+
+    queryset = LeaveBalanceAdjustment.objects.all().order_by("-created_at")
+    serializer_class = LeaveBalanceAdjustmentSerializer
+    permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ["employee", "leave_type"]
+
+    def perform_create(self, serializer):
+        instance = serializer.save(created_by=self.request.user)
+        audit(
+            self.request,
+            "create_adjustment",
+            entity="leave_balance_adjustment",
+            entity_id=instance.id,
+            metadata={"employee_id": instance.employee.id, "days": float(instance.adjustment_days)},
         )

@@ -1,0 +1,159 @@
+
+> frontend@0.0.0 lint
+> eslint .
+
+
+D:\FFI HR SYSTEM\FrontEnd\src\components\hr\AttendanceOverrideModal.tsx
+  11:45  error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                @typescript-eslint/no-explicit-any
+  36:13  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+D:\FFI HR SYSTEM\FrontEnd\src\components\hr\AttendanceOverrideModal.tsx:36:13
+  34 |                 override_reason: "",
+  35 |             });
+> 36 |             setRequireReason(false);
+     |             ^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  37 |         } else {
+  38 |             form.resetFields();
+  39 |         }  react-hooks/set-state-in-effect
+  42:49  error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                @typescript-eslint/no-explicit-any
+  42:65  error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                @typescript-eslint/no-explicit-any
+
+D:\FFI HR SYSTEM\FrontEnd\src\layouts\BaseLayout.tsx
+  76:44  error  Empty block statement  no-empty
+
+D:\FFI HR SYSTEM\FrontEnd\src\pages\ChangePasswordPage.tsx
+  49:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\FFI HR SYSTEM\FrontEnd\src\pages\LoginPage.tsx
+  56:14  error  'e' is defined but never used             @typescript-eslint/no-unused-vars
+  56:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\FFI HR SYSTEM\FrontEnd\src\pages\admin\AdminAuditLogsPage.tsx
+   79:46  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-explicit-any
+  134:21  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-explicit-any
+  147:5   error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+D:\FFI HR SYSTEM\FrontEnd\src\pages\admin\AdminAuditLogsPage.tsx:147:5
+  145 |
+  146 |   useEffect(() => {
+> 147 |     loadAuditLogs(pagination.current || 1, pagination.pageSize || 10);
+      |     ^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  148 |   }, [loadAuditLogs, pagination.current, pagination.pageSize]);
+  149 |
+  150 |   useEffect(() => {  react-hooks/set-state-in-effect
+  148:6   warning  React Hook useEffect has a missing dependency: 'pagination'. Either include it or remove the dependency array. Mutable values like 'pagination.current' aren't valid dependencies because mutating them doesn't re-render the component                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                react-hooks/exhaustive-deps
+  151:5   error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+D:\FFI HR SYSTEM\FrontEnd\src\pages\admin\AdminAuditLogsPage.tsx:151:5
+  149 |
+  150 |   useEffect(() => {
+> 151 |     setPagination((prev) => ({ ...prev, current: 1 }));
+      |     ^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  152 |   }, [q, actionType, dateRange]);
+  153 |
+  154 |   async function exportCsv() {                                    react-hooks/set-state-in-effect
+  176:19  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-explicit-any
+
+D:\FFI HR SYSTEM\FrontEnd\src\pages\admin\AdminDashboardPage.tsx
+  71:19  error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+  83:5   error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+D:\FFI HR SYSTEM\FrontEnd\src\pages\admin\AdminDashboardPage.tsx:83:5
+  81 |
+  82 |   useEffect(() => {
+> 83 |     loadData();
+     |     ^^^^^^^^ Avoid calling setState() directly within an effect
+  84 |   }, [loadData]);
+  85 |
+  86 |   if (unauthorized) return <Unauthorized403Page />;  react-hooks/set-state-in-effect
+
+D:\FFI HR SYSTEM\FrontEnd\src\pages\admin\AdminInvitesPage.tsx
+  132:21  error    Unexpected any. Specify a different type                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+  146:6   warning  React Hook useEffect has a missing dependency: 'pagination'. Either include it or remove the dependency array. Mutable values like 'pagination.current' aren't valid dependencies because mutating them doesn't re-render the component  react-hooks/exhaustive-deps
+  173:17  error    Unexpected any. Specify a different type                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+  196:17  error    Unexpected any. Specify a different type                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+  217:17  error    Unexpected any. Specify a different type                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+
+D:\FFI HR SYSTEM\FrontEnd\src\pages\admin\AdminSettingsPage.tsx
+  49:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  79:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\FFI HR SYSTEM\FrontEnd\src\pages\admin\AdminUserCreatePage.tsx
+  48:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\FFI HR SYSTEM\FrontEnd\src\pages\admin\AdminUsersListPage.tsx
+  114:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  202:31  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  229:31  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  369:25  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\FFI HR SYSTEM\FrontEnd\src\pages\employee\AttendancePage.tsx
+  53:8  warning  React Hook useEffect has a missing dependency: 'fetchData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+D:\FFI HR SYSTEM\FrontEnd\src\pages\hr\AttendancePage.tsx
+   51:23  error    Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+   68:8   warning  React Hook useEffect has a missing dependency: 'fetchData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+   84:70  error    Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+   90:18  error    '_e' is defined but never used                                                                                @typescript-eslint/no-unused-vars
+   99:25  error    Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+  147:25  error    Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+
+D:\FFI HR SYSTEM\FrontEnd\src\routes\RouteErrorBoundary.tsx
+  5:34  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\FFI HR SYSTEM\FrontEnd\src\routes\routes.tsx
+  26:10  error  Fast refresh only works when a file only exports components. Move your component(s) to a separate file  react-refresh/only-export-components
+
+D:\FFI HR SYSTEM\FrontEnd\src\services\api\authApi.ts
+  23:47  error  The `{}` ("empty object") type allows any non-nullish value, including literals like `0` and `""`.
+- If that's what you want, disable this lint rule with an inline comment or configure the 'allowObjectTypes' rule option.
+- If you want a type meaning "any object", you probably want `object` instead.
+- If you want a type meaning "any value", you probably want `unknown` instead  @typescript-eslint/no-empty-object-type
+  33:47  error  The `{}` ("empty object") type allows any non-nullish value, including literals like `0` and `""`.
+- If that's what you want, disable this lint rule with an inline comment or configure the 'allowObjectTypes' rule option.
+- If you want a type meaning "any object", you probably want `object` instead.
+- If you want a type meaning "any value", you probably want `unknown` instead  @typescript-eslint/no-empty-object-type
+
+D:\FFI HR SYSTEM\FrontEnd\src\services\api\invitesApi.ts
+  39:49  error  The `{}` ("empty object") type allows any non-nullish value, including literals like `0` and `""`.
+- If that's what you want, disable this lint rule with an inline comment or configure the 'allowObjectTypes' rule option.
+- If you want a type meaning "any object", you probably want `object` instead.
+- If you want a type meaning "any value", you probably want `unknown` instead  @typescript-eslint/no-empty-object-type
+
+D:\FFI HR SYSTEM\FrontEnd\src\stores\attendanceStore.ts
+   36:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   50:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   65:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   80:48  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   96:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  109:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\FFI HR SYSTEM\FrontEnd\src\utils\dataUtils.ts
+  46:47  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+Γ£û 47 problems (43 errors, 4 warnings)
+

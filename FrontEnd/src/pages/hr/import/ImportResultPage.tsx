@@ -100,7 +100,7 @@ const ImportResultPage: React.FC = () => {
                 }
                 subTitle={
                     isSuccess
-                        ? `Successfully inserted ${result.inserted_rows} employees.`
+                        ? `Successfully inserted ${result.inserted_rows} of ${result.row_count} employees.`
                         : isPending
                             ? "Your file is being processed. You can refresh this page or check back later."
                             : "One or more errors occurred. No data was saved."

@@ -135,9 +135,10 @@ const EmployeeAttendancePage: React.FC = () => {
             </Row>
 
             <Card style={{ marginBottom: 16 }}>
-                <Row justify="space-between" align="middle">
-                    <Col>
+                <Row justify="space-between" align="middle" gutter={[16, 16]}>
+                    <Col xs={24} md={12}>
                         <RangePicker
+                            style={{ width: '100%' }}
                             value={dateRange}
                             onChange={(dates) => {
                                 if (dates && dates[0] && dates[1]) {
@@ -146,11 +147,11 @@ const EmployeeAttendancePage: React.FC = () => {
                             }}
                         />
                     </Col>
-                    <Col>
+                    <Col xs={24} md={12} style={{ textAlign: 'right', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                         <Button
                             type="primary"
                             icon={<ClockCircleOutlined />}
-                            style={{ marginRight: 8, backgroundColor: isCheckInDisabled ? undefined : "#52c41a" }}
+                            style={{ backgroundColor: isCheckInDisabled ? undefined : "#52c41a", flex: 1 }}
                             disabled={isCheckInDisabled}
                             loading={loading}
                             onClick={handleCheckIn}
@@ -161,6 +162,7 @@ const EmployeeAttendancePage: React.FC = () => {
                             danger
                             type="primary"
                             icon={<CheckCircleOutlined />}
+                            style={{ flex: 1 }}
                             disabled={isCheckOutDisabled}
                             loading={loading}
                             onClick={handleCheckOut}
@@ -176,6 +178,7 @@ const EmployeeAttendancePage: React.FC = () => {
                 columns={columns}
                 rowKey="id"
                 loading={loading}
+                scroll={{ x: 800 }}
                 pagination={{
                     current: pagination.current,
                     pageSize: pagination.pageSize,

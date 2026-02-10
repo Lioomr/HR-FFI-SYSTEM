@@ -50,7 +50,7 @@ export default function LeaveRequestDetailsPage() {
         if (!request) return;
         confirm({
             title: "Approve Leave Request",
-            content: `Approve leave for ${request.employee_name} (${request.days_requested} days)?`,
+            content: `Approve leave for ${request.employee?.full_name} (${request.days} days)?`,
             okText: "Approve",
             okType: "primary",
             cancelText: "Cancel",
@@ -101,7 +101,9 @@ export default function LeaveRequestDetailsPage() {
     if (error) return <ErrorState title="Error" description={error} onRetry={loadData} />;
     if (!request) return <ErrorState title="Not Found" description="Leave request not found." />;
 
-    const canAction = request.status?.toLowerCase() === 'submitted' || request.status === 'PENDING';
+    const canAction = request.status?.toLowerCase() === 'submitted' ||
+        request.status?.toLowerCase() === 'pending_hr' ||
+        request.status?.toLowerCase() === 'pending_manager';
 
     return (
         <div style={{ maxWidth: 800, margin: "0 auto" }}>
@@ -116,19 +118,19 @@ export default function LeaveRequestDetailsPage() {
 
             <PageHeader
                 title={`Leave Request #${request.id}`}
-                tags={<Tag color={request.status?.toLowerCase() === 'approved' ? 'green' : request.status?.toLowerCase() === 'rejected' ? 'red' : 'blue'}>{request.status?.toUpperCase()}</Tag>}
+                tags={<Tag color={request.status?.toLowerCase() === 'approved' ? 'green' : request.status?.toLowerCase() === 'rejected' ? 'red' : 'blue'}>{request.status?.replace('_', ' ').toUpperCase()}</Tag>}
             />
 
             <Card style={{ borderRadius: 16 }} title="Details">
                 <Descriptions bordered column={1}>
-                    <Descriptions.Item label="Employee">{request.employee_name || `ID: ${request.employee_id}`}</Descriptions.Item>
-                    <Descriptions.Item label="Leave Type">{request.leave_type_name}</Descriptions.Item>
+                    <Descriptions.Item label="Employee">{request.employee?.full_name || `ID: ${request.employee?.id}`}</Descriptions.Item>
+                    <Descriptions.Item label="Leave Type">{request.leave_type?.name}</Descriptions.Item>
                     <Descriptions.Item label="Period">{request.start_date} to {request.end_date}</Descriptions.Item>
-                    <Descriptions.Item label="Duration">{request.days_requested} Days</Descriptions.Item>
+                    <Descriptions.Item label="Duration">{request.days} Days</Descriptions.Item>
                     <Descriptions.Item label="Reason">{request.reason}</Descriptions.Item>
                     <Descriptions.Item label="Submitted On">{request.created_at ? new Date(request.created_at).toLocaleDateString() : '-'}</Descriptions.Item>
 
-                    {request.status === 'REJECTED' && (
+                    {request.status === 'rejected' && (
                         <Descriptions.Item label="Rejection Reason" contentStyle={{ color: 'red' }}>
                             {request.rejection_reason || '-'}
                         </Descriptions.Item>

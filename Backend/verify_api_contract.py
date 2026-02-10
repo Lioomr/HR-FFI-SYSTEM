@@ -1,4 +1,3 @@
-
 import requests
 import sys
 import uuid
@@ -15,11 +14,12 @@ DEPTS_URL = f"{BASE_URL}/api/hr/departments/"
 POSITIONS_URL = f"{BASE_URL}/api/hr/positions/"
 TASK_GROUPS_URL = f"{BASE_URL}/api/hr/task-groups/"
 SPONSORS_URL = f"{BASE_URL}/api/hr/sponsors/"
-EMPLOYEES_URL = f"{BASE_URL}/employees" # Note: No /api/hr prefix, no trailing slash based on employeesApi.ts
+EMPLOYEES_URL = f"{BASE_URL}/employees"  # Note: No /api/hr prefix, no trailing slash based on employeesApi.ts
 
 GREEN = "\033[92m"
 RED = "\033[91m"
 RESET = "\033[0m"
+
 
 class ApiVerifier:
     def __init__(self):
@@ -41,7 +41,7 @@ class ApiVerifier:
         try:
             payload = {"email": EMAIL, "password": PASSWORD}
             resp = self.session.post(AUTH_URL, json=payload, headers=self.headers)
-            
+
             if resp.status_code == 200:
                 data = resp.json()
                 if data.get("status") == "success" and "token" in data.get("data", {}):
@@ -59,7 +59,7 @@ class ApiVerifier:
 
     def test_crud(self, name, url, payload_factory, id_field="id"):
         print(f"\n--- Testing {name} ({url}) ---")
-        
+
         # 1. Create
         item_data = payload_factory()
         resp = self.session.post(url, json=item_data, headers=self.headers)
@@ -86,7 +86,7 @@ class ApiVerifier:
                 # Handle pagination wrapper if present
                 if isinstance(items, dict) and "results" in items:
                     items = items["results"]
-                
+
                 # Verify created item is in list
                 found = any(str(i.get(id_field)) == str(self.created_ids[name]) for i in items)
                 self.log(f"List {name} contains new item: {found}", found)
@@ -102,35 +102,35 @@ class ApiVerifier:
         uid = str(uuid.uuid4())[:8]
 
         # Reference Data Tests
-        self.test_crud("Department", DEPTS_URL, lambda: {
-            "name": f"QA Dept {uid}",
-            "code": f"QAD-{uid}",
-            "description": "Automated Test"
-        })
+        self.test_crud(
+            "Department",
+            DEPTS_URL,
+            lambda: {"name": f"QA Dept {uid}", "code": f"QAD-{uid}", "description": "Automated Test"},
+        )
 
-        self.test_crud("Position", POSITIONS_URL, lambda: {
-            "name": f"QA Pos {uid}",
-            "code": f"QAP-{uid}",
-            "description": "Automated Test"
-        })
+        self.test_crud(
+            "Position",
+            POSITIONS_URL,
+            lambda: {"name": f"QA Pos {uid}", "code": f"QAP-{uid}", "description": "Automated Test"},
+        )
 
-        self.test_crud("TaskGroup", TASK_GROUPS_URL, lambda: {
-            "name": f"QA Group {uid}",
-            "code": f"QAG-{uid}",
-            "description": "Automated Test"
-        })
+        self.test_crud(
+            "TaskGroup",
+            TASK_GROUPS_URL,
+            lambda: {"name": f"QA Group {uid}", "code": f"QAG-{uid}", "description": "Automated Test"},
+        )
 
-        self.test_crud("Sponsor", SPONSORS_URL, lambda: {
-            "code": f"SP-{uid}",
-            "name": f"QA Sponsor {uid}",
-            "description": "Automated Test"
-        })
-        
+        self.test_crud(
+            "Sponsor",
+            SPONSORS_URL,
+            lambda: {"code": f"SP-{uid}", "name": f"QA Sponsor {uid}", "description": "Automated Test"},
+        )
+
         # Employee Test
         # Need IDs for FKs
         dept_id = self.created_ids.get("Department")
         pos_id = self.created_ids.get("Position")
-        
+
         if dept_id and pos_id:
             print(f"\n--- Testing Employee ({EMPLOYEES_URL}) ---")
             emp_payload = {
@@ -143,16 +143,16 @@ class ApiVerifier:
                 "passport_no": f"P{uid}",
                 "join_date": "2025-01-01",
                 "basic_salary": 5000,
-                "transportation_allowance": 500
+                "transportation_allowance": 500,
             }
-            
+
             resp = self.session.post(EMPLOYEES_URL, json=emp_payload, headers=self.headers)
             if resp.status_code in [200, 201]:
-                 data = resp.json()
-                 if data.get("status") == "success":
-                     self.log("Create Employee Success")
-                 else:
-                     self.log(f"Create Employee Logic Fail: {data}", False)
+                data = resp.json()
+                if data.get("status") == "success":
+                    self.log("Create Employee Success")
+                else:
+                    self.log(f"Create Employee Logic Fail: {data}", False)
             else:
                 self.log(f"Create Employee HTTP Fail {resp.status_code}: {resp.text}", False)
 
@@ -161,6 +161,7 @@ class ApiVerifier:
             sys.exit(1)
         else:
             print(f"\n{GREEN}ALL CHECKS PASSED{RESET}")
+
 
 if __name__ == "__main__":
     verifier = ApiVerifier()

@@ -20,6 +20,8 @@ from admin_portal.models import SystemSettings  # ✅ uses /settings default_inv
 
 from .models import Invite
 from .serializers import InviteCreateSerializer, InviteSerializer
+import resend
+from django.conf import settings
 
 User = get_user_model()
 
@@ -34,13 +36,15 @@ class InvitesPagination(PageNumberPagination):
         """
         Matches your global envelope and provides page meta.
         """
-        return success({
-            "items": data,
-            "page": self.page.number,
-            "page_size": self.get_page_size(self.request),
-            "count": self.page.paginator.count,
-            "total_pages": self.page.paginator.num_pages,
-        })
+        return success(
+            {
+                "items": data,
+                "page": self.page.number,
+                "page_size": self.get_page_size(self.request),
+                "count": self.page.paginator.count,
+                "total_pages": self.page.paginator.num_pages,
+            }
+        )
 
 
 def normalize_expired_invites():
@@ -48,10 +52,9 @@ def normalize_expired_invites():
     Converts SENT invites to EXPIRED when expires_at passed.
     Cheap + safe to run on list endpoint.
     """
-    Invite.objects.filter(
-        status=Invite.Status.SENT,
-        expires_at__lte=timezone.now()
-    ).update(status=Invite.Status.EXPIRED)
+    Invite.objects.filter(status=Invite.Status.SENT, expires_at__lte=timezone.now()).update(
+        status=Invite.Status.EXPIRED
+    )
 
 
 class InvitesListCreateView(APIView):
@@ -118,6 +121,26 @@ class InvitesListCreateView(APIView):
             },
         )
 
+        if settings.RESEND_API_KEY:
+            resend.api_key = settings.RESEND_API_KEY
+            link = f"{settings.FRONTEND_URL}/register?token={invite.token}"
+            
+            try:
+                resend.Emails.send({
+                    "from": settings.DEFAULT_FROM_EMAIL,
+                    "to": email,
+                    "subject": "You have been invited to FFI HR System",
+                    "html": f"""
+                        <p>Hello,</p>
+                        <p>You have been invited to join the FFI HR System as a <strong>{role}</strong>.</p>
+                        <p><a href="{link}">Click here to accept your invite</a></p>
+                        <p>This link expires in {expires_in_hours} hours.</p>
+                    """
+                })
+            except Exception as e:
+                # Log error but don't fail the request
+                print(f"Failed to send email: {e}")
+
         return success(InviteSerializer(invite).data, status=status.HTTP_201_CREATED)
 
 
@@ -148,14 +171,16 @@ class InviteResendView(APIView):
         invite.last_resent_at = now
         invite.sent_at = now
 
-        invite.save(update_fields=[
-            "status",
-            "expires_at",
-            "token",
-            "resend_count",
-            "last_resent_at",
-            "sent_at",
-        ])
+        invite.save(
+            update_fields=[
+                "status",
+                "expires_at",
+                "token",
+                "resend_count",
+                "last_resent_at",
+                "sent_at",
+            ]
+        )
 
         audit(
             request,
@@ -168,6 +193,25 @@ class InviteResendView(APIView):
                 "expires_at": invite.expires_at.isoformat(),
             },
         )
+
+        if settings.RESEND_API_KEY:
+            resend.api_key = settings.RESEND_API_KEY
+            link = f"{settings.FRONTEND_URL}/register?token={invite.token}"
+            
+            try:
+                resend.Emails.send({
+                    "from": settings.DEFAULT_FROM_EMAIL,
+                    "to": invite.email,
+                    "subject": "Invitation Reminder: FFI HR System",
+                    "html": f"""
+                        <p>Hello,</p>
+                        <p>This is a reminder to accept your invitation to the FFI HR System.</p>
+                        <p><a href="{link}">Click here to accept your invite</a></p>
+                        <p>This link expires shortly.</p>
+                    """
+                })
+            except Exception as e:
+                print(f"Failed to send email: {e}")
 
         return success(InviteSerializer(invite).data)
 

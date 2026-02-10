@@ -24,9 +24,7 @@ class PayrollRun(models.Model):
 
     class Meta:
         ordering = ["-year", "-month", "-id"]
-        constraints = [
-            models.UniqueConstraint(fields=["year", "month"], name="unique_payroll_run_period")
-        ]
+        constraints = [models.UniqueConstraint(fields=["year", "month"], name="unique_payroll_run_period")]
 
     def __str__(self):
         return f"{self.year}-{self.month:02d}"

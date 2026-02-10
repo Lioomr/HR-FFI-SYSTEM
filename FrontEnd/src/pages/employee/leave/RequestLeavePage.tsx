@@ -19,11 +19,12 @@ export default function RequestLeavePage() {
     const [loading, setLoading] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
-    const [balances, setBalances] = useState<Record<string, LeaveBalance>>({}); // Map by type name or id
+    const [balances, setBalances] = useState<Record<number, LeaveBalance>>({});
 
     // Calculated state
     const [daysCount, setDaysCount] = useState(0);
     const [balanceError, setBalanceError] = useState<string | null>(null);
+    const [isOtherSelected, setIsOtherSelected] = useState(false);
 
     // Initial Load
     useEffect(() => {
@@ -39,12 +40,9 @@ export default function RequestLeavePage() {
                 // Load Balance
                 const balanceRes = await getMyLeaveBalance();
                 if (!isApiError(balanceRes)) {
-                    // Index by leave_type name for quick lookup if needed, 
-                    // ideally backend gives ID but DTO says string "leave_type". 
-                    // Let's rely on matching name for now or just display generic if mismatch
-                    const map: Record<string, LeaveBalance> = {};
+                    const map: Record<number, LeaveBalance> = {};
                     (balanceRes.data || []).forEach(b => {
-                        map[b.leave_type] = b;
+                        map[b.leave_type_id] = b;
                     });
                     setBalances(map);
                 }
@@ -60,6 +58,11 @@ export default function RequestLeavePage() {
 
     // Form Watcher for Days Calculation
     const handleValuesChange = (changedValues: any, allValues: any) => {
+        if (changedValues.leave_type) {
+            const typeObj = leaveTypes.find(t => t.id === changedValues.leave_type);
+            setIsOtherSelected(typeObj?.code === 'OTHER');
+        }
+
         if (changedValues.dates || changedValues.leave_type) {
             const { dates, leave_type } = allValues;
 
@@ -73,19 +76,22 @@ export default function RequestLeavePage() {
                 if (leave_type) {
                     const typeObj = leaveTypes.find(t => t.id === leave_type);
                     if (typeObj) {
-                        const bal = balances[typeObj.name];
-                        // Note: matching by name is risky if backend names differ. 
-                        // Assuming consistency for F3.
-                        if (bal) {
-                            if (bal.remaining_days < diff) {
-                                setBalanceError(`Insufficient balance. You have ${bal.remaining_days} days remaining, but requested ${diff}.`);
+                        // Skip balance check for 'Other' type as it depends on HR decision
+                        if (typeObj.code === 'OTHER') {
+                            setBalanceError(null);
+                        } else {
+                            const bal = balances[typeObj.id];
+                            if (bal) {
+                                if (bal.remaining_days < diff) {
+                                    setBalanceError(`Insufficient balance. You have ${bal.remaining_days} days remaining, but requested ${diff}.`);
+                                } else {
+                                    setBalanceError(null);
+                                }
                             } else {
+                                // No balance record found - usually implies 0 or unknown. 
+                                // Warn if strict, otherwise clear
                                 setBalanceError(null);
                             }
-                        } else {
-                            // No balance record found - usually implies 0 or unknown. 
-                            // Warn if strict, otherwise clear
-                            setBalanceError(null);
                         }
                     }
                 }
@@ -105,7 +111,7 @@ export default function RequestLeavePage() {
         setSubmitting(true);
         try {
             const payload = {
-                leave_type_id: values.leave_type,
+                leave_type: values.leave_type, // Updated key
                 start_date: values.dates[0].format("YYYY-MM-DD"),
                 end_date: values.dates[1].format("YYYY-MM-DD"),
                 reason: values.reason
@@ -113,15 +119,26 @@ export default function RequestLeavePage() {
 
             const res = await createLeaveRequest(payload);
 
-            if (isApiError(res)) {
-                // If it's a 422 or business logic error, res.message should cover it
-                notification.error({ message: "Submission Failed", description: res.message || "Invalid request." });
-            } else {
-                notification.success({ message: "Success", description: "Leave request submitted successfully." });
-                navigate("/employee/leave/requests");
-            }
+            notification.success({ message: "Success", description: "Leave request submitted successfully." });
+            navigate("/employee/leave/requests");
+
         } catch (err: any) {
-            notification.error({ message: "System Error", description: err.message || "Something went wrong." });
+            console.error("Submit Error:", err);
+
+            // Check for validation errors from apiClient
+            const data = err.apiData || err.response?.data;
+
+            let description = err.message || "Something went wrong.";
+            if (data?.errors) {
+                if (Array.isArray(data.errors)) {
+                    description = data.errors.join(", ");
+                } else {
+                    // flatten object errors if needed, though backend seems to return list
+                    description = Object.values(data.errors).flat().join(", ");
+                }
+            }
+
+            notification.error({ message: "Submission Failed", description });
         } finally {
             setSubmitting(false);
         }
@@ -190,9 +207,9 @@ export default function RequestLeavePage() {
                     )}
 
                     <Form.Item
-                        label="Reason"
+                        label={isOtherSelected ? "Reason (Required)" : "Reason (Optional)"}
                         name="reason"
-                        rules={[{ required: true, message: "Please provide a reason" }]}
+                        rules={[{ required: isOtherSelected, message: "Please provide a reason for 'Other' leave type." }]}
                     >
                         <TextArea rows={4} placeholder="Reason for leave..." />
                     </Form.Item>

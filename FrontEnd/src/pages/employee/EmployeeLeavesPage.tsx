@@ -135,10 +135,10 @@ const EmployeeLeavesPage: React.FC = () => {
                         label="Leave Type"
                         rules={[{ required: true, message: "Please select a leave type" }]}
                     >
-                        <Select placeholder="Select leave type">
+                            <Select placeholder="Select leave type">
                             {balances.map((balance) => (
                                 <Select.Option key={balance.leave_type_id} value={balance.leave_type_id}>
-                                    {balance.leave_type_name} (Remaining: {balance.remaining} days)
+                                    {balance.leave_type} (Remaining: {balance.remaining_days} days)
                                 </Select.Option>
                             ))}
                         </Select>

@@ -14,7 +14,13 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name="employeeprofile",
             name="user",
-            field=models.OneToOneField(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name="employee_profile", to=settings.AUTH_USER_MODEL),
+            field=models.OneToOneField(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="employee_profile",
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
         migrations.AddField(
             model_name="employeeprofile",
@@ -64,22 +70,46 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="employeeprofile",
             name="department_ref",
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name="employees", to="hr_reference.department"),
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="employees",
+                to="hr_reference.department",
+            ),
         ),
         migrations.AddField(
             model_name="employeeprofile",
             name="position_ref",
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name="employees", to="hr_reference.position"),
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="employees",
+                to="hr_reference.position",
+            ),
         ),
         migrations.AddField(
             model_name="employeeprofile",
             name="task_group_ref",
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name="employees", to="hr_reference.taskgroup"),
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="employees",
+                to="hr_reference.taskgroup",
+            ),
         ),
         migrations.AddField(
             model_name="employeeprofile",
             name="sponsor_ref",
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name="employees", to="hr_reference.sponsor"),
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="employees",
+                to="hr_reference.sponsor",
+            ),
         ),
         migrations.AddField(
             model_name="employeeprofile",

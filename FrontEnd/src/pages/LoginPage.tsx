@@ -54,8 +54,14 @@ export default function LoginPage() {
       else navigate("/employee/home", { replace: true });
 
     } catch (e: any) {
-      // If backend not running yet, show a clear message:
-      setError("Backend not connected (API login failed). Start the backend or set VITE_API_BASE_URL.");
+      console.error("Login Error:", e);
+      if (e.response) {
+        // Server responded (e.g., 401 Invalid Credentials)
+        setError(e.message || "Login failed.");
+      } else {
+        // Network error (no response)
+        setError("Backend not connected (API login failed). Start the backend or set VITE_API_BASE_URL.");
+      }
     } finally {
       setSubmitting(false);
     }

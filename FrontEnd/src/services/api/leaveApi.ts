@@ -17,16 +17,26 @@ export interface LeaveType {
  */
 export interface LeaveRequest {
   id: number;
-  employee_id?: number;
-  employee_name?: string;
-  leave_type: number;
-  leave_type_name?: string;
+  // Backend returns nested objects
+  employee: {
+    id: number;
+    email: string;
+    full_name: string;
+  };
+  leave_type: LeaveType; 
   start_date: string;
   end_date: string;
-  days_requested: number;
+  days: number; // Backend returns 'days' field via get_days method (was days_requested in frontend?)
+  // Let's check serializer again. Serializer has get_days -> 'days'.
+  // Frontend had 'days_requested'. I should use 'days' to match backend.
   reason: string;
-  status: "submitted" | "approved" | "rejected" | "cancelled" | string; // Normalized to lowercase in UI usually, but backend might send Capitalized. We should handle both.
-  rejection_reason?: string;
+  status: "submitted" | "pending_manager" | "pending_hr" | "approved" | "rejected" | "cancelled";
+  rejection_reason?: string; // If mapped from hr_decision_note? Serializer fields=__all__. 
+  // Model has hr_decision_note, manager_decision_note. Frontend might want generic 'rejection_reason'.
+  // Backend keys: hr_decision_note, manager_decision_note.
+  // I will keep existing + add specific ones if needed.
+  hr_decision_note?: string;
+  manager_decision_note?: string;
   created_at?: string;
 }
 
@@ -34,6 +44,7 @@ export interface LeaveRequest {
  * Leave Balance DTO
  */
 export interface LeaveBalance {
+  leave_type_id: number;
   leave_type: string;
   total_days: number;
   used_days: number;
@@ -44,7 +55,7 @@ export interface LeaveBalance {
  * Payload for creating a leave request
  */
 export interface CreateLeaveRequestPayload {
-  leave_type_id: number;
+  leave_type: number; // Changed from leave_type_id
   start_date: string;
   end_date: string;
   reason: string;
@@ -69,7 +80,7 @@ export interface LeaveRequestFilter {
  * Get all available leave types
  */
 export async function getLeaveTypes(): Promise<ApiResponse<LeaveType[]>> {
-  const { data } = await api.get<ApiResponse<LeaveType[]>>("/leave-types");
+  const { data } = await api.get<ApiResponse<LeaveType[]>>("/api/leaves/leave-types/");
   return data;
 }
 
@@ -79,7 +90,7 @@ export async function getLeaveTypes(): Promise<ApiResponse<LeaveType[]>> {
 export async function createLeaveRequest(
   payload: CreateLeaveRequestPayload
 ): Promise<ApiResponse<LeaveRequest>> {
-  const { data } = await api.post<ApiResponse<LeaveRequest>>("/leave-requests", payload);
+  const { data } = await api.post<ApiResponse<LeaveRequest>>("/api/leaves/leave-requests/", payload);
   return data;
 }
 
@@ -90,7 +101,7 @@ export async function getMyLeaveRequests(
   params?: { page?: number; page_size?: number }
 ): Promise<ApiResponse<PaginatedResponse<LeaveRequest>>> {
   const { data } = await api.get<ApiResponse<PaginatedResponse<LeaveRequest>>>(
-    "/employee/leave-requests",
+    "/api/leaves/employee/leave-requests/",
     { params }
   );
   return data;
@@ -103,7 +114,7 @@ export async function getMyLeaveBalance(
   year?: number
 ): Promise<ApiResponse<LeaveBalance[]>> {
   const { data } = await api.get<ApiResponse<LeaveBalance[]>>(
-    "/employee/leave-balance",
+    "/api/leaves/employee/leave-balance/",
     { params: { year } }
   );
   return data;
@@ -119,7 +130,7 @@ export async function getLeaveRequests(
   params?: LeaveRequestFilter
 ): Promise<ApiResponse<PaginatedResponse<LeaveRequest>>> {
   const { data } = await api.get<ApiResponse<PaginatedResponse<LeaveRequest>>>(
-    "/leave-requests",
+    "/api/leaves/leave-requests/",
     { params }
   );
   return data;
@@ -131,7 +142,7 @@ export async function getLeaveRequests(
 export async function getLeaveRequest(
   id: string | number
 ): Promise<ApiResponse<LeaveRequest>> {
-  const { data } = await api.get<ApiResponse<LeaveRequest>>(`/leave-requests/${id}`);
+  const { data } = await api.get<ApiResponse<LeaveRequest>>(`/api/leaves/leave-requests/${id}/`);
   return data;
 }
 
@@ -143,7 +154,7 @@ export async function approveLeaveRequest(
   comment?: string
 ): Promise<ApiResponse<LeaveRequest>> {
   const { data } = await api.post<ApiResponse<LeaveRequest>>(
-    `/leave-requests/${id}/approve`,
+    `/api/leaves/leave-requests/${id}/approve/`,
     { comment }
   );
   return data;
@@ -157,18 +168,45 @@ export async function rejectLeaveRequest(
   comment: string
 ): Promise<ApiResponse<LeaveRequest>> {
   const { data } = await api.post<ApiResponse<LeaveRequest>>(
-    `/leave-requests/${id}/reject`,
+    `/api/leaves/leave-requests/${id}/reject/`,
     { comment }
   );
   return data;
 }
 
-/**
- * Cancel a leave request (Optional - if backend supports)
- */
 export async function cancelLeaveRequest(
   id: string | number
 ): Promise<ApiResponse<LeaveRequest>> {
-  const { data } = await api.post<ApiResponse<LeaveRequest>>(`/leave-requests/${id}/cancel`);
+  const { data } = await api.post<ApiResponse<LeaveRequest>>(`/api/leaves/leave-requests/${id}/cancel/`);
+  return data;
+}
+
+/**
+ * Get leave balances for an employee (HR)
+ */
+export async function getLeaveBalances(
+  employeeId: number | string,
+  year?: number
+): Promise<ApiResponse<LeaveBalance[]>> {
+  const { data } = await api.get<ApiResponse<LeaveBalance[]>>("/api/leaves/leave-balances/", {
+    params: { employee_id: employeeId, year }
+  });
+  return data;
+}
+
+/**
+ * Create a leave balance adjustment
+ */
+export interface CreateAdjustmentPayload {
+  employee_id: number;
+  leave_type: number;
+  adjustment_days: number;
+  reason: string;
+}
+
+export async function createLeaveAdjustment(
+  payload: CreateAdjustmentPayload
+): Promise<ApiResponse<any>> {
+  const { data } = await api.post<ApiResponse<any>>("/api/leaves/adjustments/", payload);
   return data;
 }

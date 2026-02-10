@@ -1,0 +1,517 @@
+{
+  "info": {
+    "name": "FFI HR Phase 3 Tester",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Excel Import",
+      "item": [
+        {
+          "name": "Import Employees (Excel)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{hr_token}}"}
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {"key": "file", "type": "file", "src": "{{excel_file}}"}
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/employees/import/excel",
+              "host": ["{{base_url}}"],
+              "path": ["employees", "import", "excel"]
+            }
+          }
+        },
+        {
+          "name": "Import History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{hr_token}}"}
+            ],
+            "url": {
+              "raw": "{{base_url}}/imports/employees?page=1&page_size=10",
+              "host": ["{{base_url}}"],
+              "path": ["imports", "employees"],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "page_size", "value": "10"}
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var json = pm.response.json();",
+                  "  if (json && json.data && json.data.items && json.data.items.length > 0) {",
+                  "    pm.environment.set('import_id', json.data.items[0].id);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Import Result",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{hr_token}}"}
+            ],
+            "url": {
+              "raw": "{{base_url}}/imports/employees/{{import_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["imports", "employees", "{{import_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Import Errors File",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{hr_token}}"}
+            ],
+            "url": {
+              "raw": "{{base_url}}/imports/employees/{{import_id}}/errors-file",
+              "host": ["{{base_url}}"],
+              "path": ["imports", "employees", "{{import_id}}", "errors-file"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payroll Runs",
+      "item": [
+        {
+          "name": "Create Payroll Run",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{hr_token}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"year\": 2026,\n  \"month\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/payroll-runs",
+              "host": ["{{base_url}}"],
+              "path": ["payroll-runs"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  var json = pm.response.json();",
+                  "  if (json && json.data && json.data.id) {",
+                  "    pm.environment.set('payroll_run_id', json.data.id);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Payroll Runs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{hr_token}}"}
+            ],
+            "url": {
+              "raw": "{{base_url}}/payroll-runs?year=2026&page=1&page_size=10",
+              "host": ["{{base_url}}"],
+              "path": ["payroll-runs"],
+              "query": [
+                {"key": "year", "value": "2026"},
+                {"key": "page", "value": "1"},
+                {"key": "page_size", "value": "10"}
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var json = pm.response.json();",
+                  "  if (json && json.data && json.data.items && json.data.items.length > 0) {",
+                  "    pm.environment.set('payroll_run_id', json.data.items[0].id);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Payroll Run",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{hr_token}}"}
+            ],
+            "url": {
+              "raw": "{{base_url}}/payroll-runs/{{payroll_run_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["payroll-runs", "{{payroll_run_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Payroll Run Items",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{hr_token}}"}
+            ],
+            "url": {
+              "raw": "{{base_url}}/payroll-runs/{{payroll_run_id}}/items?page=1&page_size=10",
+              "host": ["{{base_url}}"],
+              "path": ["payroll-runs", "{{payroll_run_id}}", "items"],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "page_size", "value": "10"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Finalize Payroll Run",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{hr_token}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"confirm\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/payroll-runs/{{payroll_run_id}}/finalize",
+              "host": ["{{base_url}}"],
+              "path": ["payroll-runs", "{{payroll_run_id}}", "finalize"]
+            }
+          }
+        },
+        {
+          "name": "Generate Payslips",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{hr_token}}"}
+            ],
+            "url": {
+              "raw": "{{base_url}}/payroll-runs/{{payroll_run_id}}/generate-payslips",
+              "host": ["{{base_url}}"],
+              "path": ["payroll-runs", "{{payroll_run_id}}", "generate-payslips"]
+            }
+          }
+        },
+        {
+          "name": "Export Payroll CSV",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{hr_token}}"}
+            ],
+            "url": {
+              "raw": "{{base_url}}/payroll-runs/{{payroll_run_id}}/export?format=csv",
+              "host": ["{{base_url}}"],
+              "path": ["payroll-runs", "{{payroll_run_id}}", "export"],
+              "query": [
+                {"key": "format", "value": "csv"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Export Payroll PDF",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{hr_token}}"}
+            ],
+            "url": {
+              "raw": "{{base_url}}/payroll-runs/{{payroll_run_id}}/export?format=pdf",
+              "host": ["{{base_url}}"],
+              "path": ["payroll-runs", "{{payroll_run_id}}", "export"],
+              "query": [
+                {"key": "format", "value": "pdf"}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Employee Payslips",
+      "item": [
+        {
+          "name": "List My Payslips",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{emp_token}}"}
+            ],
+            "url": {
+              "raw": "{{base_url}}/employee/payslips?page=1&page_size=10",
+              "host": ["{{base_url}}"],
+              "path": ["employee", "payslips"],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "page_size", "value": "10"}
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var json = pm.response.json();",
+                  "  if (json && json.data && json.data.items && json.data.items.length > 0) {",
+                  "    pm.environment.set('payslip_id', json.data.items[0].id);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Payslip Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{emp_token}}"}
+            ],
+            "url": {
+              "raw": "{{base_url}}/employee/payslips/{{payslip_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["employee", "payslips", "{{payslip_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Payslip Download",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{emp_token}}"}
+            ],
+            "url": {
+              "raw": "{{base_url}}/employee/payslips/{{payslip_id}}/download",
+              "host": ["{{base_url}}"],
+              "path": ["employee", "payslips", "{{payslip_id}}", "download"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Leave Requests",
+      "item": [
+        {
+          "name": "List Leave Types",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{emp_token}}"}
+            ],
+            "url": {
+              "raw": "{{base_url}}/leave-types",
+              "host": ["{{base_url}}"],
+              "path": ["leave-types"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var json = pm.response.json();",
+                  "  if (Array.isArray(json) && json.length > 0) {",
+                  "    pm.environment.set('leave_type_id', json[0].id);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Leave Request (Employee)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{emp_token}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"leave_type_id\": {{leave_type_id}},\n  \"start_date\": \"2026-01-10\",\n  \"end_date\": \"2026-01-12\",\n  \"reason\": \"\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/leave-requests",
+              "host": ["{{base_url}}"],
+              "path": ["leave-requests"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  var json = pm.response.json();",
+                  "  if (json && json.data && json.data.id) {",
+                  "    pm.environment.set('leave_request_id', json.data.id);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List My Leave Requests",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{emp_token}}"}
+            ],
+            "url": {
+              "raw": "{{base_url}}/employee/leave-requests?page=1&page_size=10",
+              "host": ["{{base_url}}"],
+              "path": ["employee", "leave-requests"],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "page_size", "value": "10"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "My Leave Balance (default year)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{emp_token}}"}
+            ],
+            "url": {
+              "raw": "{{base_url}}/employee/leave-balance",
+              "host": ["{{base_url}}"],
+              "path": ["employee", "leave-balance"]
+            }
+          }
+        },
+        {
+          "name": "HR Inbox (filtered)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{hr_token}}"}
+            ],
+            "url": {
+              "raw": "{{base_url}}/leave-requests?status=submitted&page=1&page_size=10",
+              "host": ["{{base_url}}"],
+              "path": ["leave-requests"],
+              "query": [
+                {"key": "status", "value": "submitted"},
+                {"key": "page", "value": "1"},
+                {"key": "page_size", "value": "10"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Leave Request Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{hr_token}}"}
+            ],
+            "url": {
+              "raw": "{{base_url}}/leave-requests/{{leave_request_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["leave-requests", "{{leave_request_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Approve Leave Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{hr_token}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comment\": \"Approved\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/leave-requests/{{leave_request_id}}/approve",
+              "host": ["{{base_url}}"],
+              "path": ["leave-requests", "{{leave_request_id}}", "approve"]
+            }
+          }
+        },
+        {
+          "name": "Reject Leave Request (comment required)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{hr_token}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comment\": \"Insufficient balance\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/leave-requests/{{leave_request_id}}/reject",
+              "host": ["{{base_url}}"],
+              "path": ["leave-requests", "{{leave_request_id}}", "reject"]
+            }
+          }
+        },
+        {
+          "name": "Cancel Leave Request (owner only)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{emp_token}}"}
+            ],
+            "url": {
+              "raw": "{{base_url}}/leave-requests/{{leave_request_id}}/cancel",
+              "host": ["{{base_url}}"],
+              "path": ["leave-requests", "{{leave_request_id}}", "cancel"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

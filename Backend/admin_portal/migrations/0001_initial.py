@@ -4,29 +4,27 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
-            name='SystemSettings',
+            name="SystemSettings",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('password_min_length', models.PositiveIntegerField(default=8)),
-                ('password_require_upper', models.BooleanField(default=True)),
-                ('password_require_lower', models.BooleanField(default=True)),
-                ('password_require_number', models.BooleanField(default=True)),
-                ('password_require_special', models.BooleanField(default=False)),
-                ('session_timeout_minutes', models.PositiveIntegerField(default=30)),
-                ('max_login_attempts', models.PositiveIntegerField(default=5)),
-                ('default_invite_expiry_hours', models.PositiveIntegerField(default=72)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("password_min_length", models.PositiveIntegerField(default=8)),
+                ("password_require_upper", models.BooleanField(default=True)),
+                ("password_require_lower", models.BooleanField(default=True)),
+                ("password_require_number", models.BooleanField(default=True)),
+                ("password_require_special", models.BooleanField(default=False)),
+                ("session_timeout_minutes", models.PositiveIntegerField(default=30)),
+                ("max_login_attempts", models.PositiveIntegerField(default=5)),
+                ("default_invite_expiry_hours", models.PositiveIntegerField(default=72)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
             ],
             options={
-                'db_table': 'system_settings',
+                "db_table": "system_settings",
             },
         ),
     ]
