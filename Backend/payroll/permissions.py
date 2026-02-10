@@ -6,6 +6,7 @@ class IsEmployeeOnly(BasePermission):
     """
     Allows access only to Employee role.
     """
+
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False

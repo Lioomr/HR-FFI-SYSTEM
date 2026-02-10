@@ -1,8 +1,10 @@
 from django.contrib.auth import authenticate
 from rest_framework import serializers
+from rest_framework.exceptions import AuthenticationFailed
 
 from .security import get_client_ip, is_locked_out, record_login_failure, clear_login_failures
 from audit.utils import audit
+
 
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
@@ -21,7 +23,7 @@ class LoginSerializer(serializers.Serializer):
                     entity="auth",
                     metadata={"email": email, "reason": "locked"},
                 )
-            raise serializers.ValidationError({"non_field_errors": ["Invalid credentials"]})
+            raise AuthenticationFailed("User is locked out due to too many failed attempts.")
 
         user = authenticate(username=email, password=attrs["password"])
         if not user or not user.is_active:
@@ -33,11 +35,12 @@ class LoginSerializer(serializers.Serializer):
                     entity="auth",
                     metadata={"email": email, "reason": "invalid_credentials"},
                 )
-            raise serializers.ValidationError({"non_field_errors": ["Invalid credentials"]})
+            raise AuthenticationFailed("Invalid credentials")
 
         clear_login_failures(email, ip_address)
         attrs["user"] = user
         return attrs
+
 
 class ChangePasswordSerializer(serializers.Serializer):
     current_password = serializers.CharField()

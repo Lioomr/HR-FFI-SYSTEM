@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { Button, Card, Form, Modal, Table } from "antd";
+import { Button, Card, Form, Modal, Table, Space, Input } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined, EditOutlined } from "@ant-design/icons";
 
@@ -82,6 +82,7 @@ export function ReferenceCrudPage<TItem = any, TCreate = any, TUpdate = any>({
     const [items, setItems] = useState<TItem[]>([]);
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(1);
+    const [searchText, setSearchText] = useState("");
 
     // Modal states
     const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -96,15 +97,19 @@ export function ReferenceCrudPage<TItem = any, TCreate = any, TUpdate = any>({
     /**
      * Fetch list data from API
      */
-    const loadData = useCallback(async (currentPage = 1) => {
+    const loadData = useCallback(async (currentPage = 1, search = searchText) => {
         setLoading(true);
         setError(null);
         setForbidden(false);
 
         try {
-            const params = enablePagination
+            const params: any = enablePagination
                 ? { page: currentPage, page_size: pageSize }
                 : {};
+
+            if (search) {
+                params.search = search;
+            }
 
             const response = await fetchList(params);
 
@@ -132,7 +137,7 @@ export function ReferenceCrudPage<TItem = any, TCreate = any, TUpdate = any>({
             setError(err.message || "Failed to load data");
             setLoading(false);
         }
-    }, [fetchList, mapListResponse, enablePagination, pageSize]);
+    }, [fetchList, mapListResponse, enablePagination, pageSize, searchText]);
 
     /**
      * Initial load
@@ -324,21 +329,33 @@ export function ReferenceCrudPage<TItem = any, TCreate = any, TUpdate = any>({
             <PageHeader
                 title={title}
                 actions={
-                    createForm ? (
-                        <Button
-                            type="primary"
-                            icon={<PlusOutlined />}
-                            onClick={() => {
-                                createFormInstance.resetFields();
-                                if (initialCreateValues) {
-                                    createFormInstance.setFieldsValue(initialCreateValues);
-                                }
-                                setCreateModalOpen(true);
+                    <Space>
+                        <Input.Search
+                            placeholder="Search..."
+                            allowClear
+                            onSearch={(value) => {
+                                setSearchText(value);
+                                setPage(1);
+                                loadData(1, value);
                             }}
-                        >
-                            Create {entityName}
-                        </Button>
-                    ) : undefined
+                            style={{ width: 250 }}
+                        />
+                        {createForm && (
+                            <Button
+                                type="primary"
+                                icon={<PlusOutlined />}
+                                onClick={() => {
+                                    createFormInstance.resetFields();
+                                    if (initialCreateValues) {
+                                        createFormInstance.setFieldsValue(initialCreateValues);
+                                    }
+                                    setCreateModalOpen(true);
+                                }}
+                            >
+                                Create {entityName}
+                            </Button>
+                        )}
+                    </Space>
                 }
             />
 

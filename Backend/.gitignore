@@ -12,10 +12,18 @@ ENV/
 /build/
 /dist/
 *.egg-info/
+
 # Excel temporary and backup files
 ~$*.xlsx
 *.xlsx
+*.csv
 
 # Local test outputs and logs
 *.txt
 *.postman_collection.json
+
+# Private Uploads (Employee Imports, etc)
+private_uploads/
+
+# Utility Scripts
+check_excel_headers.py

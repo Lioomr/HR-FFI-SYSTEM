@@ -36,7 +36,6 @@ except Exception:  # pragma: no cover - fallback for missing dependency
     load_workbook = None
 
 
-
 def generate_employee_id():
     suffix = "".join(random.choices(string.digits, k=6))
     return f"EMP-{suffix}"
@@ -71,17 +70,17 @@ def _sync_legacy_fields(instance: EmployeeProfile) -> None:
 
 EXPECTED_IMPORT_HEADERS = [
     "Emp Full Name",
-    "Employee number ",       # Space at the end
-    "Nationality ",           # Space at the end
+    "Employee number ",  # Space at the end
+    "Nationality ",  # Space at the end
     "Position Name",
     "Passport Number",
     "Passport Expiry",
-    " ID",                    # Space at the start
-    " ID Expiry",             # Space at the start
+    " ID",  # Space at the start
+    " ID Expiry",  # Space at the start
     "Date Of Birth",
-    "JOB OFFER ",             # Space at the end
-    " Joining Date",          # Space at the start
-    "Contract date ",         # Space at the end
+    "JOB OFFER ",  # Space at the end
+    " Joining Date",  # Space at the start
+    "Contract date ",  # Space at the end
     "Contract Expiry Date ",  # Space at the end
     "Task Group Name",
     "Health Card",
@@ -98,7 +97,7 @@ EXPECTED_IMPORT_HEADERS = [
     "Payment Mode",
     "Allowed Overtime",
     "department",
-    "SID monthly expense"     # No dot at the end
+    "SID monthly expense",
 ]
 MAX_IMPORT_FILE_SIZE = 5 * 1024 * 1024
 MAX_IMPORT_ROWS = 5000
@@ -256,10 +255,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
 
         department = params.get("department")
         if department:
-            qs = qs.filter(
-                Q(department_ref__code__iexact=department)
-                | Q(department__iexact=department)
-            )
+            qs = qs.filter(Q(department_ref__code__iexact=department) | Q(department__iexact=department))
 
         position = params.get("position")
         if position:
@@ -418,8 +414,14 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         upload.seek(0)
         worksheet = workbook.active
         header_row = list(next(worksheet.iter_rows(min_row=1, max_row=1, values_only=True), []))
-        normalized_headers = [_normalize_cell(value) for value in header_row]
-        expected_headers = [_normalize_cell(value) for value in EXPECTED_IMPORT_HEADERS]
+        
+        # Strip trailing None/empty headers (common in Excel files with extra columns)
+        while header_row and (_normalize_cell(header_row[-1]) == "" or header_row[-1] is None):
+            header_row.pop()
+        
+        normalized_headers = [_normalize_cell(value).lower() for value in header_row]
+        expected_headers = [_normalize_cell(value).lower() for value in EXPECTED_IMPORT_HEADERS]
+
         if normalized_headers != expected_headers:
             workbook.close()
             upload.seek(0)
@@ -476,9 +478,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
                 row_count=0,
                 file_hash=file_hash,
             )
-            errors_detail = [
-                {"row": 0, "column": "Sheet", "message": "No data rows found."}
-            ]
+            errors_detail = [{"row": 0, "column": "Sheet", "message": "No data rows found."}]
             errors_content = _write_errors_csv(errors_detail)
             import_record.errors_file.save(
                 f"employee_imports/errors/{uuid.uuid4().hex}.csv",
@@ -653,13 +653,43 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
                     )
                     row_has_error = True
 
+            # Auto-create department if not found
             department_ref = None
             if department_name:
                 department_ref = department_lookup.get(department_name.lower())
+                if not department_ref:
+                    # Create new department
+                    try:
+                        department_ref = Department.objects.create(
+                            name=department_name,
+                            code=department_name[:10].upper().replace(" ", "_"),
+                            description=f"Auto-created from import"
+                        )
+                        # Add to lookup for subsequent rows
+                        department_lookup[department_name.lower()] = department_ref
+                        department_lookup[department_ref.code.lower()] = department_ref
+                    except Exception:
+                        # If creation fails (e.g., duplicate code), try to find it again
+                        department_ref = Department.objects.filter(name=department_name).first()
 
+            # Auto-create position if not found
             position_ref = None
             if position_name:
                 position_ref = position_lookup.get(position_name.lower())
+                if not position_ref:
+                    # Create new position
+                    try:
+                        position_ref = Position.objects.create(
+                            name=position_name,
+                            code=position_name[:10].upper().replace(" ", "_"),
+                            description=f"Auto-created from import"
+                        )
+                        # Add to lookup for subsequent rows
+                        position_lookup[position_name.lower()] = position_ref
+                        position_lookup[position_ref.code.lower()] = position_ref
+                    except Exception:
+                        # If creation fails (e.g., duplicate code), try to find it again
+                        position_ref = Position.objects.filter(name=position_name).first()
 
             task_group_ref = None
             if task_group_name:
@@ -728,9 +758,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             _audit_import(request, file_hash, row_count, "failed")
             return _error_response(errors, status.HTTP_422_UNPROCESSABLE_ENTITY)
 
-        existing_ids = set(
-            EmployeeProfile.objects.values_list("employee_id", flat=True)
-        )
+        existing_ids = set(EmployeeProfile.objects.values_list("employee_id", flat=True))
 
         try:
             with transaction.atomic():
@@ -774,9 +802,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
                     _sync_legacy_fields(profile)
         except IntegrityError:
             errors = ["Import failed due to a database constraint."]
-            errors_detail = [
-                {"row": 0, "column": "Database", "message": "Constraint violation."}
-            ]
+            errors_detail = [{"row": 0, "column": "Database", "message": "Constraint violation."}]
             errors_content = _write_errors_csv(errors_detail)
             import_record.errors_file.save(
                 f"employee_imports/errors/{uuid.uuid4().hex}.csv",
@@ -798,8 +824,45 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         return error(
             "Hard delete is not allowed. Please update status to TERMINATED.",
-            status=status.HTTP_405_METHOD_NOT_ALLOWED,
+            status=status.HTTP_403_FORBIDDEN,
         )
+
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="import-template",
+        permission_classes=[IsAuthenticated, IsHRManagerOnly],
+    )
+    def import_template(self, request):
+        """
+        Return the company's official Excel template for employee import.
+        Serves from static files directory for easy deployment.
+        """
+        import os
+        from django.conf import settings
+        
+        # Path to the template file in static directory
+        template_path = os.path.join(settings.BASE_DIR, "static", "templates", "employee_import_template.xlsx")
+        
+        if not os.path.exists(template_path):
+            return error(
+                "Template file not found. Please contact system administrator.",
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        try:
+            response = FileResponse(
+                open(template_path, 'rb'),
+                as_attachment=True,
+                filename="employee_import_template.xlsx",
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+            return response
+        except Exception as e:
+            return error(
+                f"Failed to download template: {str(e)}",
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class EmployeeImportHistoryViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
@@ -808,7 +871,18 @@ class EmployeeImportHistoryViewSet(mixins.ListModelMixin, mixins.RetrieveModelMi
     serializer_class = EmployeeImportSerializer
 
     def get_queryset(self):
-        return EmployeeImport.objects.select_related("uploader").all()
+        return EmployeeImport.objects.select_related("uploader").order_by("-created_at").all()
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        
+        serializer = self.get_serializer(queryset, many=True)
+        return success({"results": serializer.data, "count": queryset.count()})
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()

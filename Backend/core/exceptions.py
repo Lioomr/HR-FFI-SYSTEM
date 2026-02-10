@@ -4,6 +4,7 @@ from django.http import Http404
 
 from core.responses import error
 
+
 def custom_exception_handler(exc, context):
     if isinstance(exc, Http404):
         return error("Not found", status=404)

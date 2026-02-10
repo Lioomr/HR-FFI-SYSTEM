@@ -10,6 +10,7 @@ from .throttles import LoginRateThrottle
 from .permissions import get_role
 from core.responses import success
 
+
 class LoginView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [LoginRateThrottle]
@@ -23,6 +24,7 @@ class LoginView(APIView):
         access = str(refresh.access_token)
 
         from audit.utils import audit
+
         audit(
             request,
             action="login_success",
@@ -30,14 +32,17 @@ class LoginView(APIView):
             metadata={"email": user.email},
         )
 
-        return success({
-            "token": access,
-            "user": {
-                "id": str(user.id),
-                "email": user.email,
-                "role": get_role(user),
+        return success(
+            {
+                "token": access,
+                "user": {
+                    "id": str(user.id),
+                    "email": user.email,
+                    "role": get_role(user),
+                },
             }
-        })
+        )
+
 
 class ChangePasswordView(APIView):
     def post(self, request):
@@ -58,11 +63,13 @@ class ChangePasswordView(APIView):
 
         return success({})
 
+
 class LogoutView(APIView):
     """
     If you only return access token from login, logout can still invalidate
     ALL refresh tokens for this user (global logout).
     """
+
     def post(self, request):
         # blacklist all outstanding refresh tokens for the user
         for t in OutstandingToken.objects.filter(user=request.user):
@@ -71,3 +78,18 @@ class LogoutView(APIView):
             except Exception:
                 pass
         return success({})
+
+
+class UserMeView(APIView):
+    def get(self, request):
+        user = request.user
+        return success(
+            {
+                "id": str(user.id),
+                "email": user.email,
+                "full_name": user.full_name,
+                "role": get_role(user),
+                "is_active": user.is_active,
+                "date_joined": user.date_joined,
+            }
+        )

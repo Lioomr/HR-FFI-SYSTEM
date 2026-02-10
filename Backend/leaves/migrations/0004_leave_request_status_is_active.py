@@ -35,7 +35,16 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name="leaverequest",
             name="status",
-            field=models.CharField(choices=[("submitted", "Submitted"), ("approved", "Approved"), ("rejected", "Rejected"), ("cancelled", "Cancelled")], default="submitted", max_length=20),
+            field=models.CharField(
+                choices=[
+                    ("submitted", "Submitted"),
+                    ("approved", "Approved"),
+                    ("rejected", "Rejected"),
+                    ("cancelled", "Cancelled"),
+                ],
+                default="submitted",
+                max_length=20,
+            ),
         ),
         migrations.RunPython(map_statuses, migrations.RunPython.noop),
     ]

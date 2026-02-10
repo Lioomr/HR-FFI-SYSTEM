@@ -51,6 +51,8 @@ export type AdminSummary = {
     total: number;
     active: number;
     inactive: number;
+    total_growth_pct: number;
+    active_growth_pct: number;
   };
   invites: {
     total: number;
@@ -121,8 +123,8 @@ export type SettingsDto = {
 
 export type LeaveBalance = {
   leave_type_id: number;
-  leave_type_name: string;
-  opening_balance: string; // Decimal as string from backend
-  used: string;
-  remaining: string;
+  leave_type: string;
+  total_days: number;
+  used_days: number;
+  remaining_days: number;
 };

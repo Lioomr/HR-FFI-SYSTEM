@@ -18,14 +18,14 @@ class EmployeeProfile(models.Model):
         related_name="employee_profile",
         null=True,
         blank=True,
-        help_text=_("Linked user account. Optional.")
+        help_text=_("Linked user account. Optional."),
     )
 
     employee_id = models.CharField(
         max_length=20,
         unique=True,
         editable=False,
-        help_text=_("Unique employee identifier (e.g. EMP-00123). Generated automatically.")
+        help_text=_("Unique employee identifier (e.g. EMP-00123). Generated automatically."),
     )
 
     full_name = models.CharField(max_length=255, blank=True)
@@ -91,7 +91,7 @@ class EmployeeProfile(models.Model):
         max_length=20,
         choices=EmploymentStatus.choices,
         default=EmploymentStatus.ACTIVE,
-        help_text=_("Current employment status.")
+        help_text=_("Current employment status."),
     )
 
     # Manager is a direct link to a User, not another EmployeeProfile (per specs)
@@ -101,7 +101,7 @@ class EmployeeProfile(models.Model):
         null=True,
         blank=True,
         related_name="managed_employees",
-        help_text=_("Direct manager (User). Optional.")
+        help_text=_("Direct manager (User). Optional."),
     )
 
     created_at = models.DateTimeField(auto_now_add=True)

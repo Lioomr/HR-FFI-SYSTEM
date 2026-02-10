@@ -6,7 +6,6 @@ import { useNavigate } from "react-router-dom";
 import PageHeader from "../../components/ui/PageHeader";
 import Unauthorized403Page from "../Unauthorized403Page";
 import type { Role } from "../../services/api/apiTypes";
-import { isApiError } from "../../services/api/apiTypes";
 import { createUser } from "../../services/api/usersApi";
 
 type FormValues = {
@@ -34,23 +33,46 @@ export default function AdminUserCreatePage() {
     setSaving(true);
 
     try {
-      const res = await createUser(values);
-      if (isApiError(res)) {
-        const firstError = res.errors
-          ? Object.values(res.errors).flat().join(" ")
-          : res.message;
-        setError(firstError || "Failed to create user.");
-        return;
-      }
+      await createUser(values);
 
+      // Success case
       message.success("User created.");
       navigate("/admin/users", { replace: true });
     } catch (err: any) {
+      // Handle 403 Forbidden
       if (err?.response?.status === 403) {
         setUnauthorized(true);
         return;
       }
-      setError("Failed to create user.");
+
+      // Handle 422 Validation Error
+      if (err?.response?.status === 422) {
+        const apiData = err?.apiData || err?.response?.data;
+
+        // Use the error message from backend (already extracted by interceptor)
+        let errorMessage = err.message || "Failed to create user.";
+
+        // If the message is still generic, try to extract from apiData
+        if (errorMessage === "Failed to create user." && apiData) {
+          if (apiData.message) {
+            errorMessage = apiData.message;
+          } else if (apiData.errors && typeof apiData.errors === "object") {
+            // Fallback: extract from field errors
+            const firstFieldErrors = Object.values(apiData.errors).find(
+              (fieldErrors: any) => Array.isArray(fieldErrors) && fieldErrors.length > 0
+            );
+            if (firstFieldErrors && Array.isArray(firstFieldErrors)) {
+              errorMessage = firstFieldErrors[0];
+            }
+          }
+        }
+
+        setError(errorMessage);
+        return;
+      }
+
+      // Generic error
+      setError(err.message || "Failed to create user. Please try again.");
     } finally {
       setSaving(false);
     }

@@ -1,39 +1,60 @@
+import os
+import django
 import requests
-import json
+import sys
 
-base_url = "http://127.0.0.1:8000"
-# Url that was failing (corrected prefix)
-url = f"{base_url}/api/leaves/leave-balances/?employee_id=1&year=2026"
+# Setup Django
+sys.path.append(os.getcwd())
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+django.setup()
 
-# Correct login URL
-login_url = f"{base_url}/auth/login"
-try:
-    print(f"Logging in to {login_url}...")
-    auth_resp = requests.post(login_url, json={"email": "testuser@example.com", "password": "password123"})
-    if auth_resp.status_code == 200:
-        print("Login success. Response:")
-        print(json.dumps(auth_resp.json(), indent=2))
-        
-        # Try to extract token based on print output manually or generic guess
-        data = auth_resp.json().get('data', {})
-        token = data.get('access') or data.get('token') or data.get('accessToken')
-        
-        if token:
-            headers = {"Authorization": f"Bearer {token}"}
-            print("Logged in successfully.")
-            
-            # Now try the endpoint
-            print(f"Requesting {url}...")
-            resp = requests.get(url, headers=headers)
-            print(f"GET {url} -> Status: {resp.status_code}")
-            try:
-                print(json.dumps(resp.json(), indent=2))
-            except:
-                print(resp.text)
-        else:
-             print("Could not find token in response.")
-    else:
-        print(f"Login failed: {auth_resp.status_code} {auth_resp.text}")
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 
-except Exception as e:
-    print(f"Error: {e}")
+User = get_user_model()
+email = "hr_manager_test@example.com"
+password = "password123"
+
+# Create HR Manager User if not exists
+if not User.objects.filter(email=email).exists():
+    user = User.objects.create_user(email=email, password=password, full_name="Test HR Manager")
+    group, _ = Group.objects.get_or_create(name="HRManager")
+    user.groups.add(group)
+    user.save()
+    print(f"Created user: {email}")
+else:
+    user = User.objects.get(email=email)
+    # Ensure role
+    group, _ = Group.objects.get_or_create(name="HRManager")
+    if not user.groups.filter(name="HRManager").exists():
+        user.groups.add(group)
+        print("Added HRManager role to existing user.")
+
+# Get Token
+login_url = "http://localhost:8000/auth/login"
+response = requests.post(login_url, json={"email": email, "password": password})
+
+if response.status_code != 200:
+    print(f"Login failed: {response.text}")
+    sys.exit(1)
+
+token = response.json()["data"]["token"]
+print("Login successful. Token obtained.")
+
+# Test /users endpoint
+users_url = "http://localhost:8000/users?page_size=1000"
+headers = {"Authorization": f"Bearer {token}"}
+
+print(f"Testing GET {users_url}...")
+response = requests.get(users_url, headers=headers)
+
+print(f"Status Code: {response.status_code}")
+if response.status_code == 200:
+    # Print first few users to verify structure
+    data = response.json()
+    items = data.get("data", {}).get("results", []) or data.get("data", {}).get("items", [])
+    print(f"Successfully retrieved {len(items)} users.")
+    if items:
+        print("Sample user:", items[0])
+else:
+    print("Error Response:", response.text)
