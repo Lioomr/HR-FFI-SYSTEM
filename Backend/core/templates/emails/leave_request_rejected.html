@@ -1,0 +1,12 @@
+{% extends "emails/base_email.html" %}
+
+{% block details %}
+<div class="details">
+  <div><strong>Leave Type / نوع الإجازة:</strong> {{ leave_type }}</div>
+  <div><strong>Requested From / بداية الإجازة المطلوبة:</strong> {{ start_date }}</div>
+  <div><strong>Requested To / نهاية الإجازة المطلوبة:</strong> {{ end_date }}</div>
+  {% if rejection_reason %}
+  <div><strong>Reason / السبب:</strong> {{ rejection_reason }}</div>
+  {% endif %}
+</div>
+{% endblock %}

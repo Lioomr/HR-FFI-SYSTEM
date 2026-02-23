@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { routes } from "./routes/routes";
 import Providers from "./app/Providers";
+import "./index.css";
 
 import { useAuthStore } from "./auth/authStore";
 

@@ -14,6 +14,18 @@ export type CreateInviteRequest = {
   expires_in_hours?: number;
 };
 
+export type InviteAcceptInfo = {
+  email: string;
+  role: Role;
+  expires_at: string;
+};
+
+export type AcceptInviteRequest = {
+  token: string;
+  full_name?: string;
+  password: string;
+};
+
 export async function listInvites(params: InvitesListParams = {}) {
   const { data } = await api.get<ApiResponse<PaginatedResponse<InviteDto>>>(
     "/invites/",
@@ -37,5 +49,17 @@ export async function resendInvite(inviteId: number | string) {
 
 export async function revokeInvite(inviteId: number | string) {
   const { data } = await api.delete<ApiResponse<{}>>(`/invites/${inviteId}/`);
+  return data;
+}
+
+export async function validateInviteToken(token: string) {
+  const { data } = await api.get<ApiResponse<InviteAcceptInfo>>("/invites/accept/", {
+    params: { token },
+  });
+  return data;
+}
+
+export async function acceptInvite(payload: AcceptInviteRequest) {
+  const { data } = await api.post<ApiResponse<{ email: string; role: Role }>>("/invites/accept/", payload);
   return data;
 }

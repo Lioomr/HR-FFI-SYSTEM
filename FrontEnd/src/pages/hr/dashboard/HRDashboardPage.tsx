@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Card, Col, Row, Button, Table, Avatar, Space, Tag } from "antd";
+import { Col, Row, Button, Table, Avatar, Space, Tag } from "antd";
 import {
     TeamOutlined,
     DollarOutlined,
@@ -9,240 +9,326 @@ import {
     UploadOutlined,
     PlayCircleOutlined,
     FileTextOutlined,
-    ArrowUpOutlined,
     UserOutlined
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import LoadingState from "../../../components/ui/LoadingState";
 import ErrorState from "../../../components/ui/ErrorState";
+import StatCard from "../../../components/ui/StatCard";
 import Unauthorized403Page from "../../Unauthorized403Page";
 import { getHrSummary } from "../../../services/api/hrSummaryApi";
 import type { HRSummary } from "../../../services/api/hrSummaryApi";
 import { isApiError } from "../../../services/api/apiTypes";
 import { isForbidden } from "../../../services/api/httpErrors";
+import AnnouncementWidget from "../../../components/announcements/AnnouncementWidget";
+import SARIcon from "../../../components/icons/SARIcon";
+import { useI18n } from "../../../i18n/useI18n";
 
 export default function HRDashboardPage() {
     const navigate = useNavigate();
+    const { t } = useI18n();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [forbidden, setForbidden] = useState(false);
     const [summary, setSummary] = useState<HRSummary | null>(null);
 
-    /**
-     * Load HR summary data
-     */
     const loadSummary = async () => {
         setLoading(true);
         setError(null);
         setForbidden(false);
-
         try {
             const response = await getHrSummary();
-
             if (isApiError(response)) {
-                setError(response.message || "Failed to load HR summary");
+                setError(response.message || t("error.loadDashboard"));
                 setLoading(false);
                 return;
             }
-
             setSummary(response.data);
             setLoading(false);
         } catch (err: any) {
-            if (isForbidden(err)) {
-                setForbidden(true);
-                setLoading(false);
-                return;
-            }
-
-            setError(err.message || "Failed to load HR summary");
+            if (isForbidden(err)) { setForbidden(true); setLoading(false); return; }
+            setError(err.message || t("error.loadDashboard"));
             setLoading(false);
         }
     };
 
-    useEffect(() => {
-        loadSummary();
-    }, []);
+    useEffect(() => { loadSummary(); }, []);
 
     if (forbidden) return <Unauthorized403Page />;
-    if (loading) return <LoadingState title="Loading dashboard..." />;
-    if (error) return <ErrorState title="Failed to load dashboard" description={error} onRetry={loadSummary} />;
+    if (loading) return <LoadingState title={t("loading.dashboard")} />;
+    if (error) return <ErrorState title={t("error.loadDashboard")} description={error} onRetry={loadSummary} />;
 
-    const StatCard = ({ title, value, icon, color, trend }: any) => (
-        <Card bordered={false} style={{ borderRadius: 12, height: '100%' }} bodyStyle={{ padding: 24 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                    <div style={{ color: '#8c8c8c', fontSize: 14, marginBottom: 4 }}>{title}</div>
-                    <div style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 8 }}>{value}</div>
-                    {trend && (
-                        <div style={{ color: '#52c41a', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <ArrowUpOutlined /> {trend} <span style={{ color: '#bfbfbf' }}>vs last month</span>
-                        </div>
-                    )}
-                </div>
-                <div style={{
-                    width: 48, height: 48, borderRadius: 12,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: `${color}15`, color: color, fontSize: 20
-                }}>
-                    {icon}
-                </div>
-            </div>
-        </Card>
-    );
+    // ─── Quick Action data ──────────────────────────────────────────────────────
+    const quickActions = [
+        { label: t("hr.dashboard.addEmployee"), icon: <UserAddOutlined />, color: "#f97316", bgColor: "#fff4e6", path: "/hr/employees/create" },
+        { label: t("hr.dashboard.uploadExcel"), icon: <UploadOutlined />, color: "#94a3b8", bgColor: "#f1f5f9", path: "/hr/import/employees" },
+        { label: t("hr.dashboard.runPayroll"), icon: <PlayCircleOutlined />, color: "#10b981", bgColor: "#d1fae5", path: "/hr/payroll" },
+        { label: t("hr.dashboard.reports"), icon: <FileTextOutlined />, color: "#f59e0b", bgColor: "#fef3c7", path: undefined },
+    ];
 
     return (
         <div style={{ maxWidth: 1600, margin: "0 auto" }}>
-            <h2 style={{ fontSize: 24, fontWeight: 600, marginBottom: 24 }}>Dashboard Overview</h2>
 
-            {/* Stats Row */}
-            <Row gutter={[24, 24]} style={{ marginBottom: 32 }}>
+            {/* ─── Stat Cards ───────────────────────────────────────────────────── */}
+            <Row gutter={[20, 20]} style={{ marginBottom: 28 }}>
                 <Col xs={24} sm={12} lg={6}>
                     <StatCard
-                        title="Total Employees"
+                        title={t("hr.dashboard.totalEmployees")}
                         value={(summary?.total_employees || 0).toLocaleString()}
                         icon={<TeamOutlined />}
-                        color="#1890ff"
+                        color="#f97316"
                         trend="+5%"
+                        animDelay={0}
                     />
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
                     <StatCard
-                        title="Active Payroll"
-                        value="$142k"
+                        title={t("hr.dashboard.activePayroll")}
+                        value={
+                            summary?.latest_payroll?.latest_total_net ? (
+                                <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                    {(summary.latest_payroll.latest_total_net / 1000).toFixed(0)}k
+                                    <SARIcon size={20} />
+                                </span>
+                            ) : "N/A"
+                        }
                         icon={<DollarOutlined />}
-                        color="#52c41a"
-                        trend="+1.2%"
+                        color="#94a3b8"
+                        trend={
+                            summary?.latest_payroll?.trend_percentage
+                                ? `${summary.latest_payroll.trend_percentage > 0 ? "+" : ""}${summary.latest_payroll.trend_percentage}%`
+                                : null
+                        }
+                        animDelay={80}
                     />
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
                     <StatCard
-                        title="Expiring Docs"
+                        title={t("hr.dashboard.expiringDocs")}
                         value={summary?.expiring_docs || 0}
                         icon={<FileExclamationOutlined />}
-                        color="#faad14"
+                        color="#f59e0b"
                         trend={null}
+                        onClick={() => navigate("/hr/employees/expiries")}
+                        animDelay={160}
                     />
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
                     <StatCard
-                        title="Pending Leave"
+                        title={t("hr.dashboard.pendingLeave")}
                         value={summary?.pending_leaves || 0}
                         icon={<ScheduleOutlined />}
-                        color="#722ed1"
+                        color="#8b5cf6"
                         trend={null}
+                        onClick={() => navigate("/hr/leave/requests")}
+                        animDelay={240}
                     />
                 </Col>
             </Row>
 
-            {/* Quick Actions */}
-            <div style={{ marginBottom: 32 }}>
-                <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>Quick Actions</h3>
-                <Space size={16} wrap>
-                    <Button
-                        type="primary"
-                        icon={<UserAddOutlined />}
-                        size="large"
-                        style={{ background: '#ff7a45', borderColor: '#ff7a45', borderRadius: 8, height: 48, paddingLeft: 24, paddingRight: 24 }}
-                        onClick={() => navigate('/hr/employees/create')}
-                    >
-                        Add Employee
-                    </Button>
-                    <Button
-                        icon={<UploadOutlined />}
-                        size="large"
-                        style={{ borderRadius: 8, height: 48, paddingLeft: 24, paddingRight: 24 }}
-                        onClick={() => navigate('/hr/import/employees')}
-                    >
-                        Upload Excel
-                    </Button>
-                    <Button
-                        icon={<PlayCircleOutlined />}
-                        size="large"
-                        style={{ borderRadius: 8, height: 48, paddingLeft: 24, paddingRight: 24 }}
-                        onClick={() => navigate('/hr/payroll')}
-                    >
-                        Run Payroll
-                    </Button>
-                    <Button
-                        icon={<FileTextOutlined />}
-                        size="large"
-                        style={{ borderRadius: 8, height: 48, paddingLeft: 24, paddingRight: 24 }}
-                    >
-                        Reports
-                    </Button>
+            {/* ─── Quick Actions ──────────────────────────────────────────────────── */}
+            <div
+                style={{
+                    background: "white",
+                    borderRadius: 16,
+                    padding: "20px 24px",
+                    marginBottom: 28,
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+                    animation: "fadeInUp 0.5s ease 0.3s both",
+                }}
+            >
+                <div style={{ fontSize: 15, fontWeight: 600, color: "#0f172a", marginBottom: 16 }}>
+                    {t("hr.dashboard.quickActions")}
+                </div>
+                <Space size={12} wrap>
+                    {quickActions.map((action, i) => (
+                        <button
+                            key={i}
+                            onClick={action.path ? () => navigate(action.path!) : undefined}
+                            style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 10,
+                                background: action.bgColor,
+                                color: action.color,
+                                border: "none",
+                                borderRadius: 12,
+                                padding: "10px 20px",
+                                fontWeight: 600,
+                                fontSize: 14,
+                                cursor: action.path ? "pointer" : "default",
+                                transition: "all 0.2s ease",
+                                fontFamily: "inherit",
+                            }}
+                            onMouseEnter={(e) => {
+                                (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-2px)";
+                                (e.currentTarget as HTMLButtonElement).style.filter = "brightness(0.95)";
+                            }}
+                            onMouseLeave={(e) => {
+                                (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
+                                (e.currentTarget as HTMLButtonElement).style.filter = "none";
+                            }}
+                        >
+                            <span style={{ fontSize: 16 }}>{action.icon}</span>
+                            {action.label}
+                        </button>
+                    ))}
                 </Space>
             </div>
 
-            <Row gutter={[24, 24]}>
-                {/* Main Content: Recent Activity */}
+            {/* ─── Main Grid ─────────────────────────────────────────────────────── */}
+            <Row gutter={[20, 20]}>
+                {/* Recent Activity */}
                 <Col xs={24} lg={16}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                        <h3 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>Recent Activity</h3>
-                        <Button type="link" style={{ color: '#ff7a45' }}>View All</Button>
-                    </div>
-                    <Card bordered={false} style={{ borderRadius: 16, overflow: 'hidden' }} bodyStyle={{ padding: 0 }}>
+                    <div
+                        style={{
+                            background: "white",
+                            borderRadius: 16,
+                            boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+                            overflow: "hidden",
+                            animation: "fadeInUp 0.5s ease 0.35s both",
+                        }}
+                    >
+                        <div
+                            style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                padding: "18px 24px",
+                                borderBottom: "1px solid #f1f5f9",
+                            }}
+                        >
+                            <span style={{ fontWeight: 700, fontSize: 15, color: "#0f172a" }}>
+                                {t("hr.dashboard.recentActivity")}
+                            </span>
+                            <Button type="link" style={{ color: "#f97316", padding: 0, fontWeight: 600 }}>
+                                {t("common.viewAll")}
+                            </Button>
+                        </div>
                         <Table
                             dataSource={summary?.recent_activity || []}
                             pagination={false}
                             scroll={{ x: 600 }}
+                            size="middle"
                             columns={[
                                 {
-                                    title: 'EMPLOYEE', dataIndex: 'employee', key: 'employee', render: (text) => (
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                            <Avatar style={{ backgroundColor: '#f56a00' }}>{text[0]}</Avatar>
-                                            <span style={{ fontWeight: 500 }}>{text}</span>
+                                    title: t("hr.dashboard.employee"),
+                                    dataIndex: "employee",
+                                    key: "employee",
+                                    render: (text: string) => (
+                                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                            <Avatar
+                                                size={32}
+                                                style={{
+                                                    background: `hsl(${(text?.charCodeAt(0) || 0) * 13 % 360}, 65%, 55%)`,
+                                                    fontWeight: 700,
+                                                    fontSize: 13,
+                                                    flexShrink: 0,
+                                                }}
+                                            >
+                                                {text?.[0]?.toUpperCase()}
+                                            </Avatar>
+                                            <span style={{ fontWeight: 500, color: "#0f172a" }}>{text}</span>
                                         </div>
-                                    )
+                                    ),
                                 },
-                                { title: 'ACTION TYPE', dataIndex: 'action', key: 'action', render: (t) => <span style={{ color: '#8c8c8c' }}>{t}</span> },
-                                { title: 'DATE & TIME', dataIndex: 'date', key: 'date', render: (t) => <span style={{ color: '#8c8c8c' }}>{t}</span> },
                                 {
-                                    title: 'STATUS', dataIndex: 'status', key: 'status', render: (text, record) => (
-                                        <Tag color={record.statusColor} style={{ borderRadius: 12, padding: '0 12px', border: 0 }}>
+                                    title: t("hr.dashboard.actionType"),
+                                    dataIndex: "action",
+                                    key: "action",
+                                    render: (text: string) => <span style={{ color: "#64748b", fontSize: 13 }}>{text}</span>,
+                                },
+                                {
+                                    title: t("hr.dashboard.dateTime"),
+                                    dataIndex: "date",
+                                    key: "date",
+                                    render: (text: string) => <span style={{ color: "#94a3b8", fontSize: 13 }}>{text}</span>,
+                                },
+                                {
+                                    title: t("common.status"),
+                                    dataIndex: "status",
+                                    key: "status",
+                                    render: (text: string, record: any) => (
+                                        <Tag color={record.statusColor} style={{ borderRadius: 20, padding: "2px 10px", border: 0, fontWeight: 600, fontSize: 11 }}>
                                             {text}
                                         </Tag>
-                                    )
+                                    ),
                                 },
                             ]}
                         />
-                    </Card>
+                    </div>
                 </Col>
 
-                {/* Sidebar: Approvals & System Status */}
+                {/* Sidebar */}
                 <Col xs={24} lg={8}>
-                    <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>Pending Approvals</h3>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 32 }}>
-                        {(summary?.pending_approvals || []).length === 0 && (
-                            <Card bordered={false} style={{ borderRadius: 12, color: '#8c8c8c', textAlign: 'center' }}>
-                                No pending approvals
-                            </Card>
-                        )}
-                        {(summary?.pending_approvals || []).map(item => (
-                            <Card key={item.id} bordered={false} style={{ borderRadius: 12 }} bodyStyle={{ padding: 16 }}>
-                                <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-                                    <Avatar src={item.avatar} size={40} icon={<UserOutlined />} />
-                                    <div style={{ flex: 1 }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                            <span style={{ fontWeight: 600 }}>{item.name}</span>
-                                            <span style={{ fontSize: 12, color: '#bfbfbf' }}>{item.time}</span>
-                                        </div>
-                                        <div style={{ fontSize: 13, color: '#8c8c8c', marginTop: 2 }}>{item.action}</div>
-                                    </div>
-                                </div>
-                                <div style={{ display: 'flex', gap: 8 }}>
-                                    <Button
-                                        type="primary"
-                                        size="small"
-                                        style={{ background: '#ff7a45', borderColor: '#ff7a45', flex: 1, borderRadius: 6 }}
-                                        onClick={() => navigate(`/hr/leave/requests/${item.id}`)}
-                                    >
-                                        Review
-                                    </Button>
-                                </div>
-                            </Card>
-                        ))}
-                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                        <div style={{ animation: "fadeInUp 0.5s ease 0.4s both" }}>
+                            <AnnouncementWidget role="hr" />
+                        </div>
 
+                        <div
+                            style={{
+                                background: "white",
+                                borderRadius: 16,
+                                overflow: "hidden",
+                                boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+                                animation: "fadeInUp 0.5s ease 0.45s both",
+                            }}
+                        >
+                            <div style={{ padding: "18px 20px", borderBottom: "1px solid #f1f5f9" }}>
+                                <span style={{ fontWeight: 700, fontSize: 15, color: "#0f172a" }}>
+                                    {t("hr.dashboard.pendingApprovals")}
+                                </span>
+                            </div>
+
+                            <div style={{ padding: 16 }}>
+                                {(summary?.pending_approvals || []).length === 0 ? (
+                                    <div style={{ textAlign: "center", color: "#94a3b8", padding: "20px 0", fontSize: 14 }}>
+                                        {t("common.noPendingApprovals")}
+                                    </div>
+                                ) : (
+                                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                                        {summary?.pending_approvals?.map((item) => (
+                                            <div
+                                                key={item.id}
+                                                style={{
+                                                    padding: 14,
+                                                    borderRadius: 12,
+                                                    background: "#f8faff",
+                                                    border: "1px solid #e8edf5",
+                                                }}
+                                            >
+                                                <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 10 }}>
+                                                    <Avatar src={item.avatar} size={36} icon={<UserOutlined />} />
+                                                    <div style={{ flex: 1 }}>
+                                                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                                                            <span style={{ fontWeight: 600, fontSize: 13 }}>{item.name}</span>
+                                                            <span style={{ fontSize: 11, color: "#94a3b8" }}>{item.time}</span>
+                                                        </div>
+                                                        <div style={{ marginTop: 4 }}>
+                                                            <Tag color={item.request_type === "ATTENDANCE" ? "gold" : "purple"} style={{ borderRadius: 20, fontSize: 11 }}>
+                                                                {item.request_type}
+                                                            </Tag>
+                                                        </div>
+                                                        <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>{item.action}</div>
+                                                    </div>
+                                                </div>
+                                                <Button
+                                                    type="primary"
+                                                    size="small"
+                                                    block
+                                                    style={{ borderRadius: 8 }}
+                                                    onClick={() => navigate(item.review_path)}
+                                                >
+                                                    {t("common.review")}
+                                                </Button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
                 </Col>
             </Row>
         </div>

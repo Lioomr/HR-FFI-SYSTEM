@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from employees.storage import PrivateUploadStorage
 
 
 class LeaveType(models.Model):
@@ -8,6 +9,9 @@ class LeaveType(models.Model):
     code = models.CharField(max_length=20, unique=True, blank=True, help_text=_("Optional code (e.g. ANNUAL, SICK)"))
     is_paid = models.BooleanField(default=True)
     requires_attachment = models.BooleanField(default=False)
+    requires_ceo_approval = models.BooleanField(
+        default=False, help_text=_("If true, requires CEO approval after HR.")
+    )
     is_active = models.BooleanField(default=True)
 
     # Quota and Carry-over (Phase 2.4)
@@ -37,6 +41,7 @@ class LeaveRequest(models.Model):
         SUBMITTED = "submitted", _("Submitted")
         PENDING_MANAGER = "pending_manager", _("Pending Manager")
         PENDING_HR = "pending_hr", _("Pending HR")
+        PENDING_CEO = "pending_ceo", _("Pending CEO")
         APPROVED = "approved", _("Approved")
         REJECTED = "rejected", _("Rejected")
         CANCELLED = "cancelled", _("Cancelled")
@@ -51,6 +56,13 @@ class LeaveRequest(models.Model):
     start_date = models.DateField()
     end_date = models.DateField()
     reason = models.TextField(blank=True)
+    document = models.FileField(
+        storage=PrivateUploadStorage(),
+        upload_to="leave_documents/",
+        null=True,
+        blank=True,
+        help_text=_("Supporting document for leave request."),
+    )
 
     status = models.CharField(max_length=20, choices=RequestStatus.choices, default=RequestStatus.SUBMITTED)
 
@@ -65,12 +77,18 @@ class LeaveRequest(models.Model):
     )
     manager_decision_note = models.TextField(blank=True, help_text=_("Manager's note."))
 
-    # HR Decision (renaming/aliasing existing fields conceptually)
-    # keeping `decision_reason` as HR/Final decision note for backward compatibility if desired,
-    # or just use it as the "final" decision note.
-    # The requirement asks for `hr_decision_note`.
-    # Let's keep `decision_reason` as the final one, or allow explicit hr_decision_note.
-    # Given the requirements "hr_decision_note (Text, nullable)", let's add it explicitly for clarity
+    # CEO Decision
+    ceo_decision_at = models.DateTimeField(null=True, blank=True)
+    ceo_decision_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ceo_decided_leaves",
+    )
+    ceo_decision_note = models.TextField(blank=True, help_text=_("CEO's decision note."))
+
+    # HR Decision
     # and maybe deprecate `decision_reason` or map it.
 
     hr_decision_note = models.TextField(blank=True, help_text=_("HR's decision note."))  # Explicit new field

@@ -7,7 +7,7 @@ export type LoginResponse = {
   user: {
     id: string;
     email: string;
-    role: "SystemAdmin" | "HRManager" | "Employee";
+    role: "SystemAdmin" | "HRManager" | "Manager" | "Employee" | "CEO" | "CFO";
   };
 };
 

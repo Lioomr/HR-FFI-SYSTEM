@@ -11,7 +11,7 @@ export interface AttendanceRecord {
   date: string;
   check_in_at: string | null;
   check_out_at: string | null;
-  status: "PRESENT" | "ABSENT" | "LATE";
+  status: "PRESENT" | "ABSENT" | "LATE" | "PENDING" | "PENDING_HR" | "PENDING_MGR" | "REJECTED";
   source: "EMPLOYEE" | "HR" | "SYSTEM";
   is_overridden: boolean;
   notes?: string;
@@ -28,7 +28,7 @@ export interface AttendanceListResponse {
 }
 
 export interface OverrideAttendanceDto {
-  status?: "PRESENT" | "ABSENT" | "LATE";
+  status?: "PRESENT" | "ABSENT" | "LATE" | "REJECTED";
   check_in_at?: string | null;
   check_out_at?: string | null;
   notes?: string;

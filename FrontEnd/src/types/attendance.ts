@@ -1,4 +1,11 @@
-export type AttendanceStatus = "PRESENT" | "ABSENT" | "LATE" | "PENDING" | "REJECTED";
+export type AttendanceStatus =
+  | "PRESENT"
+  | "ABSENT"
+  | "LATE"
+  | "PENDING"
+  | "PENDING_HR"
+  | "PENDING_MGR"
+  | "REJECTED";
 export type AttendanceSource = "EMPLOYEE" | "HR" | "SYSTEM";
 
 export interface AttendanceRecord {

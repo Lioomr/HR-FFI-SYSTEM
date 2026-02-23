@@ -1,0 +1,10 @@
+{% extends "emails/base_email.html" %}
+
+{% block details %}
+<div class="details">
+  <div><strong>Leave Type / نوع الإجازة:</strong> {{ leave_type }}</div>
+  <div><strong>Approved From / بداية الإجازة المعتمدة:</strong> {{ start_date }}</div>
+  <div><strong>Approved To / نهاية الإجازة المعتمدة:</strong> {{ end_date }}</div>
+  <div><strong>Total Days / إجمالي الأيام:</strong> {{ total_days }}</div>
+</div>
+{% endblock %}

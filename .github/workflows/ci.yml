@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+jobs:
+  backend:
+    name: Backend Checks
+    runs-on: ubuntu-latest
+    env:
+      DJANGO_DEBUG: "true"
+      DJANGO_SECRET_KEY: "ci-dev-secret-key"
+      DB_ENGINE: "django.db.backends.sqlite3"
+      DB_NAME: "db.sqlite3"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: Backend/requirements.txt
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r Backend/requirements.txt
+          pip install ruff bandit pip-audit
+
+      - name: Ruff Lint
+        run: |
+          cd Backend
+          ruff check .
+
+      - name: Ruff Format Check
+        run: |
+          cd Backend
+          ruff format --check .
+
+      - name: Backend Tests
+        run: |
+          cd Backend
+          pytest -q
+
+      - name: Bandit Security Scan
+        run: |
+          cd Backend
+          bandit -r . -x "*/migrations/*,*/venv/*,*/.venv/*"
+
+      - name: Python Dependency Audit
+        run: |
+          cd Backend
+          pip-audit -r requirements.txt
+
+  frontend:
+    name: Frontend Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: FrontEnd/package-lock.json
+
+      - name: Install Dependencies
+        run: |
+          cd FrontEnd
+          npm ci
+
+      - name: Lint
+        run: |
+          cd FrontEnd
+          npm run lint
+
+      - name: Type Check
+        run: |
+          cd FrontEnd
+          npm run type-check
+
+      - name: Frontend Tests
+        run: |
+          cd FrontEnd
+          npm run test -- --run
+
+      - name: Build
+        run: |
+          cd FrontEnd
+          npm run build
+
+      - name: NPM Audit
+        run: |
+          cd FrontEnd
+          npm audit --audit-level=high

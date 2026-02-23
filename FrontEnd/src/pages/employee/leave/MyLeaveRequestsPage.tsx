@@ -5,6 +5,7 @@ import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined, CloseCircleOutlined } from "@ant-design/icons";
 
 import PageHeader from "../../../components/ui/PageHeader";
+import { useI18n } from "../../../i18n/useI18n";
 import { getMyLeaveRequests, cancelLeaveRequest, type LeaveRequest } from "../../../services/api/leaveApi";
 import { isApiError } from "../../../services/api/apiTypes";
 
@@ -12,30 +13,31 @@ const { confirm } = Modal;
 
 export default function MyLeaveRequestsPage() {
     const navigate = useNavigate();
+    const { t } = useI18n();
     const [loading, setLoading] = useState(false);
     const [data, setData] = useState<LeaveRequest[]>([]);
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
     const [cancellingId, setCancellingId] = useState<number | null>(null);
-    const [canCancel, setCanCancel] = useState(true); // Assume enabled until 404/405 is hit
+    const [canCancel, setCanCancel] = useState(true);
 
     const loadData = useCallback(async () => {
         setLoading(true);
         try {
             const res = await getMyLeaveRequests({ page, page_size: pageSize });
             if (isApiError(res)) {
-                notification.error({ message: "Failed to load requests", description: res.message });
+                notification.error({ message: t("common.error"), description: res.message });
             } else {
                 setData(res.data.items || []);
                 setTotal(res.data.count || 0);
             }
         } catch (err: any) {
-            notification.error({ message: "Error", description: "Could not load leave requests" });
+            notification.error({ message: t("common.error"), description: t("common.tryAgain") });
         } finally {
             setLoading(false);
         }
-    }, [page, pageSize]);
+    }, [page, pageSize, t]);
 
     useEffect(() => {
         loadData();
@@ -43,27 +45,27 @@ export default function MyLeaveRequestsPage() {
 
     const handleCancel = (id: number) => {
         confirm({
-            title: "Cancel Leave Request",
-            content: "Are you sure you want to cancel this request? This action cannot be undone.",
-            okText: "Yes, Cancel",
+            title: t("leave.cancel"),
+            content: t("common.required"),
+            okText: t("common.yes"),
             okType: "danger",
-            cancelText: "No",
+            cancelText: t("common.no"),
             onOk: async () => {
                 setCancellingId(id);
                 try {
                     const res = await cancelLeaveRequest(id);
                     if (isApiError(res)) {
-                        notification.error({ message: "Cancel Failed", description: res.message });
+                        notification.error({ message: t("common.error"), description: res.message });
                     } else {
-                        notification.success({ message: "Request Cancelled" });
-                        loadData(); // Refresh list associated with status change
+                        notification.success({ message: t("leave.cancelled") });
+                        loadData();
                     }
                 } catch (e: any) {
                     if (e.status === 404 || e.status === 405) {
-                        notification.warning({ message: "Not Supported", description: "Cancellation is not supported by the system." });
+                        notification.warning({ message: t("common.error"), description: t("common.tryAgain") });
                         setCanCancel(false);
                     } else {
-                        notification.error({ message: "Error", description: "Failed to cancel request" });
+                        notification.error({ message: t("common.error"), description: t("common.tryAgain") });
                     }
                 } finally {
                     setCancellingId(null);
@@ -80,7 +82,7 @@ export default function MyLeaveRequestsPage() {
             case 'submitted': return 'blue';
             case 'pending_manager': return 'orange';
             case 'pending_hr': return 'purple';
-            case 'pending': return 'gold'; // Fallback
+            case 'pending': return 'gold';
             case 'cancelled': return 'default';
             default: return 'default';
         }
@@ -88,38 +90,37 @@ export default function MyLeaveRequestsPage() {
 
     const columns: ColumnsType<LeaveRequest> = [
         {
-            title: "Leave Type",
+            title: t("leave.type"),
             key: "leave_type",
-            render: (_, record) => record.leave_type?.name || "Leave"
+            render: (_, record) => record.leave_type?.name || t("leave.title")
         },
         {
-            title: "Start Date",
+            title: t("leave.startDate"),
             dataIndex: "start_date",
             key: "start_date",
         },
         {
-            title: "End Date",
+            title: t("leave.endDate"),
             dataIndex: "end_date",
             key: "end_date",
         },
         {
-            title: "Days",
-            dataIndex: "days", // Match backend/interface
+            title: t("leave.days"),
+            dataIndex: "days",
             key: "days",
             align: 'center'
         },
         {
-            title: "Reason",
+            title: t("leave.reason"),
             dataIndex: "reason",
             key: "reason",
             ellipsis: true
         },
         {
-            title: "Status",
+            title: t("common.status"),
             dataIndex: "status",
             key: "status",
             render: (status) => {
-                // Display normalized text. Replace underscore with space
                 const display = (status?.charAt(0).toUpperCase() + status?.slice(1).toLowerCase()).replace('_', ' ');
                 return (
                     <Tag color={getStatusColor(status)}>
@@ -129,7 +130,7 @@ export default function MyLeaveRequestsPage() {
             }
         },
         {
-            title: "Actions",
+            title: t("common.actions"),
             key: "actions",
             align: 'center',
             render: (_, record) => {
@@ -139,7 +140,7 @@ export default function MyLeaveRequestsPage() {
                 return (
                     <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
                         {canCancel && isPending && (
-                            <Tooltip title="Cancel Request">
+                            <Tooltip title={t("leave.cancel")}>
                                 <Button
                                     danger
                                     icon={<CloseCircleOutlined />}
@@ -158,15 +159,15 @@ export default function MyLeaveRequestsPage() {
     return (
         <div style={{ maxWidth: 1000, margin: "0 auto" }}>
             <PageHeader
-                title="My Leave Requests"
-                subtitle="Track your leave history"
+                title={t("leave.requestsTitle")}
+                subtitle={t("leave.requestsSubtitle")}
                 actions={
                     <Button
                         type="primary"
                         icon={<PlusOutlined />}
                         onClick={() => navigate("/employee/leave/request")}
                     >
-                        New Request
+                        {t("leave.newRequest")}
                     </Button>
                 }
             />

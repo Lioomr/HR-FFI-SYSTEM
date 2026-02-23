@@ -33,10 +33,13 @@ const leavesApi = {
     start_date: string;
     end_date: string;
     reason?: string;
-  }): Promise<ApiResponse<any>> => {
+    document?: File;
+  } | FormData): Promise<ApiResponse<any>> => {
+    const config = data instanceof FormData ? { headers: { "Content-Type": "multipart/form-data" } } : undefined;
     const response = await apiClient.post<ApiResponse<any>>(
       `/api/leaves/leave-requests/`,
-      data
+      data,
+      config
     );
     return response.data;
   },

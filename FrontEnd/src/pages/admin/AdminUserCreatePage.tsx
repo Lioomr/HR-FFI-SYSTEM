@@ -7,6 +7,7 @@ import PageHeader from "../../components/ui/PageHeader";
 import Unauthorized403Page from "../Unauthorized403Page";
 import type { Role } from "../../services/api/apiTypes";
 import { createUser } from "../../services/api/usersApi";
+import { useI18n } from "../../i18n/useI18n";
 
 type FormValues = {
   full_name: string;
@@ -18,7 +19,9 @@ type FormValues = {
 const roleOptions: { label: string; value: Role }[] = [
   { label: "SystemAdmin", value: "SystemAdmin" },
   { label: "HRManager", value: "HRManager" },
+  { label: "Manager", value: "Manager" },
   { label: "Employee", value: "Employee" },
+  { label: "CEO", value: "CEO" },
 ];
 
 export default function AdminUserCreatePage() {
@@ -27,6 +30,7 @@ export default function AdminUserCreatePage() {
   const [error, setError] = useState<string | null>(null);
   const [unauthorized, setUnauthorized] = useState(false);
   const navigate = useNavigate();
+  const { t } = useI18n();
 
   async function onSave(values: FormValues) {
     setError(null);
@@ -36,7 +40,7 @@ export default function AdminUserCreatePage() {
       await createUser(values);
 
       // Success case
-      message.success("User created.");
+      message.success(t("admin.userCreate.successMsg"));
       navigate("/admin/users", { replace: true });
     } catch (err: any) {
       // Handle 403 Forbidden
@@ -50,10 +54,10 @@ export default function AdminUserCreatePage() {
         const apiData = err?.apiData || err?.response?.data;
 
         // Use the error message from backend (already extracted by interceptor)
-        let errorMessage = err.message || "Failed to create user.";
+        let errorMessage = err.message || t("admin.userCreate.failMsg");
 
         // If the message is still generic, try to extract from apiData
-        if (errorMessage === "Failed to create user." && apiData) {
+        if (errorMessage === t("admin.userCreate.failMsg") && apiData) {
           if (apiData.message) {
             errorMessage = apiData.message;
           } else if (apiData.errors && typeof apiData.errors === "object") {
@@ -72,7 +76,7 @@ export default function AdminUserCreatePage() {
       }
 
       // Generic error
-      setError(err.message || "Failed to create user. Please try again.");
+      setError(err.message || t("admin.userCreate.failMsgTryAgain"));
     } finally {
       setSaving(false);
     }
@@ -82,7 +86,7 @@ export default function AdminUserCreatePage() {
 
   return (
     <div>
-      <PageHeader title="Create User" subtitle="Add a new user to the system" />
+      <PageHeader title={t("layout.createUser")} subtitle={t("admin.userCreate.subtitle")} />
 
       <Card style={{ borderRadius: 16 }} bodyStyle={{ padding: 24 }}>
         {error && (
@@ -98,37 +102,37 @@ export default function AdminUserCreatePage() {
         >
           <Space style={{ width: "100%" }} align="start" wrap>
             <Form.Item
-              label="Full name"
+              label={t("admin.userCreate.lblFullName")}
               name="full_name"
-              rules={[{ required: true, message: "Full name is required" }]}
+              rules={[{ required: true, message: t("admin.userCreate.reqFullName") }]}
               style={{ minWidth: 260, flex: 1 }}
             >
-              <Input placeholder="Full name" />
+              <Input placeholder={t("admin.userCreate.placeholderFullName")} />
             </Form.Item>
 
             <Form.Item
-              label="Email"
+              label={t("auth.email")}
               name="email"
               rules={[
-                { required: true, message: "Email is required" },
-                { type: "email", message: "Enter a valid email" },
+                { required: true, message: t("auth.emailRequired") },
+                { type: "email", message: t("auth.emailInvalid") },
               ]}
               style={{ minWidth: 260, flex: 1 }}
             >
-              <Input placeholder="name@company.com" autoComplete="email" />
+              <Input placeholder={t("admin.userCreate.placeholderEmail")} autoComplete="email" />
             </Form.Item>
 
             <Form.Item
-              label="Role"
+              label={t("admin.userCreate.lblRole")}
               name="role"
-              rules={[{ required: true, message: "Role is required" }]}
+              rules={[{ required: true, message: t("admin.userCreate.reqRole") }]}
               style={{ minWidth: 220 }}
             >
               <Select options={roleOptions} />
             </Form.Item>
 
             <Form.Item
-              label="Active"
+              label={t("admin.userCreate.lblActive")}
               name="is_active"
               valuePropName="checked"
               style={{ minWidth: 160 }}
@@ -144,11 +148,11 @@ export default function AdminUserCreatePage() {
               icon={<SaveOutlined />}
               loading={saving}
             >
-              Create User
+              {t("layout.createUser")}
             </Button>
 
             <Button onClick={() => navigate("/admin/users")} disabled={saving}>
-              Cancel
+              {t("common.cancel")}
             </Button>
           </Space>
         </Form>

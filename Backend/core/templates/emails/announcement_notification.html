@@ -1,0 +1,15 @@
+{% extends "emails/base_email.html" %}
+
+{% block details %}
+<div class="details">
+  {% if announcement_title %}
+  <div><strong>Announcement / الإعلان:</strong> {{ announcement_title }}</div>
+  {% endif %}
+  {% if published_at %}
+  <div><strong>Published / تاريخ النشر:</strong> {{ published_at }}</div>
+  {% endif %}
+  {% if publisher_name %}
+  <div><strong>Posted By / تم النشر بواسطة:</strong> {{ publisher_name }}</div>
+  {% endif %}
+</div>
+{% endblock %}

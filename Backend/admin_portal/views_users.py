@@ -57,7 +57,7 @@ class UsersListCreateView(APIView):
 
         if search:
             qs = qs.filter(Q(email__icontains=search) | Q(full_name__icontains=search))
-        if role in ("SystemAdmin", "HRManager", "Employee"):
+        if role in ("SystemAdmin", "HRManager", "Manager", "Employee", "CEO", "CFO"):
             qs = qs.filter(groups__name=role)
         if status_param == "active":
             qs = qs.filter(is_active=True)

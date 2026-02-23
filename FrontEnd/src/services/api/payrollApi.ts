@@ -32,15 +32,15 @@ export interface PayrollRunItem {
   employee_name: string;
   department?: string;
   position?: string;
-  
+
   // Financials
   basic_salary: number;
-  
+
   // Aggregates
   total_allowances: number;
   total_deductions: number;
   net_salary: number; // The Calculated amount
-  
+
   // We might generally just show the aggregates in the list, 
   // and have a full detail view if needed, but for "Review" this usually suffices.
 }
@@ -151,8 +151,8 @@ export async function finalizePayrollRun(
  */
 export async function generatePayslips(
   runId: string | number
-): Promise<ApiResponse<{ message: string }>> {
-  const { data } = await api.post<ApiResponse<{ message: string }>>(
+): Promise<ApiResponse<{ message: string; generated_count?: number; total_payslips?: number; run_status?: string }>> {
+  const { data } = await api.post<ApiResponse<{ message: string; generated_count?: number; total_payslips?: number; run_status?: string }>>(
     `/payroll-runs/${runId}/generate-payslips`,
     {}
   );
@@ -165,7 +165,7 @@ export async function generatePayslips(
  */
 export async function exportPayrollReport(
   runId: string | number,
-  format: "csv" | "pdf"
+  format: "csv" | "pdf" | "xlsx"
 ): Promise<Blob> {
   const response = await api.get(
     `/payroll-runs/${runId}/export`,

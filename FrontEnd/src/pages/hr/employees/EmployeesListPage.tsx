@@ -13,7 +13,8 @@ import {
     UserOutlined
 } from "@ant-design/icons";
 import dayjs from "dayjs";
-import { getCountryFlag } from "../../../utils/countries";
+import { getCountryCode, getCountryFlag, getCountryFlagImageUrl } from "../../../utils/countries";
+import { useI18n } from "../../../i18n/useI18n";
 
 /**
  * Custom debounce hook
@@ -45,42 +46,38 @@ import { useHrEmployeeListStore } from "../../../stores/hrEmployeeListStore";
 import type { Employee } from "../../../services/api/employeesApi";
 import { listEmployees } from "../../../services/api/employeesApi";
 import { listDepartments } from "../../../services/api/departmentsApi";
-import { listPositions } from "../../../services/api/positionsApi";
 import { isApiError } from "../../../services/api/apiTypes";
 import { isForbidden } from "../../../services/api/httpErrors";
 
 const { Option } = Select;
 const { Title, Text } = Typography;
 
-// Helper to get flag emoji (basic mapping or placeholder)
-// Helper removed in favor of import
-
 // Status Badge Helper
-const StatusBadge = ({ status }: { status?: string }) => {
+const StatusBadge = ({ status, t }: { status?: string; t: (k: string, f?: string) => string }) => {
     let color = '';
-    let text = status || 'Unknown';
+    let text = status || t("status.unknown");
     let bg = '';
 
     switch (status) {
         case 'ACTIVE':
-            color = '#389e0d'; // Green text
-            bg = 'rgba(82, 196, 26, 0.1)';    // Green bg
-            text = 'Active';
+            color = '#389e0d';
+            bg = 'rgba(82, 196, 26, 0.1)';
+            text = t("status.active");
             break;
         case 'ON_LEAVE':
             color = '#d46b08';
             bg = 'rgba(250, 140, 22, 0.1)';
-            text = 'On Leave';
+            text = t("status.onLeave");
             break;
         case 'TERMINATED':
             color = '#cf1322';
             bg = 'rgba(255, 77, 79, 0.1)';
-            text = 'Inactive';
+            text = t("status.terminated");
             break;
         case 'SUSPENDED':
             color = '#cf1322';
             bg = 'rgba(255, 77, 79, 0.1)';
-            text = 'Suspended';
+            text = t("status.suspended");
             break;
         default:
             color = '#595959';
@@ -106,6 +103,7 @@ const StatusBadge = ({ status }: { status?: string }) => {
 
 export default function EmployeesListPage() {
     const navigate = useNavigate();
+    const { t } = useI18n();
 
     // State from Zustand store (persisted)
     const {
@@ -129,7 +127,6 @@ export default function EmployeesListPage() {
     // Filter options state
     const [departments, setDepartments] = useState<{ code: string; name: string }[]>([]);
 
-
     /**
      * Fetch filter options
      */
@@ -139,9 +136,6 @@ export default function EmployeesListPage() {
                 listDepartments(),
             ]);
 
-            if (!isApiError(deptRes) && Array.isArray(deptRes.data)) {
-                setDepartments(deptRes.data.map((d: any) => ({ code: d.code, name: d.name })));
-            }
             if (!isApiError(deptRes) && Array.isArray(deptRes.data)) {
                 setDepartments(deptRes.data.map((d: any) => ({ code: d.code, name: d.name })));
             }
@@ -171,7 +165,7 @@ export default function EmployeesListPage() {
             const response = await listEmployees(params);
 
             if (isApiError(response)) {
-                setError(response.message || "Failed to load employees");
+                setError(response.message || t("error.generic"));
                 setLoading(false);
                 return;
             }
@@ -186,7 +180,7 @@ export default function EmployeesListPage() {
                 return;
             }
 
-            setError(err.message || "Failed to load employees");
+            setError(err.message || t("error.generic"));
             setLoading(false);
         }
     }, [page, pageSize, search, filters]);
@@ -210,7 +204,7 @@ export default function EmployeesListPage() {
     const getActionItems = (record: Employee): MenuProps['items'] => [
         {
             key: 'view',
-            label: 'View Details',
+            label: t("employees.list.actionView"),
             onClick: ({ domEvent }) => {
                 domEvent.stopPropagation();
                 navigate(`/hr/employees/${record.id}`);
@@ -218,7 +212,7 @@ export default function EmployeesListPage() {
         },
         {
             key: 'edit',
-            label: 'Edit',
+            label: t("employees.list.actionEdit"),
             onClick: ({ domEvent }) => {
                 domEvent.stopPropagation();
                 navigate(`/hr/employees/${record.id}/edit`);
@@ -226,19 +220,18 @@ export default function EmployeesListPage() {
         },
         {
             key: 'delete',
-            label: 'Delete',
+            label: t("employees.list.actionDelete"),
             danger: true,
             onClick: ({ domEvent }) => {
                 domEvent.stopPropagation();
                 // delete logic here
-
             }
         },
     ];
 
     const columns: ColumnsType<Employee> = [
         {
-            title: "EMPLOYEE NAME",
+            title: t("employees.list.colName"),
             key: "full_name",
             width: 250,
             render: (_, record) => (
@@ -252,46 +245,71 @@ export default function EmployeesListPage() {
             )
         },
         {
-            title: "NATIONALITY",
+            title: t("employees.list.colNationality"),
             key: "nationality",
             width: 150,
             render: (_, record) => (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 18 }}>{getCountryFlag(record.nationality)}</span>
-                    <Text>{record.nationality || "Saudi Arabia"}</Text>
+                    {getCountryFlagImageUrl(record.nationality) ? (
+                        <img
+                            src={getCountryFlagImageUrl(record.nationality)!}
+                            alt={`${getCountryCode(record.nationality) || "country"} flag`}
+                            width={20}
+                            height={15}
+                            style={{ objectFit: "cover", borderRadius: 2, border: "1px solid #f0f0f0" }}
+                            loading="lazy"
+                        />
+                    ) : (
+                        <span
+                            style={{
+                                fontSize: 18,
+                                fontFamily: "'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif",
+                                lineHeight: 1,
+                            }}
+                        >
+                            {getCountryFlag(record.nationality)}
+                        </span>
+                    )}
+                    <Text>{record.nationality || t("employees.list.saudiArabia")}</Text>
                 </div>
             )
         },
         {
-            title: "POSITION",
+            title: t("employees.list.colPosition"),
             dataIndex: "position",
             key: "position",
             width: 180,
             render: (text) => <Text strong>{text || "-"}</Text>
         },
         {
-            title: "DEPARTMENT",
+            title: t("employees.list.colDepartment"),
             dataIndex: "department",
             key: "department",
             width: 160,
             render: (text) => <Text>{text || "-"}</Text>
         },
         {
-            title: "JOINING DATE",
+            title: t("employees.list.colManager"),
+            key: "manager",
+            width: 220,
+            render: (_, record) => <Text>{record.manager_profile_name || record.manager_name || "-"}</Text>
+        },
+        {
+            title: t("employees.list.colJoiningDate"),
             dataIndex: "hire_date",
             key: "hire_date",
             width: 140,
             render: (text) => text ? dayjs(text).format("MMM DD, YYYY") : "-"
         },
         {
-            title: "STATUS",
+            title: t("employees.list.colStatus"),
             dataIndex: "employment_status",
             key: "employment_status",
             width: 120,
-            render: (status) => <StatusBadge status={status} />
+            render: (status) => <StatusBadge status={status} t={t} />
         },
         {
-            title: "ACTION",
+            title: t("employees.list.colAction"),
             key: "action",
             width: 80,
             align: 'center',
@@ -312,8 +330,8 @@ export default function EmployeesListPage() {
             {/* Header Section */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
                 <div>
-                    <Title level={2} style={{ margin: 0, fontWeight: 700 }}>All Employees</Title>
-                    <Text type="secondary">Manage your team members and their account permissions.</Text>
+                    <Title level={2} style={{ margin: 0, fontWeight: 700 }}>{t("employees.list.title")}</Title>
+                    <Text type="secondary">{t("employees.list.subtitle")}</Text>
                 </div>
                 <Button
                     type="primary"
@@ -330,7 +348,7 @@ export default function EmployeesListPage() {
                         boxShadow: '0 4px 10px rgba(250, 140, 22, 0.2)'
                     }}
                 >
-                    Create Employee
+                    {t("employees.list.createEmployee")}
                 </Button>
             </div>
 
@@ -339,7 +357,7 @@ export default function EmployeesListPage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
                     <div style={{ flex: 1, minWidth: 300 }}>
                         <Input
-                            placeholder="Search by name, ID or email"
+                            placeholder={t("employees.list.searchPlaceholder")}
                             prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
                             defaultValue={search}
                             onChange={(e) => debouncedSearch(e.target.value)}
@@ -357,7 +375,7 @@ export default function EmployeesListPage() {
 
                     <div style={{ display: 'flex', gap: 12 }}>
                         <Select
-                            placeholder="Department"
+                            placeholder={t("employees.list.departmentPlaceholder")}
                             value={filters.department || undefined}
                             onChange={(value) => setFilters({ department: value })}
                             size="large"
@@ -373,7 +391,7 @@ export default function EmployeesListPage() {
                         </Select>
 
                         <Select
-                            placeholder="Status"
+                            placeholder={t("employees.list.statusPlaceholder")}
                             value={filters.status || undefined}
                             onChange={(value) => setFilters({ status: value })}
                             size="large"
@@ -382,17 +400,17 @@ export default function EmployeesListPage() {
                             bordered={false}
                             className="custom-select-filter"
                         >
-                            <Option value="ACTIVE">Active</Option>
-                            <Option value="ON_LEAVE">On Leave</Option>
-                            <Option value="SUSPENDED">Suspended</Option>
-                            <Option value="TERMINATED">Terminated</Option>
+                            <Option value="ACTIVE">{t("status.active")}</Option>
+                            <Option value="ON_LEAVE">{t("status.onLeave")}</Option>
+                            <Option value="SUSPENDED">{t("status.suspended")}</Option>
+                            <Option value="TERMINATED">{t("status.terminated")}</Option>
                         </Select>
 
-                        <Tooltip title="More Filters">
+                        <Tooltip title={t("common.moreFilters")}>
                             <Button size="large" icon={<FilterOutlined />} style={{ borderRadius: 8 }} />
                         </Tooltip>
 
-                        <Tooltip title="Export">
+                        <Tooltip title={t("common.export")}>
                             <Button size="large" icon={<DownloadOutlined />} style={{ borderRadius: 8 }} />
                         </Tooltip>
                     </div>
@@ -404,7 +422,7 @@ export default function EmployeesListPage() {
                 {loading && employees.length === 0 ? (
                     <div style={{ padding: 40 }}><LoadingState /></div>
                 ) : error ? (
-                    <div style={{ padding: 40 }}><ErrorState title="Error" description={error} onRetry={loadEmployees} /></div>
+                    <div style={{ padding: 40 }}><ErrorState title={t("common.error")} description={error} onRetry={loadEmployees} /></div>
                 ) : (
                     <Table
                         dataSource={employees}
@@ -418,7 +436,7 @@ export default function EmployeesListPage() {
                                 setPage(newPage);
                                 setPageSize(newPageSize);
                             },
-                            showTotal: (total, range) => `Showing ${range[0]} to ${range[1]} of ${total} entries`,
+                            showTotal: (total, range) => `${t("common.showing")} ${range[0]} ${t("common.to")} ${range[1]} ${t("common.of")} ${total} ${t("common.entries")}`,
                             style: { padding: '24px' }
                         }}
                         onRow={(record) => ({

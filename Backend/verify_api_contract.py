@@ -3,10 +3,11 @@ import sys
 import uuid
 import datetime
 import random
+import os
 
 BASE_URL = "http://127.0.0.1:8000"
-EMAIL = "ahmed@ffi.sa"
-PASSWORD = "omar1234"
+EMAIL = os.environ.get("VERIFY_API_EMAIL", "")
+PASSWORD = os.environ.get("VERIFY_API_PASSWORD", "")
 
 # Entitiy Endpoints
 AUTH_URL = f"{BASE_URL}/auth/login"
@@ -38,6 +39,9 @@ class ApiVerifier:
 
     def login(self):
         print(f"\n--- 1. Authentication ({AUTH_URL}) ---")
+        if not EMAIL or not PASSWORD:
+            self.log("Missing VERIFY_API_EMAIL or VERIFY_API_PASSWORD environment variable.", False)
+            sys.exit(1)
         try:
             payload = {"email": EMAIL, "password": PASSWORD}
             resp = self.session.post(AUTH_URL, json=payload, headers=self.headers)

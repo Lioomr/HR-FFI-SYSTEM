@@ -1,9 +1,11 @@
-from django.contrib.auth import authenticate
+from django.contrib.auth import authenticate, get_user_model
 from rest_framework import serializers
 from rest_framework.exceptions import AuthenticationFailed
 
 from .security import get_client_ip, is_locked_out, record_login_failure, clear_login_failures
 from audit.utils import audit
+
+User = get_user_model()
 
 
 class LoginSerializer(serializers.Serializer):
@@ -12,7 +14,8 @@ class LoginSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         request = self.context.get("request")
-        email = (attrs.get("email") or "").strip().lower()
+        raw_email = (attrs.get("email") or "").strip()
+        email = raw_email.lower()
         ip_address = get_client_ip(request) if request else ""
 
         if is_locked_out(email, ip_address):
@@ -25,7 +28,11 @@ class LoginSerializer(serializers.Serializer):
                 )
             raise AuthenticationFailed("User is locked out due to too many failed attempts.")
 
-        user = authenticate(username=email, password=attrs["password"])
+        # Resolve canonical stored email case first, then authenticate.
+        # Django auth lookup for USERNAME_FIELD is case-sensitive by default.
+        existing_user = User.objects.filter(email__iexact=raw_email).only("email").first()
+        email_for_auth = existing_user.email if existing_user else email
+        user = authenticate(username=email_for_auth, password=attrs["password"])
         if not user or not user.is_active:
             record_login_failure(email, ip_address)
             if request:

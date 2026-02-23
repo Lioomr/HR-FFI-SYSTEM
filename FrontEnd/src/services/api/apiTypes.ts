@@ -1,7 +1,7 @@
 /**
  * API error item - can be an object with field/message/code or a simple string
  */
-export type ApiErrorItem = 
+export type ApiErrorItem =
   | { field?: string; message: string; code?: string }
   | string;
 
@@ -36,7 +36,7 @@ export function isApiError<T>(res: ApiResponse<T>): res is ApiError {
   return res.status === "error";
 }
 
-export type Role = "SystemAdmin" | "HRManager" | "Employee";
+export type Role = "SystemAdmin" | "HRManager" | "Manager" | "Employee" | "CEO" | "CFO";
 
 export type PaginatedResponse<T> = {
   items: T[];

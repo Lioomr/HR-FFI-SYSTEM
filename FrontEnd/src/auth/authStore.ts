@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { clearToken, getToken, setToken, getStoredUser, setStoredUser } from "../services/api/tokenStorage";
 
-export type Role = "SystemAdmin" | "HRManager" | "Employee";
+export type Role = "SystemAdmin" | "HRManager" | "Manager" | "Employee" | "CEO" | "CFO";
 
 export type AuthUser = {
   id: string;

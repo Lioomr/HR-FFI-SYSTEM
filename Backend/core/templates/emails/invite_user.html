@@ -1,0 +1,15 @@
+{% extends "emails/base_email.html" %}
+
+{% block details %}
+<div class="details">
+  <div><strong>Role / الدور:</strong> {{ role }}</div>
+  <div><strong>Expires In / تنتهي خلال:</strong> {{ expires_in_hours }} hours</div>
+  {% if inviter_name %}
+  <div><strong>Invited By / تم الإرسال بواسطة:</strong> {{ inviter_name }}</div>
+  {% endif %}
+  <div style="margin-top: 10px;">
+    <strong>Invite Link / رابط الدعوة:</strong><br />
+    <a href="{{ invite_link }}" target="_blank" rel="noopener noreferrer">{{ invite_link }}</a>
+  </div>
+</div>
+{% endblock %}

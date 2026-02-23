@@ -7,12 +7,14 @@ import { EyeOutlined } from "@ant-design/icons";
 import PageHeader from "../../../components/ui/PageHeader";
 import { getLeaveRequests, type LeaveRequest, type LeaveRequestFilter } from "../../../services/api/leaveApi";
 import { isApiError } from "../../../services/api/apiTypes";
+import { useI18n } from "../../../i18n/useI18n";
 
 const { Option } = Select;
 const { RangePicker } = DatePicker;
 
 export default function LeaveInboxPage() {
     const navigate = useNavigate();
+    const { t } = useI18n();
     const [loading, setLoading] = useState(false);
     const [data, setData] = useState<LeaveRequest[]>([]);
     const [total, setTotal] = useState(0);
@@ -28,13 +30,13 @@ export default function LeaveInboxPage() {
         try {
             const res = await getLeaveRequests({ ...filters, page, page_size: pageSize });
             if (isApiError(res)) {
-                notification.error({ message: "Failed to load inbox", description: res.message });
+                notification.error({ message: t("error.generic"), description: res.message });
             } else {
                 setData(res.data.items || []);
                 setTotal(res.data.count || 0);
             }
         } catch (err: any) {
-            notification.error({ message: "Error", description: "Could not load leave requests" });
+            notification.error({ message: t("common.error"), description: t("leave.noRequests") });
         } finally {
             setLoading(false);
         }
@@ -63,6 +65,7 @@ export default function LeaveInboxPage() {
             case 'submitted': return 'blue';
             case 'pending_manager': return 'orange';
             case 'pending_hr': return 'purple';
+            case 'pending_ceo': return 'volcano';
             case 'pending': return 'gold';
             case 'cancelled': return 'default';
             default: return 'default';
@@ -71,28 +74,28 @@ export default function LeaveInboxPage() {
 
     const columns: ColumnsType<LeaveRequest> = [
         {
-            title: "Employee",
+            title: t("hr.dashboard.employee"),
             key: "employee",
             render: (_, record) => record.employee?.full_name || `ID: ${record.employee?.id}`
         },
         {
-            title: "Leave Type",
+            title: t("leave.leaveType"),
             key: "leave_type",
             render: (_, record) => record.leave_type?.name || "-"
         },
         {
-            title: "Start Date",
+            title: t("leave.startDate"),
             dataIndex: "start_date",
             key: "start_date",
         },
         {
-            title: "Days",
-            dataIndex: "days", // Match backend
+            title: t("leave.days"),
+            dataIndex: "days",
             key: "days",
             align: 'center'
         },
         {
-            title: "Status",
+            title: t("common.status"),
             dataIndex: "status",
             key: "status",
             render: (status) => {
@@ -105,17 +108,17 @@ export default function LeaveInboxPage() {
             }
         },
         {
-            title: "Created",
+            title: t("common.createdAt"),
             dataIndex: "created_at",
             key: "created_at",
             render: (val) => val ? new Date(val).toLocaleDateString() : '-'
         },
         {
-            title: "Actions",
+            title: t("common.actions"),
             key: "actions",
             align: 'center',
             render: (_, record) => (
-                <Tooltip title="View Details">
+                <Tooltip title={t("common.details")}>
                     <Button
                         icon={<EyeOutlined />}
                         onClick={() => navigate(`/hr/leave/requests/${record.id}`)}
@@ -129,27 +132,28 @@ export default function LeaveInboxPage() {
     return (
         <div style={{ maxWidth: 1200, margin: "0 auto" }}>
             <PageHeader
-                title="Leave Request Inbox"
-                subtitle="Manage employee leave requests"
+                title={t("leave.title")}
+                subtitle={t("layout.leaveInbox")}
             />
 
             <Card style={{ marginBottom: 16, borderRadius: 16 }}>
                 <Form form={form} layout="vertical" onValuesChange={handleFilterChange}>
                     <Row gutter={16}>
                         <Col span={8}>
-                            <Form.Item label="Status" name="status">
-                                <Select placeholder="Filter by Status" allowClear>
-                                    <Option value="submitted">Submitted</Option>
-                                    <Option value="pending_manager">Pending Manager</Option>
-                                    <Option value="pending_hr">Pending HR</Option>
-                                    <Option value="approved">Approved</Option>
-                                    <Option value="rejected">Rejected</Option>
-                                    <Option value="cancelled">Cancelled</Option>
+                            <Form.Item label={t("common.status")} name="status">
+                                <Select placeholder={t("employees.list.statusPlaceholder")} allowClear>
+                                    <Option value="submitted">{t("status.pending")}</Option>
+                                    <Option value="pending_manager">{t("status.pendingManager")}</Option>
+                                    <Option value="pending_hr">{t("status.pendingHr")}</Option>
+                                    <Option value="pending_ceo">{t("status.pendingCeo")}</Option>
+                                    <Option value="approved">{t("status.approved")}</Option>
+                                    <Option value="rejected">{t("status.rejected")}</Option>
+                                    <Option value="cancelled">{t("status.cancelled")}</Option>
                                 </Select>
                             </Form.Item>
                         </Col>
                         <Col span={8}>
-                            <Form.Item label="Date Range" name="dates">
+                            <Form.Item label={t("leave.startDate") + " - " + t("leave.endDate")} name="dates">
                                 <RangePicker style={{ width: '100%' }} />
                             </Form.Item>
                         </Col>
