@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { Table, Button, Card, DatePicker, Row, Col, Typography, Tag, message, Input, Select } from "antd";
+import { Table, Button, Card, DatePicker, Row, Col, Typography, Tag, message, Input, Select, Space } from "antd";
 import { ReloadOutlined, EditOutlined, SearchOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useHrAttendanceStore } from "../../stores/attendanceStore";
 import type { AttendanceRecord, AttendanceStatus } from "../../types/attendance";
 import AttendanceOverrideModal from "../../components/hr/AttendanceOverrideModal";
+import { useI18n } from "../../i18n/useI18n";
 
 const { Title } = Typography;
 const { RangePicker } = DatePicker;
@@ -15,11 +16,13 @@ const getStatusColor = (status: AttendanceStatus) => {
         case "PRESENT": return "green";
         case "ABSENT": return "red";
         case "LATE": return "orange";
+        case "REJECTED": return "magenta";
         default: return "default";
     }
 };
 
 const HrAttendancePage: React.FC = () => {
+    const { t } = useI18n();
     const {
         records,
         total,
@@ -65,10 +68,7 @@ const HrAttendancePage: React.FC = () => {
 
     useEffect(() => {
         fetchData();
-    }, [pagination]); // Trigger when pagination changes. Filters triggered manually via Search button? Or auto? Let's do Search button for EmployeeID, auto for others might be annoying. Or just auto for all + search button.
-
-    // Let's rely on "Search" button for all filter application to avoid rapid refetches, or use a separate effect for filter changes if we want auto-update
-    // User request says "Search button + Reset button". So we won't auto-fetch on filter change.
+    }, [pagination]);
 
     useEffect(() => {
         if (error) {
@@ -84,7 +84,7 @@ const HrAttendancePage: React.FC = () => {
     const handleOverrideSubmit = async (id: string | number, values: any) => {
         try {
             await performOverride(id, values);
-            message.success("Attendance record updated");
+            message.success(t("hr.attendance.recordUpdated"));
             setModalVisible(false);
             fetchData(); // Refresh list
         } catch (_e) {
@@ -94,7 +94,7 @@ const HrAttendancePage: React.FC = () => {
 
     const columns = [
         {
-            title: "Employee",
+            title: t("hr.dashboard.employee"),
             key: "employee",
             render: (_: any, record: AttendanceRecord) => (
                 <div>
@@ -104,45 +104,53 @@ const HrAttendancePage: React.FC = () => {
             )
         },
         {
-            title: "Date",
+            title: t("common.date"),
             dataIndex: "date",
             key: "date",
             render: (val: string) => dayjs(val).format("YYYY-MM-DD"),
         },
         {
-            title: "Status",
+            title: t("common.status"),
             dataIndex: "status",
             key: "status",
-            render: (status: AttendanceStatus) => (
-                <Tag color={getStatusColor(status)}>{status}</Tag>
-            ),
+            render: (status: AttendanceStatus) => {
+                let displayStatus = status;
+                switch (status) {
+                    case "PENDING": displayStatus = t("status.pending") as any; break;
+                    case "PRESENT": displayStatus = t("status.active") as any; break;
+                    case "ABSENT": displayStatus = t("status.absent") as any; break;
+                    case "LATE": displayStatus = t("hr.attendance.late") as any; break;
+                    case "REJECTED": displayStatus = t("status.rejected") as any; break;
+                }
+                return <Tag color={getStatusColor(status)}>{displayStatus}</Tag>;
+            },
         },
         {
-            title: "Check In",
+            title: t("attendance.checkIn"),
             dataIndex: "check_in_at",
             key: "check_in_at",
             render: (val: string | null) => val ? dayjs(val).format("HH:mm") : "-",
         },
         {
-            title: "Check Out",
+            title: t("attendance.checkOut"),
             dataIndex: "check_out_at",
             key: "check_out_at",
             render: (val: string | null) => val ? dayjs(val).format("HH:mm") : "-",
         },
         {
-            title: "Src",
+            title: t("hr.attendance.source"),
             dataIndex: "source",
             key: "source",
             render: (src: string) => <Tag>{src}</Tag>
         },
         {
-            title: "Ovr",
+            title: t("hr.attendance.isOverridden"),
             dataIndex: "is_overridden",
             key: "is_overridden",
-            render: (isOvr: boolean) => isOvr ? <span style={{ color: "orange" }}>Yes</span> : "No"
+            render: (isOvr: boolean) => isOvr ? <span style={{ color: "orange" }}>{t("common.yes")}</span> : t("common.no")
         },
         {
-            title: "Action",
+            title: t("common.actions"),
             key: "action",
             render: (_: any, record: AttendanceRecord) => (
                 <Button
@@ -150,46 +158,48 @@ const HrAttendancePage: React.FC = () => {
                     icon={<EditOutlined />}
                     onClick={() => handleOverrideClick(record)}
                 >
-                    Override
+                    {t("hr.attendance.overrideButton")}
                 </Button>
             ),
         },
     ];
 
     return (
-        <div>
-            <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
+        <div style={{ padding: 24 }}>
+            <Row justify="space-between" align="middle" style={{ marginBottom: 24 }}>
                 <Col>
-                    <Title level={2}>Attendance Records</Title>
+                    <Title level={2} style={{ margin: 0 }}>{t("hr.attendance.recordsTitle")}</Title>
                 </Col>
                 <Col>
-                    <Button icon={<ReloadOutlined />} onClick={fetchData}>Refresh</Button>
+                    <Button icon={<ReloadOutlined />} onClick={fetchData} size="large">{t("common.refresh")}</Button>
                 </Col>
             </Row>
 
-            <Card style={{ marginBottom: 16 }}>
+            <Card style={{ marginBottom: 24, borderRadius: 16, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
                 <Row gutter={[16, 16]} align="middle">
-                    <Col span={6}>
+                    <Col xs={24} md={6}>
                         <Input
-                            placeholder="Employee ID"
+                            placeholder={t("hr.attendance.employeeIdPlaceholder")}
                             value={filters.employeeId}
                             onChange={e => setFilters(prev => ({ ...prev, employeeId: e.target.value }))}
+                            size="large"
                         />
                     </Col>
-                    <Col span={6}>
+                    <Col xs={24} md={6}>
                         <Select
                             style={{ width: '100%' }}
-                            placeholder="Status"
+                            placeholder={t("hr.attendance.selectStatusPlaceholder")}
                             allowClear
                             value={filters.status}
                             onChange={val => setFilters(prev => ({ ...prev, status: val }))}
+                            size="large"
                         >
-                            <Option value="PRESENT">PRESENT</Option>
-                            <Option value="ABSENT">ABSENT</Option>
-                            <Option value="LATE">LATE</Option>
+                            <Option value="PRESENT">{t("status.active")}</Option>
+                            <Option value="ABSENT">{t("status.absent")}</Option>
+                            <Option value="LATE">{t("hr.attendance.late")}</Option>
                         </Select>
                     </Col>
-                    <Col span={8}>
+                    <Col xs={24} md={8}>
                         <RangePicker
                             style={{ width: '100%' }}
                             value={filters.dateRange}
@@ -200,28 +210,29 @@ const HrAttendancePage: React.FC = () => {
                                     setFilters(prev => ({ ...prev, dateRange: null }));
                                 }
                             }}
+                            size="large"
                         />
                     </Col>
-                    <Col span={4}>
-                        <Button type="primary" icon={<SearchOutlined />} onClick={() => { setPagination(p => ({ ...p, current: 1 })); fetchData(); }}>
-                            Search
-                        </Button>
-                        <Button
-                            style={{ marginLeft: 8 }}
-                            onClick={() => {
-                                setFilters({
-                                    dateRange: null,
-                                    status: undefined,
-                                    employeeId: ""
-                                });
-                                setPagination(p => ({ ...p, current: 1 }));
-                                // We might want to trigger fetch here after state update, but react state is async. 
-                                // Simplified:
-                                setTimeout(fetchData, 0);
-                            }}
-                        >
-                            Reset
-                        </Button>
+                    <Col xs={24} md={4}>
+                        <Space>
+                            <Button type="primary" icon={<SearchOutlined />} onClick={() => { setPagination(p => ({ ...p, current: 1 })); fetchData(); }} size="large">
+                                {t("common.search")}
+                            </Button>
+                            <Button
+                                onClick={() => {
+                                    setFilters({
+                                        dateRange: null,
+                                        status: undefined,
+                                        employeeId: ""
+                                    });
+                                    setPagination(p => ({ ...p, current: 1 }));
+                                    setTimeout(fetchData, 0);
+                                }}
+                                size="large"
+                            >
+                                {t("common.reset")}
+                            </Button>
+                        </Space>
                     </Col>
                 </Row>
             </Card>
@@ -237,6 +248,7 @@ const HrAttendancePage: React.FC = () => {
                     total: total,
                     onChange: (page, pageSize) => setPagination({ current: page, pageSize }),
                 }}
+                style={{ borderRadius: 16, overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}
             />
 
             <AttendanceOverrideModal

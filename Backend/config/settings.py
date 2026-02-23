@@ -4,13 +4,40 @@ import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = "django-insecure-5ygp48f0q445qodcen2e7x6d_*rgh+a7o5()m-9&*@ibf@iyr!"
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(BASE_DIR / ".env")
+except Exception:
+    pass
 
 
-DEBUG = True
+def _env_bool(name, default=False):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
 
-ALLOWED_HOSTS = []
 
+def _env_list(name, default=None):
+    value = os.environ.get(name)
+    if value is None:
+        return default or []
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+DEBUG = _env_bool("DJANGO_DEBUG", False)
+
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY")
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = "django-insecure-dev-only-change-me"
+    else:
+        raise RuntimeError("DJANGO_SECRET_KEY is required when DJANGO_DEBUG is false.")
+
+ALLOWED_HOSTS = _env_list("DJANGO_ALLOWED_HOSTS", ["localhost", "127.0.0.1"] if DEBUG else [])
+if not DEBUG and not ALLOWED_HOSTS:
+    raise RuntimeError("DJANGO_ALLOWED_HOSTS must be set when DJANGO_DEBUG is false.")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -31,8 +58,11 @@ INSTALLED_APPS = [
     "employees",
     "payroll",
     "leaves",
+    "assets",
     "attendance",
     "hr_reference",
+    "announcements",
+    "loans",
 ]
 
 MIDDLEWARE = [
@@ -46,16 +76,35 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-# Email / Resend
-RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
+# Email / Bird
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
-DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "onboarding@resend.dev")
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "no-reply@fficontracting.com")
+NOTIFICATION_HTTP_TIMEOUT_SECONDS = int(os.environ.get("NOTIFICATION_HTTP_TIMEOUT_SECONDS", "10"))
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://localhost:3000",
-]
+# Bird (MessageBird) Channels API
+BIRD_API_KEY = os.environ.get("BIRD_API_KEY", "")
+BIRD_CHANNEL_ID = os.environ.get("BIRD_CHANNEL_ID", "")
+BIRD_ACCESS_KEY = os.environ.get("BIRD_ACCESS_KEY", "")
+BIRD_WORKSPACE_ID = os.environ.get("BIRD_WORKSPACE_ID", "")
+BIRD_EMAIL_CHANNEL_ID = os.environ.get("BIRD_EMAIL_CHANNEL_ID", "")
+BIRD_SMS_CHANNEL_ID = os.environ.get("BIRD_SMS_CHANNEL_ID", "")
+BIRD_WHATSAPP_CHANNEL_ID = os.environ.get("BIRD_WHATSAPP_CHANNEL_ID", "")
+BIRD_API_BASE_URL = os.environ.get("BIRD_API_BASE_URL", "https://api.bird.com/workspaces")
+
+if not BIRD_API_KEY:
+    BIRD_API_KEY = BIRD_ACCESS_KEY
+if not BIRD_CHANNEL_ID:
+    BIRD_CHANNEL_ID = BIRD_EMAIL_CHANNEL_ID
+
+CORS_ALLOWED_ORIGINS = _env_list(
+    "CORS_ALLOWED_ORIGINS",
+    ["http://localhost:5173", "http://localhost:3000"] if DEBUG else [],
+)
 CORS_ALLOW_CREDENTIALS = True
+CSRF_TRUSTED_ORIGINS = _env_list(
+    "CSRF_TRUSTED_ORIGINS",
+    CORS_ALLOWED_ORIGINS if DEBUG else [],
+)
 
 ROOT_URLCONF = "config.urls"
 
@@ -78,14 +127,20 @@ WSGI_APPLICATION = "config.wsgi.application"
 
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": "ffi_hr_db",
-        "USER": "postgres",
-        "PASSWORD": "M@essi2011",
-        "HOST": "localhost",
-        "PORT": "5432",
+        "ENGINE": os.environ.get("DB_ENGINE", "django.db.backends.postgresql"),
+        "NAME": os.environ.get("DB_NAME", "ffi_hr_db"),
+        "USER": os.environ.get("DB_USER", "postgres"),
+        "PASSWORD": os.environ.get("DB_PASSWORD", ""),
+        "HOST": os.environ.get("DB_HOST", "localhost"),
+        "PORT": os.environ.get("DB_PORT", "5432"),
     }
 }
+
+if DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":
+    DATABASES["default"] = {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": os.environ.get("DB_NAME", BASE_DIR / "db.sqlite3"),
+    }
 
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -123,6 +178,21 @@ STATIC_URL = "static/"
 
 # Private uploads (not served publicly)
 PRIVATE_UPLOAD_ROOT = BASE_DIR / "private_uploads"
+
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = True
+X_FRAME_OPTIONS = "DENY"
+
+if not DEBUG:
+    SECURE_SSL_REDIRECT = _env_bool("SECURE_SSL_REDIRECT", True)
+    SESSION_COOKIE_SECURE = _env_bool("SESSION_COOKIE_SECURE", True)
+    CSRF_COOKIE_SECURE = _env_bool("CSRF_COOKIE_SECURE", True)
+    SECURE_HSTS_SECONDS = int(os.environ.get("SECURE_HSTS_SECONDS", "31536000"))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = _env_bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", True)
+    SECURE_HSTS_PRELOAD = _env_bool("SECURE_HSTS_PRELOAD", True)
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_REFERRER_POLICY = os.environ.get("SECURE_REFERRER_POLICY", "same-origin")
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

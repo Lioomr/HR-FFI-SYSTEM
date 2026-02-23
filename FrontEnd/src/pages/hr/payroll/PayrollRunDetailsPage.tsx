@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Button, Card, Col, Descriptions, Row, Table, Tag, Typography, Tabs, Modal, notification, Alert } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { ArrowLeftOutlined, LockOutlined, CheckCircleOutlined } from "@ant-design/icons";
+import { ArrowLeftOutlined, LockOutlined, CheckCircleOutlined, ArrowRightOutlined } from "@ant-design/icons";
 
 import PageHeader from "../../../components/ui/PageHeader";
 import LoadingState from "../../../components/ui/LoadingState";
@@ -16,11 +16,16 @@ import type { PayrollRun, PayrollRunItem } from "../../../services/api/payrollAp
 import { getPayrollRunDetails, getPayrollRunItems, finalizePayrollRun } from "../../../services/api/payrollApi";
 import { isApiError } from "../../../services/api/apiTypes";
 import { isForbidden } from "../../../services/api/httpErrors";
+import SARIcon from "../../../components/icons/SARIcon";
+import { formatNumber } from "../../../utils/currency";
+import { useI18n } from "../../../i18n/useI18n";
 
 export default function PayrollRunDetailsPage() {
     const { run_id } = useParams<{ run_id: string }>();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
+    const { t, language } = useI18n();
+    const isRtl = language === 'ar';
 
     // Tab state management from URL
     const activeTab = searchParams.get("tab") || "overview";
@@ -42,7 +47,7 @@ export default function PayrollRunDetailsPage() {
     // Columns for Items
     const columns: ColumnsType<PayrollRunItem> = [
         {
-            title: "Employee",
+            title: t("payroll.runDetails.colEmployee"),
             dataIndex: "employee_name",
             key: "employee_name",
             render: (text, record) => (
@@ -53,37 +58,57 @@ export default function PayrollRunDetailsPage() {
             )
         },
         {
-            title: "Department",
+            title: t("reference.departments.title"),
             dataIndex: "department",
             key: "department",
         },
         {
-            title: "Basic Salary",
+            title: t("payroll.details.colBasicSalary"),
             dataIndex: "basic_salary",
             key: "basic_salary",
             align: 'right',
-            render: (val) => val?.toLocaleString(),
+            render: (val) => (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    {formatNumber(val)}
+                    <SARIcon size={12} />
+                </span>
+            ),
         },
         {
-            title: "Allowances",
+            title: t("payroll.runDetails.colAllowances"),
             dataIndex: "total_allowances",
             key: "total_allowances",
             align: 'right',
-            render: (val) => val?.toLocaleString(),
+            render: (val) => (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    {formatNumber(val)}
+                    <SARIcon size={12} />
+                </span>
+            ),
         },
         {
-            title: "Deductions",
+            title: t("payroll.runDetails.colDeductions"),
             dataIndex: "total_deductions",
             key: "total_deductions",
             align: 'right',
-            render: (val) => val ? `(${val.toLocaleString()})` : "0",
+            render: (val) => val ? (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    ({formatNumber(val)})
+                    <SARIcon size={12} />
+                </span>
+            ) : "0",
         },
         {
-            title: "Net Salary",
+            title: t("payslips.list.colNetSalary"),
             dataIndex: "net_salary",
             key: "net_salary",
             align: 'right',
-            render: (val) => <span style={{ fontWeight: "bold" }}>{val?.toLocaleString()}</span>,
+            render: (val) => (
+                <span style={{ fontWeight: "bold", display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    {formatNumber(val)}
+                    <SARIcon size={12} />
+                </span>
+            ),
         },
     ];
 
@@ -102,10 +127,10 @@ export default function PayrollRunDetailsPage() {
             ]);
 
             if (isApiError(runRes)) {
-                throw new Error(runRes.message || "Failed to load payroll run details");
+                throw new Error(runRes.message || t("payroll.runDetails.failedLoadDetails"));
             }
             if (isApiError(itemsRes)) {
-                throw new Error(itemsRes.message || "Failed to load payroll items");
+                throw new Error(itemsRes.message || t("payroll.runDetails.failedLoadItems"));
             }
 
             setRun(runRes.data);
@@ -119,10 +144,10 @@ export default function PayrollRunDetailsPage() {
                 setLoading(false);
                 return;
             }
-            setError(err.message || "An error occurred fetching payroll data");
+            setError(err.message || t("payroll.runDetails.fetchError"));
             setLoading(false);
         }
-    }, [run_id, page, pageSize]);
+    }, [run_id, page, pageSize, t]);
 
     useEffect(() => {
         loadData();
@@ -134,36 +159,36 @@ export default function PayrollRunDetailsPage() {
 
     const handleFinalize = () => {
         Modal.confirm({
-            title: "Finalize Payroll Run?",
+            title: t("payroll.runDetails.finalizeConfirmTitle"),
             icon: <LockOutlined style={{ color: "red" }} />,
             content: (
                 <div>
-                    <p>Are you sure you want to finalize this payroll run?</p>
+                    <p>{t("payroll.runDetails.finalizeConfirmText")}</p>
                     <Alert
-                        message="Warning"
-                        description="Once finalized, the payroll cannot be edited. This action is irreversible."
+                        message={t("payroll.runDetails.finalizeConfirmWarningTitle")}
+                        description={t("payroll.runDetails.finalizeConfirmWarningDesc")}
                         type="warning"
                         showIcon
                     />
                 </div>
             ),
-            okText: "Finalize & Lock",
+            okText: t("payroll.runDetails.finalizeConfirmOkBtn"),
             okType: "danger",
-            cancelText: "Cancel",
+            cancelText: t("common.cancel"),
             onOk: async () => {
                 if (!run) return;
                 setFinalizing(true);
                 try {
                     const res = await finalizePayrollRun(run.id);
                     if (isApiError(res)) {
-                        notification.error({ message: "Finalization Failed", description: res.message });
+                        notification.error({ message: t("payroll.runDetails.finalizeFailed"), description: res.message });
                     } else {
-                        notification.success({ message: "Success", description: "Payroll run finalized successfully." });
+                        notification.success({ message: t("common.success"), description: t("payroll.runDetails.finalizeSuccess") });
                         // Update local state
                         setRun(res.data);
                     }
                 } catch (e: any) {
-                    notification.error({ message: "Error", description: e.message || "Failed to finalize" });
+                    notification.error({ message: t("common.error"), description: e.message || t("payroll.runDetails.finalizeFailed") });
                 } finally {
                     setFinalizing(false);
                 }
@@ -173,11 +198,11 @@ export default function PayrollRunDetailsPage() {
 
     if (forbidden) return <Unauthorized403Page />;
 
-    if (loading && !run) return <LoadingState title="Loading payroll details..." />;
+    if (loading && !run) return <LoadingState title={t("payroll.runDetails.loadingDetails")} />;
 
-    if (error && !run) return <ErrorState title="Error" description={error} onRetry={loadData} />;
+    if (error && !run) return <ErrorState title={t("common.error")} description={error} onRetry={loadData} />;
 
-    if (!run) return <EmptyState title="Not Found" description="Payroll run not found" actionText="Back to Dashboard" onAction={() => navigate("/hr/payroll")} />;
+    if (!run) return <EmptyState title={t("common.notFound")} description={t("payroll.runDetails.notFound")} actionText={t("payroll.runDetails.backToDashboard")} onAction={() => navigate("/hr/payroll")} />;
 
     const isFinalized = run.status === 'COMPLETED' || run.status === 'PAID';
 
@@ -186,17 +211,17 @@ export default function PayrollRunDetailsPage() {
             <div style={{ marginBottom: 16 }}>
                 <Button
                     type="link"
-                    icon={<ArrowLeftOutlined />}
+                    icon={isRtl ? <ArrowRightOutlined /> : <ArrowLeftOutlined />}
                     onClick={() => navigate("/hr/payroll")}
-                    style={{ paddingLeft: 0 }}
+                    style={{ paddingInlineStart: 0 }}
                 >
-                    Back to Dashboard
+                    {t("payroll.runDetails.backToDashboard")}
                 </Button>
             </div>
 
             <PageHeader
-                title={`Payroll Run: ${run.month}/${run.year}`}
-                subtitle="Review and process payroll"
+                title={`${t("payroll.history.colRun")} ${run.month}/${run.year}`}
+                subtitle={t("payroll.runDetails.subtitle")}
                 actions={
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         <Tag color={isFinalized ? 'green' : 'orange'}>
@@ -210,7 +235,7 @@ export default function PayrollRunDetailsPage() {
                                 onClick={handleFinalize}
                                 loading={finalizing}
                             >
-                                Finalize Payroll
+                                {t("payroll.runDetails.finalizeBtn")}
                             </Button>
                         )}
                     </div>
@@ -223,25 +248,26 @@ export default function PayrollRunDetailsPage() {
                 items={[
                     {
                         key: 'overview',
-                        label: 'Overview & Items',
+                        label: t("payroll.runDetails.tabOverview"),
                         children: (
                             <>
                                 {/* Summary Cards */}
                                 <Row gutter={16} style={{ marginBottom: 24 }}>
                                     <Col span={8}>
                                         <Card>
-                                            <Descriptions title="Summary" column={1}>
-                                                <Descriptions.Item label="Period">{run.month}/{run.year}</Descriptions.Item>
-                                                <Descriptions.Item label="Total Employees">{run.total_employees}</Descriptions.Item>
+                                            <Descriptions title={t("payroll.runDetails.summary")} column={1}>
+                                                <Descriptions.Item label={t("payslips.list.colPeriod")}>{run.month}/{run.year}</Descriptions.Item>
+                                                <Descriptions.Item label={t("payroll.runDetails.totalEmployees")}>{run.total_employees}</Descriptions.Item>
                                             </Descriptions>
                                         </Card>
                                     </Col>
                                     <Col span={8}>
                                         <Card>
-                                            <Descriptions title="Financials" column={1}>
-                                                <Descriptions.Item label="Total Net Salary">
-                                                    <Typography.Text strong style={{ fontSize: 18 }}>
-                                                        {run.total_net?.toLocaleString()}
+                                            <Descriptions title={t("payroll.runDetails.financials")} column={1}>
+                                                <Descriptions.Item label={t("payroll.runDetails.totalNetSalary")}>
+                                                    <Typography.Text strong style={{ fontSize: 18, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                                        {formatNumber(run.total_net)}
+                                                        <SARIcon size={18} />
                                                     </Typography.Text>
                                                 </Descriptions.Item>
                                                 {/* Add other totals if available in the DTO later */}
@@ -250,12 +276,13 @@ export default function PayrollRunDetailsPage() {
                                     </Col>
                                 </Row>
 
-                                <Card title="Employee Payslips (Review)" style={{ borderRadius: 16 }}>
+                                <Card title={t("payroll.runDetails.employeePayslipsReview")} style={{ borderRadius: 16 }}>
                                     <Table
                                         dataSource={items}
                                         columns={columns}
                                         rowKey="id"
                                         loading={loading}
+                                        scroll={{ x: 800 }}
                                         pagination={{
                                             current: page,
                                             pageSize,
@@ -272,12 +299,19 @@ export default function PayrollRunDetailsPage() {
                     },
                     {
                         key: 'payslips',
-                        label: 'Payslips',
-                        children: <PayrollPayslips runId={run.id} isFinalized={isFinalized} />
+                        label: t("payroll.runDetails.tabPayslips"),
+                        children: (
+                            <PayrollPayslips
+                                runId={run.id}
+                                isFinalized={isFinalized}
+                                runStatus={run.status}
+                                onGenerated={loadData}
+                            />
+                        )
                     },
                     {
                         key: 'reports',
-                        label: 'Reports',
+                        label: t("payroll.runDetails.reportsTitle"),
                         children: <PayrollReports runId={run.id} status={run.status} />
                     }
                 ]}

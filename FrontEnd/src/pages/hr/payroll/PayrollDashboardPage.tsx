@@ -8,16 +8,19 @@ import PageHeader from "../../../components/ui/PageHeader";
 import ErrorState from "../../../components/ui/ErrorState";
 import EmptyState from "../../../components/ui/EmptyState";
 import Unauthorized403Page from "../../Unauthorized403Page";
+import { useI18n } from "../../../i18n/useI18n";
 
 import type { PayrollRun } from "../../../services/api/payrollApi";
 import { getPayrollRuns } from "../../../services/api/payrollApi";
 import { isApiError } from "../../../services/api/apiTypes";
 import { isForbidden } from "../../../services/api/httpErrors";
+import { formatNumber } from "../../../utils/currency";
 
 const { Option } = Select;
 
 export default function PayrollDashboardPage() {
     const navigate = useNavigate();
+    const { t } = useI18n();
 
     // State
     const [loading, setLoading] = useState(true);
@@ -41,13 +44,13 @@ export default function PayrollDashboardPage() {
             width: 80,
         },
         {
-            title: "Period",
+            title: t("payroll.period"),
             key: "period",
             render: (_, record) => `${record.month}/${record.year}`,
             width: 120,
         },
         {
-            title: "Status",
+            title: t("common.status"),
             dataIndex: "status",
             key: "status",
             render: (status) => {
@@ -61,25 +64,25 @@ export default function PayrollDashboardPage() {
             width: 120,
         },
         {
-            title: "Employees",
+            title: t("payroll.employees"),
             dataIndex: "total_employees",
             key: "total_employees",
             align: 'right',
             width: 120,
         },
         {
-            title: "Total Net",
+            title: t("payroll.totalNet"),
             dataIndex: "total_net",
             key: "total_net",
             align: 'right',
-            render: (val) => val ? val.toLocaleString() : "-",
+            render: (val) => val !== null && val !== undefined ? formatNumber(val) : "-",
         },
         {
-            title: "Actions",
+            title: t("common.actions"),
             key: "actions",
             render: (_, record) => (
                 <Button size="small" onClick={() => navigate(`/hr/payroll/${record.id}`)}>
-                    View
+                    {t("payroll.view")}
                 </Button>
             ),
             width: 100,
@@ -99,7 +102,7 @@ export default function PayrollDashboardPage() {
             });
 
             if (isApiError(response)) {
-                setError(response.message || "Failed to load payroll runs");
+                setError(response.message || t("common.tryAgain"));
                 setLoading(false);
                 return;
             }
@@ -113,10 +116,10 @@ export default function PayrollDashboardPage() {
                 setLoading(false);
                 return;
             }
-            setError(err.message || "Failed to load payroll runs");
+            setError(err.message || t("common.tryAgain"));
             setLoading(false);
         }
-    }, [page, pageSize, year]);
+    }, [page, pageSize, year, t]);
 
     useEffect(() => {
         loadRuns();
@@ -127,15 +130,15 @@ export default function PayrollDashboardPage() {
     return (
         <div>
             <PageHeader
-                title="Payroll Runs"
-                subtitle="Manage monthly payroll processing"
+                title={t("payroll.runs")}
+                subtitle={t("payroll.title")}
                 actions={
                     <Button
                         type="primary"
                         icon={<PlusOutlined />}
                         onClick={() => navigate("/hr/payroll/create")}
                     >
-                        Create Payroll Run
+                        {t("payroll.createRun")}
                     </Button>
                 }
             />
@@ -144,7 +147,7 @@ export default function PayrollDashboardPage() {
             <Card style={{ borderRadius: 16, marginBottom: 16 }} bodyStyle={{ padding: 16 }}>
                 <Row gutter={16} align="middle">
                     <Col>
-                        <span style={{ marginRight: 8 }}>Year:</span>
+                        <span style={{ marginRight: 8 }}>{t("payroll.year")}:</span>
                         <Select
                             value={year}
                             onChange={setYear}
@@ -178,9 +181,9 @@ export default function PayrollDashboardPage() {
                     locale={{
                         emptyText: !loading && runs.length === 0 ? (
                             <EmptyState
-                                title="No Payroll Runs Found"
-                                description="Get started by creating a new payroll run."
-                                actionText="Create Payroll Run"
+                                title={t("payroll.noRuns")}
+                                description={t("payroll.createRun")}
+                                actionText={t("payroll.createRun")}
                                 onAction={() => navigate("/hr/payroll/create")}
                             />
                         ) : undefined
@@ -190,7 +193,7 @@ export default function PayrollDashboardPage() {
 
             {error && (
                 <div style={{ marginTop: 16 }}>
-                    <ErrorState title="Error" description={error} onRetry={loadRuns} />
+                    <ErrorState title={t("common.error")} description={error} onRetry={loadRuns} />
                 </div>
             )}
         </div>

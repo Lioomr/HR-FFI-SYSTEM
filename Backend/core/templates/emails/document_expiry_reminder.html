@@ -1,0 +1,11 @@
+{% extends "emails/base_email.html" %}
+
+{% block details %}
+<div class="details">
+  <div><strong>Document / المستند:</strong> {{ document_type }}</div>
+  <div><strong>Expiry Date / تاريخ الانتهاء:</strong> {{ expiry_date }}</div>
+  {% if days_remaining is not None %}
+  <div><strong>Days Remaining / الأيام المتبقية:</strong> {{ days_remaining }}</div>
+  {% endif %}
+</div>
+{% endblock %}

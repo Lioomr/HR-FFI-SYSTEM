@@ -15,6 +15,7 @@ import { listUsers } from "../../../services/api/usersApi";
 import type { UserDto } from "../../../services/api/apiTypes";
 import { isApiError } from "../../../services/api/apiTypes";
 import { isForbidden } from "../../../services/api/httpErrors";
+import { formatNumber } from "../../../utils/currency";
 
 /**
  * Format value for display (show "—" for missing values)
@@ -33,11 +34,7 @@ const formatCurrency = (value: any): string => {
     if (value === null || value === undefined || value === "") {
         return "—";
     }
-    const num = Number(value);
-    if (isNaN(num)) {
-        return "—";
-    }
-    return num.toFixed(2);
+    return formatNumber(value);
 };
 
 /**

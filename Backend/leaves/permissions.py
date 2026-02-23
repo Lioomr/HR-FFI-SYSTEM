@@ -51,16 +51,22 @@ class IsManagerOfEmployee(BasePermission):
 
     def has_object_permission(self, request, view, obj):
         # obj is LeaveRequest
-        # Check if obj.employee (User) -> employee_profile -> manager is request.user
+        # Check if obj.employee (User) -> employee_profile -> manager_profile.user is request.user
         if not hasattr(obj.employee, "employee_profile"):
             return False
-        return obj.employee.employee_profile.manager == request.user
+        profile = obj.employee.employee_profile
+        manager_profile = profile.manager_profile
+        if manager_profile and manager_profile.user_id == request.user.id:
+            return True
+        if hasattr(request.user, "employee_profile") and manager_profile and manager_profile.id == request.user.employee_profile.id:
+            return True
+        return bool(profile.manager_id == request.user.id)
 
 
 class IsEmployeeOnly(BasePermission):
     """
-    Allows access only to Employee role.
+    Allows access to self-service leave submission roles.
     """
 
     def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and get_role(request.user) == "Employee"
+        return request.user and request.user.is_authenticated and get_role(request.user) in ["Employee", "Manager"]

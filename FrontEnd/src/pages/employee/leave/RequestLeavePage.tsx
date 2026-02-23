@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Card, Form, Select, DatePicker, Input, Alert, notification } from "antd";
+import { Button, Card, Form, Select, DatePicker, Input, Alert, notification, Upload } from "antd";
 import { ArrowLeftOutlined, SendOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
+import type { UploadFile } from "antd/es/upload/interface";
 
 import PageHeader from "../../../components/ui/PageHeader";
+import { useI18n } from "../../../i18n/useI18n";
 import { getLeaveTypes, createLeaveRequest, getMyLeaveBalance, type LeaveType, type LeaveBalance } from "../../../services/api/leaveApi";
 import { isApiError } from "../../../services/api/apiTypes";
 
@@ -14,6 +16,7 @@ const { RangePicker } = DatePicker;
 
 export default function RequestLeavePage() {
     const navigate = useNavigate();
+    const { t } = useI18n();
     const [form] = Form.useForm();
 
     const [loading, setLoading] = useState(false);
@@ -21,23 +24,20 @@ export default function RequestLeavePage() {
     const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
     const [balances, setBalances] = useState<Record<number, LeaveBalance>>({});
 
-    // Calculated state
     const [daysCount, setDaysCount] = useState(0);
     const [balanceError, setBalanceError] = useState<string | null>(null);
     const [isOtherSelected, setIsOtherSelected] = useState(false);
+    const [isSickSelected, setIsSickSelected] = useState(false);
 
-    // Initial Load
     useEffect(() => {
         async function init() {
             setLoading(true);
             try {
-                // Load Types
                 const typesRes = await getLeaveTypes();
                 if (!isApiError(typesRes)) {
                     setLeaveTypes(typesRes.data || []);
                 }
 
-                // Load Balance
                 const balanceRes = await getMyLeaveBalance();
                 if (!isApiError(balanceRes)) {
                     const map: Record<number, LeaveBalance> = {};
@@ -48,7 +48,7 @@ export default function RequestLeavePage() {
                 }
             } catch (e) {
                 console.error(e);
-                notification.error({ message: "Init Error", description: "Failed to load leave types or balance" });
+                notification.error({ message: t("common.error"), description: t("common.tryAgain") });
             } finally {
                 setLoading(false);
             }
@@ -56,11 +56,11 @@ export default function RequestLeavePage() {
         init();
     }, []);
 
-    // Form Watcher for Days Calculation
     const handleValuesChange = (changedValues: any, allValues: any) => {
         if (changedValues.leave_type) {
             const typeObj = leaveTypes.find(t => t.id === changedValues.leave_type);
             setIsOtherSelected(typeObj?.code === 'OTHER');
+            setIsSickSelected(["SICK", "SICK_LEAVE"].includes((typeObj?.code || "").toUpperCase()));
         }
 
         if (changedValues.dates || changedValues.leave_type) {
@@ -69,27 +69,23 @@ export default function RequestLeavePage() {
             if (dates && dates[0] && dates[1]) {
                 const start = dates[0];
                 const end = dates[1];
-                const diff = end.diff(start, 'day') + 1; // Inclusive
+                const diff = end.diff(start, 'day') + 1;
                 setDaysCount(diff > 0 ? diff : 0);
 
-                // Check Balance Logic
                 if (leave_type) {
                     const typeObj = leaveTypes.find(t => t.id === leave_type);
                     if (typeObj) {
-                        // Skip balance check for 'Other' type as it depends on HR decision
                         if (typeObj.code === 'OTHER') {
                             setBalanceError(null);
                         } else {
                             const bal = balances[typeObj.id];
                             if (bal) {
                                 if (bal.remaining_days < diff) {
-                                    setBalanceError(`Insufficient balance. You have ${bal.remaining_days} days remaining, but requested ${diff}.`);
+                                    setBalanceError(t("leave.insufficientBalance"));
                                 } else {
                                     setBalanceError(null);
                                 }
                             } else {
-                                // No balance record found - usually implies 0 or unknown. 
-                                // Warn if strict, otherwise clear
                                 setBalanceError(null);
                             }
                         }
@@ -104,41 +100,43 @@ export default function RequestLeavePage() {
 
     const handleFinish = async (values: any) => {
         if (balanceError) {
-            notification.error({ message: "Validation Error", description: "Please resolve balance issues before submitting." });
+            notification.error({ message: t("common.error"), description: balanceError });
             return;
         }
 
         setSubmitting(true);
         try {
-            const payload = {
-                leave_type: values.leave_type, // Updated key
-                start_date: values.dates[0].format("YYYY-MM-DD"),
-                end_date: values.dates[1].format("YYYY-MM-DD"),
-                reason: values.reason
-            };
+            const payload = new FormData();
+            payload.append("leave_type", String(values.leave_type));
+            payload.append("start_date", values.dates[0].format("YYYY-MM-DD"));
+            payload.append("end_date", values.dates[1].format("YYYY-MM-DD"));
+            payload.append("reason", values.reason || "");
 
-            const res = await createLeaveRequest(payload);
+            const fileList = (values.document || []) as UploadFile[];
+            const file = fileList[0]?.originFileObj;
+            if (file) {
+                payload.append("document", file);
+            }
 
-            notification.success({ message: "Success", description: "Leave request submitted successfully." });
+            await createLeaveRequest(payload);
+
+            notification.success({ message: t("common.submit"), description: t("leave.submitRequest") });
             navigate("/employee/leave/requests");
 
         } catch (err: any) {
             console.error("Submit Error:", err);
 
-            // Check for validation errors from apiClient
             const data = err.apiData || err.response?.data;
-
-            let description = err.message || "Something went wrong.";
+            let description = err.message || t("common.tryAgain");
             if (data?.errors) {
                 if (Array.isArray(data.errors)) {
                     description = data.errors.join(", ");
                 } else {
-                    // flatten object errors if needed, though backend seems to return list
                     description = Object.values(data.errors).flat().join(", ");
                 }
             }
 
-            notification.error({ message: "Submission Failed", description });
+            notification.error({ message: t("common.error"), description });
         } finally {
             setSubmitting(false);
         }
@@ -152,12 +150,12 @@ export default function RequestLeavePage() {
                 onClick={() => navigate("/employee/leave/requests")}
                 style={{ paddingLeft: 0, marginBottom: 16 }}
             >
-                Back to My Requests
+                {t("leave.backToRequests")}
             </Button>
 
             <PageHeader
-                title="Request Leave"
-                subtitle="Submit a new leave application"
+                title={t("leave.requestTitle")}
+                subtitle={t("leave.requestSubtitle")}
             />
 
             <Card style={{ borderRadius: 16 }} loading={loading}>
@@ -177,11 +175,11 @@ export default function RequestLeavePage() {
                     onValuesChange={handleValuesChange}
                 >
                     <Form.Item
-                        label="Leave Type"
+                        label={t("leave.type")}
                         name="leave_type"
-                        rules={[{ required: true, message: "Please select a leave type" }]}
+                        rules={[{ required: true, message: t("common.required") }]}
                     >
-                        <Select placeholder="Select leave type">
+                        <Select placeholder={t("leave.selectType")}>
                             {leaveTypes.map(t => (
                                 <Option key={t.id} value={t.id}>{t.name}</Option>
                             ))}
@@ -189,9 +187,9 @@ export default function RequestLeavePage() {
                     </Form.Item>
 
                     <Form.Item
-                        label="Dates"
+                        label={t("common.date")}
                         name="dates"
-                        rules={[{ required: true, message: "Please select start and end dates" }]}
+                        rules={[{ required: true, message: t("common.required") }]}
                     >
                         <RangePicker
                             style={{ width: '100%' }}
@@ -202,16 +200,37 @@ export default function RequestLeavePage() {
 
                     {daysCount > 0 && (
                         <div style={{ marginBottom: 24, padding: 12, background: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: 8 }}>
-                            <strong>Total Days:</strong> {daysCount}
+                            <strong>{t("leave.totalDays")}:</strong> {daysCount}
                         </div>
                     )}
 
                     <Form.Item
-                        label={isOtherSelected ? "Reason (Required)" : "Reason (Optional)"}
+                        label={isOtherSelected ? t("leave.reasonRequired") : t("leave.reasonOptional")}
                         name="reason"
-                        rules={[{ required: isOtherSelected, message: "Please provide a reason for 'Other' leave type." }]}
+                        rules={[{ required: isOtherSelected, message: t("common.required") }]}
                     >
-                        <TextArea rows={4} placeholder="Reason for leave..." />
+                        <TextArea rows={4} placeholder={t("leave.reason")} />
+                    </Form.Item>
+
+                    <Form.Item
+                        label={isSickSelected ? t("leave.docRequired") : t("leave.docOptional")}
+                        name="document"
+                        valuePropName="fileList"
+                        getValueFromEvent={(e) => (Array.isArray(e) ? e : e?.fileList || [])}
+                        rules={[
+                            {
+                                validator: (_, value: UploadFile[]) => {
+                                    if (!isSickSelected) return Promise.resolve();
+                                    return value && value.length > 0
+                                        ? Promise.resolve()
+                                        : Promise.reject(new Error(t("common.required")));
+                                },
+                            },
+                        ]}
+                    >
+                        <Upload beforeUpload={() => false} maxCount={1} accept=".pdf,.png,.jpg,.jpeg,.doc,.docx">
+                            <Button>{t("leave.chooseFile")}</Button>
+                        </Upload>
                     </Form.Item>
 
                     <Button
@@ -223,7 +242,7 @@ export default function RequestLeavePage() {
                         loading={submitting}
                         disabled={!!balanceError}
                     >
-                        Submit Request
+                        {t("leave.submitRequest")}
                     </Button>
                 </Form>
             </Card>

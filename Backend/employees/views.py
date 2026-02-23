@@ -5,13 +5,14 @@ import random
 import string
 import uuid
 import zipfile
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.http import FileResponse
 from django.core.files.base import ContentFile
+from django.utils import timezone
 
 from rest_framework import viewsets, status, mixins
 from rest_framework.response import Response
@@ -21,14 +22,18 @@ from rest_framework.decorators import action
 from core.permissions import get_role
 from core.responses import success, error
 from core.pagination import EmployeePagination, StandardPagination
+from core.services import send_document_expiry_reminder_email
 from audit.utils import audit
 
 from hr_reference.models import Department, Position, TaskGroup, Sponsor
+from announcements.models import Announcement
 from .models import EmployeeProfile, EmployeeImport
 from .serializers import EmployeeProfileReadSerializer, EmployeeProfileWriteSerializer, EmployeeImportSerializer
+from .notifications import send_document_expiry_whatsapp
 from .permissions import IsHRManagerOrAdmin, IsEmployeeOwner, IsHRManagerOnly
 from .throttles import EmployeeImportThrottle
 from .storage import PrivateUploadStorage
+from .services import EmployeeImporter
 
 try:
     from openpyxl import load_workbook
@@ -46,6 +51,7 @@ def _audit_snapshot(instance: EmployeeProfile) -> dict:
         "id": instance.id,
         "employee_id": instance.employee_id,
         "full_name": instance.full_name,
+        "full_name_en": instance.full_name_en,
         "user_id": instance.user.id if instance.user else None,
         "email": instance.user.email if instance.user else "",
         "department_id": instance.department_ref.id if instance.department_ref else None,
@@ -53,6 +59,8 @@ def _audit_snapshot(instance: EmployeeProfile) -> dict:
         "task_group_id": instance.task_group_ref.id if instance.task_group_ref else None,
         "sponsor_id": instance.sponsor_ref.id if instance.sponsor_ref else None,
         "employment_status": instance.employment_status,
+        "manager_profile_id": instance.manager_profile.id if instance.manager_profile else None,
+        "data_source": instance.data_source,
     }
 
 
@@ -211,6 +219,8 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action == "import_excel":
             permission_classes = [IsAuthenticated, IsHRManagerOnly]
+        elif self.action == "manager_team":
+            permission_classes = [IsAuthenticated]
         elif self.action in ["retrieve", "me"]:
             permission_classes = [IsAuthenticated, IsHRManagerOrAdmin | IsEmployeeOwner]
         else:
@@ -224,6 +234,8 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         base_qs = EmployeeProfile.objects.select_related(
             "user",
             "manager",
+            "manager_profile",
+            "manager_profile__user",
             "department_ref",
             "position_ref",
             "task_group_ref",
@@ -246,6 +258,8 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         if search:
             qs = qs.filter(
                 Q(full_name__icontains=search)
+                | Q(full_name_en__icontains=search)
+                | Q(full_name_ar__icontains=search)
                 | Q(employee_id__icontains=search)
                 | Q(employee_number__icontains=search)
                 | Q(mobile__icontains=search)
@@ -299,6 +313,59 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(profile)
         return success(serializer.data)
 
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="manager/team",
+        permission_classes=[IsAuthenticated],
+    )
+    def manager_team(self, request):
+        role = get_role(request.user)
+        if role not in ["Manager", "CEO", "SystemAdmin", "HRManager"]:
+            return error("Forbidden", status=status.HTTP_403_FORBIDDEN)
+
+        base_qs = EmployeeProfile.objects.select_related(
+            "user",
+            "manager",
+            "manager_profile",
+            "manager_profile__user",
+            "department_ref",
+            "position_ref",
+            "task_group_ref",
+            "sponsor_ref",
+        )
+        if role == "CEO":
+            ceo_profile = getattr(request.user, "employee_profile", None)
+            direct_reports_q = Q(manager=request.user)
+            if ceo_profile:
+                direct_reports_q = direct_reports_q | Q(manager_profile=ceo_profile)
+
+            qs = base_qs.filter(
+                Q(user__groups__name__in=["Manager", "HRManager"]) | direct_reports_q
+            ).distinct()
+        else:
+            manager_profile = getattr(request.user, "employee_profile", None)
+            qs = base_qs.filter(
+                Q(manager=request.user) | Q(manager_profile=manager_profile) if manager_profile else Q(manager=request.user)
+            )
+
+        search = request.query_params.get("search")
+        if search:
+            qs = qs.filter(
+                Q(full_name__icontains=search)
+                | Q(full_name_en__icontains=search)
+                | Q(full_name_ar__icontains=search)
+                | Q(employee_id__icontains=search)
+                | Q(mobile__icontains=search)
+                | Q(user__email__icontains=search)
+            )
+
+        page = self.paginate_queryset(qs)
+        serializer = EmployeeProfileReadSerializer(page if page is not None else qs, many=True)
+        if page is not None:
+            return self.get_paginated_response(serializer.data)
+        return success({"results": serializer.data, "count": qs.count()})
+
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -312,7 +379,10 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             eid = generate_employee_id()
             try:
                 with transaction.atomic():
-                    instance = serializer.save(employee_id=eid)
+                    instance = serializer.save(employee_id=eid, data_source=EmployeeProfile.DataSource.MANUAL)
+                    if instance.manager_profile and instance.manager != instance.manager_profile.user:
+                        instance.manager = instance.manager_profile.user
+                        instance.save(update_fields=["manager", "updated_at"])
                     _sync_legacy_fields(instance)
                     audit(
                         self.request,
@@ -338,6 +408,9 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         before = _audit_snapshot(serializer.instance)
         instance = serializer.save()
+        if instance.manager_profile and instance.manager != instance.manager_profile.user:
+            instance.manager = instance.manager_profile.user
+            instance.save(update_fields=["manager", "updated_at"])
         _sync_legacy_fields(instance)
         audit(
             self.request,
@@ -355,6 +428,214 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         read_serializer = EmployeeProfileReadSerializer(serializer.instance)
         return success(read_serializer.data)
 
+    @staticmethod
+    def _expiring_docs_for_profile(profile, today, cutoff_date):
+        candidates = [
+            ("passport", "Passport", profile.passport_expiry),
+            ("id_card", "ID Card", profile.id_expiry),
+            ("health_card", "Health Card", profile.health_card_expiry),
+            ("contract", "Contract", profile.contract_expiry),
+        ]
+
+        documents = []
+        for doc_type, label, expiry_date in candidates:
+            if not expiry_date:
+                continue
+            if today <= expiry_date <= cutoff_date:
+                documents.append(
+                    {
+                        "doc_type": doc_type,
+                        "label": label,
+                        "expiry_date": expiry_date.isoformat(),
+                        "days_left": (expiry_date - today).days,
+                    }
+                )
+
+        documents.sort(key=lambda item: item["days_left"])
+        return documents
+
+    @action(detail=False, methods=["get"], url_path="expiries")
+    def expiries(self, request):
+        role = get_role(request.user)
+        if role not in ["SystemAdmin", "HRManager"]:
+            return error("Forbidden", status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            days = int(request.query_params.get("days", 30))
+            page = int(request.query_params.get("page", 1))
+            page_size = int(request.query_params.get("page_size", 25))
+        except (TypeError, ValueError):
+            return error("Validation error", errors={"query": ["days, page and page_size must be integers."]}, status=422)
+
+        if days < 1 or days > 365:
+            return error("Validation error", errors={"days": ["Must be between 1 and 365."]}, status=422)
+        if page < 1:
+            return error("Validation error", errors={"page": ["Must be >= 1."]}, status=422)
+        if page_size < 1 or page_size > 100:
+            return error("Validation error", errors={"page_size": ["Must be between 1 and 100."]}, status=422)
+
+        today = timezone.localdate()
+        cutoff_date = today + timedelta(days=days)
+        qs = self.get_queryset().filter(
+            Q(passport_expiry__isnull=False, passport_expiry__range=[today, cutoff_date])
+            | Q(id_expiry__isnull=False, id_expiry__range=[today, cutoff_date])
+            | Q(health_card_expiry__isnull=False, health_card_expiry__range=[today, cutoff_date])
+            | Q(contract_expiry__isnull=False, contract_expiry__range=[today, cutoff_date])
+        )
+
+        items = []
+        for profile in qs:
+            documents = self._expiring_docs_for_profile(profile, today, cutoff_date)
+            if not documents:
+                continue
+            linked_email = profile.user.email if profile.user_id and getattr(profile.user, "email", "") else None
+            items.append(
+                {
+                    "id": profile.id,
+                    "employee_id": profile.employee_id,
+                    "full_name": profile.full_name,
+                    "linked_email": linked_email,
+                    "mobile": profile.mobile,
+                    "nearest_days_left": min(doc["days_left"] for doc in documents),
+                    "documents": documents,
+                }
+            )
+
+        items.sort(key=lambda item: (item["nearest_days_left"], item["full_name"] or "", item["employee_id"] or ""))
+
+        count = len(items)
+        start = (page - 1) * page_size
+        end = start + page_size
+        paged_items = items[start:end]
+        total_pages = (count + page_size - 1) // page_size if count else 0
+
+        return success(
+            {
+                "items": paged_items,
+                "page": page,
+                "page_size": page_size,
+                "count": count,
+                "total_pages": total_pages,
+            }
+        )
+
+    @action(detail=True, methods=["post"], url_path="notify-expiry")
+    def notify_expiry(self, request, pk=None):
+        role = get_role(request.user)
+        if role not in ["SystemAdmin", "HRManager"]:
+            return error("Forbidden", status=status.HTTP_403_FORBIDDEN)
+
+        profile = self.get_object()
+
+        try:
+            days = int(request.data.get("days", 30))
+        except (TypeError, ValueError):
+            return error("Validation error", errors={"days": ["Must be an integer."]}, status=422)
+        if days < 1 or days > 365:
+            return error("Validation error", errors={"days": ["Must be between 1 and 365."]}, status=422)
+
+        raw_channels = request.data.get("channels")
+        if not isinstance(raw_channels, list) or not raw_channels:
+            return error("Validation error", errors={"channels": ["At least one channel is required."]}, status=422)
+
+        valid_input_channels = {"email", "sms", "whatsapp", "announcement"}
+        invalid = [ch for ch in raw_channels if ch not in valid_input_channels]
+        if invalid:
+            return error("Validation error", errors={"channels": [f"Unsupported channels: {', '.join(invalid)}"]}, status=422)
+
+        channels = []
+        for ch in raw_channels:
+            normalized = "whatsapp" if ch == "sms" else ch
+            if normalized not in channels:
+                channels.append(normalized)
+
+        today = timezone.localdate()
+        cutoff_date = today + timedelta(days=days)
+        documents = self._expiring_docs_for_profile(profile, today, cutoff_date)
+
+        if not documents:
+            return success(
+                {
+                    "delivery": {
+                        ch: {"sent": False, "reason": "No expiring documents found in the selected window."}
+                        for ch in channels
+                    }
+                },
+                message="No expiring documents found in the selected window.",
+            )
+
+        delivery = {}
+
+        if "email" in channels:
+            try:
+                linked_email = profile.user.email if profile.user_id and getattr(profile.user, "email", "") else None
+                if not linked_email:
+                    delivery["email"] = {"sent": False, "reason": "No linked email on employee profile."}
+                else:
+                    email_results = []
+                    for doc in documents:
+                        result = send_document_expiry_reminder_email(
+                            to_email=linked_email,
+                            employee_name=profile.full_name or profile.employee_id,
+                            document_type=doc["label"],
+                            expiry_date=doc["expiry_date"],
+                            days_remaining=doc["days_left"],
+                        )
+                        email_results.append(result)
+                    sent_count = sum(1 for result in email_results if result.get("success"))
+                    delivery["email"] = {
+                        "sent": sent_count > 0,
+                        "count": sent_count,
+                        "total": len(email_results),
+                    }
+                    if sent_count < len(email_results):
+                        delivery["email"]["reason"] = "One or more emails failed to send."
+            except Exception as exc:
+                delivery["email"] = {"sent": False, "reason": f"Email delivery failed: {str(exc)}"}
+
+        if "whatsapp" in channels:
+            try:
+                whatsapp_result = send_document_expiry_whatsapp(profile, documents)
+                delivery["whatsapp"] = whatsapp_result
+            except Exception as exc:
+                delivery["whatsapp"] = {"sent": False, "provider": "bird_whatsapp", "reason": str(exc)}
+
+        if "announcement" in channels:
+            try:
+                if not profile.user_id:
+                    delivery["announcement"] = {"sent": False, "reason": "Employee is not linked to a user account."}
+                else:
+                    primary_doc = documents[0]
+                    announcement = Announcement.objects.create(
+                        title="Document Expiry Reminder",
+                        content=(
+                            f"Your {primary_doc['label']} will expire on {primary_doc['expiry_date']} "
+                            f"({primary_doc['days_left']} day(s) remaining)."
+                        ),
+                        target_roles=[],
+                        target_user=profile.user,
+                        publish_to_dashboard=True,
+                        publish_to_email=False,
+                        publish_to_sms=False,
+                        created_by=request.user,
+                    )
+                    delivery["announcement"] = {"sent": True, "announcement_id": announcement.id}
+            except Exception as exc:
+                delivery["announcement"] = {"sent": False, "reason": f"Announcement delivery failed: {str(exc)}"}
+
+        try:
+            audit(
+                request,
+                action="employee_expiry_notification_sent",
+                entity="Employee",
+                entity_id=profile.id,
+                metadata={"channels": channels, "documents": documents},
+            )
+        except Exception:
+            pass
+
+        return success({"delivery": delivery})
+
     @action(
         detail=False,
         methods=["post"],
@@ -364,462 +645,11 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
     )
     def import_excel(self, request):
         upload = request.FILES.get("file")
-        file_hash = ""
-
-        if upload is None:
-            _audit_import(request, file_hash, 0, "failed")
-            return _error_response(["File is required."], status.HTTP_400_BAD_REQUEST)
-
-        if upload.size > MAX_IMPORT_FILE_SIZE:
-            _audit_import(request, file_hash, 0, "failed")
-            return _error_response(["File exceeds 5MB limit."], status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
-
-        if not upload.name.lower().endswith(".xlsx"):
-            _audit_import(request, file_hash, 0, "failed")
-            return _error_response(["Unsupported file type."], status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
-
-        content_type = upload.content_type or ""
-        if content_type not in ALLOWED_IMPORT_MIME_TYPES:
-            _audit_import(request, file_hash, 0, "failed")
-            return _error_response(["Unsupported file type."], status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
-
-        if not _has_xlsx_signature(upload):
-            _audit_import(request, file_hash, 0, "failed")
-            return _error_response(["Unsupported file type."], status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
-
-        try:
-            with zipfile.ZipFile(upload) as zf:
-                if "xl/workbook.xml" not in zf.namelist():
-                    _audit_import(request, file_hash, 0, "failed")
-                    return _error_response(["Unsupported file type."], status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
-            upload.seek(0)
-        except zipfile.BadZipFile:
-            _audit_import(request, file_hash, 0, "failed")
-            return _error_response(["Unsupported file type."], status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
-
-        if load_workbook is None:
-            _audit_import(request, file_hash, 0, "failed")
-            return _error_response(["Excel parser unavailable."], status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-        upload.seek(0)
-        file_hash = _compute_file_hash(upload)
-        _audit_import(request, file_hash, 0, "attempt")
-
-        try:
-            workbook = load_workbook(upload, read_only=True, data_only=True)
-        except Exception:
-            _audit_import(request, file_hash, 0, "failed")
-            return _error_response(["Unsupported file type."], status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
-
-        upload.seek(0)
-        worksheet = workbook.active
-        header_row = list(next(worksheet.iter_rows(min_row=1, max_row=1, values_only=True), []))
-        
-        # Strip trailing None/empty headers (common in Excel files with extra columns)
-        while header_row and (_normalize_cell(header_row[-1]) == "" or header_row[-1] is None):
-            header_row.pop()
-        
-        normalized_headers = [_normalize_cell(value).lower() for value in header_row]
-        expected_headers = [_normalize_cell(value).lower() for value in EXPECTED_IMPORT_HEADERS]
-
-        if normalized_headers != expected_headers:
-            workbook.close()
-            upload.seek(0)
-            stored_name = PRIVATE_STORAGE.save(
-                f"employee_imports/{uuid.uuid4().hex}.xlsx",
-                upload,
-            )
-            import_record = EmployeeImport.objects.create(
-                uploader=request.user,
-                original_filename=upload.name,
-                stored_file=stored_name,
-                status=EmployeeImport.Status.FAILED,
-                row_count=0,
-                file_hash=file_hash,
-            )
-            errors_detail = [{"row": 1, "column": "Header", "message": "Header mismatch."}]
-            errors_content = _write_errors_csv(errors_detail)
-            import_record.errors_file.save(
-                f"employee_imports/errors/{uuid.uuid4().hex}.csv",
-                ContentFile(errors_content),
-            )
-            import_record.error_summary = ["row 1: Header mismatch."]
-            import_record.save(update_fields=["error_summary", "updated_at"])
-            _audit_import(request, file_hash, 0, "failed")
-            return _error_response(["row 1: Header mismatch."], status.HTTP_422_UNPROCESSABLE_ENTITY)
-
-        rows = []
-        for row_index, row_values in enumerate(
-            worksheet.iter_rows(min_row=2, values_only=True),
-            start=2,
-        ):
-            row_list = list(row_values or [])
-            if len(row_list) < len(EXPECTED_IMPORT_HEADERS):
-                row_list += [None] * (len(EXPECTED_IMPORT_HEADERS) - len(row_list))
-            normalized = [_normalize_cell(value) for value in row_list[: len(EXPECTED_IMPORT_HEADERS)]]
-            if all(not value for value in normalized):
-                continue
-            rows.append({"row_index": row_index, "values": normalized})
-
-        workbook.close()
-
-        row_count = len(rows)
-        if row_count == 0:
-            upload.seek(0)
-            stored_name = PRIVATE_STORAGE.save(
-                f"employee_imports/{uuid.uuid4().hex}.xlsx",
-                upload,
-            )
-            import_record = EmployeeImport.objects.create(
-                uploader=request.user,
-                original_filename=upload.name,
-                stored_file=stored_name,
-                status=EmployeeImport.Status.FAILED,
-                row_count=0,
-                file_hash=file_hash,
-            )
-            errors_detail = [{"row": 0, "column": "Sheet", "message": "No data rows found."}]
-            errors_content = _write_errors_csv(errors_detail)
-            import_record.errors_file.save(
-                f"employee_imports/errors/{uuid.uuid4().hex}.csv",
-                ContentFile(errors_content),
-            )
-            import_record.error_summary = ["row 0: No data rows found."]
-            import_record.save(update_fields=["error_summary", "updated_at"])
-            _audit_import(request, file_hash, 0, "failed")
-            return _error_response(["row 0: No data rows found."], status.HTTP_422_UNPROCESSABLE_ENTITY)
-
-        if row_count > MAX_IMPORT_ROWS:
-            upload.seek(0)
-            stored_name = PRIVATE_STORAGE.save(
-                f"employee_imports/{uuid.uuid4().hex}.xlsx",
-                upload,
-            )
-            import_record = EmployeeImport.objects.create(
-                uploader=request.user,
-                original_filename=upload.name,
-                stored_file=stored_name,
-                status=EmployeeImport.Status.FAILED,
-                row_count=row_count,
-                file_hash=file_hash,
-            )
-            errors_detail = [
-                {
-                    "row": 0,
-                    "column": "Sheet",
-                    "message": f"Row limit exceeded (max {MAX_IMPORT_ROWS}).",
-                }
-            ]
-            errors_content = _write_errors_csv(errors_detail)
-            import_record.errors_file.save(
-                f"employee_imports/errors/{uuid.uuid4().hex}.csv",
-                ContentFile(errors_content),
-            )
-            import_record.error_summary = [f"row 0: Row limit exceeded (max {MAX_IMPORT_ROWS})."]
-            import_record.save(update_fields=["error_summary", "updated_at"])
-            _audit_import(request, file_hash, row_count, "failed")
-            return _error_response(
-                [f"row 0: Row limit exceeded (max {MAX_IMPORT_ROWS})."],
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
-            )
-
-        department_lookup = _build_reference_lookup(Department.objects.all())
-        position_lookup = _build_reference_lookup(Position.objects.all())
-        task_group_lookup = _build_reference_lookup(TaskGroup.objects.all())
-        sponsor_lookup = _build_reference_lookup(Sponsor.objects.all())
-
-        errors = []
-        errors_detail = []
-        valid_rows = []
-
-        for row in rows:
-            row_index = row["row_index"]
-            values = row["values"]
-            row_has_error = False
-
-            full_name = values[0]
-            employee_number = values[1]
-            nationality = values[2]
-            position_name = values[3]
-            passport_number = values[4]
-            passport_expiry_raw = values[5]
-            national_id = values[6]
-            id_expiry_raw = values[7]
-            date_of_birth_raw = values[8]
-            job_offer = values[9]
-            joining_date_raw = values[10]
-            contract_date_raw = values[11]
-            contract_expiry_raw = values[12]
-            task_group_name = values[13]
-            health_card = values[14]
-            health_card_expiry_raw = values[15]
-            mobile_number = values[16]
-            sponsor_code = values[17]
-            basic_salary_raw = values[18]
-            transportation_raw = values[19]
-            accommodation_raw = values[20]
-            telephone_raw = values[21]
-            petrol_raw = values[22]
-            other_raw = values[23]
-            allowed_overtime_raw = values[26]
-            department_name = values[27]
-
-            passport_expiry, err = _parse_date_ddmmyyyy(passport_expiry_raw)
-            if err:
-                errors.append(f"row {row_index}: {err}")
-                errors_detail.append({"row": row_index, "column": "Passport Expiry", "message": err})
-                row_has_error = True
-
-            id_expiry, err = _parse_date_ddmmyyyy(id_expiry_raw)
-            if err:
-                errors.append(f"row {row_index}: {err}")
-                errors_detail.append({"row": row_index, "column": "ID Expiry", "message": err})
-                row_has_error = True
-
-            date_of_birth, err = _parse_date_ddmmyyyy(date_of_birth_raw)
-            if err:
-                errors.append(f"row {row_index}: {err}")
-                errors_detail.append({"row": row_index, "column": "Date Of Birth", "message": err})
-                row_has_error = True
-
-            joining_date, err = _parse_date_ddmmyyyy(joining_date_raw)
-            if err:
-                errors.append(f"row {row_index}: {err}")
-                errors_detail.append({"row": row_index, "column": "Joining Date", "message": err})
-                row_has_error = True
-
-            contract_date, err = _parse_date_ddmmyyyy(contract_date_raw)
-            if err:
-                errors.append(f"row {row_index}: {err}")
-                errors_detail.append({"row": row_index, "column": "Contract date", "message": err})
-                row_has_error = True
-
-            contract_expiry, err = _parse_date_ddmmyyyy(contract_expiry_raw)
-            if err:
-                errors.append(f"row {row_index}: {err}")
-                errors_detail.append({"row": row_index, "column": "Contract Expiry Date", "message": err})
-                row_has_error = True
-
-            health_card_expiry, err = _parse_date_ddmmyyyy(health_card_expiry_raw)
-            if err:
-                errors.append(f"row {row_index}: {err}")
-                errors_detail.append({"row": row_index, "column": "Health Card Expiry", "message": err})
-                row_has_error = True
-
-            basic_salary, err = _parse_decimal(basic_salary_raw)
-            if err:
-                errors.append(f"row {row_index}: {err}")
-                errors_detail.append({"row": row_index, "column": "Basic Salary", "message": err})
-                row_has_error = True
-
-            transportation_allowance, err = _parse_decimal(transportation_raw)
-            if err:
-                errors.append(f"row {row_index}: {err}")
-                errors_detail.append({"row": row_index, "column": "Transportation Allowance", "message": err})
-                row_has_error = True
-
-            accommodation_allowance, err = _parse_decimal(accommodation_raw)
-            if err:
-                errors.append(f"row {row_index}: {err}")
-                errors_detail.append({"row": row_index, "column": "Accommodation Allowance", "message": err})
-                row_has_error = True
-
-            telephone_allowance, err = _parse_decimal(telephone_raw)
-            if err:
-                errors.append(f"row {row_index}: {err}")
-                errors_detail.append({"row": row_index, "column": "Telephone Allowance", "message": err})
-                row_has_error = True
-
-            petrol_allowance, err = _parse_decimal(petrol_raw)
-            if err:
-                errors.append(f"row {row_index}: {err}")
-                errors_detail.append({"row": row_index, "column": "Petrol Allowance", "message": err})
-                row_has_error = True
-
-            other_allowance, err = _parse_decimal(other_raw)
-            if err:
-                errors.append(f"row {row_index}: {err}")
-                errors_detail.append({"row": row_index, "column": "Other Allowance", "message": err})
-                row_has_error = True
-
-            allowed_overtime = None
-            if _normalize_cell(allowed_overtime_raw):
-                try:
-                    allowed_overtime = int(_normalize_cell(allowed_overtime_raw))
-                except ValueError:
-                    errors.append(f"row {row_index}: Invalid numeric value: {allowed_overtime_raw}")
-                    errors_detail.append(
-                        {"row": row_index, "column": "Allowed Overtime", "message": "Invalid numeric value."}
-                    )
-                    row_has_error = True
-
-            # Auto-create department if not found
-            department_ref = None
-            if department_name:
-                department_ref = department_lookup.get(department_name.lower())
-                if not department_ref:
-                    # Create new department
-                    try:
-                        department_ref = Department.objects.create(
-                            name=department_name,
-                            code=department_name[:10].upper().replace(" ", "_"),
-                            description=f"Auto-created from import"
-                        )
-                        # Add to lookup for subsequent rows
-                        department_lookup[department_name.lower()] = department_ref
-                        department_lookup[department_ref.code.lower()] = department_ref
-                    except Exception:
-                        # If creation fails (e.g., duplicate code), try to find it again
-                        department_ref = Department.objects.filter(name=department_name).first()
-
-            # Auto-create position if not found
-            position_ref = None
-            if position_name:
-                position_ref = position_lookup.get(position_name.lower())
-                if not position_ref:
-                    # Create new position
-                    try:
-                        position_ref = Position.objects.create(
-                            name=position_name,
-                            code=position_name[:10].upper().replace(" ", "_"),
-                            description=f"Auto-created from import"
-                        )
-                        # Add to lookup for subsequent rows
-                        position_lookup[position_name.lower()] = position_ref
-                        position_lookup[position_ref.code.lower()] = position_ref
-                    except Exception:
-                        # If creation fails (e.g., duplicate code), try to find it again
-                        position_ref = Position.objects.filter(name=position_name).first()
-
-            task_group_ref = None
-            if task_group_name:
-                task_group_ref = task_group_lookup.get(task_group_name.lower())
-
-            sponsor_ref = None
-            if sponsor_code:
-                sponsor_ref = sponsor_lookup.get(sponsor_code.lower())
-
-            if not row_has_error:
-                valid_rows.append(
-                    {
-                        "full_name": full_name,
-                        "employee_number": employee_number,
-                        "nationality": nationality,
-                        "passport_no": passport_number,
-                        "passport_expiry": passport_expiry,
-                        "national_id": national_id,
-                        "id_expiry": id_expiry,
-                        "date_of_birth": date_of_birth,
-                        "job_offer": job_offer,
-                        "hire_date": joining_date,
-                        "contract_date": contract_date,
-                        "contract_expiry": contract_expiry,
-                        "task_group_ref": task_group_ref,
-                        "health_card": health_card,
-                        "health_card_expiry": health_card_expiry,
-                        "mobile": mobile_number,
-                        "sponsor_ref": sponsor_ref,
-                        "basic_salary": basic_salary,
-                        "transportation_allowance": transportation_allowance,
-                        "accommodation_allowance": accommodation_allowance,
-                        "telephone_allowance": telephone_allowance,
-                        "petrol_allowance": petrol_allowance,
-                        "other_allowance": other_allowance,
-                        "allowed_overtime": allowed_overtime,
-                        "department_ref": department_ref,
-                        "position_ref": position_ref,
-                        "department": department_name,
-                        "job_title": position_name,
-                    }
-                )
-
-        upload.seek(0)
-        stored_name = PRIVATE_STORAGE.save(
-            f"employee_imports/{uuid.uuid4().hex}.xlsx",
-            upload,
-        )
-        import_record = EmployeeImport.objects.create(
-            uploader=request.user,
-            original_filename=upload.name,
-            stored_file=stored_name,
-            status=EmployeeImport.Status.FAILED,
-            row_count=row_count,
-            file_hash=file_hash,
-        )
-
-        if errors:
-            errors_content = _write_errors_csv(errors_detail)
-            import_record.errors_file.save(
-                f"employee_imports/errors/{uuid.uuid4().hex}.csv",
-                ContentFile(errors_content),
-            )
-            import_record.error_summary = errors[:10]
-            import_record.save(update_fields=["error_summary", "updated_at"])
-            _audit_import(request, file_hash, row_count, "failed")
-            return _error_response(errors, status.HTTP_422_UNPROCESSABLE_ENTITY)
-
-        existing_ids = set(EmployeeProfile.objects.values_list("employee_id", flat=True))
-
-        try:
-            with transaction.atomic():
-                for row_data in valid_rows:
-                    employee_id = _generate_unique_employee_id(existing_ids)
-                    if not employee_id:
-                        raise IntegrityError("Failed to generate unique employee ID.")
-
-                    profile = EmployeeProfile.objects.create(
-                        user=None,
-                        employee_id=employee_id,
-                        full_name=row_data["full_name"],
-                        employee_number=row_data["employee_number"],
-                        nationality=row_data["nationality"],
-                        passport_no=row_data["passport_no"],
-                        passport_expiry=row_data["passport_expiry"],
-                        national_id=row_data["national_id"],
-                        id_expiry=row_data["id_expiry"],
-                        date_of_birth=row_data["date_of_birth"],
-                        job_offer=row_data["job_offer"],
-                        hire_date=row_data["hire_date"],
-                        contract_date=row_data["contract_date"],
-                        contract_expiry=row_data["contract_expiry"],
-                        task_group_ref=row_data["task_group_ref"],
-                        health_card=row_data["health_card"],
-                        health_card_expiry=row_data["health_card_expiry"],
-                        mobile=row_data["mobile"],
-                        sponsor_ref=row_data["sponsor_ref"],
-                        basic_salary=row_data["basic_salary"],
-                        transportation_allowance=row_data["transportation_allowance"],
-                        accommodation_allowance=row_data["accommodation_allowance"],
-                        telephone_allowance=row_data["telephone_allowance"],
-                        petrol_allowance=row_data["petrol_allowance"],
-                        other_allowance=row_data["other_allowance"],
-                        allowed_overtime=row_data["allowed_overtime"],
-                        department_ref=row_data["department_ref"],
-                        position_ref=row_data["position_ref"],
-                        department=row_data["department"] or "",
-                        job_title=row_data["job_title"] or "",
-                    )
-                    _sync_legacy_fields(profile)
-        except IntegrityError:
-            errors = ["Import failed due to a database constraint."]
-            errors_detail = [{"row": 0, "column": "Database", "message": "Constraint violation."}]
-            errors_content = _write_errors_csv(errors_detail)
-            import_record.errors_file.save(
-                f"employee_imports/errors/{uuid.uuid4().hex}.csv",
-                ContentFile(errors_content),
-            )
-            import_record.error_summary = errors[:10]
-            import_record.save(update_fields=["error_summary", "updated_at"])
-            _audit_import(request, file_hash, row_count, "failed")
-            return _error_response(errors, status.HTTP_422_UNPROCESSABLE_ENTITY)
-
-        import_record.status = EmployeeImport.Status.SUCCESS
-        import_record.inserted_rows = row_count
-        import_record.error_summary = []
-        import_record.save(update_fields=["status", "inserted_rows", "error_summary", "updated_at"])
-
-        _audit_import(request, file_hash, row_count, "success")
-        return success({"inserted_rows": row_count})
+        result = EmployeeImporter().execute(upload=upload, uploader=request.user)
+        _audit_import(request, result.file_hash, result.row_count, result.result)
+        if not result.ok:
+            return _error_response(result.errors, result.status_code)
+        return success({"inserted_rows": result.inserted_rows}, status=status.HTTP_201_CREATED)
 
     def destroy(self, request, *args, **kwargs):
         return error(

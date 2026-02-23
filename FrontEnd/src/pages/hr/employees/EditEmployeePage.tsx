@@ -9,8 +9,9 @@ import { isApiError } from "../../../services/api/apiTypes";
 import { apply422ToForm } from "../../../utils/formErrors";
 import { notifyError, notifySuccess } from "../../../utils/notify";
 import { isForbidden } from "../../../services/api/httpErrors";
-import { getEmployee, updateEmployee } from "../../../services/api/employeesApi";
+import { getEmployee, listEmployees, updateEmployee } from "../../../services/api/employeesApi";
 import type { CreateEmployeeDto } from "../../../services/api/employeesApi";
+import type { Employee } from "../../../services/api/employeesApi";
 import { listDepartments } from "../../../services/api/departmentsApi";
 import type { Department } from "../../../services/api/departmentsApi";
 import { listPositions } from "../../../services/api/positionsApi";
@@ -38,6 +39,7 @@ export default function EditEmployeePage() {
     const [positions, setPositions] = useState<Position[]>([]);
     const [taskGroups, setTaskGroups] = useState<TaskGroup[]>([]);
     const [sponsors, setSponsors] = useState<Sponsor[]>([]);
+    const [employees, setEmployees] = useState<Employee[]>([]);
 
     /**
      * Load employee data and reference data
@@ -56,12 +58,13 @@ export default function EditEmployeePage() {
 
             try {
                 // Fetch employee and reference data in parallel
-                const [employeeRes, deptRes, posRes, tgRes, sponsorRes] = await Promise.all([
+                const [employeeRes, deptRes, posRes, tgRes, sponsorRes, employeesRes] = await Promise.all([
                     getEmployee(id),
                     listDepartments(),
                     listPositions(),
                     listTaskGroups(),
                     listSponsors(),
+                    listEmployees({ page: 1, page_size: 1000 }),
                 ]);
 
                 // Check for errors
@@ -71,7 +74,13 @@ export default function EditEmployeePage() {
                     return;
                 }
 
-                if (isApiError(deptRes) || isApiError(posRes) || isApiError(tgRes) || isApiError(sponsorRes)) {
+                if (
+                    isApiError(deptRes) ||
+                    isApiError(posRes) ||
+                    isApiError(tgRes) ||
+                    isApiError(sponsorRes) ||
+                    isApiError(employeesRes)
+                ) {
                     notifyError("Failed to load reference data");
                     setLoading(false);
                     return;
@@ -82,6 +91,11 @@ export default function EditEmployeePage() {
                 setPositions(Array.isArray(posRes.data) ? posRes.data : []);
                 setTaskGroups(Array.isArray(tgRes.data) ? tgRes.data : []);
                 setSponsors(Array.isArray(sponsorRes.data) ? sponsorRes.data : []);
+                const managerCandidates =
+                    (employeesRes.data as any)?.results ||
+                    (employeesRes.data as any)?.items ||
+                    [];
+                setEmployees(Array.isArray(managerCandidates) ? managerCandidates : []);
 
                 // Prefill form with employee data
                 const formValues = fromEmployeeToFormValues(employeeRes.data);
@@ -203,6 +217,7 @@ export default function EditEmployeePage() {
                         positions,
                         taskGroups,
                         sponsors,
+                        employees,
                     }}
                 />
             </Card>

@@ -8,7 +8,19 @@ export interface Employee {
   id: number;
   employee_id: string;
   user_id: number;
+  // Legacy single-language field (kept for backward compat)
   full_name: string;
+  // Bilingual fields
+  full_name_en?: string;
+  full_name_ar?: string;
+  nationality_en?: string;
+  nationality_ar?: string;
+  job_title_en?: string;
+  job_title_ar?: string;
+  // Saudi / Foreign identification
+  is_saudi?: boolean;
+  // Data source tracking
+  data_source?: "IMPORT_EXCEL" | "MANUAL";
   email: string;
   mobile?: string;
   passport?: string;
@@ -23,12 +35,17 @@ export interface Employee {
   position_id?: number;
   task_group_id?: number;
   sponsor_id?: number;
+  // Legacy manager (FK to User)
   manager_id?: number;
   manager_name?: string;
+  // New manager profile (FK to EmployeeProfile)
+  manager_profile_id?: number;
+  manager_profile_name?: string;
   nationality?: string;
   employee_number?: string;
   passport_no?: string;
   passport_expiry?: string;
+  passport_expiry_raw?: string;
   national_id?: string;
   id_expiry?: string;
   date_of_birth?: string;
@@ -88,7 +105,6 @@ export async function listEmployees(
 
 /**
  * Get a single employee by ID
- * (Stub for now, will be implemented when view page is built)
  */
 export async function getEmployee(
   id: string | number
@@ -103,9 +119,11 @@ export async function getEmployee(
  * Create employee payload (snake_case per API conventions)
  */
 export interface CreateEmployeeDto {
-  // Personal Info
-  full_name: string;
-  employee_number?: string; // Phone number per spec
+  // Personal Info (bilingual)
+  full_name_en: string;   // English full name (primary)
+  full_name_ar?: string;  // Arabic full name
+  is_saudi?: boolean;     // Saudi citizen flag
+  employee_number?: string;
   nationality?: string;
   passport_no?: string;
   passport_expiry?: string; // YYYY-MM-DD
@@ -119,6 +137,7 @@ export interface CreateEmployeeDto {
   position_id?: number;
   task_group_id?: number;
   sponsor_id?: number;
+  manager_profile_id?: number | null; // FK to EmployeeProfile
   job_offer?: string;
   join_date?: string; // YYYY-MM-DD
   contract_date?: string; // YYYY-MM-DD
@@ -197,14 +216,11 @@ export interface ImportHistoryItem {
   created_at: string;
   uploader: string;
   error_summary?: string[];
-  // Backend does NOT return original_filename, so we cannot display it unless we add it to backend.
-  // We will omit it for now to match backend.
 }
 
 /**
  * Upload employees Excel file
  * Endpoint: POST /employees/import/excel
- * Backend return: { "inserted_rows": number } (Synchronous)
  */
 export async function importEmployees(file: File): Promise<ApiResponse<{ inserted_rows: number }>> {
   const formData = new FormData();
@@ -224,7 +240,6 @@ export async function importEmployees(file: File): Promise<ApiResponse<{ inserte
 
 /**
  * Get status of a specific import
- * Endpoint: GET /imports/employees/{id}
  */
 export async function getImportStatus(id: string): Promise<ApiResponse<ImportResult>> {
   const { data } = await api.get<ApiResponse<ImportResult>>(`/imports/employees/${id}`);
@@ -233,7 +248,6 @@ export async function getImportStatus(id: string): Promise<ApiResponse<ImportRes
 
 /**
  * Get import history
- * Endpoint: GET /imports/employees/history
  */
 export async function getImportHistory(params?: {
   page?: number;
@@ -242,7 +256,6 @@ export async function getImportHistory(params?: {
   date_from?: string;
   date_to?: string;
 }): Promise<ApiResponse<{ items: ImportHistoryItem[]; count: number; page?: number; page_size?: number; total_pages?: number }>> {
-  // Backend StandardPagination structure is { items: [], count: ..., page, page_size, total_pages }
   const { data } = await api.get<ApiResponse<{ items: ImportHistoryItem[]; count: number; page?: number; page_size?: number; total_pages?: number }>>(
     "/imports/employees/history",
     { params }
@@ -252,7 +265,6 @@ export async function getImportHistory(params?: {
 
 /**
  * Download error file as Blob (Authenticated)
- * Endpoint: GET /imports/employees/{import_id}/errors-file
  */
 export async function downloadImportErrors(importId: string): Promise<Blob> {
   const response = await api.get(`/imports/employees/${importId}/errors-file`, {
@@ -263,11 +275,60 @@ export async function downloadImportErrors(importId: string): Promise<Blob> {
 
 /**
  * Download import template
- * Endpoint: GET /employees/import-template
  */
 export async function downloadImportTemplate(): Promise<Blob> {
   const response = await api.get("/employees/import-template", {
     responseType: "blob",
   });
   return response.data;
+}
+
+export interface ExpiringDocumentItem {
+  doc_type: "passport" | "id_card" | "health_card" | "contract";
+  label: string;
+  expiry_date: string;
+  days_left: number;
+}
+
+export interface ExpiringEmployee {
+  id: number;
+  employee_id: string;
+  full_name: string;
+  linked_email: string | null;
+  mobile: string | null;
+  nearest_days_left: number;
+  documents: ExpiringDocumentItem[];
+}
+
+export interface ExpiringEmployeesResponse {
+  items: ExpiringEmployee[];
+  page: number;
+  page_size: number;
+  count: number;
+  total_pages: number;
+}
+
+export async function getExpiringEmployees(days = 30, page = 1, pageSize = 25): Promise<ApiResponse<ExpiringEmployeesResponse>> {
+  const { data } = await api.get<ApiResponse<ExpiringEmployeesResponse>>("/employees/expiries", {
+    params: {
+      days,
+      page,
+      page_size: pageSize,
+    },
+  });
+  return data;
+}
+
+export interface NotifyExpiryPayload {
+  channels: Array<"email" | "whatsapp" | "announcement">;
+  days?: number;
+  message?: string;
+}
+
+export async function notifyExpiringEmployee(
+  employeeProfileId: number,
+  payload: NotifyExpiryPayload
+): Promise<ApiResponse<any>> {
+  const { data } = await api.post<ApiResponse<any>>(`/employees/${employeeProfileId}/notify-expiry`, payload);
+  return data;
 }

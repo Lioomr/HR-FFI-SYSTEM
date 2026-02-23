@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { Card, DatePicker, Row, Col, Typography, message, Button, Modal, Form, Select, Input } from "antd";
+import { Card, DatePicker, Row, Col, Typography, message, Button, Modal, Form, Select, Input, Upload } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import leavesApi from "../../services/api/leavesApi";
 import type { LeaveBalance } from "../../services/api/apiTypes";
 import LeaveBalanceTable from "../../components/leaves/LeaveBalanceTable";
+import type { UploadFile } from "antd/es/upload/interface";
 
 const { Title } = Typography;
 const { RangePicker } = DatePicker;
@@ -16,6 +17,7 @@ const EmployeeLeavesPage: React.FC = () => {
     const [loading, setLoading] = useState<boolean>(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+    const [isSickSelected, setIsSickSelected] = useState(false);
     const [form] = Form.useForm();
 
     const fetchBalances = useCallback(async () => {
@@ -53,12 +55,16 @@ const EmployeeLeavesPage: React.FC = () => {
     const handleSubmit = async (values: any) => {
         setSubmitting(true);
         try {
-            const payload = {
-                leave_type: values.leave_type,
-                start_date: values.dates[0].format("YYYY-MM-DD"),
-                end_date: values.dates[1].format("YYYY-MM-DD"),
-                reason: values.reason || "",
-            };
+            const payload = new FormData();
+            payload.append("leave_type", String(values.leave_type));
+            payload.append("start_date", values.dates[0].format("YYYY-MM-DD"));
+            payload.append("end_date", values.dates[1].format("YYYY-MM-DD"));
+            payload.append("reason", values.reason || "");
+            const fileList = (values.document || []) as UploadFile[];
+            const file = fileList[0]?.originFileObj;
+            if (file) {
+                payload.append("document", file);
+            }
 
             const response = await leavesApi.createLeaveRequest(payload);
 
@@ -129,6 +135,13 @@ const EmployeeLeavesPage: React.FC = () => {
                     form={form}
                     layout="vertical"
                     onFinish={handleSubmit}
+                    onValuesChange={(changedValues) => {
+                        if (changedValues.leave_type) {
+                            const selected = balances.find((b) => b.leave_type_id === changedValues.leave_type);
+                            const code = (selected as any)?.leave_code || selected?.leave_type || "";
+                            setIsSickSelected(String(code).toUpperCase().includes("SICK"));
+                        }
+                    }}
                 >
                     <Form.Item
                         name="leave_type"
@@ -164,6 +177,27 @@ const EmployeeLeavesPage: React.FC = () => {
                             placeholder="Enter reason for leave request"
                             maxLength={500}
                         />
+                    </Form.Item>
+
+                    <Form.Item
+                        name="document"
+                        label={isSickSelected ? "Medical Report (Required)" : "Document (Optional)"}
+                        valuePropName="fileList"
+                        getValueFromEvent={(e) => (Array.isArray(e) ? e : e?.fileList || [])}
+                        rules={[
+                            {
+                                validator: (_, value: UploadFile[]) => {
+                                    if (!isSickSelected) return Promise.resolve();
+                                    return value && value.length > 0
+                                        ? Promise.resolve()
+                                        : Promise.reject(new Error("Please upload a medical report for sick leave."));
+                                },
+                            },
+                        ]}
+                    >
+                        <Upload beforeUpload={() => false} maxCount={1} accept=".pdf,.png,.jpg,.jpeg,.doc,.docx">
+                            <Button>Choose File</Button>
+                        </Upload>
                     </Form.Item>
                 </Form>
             </Modal>

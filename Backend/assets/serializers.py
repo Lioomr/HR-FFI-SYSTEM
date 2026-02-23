@@ -1,0 +1,139 @@
+from django.utils import timezone
+from rest_framework import serializers
+
+from employees.models import EmployeeProfile
+
+from .models import Asset, AssetAssignment, AssetDamageReport, AssetReturnRequest
+
+
+class AssetAssignmentSummarySerializer(serializers.ModelSerializer):
+    employee_id = serializers.CharField(source="employee.employee_id", read_only=True)
+    employee_name = serializers.CharField(source="employee.full_name", read_only=True)
+
+    class Meta:
+        model = AssetAssignment
+        fields = [
+            "id",
+            "employee",
+            "employee_id",
+            "employee_name",
+            "assigned_by",
+            "assigned_at",
+            "is_active",
+        ]
+
+
+class AssetSerializer(serializers.ModelSerializer):
+    active_assignment = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = Asset
+        fields = [
+            "id",
+            "asset_code",
+            "name",
+            "type",
+            "status",
+            "serial_number",
+            "purchase_date",
+            "warranty_expiry",
+            "asset_value",
+            "vendor",
+            "invoice_file",
+            "notes",
+            "flexible_attributes",
+            "plate_number",
+            "chassis_number",
+            "engine_number",
+            "fuel_type",
+            "insurance_expiry",
+            "registration_expiry",
+            "cpu",
+            "ram",
+            "storage",
+            "mac_address",
+            "operating_system",
+            "active_assignment",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "asset_code", "created_at", "updated_at", "active_assignment"]
+
+    def get_active_assignment(self, obj):
+        assignment = obj.assignments.filter(is_active=True).select_related("employee").first()
+        if not assignment:
+            return None
+        return AssetAssignmentSummarySerializer(assignment).data
+
+    def validate(self, attrs):
+        instance = getattr(self, "instance", None)
+        asset_type = attrs.get("type", instance.type if instance else None)
+        flexible_attributes = attrs.get(
+            "flexible_attributes",
+            instance.flexible_attributes if instance else None,
+        )
+
+        def get_value(field_name):
+            if field_name in attrs:
+                return attrs.get(field_name)
+            return getattr(instance, field_name, None) if instance else None
+
+        errors = {}
+        if asset_type == Asset.AssetType.VEHICLE:
+            for field_name in ["plate_number", "chassis_number", "engine_number", "fuel_type"]:
+                if not get_value(field_name):
+                    errors[field_name] = "This field is required for vehicle assets."
+
+        if asset_type == Asset.AssetType.LAPTOP:
+            for field_name in ["cpu", "ram", "storage", "mac_address", "operating_system"]:
+                if not get_value(field_name):
+                    errors[field_name] = "This field is required for laptop assets."
+
+        if asset_type == Asset.AssetType.OTHER and not flexible_attributes:
+            errors["flexible_attributes"] = "This field is required for OTHER assets."
+
+        if errors:
+            raise serializers.ValidationError(errors)
+
+        return attrs
+
+
+class AssetAssignmentCreateSerializer(serializers.Serializer):
+    employee_id = serializers.PrimaryKeyRelatedField(queryset=EmployeeProfile.objects.all(), source="employee")
+
+    def validate_employee(self, value):
+        if value.employment_status != EmployeeProfile.EmploymentStatus.ACTIVE:
+            raise serializers.ValidationError("Only active employees can be assigned assets.")
+        return value
+
+
+class AssetReturnSerializer(serializers.Serializer):
+    returned_at = serializers.DateTimeField(required=False)
+    return_note = serializers.CharField(required=False, allow_blank=True)
+    condition_on_return = serializers.CharField(required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        attrs.setdefault("returned_at", timezone.now())
+        return attrs
+
+
+class AssetDamageReportCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AssetDamageReport
+        fields = ["description"]
+
+    def validate_description(self, value):
+        if not value.strip():
+            raise serializers.ValidationError("Description is required.")
+        return value
+
+
+class AssetReturnRequestCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AssetReturnRequest
+        fields = ["note"]
+
+    def validate_note(self, value):
+        if not value.strip():
+            raise serializers.ValidationError("Note is required.")
+        return value
