@@ -1,20 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Alert,
-  Button,
-  Card,
-  Form,
-  Input,
-  Select,
-  Space,
-  Table,
-  Tag,
-  Typography,
-  message,
-} from "antd";
+import { Alert, Button, Card, Form, Input, Select, Space, Table, Tag, Typography, message } from "antd";
 import type { ColumnsType, TablePaginationConfig } from "antd/es/table";
 import { MailOutlined, ReloadOutlined, StopOutlined } from "@ant-design/icons";
-
 import PageHeader from "../../components/ui/PageHeader";
 import LoadingState from "../../components/ui/LoadingState";
 import EmptyState from "../../components/ui/EmptyState";
@@ -22,12 +9,8 @@ import ErrorState from "../../components/ui/ErrorState";
 import Unauthorized403Page from "../Unauthorized403Page";
 import type { InviteDto, Role } from "../../services/api/apiTypes";
 import { isApiError } from "../../services/api/apiTypes";
-import {
-  createInvite,
-  listInvites,
-  resendInvite,
-  revokeInvite,
-} from "../../services/api/invitesApi";
+import { createInvite, listInvites, resendInvite, revokeInvite } from "../../services/api/invitesApi";
+import { useI18n } from "../../i18n/useI18n";
 
 type UiMode = "loading" | "empty" | "error" | "ok";
 
@@ -51,6 +34,7 @@ type SendInviteValues = {
 const roleOptions: { label: string; value: Role }[] = [
   { label: "System Admin", value: "SystemAdmin" },
   { label: "HR Manager", value: "HRManager" },
+  { label: "Manager", value: "Manager" },
   { label: "Employee", value: "Employee" },
 ];
 
@@ -80,6 +64,7 @@ function toInviteRow(invite: InviteDto): InviteRow {
 
 export default function AdminInvitesPage() {
   const [form] = Form.useForm<SendInviteValues>();
+  const { t } = useI18n();
 
   const [mode, setMode] = useState<UiMode>("loading");
   const [error, setError] = useState<string | null>(null);
@@ -242,7 +227,7 @@ export default function AdminInvitesPage() {
       render: (v) => <Typography.Text strong>{v}</Typography.Text>,
     },
     {
-      title: "Role",
+      title: t("common.role"),
       dataIndex: "role",
       key: "role",
       render: (v: Role) =>
@@ -250,21 +235,23 @@ export default function AdminInvitesPage() {
           <Tag color="orange">SystemAdmin</Tag>
         ) : v === "HRManager" ? (
           <Tag color="blue">HRManager</Tag>
+        ) : v === "Manager" ? (
+          <Tag color="geekblue">Manager</Tag>
         ) : (
           <Tag>Employee</Tag>
         ),
     },
     {
-      title: "Status",
+      title: t("common.status"),
       dataIndex: "status",
       key: "status",
       render: (v: InviteStatus) => statusTag(v),
     },
-    { title: "Invited", dataIndex: "invitedAt", key: "invitedAt" },
-    { title: "Expires", dataIndex: "expiresAt", key: "expiresAt" },
-    { title: "Invited By", dataIndex: "invitedBy", key: "invitedBy" },
+    { title: t("admin.invites.invited"), dataIndex: "invitedAt", key: "invitedAt" },
+    { title: t("admin.invites.expires"), dataIndex: "expiresAt", key: "expiresAt" },
+    { title: t("admin.invites.invitedBy"), dataIndex: "invitedBy", key: "invitedBy" },
     {
-      title: "Actions",
+      title: t("common.actions"),
       key: "actions",
       width: 220,
       render: (_, record) => (
@@ -274,7 +261,7 @@ export default function AdminInvitesPage() {
             onClick={() => resendInviteRow(record)}
             disabled={record.status !== "sent"}
           >
-            Resend
+            {t("admin.invites.resend")}
           </Button>
           <Button
             danger
@@ -282,7 +269,7 @@ export default function AdminInvitesPage() {
             onClick={() => revokeInviteRow(record)}
             disabled={record.status !== "sent"}
           >
-            Revoke
+            {t("admin.invites.revoke")}
           </Button>
         </Space>
       ),
@@ -290,84 +277,39 @@ export default function AdminInvitesPage() {
   ];
 
   if (unauthorized) return <Unauthorized403Page />;
-  if (mode === "loading") return <LoadingState title="Loading invites..." />;
-  if (mode === "error") {
-    return (
-      <ErrorState
-        title="Failed to load invites"
-        description={error || "Please try again."}
-        onRetry={() => loadInvites(pagination.current || 1, pagination.pageSize || 8)}
-      />
-    );
-  }
-
-  if (mode === "empty" || (mode === "ok" && rows.length === 0)) {
-    return (
-      <EmptyState
-        title="No invites"
-        description="Send your first invite to onboard a user."
-        actionText="Send Invite"
-        onAction={() => {
-          window.scrollTo({ top: 0, behavior: "smooth" });
-        }}
-      />
-    );
-  }
+  if (mode === "loading") return <LoadingState title={t("loading.generic")} />;
+  if (mode === "error") return <ErrorState title={t("admin.invites.title")} description={error || t("common.tryAgain")} onRetry={() => loadInvites(pagination.current || 1, pagination.pageSize || 8)} />;
 
   return (
     <div>
       <PageHeader
-        title="Invites"
-        subtitle={`Pending invites: ${pendingCount}`}
+        title={t("admin.invites.title")}
+        subtitle={`${t("admin.dashboard.pendingInvites")}: ${pendingCount}`}
         actions={
           <Space>
-            <Button icon={<ReloadOutlined />} onClick={() => loadInvites(1, pagination.pageSize || 8)}>
-              Refresh
-            </Button>
+            <Button icon={<ReloadOutlined />} onClick={() => loadInvites(1, pagination.pageSize || 8)}>{t("common.refresh")}</Button>
           </Space>
         }
       />
 
       <Card style={{ borderRadius: 16, marginBottom: 16 }} bodyStyle={{ padding: 24 }}>
-        <Typography.Title level={5} style={{ marginTop: 0 }}>
-          Send Invite
-        </Typography.Title>
-
+        <Typography.Title level={5} style={{ marginTop: 0 }}>{t("admin.invites.sendInvite")}</Typography.Title>
         {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 12 }} />}
-
-        <Form<SendInviteValues>
-          form={form}
-          layout="vertical"
-          requiredMark={false}
-          onFinish={sendInvite}
-          initialValues={{ role: "Employee" }}
-        >
+        <Form<SendInviteValues> form={form} layout="vertical" requiredMark={false} onFinish={sendInvite} initialValues={{ role: "Employee" }}>
           <Space style={{ width: "100%" }} align="start" wrap>
-            <Form.Item
-              label="Email"
-              name="email"
-              style={{ minWidth: 280, flex: 1 }}
+            <Form.Item label={t("common.email")} name="email" style={{ minWidth: 280, flex: 1 }}
               rules={[
-                { required: true, message: "Email is required" },
-                { type: "email", message: "Enter a valid email" },
+                { required: true, message: t("auth.emailRequired") },
+                { type: "email", message: t("auth.emailInvalid") },
               ]}
             >
               <Input size="large" placeholder="name@company.com" autoComplete="email" />
             </Form.Item>
-
-            <Form.Item
-              label="Role"
-              name="role"
-              style={{ minWidth: 220 }}
-              rules={[{ required: true, message: "Role is required" }]}
-            >
+            <Form.Item label={t("common.role")} name="role" style={{ minWidth: 220 }} rules={[{ required: true, message: t("common.required") }]}>
               <Select size="large" options={roleOptions} />
             </Form.Item>
-
             <Form.Item label=" " style={{ marginTop: 30 }}>
-              <Button type="primary" htmlType="submit" size="large" loading={sending}>
-                Send
-              </Button>
+              <Button type="primary" htmlType="submit" size="large" loading={sending}>{t("common.submit")}</Button>
             </Form.Item>
           </Space>
         </Form>
@@ -376,47 +318,45 @@ export default function AdminInvitesPage() {
       <Card style={{ borderRadius: 16 }}>
         <Space style={{ width: "100%", justifyContent: "space-between" }} wrap>
           <Space wrap>
-            <Input
-              allowClear
-              placeholder="Search email or role..."
-              style={{ width: 260 }}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            <Select
-              value={statusFilter}
-              onChange={setStatusFilter}
-              style={{ width: 180 }}
-              options={[
-                { label: "All status", value: "All" },
-                { label: "Pending", value: "sent" },
-                { label: "Accepted", value: "accepted" },
-                { label: "Revoked", value: "revoked" },
-                { label: "Expired", value: "expired" },
-              ]}
-            />
+            <Input allowClear placeholder={t("admin.users.searchPlaceholder")} style={{ width: 260 }} value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Select value={statusFilter} onChange={setStatusFilter} style={{ width: 180 }} options={[
+              { label: t("common.filter"), value: "All" },
+              { label: t("status.pending"), value: "sent" },
+              { label: t("status.accepted"), value: "accepted" },
+              { label: t("status.rejected"), value: "revoked" },
+              { label: t("status.expired"), value: "expired" },
+            ]} />
           </Space>
         </Space>
 
         <div style={{ marginTop: 16 }}>
-          <Table<InviteRow>
-            rowKey="id"
-            columns={columns}
-            dataSource={rows}
-            pagination={{
-              current: pagination.current,
-              pageSize: pagination.pageSize,
-              total: pagination.total,
-              showSizeChanger: true,
-            }}
-            onChange={(pager) => {
-              setPagination((prev) => ({
-                ...prev,
-                current: pager.current,
-                pageSize: pager.pageSize,
-              }));
-            }}
-          />
+          {(mode === "empty" || (mode === "ok" && rows.length === 0)) ? (
+            <EmptyState
+              title={t("common.noData")}
+              description={t("admin.invites.title")}
+              actionText={t("admin.invites.sendInvite")}
+              onAction={() => { window.scrollTo({ top: 0, behavior: "smooth" }); }}
+            />
+          ) : (
+            <Table<InviteRow>
+              rowKey="id"
+              columns={columns}
+              dataSource={rows}
+              pagination={{
+                current: pagination.current,
+                pageSize: pagination.pageSize,
+                total: pagination.total,
+                showSizeChanger: true,
+              }}
+              onChange={(pager) => {
+                setPagination((prev) => ({
+                  ...prev,
+                  current: pager.current,
+                  pageSize: pager.pageSize,
+                }));
+              }}
+            />
+          )}
         </div>
       </Card>
     </div>

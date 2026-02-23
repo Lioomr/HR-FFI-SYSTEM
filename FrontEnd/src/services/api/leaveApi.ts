@@ -10,6 +10,7 @@ export interface LeaveType {
   code: string;
   days_allowed_per_year: number;
   is_active: boolean;
+  requires_ceo_approval: boolean;
 }
 
 /**
@@ -23,20 +24,22 @@ export interface LeaveRequest {
     email: string;
     full_name: string;
   };
-  leave_type: LeaveType; 
+  leave_type: LeaveType;
   start_date: string;
   end_date: string;
   days: number; // Backend returns 'days' field via get_days method (was days_requested in frontend?)
   // Let's check serializer again. Serializer has get_days -> 'days'.
   // Frontend had 'days_requested'. I should use 'days' to match backend.
   reason: string;
-  status: "submitted" | "pending_manager" | "pending_hr" | "approved" | "rejected" | "cancelled";
+  document?: string | null;
+  status: "submitted" | "pending_manager" | "pending_hr" | "pending_ceo" | "approved" | "rejected" | "cancelled";
   rejection_reason?: string; // If mapped from hr_decision_note? Serializer fields=__all__. 
   // Model has hr_decision_note, manager_decision_note. Frontend might want generic 'rejection_reason'.
   // Backend keys: hr_decision_note, manager_decision_note.
   // I will keep existing + add specific ones if needed.
   hr_decision_note?: string;
   manager_decision_note?: string;
+  ceo_decision_note?: string;
   created_at?: string;
 }
 
@@ -59,6 +62,7 @@ export interface CreateLeaveRequestPayload {
   start_date: string;
   end_date: string;
   reason: string;
+  document?: File;
 }
 
 /**
@@ -88,9 +92,10 @@ export async function getLeaveTypes(): Promise<ApiResponse<LeaveType[]>> {
  * Submit a new leave request
  */
 export async function createLeaveRequest(
-  payload: CreateLeaveRequestPayload
+  payload: CreateLeaveRequestPayload | FormData
 ): Promise<ApiResponse<LeaveRequest>> {
-  const { data } = await api.post<ApiResponse<LeaveRequest>>("/api/leaves/leave-requests/", payload);
+  const config = payload instanceof FormData ? { headers: { "Content-Type": "multipart/form-data" } } : undefined;
+  const { data } = await api.post<ApiResponse<LeaveRequest>>("/api/leaves/leave-requests/", payload, config);
   return data;
 }
 
@@ -146,6 +151,20 @@ export async function getLeaveRequest(
   return data;
 }
 
+export async function getLeaveRequestDocumentBlob(
+  id: string | number,
+  download = false
+): Promise<Blob> {
+  const { data } = await api.get(
+    `/api/leaves/leave-requests/${id}/document/`,
+    {
+      params: download ? { download: 1 } : undefined,
+      responseType: "blob",
+    }
+  );
+  return data;
+}
+
 /**
  * Approve a leave request (HR)
  */
@@ -169,6 +188,17 @@ export async function rejectLeaveRequest(
 ): Promise<ApiResponse<LeaveRequest>> {
   const { data } = await api.post<ApiResponse<LeaveRequest>>(
     `/api/leaves/leave-requests/${id}/reject/`,
+    { comment }
+  );
+  return data;
+}
+
+export async function sendLeaveRequestToCEO(
+  id: string | number,
+  comment?: string
+): Promise<ApiResponse<LeaveRequest>> {
+  const { data } = await api.post<ApiResponse<LeaveRequest>>(
+    `/api/leaves/leave-requests/${id}/send-to-ceo/`,
     { comment }
   );
   return data;
@@ -208,5 +238,49 @@ export async function createLeaveAdjustment(
   payload: CreateAdjustmentPayload
 ): Promise<ApiResponse<any>> {
   const { data } = await api.post<ApiResponse<any>>("/api/leaves/adjustments/", payload);
+  return data;
+}
+
+
+// --- CEO Endpoints ---
+
+/**
+ * Get all leave requests pending CEO approval
+ */
+export async function getCEOLeaveRequests(
+  params?: { page?: number; page_size?: number; status?: string }
+): Promise<ApiResponse<PaginatedResponse<LeaveRequest>>> {
+  const { data } = await api.get<ApiResponse<PaginatedResponse<LeaveRequest>>>(
+    "/api/leaves/ceo/leave-requests/",
+    { params }
+  );
+  return data;
+}
+
+/**
+ * CEO approves a leave request
+ */
+export async function approveCEOLeaveRequest(
+  id: string | number,
+  comment?: string
+): Promise<ApiResponse<LeaveRequest>> {
+  const { data } = await api.post<ApiResponse<LeaveRequest>>(
+    `/api/leaves/ceo/leave-requests/${id}/approve/`,
+    { comment }
+  );
+  return data;
+}
+
+/**
+ * CEO rejects a leave request
+ */
+export async function rejectCEOLeaveRequest(
+  id: string | number,
+  comment: string
+): Promise<ApiResponse<LeaveRequest>> {
+  const { data } = await api.post<ApiResponse<LeaveRequest>>(
+    `/api/leaves/ceo/leave-requests/${id}/reject/`,
+    { comment }
+  );
   return data;
 }

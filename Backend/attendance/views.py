@@ -6,6 +6,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.throttling import UserRateThrottle
 from django_filters.rest_framework import DjangoFilterBackend
 from datetime import timedelta, date as date_type
+from django.db.models import Q
+from django.contrib.auth import get_user_model
 
 from .models import AttendanceRecord
 from .serializers import (
@@ -15,10 +17,12 @@ from .serializers import (
     CheckOutResponseSerializer,
 )
 from .permissions import IsAttendanceOwner, IsHRManagerOrAdmin
+from .permissions import IsAttendanceSelfServiceRole
 from core.permissions import get_role
 from core.responses import success, error
 from audit.utils import audit
 from employees.models import EmployeeProfile
+User = get_user_model()
 
 
 class AttendanceThrottle(UserRateThrottle):
@@ -32,6 +36,25 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
     filterset_fields = ["status"]
     ordering_fields = ["date", "created_at"]
     ordering = ["-date"]
+
+    def _apply_status_filter(self, queryset):
+        """
+        Support legacy UI filter `status=PENDING` by mapping to current workflow states.
+        """
+        status_param = self.request.query_params.get("status")
+        if not status_param:
+            return queryset
+
+        if status_param == AttendanceRecord.Status.PENDING:
+            return queryset.filter(
+                status__in=[
+                    AttendanceRecord.Status.PENDING,
+                    AttendanceRecord.Status.PENDING_HR,
+                    AttendanceRecord.Status.PENDING_MANAGER,
+                ]
+            )
+
+        return queryset.filter(status=status_param)
 
     def get_queryset(self):
         user = self.request.user
@@ -77,13 +100,25 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
 
         # Employee-only actions
         if self.action in ["me_list", "me_check_in", "me_check_out"]:
-            return [IsAuthenticated()]
+            return [IsAuthenticated(), IsAttendanceSelfServiceRole()]
 
         # HR/Admin write actions
         if self.action in ["create", "update", "partial_update", "destroy"]:
             return [IsAuthenticated(), IsHRManagerOrAdmin()]
 
         return [IsAuthenticated()]
+
+    def filter_queryset(self, queryset):
+        # Apply custom status mapping first.
+        queryset = self._apply_status_filter(queryset)
+
+        # Skip DjangoFilterBackend because we've already handled status.
+        # Keep ordering behavior from OrderingFilter.
+        for backend in list(self.filter_backends):
+            if backend is DjangoFilterBackend:
+                continue
+            queryset = backend().filter_queryset(self.request, queryset, self)
+        return queryset
 
     def list(self, request, *args, **kwargs):
         # Check for date filter error
@@ -149,11 +184,19 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         if AttendanceRecord.objects.filter(employee_profile=profile, date=today).exists():
             return error("Check-in already exists for today.", status=status.HTTP_400_BAD_REQUEST)
 
+        # Check if user has a manager
+        has_manager = False
+        if profile.manager or profile.manager_profile:
+            has_manager = True
+
+        status_value = AttendanceRecord.Status.PENDING_MANAGER if has_manager else AttendanceRecord.Status.PENDING_HR
+        # Fallback/Legacy note: PENDING_HR maps to old 'PENDING' concept effectively
+
         record = AttendanceRecord.objects.create(
             employee_profile=profile,
             date=today,
             check_in_at=timezone.now(),
-            status=AttendanceRecord.Status.PENDING,
+            status=status_value,
             source=AttendanceRecord.Source.EMPLOYEE,
             created_by=user,
             updated_by=user,
@@ -200,3 +243,114 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(queryset, many=True)
         return success(serializer.data)
+
+
+from core.permissions import IsManager 
+
+
+class ManagerAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Endpoints for managers to view and act on their direct reports' attendance.
+    """
+    serializer_class = AttendanceRecordSerializer
+    permission_classes = [IsAuthenticated, IsManager]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ["status"]
+    ordering_fields = ["date", "created_at"]
+    ordering = ["-date"]
+
+    def filter_queryset(self, queryset):
+        status_param = self.request.query_params.get("status")
+        if status_param == AttendanceRecord.Status.PENDING:
+            queryset = queryset.filter(
+                status__in=[
+                    AttendanceRecord.Status.PENDING,
+                    AttendanceRecord.Status.PENDING_MANAGER,
+                ]
+            )
+        elif status_param:
+            queryset = queryset.filter(status=status_param)
+
+        # Keep ordering behavior from OrderingFilter.
+        for backend in list(self.filter_backends):
+            if backend is DjangoFilterBackend:
+                continue
+            queryset = backend().filter_queryset(self.request, queryset, self)
+        return queryset
+
+    def get_queryset(self):
+        role = get_role(self.request.user)
+        if role == "CEO":
+            ceo_profile = getattr(self.request.user, "employee_profile", None)
+            direct_reports_q = Q(manager=self.request.user)
+            if ceo_profile:
+                direct_reports_q = direct_reports_q | Q(manager_profile=ceo_profile)
+
+            leadership_user_ids = User.objects.filter(groups__name__in=["Manager", "HRManager"]).values_list(
+                "id", flat=True
+            )
+            direct_report_user_ids = EmployeeProfile.objects.filter(direct_reports_q).exclude(user__isnull=True).values_list(
+                "user_id", flat=True
+            )
+            scope_user_ids = set(leadership_user_ids).union(set(direct_report_user_ids))
+
+            return AttendanceRecord.objects.filter(
+                employee_profile__user_id__in=scope_user_ids
+            ).select_related("employee_profile__user", "employee_profile__manager_profile")
+
+        # Only records where the employee's manager maps to current user
+        manager_profile = getattr(self.request.user, "employee_profile", None)
+        profile_match = Q()
+        if manager_profile:
+            profile_match = Q(employee_profile__manager_profile=manager_profile)
+
+        return AttendanceRecord.objects.filter(
+            Q(employee_profile__manager_profile__user=self.request.user)
+            | Q(employee_profile__manager=self.request.user)
+            | profile_match
+        ).select_related("employee_profile__user", "employee_profile__manager_profile")
+
+    @action(detail=True, methods=["post"])
+    def approve(self, request, pk=None):
+        try:
+            instance = self.get_queryset().get(pk=pk)
+        except AttendanceRecord.DoesNotExist:
+            return error("Not found", errors=["Not found."], status=404)
+
+        if instance.status != AttendanceRecord.Status.PENDING_MANAGER:
+             return error("Validation error", errors=["Request is not in a state to be approved by manager."], status=422)
+
+        s = AttendanceOverrideSerializer(data=request.data, partial=True) # Basic validation if any comments
+        # We don't need full validation for approve, just maybe note
+        
+        instance.status = AttendanceRecord.Status.PENDING_HR
+        instance.manager_decision_by = request.user
+        instance.manager_decision_at = timezone.now()
+        instance.manager_decision_note = request.data.get("notes", "") # Simple note
+        instance.save()
+
+        audit(request, "approve", entity="AttendanceRecord", entity_id=instance.id)
+        return success(AttendanceRecordSerializer(instance).data)
+
+    @action(detail=True, methods=["post"])
+    def reject(self, request, pk=None):
+        try:
+            instance = self.get_queryset().get(pk=pk)
+        except AttendanceRecord.DoesNotExist:
+             return error("Not found", errors=["Not found."], status=404)
+
+        if instance.status != AttendanceRecord.Status.PENDING_MANAGER:
+             return error("Validation error", errors=["Request is not in a state to be rejected by manager."], status=422)
+        
+        note = request.data.get("notes", "")
+        if not note:
+             return error("Validation error", errors=["notes/comment is required for rejection."], status=422)
+
+        instance.status = AttendanceRecord.Status.REJECTED
+        instance.manager_decision_by = request.user
+        instance.manager_decision_at = timezone.now()
+        instance.manager_decision_note = note
+        instance.save()
+
+        audit(request, "reject", entity="AttendanceRecord", entity_id=instance.id)
+        return success(AttendanceRecordSerializer(instance).data)

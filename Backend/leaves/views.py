@@ -4,9 +4,12 @@ from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django_filters.rest_framework import DjangoFilterBackend
+from django.http import FileResponse
+from django.db.models import Q
 
-from core.permissions import get_role
+from core.permissions import get_role, IsCEO
 from audit.utils import audit
 from core.responses import success, error
 from core.pagination import StandardPagination
@@ -28,7 +31,14 @@ from .permissions import (
     IsEmployeeOnly,
 )
 from .utils import calculate_leave_balance
+from .utils import get_leave_days, get_used_days_for_type, get_payment_breakdown
+from .notifications import (
+    send_leave_request_submitted_whatsapp,
+    send_leave_request_approved_whatsapp,
+    send_leave_request_rejected_whatsapp,
+)
 from django.contrib.auth import get_user_model
+from employees.models import EmployeeProfile
 
 User = get_user_model()
 
@@ -42,6 +52,27 @@ def _flatten_errors(error_dict):
         else:
             errors.append(f"{field}: {messages}")
     return errors
+
+
+def _to_bool(value):
+    return str(value).strip().lower() in {"1", "true", "yes", "y"}
+
+
+def _serve_leave_document(instance, request):
+    if not instance.document:
+        return error("Not found", errors=["No document attached to this leave request."], status=404)
+
+    try:
+        as_attachment = _to_bool(request.query_params.get("download", "0"))
+        filename = instance.document.name.split("/")[-1] or f"leave_document_{instance.id}"
+        return FileResponse(
+            instance.document.open("rb"),
+            as_attachment=as_attachment,
+            filename=filename,
+            content_type="application/octet-stream",
+        )
+    except FileNotFoundError:
+        return error("Not found", errors=["Document file is missing from storage."], status=404)
 
 
 class LeaveTypeViewSet(viewsets.ModelViewSet):
@@ -108,6 +139,7 @@ class LeaveTypeViewSet(viewsets.ModelViewSet):
 
 
 class LeaveRequestViewSet(viewsets.ModelViewSet):
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ["status", "leave_type", "employee"]
     ordering_fields = ["created_at", "start_date"]
@@ -165,9 +197,13 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         # Determine initial status
         user = self.request.user
         has_manager = False
-        # Check if user has a manager
-        if hasattr(user, "employee_profile") and user.employee_profile.manager:
-            has_manager = True
+        # Check both new manager_profile and legacy manager for compatibility
+        if hasattr(user, "employee_profile"):
+            profile = user.employee_profile
+            manager_user_id = profile.manager_id
+            if not manager_user_id and profile.manager_profile:
+                manager_user_id = profile.manager_profile.user_id
+            has_manager = bool(manager_user_id)
 
         if has_manager:
             initial_status = LeaveRequest.RequestStatus.PENDING_MANAGER
@@ -175,6 +211,9 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             initial_status = LeaveRequest.RequestStatus.PENDING_HR
 
         instance = serializer.save(employee=self.request.user, status=initial_status)
+        requested_days = get_leave_days(instance.start_date, instance.end_date)
+        used_before = get_used_days_for_type(self.request.user, instance.leave_type, instance.start_date.year)
+        payment_breakdown = get_payment_breakdown(instance.leave_type, used_before, requested_days)
 
         # Audit
         audit(
@@ -186,8 +225,16 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
                 "leave_type": instance.leave_type.name,
                 "start_date": str(instance.start_date),
                 "end_date": str(instance.end_date),
+                "duration_days": requested_days,
+                "payment_breakdown": payment_breakdown,
+                "approval_status": instance.status,
             },
         )
+        # Fire-and-log pattern: leave workflow should not fail on notification issues.
+        try:
+            send_leave_request_submitted_whatsapp(instance)
+        except Exception:
+            pass
 
     def list(self, request, *args, **kwargs):
         role = get_role(request.user)
@@ -266,14 +313,41 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         if not s.is_valid():
             return error("Validation error", errors=_flatten_errors(s.errors), status=422)
 
-        instance.status = LeaveRequest.RequestStatus.APPROVED
         instance.decided_by = request.user
         instance.decided_at = timezone.now()
         note = s.validated_data.get("comment", "")
         instance.hr_decision_note = note
+
+        # Check if CEO approval is required
+        if instance.leave_type.requires_ceo_approval:
+            instance.status = LeaveRequest.RequestStatus.PENDING_CEO
+        else:
+            instance.status = LeaveRequest.RequestStatus.APPROVED
+
         instance.save()
 
-        audit(request, "approve", entity="LeaveRequest", entity_id=instance.id)
+        requested_days = get_leave_days(instance.start_date, instance.end_date)
+        used_before = max(
+            0.0,
+            get_used_days_for_type(instance.employee, instance.leave_type, instance.start_date.year) - requested_days,
+        )
+        payment_breakdown = get_payment_breakdown(instance.leave_type, used_before, requested_days)
+
+        audit(
+            request,
+            "approve",
+            entity="LeaveRequest",
+            entity_id=instance.id,
+            metadata={
+                "duration_days": requested_days,
+                "payment_breakdown": payment_breakdown,
+                "approval_status": instance.status,
+            },
+        )
+        try:
+            send_leave_request_approved_whatsapp(instance)
+        except Exception:
+            pass
         return success(LeaveRequestSerializer(instance).data)
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsHRManagerOrAdmin])
@@ -308,6 +382,46 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         instance.save()
 
         audit(request, "reject", entity="LeaveRequest", entity_id=instance.id)
+        try:
+            send_leave_request_rejected_whatsapp(instance, comment)
+        except Exception:
+            pass
+        return success(LeaveRequestSerializer(instance).data)
+
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsHRManagerOrAdmin], url_path="send-to-ceo")
+    def send_to_ceo(self, request, pk=None):
+        try:
+            instance = self.get_queryset().get(pk=pk)
+        except LeaveRequest.DoesNotExist:
+            return error("Not found", errors=["Not found."], status=404)
+
+        allowed_statuses = [
+            LeaveRequest.RequestStatus.SUBMITTED,
+            LeaveRequest.RequestStatus.PENDING_HR,
+            LeaveRequest.RequestStatus.PENDING_MANAGER,
+        ]
+        if instance.status not in allowed_statuses:
+            return error("Validation error", errors=["Request cannot be sent to CEO in current state."], status=422)
+
+        s = LeaveRequestActionSerializer(data=request.data)
+        if not s.is_valid():
+            return error("Validation error", errors=_flatten_errors(s.errors), status=422)
+
+        note = (s.validated_data.get("comment") or "").strip()
+        if note:
+            instance.hr_decision_note = note
+        instance.status = LeaveRequest.RequestStatus.PENDING_CEO
+        instance.decided_by = request.user
+        instance.decided_at = timezone.now()
+        instance.save()
+
+        audit(
+            request,
+            "send_to_ceo",
+            entity="LeaveRequest",
+            entity_id=instance.id,
+            metadata={"status": instance.status, "note": note},
+        )
         return success(LeaveRequestSerializer(instance).data)
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsLeaveRequestOwner])
@@ -332,6 +446,14 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         audit(request, "cancel", entity="LeaveRequest", entity_id=instance.id)
         return success(LeaveRequestSerializer(instance).data)
 
+    @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated, IsOwnerOrHR])
+    def document(self, request, pk=None):
+        try:
+            instance = self.get_object()
+        except LeaveRequest.DoesNotExist:
+            return error("Not found", errors=["Not found."], status=404)
+        return _serve_leave_document(instance, request)
+
 
 class ManagerLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
     """
@@ -346,11 +468,39 @@ class ManagerLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ["-created_at"]
 
     def get_queryset(self):
-        # Only requests where the employee's manager is the current user
+        role = get_role(self.request.user)
+        if role == "CEO":
+            ceo_profile = getattr(self.request.user, "employee_profile", None)
+            direct_reports_q = Q(manager=self.request.user)
+            if ceo_profile:
+                direct_reports_q = direct_reports_q | Q(manager_profile=ceo_profile)
+
+            leadership_user_ids = User.objects.filter(groups__name__in=["Manager", "HRManager"]).values_list(
+                "id", flat=True
+            )
+            direct_report_user_ids = EmployeeProfile.objects.filter(direct_reports_q).exclude(user__isnull=True).values_list(
+                "user_id", flat=True
+            )
+            scope_user_ids = set(leadership_user_ids).union(set(direct_report_user_ids))
+
+            return LeaveRequest.objects.filter(
+                employee_id__in=scope_user_ids,
+                is_active=True,
+            ).select_related("employee", "leave_type", "employee__employee_profile", "employee__employee_profile__manager_profile")
+
+        # Only requests where the employee's manager maps to the current user.
+        manager_profile_match = Q()
+        if hasattr(self.request.user, "employee_profile"):
+            manager_profile_match = Q(employee__employee_profile__manager_profile=self.request.user.employee_profile)
+
         return LeaveRequest.objects.filter(
-            employee__employee_profile__manager=self.request.user,
+            (
+                Q(employee__employee_profile__manager_profile__user=self.request.user)
+                | Q(employee__employee_profile__manager=self.request.user)
+                | manager_profile_match
+            ),
             is_active=True,
-        ).select_related("employee", "leave_type")
+        ).select_related("employee", "leave_type", "employee__employee_profile", "employee__employee_profile__manager_profile")
 
     def list(self, request, *args, **kwargs):
         return super().list(request, *args, **kwargs)
@@ -408,7 +558,16 @@ class ManagerLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
         instance.save()
 
         audit(request, "reject", entity="LeaveRequest", entity_id=instance.id)
+        try:
+            send_leave_request_rejected_whatsapp(instance, comment)
+        except Exception:
+            pass
         return success(LeaveRequestSerializer(instance).data)
+
+    @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated, IsManagerOfEmployee])
+    def document(self, request, pk=None):
+        instance = self.get_object()
+        return _serve_leave_document(instance, request)
 
 
 class LeaveBalanceViewSet(viewsets.ViewSet):
@@ -542,3 +701,83 @@ class LeaveBalanceAdjustmentViewSet(viewsets.ModelViewSet):
             entity_id=instance.id,
             metadata={"employee_id": instance.employee.id, "days": float(instance.adjustment_days)},
         )
+
+
+class CEOLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Endpoints for CEO to view and act on pending leave requests.
+    """
+
+    serializer_class = LeaveRequestSerializer
+    permission_classes = [IsAuthenticated, IsCEO]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ["status", "leave_type"]
+    ordering_fields = ["created_at", "start_date"]
+    ordering = ["-created_at"]
+
+    def get_queryset(self):
+        # CEO sees all requests pending CEO approval
+        return LeaveRequest.objects.filter(
+            status=LeaveRequest.RequestStatus.PENDING_CEO,
+            is_active=True,
+        ).select_related("employee", "leave_type", "employee__employee_profile")
+
+    @action(detail=True, methods=["post"])
+    def approve(self, request, pk=None):
+        instance = self.get_object()
+
+        if instance.status != LeaveRequest.RequestStatus.PENDING_CEO:
+            return error(
+                "Validation error", errors=["Request is not in a state to be approved by CEO."], status=422
+            )
+
+        s = LeaveRequestActionSerializer(data=request.data)
+        if not s.is_valid():
+            return error("Validation error", errors=_flatten_errors(s.errors), status=422)
+
+        instance.status = LeaveRequest.RequestStatus.APPROVED
+        instance.ceo_decision_by = request.user
+        instance.ceo_decision_at = timezone.now()
+        instance.ceo_decision_note = s.validated_data.get("comment", "")
+        instance.save()
+
+        audit(request, "approve_ceo", entity="LeaveRequest", entity_id=instance.id)
+        try:
+            send_leave_request_approved_whatsapp(instance)
+        except Exception:
+            pass
+        return success(LeaveRequestSerializer(instance).data)
+
+    @action(detail=True, methods=["post"])
+    def reject(self, request, pk=None):
+        instance = self.get_object()
+
+        if instance.status != LeaveRequest.RequestStatus.PENDING_CEO:
+            return error(
+                "Validation error", errors=["Request is not in a state to be rejected by CEO."], status=422
+            )
+
+        s = LeaveRequestActionSerializer(data=request.data)
+        if not s.is_valid():
+            return error("Validation error", errors=_flatten_errors(s.errors), status=422)
+        comment = (s.validated_data.get("comment") or "").strip()
+        if not comment:
+            return error("Validation error", errors=["comment is required."], status=422)
+
+        instance.status = LeaveRequest.RequestStatus.REJECTED
+        instance.ceo_decision_by = request.user
+        instance.ceo_decision_at = timezone.now()
+        instance.ceo_decision_note = comment
+        instance.save()
+
+        audit(request, "reject_ceo", entity="LeaveRequest", entity_id=instance.id)
+        try:
+            send_leave_request_rejected_whatsapp(instance, comment)
+        except Exception:
+            pass
+        return success(LeaveRequestSerializer(instance).data)
+
+    @action(detail=True, methods=["get"])
+    def document(self, request, pk=None):
+        instance = self.get_object()
+        return _serve_leave_document(instance, request)

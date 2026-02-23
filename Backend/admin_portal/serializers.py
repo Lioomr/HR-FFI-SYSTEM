@@ -4,7 +4,7 @@ from rest_framework import serializers
 
 User = get_user_model()
 
-ROLE_CHOICES = ("SystemAdmin", "HRManager", "Employee")
+ROLE_CHOICES = ("SystemAdmin", "HRManager", "Manager", "Employee", "CEO", "CFO")
 
 
 class UserListSerializer(serializers.ModelSerializer):
@@ -48,9 +48,10 @@ class CreateUserSerializer(serializers.Serializer):
     is_active = serializers.BooleanField(default=True)
 
     def validate_email(self, value):
-        if User.objects.filter(email__iexact=value).exists():
+        normalized = value.strip().lower()
+        if User.objects.filter(email__iexact=normalized).exists():
             raise serializers.ValidationError("Email already exists.")
-        return value
+        return normalized
 
     def create(self, validated_data):
         role = validated_data.pop("role")

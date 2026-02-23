@@ -4,6 +4,7 @@ import { CheckCircleOutlined, ClockCircleOutlined, ReloadOutlined } from "@ant-d
 import dayjs from "dayjs";
 import { useEmployeeAttendanceStore } from "../../stores/attendanceStore";
 import type { AttendanceStatus } from "../../types/attendance";
+import { useI18n } from "../../i18n/useI18n";
 
 const { Title } = Typography;
 const { RangePicker } = DatePicker;
@@ -14,11 +15,18 @@ const getStatusColor = (status: AttendanceStatus) => {
         case "PRESENT": return "green";
         case "ABSENT": return "red";
         case "LATE": return "orange";
+        case "PENDING":
+        case "PENDING_HR":
+        case "PENDING_MGR":
+            return "gold";
+        case "REJECTED":
+            return "magenta";
         default: return "default";
     }
 };
 
 const EmployeeAttendancePage: React.FC = () => {
+    const { t } = useI18n();
     const {
         records,
         total,
@@ -61,17 +69,17 @@ const EmployeeAttendancePage: React.FC = () => {
     const handleCheckIn = async () => {
         try {
             await performCheckIn();
-            message.success("Successfully checked in!");
+            message.success(t("attendance.checkedIn"));
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
         } catch (_e) {
-            // Store handles error state, toast shown via effect or we can show it here
+            // Store handles error state
         }
     };
 
     const handleCheckOut = async () => {
         try {
             await performCheckOut();
-            message.success("Successfully checked out!");
+            message.success(t("attendance.checkedOut"));
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
         } catch (_e) {
             // Handled
@@ -79,25 +87,21 @@ const EmployeeAttendancePage: React.FC = () => {
     };
 
     // Determine today's status for button states
-    // We can look at the latest record if it's today
     const todayStr = dayjs().format("YYYY-MM-DD");
     const todayRecord = records.find(r => r.date === todayStr);
 
-    // Disable Check In if: today record exists AND check_in_at is present
     const isCheckInDisabled = !!todayRecord?.check_in_at;
-
-    // Disable Check Out if: today record does NOT exist OR check_in_at is missing OR check_out_at is already present
     const isCheckOutDisabled = !todayRecord || !todayRecord.check_in_at || !!todayRecord.check_out_at;
 
     const columns = [
         {
-            title: "Date",
+            title: t("attendance.date"),
             dataIndex: "date",
             key: "date",
             render: (val: string) => dayjs(val).format("MMM D, YYYY"),
         },
         {
-            title: "Status",
+            title: t("common.status"),
             dataIndex: "status",
             key: "status",
             render: (status: AttendanceStatus) => (
@@ -105,19 +109,19 @@ const EmployeeAttendancePage: React.FC = () => {
             ),
         },
         {
-            title: "Check In",
+            title: t("attendance.checkInTime"),
             dataIndex: "check_in_at",
             key: "check_in_at",
             render: (val: string | null) => val ? dayjs(val).format("hh:mm A") : "-",
         },
         {
-            title: "Check Out",
+            title: t("attendance.checkOutTime"),
             dataIndex: "check_out_at",
             key: "check_out_at",
             render: (val: string | null) => val ? dayjs(val).format("hh:mm A") : "-",
         },
         {
-            title: "Notes",
+            title: t("attendance.notes"),
             dataIndex: "notes",
             key: "notes",
         },
@@ -127,10 +131,10 @@ const EmployeeAttendancePage: React.FC = () => {
         <div>
             <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
                 <Col>
-                    <Title level={2}>My Attendance</Title>
+                    <Title level={2}>{t("attendance.myAttendance")}</Title>
                 </Col>
                 <Col>
-                    <Button icon={<ReloadOutlined />} onClick={fetchData}>Refresh</Button>
+                    <Button icon={<ReloadOutlined />} onClick={fetchData}>{t("common.refresh")}</Button>
                 </Col>
             </Row>
 
@@ -156,7 +160,7 @@ const EmployeeAttendancePage: React.FC = () => {
                             loading={loading}
                             onClick={handleCheckIn}
                         >
-                            Check In
+                            {t("attendance.checkIn")}
                         </Button>
                         <Button
                             danger
@@ -167,7 +171,7 @@ const EmployeeAttendancePage: React.FC = () => {
                             loading={loading}
                             onClick={handleCheckOut}
                         >
-                            Check Out
+                            {t("attendance.checkOut")}
                         </Button>
                     </Col>
                 </Row>

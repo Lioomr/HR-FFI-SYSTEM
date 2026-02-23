@@ -17,3 +17,12 @@ class IsAttendanceOwner(permissions.BasePermission):
 
 # Re-export strict RBAC
 IsHRManagerOrAdmin = IsHRManagerOrAdmin
+
+
+class IsAttendanceSelfServiceRole(permissions.BasePermission):
+    """
+    Allows attendance self-service only for employee-like roles (not CEO).
+    """
+
+    def has_permission(self, request, view):
+        return request.user and request.user.is_authenticated and get_role(request.user) in ["Employee", "Manager"]

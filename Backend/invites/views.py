@@ -5,10 +5,11 @@ from datetime import timedelta
 from django.db import transaction
 from django.utils import timezone
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.db.models import Q
 
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.pagination import PageNumberPagination
 from rest_framework import status
 
@@ -19,9 +20,9 @@ from audit.utils import audit
 from admin_portal.models import SystemSettings  # ✅ uses /settings default_invite_expiry_hours
 
 from .models import Invite
-from .serializers import InviteCreateSerializer, InviteSerializer
-import resend
+from .serializers import InviteCreateSerializer, InviteSerializer, InviteAcceptSerializer
 from django.conf import settings
+from core.services import send_user_invite_email
 
 User = get_user_model()
 
@@ -121,25 +122,16 @@ class InvitesListCreateView(APIView):
             },
         )
 
-        if settings.RESEND_API_KEY:
-            resend.api_key = settings.RESEND_API_KEY
-            link = f"{settings.FRONTEND_URL}/register?token={invite.token}"
-            
-            try:
-                resend.Emails.send({
-                    "from": settings.DEFAULT_FROM_EMAIL,
-                    "to": email,
-                    "subject": "You have been invited to FFI HR System",
-                    "html": f"""
-                        <p>Hello,</p>
-                        <p>You have been invited to join the FFI HR System as a <strong>{role}</strong>.</p>
-                        <p><a href="{link}">Click here to accept your invite</a></p>
-                        <p>This link expires in {expires_in_hours} hours.</p>
-                    """
-                })
-            except Exception as e:
-                # Log error but don't fail the request
-                print(f"Failed to send email: {e}")
+        link = f"{settings.FRONTEND_URL}/register?token={invite.token}"
+        email_result = send_user_invite_email(
+            to_email=email,
+            role=role,
+            invite_link=link,
+            expires_in_hours=expires_in_hours,
+            inviter_name=getattr(request.user, "full_name", "") or request.user.email,
+        )
+        if not email_result.get("success"):
+            print(f"Failed to send invite email: {email_result.get('error', 'Unknown error')}")
 
         return success(InviteSerializer(invite).data, status=status.HTTP_201_CREATED)
 
@@ -194,24 +186,18 @@ class InviteResendView(APIView):
             },
         )
 
-        if settings.RESEND_API_KEY:
-            resend.api_key = settings.RESEND_API_KEY
-            link = f"{settings.FRONTEND_URL}/register?token={invite.token}"
-            
-            try:
-                resend.Emails.send({
-                    "from": settings.DEFAULT_FROM_EMAIL,
-                    "to": invite.email,
-                    "subject": "Invitation Reminder: FFI HR System",
-                    "html": f"""
-                        <p>Hello,</p>
-                        <p>This is a reminder to accept your invitation to the FFI HR System.</p>
-                        <p><a href="{link}">Click here to accept your invite</a></p>
-                        <p>This link expires shortly.</p>
-                    """
-                })
-            except Exception as e:
-                print(f"Failed to send email: {e}")
+        link = f"{settings.FRONTEND_URL}/register?token={invite.token}"
+        remaining_hours = max(1, int((invite.expires_at - now).total_seconds() // 3600))
+        email_result = send_user_invite_email(
+            to_email=invite.email,
+            role=invite.role,
+            invite_link=link,
+            expires_in_hours=remaining_hours,
+            inviter_name=getattr(request.user, "full_name", "") or request.user.email,
+            is_reminder=True,
+        )
+        if not email_result.get("success"):
+            print(f"Failed to resend invite email: {email_result.get('error', 'Unknown error')}")
 
         return success(InviteSerializer(invite).data)
 
@@ -243,3 +229,69 @@ class InviteRevokeView(APIView):
         )
 
         return success({})
+
+
+class InviteAcceptView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        token = (request.query_params.get("token") or "").strip()
+        if not token:
+            return error("Validation error", errors={"token": ["token is required."]}, status=422)
+
+        try:
+            invite = Invite.objects.get(token=token)
+        except Invite.DoesNotExist:
+            return error("Validation error", errors={"token": ["Invalid invitation token."]}, status=422)
+
+        invite.refresh_expired_status_if_needed()
+        if invite.status == Invite.Status.ACCEPTED:
+            return error("Validation error", errors={"token": ["Invitation already accepted."]}, status=422)
+        if invite.status == Invite.Status.REVOKED:
+            return error("Validation error", errors={"token": ["Invitation has been revoked."]}, status=422)
+        if invite.status == Invite.Status.EXPIRED or invite.expires_at <= timezone.now():
+            return error("Validation error", errors={"token": ["Invitation has expired."]}, status=422)
+
+        return success(
+            {
+                "email": invite.email,
+                "role": invite.role,
+                "expires_at": invite.expires_at.isoformat(),
+            }
+        )
+
+    @transaction.atomic
+    def post(self, request):
+        s = InviteAcceptSerializer(data=request.data)
+        if not s.is_valid():
+            return error("Validation error", errors=s.errors, status=422)
+
+        invite: Invite = s.validated_data["invite"]
+        password: str = s.validated_data["password"]
+        full_name: str = (s.validated_data.get("full_name") or "").strip()
+
+        if User.objects.filter(email__iexact=invite.email).exists():
+            return error("Validation error", errors={"email": ["Email is already registered."]}, status=422)
+
+        user = User.objects.create_user(
+            email=invite.email,
+            password=password,
+            full_name=full_name,
+            is_active=True,
+        )
+        group, _ = Group.objects.get_or_create(name=invite.role)
+        user.groups.clear()
+        user.groups.add(group)
+
+        invite.status = Invite.Status.ACCEPTED
+        invite.save(update_fields=["status"])
+
+        audit(
+            request,
+            action="invite_accepted",
+            entity="invite",
+            entity_id=invite.id,
+            metadata={"email": invite.email, "role": invite.role, "user_id": user.id},
+        )
+
+        return success({"email": user.email, "role": invite.role}, status=201)

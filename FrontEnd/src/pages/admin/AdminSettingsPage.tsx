@@ -19,6 +19,7 @@ import Unauthorized403Page from "../Unauthorized403Page";
 import { getSettings, updateSettings } from "../../services/api/settingsApi";
 import { isApiError } from "../../services/api/apiTypes";
 import type { SettingsDto } from "../../services/api/apiTypes";
+import { useI18n } from "../../i18n/useI18n";
 
 type FormValues = SettingsDto;
 
@@ -30,6 +31,7 @@ export default function AdminSettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [unauthorized, setUnauthorized] = useState(false);
   const [mode, setMode] = useState<UiMode>("loading");
+  const { t } = useI18n();
 
   const loadSettings = useCallback(async () => {
     setMode("loading");
@@ -39,7 +41,7 @@ export default function AdminSettingsPage() {
     try {
       const res = await getSettings();
       if (isApiError(res)) {
-        setError(res.message || "Failed to load settings.");
+        setError(res.message || t("admin.settings.loadError"));
         setMode("error");
         return;
       }
@@ -51,10 +53,10 @@ export default function AdminSettingsPage() {
         setUnauthorized(true);
         return;
       }
-      setError("Failed to load settings.");
+      setError(t("admin.settings.loadError"));
       setMode("error");
     }
-  }, [form]);
+  }, [form, t]);
 
   useEffect(() => {
     loadSettings();
@@ -70,30 +72,30 @@ export default function AdminSettingsPage() {
         const firstError = res.errors
           ? Object.values(res.errors).flat().join(" ")
           : res.message;
-        setError(firstError || "Failed to save settings.");
+        setError(firstError || t("admin.settings.saveError"));
         return;
       }
 
       form.setFieldsValue(res.data);
-      message.success("Settings saved.");
+      message.success(t("admin.settings.saveSuccess"));
     } catch (e: any) {
       if (e?.response?.status === 403) {
         setUnauthorized(true);
         return;
       }
-      setError(e?.message || "Failed to save settings.");
+      setError(e?.message || t("admin.settings.saveError"));
     } finally {
       setSaving(false);
     }
   }
 
   if (unauthorized) return <Unauthorized403Page />;
-  if (mode === "loading") return <LoadingState title="Loading settings..." />;
+  if (mode === "loading") return <LoadingState title={t("admin.settings.loading")} />;
   if (mode === "error") {
     return (
       <ErrorState
-        title="Failed to load settings"
-        description={error || "Please try again."}
+        title={t("admin.settings.loadFailedState")}
+        description={error || t("admin.settings.pleaseTryAgain")}
         onRetry={loadSettings}
       />
     );
@@ -101,7 +103,7 @@ export default function AdminSettingsPage() {
 
   return (
     <div>
-      <PageHeader title="System Settings" subtitle="Manage system-wide policies" />
+      <PageHeader title={t("layout.systemSettings")} subtitle={t("admin.settings.subtitle")} />
 
       <Card style={{ borderRadius: 16 }} bodyStyle={{ padding: 24 }}>
         {error && (
@@ -115,14 +117,14 @@ export default function AdminSettingsPage() {
           onFinish={onSave}
         >
           <Typography.Title level={5} style={{ marginTop: 0 }}>
-            Invites
+            {t("admin.settings.secInvites")}
           </Typography.Title>
 
           <Space style={{ width: "100%" }} align="start" wrap>
             <Form.Item
-              label="Default invite expiry (hours)"
+              label={t("admin.settings.lblDefaultInviteExpiry")}
               name={["invites", "default_expiry_hours"]}
-              rules={[{ required: true, message: "Invite expiry is required" }]}
+              rules={[{ required: true, message: t("admin.settings.reqInviteExpiry") }]}
               style={{ minWidth: 260 }}
             >
               <InputNumber min={1} max={720} style={{ width: "100%" }} placeholder="e.g. 168" />
@@ -132,14 +134,14 @@ export default function AdminSettingsPage() {
           <Divider />
 
           <Typography.Title level={5} style={{ marginTop: 0 }}>
-            Sessions
+            {t("admin.settings.secSessions")}
           </Typography.Title>
 
           <Space style={{ width: "100%" }} align="start" wrap>
             <Form.Item
-              label="Session timeout (minutes)"
+              label={t("admin.settings.lblSessionTimeout")}
               name={["session", "timeout_minutes"]}
-              rules={[{ required: true, message: "Session timeout is required" }]}
+              rules={[{ required: true, message: t("admin.settings.reqSessionTimeout") }]}
               style={{ minWidth: 260 }}
             >
               <InputNumber min={5} max={1440} style={{ width: "100%" }} placeholder="e.g. 60" />
@@ -149,21 +151,21 @@ export default function AdminSettingsPage() {
           <Divider />
 
           <Typography.Title level={5} style={{ marginTop: 0 }}>
-            Password Policy
+            {t("admin.settings.secPassword")}
           </Typography.Title>
 
           <Space style={{ width: "100%" }} align="start" wrap>
             <Form.Item
-              label="Minimum password length"
+              label={t("admin.settings.lblMinLength")}
               name={["password_policy", "min_length"]}
-              rules={[{ required: true, message: "Minimum length is required" }]}
+              rules={[{ required: true, message: t("admin.settings.reqMinLength") }]}
               style={{ minWidth: 260 }}
             >
               <InputNumber min={6} max={128} style={{ width: "100%" }} placeholder="e.g. 12" />
             </Form.Item>
 
             <Form.Item
-              label="Require uppercase"
+              label={t("admin.settings.lblReqUpper")}
               name={["password_policy", "require_upper"]}
               valuePropName="checked"
               style={{ minWidth: 220 }}
@@ -172,7 +174,7 @@ export default function AdminSettingsPage() {
             </Form.Item>
 
             <Form.Item
-              label="Require lowercase"
+              label={t("admin.settings.lblReqLower")}
               name={["password_policy", "require_lower"]}
               valuePropName="checked"
               style={{ minWidth: 220 }}
@@ -181,7 +183,7 @@ export default function AdminSettingsPage() {
             </Form.Item>
 
             <Form.Item
-              label="Require numbers"
+              label={t("admin.settings.lblReqNumber")}
               name={["password_policy", "require_number"]}
               valuePropName="checked"
               style={{ minWidth: 220 }}
@@ -190,7 +192,7 @@ export default function AdminSettingsPage() {
             </Form.Item>
 
             <Form.Item
-              label="Require special characters"
+              label={t("admin.settings.lblReqSpecial")}
               name={["password_policy", "require_special"]}
               valuePropName="checked"
               style={{ minWidth: 240 }}
@@ -202,14 +204,14 @@ export default function AdminSettingsPage() {
           <Divider />
 
           <Typography.Title level={5} style={{ marginTop: 0 }}>
-            Security
+            {t("admin.settings.secSecurity")}
           </Typography.Title>
 
           <Space style={{ width: "100%" }} align="start" wrap>
             <Form.Item
-              label="Max login attempts"
+              label={t("admin.settings.lblMaxLoginAttempts")}
               name={["security", "max_login_attempts"]}
-              rules={[{ required: true, message: "Max login attempts is required" }]}
+              rules={[{ required: true, message: t("admin.settings.reqMaxLoginAttempts") }]}
               style={{ minWidth: 260 }}
             >
               <InputNumber min={1} max={50} style={{ width: "100%" }} placeholder="e.g. 5" />
@@ -226,11 +228,11 @@ export default function AdminSettingsPage() {
               icon={<SaveOutlined />}
               loading={saving}
             >
-              Save
+              {t("common.save")}
             </Button>
 
             <Button size="large" onClick={() => form.resetFields()} disabled={saving}>
-              Reset
+              {t("admin.settings.btnReset")}
             </Button>
           </Space>
         </Form>

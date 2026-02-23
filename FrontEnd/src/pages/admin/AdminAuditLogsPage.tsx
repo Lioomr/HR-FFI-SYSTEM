@@ -1,16 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Button,
-  Card,
-  DatePicker,
-  Input,
-  Select,
-  Space,
-  Table,
-  Tag,
-  Typography,
-  message,
-} from "antd";
+import { Button, Card, DatePicker, Input, Select, Space, Table, Tag, Typography, message } from "antd";
 import type { ColumnsType, TablePaginationConfig } from "antd/es/table";
 import { DownloadOutlined, ReloadOutlined } from "@ant-design/icons";
 import PageHeader from "../../components/ui/PageHeader";
@@ -21,6 +10,7 @@ import Unauthorized403Page from "../Unauthorized403Page";
 import { exportAuditLogs, listAuditLogs } from "../../services/api/auditApi";
 import { isApiError } from "../../services/api/apiTypes";
 import type { AuditLogDto } from "../../services/api/apiTypes";
+import { useI18n } from "../../i18n/useI18n";
 
 const { RangePicker } = DatePicker;
 
@@ -68,6 +58,7 @@ function toAuditRow(log: AuditLogDto): AuditRow {
 }
 
 export default function AdminAuditLogsPage() {
+  const { t } = useI18n();
   const [mode, setMode] = useState<UiMode>("loading");
   const [rows, setRows] = useState<AuditRow[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -183,66 +174,28 @@ export default function AdminAuditLogsPage() {
   }
 
   const columns: ColumnsType<AuditRow> = [
-    { title: "Time", dataIndex: "timestamp", key: "timestamp", width: 190 },
-    {
-      title: "Actor",
-      dataIndex: "actorEmail",
-      key: "actorEmail",
-      render: (v) => <Typography.Text strong>{v}</Typography.Text>,
-      width: 200,
-    },
-    {
-      title: "Action",
-      dataIndex: "action",
-      key: "action",
-      render: (v) => <Tag>{v}</Tag>,
-      width: 180,
-    },
+    { title: t("admin.dashboard.time"), dataIndex: "timestamp", key: "timestamp", width: 190 },
+    { title: t("admin.dashboard.actor"), dataIndex: "actorEmail", key: "actorEmail", render: (v) => <Typography.Text strong>{v}</Typography.Text>, width: 200 },
+    { title: t("admin.dashboard.action"), dataIndex: "action", key: "action", render: (v) => <Tag>{v}</Tag>, width: 180 },
     { title: "Target", dataIndex: "target", key: "target" },
-    {
-      title: "Severity",
-      dataIndex: "severity",
-      key: "severity",
-      render: (v: AuditSeverity) => severityTag(v),
-      width: 120,
-    },
+    { title: t("admin.dashboard.severity"), dataIndex: "severity", key: "severity", render: (v: AuditSeverity) => severityTag(v), width: 120 },
     { title: "IP", dataIndex: "ip", key: "ip", width: 140 },
   ];
 
   if (unauthorized) return <Unauthorized403Page />;
-  if (mode === "loading") return <LoadingState title="Loading audit logs..." />;
-  if (mode === "error") {
-    return (
-      <ErrorState
-        title="Failed to load audit logs"
-        description={error || "Please try again."}
-        onRetry={() => loadAuditLogs(pagination.current || 1, pagination.pageSize || 10)}
-      />
-    );
-  }
-
-  if (mode === "empty" || (mode === "ok" && rows.length === 0)) {
-    return (
-      <EmptyState
-        title="No audit logs"
-        description="Audit logs will appear here once sensitive actions occur."
-      />
-    );
-  }
+  if (mode === "loading") return <LoadingState title={t("loading.generic")} />;
+  if (mode === "error") return <ErrorState title={t("admin.audit.title")} description={error || t("common.tryAgain")} onRetry={() => loadAuditLogs(pagination.current || 1, pagination.pageSize || 10)} />;
+  if (mode === "empty" || (mode === "ok" && rows.length === 0)) return <EmptyState title={t("admin.audit.title")} description={t("common.noData")} />;
 
   return (
     <div>
       <PageHeader
-        title="Audit Logs"
-        subtitle="Track sensitive actions (Phase 1)"
+        title={t("admin.audit.title")}
+        subtitle={t("layout.auditLogs")}
         actions={
           <Space>
-            <Button icon={<ReloadOutlined />} onClick={() => loadAuditLogs(1, pagination.pageSize || 10)}>
-              Refresh
-            </Button>
-            <Button icon={<DownloadOutlined />} onClick={exportCsv}>
-              Export CSV
-            </Button>
+            <Button icon={<ReloadOutlined />} onClick={() => loadAuditLogs(1, pagination.pageSize || 10)}>{t("common.refresh")}</Button>
+            <Button icon={<DownloadOutlined />} onClick={exportCsv}>{t("common.export")} CSV</Button>
           </Space>
         }
       />
@@ -250,60 +203,27 @@ export default function AdminAuditLogsPage() {
       <Card style={{ borderRadius: 16 }}>
         <Space style={{ width: "100%", justifyContent: "space-between" }} wrap>
           <Space wrap>
-            <Input
-              allowClear
-              placeholder="Search actor/action/target/ip..."
-              style={{ width: 280 }}
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-            />
-
-            <Select
-              value={severity}
-              onChange={setSeverity}
-              style={{ width: 160 }}
-              options={[
-                { label: "All severity", value: "All" },
-                { label: "Info", value: "Info" },
-                { label: "Warning", value: "Warning" },
-                { label: "Critical", value: "Critical" },
-              ]}
-            />
-
-            <Select
-              value={actionType}
-              onChange={setActionType}
-              style={{ width: 200 }}
-              options={[
-                { label: "All actions", value: "All" },
-                ...actionOptions.map((a) => ({ label: a, value: a })),
-              ]}
-            />
-
-            <RangePicker onChange={(v) => setDateRange(v)} placeholder={["From", "To"]} />
+            <Input allowClear placeholder={t("admin.audit.searchPlaceholder")} style={{ width: 280 }} value={q} onChange={(e) => setQ(e.target.value)} />
+            <Select value={severity} onChange={setSeverity} style={{ width: 160 }} options={[
+              { label: t("common.filter"), value: "All" },
+              { label: t("status.info"), value: "Info" },
+              { label: t("status.warning"), value: "Warning" },
+              { label: t("status.critical"), value: "Critical" },
+            ]} />
+            <Select value={actionType} onChange={setActionType} style={{ width: 200 }} options={[
+              { label: t("common.filter"), value: "All" },
+              ...actionOptions.map((a) => ({ label: a, value: a })),
+            ]} />
+            <RangePicker onChange={(v) => setDateRange(v)} placeholder={[t("leave.startDate"), t("leave.endDate")]} />
           </Space>
-
-          <Space wrap></Space>
         </Space>
-
         <div style={{ marginTop: 16 }}>
           <Table<AuditRow>
             rowKey="id"
             columns={columns}
             dataSource={filtered}
-            pagination={{
-              current: pagination.current,
-              pageSize: pagination.pageSize,
-              total: pagination.total,
-              showSizeChanger: true,
-            }}
-            onChange={(pager) => {
-              setPagination((prev) => ({
-                ...prev,
-                current: pager.current,
-                pageSize: pager.pageSize,
-              }));
-            }}
+            pagination={{ current: pagination.current, pageSize: pagination.pageSize, total: pagination.total, showSizeChanger: true }}
+            onChange={(pager) => setPagination((prev) => ({ ...prev, current: pager.current, pageSize: pager.pageSize }))}
           />
         </div>
       </Card>

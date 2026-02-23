@@ -2,6 +2,7 @@ import React, { useEffect } from "react";
 import { Modal, Form, Select, DatePicker, Input, Alert } from "antd";
 import dayjs from "dayjs";
 import type { AttendanceRecord } from "../../types/attendance";
+import { useI18n } from "../../i18n/useI18n";
 
 interface AttendanceOverrideModalProps {
     visible: boolean;
@@ -21,6 +22,7 @@ const AttendanceOverrideModal: React.FC<AttendanceOverrideModalProps> = ({
     onCancel,
     onSubmit,
 }) => {
+    const { t } = useI18n();
     const [form] = Form.useForm();
     const [requireReason, setRequireReason] = React.useState(false);
 
@@ -76,19 +78,20 @@ const AttendanceOverrideModal: React.FC<AttendanceOverrideModalProps> = ({
 
     return (
         <Modal
-            title="Override Attendance Record"
+            title={t("hr.attendance.overrideTitle")}
             open={visible}
             onOk={handleOk}
             onCancel={onCancel}
             confirmLoading={loading}
             destroyOnClose
+            style={{ borderRadius: 16 }}
         >
             <Alert
-                message="Audited Action"
-                description="All changes are logged. 'Override Reason' is required when changing Status or Times."
+                message={t("hr.attendance.auditedAction")}
+                description={t("hr.attendance.auditedDesc")}
                 type="info"
                 showIcon
-                style={{ marginBottom: 16 }}
+                style={{ marginBottom: 24, borderRadius: 12 }}
             />
 
             <Form
@@ -96,32 +99,32 @@ const AttendanceOverrideModal: React.FC<AttendanceOverrideModalProps> = ({
                 layout="vertical"
                 onValuesChange={handleValuesChange}
             >
-                <Form.Item name="status" label="Status" rules={[{ required: true }]}>
-                    <Select>
-                        <Option value="PRESENT">PRESENT</Option>
-                        <Option value="ABSENT">ABSENT</Option>
-                        <Option value="LATE">LATE</Option>
+                <Form.Item name="status" label={t("common.status")} rules={[{ required: true }]}>
+                    <Select size="large">
+                        <Option value="PRESENT">{t("status.active")}</Option>
+                        <Option value="ABSENT">{t("status.absent")}</Option>
+                        <Option value="LATE">{t("hr.attendance.late")}</Option>
                     </Select>
                 </Form.Item>
 
-                <Form.Item name="check_in_at" label="Check In Time">
-                    <DatePicker showTime />
+                <Form.Item name="check_in_at" label={t("hr.attendance.checkInTime")}>
+                    <DatePicker showTime style={{ width: '100%' }} size="large" />
                 </Form.Item>
 
-                <Form.Item name="check_out_at" label="Check Out Time">
-                    <DatePicker showTime />
+                <Form.Item name="check_out_at" label={t("hr.attendance.checkOutTime")}>
+                    <DatePicker showTime style={{ width: '100%' }} size="large" />
                 </Form.Item>
 
-                <Form.Item name="notes" label="Notes">
-                    <TextArea rows={2} />
+                <Form.Item name="notes" label={t("common.notes")}>
+                    <TextArea rows={2} placeholder={t("common.notes")} />
                 </Form.Item>
 
                 <Form.Item
                     name="override_reason"
-                    label="Override Reason"
-                    rules={[{ required: requireReason, message: "Please provide a reason for this override" }]}
+                    label={t("hr.attendance.overrideReasonLabel")}
+                    rules={[{ required: requireReason, message: t("hr.attendance.reasonRequired") }]}
                 >
-                    <TextArea rows={2} placeholder="Why are you changing this record?" />
+                    <TextArea rows={3} placeholder={t("hr.attendance.reasonPlaceholder")} />
                 </Form.Item>
             </Form>
         </Modal>

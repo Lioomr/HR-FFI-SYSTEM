@@ -12,9 +12,11 @@ export interface HRSummary {
   pending_approvals: Array<{
     id: number;
     name: string;
+    request_type: "LEAVE" | "ATTENDANCE";
     action: string;
     time: string;
     avatar: string;
+    review_path: string;
   }>;
   recent_activity: Array<{
     key: string;
@@ -24,6 +26,11 @@ export interface HRSummary {
     status: string;
     statusColor: string;
   }>;
+  latest_payroll: {
+    latest_total_net: number | null;
+    latest_period: string | null;
+    trend_percentage: number | null;
+  };
 }
 
 /**

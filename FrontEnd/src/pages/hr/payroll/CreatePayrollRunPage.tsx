@@ -16,7 +16,17 @@ export default function CreatePayrollRunPage() {
         setSubmitting(true);
 
         try {
+            notification.open({
+                key: 'payroll_processing',
+                message: 'Processing Payroll',
+                description: 'Calculating salaries and generating payslips for all active employees...',
+                icon: <div className="ant-spin ant-spin-spinning"><span className="ant-spin-dot ant-spin-dot-spin"><i className="ant-spin-dot-item"></i><i className="ant-spin-dot-item"></i><i className="ant-spin-dot-item"></i><i className="ant-spin-dot-item"></i></span></div>,
+                duration: 0,
+            });
+
             const response = await createPayrollRun(values);
+
+            notification.destroy('payroll_processing');
 
             if (isApiError(response)) {
                 // Handle 409 Conflict (Already Exists)
@@ -71,8 +81,18 @@ export default function CreatePayrollRunPage() {
             navigate(`/hr/payroll/${response.data.id}`);
 
         } catch (err: any) {
-            // Check for 409 in the caught object if it wasn't an isApiError standard response
-            if (err.response?.status === 409 || err.message?.includes("409")) {
+            const apiData = err?.apiData;
+            const backendMessage = (apiData?.message || err?.message || "").toLowerCase();
+            const backendErrors = Array.isArray(apiData?.errors)
+                ? apiData.errors.map((e: any) => (typeof e === "string" ? e : e?.message || "")).join(" ").toLowerCase()
+                : "";
+            const duplicateDetected =
+                err.response?.status === 409 ||
+                err.message?.includes("409") ||
+                err.response?.status === 422 && (backendMessage.includes("already exists") || backendErrors.includes("already exists") || backendErrors.includes("unique"));
+
+            // Check for duplicate period and recover by opening existing run.
+            if (duplicateDetected) {
                 // Same recovery logic
                 try {
                     const listRes = await getPayrollRuns({ year: values.year, page_size: 100 });

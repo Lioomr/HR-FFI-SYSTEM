@@ -7,9 +7,12 @@ import { EyeOutlined, DownloadOutlined } from "@ant-design/icons";
 import PageHeader from "../../../components/ui/PageHeader";
 import { getMyPayslips, downloadMyPayslipPdf, type EmployeePayslip } from "../../../services/api/employeePayslipsApi";
 import { isApiError } from "../../../services/api/apiTypes";
+import { formatNumber } from "../../../utils/currency";
+import { useI18n } from "../../../i18n/useI18n";
 
 export default function EmployeePayslipsListPage() {
     const navigate = useNavigate();
+    const { t } = useI18n();
     const [loading, setLoading] = useState(false);
     const [data, setData] = useState<EmployeePayslip[]>([]);
     const [total, setTotal] = useState(0);
@@ -22,20 +25,20 @@ export default function EmployeePayslipsListPage() {
         try {
             const res = await getMyPayslips({ page, page_size: pageSize });
             if (isApiError(res)) {
-                notification.error({ message: "Failed to load payslips", description: res.message });
+                notification.error({ message: t("payslips.list.failedLoad"), description: res.message });
             } else {
                 setData(res.data.items || []);
                 setTotal(res.data.count || 0);
             }
         } catch (err: any) {
             notification.error({
-                message: "Error",
-                description: err.message || "Failed to load payslips"
+                message: t("common.error"),
+                description: err.message || t("payslips.list.failedLoad")
             });
         } finally {
             setLoading(false);
         }
-    }, [page, pageSize]);
+    }, [page, pageSize, t]);
 
     useEffect(() => {
         loadData();
@@ -54,7 +57,7 @@ export default function EmployeePayslipsListPage() {
             link.remove();
             window.URL.revokeObjectURL(url);
         } catch (err) {
-            notification.error({ message: "Download Failed", description: "Could not download PDF." });
+            notification.error({ message: t("payslips.list.downloadFailed"), description: t("payslips.list.couldNotDownloadPdf") });
         } finally {
             setDownloadingId(null);
         }
@@ -62,25 +65,25 @@ export default function EmployeePayslipsListPage() {
 
     const columns: ColumnsType<EmployeePayslip> = [
         {
-            title: "Period",
+            title: t("payslips.list.colPeriod"),
             key: "period",
             render: (_, r) => <span>{new Date(0, r.month - 1).toLocaleString('default', { month: 'long' })} {r.year}</span>
         },
         {
-            title: "Net Salary",
+            title: t("payslips.list.colNetSalary"),
             dataIndex: "net_salary",
             key: "net_salary",
             align: 'right',
-            render: (val) => val?.toLocaleString(),
+            render: (val) => formatNumber(val),
         },
         {
-            title: "Payment Mode",
+            title: t("payslips.list.colPaymentMode"),
             dataIndex: "payment_mode",
             key: "payment_mode",
             render: (val) => val || "-"
         },
         {
-            title: "Status",
+            title: t("payslips.list.colStatus"),
             dataIndex: "status",
             key: "status",
             render: (status) => (
@@ -90,19 +93,19 @@ export default function EmployeePayslipsListPage() {
             )
         },
         {
-            title: "Actions",
+            title: t("common.actions"),
             key: "actions",
             align: 'center',
             render: (_, record) => (
                 <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
-                    <Tooltip title="View Details">
+                    <Tooltip title={t("payslips.list.viewDetails")}>
                         <Button
                             icon={<EyeOutlined />}
                             onClick={() => navigate(`/employee/payslips/${record.id}`)}
                             size="small"
                         />
                     </Tooltip>
-                    <Tooltip title="Download PDF">
+                    <Tooltip title={t("payslips.list.downloadPdf")}>
                         <Button
                             icon={<DownloadOutlined />}
                             onClick={() => handleDownload(record)}
@@ -118,8 +121,8 @@ export default function EmployeePayslipsListPage() {
     return (
         <div style={{ maxWidth: 1000, margin: "0 auto" }}>
             <PageHeader
-                title="My Payslips"
-                subtitle="View and download your monthly payslips"
+                title={t("payslips.list.title")}
+                subtitle={t("payslips.list.subtitle")}
             />
 
             <Card style={{ borderRadius: 16 }}>
@@ -128,6 +131,7 @@ export default function EmployeePayslipsListPage() {
                     columns={columns}
                     rowKey="id"
                     loading={loading}
+                    scroll={{ x: 800 }}
                     pagination={{
                         current: page,
                         pageSize,

@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { Table, Button, Card, Tag, message, Typography, Tabs, Space, Tooltip, Modal, Input } from "antd";
-import { CheckCircleOutlined, CloseCircleOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
+import { CheckCircleOutlined, CloseCircleOutlined, ReloadOutlined } from "@ant-design/icons";
 import { useHrAttendanceStore } from "../../../stores/attendanceStore";
 import type { AttendanceRecord, AttendanceStatus } from "../../../types/attendance";
+import dayjs from "dayjs";
+import { useI18n } from "../../../i18n/useI18n";
 
 const { Title } = Typography;
 const { TextArea } = Input;
@@ -11,6 +13,8 @@ const { TextArea } = Input;
 const getStatusColor = (status: AttendanceStatus) => {
     switch (status) {
         case "PENDING": return "orange";
+        case "PENDING_HR": return "orange";
+        case "PENDING_MGR": return "gold";
         case "PRESENT": return "green";
         case "LATE": return "gold";
         case "ABSENT": return "red";
@@ -20,6 +24,7 @@ const getStatusColor = (status: AttendanceStatus) => {
 };
 
 const HRAttendancePage: React.FC = () => {
+    const { t } = useI18n();
     const {
         records,
         total,
@@ -33,7 +38,7 @@ const HRAttendancePage: React.FC = () => {
 
     // For Reject Modal
     const [rejectModalVisible, setRejectModalVisible] = useState(false);
-    const [selectedRecordId, setSelectedRecordId] = useState<number | null>(null);
+    const [selectedRecordId, setSelectedRecordId] = useState<number | string | null>(null);
     const [rejectReason, setRejectReason] = useState("");
 
     const fetchData = () => {
@@ -59,7 +64,7 @@ const HRAttendancePage: React.FC = () => {
                 status: "PRESENT",
                 override_reason: "Approved by HR"
             });
-            message.success(`Attendance for ${record.employee_name} approved!`);
+            message.success(t("hr.attendance.approvedSuccess", { name: record.employee_name }));
             fetchData();
         } catch (err) {
             // Error handled by store
@@ -79,7 +84,7 @@ const HRAttendancePage: React.FC = () => {
                 status: "REJECTED",
                 override_reason: rejectReason || "Rejected by HR"
             });
-            message.success("Attendance rejected.");
+            message.success(t("hr.attendance.rejectedSuccess"));
             setRejectModalVisible(false);
             fetchData();
         } catch (err) {
@@ -89,7 +94,7 @@ const HRAttendancePage: React.FC = () => {
 
     const columns = [
         {
-            title: "Employee",
+            title: t("hr.dashboard.employee"),
             dataIndex: "employee_name",
             key: "employee_name",
             render: (text: string, record: AttendanceRecord) => (
@@ -100,39 +105,50 @@ const HRAttendancePage: React.FC = () => {
             )
         },
         {
-            title: "Date",
+            title: t("common.date"),
             dataIndex: "date",
             key: "date",
             render: (val: string) => dayjs(val).format("MMM D, YYYY"),
         },
         {
-            title: "Check In",
+            title: t("attendance.checkIn"),
             dataIndex: "check_in_at",
             key: "check_in_at",
             render: (val: string) => val ? dayjs(val).format("HH:mm") : "—",
         },
         {
-            title: "Check Out",
+            title: t("attendance.checkOut"),
             dataIndex: "check_out_at",
             key: "check_out_at",
             render: (val: string) => val ? dayjs(val).format("HH:mm") : "—",
         },
         {
-            title: "Status",
+            title: t("common.status"),
             dataIndex: "status",
             key: "status",
-            render: (status: AttendanceStatus) => (
-                <Tag color={getStatusColor(status)}>{status}</Tag>
-            ),
+            render: (status: AttendanceStatus) => {
+                // Determine display text for status tag
+                let displayStatus = status;
+                switch (status) {
+                    case "PENDING": displayStatus = t("status.pending") as any; break;
+                    case "PRESENT": displayStatus = t("status.active") as any; break;
+                    case "ABSENT": displayStatus = t("status.absent") as any; break;
+                    case "LATE": displayStatus = t("hr.attendance.late") as any; break;
+                    case "REJECTED": displayStatus = t("status.rejected") as any; break;
+                    case "PENDING_HR": displayStatus = t("status.pendingHr") as any; break;
+                    case "PENDING_MGR": displayStatus = t("status.pendingManager") as any; break;
+                }
+                return <Tag color={getStatusColor(status)}>{displayStatus}</Tag>;
+            },
         },
         {
-            title: "Actions",
+            title: t("common.actions"),
             key: "actions",
             render: (_: any, record: AttendanceRecord) => (
                 <Space>
-                    {record.status === "PENDING" && (
+                    {["PENDING", "PENDING_HR", "PENDING_MGR"].includes(record.status) && (
                         <>
-                            <Tooltip title="Approve">
+                            <Tooltip title={t("common.approve")}>
                                 <Button
                                     type="primary"
                                     shape="circle"
@@ -142,7 +158,7 @@ const HRAttendancePage: React.FC = () => {
                                     onClick={() => handleApprove(record)}
                                 />
                             </Tooltip>
-                            <Tooltip title="Reject">
+                            <Tooltip title={t("common.reject")}>
                                 <Button
                                     type="primary"
                                     danger
@@ -160,22 +176,22 @@ const HRAttendancePage: React.FC = () => {
     ];
 
     const tabItems = [
-        { label: "Pending Approval", key: "PENDING" },
-        { label: "Present", key: "PRESENT" },
-        { label: "Absent", key: "ABSENT" },
-        { label: "Late", key: "LATE" },
-        { label: "Rejected", key: "REJECTED" },
-        { label: "All Records", key: "ALL" },
+        { label: t("hr.attendance.pendingApproval"), key: "PENDING" },
+        { label: t("hr.attendance.present"), key: "PRESENT" },
+        { label: t("hr.attendance.absent"), key: "ABSENT" },
+        { label: t("hr.attendance.late"), key: "LATE" },
+        { label: t("hr.attendance.rejected"), key: "REJECTED" },
+        { label: t("hr.attendance.allRecords"), key: "ALL" },
     ];
 
     return (
         <div>
             <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Title level={2} style={{ margin: 0 }}>Attendance Management</Title>
-                <Button icon={<ReloadOutlined />} onClick={fetchData}>Refresh</Button>
+                <Title level={4} style={{ margin: 0 }}>{t("hr.attendance.title")}</Title>
+                <Button icon={<ReloadOutlined />} onClick={fetchData}>{t("common.refresh")}</Button>
             </div>
 
-            <Card bordered={false} style={{ borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+            <Card bordered={false} style={{ borderRadius: 16, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
                 <Tabs
                     activeKey={activeTab}
                     onChange={(key) => {
@@ -204,20 +220,21 @@ const HRAttendancePage: React.FC = () => {
             </Card>
 
             <Modal
-                title="Reject Attendance"
+                title={t("hr.attendance.rejectTitle")}
                 open={rejectModalVisible}
                 onOk={handleConfirmReject}
                 onCancel={() => setRejectModalVisible(false)}
-                okText="Reject"
+                okText={t("common.reject")}
                 okButtonProps={{ danger: true }}
+                cancelText={t("common.cancel")}
             >
-                <Typography.Text>Please provide a reason for rejection:</Typography.Text>
+                <Typography.Text>{t("hr.attendance.rejectReasonLabel")}</Typography.Text>
                 <TextArea
                     rows={4}
                     style={{ marginTop: 8 }}
                     value={rejectReason}
                     onChange={(e) => setRejectReason(e.target.value)}
-                    placeholder="e.g. Not at work location, Duplicate entry..."
+                    placeholder={t("hr.attendance.rejectPlaceholder")}
                 />
             </Modal>
         </div>

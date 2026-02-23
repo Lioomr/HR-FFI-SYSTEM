@@ -25,6 +25,8 @@ class EmployeeProfileReadSerializer(serializers.ModelSerializer):
     email = serializers.SerializerMethodField()
     manager_id = serializers.SerializerMethodField()
     manager_name = serializers.SerializerMethodField()
+    manager_profile_id = serializers.SerializerMethodField()
+    manager_profile_name = serializers.SerializerMethodField()
     department = serializers.SerializerMethodField()
     position = serializers.SerializerMethodField()
     task_group = serializers.SerializerMethodField()
@@ -43,19 +45,31 @@ class EmployeeProfileReadSerializer(serializers.ModelSerializer):
             "employee_id",
             "user_id",
             "full_name",
+            "full_name_en",
+            "full_name_ar",
             "email",
             "mobile",
             "passport",
             "passport_no",
             "passport_expiry",
+            "passport_expiry_raw",
             "nationality",
+            "nationality_en",
+            "nationality_ar",
+            "is_saudi",
             "national_id",
             "id_expiry",
+            "id_expiry_raw",
             "date_of_birth",
+            "date_of_birth_raw",
             "employee_number",
             "department",
+            "department_name_en",
+            "department_name_ar",
             "department_id",
             "position",
+            "job_title_en",
+            "job_title_ar",
             "position_id",
             "task_group",
             "task_group_id",
@@ -64,11 +78,15 @@ class EmployeeProfileReadSerializer(serializers.ModelSerializer):
             "job_title",
             "job_offer",
             "hire_date",
+            "hire_date_raw",
             "contract_date",
+            "contract_date_raw",
             "contract_expiry",
+            "contract_expiry_raw",
             "allowed_overtime",
             "health_card",
             "health_card_expiry",
+            "health_card_expiry_raw",
             "basic_salary",
             "transportation_allowance",
             "accommodation_allowance",
@@ -76,9 +94,12 @@ class EmployeeProfileReadSerializer(serializers.ModelSerializer):
             "petrol_allowance",
             "other_allowance",
             "total_salary",
+            "data_source",
             "employment_status",
             "manager_id",
             "manager_name",
+            "manager_profile_id",
+            "manager_profile_name",
             "created_at",
             "updated_at",
         ]
@@ -90,11 +111,23 @@ class EmployeeProfileReadSerializer(serializers.ModelSerializer):
         return obj.user.email if obj.user else ""
 
     def get_manager_id(self, obj):
+        if obj.manager_profile and obj.manager_profile.user:
+            return obj.manager_profile.user.id
         return obj.manager.id if obj.manager else None
 
     def get_manager_name(self, obj):
+        if obj.manager_profile:
+            return obj.manager_profile.full_name_en or obj.manager_profile.full_name or obj.manager_profile.employee_id
         if obj.manager:
             return obj.manager.full_name or obj.manager.email
+        return None
+
+    def get_manager_profile_id(self, obj):
+        return obj.manager_profile.id if obj.manager_profile else None
+
+    def get_manager_profile_name(self, obj):
+        if obj.manager_profile:
+            return obj.manager_profile.full_name_en or obj.manager_profile.full_name or obj.manager_profile.employee_id
         return None
 
     def _display_name(self, ref_obj, fallback):
@@ -145,6 +178,12 @@ class EmployeeProfileWriteSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True,
     )
+    manager_profile_id = serializers.PrimaryKeyRelatedField(
+        queryset=EmployeeProfile.objects.all(),
+        source="manager_profile",
+        required=False,
+        allow_null=True,
+    )
 
     class Meta:
         model = EmployeeProfile
@@ -152,25 +191,41 @@ class EmployeeProfileWriteSerializer(serializers.ModelSerializer):
             "id",
             "employee_id",
             "full_name",
+            "full_name_en",
+            "full_name_ar",
             "employee_number",
             "nationality",
+            "nationality_en",
+            "nationality_ar",
+            "is_saudi",
             "passport_no",
             "passport_expiry",
+            "passport_expiry_raw",
             "national_id",
             "id_expiry",
+            "id_expiry_raw",
             "date_of_birth",
+            "date_of_birth_raw",
             "mobile",
             "department_id",
+            "department_name_en",
+            "department_name_ar",
             "position_id",
+            "job_title_en",
+            "job_title_ar",
             "task_group_id",
             "sponsor_id",
             "job_offer",
             "join_date",
+            "hire_date_raw",
             "contract_date",
+            "contract_date_raw",
             "contract_expiry",
+            "contract_expiry_raw",
             "allowed_overtime",
             "health_card",
             "health_card_expiry",
+            "health_card_expiry_raw",
             "basic_salary",
             "transportation_allowance",
             "accommodation_allowance",
@@ -178,7 +233,9 @@ class EmployeeProfileWriteSerializer(serializers.ModelSerializer):
             "petrol_allowance",
             "other_allowance",
             "total_salary",
+            "data_source",
             "user_id",
+            "manager_profile_id",
         ]
         read_only_fields = ["id", "employee_id"]
 
@@ -186,6 +243,13 @@ class EmployeeProfileWriteSerializer(serializers.ModelSerializer):
         if not value.strip():
             raise serializers.ValidationError("Full name is required.")
         return value
+
+    def validate(self, attrs):
+        full_name = attrs.get("full_name")
+        full_name_en = attrs.get("full_name_en")
+        if full_name is None and full_name_en:
+            attrs["full_name"] = full_name_en
+        return super().validate(attrs)
 
 
 class EmployeeImportSerializer(serializers.ModelSerializer):
