@@ -4,6 +4,7 @@ import type { ApiResponse } from "./apiTypes";
 export interface RentType {
   id: number;
   code: string;
+  name?: string;
   name_en: string;
   name_ar: string;
   description?: string;
@@ -11,6 +12,7 @@ export interface RentType {
 
 export interface CreateRentTypeDto {
   code: string;
+  name?: string;
   name_en: string;
   name_ar: string;
   description?: string;
@@ -18,6 +20,7 @@ export interface CreateRentTypeDto {
 
 export interface UpdateRentTypeDto {
   code?: string;
+  name?: string;
   name_en?: string;
   name_ar?: string;
   description?: string;
