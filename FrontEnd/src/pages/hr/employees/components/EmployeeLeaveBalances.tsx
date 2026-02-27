@@ -3,12 +3,14 @@ import { Table, Button, Modal, Form, InputNumber, Input, Select, message, Space,
 import { CalculatorOutlined } from "@ant-design/icons";
 import { getLeaveBalances, getLeaveTypes, createLeaveAdjustment } from "../../../../services/api/leaveApi";
 import type { LeaveBalance, LeaveType } from "../../../../services/api/leaveApi";
+import { useI18n } from "../../../../i18n/useI18n";
 
 interface EmployeeLeaveBalancesProps {
     employeeId: number;
 }
 
 export default function EmployeeLeaveBalances({ employeeId }: EmployeeLeaveBalancesProps) {
+    const { t } = useI18n();
     const [balances, setBalances] = useState<LeaveBalance[]>([]);
     const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
     const [loading, setLoading] = useState(false);
@@ -31,7 +33,7 @@ export default function EmployeeLeaveBalances({ employeeId }: EmployeeLeaveBalan
                 setLeaveTypes(typeRes.data);
             }
         } catch (error) {
-            message.error("Failed to load leave data");
+            message.error(t("hr.employees.balances.loadFailed"));
         } finally {
             setLoading(false);
         }
@@ -52,7 +54,7 @@ export default function EmployeeLeaveBalances({ employeeId }: EmployeeLeaveBalan
                 adjustment_days: values.adjustment_days,
                 reason: values.reason
             });
-            message.success("Balance adjusted successfully");
+            message.success(t("hr.employees.balances.adjustSuccess"));
             setIsModalOpen(false);
             form.resetFields();
             loadData(); // Refresh
@@ -65,7 +67,7 @@ export default function EmployeeLeaveBalances({ employeeId }: EmployeeLeaveBalan
                     return;
                 }
             }
-            message.error(error.message || "Failed to adjust balance");
+            message.error(error.message || t("hr.employees.balances.adjustFailed"));
         } finally {
             setSubmitting(false);
         }
@@ -73,25 +75,29 @@ export default function EmployeeLeaveBalances({ employeeId }: EmployeeLeaveBalan
 
     const columns = [
         {
-            title: "Leave Type",
+            title: t("hr.employees.balances.leaveType"),
             dataIndex: "leave_type",
             key: "leave_type",
-            render: (text: string) => <Tag color="blue">{text}</Tag>
+            render: (text: string) => {
+                const translationKey = `leave.balance.${text.toLowerCase().replace(/\s+/g, '.')}`;
+                const translated = t(translationKey, text);
+                return <Tag color="blue">{translated}</Tag>;
+            }
         },
         {
-            title: "Total Quota (incl. Adjustments)",
+            title: t("hr.employees.balances.totalQuota"),
             dataIndex: "total_days",
             key: "total_days",
             render: (val: any) => Number(val || 0).toFixed(1)
         },
         {
-            title: "Used",
+            title: t("hr.employees.balances.used"),
             dataIndex: "used_days",
             key: "used_days",
             render: (val: any) => <span style={{ color: "orange" }}>{Number(val || 0).toFixed(1)}</span>
         },
         {
-            title: "Remaining",
+            title: t("hr.employees.balances.remaining"),
             dataIndex: "remaining_days",
             key: "remaining_days",
             render: (val: any) => {
@@ -108,13 +114,13 @@ export default function EmployeeLeaveBalances({ employeeId }: EmployeeLeaveBalan
     return (
         <div>
             <div style={{ marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <h3>Leave Balances</h3>
+                <h3>{t("hr.employees.balances.title")}</h3>
                 <Button
                     type="primary"
                     icon={<CalculatorOutlined />}
                     onClick={() => setIsModalOpen(true)}
                 >
-                    Adjust Balance
+                    {t("hr.employees.balances.adjustBtn")}
                 </Button>
             </div>
 
@@ -129,46 +135,48 @@ export default function EmployeeLeaveBalances({ employeeId }: EmployeeLeaveBalan
             />
 
             <Modal
-                title="Adjust Leave Balance"
+                title={t("hr.employees.balances.adjustTitle")}
                 open={isModalOpen}
                 onCancel={() => setIsModalOpen(false)}
                 footer={null}
             >
                 <Form layout="vertical" form={form} onFinish={handleAdjust}>
                     <Form.Item
-                        label="Leave Type"
+                        label={t("hr.employees.balances.leaveType")}
                         name="leave_type"
-                        rules={[{ required: true, message: "Select leave type" }]}
+                        rules={[{ required: true, message: t("hr.employees.balances.selectLeaveType") }]}
                     >
-                        <Select placeholder="Select leave type">
-                            {leaveTypes.map(lt => (
-                                <Select.Option key={lt.id} value={lt.id}>{lt.name}</Select.Option>
-                            ))}
+                        <Select placeholder={t("hr.employees.balances.selectLeaveType")}>
+                            {leaveTypes.map(lt => {
+                                const translationKey = `leave.balance.${lt.name.toLowerCase().replace(/\s+/g, '.')}`;
+                                const translated = t(translationKey, lt.name);
+                                return <Select.Option key={lt.id} value={lt.id}>{translated}</Select.Option>;
+                            })}
                         </Select>
                     </Form.Item>
 
                     <Form.Item
-                        label="Adjustment Days (+/-)"
+                        label={t("hr.employees.balances.adjustmentDays")}
                         name="adjustment_days"
-                        rules={[{ required: true, message: "Enter days" }]}
-                        help="Enter positive number to add days, negative to deduct."
+                        rules={[{ required: true, message: t("hr.employees.balances.enterDays") }]}
+                        help={t("hr.employees.balances.adjustmentHelp")}
                     >
-                        <InputNumber style={{ width: "100%" }} step={0.5} placeholder="e.g. 5 or -2" />
+                        <InputNumber style={{ width: "100%" }} step={0.5} placeholder={t("hr.employees.balances.adjustmentPlaceholder")} />
                     </Form.Item>
 
                     <Form.Item
-                        label="Reason"
+                        label={t("hr.employees.balances.reason")}
                         name="reason"
-                        rules={[{ required: true, message: "Reason is required" }]}
+                        rules={[{ required: true, message: t("hr.employees.balances.reasonRequired") }]}
                     >
-                        <Input.TextArea rows={3} placeholder="e.g. Compensation for weekend work" />
+                        <Input.TextArea rows={3} placeholder={t("hr.employees.balances.reasonPlaceholder")} />
                     </Form.Item>
 
                     <div style={{ textAlign: "right" }}>
                         <Space>
-                            <Button onClick={() => setIsModalOpen(false)}>Cancel</Button>
+                            <Button onClick={() => setIsModalOpen(false)}>{t("common.cancel")}</Button>
                             <Button type="primary" htmlType="submit" loading={submitting}>
-                                Submit Adjustment
+                                {t("hr.employees.balances.submit")}
                             </Button>
                         </Space>
                     </div>

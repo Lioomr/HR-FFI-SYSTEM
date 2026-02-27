@@ -4,15 +4,24 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('attendance', '0001_initial'),
+        ("attendance", "0001_initial"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='attendancerecord',
-            name='status',
-            field=models.CharField(choices=[('PENDING', 'Pending Approval'), ('PRESENT', 'Present'), ('ABSENT', 'Absent'), ('LATE', 'Late'), ('REJECTED', 'Rejected')], default='PENDING', max_length=10),
+            model_name="attendancerecord",
+            name="status",
+            field=models.CharField(
+                choices=[
+                    ("PENDING", "Pending Approval"),
+                    ("PRESENT", "Present"),
+                    ("ABSENT", "Absent"),
+                    ("LATE", "Late"),
+                    ("REJECTED", "Rejected"),
+                ],
+                default="PENDING",
+                max_length=10,
+            ),
         ),
     ]

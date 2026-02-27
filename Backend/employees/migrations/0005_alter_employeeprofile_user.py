@@ -6,16 +6,22 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('employees', '0004_employee_import_error_summary'),
+        ("employees", "0004_employee_import_error_summary"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='employeeprofile',
-            name='user',
-            field=models.OneToOneField(blank=True, help_text='Linked user account. Optional.', null=True, on_delete=django.db.models.deletion.CASCADE, related_name='employee_profile', to=settings.AUTH_USER_MODEL),
+            model_name="employeeprofile",
+            name="user",
+            field=models.OneToOneField(
+                blank=True,
+                help_text="Linked user account. Optional.",
+                null=True,
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="employee_profile",
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
     ]

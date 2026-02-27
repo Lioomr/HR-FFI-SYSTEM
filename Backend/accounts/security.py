@@ -7,11 +7,14 @@ from .models import LoginAttempt
 
 
 def get_client_ip(request):
-    xff = request.META.get("HTTP_X_FORWARDED_FOR")
-    if xff:
-        # X-Forwarded-For can be a list; take the first hop.
-        return xff.split(",")[0].strip()
-    return request.META.get("REMOTE_ADDR", "")
+    remote_addr = request.META.get("REMOTE_ADDR", "")
+    trusted_proxies = set(getattr(settings, "TRUSTED_PROXY_IPS", []))
+    if remote_addr and remote_addr in trusted_proxies:
+        xff = request.META.get("HTTP_X_FORWARDED_FOR")
+        if xff:
+            # X-Forwarded-For can be a list; take the first hop.
+            return xff.split(",")[0].strip()
+    return remote_addr
 
 
 def _get_settings():

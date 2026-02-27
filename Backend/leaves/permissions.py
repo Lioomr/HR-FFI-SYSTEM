@@ -1,5 +1,6 @@
-from rest_framework.permissions import BasePermission, SAFE_METHODS
-from core.permissions import get_role, IsHRManagerOrAdmin
+from rest_framework.permissions import SAFE_METHODS, BasePermission
+
+from core.permissions import get_role
 
 
 class IsLeaveRequestOwner(BasePermission):
@@ -58,7 +59,11 @@ class IsManagerOfEmployee(BasePermission):
         manager_profile = profile.manager_profile
         if manager_profile and manager_profile.user_id == request.user.id:
             return True
-        if hasattr(request.user, "employee_profile") and manager_profile and manager_profile.id == request.user.employee_profile.id:
+        if (
+            hasattr(request.user, "employee_profile")
+            and manager_profile
+            and manager_profile.id == request.user.employee_profile.id
+        ):
             return True
         return bool(profile.manager_id == request.user.id)
 

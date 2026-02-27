@@ -4,15 +4,14 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0002_loginattempt'),
+        ("accounts", "0002_loginattempt"),
     ]
 
     operations = [
         migrations.RenameIndex(
-            model_name='loginattempt',
-            new_name='accounts_lo_email_b0d539_idx',
-            old_name='accounts_lo_email_8d3c0f_idx',
+            model_name="loginattempt",
+            new_name="accounts_lo_email_b0d539_idx",
+            old_name="accounts_lo_email_8d3c0f_idx",
         ),
     ]

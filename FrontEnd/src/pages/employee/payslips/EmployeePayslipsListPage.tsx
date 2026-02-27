@@ -7,12 +7,12 @@ import { EyeOutlined, DownloadOutlined } from "@ant-design/icons";
 import PageHeader from "../../../components/ui/PageHeader";
 import { getMyPayslips, downloadMyPayslipPdf, type EmployeePayslip } from "../../../services/api/employeePayslipsApi";
 import { isApiError } from "../../../services/api/apiTypes";
-import { formatNumber } from "../../../utils/currency";
+import AmountWithSAR from "../../../components/ui/AmountWithSAR";
 import { useI18n } from "../../../i18n/useI18n";
 
 export default function EmployeePayslipsListPage() {
     const navigate = useNavigate();
-    const { t } = useI18n();
+    const { t, language } = useI18n();
     const [loading, setLoading] = useState(false);
     const [data, setData] = useState<EmployeePayslip[]>([]);
     const [total, setTotal] = useState(0);
@@ -67,30 +67,44 @@ export default function EmployeePayslipsListPage() {
         {
             title: t("payslips.list.colPeriod"),
             key: "period",
-            render: (_, r) => <span>{new Date(0, r.month - 1).toLocaleString('default', { month: 'long' })} {r.year}</span>
+            render: (_, r) => {
+                const monthName = new Date(0, r.month - 1).toLocaleString(language === 'ar' ? 'ar-EG' : 'en-US', { month: 'long' });
+                return <span>{monthName} {r.year}</span>;
+            }
         },
         {
             title: t("payslips.list.colNetSalary"),
             dataIndex: "net_salary",
             key: "net_salary",
             align: 'right',
-            render: (val) => formatNumber(val),
+            render: (val) => <AmountWithSAR amount={val} />,
         },
         {
             title: t("payslips.list.colPaymentMode"),
             dataIndex: "payment_mode",
             key: "payment_mode",
-            render: (val) => val || "-"
+            render: (val) => {
+                if (!val) return "-";
+                // Map backend strings like "Bank Transfer" or "Cash" to translation keys
+                const key = val.toLowerCase().replace(/\s+/g, ''); // "Bank Transfer" -> "banktransfer"
+                const tKey = `paymentMode.${key}`;
+                // Fallback to raw value if translation doesn't exist
+                const translated = t(tKey);
+                return translated === tKey ? val : translated;
+            }
         },
         {
             title: t("payslips.list.colStatus"),
             dataIndex: "status",
             key: "status",
-            render: (status) => (
-                <Tag color={status === 'paid' ? 'green' : 'blue'}>
-                    {status?.toUpperCase()}
-                </Tag>
-            )
+            render: (status) => {
+                const s = (status || '').toLowerCase();
+                return (
+                    <Tag color={s === 'paid' ? 'green' : 'blue'}>
+                        {t(`status.${s}`)}
+                    </Tag>
+                );
+            }
         },
         {
             title: t("common.actions"),

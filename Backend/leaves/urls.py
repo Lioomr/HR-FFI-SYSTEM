@@ -1,15 +1,15 @@
-from django.urls import path, include
+from django.urls import include, path
 from rest_framework.routers import DefaultRouter
+
 from .views import (
-    LeaveBalanceViewSet,
+    CEOLeaveRequestViewSet,
     EmployeeLeaveBalanceView,
+    EmployeeLeaveRequestViewSet,
+    LeaveBalanceAdjustmentViewSet,
+    LeaveBalanceViewSet,
     LeaveRequestViewSet,
     LeaveTypeViewSet,
     ManagerLeaveRequestViewSet,
-    EmployeeLeaveRequestViewSet,
-    EmployeeLeaveRequestViewSet,
-    LeaveBalanceAdjustmentViewSet,
-    CEOLeaveRequestViewSet,
 )
 
 router = DefaultRouter()

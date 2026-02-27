@@ -1,15 +1,17 @@
 import os
-import django
 import sys
 from datetime import date
+
+import django
 
 # Setup Django environment
 sys.path.append(os.getcwd())
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
 
-from django.contrib.auth import get_user_model
-from employees.models import EmployeeProfile
+from django.contrib.auth import get_user_model  # noqa: E402
+
+from employees.models import EmployeeProfile  # noqa: E402
 
 User = get_user_model()
 email = "testuser@example.com"

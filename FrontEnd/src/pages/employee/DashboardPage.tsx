@@ -15,8 +15,6 @@ import type { Employee } from "../../services/api/employeesApi";
 import AnnouncementWidget from "../../components/announcements/AnnouncementWidget";
 import { useI18n } from "../../i18n/useI18n";
 
-const { } = {};
-
 export default function DashboardPage() {
     const navigate = useNavigate();
     const { t } = useI18n();

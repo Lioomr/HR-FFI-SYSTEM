@@ -5,12 +5,14 @@ import { DownloadOutlined, UploadOutlined, HistoryOutlined } from "@ant-design/i
 import { getImportStatus, downloadImportErrors } from "../../../services/api/employeesApi";
 import type { ImportResult } from "../../../services/api/employeesApi";
 import { unwrapEnvelope } from "../../../utils/dataUtils";
+import { useI18n } from "../../../i18n/useI18n";
 
 const { Text } = Typography;
 
 const ImportResultPage: React.FC = () => {
     const { import_id } = useParams<{ import_id: string }>();
     const navigate = useNavigate();
+    const { t } = useI18n();
     const [loading, setLoading] = useState(true);
     const [result, setResult] = useState<ImportResult | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -31,7 +33,7 @@ const ImportResultPage: React.FC = () => {
             const data = unwrapEnvelope(response);
             setResult(data);
         } catch (err: any) {
-            setError(err.message || "Failed to load import result");
+            setError(err.message || t("import.result.loadFail"));
         } finally {
             setLoading(false);
         }
@@ -61,7 +63,7 @@ const ImportResultPage: React.FC = () => {
     if (loading) {
         return (
             <div style={{ textAlign: "center", padding: 50 }}>
-                <Spin size="large" tip="Loading import status..." />
+                <Spin size="large" tip={t("import.result.loading")} />
             </div>
         );
     }
@@ -70,11 +72,11 @@ const ImportResultPage: React.FC = () => {
         return (
             <Result
                 status="500"
-                title="Something went wrong"
-                subTitle={error || "Could not retrieve import details."}
+                title={t("import.result.wrong")}
+                subTitle={error || t("import.result.noDetails")}
                 extra={
                     <Button type="primary" onClick={() => navigate("/hr/import/employees")}>
-                        Go Back
+                        {t("common.back")}
                     </Button>
                 }
             />
@@ -93,17 +95,17 @@ const ImportResultPage: React.FC = () => {
                 status={isSuccess ? "success" : isFailed ? "error" : "info"}
                 title={
                     isSuccess
-                        ? "Import Completed Successfully"
+                        ? t("import.result.successTitle")
                         : isFailed
-                            ? "Import Failed"
-                            : "Import Processing..."
+                            ? t("import.result.failedTitle")
+                            : t("import.result.processingTitle")
                 }
                 subTitle={
                     isSuccess
-                        ? `Successfully inserted ${result.inserted_rows} of ${result.row_count} employees.`
+                        ? t("import.result.successDesc", { inserted: result.inserted_rows, total: result.row_count })
                         : isPending
-                            ? "Your file is being processed. You can refresh this page or check back later."
-                            : "One or more errors occurred. No data was saved."
+                            ? t("import.result.processingDesc")
+                            : t("import.result.failedDesc")
                 }
                 extra={[
                     <Button
@@ -112,22 +114,22 @@ const ImportResultPage: React.FC = () => {
                         icon={<UploadOutlined />}
                         onClick={() => navigate("/hr/import/employees")}
                     >
-                        Upload New File
+                        {t("import.result.uploadNew")}
                     </Button>,
                     <Button
                         key="history"
                         icon={<HistoryOutlined />}
                         onClick={() => navigate("/hr/import/employees/history")}
                     >
-                        View History
+                        {t("import.result.viewHistory")}
                     </Button>,
                 ]}
             >
                 {isFailed && (
                     <div className="desc">
                         <Alert
-                            message="All-or-Nothing Import"
-                            description="Because errors were found, the entire import was rejected to prevent partial data corruption."
+                            message={t("import.result.alertTitle")}
+                            description={t("import.result.alertDesc")}
                             type="error"
                             showIcon
                             style={{ marginBottom: 16 }}
@@ -142,12 +144,12 @@ const ImportResultPage: React.FC = () => {
                                 onClick={handleDownloadErrorFile}
                                 loading={downloading}
                             >
-                                Download Detailed Error Report (.xlsx)
+                                {t("import.result.downloadError")}
                             </Button>
                         </div>
 
                         {result.error_summary && result.error_summary.length > 0 && (
-                            <Card title="Error Summary" size="small" style={{ textAlign: "left" }}>
+                            <Card title={t("import.result.errorSummary")} size="small" style={{ textAlign: "left" }}>
                                 <List
                                     size="small"
                                     dataSource={result.error_summary}

@@ -1,16 +1,16 @@
-from rest_framework import viewsets, status
+from rest_framework import status, viewsets
 from rest_framework.permissions import IsAuthenticated
 
+from audit.utils import audit
 from core.permissions import IsHRManagerOrAdmin
 from core.responses import success
-from audit.utils import audit
 
-from .models import Department, Position, TaskGroup, Sponsor
+from .models import Department, Position, Sponsor, TaskGroup
 from .serializers import (
     DepartmentSerializer,
     PositionSerializer,
-    TaskGroupSerializer,
     SponsorSerializer,
+    TaskGroupSerializer,
 )
 
 

@@ -1,4 +1,6 @@
+import base64
 import logging
+import os
 from typing import Any
 
 import requests
@@ -7,6 +9,29 @@ from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 
 logger = logging.getLogger(__name__)
+
+
+def _load_logo_base64() -> str:
+    """Return the FFI logo as a base64 inline data URI.
+
+    Embeds the image directly into the HTML so it renders in every email client
+    without requiring a publicly accessible URL.
+    Falls back to EMAIL_LOGO_URL if the file cannot be opened.
+    """
+    logo_path = getattr(
+        settings,
+        "EMAIL_LOGO_PATH",
+        os.path.join(str(settings.BASE_DIR.parent), "Logo FFI.png"),
+    )
+    try:
+        with open(logo_path, "rb") as fh:
+            encoded = base64.b64encode(fh.read()).decode("ascii")
+        ext = os.path.splitext(logo_path)[1].lstrip(".").lower()
+        mime_type = "jpeg" if ext in ("jpg", "jpeg") else ext  # e.g. "png"
+        return f"data:image/{mime_type};base64,{encoded}"
+    except Exception:
+        logger.warning("email_logo_file_not_found", extra={"logo_path": logo_path})
+        return getattr(settings, "EMAIL_LOGO_URL", "https://mail.fficontracting.com/logo.png")
 
 
 class BirdEmailService:
@@ -21,9 +46,13 @@ class BirdEmailService:
         default_sender: str | None = None,
     ) -> None:
         self.api_key = api_key or getattr(settings, "BIRD_API_KEY", "") or getattr(settings, "BIRD_ACCESS_KEY", "")
-        self.channel_id = channel_id or getattr(settings, "BIRD_CHANNEL_ID", "") or getattr(settings, "BIRD_EMAIL_CHANNEL_ID", "")
+        self.channel_id = (
+            channel_id or getattr(settings, "BIRD_CHANNEL_ID", "") or getattr(settings, "BIRD_EMAIL_CHANNEL_ID", "")
+        )
         self.workspace_id = workspace_id or getattr(settings, "BIRD_WORKSPACE_ID", "")
-        self.base_url = (base_url or getattr(settings, "BIRD_API_BASE_URL", "https://api.bird.com/workspaces")).rstrip("/")
+        self.base_url = (base_url or getattr(settings, "BIRD_API_BASE_URL", "https://api.bird.com/workspaces")).rstrip(
+            "/"
+        )
         self.timeout_seconds = timeout_seconds or int(getattr(settings, "NOTIFICATION_HTTP_TIMEOUT_SECONDS", 10))
         self.default_sender = default_sender or getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@fficontracting.com")
         self.logo_url = getattr(settings, "EMAIL_LOGO_URL", "https://mail.fficontracting.com/logo.png")
@@ -152,7 +181,7 @@ def _base_email_context(
     action_text_ar: str | None = None,
 ) -> dict[str, Any]:
     return {
-        "logo_url": getattr(settings, "EMAIL_LOGO_URL", "https://mail.fficontracting.com/logo.png"),
+        "logo_url": _load_logo_base64(),
         "contact_email": getattr(settings, "EMAIL_CONTACT_EMAIL", "hr@fficontracting.com"),
         "title": title,
         "title_ar": title_ar,

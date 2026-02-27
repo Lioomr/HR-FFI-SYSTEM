@@ -1,23 +1,19 @@
-from rest_framework import viewsets, status
-from rest_framework.permissions import IsAuthenticated
-from django.db.models import Q, Min
-from django.utils import timezone
 from django.contrib.auth import get_user_model
+from django.db.models import Min, Q
 from django.db.models.functions import TruncMinute
+from django.utils import timezone
+from rest_framework import status, viewsets
+from rest_framework.permissions import IsAuthenticated
 
-from core.pagination import StandardPagination
-from core.responses import success, error
-from employees.permissions import IsHRManagerOrAdmin
-from core.permissions import get_role
 from audit.utils import audit
+from core.pagination import StandardPagination
+from core.permissions import get_role
+from core.responses import error, success
 from employees.models import EmployeeProfile
+from employees.permissions import IsHRManagerOrAdmin
 
 from .models import Announcement
-from .serializers import (
-    AnnouncementSerializer,
-    AnnouncementListSerializer,
-    AnnouncementCreateSerializer
-)
+from .serializers import AnnouncementCreateSerializer, AnnouncementListSerializer, AnnouncementSerializer
 from .utils import send_announcement_email, send_announcement_whatsapp
 
 User = get_user_model()
@@ -26,16 +22,17 @@ User = get_user_model()
 class AnnouncementViewSet(viewsets.ModelViewSet):
     """
     ViewSet for managing announcements.
-    
+
     - HR Managers can create, update, delete announcements
     - All users can view announcements targeted to their role
     """
+
     pagination_class = StandardPagination
 
     def get_permissions(self):
         if self.action == "create":
             return [IsAuthenticated()]
-        if self.action in ['update', 'partial_update', 'destroy']:
+        if self.action in ["update", "partial_update", "destroy"]:
             return [IsAuthenticated(), IsHRManagerOrAdmin()]
         return [IsAuthenticated()]
 
@@ -52,9 +49,13 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         if ceo_profile:
             direct_reports_q = direct_reports_q | Q(manager_profile=ceo_profile)
 
-        leadership_user_ids = User.objects.filter(groups__name__in=["Manager", "HRManager"]).values_list("id", flat=True)
-        direct_report_user_ids = EmployeeProfile.objects.filter(direct_reports_q).exclude(user__isnull=True).values_list(
-            "user_id", flat=True
+        leadership_user_ids = User.objects.filter(groups__name__in=["Manager", "HRManager"]).values_list(
+            "id", flat=True
+        )
+        direct_report_user_ids = (
+            EmployeeProfile.objects.filter(direct_reports_q)
+            .exclude(user__isnull=True)
+            .values_list("user_id", flat=True)
         )
         return set(leadership_user_ids).union(set(direct_report_user_ids))
 
@@ -85,7 +86,7 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
 
         # Determine user role from groups using core permissions logic
         user_group_role = get_role(user)
-        
+
         # Map group roles to Announcement model constants
         # SystemAdmin -> ADMIN
         # HRManager -> HR_MANAGER
@@ -96,22 +97,20 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
             "HRManager": "HR_MANAGER",
             "Manager": "MANAGER",
             "CEO": "CEO",
-            "Employee": "EMPLOYEE"
+            "Employee": "EMPLOYEE",
         }
-        
+
         user_role = role_map.get(user_group_role, "EMPLOYEE")
-        
+
         # HR Managers and Admins can see all announcements
-        if user_role in ['ADMIN', 'HR_MANAGER']:
+        if user_role in ["ADMIN", "HR_MANAGER"]:
             return self._collapse_broadcast_duplicates(Announcement.objects.filter(is_active=True))
-        
+
         # Managers can also see what they created for their team.
         if user_role == "MANAGER":
             base_qs = Announcement.objects.filter(
                 is_active=True,
-            ).filter(
-                Q(created_by=user) | Q(target_user=user) | Q(target_roles__contains=["MANAGER"])
-            )
+            ).filter(Q(created_by=user) | Q(target_user=user) | Q(target_roles__contains=["MANAGER"]))
             return self._collapse_broadcast_duplicates(base_qs)
 
         if user_role == "CEO":
@@ -123,20 +122,18 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         # Other users only see announcements targeted to their role
         return self._collapse_broadcast_duplicates(
             Announcement.objects.filter(
-            is_active=True,
-            publish_to_dashboard=True,
-        ).filter(
-            Q(target_user=user) | Q(target_roles__contains=[user_role])
-            )
+                is_active=True,
+                publish_to_dashboard=True,
+            ).filter(Q(target_user=user) | Q(target_roles__contains=[user_role]))
         )
-    
+
     def get_serializer_class(self):
-        if self.action == 'list':
+        if self.action == "list":
             return AnnouncementListSerializer
-        elif self.action == 'create':
+        elif self.action == "create":
             return AnnouncementCreateSerializer
         return AnnouncementSerializer
-    
+
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
         page = self.paginate_queryset(queryset)
@@ -155,7 +152,7 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
                 "total_pages": 1,
             }
         )
-    
+
     def create(self, request, *args, **kwargs):
         user_role = get_role(request.user)
         serializer_context = self.get_serializer_context()
@@ -170,7 +167,9 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         validated = serializer.validated_data
 
         if user_role not in ["SystemAdmin", "HRManager", "Manager", "CEO"]:
-            return error("Forbidden", errors=["You are not allowed to create announcements."], status=status.HTTP_403_FORBIDDEN)
+            return error(
+                "Forbidden", errors=["You are not allowed to create announcements."], status=status.HTTP_403_FORBIDDEN
+            )
 
         # Manager can only target own team (direct reports), never global roles.
         if user_role in ["Manager", "CEO"]:
@@ -248,40 +247,37 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
                 "message": "Announcement sent to your team successfully",
             }
 
-        return success(
-            payload,
-            status=status.HTTP_201_CREATED
-        )
-    
+        return success(payload, status=status.HTTP_201_CREATED)
+
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
         serializer = self.get_serializer(instance)
         return success({"announcement": serializer.data})
-    
+
     def update(self, request, *args, **kwargs):
-        partial = kwargs.pop('partial', False)
+        partial = kwargs.pop("partial", False)
         instance = self.get_object()
         serializer = AnnouncementCreateSerializer(instance, data=request.data, partial=partial)
-        
+
         if not serializer.is_valid():
             return error("Validation error", errors=serializer.errors, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
-        
+
         serializer.save()
-        
+
         # Audit log
         audit(request, "announcement_updated", entity="Announcement", entity_id=instance.id)
-        
+
         response_serializer = AnnouncementSerializer(instance)
         return success({"announcement": response_serializer.data, "message": "Announcement updated successfully"})
-    
+
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
-        
+
         # Soft delete
         instance.is_active = False
         instance.save()
-        
+
         # Audit log
         audit(request, "announcement_deleted", entity="Announcement", entity_id=instance.id)
-        
+
         return success({"message": "Announcement deleted successfully"})

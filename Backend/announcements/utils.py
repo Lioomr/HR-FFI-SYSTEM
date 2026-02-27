@@ -1,8 +1,8 @@
 from django.contrib.auth import get_user_model
 
 from core.notifications import send_email_notification
-from core.services.whatsapp_service import WhatsAppService
 from core.permissions import get_role
+from core.services.whatsapp_service import WhatsAppService
 
 User = get_user_model()
 
@@ -13,7 +13,7 @@ def send_announcement_email(announcement):
     """
     if not announcement.publish_to_email:
         return
-    
+
     # Private targeted announcement
     if getattr(announcement, "target_user_id", None):
         users = User.objects.filter(id=announcement.target_user_id, is_active=True)
@@ -26,12 +26,12 @@ def send_announcement_email(announcement):
         }
         expected_roles = {role_map[r] for r in (announcement.target_roles or []) if r in role_map}
         users = [u for u in User.objects.filter(is_active=True) if get_role(u) in expected_roles]
-    
+
     recipient_emails = [user.email for user in users if getattr(user, "email", None)]
-    
+
     if not recipient_emails:
         return
-    
+
     subject = f"New Announcement: {announcement.title}"
     message = f"""
 {announcement.title}
@@ -41,7 +41,7 @@ def send_announcement_email(announcement):
 ---
 This announcement was sent by {announcement.created_by.full_name or announcement.created_by.email}
 """
-    
+
     for recipient_email in recipient_emails:
         result = send_email_notification(recipient_email, subject, message)
         if not result.get("sent"):
@@ -51,7 +51,7 @@ This announcement was sent by {announcement.created_by.full_name or announcement
 def send_announcement_whatsapp(announcement):
     if not announcement.publish_to_sms:
         return
-    
+
     if getattr(announcement, "target_user_id", None):
         users = User.objects.filter(id=announcement.target_user_id, is_active=True)
     else:
@@ -63,7 +63,7 @@ def send_announcement_whatsapp(announcement):
         }
         expected_roles = {role_map[r] for r in (announcement.target_roles or []) if r in role_map}
         users = [u for u in User.objects.filter(is_active=True) if get_role(u) in expected_roles]
-    
+
     service = WhatsAppService()
     sent_count = 0
 

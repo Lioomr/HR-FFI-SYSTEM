@@ -8,6 +8,8 @@ import PageHeader from "../../../components/ui/PageHeader";
 import { useI18n } from "../../../i18n/useI18n";
 import { getMyLeaveRequests, cancelLeaveRequest, type LeaveRequest } from "../../../services/api/leaveApi";
 import { isApiError } from "../../../services/api/apiTypes";
+import { getHttpStatus } from "../../../services/api/httpErrors";
+import { getDetailedApiMessage, getDetailedHttpErrorMessage } from "../../../services/api/userErrorMessages";
 
 const { confirm } = Modal;
 
@@ -27,13 +29,13 @@ export default function MyLeaveRequestsPage() {
         try {
             const res = await getMyLeaveRequests({ page, page_size: pageSize });
             if (isApiError(res)) {
-                notification.error({ message: t("common.error"), description: res.message });
+                notification.error({ message: t("common.error"), description: getDetailedApiMessage(t, res.message) });
             } else {
                 setData(res.data.items || []);
                 setTotal(res.data.count || 0);
             }
-        } catch (err: any) {
-            notification.error({ message: t("common.error"), description: t("common.tryAgain") });
+        } catch (err: unknown) {
+            notification.error({ message: t("common.error"), description: getDetailedHttpErrorMessage(t, err) });
         } finally {
             setLoading(false);
         }
@@ -55,17 +57,18 @@ export default function MyLeaveRequestsPage() {
                 try {
                     const res = await cancelLeaveRequest(id);
                     if (isApiError(res)) {
-                        notification.error({ message: t("common.error"), description: res.message });
+                        notification.error({ message: t("common.error"), description: getDetailedApiMessage(t, res.message) });
                     } else {
                         notification.success({ message: t("leave.cancelled") });
                         loadData();
                     }
-                } catch (e: any) {
-                    if (e.status === 404 || e.status === 405) {
-                        notification.warning({ message: t("common.error"), description: t("common.tryAgain") });
+                } catch (e: unknown) {
+                    const status = getHttpStatus(e);
+                    if (status === 404 || status === 405) {
+                        notification.warning({ message: t("common.error"), description: getDetailedHttpErrorMessage(t, e) });
                         setCanCancel(false);
                     } else {
-                        notification.error({ message: t("common.error"), description: t("common.tryAgain") });
+                        notification.error({ message: t("common.error"), description: getDetailedHttpErrorMessage(t, e) });
                     }
                 } finally {
                     setCancellingId(null);
@@ -88,11 +91,20 @@ export default function MyLeaveRequestsPage() {
         }
     };
 
+    // Translate a leave type name coming from the API
+    const translateLeaveType = (name?: string): string => {
+        if (!name) return t("leave.title");
+        const key = `leave.type.${name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z_]/g, '')}`;
+        const translated = t(key);
+        // If no translation key exists, fall back to original name
+        return translated === key ? name : translated;
+    };
+
     const columns: ColumnsType<LeaveRequest> = [
         {
             title: t("leave.type"),
             key: "leave_type",
-            render: (_, record) => record.leave_type?.name || t("leave.title")
+            render: (_, record) => translateLeaveType(record.leave_type?.name)
         },
         {
             title: t("leave.startDate"),
@@ -117,11 +129,25 @@ export default function MyLeaveRequestsPage() {
             ellipsis: true
         },
         {
+            title: t("leave.rejectionReason"),
+            key: "rejection_reason",
+            render: (_, record) => {
+                const isRejected = (record.status || "").toLowerCase() === "rejected";
+                if (!isRejected) return "-";
+                return record.ceo_decision_note || record.hr_decision_note || record.manager_decision_note || record.rejection_reason || "-";
+            },
+            ellipsis: true,
+        },
+        {
             title: t("common.status"),
             dataIndex: "status",
             key: "status",
             render: (status) => {
-                const display = (status?.charAt(0).toUpperCase() + status?.slice(1).toLowerCase()).replace('_', ' ');
+                const statusKey = `leave.status.${status?.toLowerCase()}`;
+                const translated = t(statusKey);
+                const display = translated === statusKey
+                    ? (status?.charAt(0).toUpperCase() + status?.slice(1).toLowerCase()).replace(/_/g, ' ')
+                    : translated;
                 return (
                     <Tag color={getStatusColor(status)}>
                         {display}

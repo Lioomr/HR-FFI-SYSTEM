@@ -15,11 +15,7 @@ def capture_previous_employment_status(sender, instance, **kwargs):
         instance._previous_employment_status = None
         return
 
-    previous_status = (
-        EmployeeProfile.objects.filter(pk=instance.pk)
-        .values_list("employment_status", flat=True)
-        .first()
-    )
+    previous_status = EmployeeProfile.objects.filter(pk=instance.pk).values_list("employment_status", flat=True).first()
     instance._previous_employment_status = previous_status
 
 

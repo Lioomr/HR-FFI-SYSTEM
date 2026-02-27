@@ -13,9 +13,9 @@ from decimal import Decimal, InvalidOperation
 from django.core.files.base import ContentFile
 from django.db import transaction
 
-from hr_reference.models import Department, Position, TaskGroup, Sponsor
 from employees.models import EmployeeImport, EmployeeProfile
 from employees.storage import PrivateUploadStorage
+from hr_reference.models import Department, Position, Sponsor, TaskGroup
 
 try:
     from openpyxl import load_workbook
@@ -76,7 +76,14 @@ class EmployeeImporter:
         "allowed_overtime": ["allowed overtime"],
         "department_name_en": ["department", "department name", "department en"],
         "department_name_ar": ["department ar", "department name ar"],
-        "manager_ref": ["manager", "manager employee number", "manager id", "line manager", "direct manager", "direct manger"],
+        "manager_ref": [
+            "manager",
+            "manager employee number",
+            "manager id",
+            "line manager",
+            "direct manager",
+            "direct manger",
+        ],
     }
 
     DATE_FORMATS = (
@@ -238,7 +245,9 @@ class EmployeeImporter:
             code = department_name[:10].upper().replace(" ", "_")
             department = Department.objects.filter(code=code).first()
             if not department:
-                department = Department.objects.create(name=department_name, code=code, description="Auto-created from import")
+                department = Department.objects.create(
+                    name=department_name, code=code, description="Auto-created from import"
+                )
         lookup[key] = department
         if department.code:
             lookup[department.code.lower()] = department
@@ -255,7 +264,9 @@ class EmployeeImporter:
             code = position_name[:10].upper().replace(" ", "_")
             position = Position.objects.filter(code=code).first()
             if not position:
-                position = Position.objects.create(name=position_name, code=code, description="Auto-created from import")
+                position = Position.objects.create(
+                    name=position_name, code=code, description="Auto-created from import"
+                )
         lookup[key] = position
         if position.code:
             lookup[position.code.lower()] = position
@@ -344,7 +355,9 @@ class EmployeeImporter:
             return ImportExecutionResult(ok=False, status_code=415, errors=["Unsupported file type."], result="failed")
 
         if load_workbook is None:
-            return ImportExecutionResult(ok=False, status_code=500, errors=["Excel parser unavailable."], result="failed")
+            return ImportExecutionResult(
+                ok=False, status_code=500, errors=["Excel parser unavailable."], result="failed"
+            )
 
         file_hash = self._compute_file_hash(upload)
         try:
@@ -451,7 +464,9 @@ class EmployeeImporter:
                 errors_detail.append({"row": row_index, "column": "passport_expiry", "message": err})
                 row_has_error = True
 
-            id_expiry, id_expiry_raw, err = self._parse_date_flexible(self._extract_by_header(values, header_map, "id_expiry"))
+            id_expiry, id_expiry_raw, err = self._parse_date_flexible(
+                self._extract_by_header(values, header_map, "id_expiry")
+            )
             if err:
                 errors.append(f"row {row_index}: {err}")
                 errors_detail.append({"row": row_index, "column": "id_expiry", "message": err})
@@ -465,7 +480,9 @@ class EmployeeImporter:
                 errors_detail.append({"row": row_index, "column": "date_of_birth", "message": err})
                 row_has_error = True
 
-            hire_date, hire_date_raw, err = self._parse_date_flexible(self._extract_by_header(values, header_map, "hire_date"))
+            hire_date, hire_date_raw, err = self._parse_date_flexible(
+                self._extract_by_header(values, header_map, "hire_date")
+            )
             if err:
                 errors.append(f"row {row_index}: {err}")
                 errors_detail.append({"row": row_index, "column": "hire_date", "message": err})
@@ -517,7 +534,9 @@ class EmployeeImporter:
                 errors_detail.append({"row": row_index, "column": "accommodation_allowance", "message": err})
                 row_has_error = True
 
-            telephone_allowance, err = self._parse_decimal(self._extract_by_header(values, header_map, "telephone_allowance"))
+            telephone_allowance, err = self._parse_decimal(
+                self._extract_by_header(values, header_map, "telephone_allowance")
+            )
             if err:
                 errors.append(f"row {row_index}: {err}")
                 errors_detail.append({"row": row_index, "column": "telephone_allowance", "message": err})
@@ -641,7 +660,9 @@ class EmployeeImporter:
         passport_numbers = [row["passport_no"] for row in prepared_rows if row["passport_no"]]
         existing_profiles_by_number = {
             ep.employee_number: ep
-            for ep in EmployeeProfile.objects.filter(employee_number__in=employee_numbers).select_related("manager_profile")
+            for ep in EmployeeProfile.objects.filter(employee_number__in=employee_numbers).select_related(
+                "manager_profile"
+            )
         }
         existing_profiles_by_national_id = {
             ep.national_id: ep
@@ -654,7 +675,8 @@ class EmployeeImporter:
             if ep.passport_no
         }
         all_profiles_by_emp_no = {
-            ep.employee_number: ep for ep in EmployeeProfile.objects.exclude(employee_number="").only("id", "employee_number")
+            ep.employee_number: ep
+            for ep in EmployeeProfile.objects.exclude(employee_number="").only("id", "employee_number")
         }
 
         created_or_updated = {}

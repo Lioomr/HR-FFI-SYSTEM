@@ -1,6 +1,6 @@
+from core.whatsapp_service import BirdWhatsAppTemplateService
 from leaves.models import LeaveRequest
 from leaves.utils import get_leave_days
-from core.whatsapp_service import BirdWhatsAppTemplateService
 
 
 def _employee_name(user) -> str:

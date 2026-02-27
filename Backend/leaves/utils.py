@@ -3,9 +3,9 @@ from decimal import Decimal
 
 from django.db.models import Sum
 
-from .models import LeaveType, LeaveRequest, LeaveBalanceAdjustment
 from employees.models import EmployeeProfile
 
+from .models import LeaveBalanceAdjustment, LeaveRequest, LeaveType
 
 SICK_MAX_DAYS_PER_YEAR = 120
 SICK_FULL_PAY_DAYS = 30
@@ -240,12 +240,9 @@ def get_used_days_for_type(user, leave_type: LeaveType, year: int):
 
 
 def get_adjustments_for_type(user, leave_type: LeaveType, year: int):
-    adjs = (
-        LeaveBalanceAdjustment.objects.filter(employee=user, leave_type=leave_type, created_at__year=year).aggregate(
-            Sum("adjustment_days")
-        )["adjustment_days__sum"]
-        or Decimal("0")
-    )
+    adjs = LeaveBalanceAdjustment.objects.filter(employee=user, leave_type=leave_type, created_at__year=year).aggregate(
+        Sum("adjustment_days")
+    )["adjustment_days__sum"] or Decimal("0")
     return float(adjs)
 
 
@@ -380,18 +377,23 @@ def validate_leave_request_policy(
     return None
 
 
-def calculate_leave_balance(user, year):
+def calculate_leave_balance(user, year, profile=None):
     """
     Calculate balances for all leave types for a user in a given year.
-    Returns a dict keyed by leave_type_id or a list of dicts.
+    Returns a list of dicts.
     """
     # 1. Try to get hire date for recursion base case
-    try:
-        profile = user.employee_profile
+    if not profile and user:
+        try:
+            profile = user.employee_profile
+        except AttributeError:
+            profile = None
+        except EmployeeProfile.DoesNotExist:
+            profile = None
+
+    if profile:
         hire_year = profile.hire_date.year if profile.hire_date else year
-    except EmployeeProfile.DoesNotExist:
-        # Should not happen for valid employees, but handle gracefully
-        profile = None
+    else:
         hire_year = year
 
     if year < hire_year:
@@ -417,7 +419,7 @@ def calculate_leave_balance(user, year):
             if year > hire_year:
                 # Recurse for previous year
                 prev_year = year - 1
-                prev_balances = calculate_leave_balance(user, prev_year)
+                prev_balances = calculate_leave_balance(user, prev_year, profile=profile)
 
                 # Extract remaining from previous year's calculation
                 # prev_balances is a list of dicts, find the matching leave_type
@@ -437,7 +439,11 @@ def calculate_leave_balance(user, year):
         # Quota
         configured_quota = float(lt.annual_quota or 0.0)
         if _is_annual(code):
-            quota = configured_quota if configured_quota > 0 else (get_annual_entitlement(profile, year) if profile else 0.0)
+            quota = (
+                configured_quota
+                if configured_quota > 0
+                else (get_annual_entitlement(profile, year) if profile else 0.0)
+            )
         elif _is_sick(code):
             quota = configured_quota if configured_quota > 0 else float(SICK_MAX_DAYS_PER_YEAR)
         elif _is_emergency(code):
@@ -472,21 +478,19 @@ def calculate_leave_balance(user, year):
         # Emergency leave is deducted from annual leave.
         if _is_emergency(code):
             annual_type = next(
-                (
-                    t
-                    for t in leave_types
-                    if _is_annual(_normalized_leave_code(t))
-                ),
+                (t for t in leave_types if _is_annual(_normalized_leave_code(t))),
                 None,
             )
             if annual_type:
-                annual_total = (
-                    get_annual_entitlement(profile, year) if profile else 0.0
-                ) + get_adjustments_for_type(user, annual_type, year)
+                annual_total = (get_annual_entitlement(profile, year) if profile else 0.0) + get_adjustments_for_type(
+                    user, annual_type, year
+                )
                 annual_used = get_used_days_for_type(user, annual_type, year)
                 emergency_used = used
                 annual_remaining_after_annual = max(0.0, annual_total - annual_used)
-                quota = min(float(EMERGENCY_MAX_DAYS_PER_YEAR), max(0.0, annual_remaining_after_annual - emergency_used))
+                quota = min(
+                    float(EMERGENCY_MAX_DAYS_PER_YEAR), max(0.0, annual_remaining_after_annual - emergency_used)
+                )
 
         # Marriage leave is once during service.
         if _is_marriage(code):

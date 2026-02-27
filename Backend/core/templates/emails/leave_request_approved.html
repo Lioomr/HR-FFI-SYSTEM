@@ -1,10 +1,63 @@
 {% extends "emails/base_email.html" %}
 
-{% block details %}
-<div class="details">
-  <div><strong>Leave Type / نوع الإجازة:</strong> {{ leave_type }}</div>
-  <div><strong>Approved From / بداية الإجازة المعتمدة:</strong> {{ start_date }}</div>
-  <div><strong>Approved To / نهاية الإجازة المعتمدة:</strong> {{ end_date }}</div>
-  <div><strong>Total Days / إجمالي الأيام:</strong> {{ total_days }}</div>
+{% block status_badge %}
+<div class="status-badge-wrap">
+  <span class="status-badge badge-approved">
+    &#10003;&nbsp; Approved &nbsp;·&nbsp; معتمد
+  </span>
 </div>
+{% endblock %}
+
+{% block details %}
+{% if leave_type or start_date or end_date or total_days %}
+<div class="details-card">
+  <div class="details-card-header" style="background: linear-gradient(90deg,#2E7D32,#43A047);">&#10004; Approval Details
+    — تفاصيل الموافقة</div>
+  <div class="details-card-body">
+    <div class="detail-row">
+      <span class="detail-label">Leave Type / نوع الإجازة</span>
+      <span class="detail-value">{{ leave_type }}</span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Approved From / بداية الإجازة</span>
+      <span class="detail-value">{{ start_date }}</span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Approved To / نهاية الإجازة</span>
+      <span class="detail-value">{{ end_date }}</span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Total Days / إجمالي الأيام</span>
+      <span class="detail-value"><strong>{{ total_days }}</strong></span>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block details_ar %}
+{% if leave_type or start_date or end_date or total_days %}
+<div class="details-card" style="direction:rtl;text-align:right;">
+  <div class="details-card-header" style="background: linear-gradient(90deg,#2E7D32,#43A047);">&#10004; تفاصيل الموافقة
+    — Approval Details</div>
+  <div class="details-card-body">
+    <div class="detail-row">
+      <span class="ar-detail-label">نوع الإجازة / Leave Type</span>
+      <span class="detail-value">{{ leave_type }}</span>
+    </div>
+    <div class="detail-row">
+      <span class="ar-detail-label">بداية الإجازة المعتمدة / Approved From</span>
+      <span class="detail-value">{{ start_date }}</span>
+    </div>
+    <div class="detail-row">
+      <span class="ar-detail-label">نهاية الإجازة المعتمدة / Approved To</span>
+      <span class="detail-value">{{ end_date }}</span>
+    </div>
+    <div class="detail-row">
+      <span class="ar-detail-label">إجمالي الأيام / Total Days</span>
+      <span class="detail-value"><strong>{{ total_days }}</strong></span>
+    </div>
+  </div>
+</div>
+{% endif %}
 {% endblock %}

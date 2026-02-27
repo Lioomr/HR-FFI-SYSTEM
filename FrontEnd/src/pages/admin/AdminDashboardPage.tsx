@@ -39,6 +39,20 @@ function inferSeverity(action: string): AuditPreview["severity"] {
   return "Info";
 }
 
+function formatAuditTimestamp(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  }).format(date);
+}
+
 export default function AdminDashboardPage() {
   const navigate = useNavigate();
   const { t } = useI18n();
@@ -60,18 +74,37 @@ export default function AdminDashboardPage() {
     setUnauthorized(false);
 
     try {
-      const [summaryRes, auditRes] = await Promise.all([
+      const [summaryResult, auditResult] = await Promise.allSettled([
         getAdminSummary(),
         listAuditLogs({ limit: 5 }),
       ]);
 
+      if (summaryResult.status === "rejected") {
+        if (isForbidden(summaryResult.reason)) {
+          setUnauthorized(true);
+          return;
+        }
+        setError(t("error.loadDashboard"));
+        setMode("error");
+        return;
+      }
+
+      const summaryRes = summaryResult.value;
       if (isApiError(summaryRes)) {
         setError(summaryRes.message || t("error.loadDashboard"));
         setMode("error");
         return;
       }
 
-      const auditItems = !isApiError(auditRes) ? auditRes.data.items ?? [] : [];
+      let auditItems: Array<{
+        id: string | number;
+        created_at: string;
+        action: string;
+        actor_email: string | null;
+      }> = [];
+      if (auditResult.status === "fulfilled" && !isApiError(auditResult.value)) {
+        auditItems = auditResult.value.data.items ?? [];
+      }
 
       setSummary(summaryRes.data);
       setAuditPreview(
@@ -224,7 +257,7 @@ export default function AdminDashboardPage() {
         <Col xs={24} lg={16}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <h3 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>{t("admin.dashboard.recentActivity")}</h3>
-            <Button type="link" onClick={() => navigate("/admin/audit")} style={{ color: '#ff7a45' }}>{t("admin.dashboard.viewAllAuditLogs")}</Button>
+            <Button type="link" onClick={() => navigate("/admin/audit-logs")} style={{ color: '#ff7a45' }}>{t("admin.dashboard.viewAllAuditLogs")}</Button>
           </div>
           <Card bordered={false} style={{ borderRadius: 16, overflow: 'hidden' }} bodyStyle={{ padding: 0 }}>
             <Table
@@ -242,11 +275,20 @@ export default function AdminDashboardPage() {
                   )
                 },
                 {
-                  title: t("admin.dashboard.action"), dataIndex: 'action', key: 'action', render: (t) => (
-                    <span style={{ fontWeight: 500 }}>{t}</span>
+                  title: t("admin.dashboard.action"), dataIndex: 'action', key: 'action', render: (val) => (
+                    <span style={{ fontWeight: 500 }}>{t(`audit.action.${val}`, val)}</span>
                   )
                 },
-                { title: t("admin.dashboard.time"), dataIndex: 'time', key: 'time', render: (t) => <span style={{ color: '#8c8c8c' }}>{t}</span> },
+                {
+                  title: t("admin.dashboard.time"),
+                  dataIndex: "time",
+                  key: "time",
+                  render: (v: string) => (
+                    <span style={{ color: "#8c8c8c" }} title={v}>
+                      {formatAuditTimestamp(v)}
+                    </span>
+                  ),
+                },
                 {
                   title: t("admin.dashboard.severity"), dataIndex: 'severity', key: 'severity', render: severityTag
                 },
@@ -311,7 +353,7 @@ export default function AdminDashboardPage() {
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <ClusterOutlined style={{ color: '#f97316' }} />
-                          <span>{item.action}</span>
+                          <span>{t(`audit.action.${item.action}`, item.action)}</span>
                         </div>
                         <Tag>{item.count}</Tag>
                       </div>

@@ -22,8 +22,10 @@ import { listSponsors } from "../../../services/api/sponsorsApi";
 import type { Sponsor } from "../../../services/api/sponsorsApi";
 import { toPayload, fromEmployeeToFormValues } from "./employeeFormMapper";
 import EmployeeForm from "./EmployeeForm";
+import { useI18n } from "../../../i18n/useI18n";
 
 export default function EditEmployeePage() {
+    const { t } = useI18n();
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const [form] = Form.useForm();
@@ -47,7 +49,7 @@ export default function EditEmployeePage() {
     useEffect(() => {
         const loadData = async () => {
             if (!id) {
-                setError("No employee ID provided");
+                setError(t("hr.employees.noIdError"));
                 setLoading(false);
                 return;
             }
@@ -69,7 +71,7 @@ export default function EditEmployeePage() {
 
                 // Check for errors
                 if (isApiError(employeeRes)) {
-                    setError(employeeRes.message || "Failed to load employee");
+                    setError(employeeRes.message || t("hr.employees.loadFailed"));
                     setLoading(false);
                     return;
                 }
@@ -81,7 +83,7 @@ export default function EditEmployeePage() {
                     isApiError(sponsorRes) ||
                     isApiError(employeesRes)
                 ) {
-                    notifyError("Failed to load reference data");
+                    notifyError(t("hr.employees.fetchRefDataFailed"));
                     setLoading(false);
                     return;
                 }
@@ -109,7 +111,7 @@ export default function EditEmployeePage() {
                     return;
                 }
 
-                setError(err.message || "Failed to load employee");
+                setError(err.message || t("hr.employees.loadFailed"));
                 setLoading(false);
             }
         };
@@ -136,20 +138,20 @@ export default function EditEmployeePage() {
             if (isApiError(response)) {
                 // Apply 422 field errors
                 apply422ToForm(form, response);
-                notifyError(response.message || "Failed to update employee");
+                notifyError(response.message || t("hr.employees.updateFailed"));
                 setSubmitting(false);
                 return;
             }
 
             // Success
-            notifySuccess("Employee updated successfully");
+            notifySuccess(t("hr.employees.updateSuccess"));
             navigate(`/hr/employees/${id}`);
         } catch (err: any) {
             setSubmitting(false);
 
             // Handle form validation errors
             if (err.errorFields) {
-                notifyError("Please fix the validation errors in the form.");
+                notifyError(t("hr.employees.fixValidationErrors"));
                 return;
             }
 
@@ -162,7 +164,7 @@ export default function EditEmployeePage() {
             }
 
             if (!err.response || err.response.status !== 422) {
-                notifyError(err.message || "Failed to update employee");
+                notifyError(err.message || t("hr.employees.updateFailed"));
             }
         }
     };
@@ -181,14 +183,14 @@ export default function EditEmployeePage() {
 
     // Render loading state
     if (loading) {
-        return <LoadingState title="Loading employee data..." />;
+        return <LoadingState title={t("common.loading")} />;
     }
 
     // Render error state
     if (error) {
         return (
             <ErrorState
-                title="Failed to load employee"
+                title={t("hr.employees.loadFailed")}
                 description={error}
                 onRetry={() => window.location.reload()}
             />
@@ -198,12 +200,12 @@ export default function EditEmployeePage() {
     return (
         <div>
             <PageHeader
-                title="Edit Employee"
+                title={t("hr.employees.edit")}
                 actions={
                     <Space>
-                        <Button onClick={handleCancel}>Cancel</Button>
+                        <Button onClick={handleCancel}>{t("common.cancel")}</Button>
                         <Button type="primary" onClick={handleSubmit} loading={submitting}>
-                            Save
+                            {t("common.save")}
                         </Button>
                     </Space>
                 }

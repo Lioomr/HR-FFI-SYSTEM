@@ -53,28 +53,32 @@ export default function EmployeeForm({ form, loadingRefs, refOptions }: Employee
     }, [form, nationality, isSaudi]);
 
     const countryCodeOptions = COUNTRIES
-        .map((c) => {
+        .flatMap((c) => {
             const dial = getDialCodeByCountryCode(c.code);
-            if (!dial) return null;
-            return {
+            if (!dial) return [];
+            return [{
                 label: (
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                        <img
-                            src={`https://flagcdn.com/24x18/${c.code.toLowerCase()}.png`}
-                            alt={`${c.code} flag`}
-                            width={16}
-                            height={12}
-                            style={{ borderRadius: 2, border: "1px solid #f0f0f0" }}
-                            loading="lazy"
+                        <span
+                            className={`fi fi-${c.code.toLowerCase()}`}
+                            aria-label={`${c.code} flag`}
+                            style={{
+                                width: 16,
+                                height: 12,
+                                borderRadius: 2,
+                                display: "inline-flex",
+                                backgroundSize: "cover",
+                                backgroundPosition: "center",
+                                boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.08)",
+                            }}
                         />
                         <span>{dial} ({c.code})</span>
                     </span>
                 ),
                 search: `${c.code} ${c.name} ${dial}`,
                 value: dial,
-            };
+            }];
         })
-        .filter((x): x is { label: React.ReactNode; value: string; search: string } => Boolean(x))
         .filter((option, index, arr) => arr.findIndex((x) => x.value === option.value) === index);
 
     return (
@@ -158,13 +162,18 @@ export default function EmployeeForm({ form, loadingRefs, refOptions }: Employee
                                                                 {COUNTRIES.map((c) => (
                                                                     <Select.Option key={c.code} value={c.name}>
                                                                         <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                                                                            <img
-                                                                                src={`https://flagcdn.com/24x18/${c.code.toLowerCase()}.png`}
-                                                                                alt={`${c.code} flag`}
-                                                                                width={16}
-                                                                                height={12}
-                                                                                style={{ borderRadius: 2, border: "1px solid #f0f0f0" }}
-                                                                                loading="lazy"
+                                                                            <span
+                                                                                className={`fi fi-${c.code.toLowerCase()}`}
+                                                                                aria-label={`${c.code} flag`}
+                                                                                style={{
+                                                                                    width: 16,
+                                                                                    height: 12,
+                                                                                    borderRadius: 2,
+                                                                                    display: "inline-flex",
+                                                                                    backgroundSize: "cover",
+                                                                                    backgroundPosition: "center",
+                                                                                    boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.08)",
+                                                                                }}
                                                                             />
                                                                             <span>{c.name}</span>
                                                                         </span>

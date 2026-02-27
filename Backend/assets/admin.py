@@ -5,8 +5,8 @@ from .models import Asset, AssetAssignment, AssetCodeSequence, AssetDamageReport
 
 @admin.register(Asset)
 class AssetAdmin(admin.ModelAdmin):
-    list_display = ["asset_code", "name", "type", "status", "vendor", "warranty_expiry"]
-    search_fields = ["asset_code", "name", "serial_number", "plate_number", "mac_address"]
+    list_display = ["asset_code", "name_en", "name_ar", "type", "status", "vendor", "warranty_expiry"]
+    search_fields = ["asset_code", "name_en", "name_ar", "serial_number", "plate_number", "mac_address"]
     list_filter = ["type", "status", "vendor"]
 
 

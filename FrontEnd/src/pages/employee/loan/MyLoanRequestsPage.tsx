@@ -7,8 +7,9 @@ import { CloseCircleOutlined, EyeOutlined, PlusOutlined } from "@ant-design/icon
 import PageHeader from "../../../components/ui/PageHeader";
 import { isApiError } from "../../../services/api/apiTypes";
 import { cancelLoanRequest, getMyLoanRequests, type LoanRequest, type LoanStatus } from "../../../services/api/loanApi";
-import { formatNumber } from "../../../utils/currency";
+import AmountWithSAR from "../../../components/ui/AmountWithSAR";
 import { useI18n } from "../../../i18n/useI18n";
+import { getDetailedApiMessage, getDetailedHttpErrorMessage } from "../../../services/api/userErrorMessages";
 
 const { confirm } = Modal;
 
@@ -20,12 +21,16 @@ function statusColor(status: LoanStatus) {
       return "red";
     case "pending_manager":
       return "orange";
+    case "pending_hr":
+      return "gold";
     case "pending_finance":
       return "gold";
     case "pending_cfo":
       return "purple";
     case "pending_ceo":
       return "volcano";
+    case "pending_disbursement":
+      return "geekblue";
     case "deducted":
       return "cyan";
     case "cancelled":
@@ -50,13 +55,13 @@ export default function MyLoanRequestsPage() {
     try {
       const res = await getMyLoanRequests({ page, page_size: pageSize });
       if (isApiError(res)) {
-        notification.error({ message: t("loans.myRequests.failedLoad"), description: res.message });
+        notification.error({ message: t("loans.myRequests.failedLoad"), description: getDetailedApiMessage(t, res.message) });
       } else {
         setItems(res.data.items || []);
         setTotal(res.data.count || 0);
       }
-    } catch {
-      notification.error({ message: t("loans.myRequests.failedLoad") });
+    } catch (err: unknown) {
+      notification.error({ message: t("loans.myRequests.failedLoad"), description: getDetailedHttpErrorMessage(t, err) });
     } finally {
       setLoading(false);
     }
@@ -78,13 +83,13 @@ export default function MyLoanRequestsPage() {
         try {
           const res = await cancelLoanRequest(id);
           if (isApiError(res)) {
-            notification.error({ message: t("loans.myRequests.cancelFailed"), description: res.message });
+            notification.error({ message: t("loans.myRequests.cancelFailed"), description: getDetailedApiMessage(t, res.message) });
           } else {
             notification.success({ message: t("loans.myRequests.cancelSuccess") });
             loadData();
           }
-        } catch {
-          notification.error({ message: t("loans.myRequests.cancelFailed") });
+        } catch (err: unknown) {
+          notification.error({ message: t("loans.myRequests.cancelFailed"), description: getDetailedHttpErrorMessage(t, err) });
         } finally {
           setCancellingId(null);
         }
@@ -96,7 +101,7 @@ export default function MyLoanRequestsPage() {
     {
       title: t("loans.list.colAmount"),
       key: "requested_amount",
-      render: (_, record) => formatNumber(record.requested_amount || 0),
+      render: (_, record) => <AmountWithSAR amount={record.requested_amount || 0} />,
     },
     {
       title: t("loans.list.colReason"),
@@ -109,11 +114,20 @@ export default function MyLoanRequestsPage() {
       key: "status",
       dataIndex: "status",
       render: (status: LoanStatus) => {
-        let label = status as string;
-        if (status) {
-          const parts = status.split('_');
-          label = parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
-        }
+        const statusMap: Record<string, string> = {
+          submitted: "status.submitted",
+          pending_manager: "status.pendingManager",
+          pending_hr: "status.pendingHr",
+          pending_finance: "status.pendingFinance",
+          pending_cfo: "status.pendingCfo",
+          pending_ceo: "status.pendingCeo",
+          pending_disbursement: "status.pendingDisbursement",
+          approved: "status.approved",
+          rejected: "status.rejected",
+          cancelled: "status.cancelled",
+          deducted: "status.deducted",
+        };
+        const label = t(statusMap[status] || "status.unknown");
         return <Tag color={statusColor(status)}>{label}</Tag>;
       },
     },
@@ -130,6 +144,7 @@ export default function MyLoanRequestsPage() {
         const isPending =
           record.status === "submitted" ||
           record.status === "pending_manager" ||
+          record.status === "pending_hr" ||
           record.status === "pending_finance" ||
           record.status === "pending_cfo" ||
           record.status === "pending_ceo";

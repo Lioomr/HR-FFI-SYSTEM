@@ -1,9 +1,9 @@
-from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
 
-from core.permissions import IsSystemAdmin
-from core.responses import success, error
 from audit.utils import audit
+from core.permissions import IsSystemAdmin
+from core.responses import error, success
 
 from .models import SystemSettings
 from .serializers_settings import SettingsUpdateSerializer, to_settings_response

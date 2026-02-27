@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Button, Card, Col, Descriptions, Row, Table, Tag, Typography, Tabs, Modal, notification, Alert } from "antd";
+import { Button, Card, Col, Descriptions, Row, Table, Tag, Tabs, Modal, notification, Alert } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { ArrowLeftOutlined, LockOutlined, CheckCircleOutlined, ArrowRightOutlined } from "@ant-design/icons";
 
@@ -12,12 +12,11 @@ import Unauthorized403Page from "../../Unauthorized403Page";
 import PayrollPayslips from "./PayrollPayslips";
 import PayrollReports from "./PayrollReports";
 
-import type { PayrollRun, PayrollRunItem } from "../../../services/api/payrollApi";
-import { getPayrollRunDetails, getPayrollRunItems, finalizePayrollRun } from "../../../services/api/payrollApi";
+import type { PayrollRun, PayrollRunItem, PayrollRunSummary } from "../../../services/api/payrollApi";
+import { getPayrollRunDetails, getPayrollRunItems, getPayrollRunSummary, finalizePayrollRun } from "../../../services/api/payrollApi";
 import { isApiError } from "../../../services/api/apiTypes";
 import { isForbidden } from "../../../services/api/httpErrors";
-import SARIcon from "../../../components/icons/SARIcon";
-import { formatNumber } from "../../../utils/currency";
+import AmountWithSAR from "../../../components/ui/AmountWithSAR";
 import { useI18n } from "../../../i18n/useI18n";
 
 export default function PayrollRunDetailsPage() {
@@ -37,6 +36,7 @@ export default function PayrollRunDetailsPage() {
     const [finalizing, setFinalizing] = useState(false);
 
     const [run, setRun] = useState<PayrollRun | null>(null);
+    const [summary, setSummary] = useState<PayrollRunSummary | null>(null);
     const [items, setItems] = useState<PayrollRunItem[]>([]);
     const [totalItems, setTotalItems] = useState(0);
 
@@ -46,6 +46,12 @@ export default function PayrollRunDetailsPage() {
 
     // Columns for Items
     const columns: ColumnsType<PayrollRunItem> = [
+        {
+            title: t("payroll.runDetails.colEmployeeId"),
+            dataIndex: "employee_id",
+            key: "employee_id",
+            width: 120,
+        },
         {
             title: t("payroll.runDetails.colEmployee"),
             dataIndex: "employee_name",
@@ -67,24 +73,20 @@ export default function PayrollRunDetailsPage() {
             dataIndex: "basic_salary",
             key: "basic_salary",
             align: 'right',
-            render: (val) => (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                    {formatNumber(val)}
-                    <SARIcon size={12} />
-                </span>
-            ),
+            render: (val) => <AmountWithSAR amount={val} size={12} />,
+        },
+        {
+            title: t("payroll.runDetails.colGrossSalary"),
+            key: "gross_salary",
+            align: 'right',
+            render: (_, record) => <AmountWithSAR amount={(Number(record.basic_salary || 0) + Number(record.total_allowances || 0))} size={12} />,
         },
         {
             title: t("payroll.runDetails.colAllowances"),
             dataIndex: "total_allowances",
             key: "total_allowances",
             align: 'right',
-            render: (val) => (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                    {formatNumber(val)}
-                    <SARIcon size={12} />
-                </span>
-            ),
+            render: (val) => <AmountWithSAR amount={val} size={12} />,
         },
         {
             title: t("payroll.runDetails.colDeductions"),
@@ -92,10 +94,9 @@ export default function PayrollRunDetailsPage() {
             key: "total_deductions",
             align: 'right',
             render: (val) => val ? (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                    ({formatNumber(val)})
-                    <SARIcon size={12} />
-                </span>
+                <div style={{ color: 'red', display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+                    (<AmountWithSAR amount={val} size={12} color="red" />)
+                </div>
             ) : "0",
         },
         {
@@ -103,12 +104,7 @@ export default function PayrollRunDetailsPage() {
             dataIndex: "net_salary",
             key: "net_salary",
             align: 'right',
-            render: (val) => (
-                <span style={{ fontWeight: "bold", display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                    {formatNumber(val)}
-                    <SARIcon size={12} />
-                </span>
-            ),
+            render: (val) => <AmountWithSAR amount={val} size={12} fontWeight="bold" />,
         },
     ];
 
@@ -121,9 +117,10 @@ export default function PayrollRunDetailsPage() {
 
         try {
             // Fetch Run Details + Items in parallel
-            const [runRes, itemsRes] = await Promise.all([
+            const [runRes, itemsRes, summaryRes] = await Promise.all([
                 getPayrollRunDetails(run_id),
-                getPayrollRunItems(run_id, { page, page_size: pageSize })
+                getPayrollRunItems(run_id, { page, page_size: pageSize }),
+                getPayrollRunSummary(run_id),
             ]);
 
             if (isApiError(runRes)) {
@@ -132,10 +129,14 @@ export default function PayrollRunDetailsPage() {
             if (isApiError(itemsRes)) {
                 throw new Error(itemsRes.message || t("payroll.runDetails.failedLoadItems"));
             }
+            if (isApiError(summaryRes)) {
+                throw new Error(summaryRes.message || t("payroll.runDetails.failedLoadDetails"));
+            }
 
             setRun(runRes.data);
             setItems(itemsRes.data.items || []);
             setTotalItems(itemsRes.data.count || 0);
+            setSummary(summaryRes.data);
             setLoading(false);
 
         } catch (err: any) {
@@ -258,19 +259,45 @@ export default function PayrollRunDetailsPage() {
                                             <Descriptions title={t("payroll.runDetails.summary")} column={1}>
                                                 <Descriptions.Item label={t("payslips.list.colPeriod")}>{run.month}/{run.year}</Descriptions.Item>
                                                 <Descriptions.Item label={t("payroll.runDetails.totalEmployees")}>{run.total_employees}</Descriptions.Item>
+                                                <Descriptions.Item label={t("payroll.runDetails.employeesWithDeductions")}>
+                                                    {summary?.employees_with_deductions ?? 0}
+                                                </Descriptions.Item>
                                             </Descriptions>
                                         </Card>
                                     </Col>
                                     <Col span={8}>
                                         <Card>
                                             <Descriptions title={t("payroll.runDetails.financials")} column={1}>
-                                                <Descriptions.Item label={t("payroll.runDetails.totalNetSalary")}>
-                                                    <Typography.Text strong style={{ fontSize: 18, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                                                        {formatNumber(run.total_net)}
-                                                        <SARIcon size={18} />
-                                                    </Typography.Text>
+                                                <Descriptions.Item label={t("payroll.details.colBasicSalary")}>
+                                                    <AmountWithSAR amount={summary?.total_basic_salary ?? 0} size={14} />
                                                 </Descriptions.Item>
-                                                {/* Add other totals if available in the DTO later */}
+                                                <Descriptions.Item label={t("payroll.runDetails.colAllowances")}>
+                                                    <AmountWithSAR amount={summary?.total_allowances ?? 0} size={14} />
+                                                </Descriptions.Item>
+                                                <Descriptions.Item label={t("payroll.runDetails.totalGrossSalary")}>
+                                                    <AmountWithSAR amount={summary?.total_gross_salary ?? 0} size={14} />
+                                                </Descriptions.Item>
+                                            </Descriptions>
+                                        </Card>
+                                    </Col>
+                                    <Col span={8}>
+                                        <Card>
+                                            <Descriptions title={t("payroll.runDetails.financials")} column={1}>
+                                                <Descriptions.Item label={t("payroll.runDetails.colDeductions")}>
+                                                    <AmountWithSAR amount={summary?.total_deductions ?? 0} size={14} color="red" />
+                                                </Descriptions.Item>
+                                                <Descriptions.Item label={t("payroll.runDetails.totalNetSalary")}>
+                                                    <AmountWithSAR
+                                                        amount={summary?.total_net_salary ?? run.total_net}
+                                                        size={18}
+                                                        fontWeight="bold"
+                                                        color="#1890ff"
+                                                        style={{ fontSize: 18 }}
+                                                    />
+                                                </Descriptions.Item>
+                                                <Descriptions.Item label={t("payroll.runDetails.averageNetSalary")}>
+                                                    <AmountWithSAR amount={summary?.average_net_salary ?? 0} size={14} />
+                                                </Descriptions.Item>
                                             </Descriptions>
                                         </Card>
                                     </Col>

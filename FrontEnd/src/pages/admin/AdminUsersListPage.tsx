@@ -35,6 +35,7 @@ import {
   updateUserStatus,
 } from "../../services/api/usersApi";
 import { useI18n } from "../../i18n/useI18n";
+import { useAuthStore } from "../../auth/authStore";
 
 type UserRow = {
   id: string | number;
@@ -49,8 +50,7 @@ type UiMode = "loading" | "empty" | "error" | "ok";
 
 type ResetResult = {
   mode: "temporary_password" | "reset_link";
-  temporary_password?: string;
-  reset_token?: string;
+  message?: string;
 };
 
 const roleOptions: Role[] = ["SystemAdmin", "HRManager", "Manager", "Employee", "CEO"];
@@ -73,7 +73,7 @@ function avatarColor(name: string): string {
   return colors[Math.abs(hash) % colors.length];
 }
 
-function roleTag(role: Role) {
+function roleTag(role: Role, t: any) {
   const c = ROLE_COLORS[role] || ROLE_COLORS["Employee"];
   return (
     <span
@@ -90,7 +90,7 @@ function roleTag(role: Role) {
         textTransform: "uppercase",
       }}
     >
-      {role}
+      {t(`role.${role}`, role)}
     </span>
   );
 }
@@ -109,6 +109,8 @@ function toUserRow(user: UserDto): UserRow {
 export default function AdminUsersListPage() {
   const navigate = useNavigate();
   const { t } = useI18n();
+  const currentUserRole = useAuthStore((state) => state.user?.role);
+  const activeRoleOptions = roleOptions.filter(r => r !== "SystemAdmin" || currentUserRole === "SystemAdmin");
 
   const [mode, setMode] = useState<UiMode>("loading");
   const [error, setError] = useState<string | null>(null);
@@ -190,8 +192,8 @@ export default function AdminUsersListPage() {
         title: t("common.role"),
         dataIndex: "role",
         key: "role",
-        render: (v: Role) => roleTag(v),
-        filters: roleOptions.map((r) => ({ text: r, value: r })),
+        render: (v: Role) => roleTag(v, t),
+        filters: activeRoleOptions.map((r) => ({ text: t(`role.${r}`, r), value: r })),
         onFilter: (value, record) => record.role === value,
       },
       {
@@ -250,7 +252,7 @@ export default function AdminUsersListPage() {
               value={record.role}
               size="small"
               style={{ width: 140, borderRadius: 8 }}
-              options={roleOptions.map((r) => ({ label: r, value: r }))}
+              options={activeRoleOptions.map((r) => ({ label: t(`role.${r}`, r), value: r }))}
               onChange={async (nextRole) => {
                 try {
                   const res = await updateUserRole(record.id, { role: nextRole });
@@ -307,6 +309,7 @@ export default function AdminUsersListPage() {
 
       {/* Filter Bar */}
       <div
+        className="responsive-filter-bar"
         style={{
           background: "white",
           borderRadius: 14,
@@ -323,23 +326,23 @@ export default function AdminUsersListPage() {
           allowClear
           prefix={<SearchOutlined style={{ color: "#94a3b8" }} />}
           placeholder={t("admin.users.searchPlaceholder")}
-          style={{ width: 280, borderRadius: 10 }}
+          style={{ flex: "1 1 200px", minWidth: 150, borderRadius: 10 }}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
         <Select
           value={role}
           onChange={setRole}
-          style={{ width: 160 }}
+          style={{ flex: "0 1 160px", minWidth: 120 }}
           options={[
-            { label: t("common.filter") + " Role", value: "All" },
-            ...roleOptions.map((r) => ({ label: r, value: r })),
+            { label: t("common.filter") + " " + t("common.role"), value: "All" },
+            ...activeRoleOptions.map((r) => ({ label: t(`role.${r}`, r), value: r })),
           ]}
         />
         <Select
           value={status}
           onChange={setStatus}
-          style={{ width: 140 }}
+          style={{ flex: "0 1 140px", minWidth: 110 }}
           options={[
             { label: t("common.filter") + " Status", value: "All" },
             { label: t("status.active"), value: "Active" },
@@ -364,6 +367,7 @@ export default function AdminUsersListPage() {
           rowKey="id"
           columns={columns}
           dataSource={rows}
+          scroll={{ x: 700 }}
           pagination={{ pageSize: 10, style: { padding: "12px 20px" } }}
         />
       </div>
@@ -400,16 +404,10 @@ export default function AdminUsersListPage() {
               <Radio value="reset_link">Reset link token</Radio>
             </Space>
           </Radio.Group>
-          {resetResult?.temporary_password && (
-            <div>
-              <div style={{ fontWeight: 600, marginBottom: 6 }}>Temporary Password</div>
-              <Input value={resetResult.temporary_password} readOnly onFocus={(e) => e.currentTarget.select()} style={{ borderRadius: 8, fontFamily: "monospace" }} />
-            </div>
-          )}
-          {resetResult?.reset_token && (
-            <div>
-              <div style={{ fontWeight: 600, marginBottom: 6 }}>Reset Token</div>
-              <Input value={resetResult.reset_token} readOnly onFocus={(e) => e.currentTarget.select()} style={{ borderRadius: 8, fontFamily: "monospace" }} />
+          {resetResult && (
+            <div style={{ padding: 12, background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, color: "#065f46" }}>
+              <Typography.Text strong style={{ color: "#065f46" }}>Success: </Typography.Text>
+              Password reset operation completed successfully. Detailed credentials have been securely routed.
             </div>
           )}
         </Space>

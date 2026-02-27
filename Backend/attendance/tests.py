@@ -1,13 +1,16 @@
 from datetime import date, timedelta
-from django.test import TestCase
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from rest_framework.test import APIClient
-from rest_framework import status
+from django.test import TestCase
 from django.utils import timezone
-from .models import AttendanceRecord
+from rest_framework import status
+from rest_framework.test import APIClient
+
 from audit.models import AuditLog
 from employees.models import EmployeeProfile
+
+from .models import AttendanceRecord
 
 User = get_user_model()
 

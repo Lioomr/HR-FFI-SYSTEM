@@ -1,14 +1,15 @@
-from rest_framework.views import APIView
-from rest_framework.permissions import AllowAny
-from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from rest_framework.permissions import AllowAny
+from rest_framework.views import APIView
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
+from rest_framework_simplejwt.tokens import RefreshToken
 
-from .serializers import LoginSerializer, ChangePasswordSerializer
-from .throttles import LoginRateThrottle
-from .permissions import get_role
 from core.responses import error, success
+
+from .permissions import get_role
+from .serializers import ChangePasswordSerializer, LoginSerializer
+from .throttles import LoginRateThrottle
 
 
 class LoginView(APIView):

@@ -7,12 +7,22 @@ from payroll.models import PayrollRun
 
 
 class LoanRequest(models.Model):
+    class LoanType(models.TextChoices):
+        OPEN = "open", _("Open Loan")
+        INSTALLMENT = "installment", _("Installment Loan")
+
+    class Recommendation(models.TextChoices):
+        APPROVE = "approve", _("Approve")
+        REJECT = "reject", _("Reject")
+
     class RequestStatus(models.TextChoices):
         SUBMITTED = "submitted", _("Submitted")
         PENDING_MANAGER = "pending_manager", _("Pending Manager")
-        PENDING_FINANCE = "pending_finance", _("Pending Finance")
+        PENDING_HR = "pending_hr", _("Pending HR")
+        PENDING_FINANCE = "pending_finance", _("Pending Finance (Legacy)")
         PENDING_CFO = "pending_cfo", _("Pending CFO")
         PENDING_CEO = "pending_ceo", _("Pending CEO")
+        PENDING_DISBURSEMENT = "pending_disbursement", _("Pending Disbursement")
         APPROVED = "approved", _("Approved")
         REJECTED = "rejected", _("Rejected")
         CANCELLED = "cancelled", _("Cancelled")
@@ -30,6 +40,8 @@ class LoanRequest(models.Model):
     )
     requested_amount = models.DecimalField(max_digits=12, decimal_places=2)
     approved_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    loan_type = models.CharField(max_length=20, choices=LoanType.choices, default=LoanType.OPEN)
+    installment_months = models.PositiveSmallIntegerField(null=True, blank=True)
     reason = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=RequestStatus.choices, default=RequestStatus.SUBMITTED)
 
@@ -42,6 +54,9 @@ class LoanRequest(models.Model):
         related_name="manager_decided_loans",
     )
     manager_decision_note = models.TextField(blank=True)
+    manager_recommendation = models.CharField(
+        max_length=16, choices=Recommendation.choices, null=True, blank=True
+    )
 
     finance_decision_at = models.DateTimeField(null=True, blank=True)
     finance_decision_by = models.ForeignKey(
@@ -52,6 +67,7 @@ class LoanRequest(models.Model):
         related_name="finance_decided_loans",
     )
     finance_decision_note = models.TextField(blank=True)
+    hr_recommendation = models.CharField(max_length=16, choices=Recommendation.choices, null=True, blank=True)
 
     cfo_decision_at = models.DateTimeField(null=True, blank=True)
     cfo_decision_by = models.ForeignKey(
@@ -82,6 +98,19 @@ class LoanRequest(models.Model):
     )
     deducted_at = models.DateTimeField(null=True, blank=True)
     deducted_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    approved_year = models.PositiveIntegerField(null=True, blank=True)
+    approved_month = models.PositiveIntegerField(null=True, blank=True)
+    target_deduction_year = models.PositiveIntegerField(null=True, blank=True)
+    target_deduction_month = models.PositiveIntegerField(null=True, blank=True)
+    disbursed_at = models.DateTimeField(null=True, blank=True)
+    disbursed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="disbursed_loans",
+    )
+    disbursement_note = models.TextField(blank=True)
 
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)

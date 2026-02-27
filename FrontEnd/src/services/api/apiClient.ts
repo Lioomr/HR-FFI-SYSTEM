@@ -10,10 +10,15 @@ export const api = axios.create({
 
 
 
-// Attach token
+// Attach token and language
 api.interceptors.request.use((config) => {
   const token = getToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
+
+  // Attach current language for backend i18n
+  const lang = localStorage.getItem("ffi_app_language") || "en";
+  config.headers["Accept-Language"] = lang;
+
   return config;
 });
 

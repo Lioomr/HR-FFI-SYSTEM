@@ -2,11 +2,11 @@ const TOKEN_KEY = "ffi_hr_token";
 const USER_KEY = "ffi_hr_user";
 
 export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+  return sessionStorage.getItem(TOKEN_KEY);
 }
 
 export function setToken(token: string) {
-  localStorage.setItem(TOKEN_KEY, token);
+  sessionStorage.setItem(TOKEN_KEY, token);
 }
 
 // Minimal user shape for storage (versioned)
@@ -18,7 +18,7 @@ type StoredUser = {
 };
 
 export function getStoredUser(): StoredUser | null {
-  const str = localStorage.getItem(USER_KEY);
+  const str = sessionStorage.getItem(USER_KEY);
   if (!str) return null;
   try {
     return JSON.parse(str);
@@ -34,10 +34,12 @@ export function setStoredUser(user: { id: string; email: string; role: string })
     email: user.email,
     role: user.role,
   };
-  localStorage.setItem(USER_KEY, JSON.stringify(stored));
+  sessionStorage.setItem(USER_KEY, JSON.stringify(stored));
 }
 
 export function clearToken() {
+  sessionStorage.removeItem(TOKEN_KEY);
+  sessionStorage.removeItem(USER_KEY);
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
 }

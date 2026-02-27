@@ -1,16 +1,15 @@
 from datetime import timedelta
-from django.utils import timezone
+
 from django.contrib.auth import get_user_model
-
-from rest_framework.views import APIView
+from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
 
-from core.permissions import IsSystemAdmin
-from core.responses import success
-
-from invites.models import Invite
 from audit.models import AuditLog
 from audit.serializers import AuditLogSerializer
+from core.permissions import IsSystemAdmin
+from core.responses import success
+from invites.models import Invite
 
 User = get_user_model()
 
@@ -37,7 +36,7 @@ class AdminSummaryView(APIView):
 
         # Note: We don't have historical "active" status in a simple way without audit logs.
         # Let's placeholder it as 0 for now.
-        users_active_growth_pct = 0 
+        users_active_growth_pct = 0
 
         # ---- Invites ----
         # Normalize expired invites (SENT -> EXPIRED when time passed)
@@ -53,9 +52,6 @@ class AdminSummaryView(APIView):
         audit_today = AuditLog.objects.filter(created_at__gte=start_today).count()
         audit_last_7_days = AuditLog.objects.filter(created_at__gte=start_7d).count()
         recent_audits = AuditLog.objects.select_related("actor").order_by("-created_at")[:10]
-
-        # Optional: small breakdown for "activity cards"
-        actions_today = AuditLog.objects.filter(created_at__gte=start_today).values("action").order_by("action")
 
         # If you want top actions with counts:
         from django.db.models import Count
