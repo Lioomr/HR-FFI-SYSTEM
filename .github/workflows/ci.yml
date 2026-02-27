@@ -30,14 +30,14 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f Backend/requirements.txt ]; then
-            pip install -r Backend/requirements.txt
-          elif [ -f requirements.txt ]; then
-            pip install -r requirements.txt
-          else
-            echo "requirements.txt not found in expected locations"
+          REQ_FILE="$(find . -maxdepth 4 -type f -iname 'requirements.txt' | grep -Ei '/backend/' | head -n1)"
+          if [ -z "$REQ_FILE" ]; then
+            echo "Backend requirements.txt not found. Repository tree (top level):"
+            ls -la
             exit 1
           fi
+          echo "Using requirements file: $REQ_FILE"
+          pip install -r "$REQ_FILE"
           pip install ruff bandit pip-audit
 
       - name: Ruff Lint
@@ -62,8 +62,12 @@ jobs:
 
       - name: Python Dependency Audit
         run: |
-          cd Backend
-          pip-audit -r requirements.txt
+          REQ_FILE="$(find . -maxdepth 4 -type f -iname 'requirements.txt' | grep -Ei '/backend/' | head -n1)"
+          if [ -z "$REQ_FILE" ]; then
+            echo "Backend requirements.txt not found for pip-audit"
+            exit 1
+          fi
+          pip-audit -r "$REQ_FILE"
 
   frontend:
     name: Frontend Checks
