@@ -4,6 +4,7 @@ import logging
 from typing import Iterable
 
 from django.conf import settings
+from django.template.loader import render_to_string
 
 from .email_service import EmailService
 
@@ -33,32 +34,26 @@ def send_request_submission_email(
     if not to_email:
         return {"success": False, "error": "Recipient email is missing."}
 
-    details_html = ""
-    details_text = ""
-    if details:
-        safe_items = [str(item) for item in details if str(item).strip()]
-        if safe_items:
-            details_html = "<ul>" + "".join(f"<li>{item}</li>" for item in safe_items) + "</ul>"
-            details_text = "\n".join(f"- {item}" for item in safe_items)
-
     action_url = _build_action_url(action_path)
-    button_html = ""
-    if action_url:
-        button_html = (
-            f'<p><a href="{action_url}" style="display:inline-block;padding:10px 14px;'
-            'background:#f97316;color:#fff;text-decoration:none;border-radius:8px;">View Request</a></p>'
-        )
-
     subject = f"{request_type} submitted - #{request_id}"
-    html = (
-        f"<h2>{request_type} submitted successfully</h2>"
-        f"<p>Dear {employee_name},</p>"
-        f"<p>Your request has been submitted and is now in <strong>{status_label}</strong>.</p>"
-        f"<p><strong>Request ID:</strong> {request_id}</p>"
-        f"{details_html}"
-        f"{button_html}"
-        "<p>If you did not submit this request, please contact HR immediately.</p>"
-    )
+
+    context = {
+        "title": f"{request_type} submitted successfully",
+        "title_ar": f"تم تقديم طلب {request_type} بنجاح",
+        "employee_name": employee_name,
+        "message": f"Your request has been submitted and is now in {status_label}.",
+        "message_ar": f"تم تقديم طلبك بنجاح وهو الآن في حالة {status_label}.",
+        "request_type": request_type,
+        "request_id": request_id,
+        "status_label": status_label,
+        "details": details,
+        "action_url": action_url,
+        "action_text": "View Request",
+        "action_text_ar": "عرض الطلب",
+    }
+    
+    html = render_to_string("emails/request_submission_email.html", context)
+
     text = (
         f"{request_type} submitted successfully.\n"
         f"Request ID: {request_id}\n"
