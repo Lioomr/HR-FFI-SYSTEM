@@ -14,6 +14,7 @@ export interface AssetAssignmentSummary {
 export interface Asset {
   id: number;
   asset_code: string;
+  name?: string;
   name_en: string;
   name_ar: string;
   type: "VEHICLE" | "LAPTOP" | "OTHER";

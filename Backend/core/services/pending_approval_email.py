@@ -4,6 +4,7 @@ import logging
 from typing import Iterable
 
 from django.conf import settings
+from django.template.loader import render_to_string
 from django.contrib.auth import get_user_model
 
 from employees.models import EmployeeProfile
@@ -97,32 +98,26 @@ def send_pending_approval_email(
     action_path: str | None = None,
 ) -> dict:
     action_url = _build_action_url(action_path)
-    details_html = ""
-    details_text = ""
-    if details:
-        items = [str(item) for item in details if str(item).strip()]
-        if items:
-            details_html = "<ul>" + "".join(f"<li>{item}</li>" for item in items) + "</ul>"
-            details_text = "\n".join(f"- {item}" for item in items)
-
-    action_btn = ""
-    if action_url:
-        action_btn = (
-            f'<p><a href="{action_url}" style="display:inline-block;padding:10px 14px;'
-            'background:#f97316;color:#fff;text-decoration:none;border-radius:8px;">Review Request</a></p>'
-        )
-
     subject = f"{request_type} pending approval - #{request_id}"
-    html = (
-        f"<h2>{request_type} requires your review</h2>"
-        f"<p>Dear {approver_name},</p>"
-        f"<p>A new request is pending your action.</p>"
-        f"<p><strong>Request ID:</strong> {request_id}<br/>"
-        f"<strong>Requested by:</strong> {requester_name}<br/>"
-        f"<strong>Status:</strong> {status_label}</p>"
-        f"{details_html}"
-        f"{action_btn}"
-    )
+
+    context = {
+        "title": f"{request_type} requires your review",
+        "title_ar": f"طلب {request_type} يتطلب مراجعتك",
+        "employee_name": approver_name,
+        "message": "A new request is pending your action.",
+        "message_ar": "هناك طلب جديد معلق بانتظار إجراء منك.",
+        "request_type": request_type,
+        "request_id": request_id,
+        "requester_name": requester_name,
+        "status_label": status_label,
+        "details": details,
+        "action_url": action_url,
+        "action_text": "Review Request",
+        "action_text_ar": "مراجعة الطلب",
+    }
+    
+    html = render_to_string("emails/pending_approval_email.html", context)
+
     text = (
         f"{request_type} requires your review.\n"
         f"Request ID: {request_id}\n"

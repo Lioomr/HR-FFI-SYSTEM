@@ -22,7 +22,7 @@ export default function CFOLoanRequestDetailsPage() {
         successMessage: t("loans.inbox.referredToCEOSuccess"),
         failedMessage: t("loans.inbox.referFailed"),
         requireComment: true,
-        handler: referCFOLoanRequestToCEO,
+        handler: (id, comment) => referCFOLoanRequestToCEO(id, comment ?? ""),
       }}
     />
   );

@@ -12,6 +12,7 @@ import Unauthorized403Page from "../../Unauthorized403Page";
 import { getEmployee } from "../../../services/api/employeesApi";
 import type { Employee } from "../../../services/api/employeesApi";
 import { listUsers } from "../../../services/api/usersApi";
+import { api } from "../../../services/api/apiClient";
 import type { UserDto } from "../../../services/api/apiTypes";
 import { isApiError } from "../../../services/api/apiTypes";
 import { isForbidden } from "../../../services/api/httpErrors";
@@ -145,7 +146,6 @@ export default function ViewEmployeePage() {
         if (!selectedUserId || !employee) return;
         setLinking(true);
         try {
-            const { api } = await import("../../../services/api/apiClient");
             await api.patch(`/employees/${id}`, { user_id: selectedUserId });
 
             message.success(t("hr.employees.linkSuccess"));
@@ -168,7 +168,6 @@ export default function ViewEmployeePage() {
             content: t("hr.employees.unlinkUserConfirm"),
             onOk: async () => {
                 try {
-                    const { api } = await import("../../../services/api/apiClient");
                     await api.patch(`/employees/${id}`, { user_id: null });
                     message.success(t("hr.employees.unlinkSuccess"));
                     loadEmployee();
