@@ -21,8 +21,10 @@ import { listSponsors } from "../../../services/api/sponsorsApi";
 import type { Sponsor } from "../../../services/api/sponsorsApi";
 import { toPayload } from "./employeeFormMapper";
 import EmployeeForm from "./EmployeeForm";
+import { useI18n } from "../../../i18n/useI18n";
 
 export default function CreateEmployeePage() {
+    const { t } = useI18n();
     const navigate = useNavigate();
     const [form] = Form.useForm();
 
@@ -64,7 +66,7 @@ export default function CreateEmployeePage() {
                     isApiError(sponsorRes) ||
                     isApiError(employeesRes)
                 ) {
-                    notifyError("Failed to load reference data");
+                    notifyError(t("hr.employees.fetchRefDataFailed"));
                     setLoading(false);
                     return;
                 }

@@ -1,16 +1,23 @@
-from datetime import date
-from rest_framework import serializers
+from pathlib import Path
+
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db.models import Q
-from .models import LeaveType, LeaveRequest
+from rest_framework import serializers
+
+from employees.models import EmployeeProfile
+
+from .models import LeaveBalanceAdjustment, LeaveRequest, LeaveType
 from .utils import (
     get_leave_days,
-    validate_leave_request_policy,
-    get_used_days_for_type,
     get_payment_breakdown,
+    get_used_days_for_type,
+    validate_leave_request_policy,
 )
 
 User = get_user_model()
+LEAVE_ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png"}
+LEAVE_MAX_UPLOAD_SIZE = int(getattr(settings, "MAX_LEAVE_DOCUMENT_SIZE_BYTES", 5 * 1024 * 1024))
 
 
 class UserSummarySerializer(serializers.ModelSerializer):
@@ -148,14 +155,19 @@ class LeaveRequestCreateSerializer(serializers.ModelSerializer):
 
         return attrs
 
+    def validate_document(self, value):
+        if not value:
+            return value
+        extension = Path(value.name).suffix.lower()
+        if extension not in LEAVE_ALLOWED_EXTENSIONS:
+            raise serializers.ValidationError("Unsupported file type.")
+        if value.size > LEAVE_MAX_UPLOAD_SIZE:
+            raise serializers.ValidationError("File size exceeds maximum limit.")
+        return value
+
 
 class LeaveRequestActionSerializer(serializers.Serializer):
     comment = serializers.CharField(required=False, allow_blank=True)
-
-
-from .models import LeaveBalanceAdjustment
-
-from employees.models import EmployeeProfile
 
 
 class LeaveBalanceAdjustmentSerializer(serializers.ModelSerializer):
@@ -182,6 +194,8 @@ class LeaveBalanceAdjustmentSerializer(serializers.ModelSerializer):
         try:
             profile = EmployeeProfile.objects.get(id=emp_id)
             user = profile.user
+            if not user:
+                raise serializers.ValidationError({"employee_id": "Employee is not connected to a system user account."})
             validated_data["employee"] = user
         except EmployeeProfile.DoesNotExist:
             raise serializers.ValidationError({"employee_id": "Employee Profile not found."})

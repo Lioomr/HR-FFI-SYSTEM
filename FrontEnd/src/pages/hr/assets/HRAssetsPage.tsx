@@ -22,6 +22,8 @@ import {
 import { isApiError } from "../../../services/api/apiTypes";
 import { listEmployees, type Employee } from "../../../services/api/employeesApi";
 
+import { useI18n } from "../../../i18n/useI18n";
+
 const statusColorMap: Record<string, string> = {
   AVAILABLE: "green",
   ASSIGNED: "blue",
@@ -41,6 +43,7 @@ function StatCard({ title, value }: { title: string; value: number }) {
 }
 
 export default function HRAssetsPage() {
+  const { t, language } = useI18n();
   const [apiMessage, contextHolder] = message.useMessage();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -72,18 +75,18 @@ export default function HRAssetsPage() {
       ]);
 
       if (isApiError(assetsRes)) {
-        setError(assetsRes.message || "Failed to load assets.");
+        setError(assetsRes.message || t("assets.loadFailed"));
         return;
       }
       if (isApiError(summaryRes)) {
-        setError(summaryRes.message || "Failed to load assets summary.");
+        setError(summaryRes.message || t("hr.assets.unableToLoadSummary"));
         return;
       }
 
       setAssets(assetsRes.data.items || []);
       setSummary(summaryRes.data);
     } catch (err: any) {
-      setError(err?.message || "Failed to load assets.");
+      setError(err?.message || t("assets.loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -117,7 +120,7 @@ export default function HRAssetsPage() {
 
   const columns: ColumnsType<Asset> = [
     {
-      title: "Code",
+      title: t("assets.assetCode"),
       dataIndex: "asset_code",
       key: "asset_code",
       width: 140,
@@ -135,10 +138,9 @@ export default function HRAssetsPage() {
       ),
     },
     {
-      title: "Name",
-      dataIndex: "name",
+      title: t("common.name"),
       key: "name",
-      render: (value: string, record) => (
+      render: (_: unknown, record) => (
         <Button
           type="link"
           style={{ paddingInline: 0 }}
@@ -147,28 +149,28 @@ export default function HRAssetsPage() {
             setDetailsModalOpen(true);
           }}
         >
-          {value}
+          {language === "ar" ? (record.name_ar || record.name_en) : record.name_en}
         </Button>
       ),
     },
-    { title: "Type", dataIndex: "type", key: "type", width: 120 },
+    { title: t("common.type"), dataIndex: "type", key: "type", width: 120 },
     {
-      title: "Status",
+      title: t("common.status"),
       dataIndex: "status",
       key: "status",
       width: 180,
       render: (status: string) => <Tag color={statusColorMap[status] || "default"}>{status}</Tag>,
     },
-    { title: "Vendor", dataIndex: "vendor", key: "vendor", width: 180, render: (value?: string) => value || "-" },
+    { title: t("assets.vendor"), dataIndex: "vendor", key: "vendor", width: 180, render: (value?: string) => value || "-" },
     {
-      title: "Warranty Expiry",
+      title: t("assets.warrantyExpiry"),
       dataIndex: "warranty_expiry",
       key: "warranty_expiry",
       width: 160,
       render: (value?: string | null) => value || "-",
     },
     {
-      title: "Actions",
+      title: t("common.actions"),
       key: "actions",
       width: 320,
       render: (_, record) => (
@@ -181,7 +183,7 @@ export default function HRAssetsPage() {
               setDetailsModalOpen(true);
             }}
           >
-            View
+            {t("common.view")}
           </Button>
           <Button
             size="small"
@@ -190,7 +192,8 @@ export default function HRAssetsPage() {
               setEditingAsset(record);
 
               const baseValues: Record<string, unknown> = {
-                name: record.name,
+                name_en: record.name_en,
+                name_ar: record.name_ar,
                 type: record.type,
                 vendor: record.vendor || undefined,
                 asset_value: record.asset_value ?? undefined,
@@ -230,7 +233,7 @@ export default function HRAssetsPage() {
               setCreateModalOpen(true);
             }}
           >
-            Edit
+            {t("hr.assets.edit")}
           </Button>
           <Button
             size="small"
@@ -242,7 +245,7 @@ export default function HRAssetsPage() {
               setAssignModalOpen(true);
             }}
           >
-            Assign
+            {t("hr.assets.assign")}
           </Button>
           <Button
             size="small"
@@ -254,21 +257,21 @@ export default function HRAssetsPage() {
               setReturnModalOpen(true);
             }}
           >
-            Return
+            {t("hr.assets.return")}
           </Button>
           <Popconfirm
-            title="Delete asset"
-            description="This will hard delete the asset. Continue?"
-            okText="Delete"
+            title={t("hr.assets.deleteAsset")}
+            description={t("hr.assets.deleteConfirm")}
+            okText={t("hr.assets.delete")}
             okButtonProps={{ danger: true }}
             onConfirm={async (e) => {
               e?.stopPropagation?.();
               try {
                 await deleteAsset(record.id);
-                await apiMessage.success("Asset deleted.");
+                await apiMessage.success(t("hr.assets.deleteSuccess"));
                 await loadData();
               } catch (err: any) {
-                await apiMessage.error(err?.message || "Failed to delete asset.");
+                await apiMessage.error(err?.message || t("hr.assets.deleteFailed"));
               }
             }}
           >
@@ -279,7 +282,7 @@ export default function HRAssetsPage() {
                 e.stopPropagation();
               }}
             >
-              Delete
+              {t("hr.assets.delete")}
             </Button>
           </Popconfirm>
         </Space>
@@ -349,7 +352,7 @@ export default function HRAssetsPage() {
           {}
         );
 
-        const hasAnyValidValue = Object.values(flexibleAttributes).some((item) => {
+        const hasAnyValidValue = Object.values(flexibleAttributes || {}).some((item) => {
           if (!item || typeof item !== "object") return false;
           const details = item as Record<string, unknown>;
           if (details.type === "date") return Boolean(details.date);
@@ -370,7 +373,8 @@ export default function HRAssetsPage() {
       }
 
       const payload: CreateAssetPayload = {
-        name: values.name,
+        name_en: values.name_en,
+        name_ar: values.name_ar,
         type: values.type,
         status: values.status || "AVAILABLE",
         serial_number: normalizeOptional(values.serial_number),
@@ -401,11 +405,11 @@ export default function HRAssetsPage() {
       setCreateModalOpen(false);
       createForm.resetFields();
       setEditingAsset(null);
-      await apiMessage.success(editingAsset ? "Asset updated successfully." : "Asset created successfully.");
+      await apiMessage.success(editingAsset ? t("hr.assets.updateSuccess") : t("hr.assets.createSuccess"));
       await loadData();
     } catch (err: any) {
       if (!err?.errorFields) {
-        await apiMessage.error(err?.message || (editingAsset ? "Failed to update asset." : "Failed to create asset."));
+        await apiMessage.error(err?.message || (editingAsset ? t("hr.assets.updateFailed") : t("hr.assets.createFailed")));
       }
     } finally {
       setSubmitting(false);
@@ -420,11 +424,11 @@ export default function HRAssetsPage() {
       await assignAsset(activeAsset.id, values.employee_id);
       setAssignModalOpen(false);
       setActiveAsset(null);
-      await apiMessage.success("Asset assigned successfully.");
+      await apiMessage.success(t("hr.assets.assignSuccess"));
       await loadData();
     } catch (err: any) {
       if (!err?.errorFields) {
-        await apiMessage.error(err?.message || "Failed to assign asset.");
+        await apiMessage.error(err?.message || t("hr.assets.assignFailed"));
       }
     } finally {
       setSubmitting(false);
@@ -442,26 +446,26 @@ export default function HRAssetsPage() {
       });
       setReturnModalOpen(false);
       setActiveAsset(null);
-      await apiMessage.success("Asset returned successfully.");
+      await apiMessage.success(t("hr.assets.returnSuccess"));
       await loadData();
     } catch (err: any) {
       if (!err?.errorFields) {
-        await apiMessage.error(err?.message || "Failed to return asset.");
+        await apiMessage.error(err?.message || t("hr.assets.returnFailed"));
       }
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (loading) return <LoadingState title="Loading assets" lines={6} />;
-  if (error) return <ErrorState title="Unable to load assets" description={error} onRetry={() => void loadData()} />;
+  if (loading) return <LoadingState title={t("hr.assets.loadingAssets")} lines={6} />;
+  if (error) return <ErrorState title={t("assets.unableToLoad")} description={error} onRetry={() => void loadData()} />;
 
   return (
     <div>
       {contextHolder}
       <PageHeader
-        title="Assets"
-        subtitle="Manage company assets and monitor availability."
+        title={t("hr.assets.title")}
+        subtitle={t("hr.assets.subtitle")}
         actions={
           <Button
             type="primary"
@@ -472,19 +476,19 @@ export default function HRAssetsPage() {
               setCreateModalOpen(true);
             }}
           >
-            Create Asset
+            {t("hr.assets.createAsset")}
           </Button>
         }
       />
 
       {summary && (
         <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-          <Col xs={24} sm={12} md={8} lg={4}><StatCard title="Total" value={summary.total} /></Col>
-          <Col xs={24} sm={12} md={8} lg={4}><StatCard title="Assigned" value={summary.assigned} /></Col>
-          <Col xs={24} sm={12} md={8} lg={4}><StatCard title="Available" value={summary.available} /></Col>
-          <Col xs={24} sm={12} md={8} lg={4}><StatCard title="Damaged" value={summary.damaged} /></Col>
-          <Col xs={24} sm={12} md={8} lg={4}><StatCard title="Lost" value={summary.lost} /></Col>
-          <Col xs={24} sm={12} md={8} lg={4}><StatCard title="Warranty Soon" value={summary.warranty_expiring_soon} /></Col>
+          <Col xs={24} sm={12} md={8} lg={4}><StatCard title={t("hr.assets.total")} value={summary.total} /></Col>
+          <Col xs={24} sm={12} md={8} lg={4}><StatCard title={t("hr.assets.assigned")} value={summary.assigned} /></Col>
+          <Col xs={24} sm={12} md={8} lg={4}><StatCard title={t("hr.assets.available")} value={summary.available} /></Col>
+          <Col xs={24} sm={12} md={8} lg={4}><StatCard title={t("hr.assets.damaged")} value={summary.damaged} /></Col>
+          <Col xs={24} sm={12} md={8} lg={4}><StatCard title={t("hr.assets.lost")} value={summary.lost} /></Col>
+          <Col xs={24} sm={12} md={8} lg={4}><StatCard title={t("hr.assets.warrantySoon")} value={summary.warranty_expiring_soon} /></Col>
         </Row>
       )}
 
@@ -505,7 +509,7 @@ export default function HRAssetsPage() {
       </Card>
 
       <Modal
-        title={`Asset Details${activeAsset ? `: ${activeAsset.asset_code}` : ""}`}
+        title={activeAsset ? `${t("assets.details")}: ${activeAsset.asset_code}` : t("assets.details")}
         open={detailsModalOpen}
         onCancel={() => {
           setDetailsModalOpen(false);
@@ -519,61 +523,61 @@ export default function HRAssetsPage() {
               setActiveAsset(null);
             }}
           >
-            Close
+            {t("common.close")}
           </Button>,
         ]}
         width={900}
       >
         {activeAsset && (
           <Descriptions bordered size="small" column={2}>
-            <Descriptions.Item label="Asset Code">{activeAsset.asset_code}</Descriptions.Item>
-            <Descriptions.Item label="Name">{activeAsset.name || "-"}</Descriptions.Item>
-            <Descriptions.Item label="Type">{activeAsset.type || "-"}</Descriptions.Item>
-            <Descriptions.Item label="Status">
+            <Descriptions.Item label={t("assets.assetCode")}>{activeAsset.asset_code}</Descriptions.Item>
+            <Descriptions.Item label={t("common.name")}>{language === "ar" ? (activeAsset.name_ar || activeAsset.name_en || "-") : (activeAsset.name_en || "-")}</Descriptions.Item>
+            <Descriptions.Item label={t("common.type")}>{activeAsset.type || "-"}</Descriptions.Item>
+            <Descriptions.Item label={t("common.status")}>
               <Tag color={statusColorMap[activeAsset.status] || "default"}>{activeAsset.status}</Tag>
             </Descriptions.Item>
-            <Descriptions.Item label="Vendor">{activeAsset.vendor || "-"}</Descriptions.Item>
-            <Descriptions.Item label="Asset Value">{activeAsset.asset_value ?? "-"}</Descriptions.Item>
-            <Descriptions.Item label="Serial Number">{activeAsset.serial_number || "-"}</Descriptions.Item>
-            <Descriptions.Item label="Purchase Date">{activeAsset.purchase_date || "-"}</Descriptions.Item>
-            <Descriptions.Item label="Warranty Expiry">{activeAsset.warranty_expiry || "-"}</Descriptions.Item>
-            <Descriptions.Item label="Notes" span={2}>{activeAsset.notes || "-"}</Descriptions.Item>
+            <Descriptions.Item label={t("assets.vendor")}>{activeAsset.vendor || "-"}</Descriptions.Item>
+            <Descriptions.Item label={t("hr.assets.assetValue")}>{activeAsset.asset_value ?? "-"}</Descriptions.Item>
+            <Descriptions.Item label={t("assets.serialNumber")}>{activeAsset.serial_number || "-"}</Descriptions.Item>
+            <Descriptions.Item label={t("assets.purchaseDate")}>{activeAsset.purchase_date || "-"}</Descriptions.Item>
+            <Descriptions.Item label={t("assets.warrantyExpiry")}>{activeAsset.warranty_expiry || "-"}</Descriptions.Item>
+            <Descriptions.Item label={t("common.notes")} span={2}>{activeAsset.notes || "-"}</Descriptions.Item>
 
             {activeAsset.active_assignment && (
               <>
-                <Descriptions.Item label="Assigned To">
+                <Descriptions.Item label={t("hr.assets.assignedTo")}>
                   {activeAsset.active_assignment.employee_name || "-"}
                 </Descriptions.Item>
-                <Descriptions.Item label="Assigned Employee ID">
+                <Descriptions.Item label={t("hr.assets.assignedEmployeeId")}>
                   {activeAsset.active_assignment.employee_id || "-"}
                 </Descriptions.Item>
-                <Descriptions.Item label="Assigned At">
+                <Descriptions.Item label={t("hr.assets.assignedAt")}>
                   {activeAsset.active_assignment.assigned_at || "-"}
                 </Descriptions.Item>
-                <Descriptions.Item label="Assignment Active">
-                  {activeAsset.active_assignment.is_active ? "Yes" : "No"}
+                <Descriptions.Item label={t("hr.assets.assignmentActive")}>
+                  {activeAsset.active_assignment.is_active ? t("common.yes") : t("common.no")}
                 </Descriptions.Item>
               </>
             )}
 
             {activeAsset.type === "VEHICLE" && (
               <>
-                <Descriptions.Item label="Plate Number">{activeAsset.plate_number || "-"}</Descriptions.Item>
-                <Descriptions.Item label="Chassis Number">{activeAsset.chassis_number || "-"}</Descriptions.Item>
-                <Descriptions.Item label="Engine Number">{activeAsset.engine_number || "-"}</Descriptions.Item>
-                <Descriptions.Item label="Fuel Type">{activeAsset.fuel_type || "-"}</Descriptions.Item>
-                <Descriptions.Item label="Insurance Expiry">{activeAsset.insurance_expiry || "-"}</Descriptions.Item>
-                <Descriptions.Item label="Registration Expiry">{activeAsset.registration_expiry || "-"}</Descriptions.Item>
+                <Descriptions.Item label={t("assets.plateNumber")}>{activeAsset.plate_number || "-"}</Descriptions.Item>
+                <Descriptions.Item label={t("assets.chassisNumber")}>{activeAsset.chassis_number || "-"}</Descriptions.Item>
+                <Descriptions.Item label={t("assets.engineNumber")}>{activeAsset.engine_number || "-"}</Descriptions.Item>
+                <Descriptions.Item label={t("assets.fuelType")}>{activeAsset.fuel_type || "-"}</Descriptions.Item>
+                <Descriptions.Item label={t("hr.assets.insuranceExpiry")}>{activeAsset.insurance_expiry || "-"}</Descriptions.Item>
+                <Descriptions.Item label={t("hr.assets.registrationExpiry")}>{activeAsset.registration_expiry || "-"}</Descriptions.Item>
               </>
             )}
 
             {activeAsset.type === "LAPTOP" && (
               <>
-                <Descriptions.Item label="CPU">{activeAsset.cpu || "-"}</Descriptions.Item>
-                <Descriptions.Item label="RAM">{activeAsset.ram || "-"}</Descriptions.Item>
-                <Descriptions.Item label="Storage">{activeAsset.storage || "-"}</Descriptions.Item>
-                <Descriptions.Item label="MAC Address">{activeAsset.mac_address || "-"}</Descriptions.Item>
-                <Descriptions.Item label="Operating System">{activeAsset.operating_system || "-"}</Descriptions.Item>
+                <Descriptions.Item label={t("assets.cpu")}>{activeAsset.cpu || "-"}</Descriptions.Item>
+                <Descriptions.Item label={t("assets.ram")}>{activeAsset.ram || "-"}</Descriptions.Item>
+                <Descriptions.Item label={t("assets.storage")}>{activeAsset.storage || "-"}</Descriptions.Item>
+                <Descriptions.Item label={t("hr.assets.macAddress")}>{activeAsset.mac_address || "-"}</Descriptions.Item>
+                <Descriptions.Item label={t("assets.os")}>{activeAsset.operating_system || "-"}</Descriptions.Item>
               </>
             )}
 
@@ -592,7 +596,7 @@ export default function HRAssetsPage() {
                     );
                   })
                 ) : (
-                  <Descriptions.Item label="Custom Details" span={2}>
+                  <Descriptions.Item label={t("assets.customDetails")} span={2}>
                     -
                   </Descriptions.Item>
                 )}
@@ -603,7 +607,7 @@ export default function HRAssetsPage() {
       </Modal>
 
       <Modal
-        title={editingAsset ? `Edit Asset: ${editingAsset.asset_code}` : "Create Asset"}
+        title={editingAsset ? `${t("hr.assets.editAsset")}: ${editingAsset.asset_code}` : t("hr.assets.createAsset")}
         open={createModalOpen}
         onCancel={() => {
           setCreateModalOpen(false);
@@ -611,24 +615,31 @@ export default function HRAssetsPage() {
           setEditingAsset(null);
         }}
         onOk={handleCreateAsset}
-        okText={editingAsset ? "Save Changes" : "Create"}
+        okText={editingAsset ? t("hr.assets.saveChanges") : t("hr.assets.create")}
         confirmLoading={submitting}
         width={760}
       >
         <Form form={createForm} layout="vertical">
           <Row gutter={12}>
             <Col span={12}>
-              <Form.Item name="name" label="Name" rules={[{ required: true, message: "Name is required." }]}>
-                <Input />
+              <Form.Item name="name_en" label={t("common.name")} rules={[{ required: true, message: t("hr.assets.nameReq") }]}>
+                <Input placeholder="Name (English)" />
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="type" label="Type" rules={[{ required: true, message: "Type is required." }]}>
+              <Form.Item name="name_ar" label={t("common.nameAr", "Name (Arabic)")}>
+                <Input placeholder="Name (Arabic)" />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={12}>
+            <Col span={12}>
+              <Form.Item name="type" label={t("common.type")} rules={[{ required: true, message: t("hr.assets.typeReq") }]}>
                 <Select
                   options={[
-                    { label: "Vehicle", value: "VEHICLE" },
-                    { label: "Laptop", value: "LAPTOP" },
-                    { label: "Other", value: "OTHER" },
+                    { label: t("hr.assets.vehicle"), value: "VEHICLE" },
+                    { label: t("hr.assets.laptop"), value: "LAPTOP" },
+                    { label: t("hr.assets.other"), value: "OTHER" },
                   ]}
                 />
               </Form.Item>
@@ -637,12 +648,12 @@ export default function HRAssetsPage() {
 
           <Row gutter={12}>
             <Col span={12}>
-              <Form.Item name="vendor" label="Vendor">
+              <Form.Item name="vendor" label={t("assets.vendor")}>
                 <Input />
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="asset_value" label="Asset Value">
+              <Form.Item name="asset_value" label={t("hr.assets.assetValue")}>
                 <InputNumber style={{ width: "100%" }} min={0} precision={2} />
               </Form.Item>
             </Col>
@@ -650,21 +661,21 @@ export default function HRAssetsPage() {
 
           <Row gutter={12}>
             <Col span={12}>
-              <Form.Item name="purchase_date" label="Purchase Date (YYYY-MM-DD)">
+              <Form.Item name="purchase_date" label={t("assets.purchaseDate")}>
                 <DatePicker style={{ width: "100%" }} format="YYYY-MM-DD" />
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="warranty_expiry" label="Warranty Expiry (YYYY-MM-DD)">
+              <Form.Item name="warranty_expiry" label={t("assets.warrantyExpiry")}>
                 <DatePicker style={{ width: "100%" }} format="YYYY-MM-DD" />
               </Form.Item>
             </Col>
           </Row>
 
-          <Form.Item name="serial_number" label="Serial Number">
+          <Form.Item name="serial_number" label={t("assets.serialNumber")}>
             <Input />
           </Form.Item>
-          <Form.Item name="notes" label="Notes">
+          <Form.Item name="notes" label={t("common.notes")}>
             <Input.TextArea rows={2} />
           </Form.Item>
 
@@ -672,24 +683,24 @@ export default function HRAssetsPage() {
             <>
               <Row gutter={12}>
                 <Col span={12}>
-                  <Form.Item name="plate_number" label="Plate Number" rules={[{ required: true, message: "Plate number is required." }]}>
+                  <Form.Item name="plate_number" label={t("assets.plateNumber")} rules={[{ required: true, message: t("hr.assets.plateReq") }]}>
                     <Input />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item name="chassis_number" label="Chassis Number" rules={[{ required: true, message: "Chassis number is required." }]}>
+                  <Form.Item name="chassis_number" label={t("assets.chassisNumber")} rules={[{ required: true, message: t("hr.assets.chassisReq") }]}>
                     <Input />
                   </Form.Item>
                 </Col>
               </Row>
               <Row gutter={12}>
                 <Col span={12}>
-                  <Form.Item name="engine_number" label="Engine Number" rules={[{ required: true, message: "Engine number is required." }]}>
+                  <Form.Item name="engine_number" label={t("assets.engineNumber")} rules={[{ required: true, message: t("hr.assets.engineReq") }]}>
                     <Input />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item name="fuel_type" label="Fuel Type" rules={[{ required: true, message: "Fuel type is required." }]}>
+                  <Form.Item name="fuel_type" label={t("assets.fuelType")} rules={[{ required: true, message: t("hr.assets.fuelReq") }]}>
                     <Input />
                   </Form.Item>
                 </Col>
@@ -701,36 +712,36 @@ export default function HRAssetsPage() {
             <>
               <Row gutter={12}>
                 <Col span={12}>
-                  <Form.Item name="cpu" label="CPU" rules={[{ required: true, message: "CPU is required." }]}>
+                  <Form.Item name="cpu" label={t("assets.cpu")} rules={[{ required: true, message: t("hr.assets.cpuReq") }]}>
                     <Input />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item name="ram" label="RAM" rules={[{ required: true, message: "RAM is required." }]}>
+                  <Form.Item name="ram" label={t("assets.ram")} rules={[{ required: true, message: t("hr.assets.ramReq") }]}>
                     <Input />
                   </Form.Item>
                 </Col>
               </Row>
               <Row gutter={12}>
                 <Col span={12}>
-                  <Form.Item name="storage" label="Storage" rules={[{ required: true, message: "Storage is required." }]}>
+                  <Form.Item name="storage" label={t("assets.storage")} rules={[{ required: true, message: t("hr.assets.storageReq") }]}>
                     <Input />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item name="mac_address" label="MAC Address" rules={[{ required: true, message: "MAC address is required." }]}>
+                  <Form.Item name="mac_address" label={t("hr.assets.macAddress")} rules={[{ required: true, message: t("hr.assets.macReq") }]}>
                     <Input />
                   </Form.Item>
                 </Col>
               </Row>
-              <Form.Item name="operating_system" label="Operating System" rules={[{ required: true, message: "Operating system is required." }]}>
+              <Form.Item name="operating_system" label={t("assets.os")} rules={[{ required: true, message: t("hr.assets.osReq") }]}>
                 <Input />
               </Form.Item>
             </>
           )}
 
           {selectedType === "OTHER" && (
-            <Form.Item label="Custom Details" required>
+            <Form.Item label={t("assets.customDetails")} required>
               <Form.List name="other_custom_details">
                 {(fields, { add, remove }) => (
                   <>
@@ -741,25 +752,25 @@ export default function HRAssetsPage() {
                             {...restField}
                             name={[name, "title"]}
                             label={name === 0 ? "Title" : ""}
-                            rules={[{ required: true, message: "Title is required." }]}
+                            rules={[{ required: true, message: t("hr.assets.titleReq") }]}
                             style={{ marginBottom: 0 }}
                           >
-                            <Input placeholder="Custom detail title" />
+                            <Input placeholder={t("hr.assets.customDetailTitle")} />
                           </Form.Item>
                         </Col>
                         <Col span={6}>
                           <Form.Item
                             {...restField}
                             name={[name, "value_type"]}
-                            label={name === 0 ? "Field Type" : ""}
+                            label={name === 0 ? t("hr.assets.fieldType") : ""}
                             initialValue="body"
-                            rules={[{ required: true, message: "Type is required." }]}
+                            rules={[{ required: true, message: t("hr.assets.typeReq") }]}
                             style={{ marginBottom: 0 }}
                           >
                             <Select
                               options={[
-                                { label: "Body", value: "body" },
-                                { label: "Date", value: "date" },
+                                { label: t("hr.assets.body"), value: "body" },
+                                { label: t("hr.assets.date"), value: "date" },
                               ]}
                             />
                           </Form.Item>
@@ -773,8 +784,8 @@ export default function HRAssetsPage() {
                                   <Form.Item
                                     {...restField}
                                     name={[name, "date"]}
-                                    label={name === 0 ? "Date" : ""}
-                                    rules={[{ required: true, message: "Date is required." }]}
+                                    label={name === 0 ? t("hr.assets.date") : ""}
+                                    rules={[{ required: true, message: t("hr.assets.dateReq") }]}
                                     style={{ marginBottom: 0 }}
                                   >
                                     <DatePicker style={{ width: "100%" }} format="YYYY-MM-DD" />
@@ -786,11 +797,11 @@ export default function HRAssetsPage() {
                                 <Form.Item
                                   {...restField}
                                   name={[name, "body"]}
-                                  label={name === 0 ? "Body" : ""}
-                                  rules={[{ required: true, message: "Body is required." }]}
+                                  label={name === 0 ? t("hr.assets.body") : ""}
+                                  rules={[{ required: true, message: t("hr.assets.bodyReq") }]}
                                   style={{ marginBottom: 0 }}
                                 >
-                                  <Input placeholder="Custom detail body" />
+                                  <Input placeholder={t("hr.assets.customDetailBody")} />
                                 </Form.Item>
                               );
                             }}
@@ -814,7 +825,7 @@ export default function HRAssetsPage() {
                       onClick={() => add()}
                       style={{ width: "100%", marginTop: 8 }}
                     >
-                      Add Custom Detail
+                      {t("hr.assets.addCustomDetail")}
                     </Button>
                   </>
                 )}
@@ -825,7 +836,7 @@ export default function HRAssetsPage() {
       </Modal>
 
       <Modal
-        title={`Assign Asset${activeAsset ? `: ${activeAsset.asset_code}` : ""}`}
+        title={activeAsset ? `${t("hr.assets.assignAsset")}: ${activeAsset.asset_code}` : t("hr.assets.assignAsset")}
         open={assignModalOpen}
         onCancel={() => {
           setAssignModalOpen(false);
@@ -833,27 +844,27 @@ export default function HRAssetsPage() {
           assignForm.resetFields();
         }}
         onOk={handleAssignAsset}
-        okText="Assign"
+        okText={t("hr.assets.assign")}
         confirmLoading={submitting}
       >
         <Form form={assignForm} layout="vertical">
           <Form.Item
             name="employee_id"
-            label="Employee"
-            rules={[{ required: true, message: "Please select an employee." }]}
+            label={t("hr.assets.employee")}
+            rules={[{ required: true, message: t("hr.assets.pleaseSelectEmployee") }]}
           >
             <Select
               showSearch
               options={employeeOptions}
               optionFilterProp="label"
-              placeholder="Select employee"
+              placeholder={t("hr.assets.selectEmployee")}
             />
           </Form.Item>
         </Form>
       </Modal>
 
       <Modal
-        title={`Return Asset${activeAsset ? `: ${activeAsset.asset_code}` : ""}`}
+        title={activeAsset ? `${t("hr.assets.returnAsset")}: ${activeAsset.asset_code}` : t("hr.assets.returnAsset")}
         open={returnModalOpen}
         onCancel={() => {
           setReturnModalOpen(false);
@@ -861,18 +872,18 @@ export default function HRAssetsPage() {
           returnForm.resetFields();
         }}
         onOk={handleReturnAsset}
-        okText="Return"
+        okText={t("hr.assets.return")}
         confirmLoading={submitting}
       >
         <Form form={returnForm} layout="vertical">
-          <Form.Item name="return_note" label="Return Note">
+          <Form.Item name="return_note" label={t("hr.assets.returnNote")}>
             <Input.TextArea rows={3} />
           </Form.Item>
-          <Form.Item name="condition_on_return" label="Condition On Return">
+          <Form.Item name="condition_on_return" label={t("hr.assets.conditionOnReturn")}>
             <Input.TextArea rows={2} />
           </Form.Item>
         </Form>
       </Modal>
-    </div>
+    </div >
   );
 }

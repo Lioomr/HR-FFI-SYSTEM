@@ -1,6 +1,8 @@
-from pathlib import Path
-from datetime import timedelta
 import os
+from datetime import timedelta
+from pathlib import Path
+
+from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -26,18 +28,50 @@ def _env_list(name, default=None):
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+def _is_weak_secret_key(value: str) -> bool:
+    if not value:
+        return True
+    candidate = value.strip()
+    weak_values = {
+        "django-insecure-dev-only-change-me",
+        "django-insecure-local-dev-only",
+        "changeme",
+        "change-me",
+        "secret",
+        "password",
+    }
+    if candidate.lower() in weak_values:
+        return True
+    if candidate.startswith("django-insecure-"):
+        return True
+    return len(candidate) < 32
+
+
 DEBUG = _env_bool("DJANGO_DEBUG", False)
+DJANGO_ENV = (os.environ.get("DJANGO_ENV") or os.environ.get("APP_ENV") or os.environ.get("ENVIRONMENT") or "").strip()
+
+if DEBUG and DJANGO_ENV and DJANGO_ENV.lower() not in {"local", "development", "dev"}:
+    raise ImproperlyConfigured("DJANGO_DEBUG cannot be true outside a local/development environment.")
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY")
 if not SECRET_KEY:
     if DEBUG:
         SECRET_KEY = "django-insecure-dev-only-change-me"
     else:
-        raise RuntimeError("DJANGO_SECRET_KEY is required when DJANGO_DEBUG is false.")
+        raise ImproperlyConfigured("DJANGO_SECRET_KEY is required when DJANGO_DEBUG is false.")
+
+if not DEBUG and _is_weak_secret_key(SECRET_KEY):
+    raise ImproperlyConfigured("DJANGO_SECRET_KEY is too weak for non-debug environments.")
 
 ALLOWED_HOSTS = _env_list("DJANGO_ALLOWED_HOSTS", ["localhost", "127.0.0.1"] if DEBUG else [])
 if not DEBUG and not ALLOWED_HOSTS:
-    raise RuntimeError("DJANGO_ALLOWED_HOSTS must be set when DJANGO_DEBUG is false.")
+    raise ImproperlyConfigured("DJANGO_ALLOWED_HOSTS must be set when DJANGO_DEBUG is false.")
+
+if DEBUG:
+    local_hosts = {"localhost", "127.0.0.1", "[::1]"}
+    non_local_hosts = [host for host in ALLOWED_HOSTS if host not in local_hosts and not host.endswith(".localhost")]
+    if non_local_hosts:
+        raise ImproperlyConfigured("DJANGO_DEBUG=true is only allowed with local ALLOWED_HOSTS.")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -63,12 +97,14 @@ INSTALLED_APPS = [
     "hr_reference",
     "announcements",
     "loans",
+    "rents",
 ]
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -80,6 +116,9 @@ MIDDLEWARE = [
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "no-reply@fficontracting.com")
 NOTIFICATION_HTTP_TIMEOUT_SECONDS = int(os.environ.get("NOTIFICATION_HTTP_TIMEOUT_SECONDS", "10"))
+PASSWORD_RESET_TOKEN_TTL_SECONDS = int(os.environ.get("PASSWORD_RESET_TOKEN_TTL_SECONDS", "3600"))
+MAX_LEAVE_DOCUMENT_SIZE_BYTES = int(os.environ.get("MAX_LEAVE_DOCUMENT_SIZE_BYTES", str(5 * 1024 * 1024)))
+MAX_ASSET_INVOICE_SIZE_BYTES = int(os.environ.get("MAX_ASSET_INVOICE_SIZE_BYTES", str(5 * 1024 * 1024)))
 
 # Bird (MessageBird) Channels API
 BIRD_API_KEY = os.environ.get("BIRD_API_KEY", "")
@@ -101,6 +140,7 @@ CORS_ALLOWED_ORIGINS = _env_list(
     ["http://localhost:5173", "http://localhost:3000"] if DEBUG else [],
 )
 CORS_ALLOW_CREDENTIALS = True
+TRUSTED_PROXY_IPS = _env_list("TRUSTED_PROXY_IPS", [])
 CSRF_TRUSTED_ORIGINS = _env_list(
     "CSRF_TRUSTED_ORIGINS",
     CORS_ALLOWED_ORIGINS if DEBUG else [],

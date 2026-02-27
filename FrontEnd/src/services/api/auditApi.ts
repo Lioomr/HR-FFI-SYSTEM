@@ -16,14 +16,14 @@ export type AuditLogsParams = {
 
 export async function listAuditLogs(params: AuditLogsParams = {}) {
   const { data } = await api.get<ApiResponse<PaginatedResponse<AuditLogDto>>>(
-    "/audit-logs",
+    "/audit-logs/",
     { params }
   );
   return data;
 }
 
 export async function exportAuditLogs(params: AuditLogsParams = {}) {
-  const { data } = await api.get<Blob>("/audit-logs/export", {
+  const { data } = await api.get<Blob>("/audit-logs/export/", {
     params,
     responseType: "blob",
   });

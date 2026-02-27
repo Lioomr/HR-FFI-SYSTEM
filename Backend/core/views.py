@@ -1,14 +1,19 @@
-from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
-from django.utils import timezone
 from datetime import timedelta
-from django.db.models import Q
 
+from django.conf import settings
+from django.core.mail import send_mail
+from django.db.models import Q
+from django.utils import timezone
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.views import APIView
+from rest_framework.response import Response
+
+from attendance.models import AttendanceRecord
 from core.permissions import IsHRManagerOrAdmin
 from core.responses import success
 from employees.models import EmployeeProfile
 from leaves.models import LeaveRequest
-from attendance.models import AttendanceRecord
 from payroll.models import PayrollRun
 
 
@@ -61,14 +66,18 @@ class HrSummaryView(APIView):
             )
 
         pending_attendance_qs = (
-            AttendanceRecord.objects.filter(status__in=[AttendanceRecord.Status.PENDING_HR, AttendanceRecord.Status.PENDING])
+            AttendanceRecord.objects.filter(
+                status__in=[AttendanceRecord.Status.PENDING_HR, AttendanceRecord.Status.PENDING]
+            )
             .select_related("employee_profile__user")
             .order_by("-created_at")[:10]
         )
         for rec in pending_attendance_qs:
             profile = rec.employee_profile
             user = profile.user if profile else None
-            full_name = profile.full_name if profile and profile.full_name else (user.email if user else f"Employee {rec.id}")
+            full_name = (
+                profile.full_name if profile and profile.full_name else (user.email if user else f"Employee {rec.id}")
+            )
             pending_approvals.append(
                 {
                     "id": rec.id,
@@ -93,27 +102,27 @@ class HrSummaryView(APIView):
 
         # Latest Leaves
         latest_leaves = LeaveRequest.objects.select_related("employee__employee_profile").order_by("-created_at")[:5]
-        for l in latest_leaves:
-            profile = getattr(l.employee, "employee_profile", None)
-            name = profile.full_name if profile else l.employee.email
+        for leave in latest_leaves:
+            profile = getattr(leave.employee, "employee_profile", None)
+            name = profile.full_name if profile else leave.employee.email
 
             status_color = "orange"
-            if l.status == LeaveRequest.RequestStatus.APPROVED:
+            if leave.status == LeaveRequest.RequestStatus.APPROVED:
                 status_color = "green"
-            elif l.status == LeaveRequest.RequestStatus.REJECTED:
+            elif leave.status == LeaveRequest.RequestStatus.REJECTED:
                 status_color = "red"
-            elif l.status == LeaveRequest.RequestStatus.CANCELLED:
+            elif leave.status == LeaveRequest.RequestStatus.CANCELLED:
                 status_color = "default"
 
             recent_activity.append(
                 {
-                    "key": f"leave_{l.id}",
+                    "key": f"leave_{leave.id}",
                     "employee": name,
                     "action": "Leave Request",
-                    "date": l.created_at.strftime("%b %d, %I:%M %p"),
-                    "status": l.status.replace("_", " ").title(),
+                    "date": leave.created_at.strftime("%b %d, %I:%M %p"),
+                    "status": leave.status.replace("_", " ").title(),
                     "statusColor": status_color,
-                    "sort_key": l.created_at,
+                    "sort_key": leave.created_at,
                 }
             )
 
@@ -147,11 +156,11 @@ class HrSummaryView(APIView):
             "latest_period": None,
             "trend_percentage": None,
         }
-        
+
         if latest_payroll:
             payroll_data["latest_total_net"] = float(latest_payroll.total_net)
             payroll_data["latest_period"] = f"{latest_payroll.month}/{latest_payroll.year}"
-            
+
             # Calculate trend vs previous month
             if latest_payroll.month == 1:
                 prev_month = 12
@@ -159,11 +168,9 @@ class HrSummaryView(APIView):
             else:
                 prev_month = latest_payroll.month - 1
                 prev_year = latest_payroll.year
-            
-            prev_payroll = PayrollRun.objects.filter(
-                year=prev_year, month=prev_month
-            ).first()
-            
+
+            prev_payroll = PayrollRun.objects.filter(year=prev_year, month=prev_month).first()
+
             if prev_payroll and prev_payroll.total_net > 0:
                 diff = latest_payroll.total_net - prev_payroll.total_net
                 trend = (diff / prev_payroll.total_net) * 100
@@ -179,3 +186,51 @@ class HrSummaryView(APIView):
             "latest_payroll": payroll_data,
         }
         return success(data)
+
+
+class ReportErrorAPIView(APIView):
+    """
+    Endpoint for frontend to report unhandled errors.
+    This will send an email to the system admin.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        message = request.data.get("message", "Unknown error")
+        stack = request.data.get("stack", "No stack trace provided")
+        url = request.data.get("url", "Unknown URL")
+        
+        user_info = "Anonymous/Unauthenticated User"
+        if request.user.is_authenticated:
+            user_info = f"User: {request.user.email} (Role: {request.user.role})"
+
+        email_subject = f"[FFISYS Error Report] Error at {url}"
+        email_body = f"""
+An error was reported from the frontend application:
+
+URL: {url}
+Reported By: {user_info}
+Time: {timezone.now().strftime("%Y-%m-%d %H:%M:%S UTC")}
+
+Message:
+{message}
+
+Stack Trace:
+{stack}
+"""
+
+        try:
+            admin_email = getattr(settings, "ADMIN_EMAIL", "admin@ffisystem.com")
+            # If deploying, make sure you configure EMAIL_HOST_USER or DEFAULT_FROM_EMAIL
+            from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "noreply@ffisystem.com")
+            
+            send_mail(
+                subject=email_subject,
+                message=email_body,
+                from_email=from_email,
+                recipient_list=[admin_email],
+                fail_silently=False,
+            )
+            return success({"detail": "Error reported successfully."})
+        except Exception as e:
+            return Response({"detail": f"Failed to send error report: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

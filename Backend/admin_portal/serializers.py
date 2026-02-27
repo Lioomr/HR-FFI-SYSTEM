@@ -2,6 +2,8 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from rest_framework import serializers
 
+from core.permissions import get_role
+
 User = get_user_model()
 
 ROLE_CHOICES = ("SystemAdmin", "HRManager", "Manager", "Employee", "CEO", "CFO")
@@ -53,6 +55,13 @@ class CreateUserSerializer(serializers.Serializer):
             raise serializers.ValidationError("Email already exists.")
         return normalized
 
+    def validate_role(self, value):
+        request = self.context.get("request")
+        if value == "SystemAdmin":
+            if not request or not request.user.is_authenticated or get_role(request.user) != "SystemAdmin":
+                raise serializers.ValidationError("Only SystemAdmin can assign SystemAdmin role.")
+        return value
+
     def create(self, validated_data):
         role = validated_data.pop("role")
         is_active = validated_data.pop("is_active", True)
@@ -78,6 +87,13 @@ class UpdateStatusSerializer(serializers.Serializer):
 
 class UpdateRoleSerializer(serializers.Serializer):
     role = serializers.ChoiceField(choices=ROLE_CHOICES)
+
+    def validate_role(self, value):
+        request = self.context.get("request")
+        if value == "SystemAdmin":
+            if not request or not request.user.is_authenticated or get_role(request.user) != "SystemAdmin":
+                raise serializers.ValidationError("Only SystemAdmin can assign SystemAdmin role.")
+        return value
 
 
 class ResetPasswordSerializer(serializers.Serializer):

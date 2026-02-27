@@ -8,6 +8,7 @@ import LoadingState from "../../../components/ui/LoadingState";
 import ErrorState from "../../../components/ui/ErrorState";
 import { getLeaveRequest, approveLeaveRequest, rejectLeaveRequest, sendLeaveRequestToCEO, getLeaveRequestDocumentBlob, type LeaveRequest } from "../../../services/api/leaveApi";
 import { isApiError } from "../../../services/api/apiTypes";
+import { useI18n } from "../../../i18n/useI18n";
 
 const { confirm } = Modal;
 const { TextArea } = Input;
@@ -15,6 +16,15 @@ const { TextArea } = Input;
 export default function LeaveRequestDetailsPage() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const { t } = useI18n();
+
+    // Translate leave type names from the API
+    const translateLeaveType = (name?: string): string => {
+        if (!name) return '-';
+        const key = `leave.type.${name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z_]/g, '')}`;
+        const translated = t(key);
+        return translated === key ? name : translated;
+    };
 
     const [loading, setLoading] = useState(true);
     const [request, setRequest] = useState<LeaveRequest | null>(null);
@@ -37,7 +47,7 @@ export default function LeaveRequestDetailsPage() {
                 setRequest(res.data);
             }
         } catch (e: any) {
-            setError(e.message || "Failed to load request details");
+            setError(e.message || t("leave.loadFail"));
         } finally {
             setLoading(false);
         }
@@ -50,23 +60,23 @@ export default function LeaveRequestDetailsPage() {
     const handleApprove = () => {
         if (!request) return;
         confirm({
-            title: "Approve Leave Request",
-            content: `Approve leave for ${request.employee?.full_name} (${request.days} days)?`,
-            okText: "Approve",
+            title: t("leave.approveTitle"),
+            content: t("leave.approveConfirm", { name: request.employee?.full_name || '', days: request.days }),
+            okText: t("common.approve"),
             okType: "primary",
-            cancelText: "Cancel",
+            cancelText: t("common.cancel"),
             onOk: async () => {
                 setProcessing(true);
                 try {
                     const res = await approveLeaveRequest(request.id);
                     if (isApiError(res)) {
-                        notification.error({ message: "Approval Failed", description: res.message });
+                        notification.error({ message: t("leave.approveFail"), description: res.message });
                     } else {
-                        notification.success({ message: "Request Approved" });
+                        notification.success({ message: t("leave.approveSuccess") });
                         loadData();
                     }
                 } catch (e) {
-                    notification.error({ message: "Error", description: "System error during approval" });
+                    notification.error({ message: t("common.error"), description: t("leave.approveError") });
                 } finally {
                     setProcessing(false);
                 }
@@ -77,23 +87,23 @@ export default function LeaveRequestDetailsPage() {
     const handleSendToCEO = () => {
         if (!request) return;
         confirm({
-            title: "Send Request to CEO",
-            content: "This will move the request to CEO inbox for review and final handling.",
-            okText: "Send to CEO",
+            title: t("leave.sendToCeoTitle"),
+            content: t("leave.sendToCeoDesc"),
+            okText: t("leave.sendToCeoBtn"),
             okType: "primary",
-            cancelText: "Cancel",
+            cancelText: t("common.cancel"),
             onOk: async () => {
                 setProcessing(true);
                 try {
                     const res = await sendLeaveRequestToCEO(request.id);
                     if (isApiError(res)) {
-                        notification.error({ message: "Send Failed", description: res.message });
+                        notification.error({ message: t("leave.sendFail"), description: res.message });
                     } else {
-                        notification.success({ message: "Request sent to CEO" });
+                        notification.success({ message: t("leave.sendSuccess") });
                         loadData();
                     }
                 } catch {
-                    notification.error({ message: "Error", description: "System error while sending to CEO" });
+                    notification.error({ message: t("common.error"), description: t("leave.sendError") });
                 } finally {
                     setProcessing(false);
                 }
@@ -119,7 +129,7 @@ export default function LeaveRequestDetailsPage() {
             }
             setTimeout(() => window.URL.revokeObjectURL(url), 5000);
         } catch {
-            notification.error({ message: "Document Error", description: "Unable to open document." });
+            notification.error({ message: t("leave.docErrorTitle"), description: t("leave.docErrorDesc") });
         } finally {
             setDocumentLoading(false);
         }
@@ -127,7 +137,7 @@ export default function LeaveRequestDetailsPage() {
 
     const handleReject = async () => {
         if (!request || !rejectionReason.trim()) {
-            notification.error({ message: "Reason Required", description: "Please provide a reason for rejection." });
+            notification.error({ message: t("leave.reasonReqTitle"), description: t("leave.reasonReqDesc") });
             return;
         }
 
@@ -135,15 +145,15 @@ export default function LeaveRequestDetailsPage() {
         try {
             const res = await rejectLeaveRequest(request.id, rejectionReason);
             if (isApiError(res)) {
-                notification.error({ message: "Rejection Failed", description: res.message });
+                notification.error({ message: t("leave.rejectFail"), description: res.message });
             } else {
-                notification.success({ message: "Request Rejected" });
+                notification.success({ message: t("leave.rejectSuccess") });
                 setRejectModalVisible(false);
                 setRejectionReason("");
                 loadData();
             }
         } catch (e) {
-            notification.error({ message: "Error", description: "System error during rejection" });
+            notification.error({ message: t("common.error"), description: t("leave.rejectError") });
         } finally {
             setProcessing(false);
         }
@@ -159,9 +169,13 @@ export default function LeaveRequestDetailsPage() {
         request.status?.toLowerCase() === 'pending_hr';
     const canSendToCEO = canAction;
 
-    const statusLabel = (request.status || '')
-        .replace(/_/g, ' ')
-        .replace(/\b\w/g, (c) => c.toUpperCase());
+    const statusLabel = (() => {
+        const statusKey = `leave.status.${(request.status || '').toLowerCase()}`;
+        const translated = t(statusKey);
+        return translated === statusKey
+            ? (request.status || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+            : translated;
+    })();
 
     const statusColor = () => {
         const s = request.status?.toLowerCase();
@@ -181,45 +195,45 @@ export default function LeaveRequestDetailsPage() {
                 onClick={() => navigate("/hr/leave/requests")}
                 style={{ paddingLeft: 0, marginBottom: 16 }}
             >
-                Back to Inbox
+                {t("leave.backToInbox")}
             </Button>
 
             <PageHeader
-                title={`Leave Request #${request.id}`}
+                title={t("leave.requestDetailsTitle", { id: request.id })}
                 tags={<Tag color={statusColor()}>{statusLabel}</Tag>}
             />
 
-            <Card style={{ borderRadius: 16 }} title="Details">
+            <Card style={{ borderRadius: 16 }} title={t("common.details")}>
                 <Descriptions bordered column={1}>
-                    <Descriptions.Item label="Employee">{request.employee?.full_name || `ID: ${request.employee?.id}`}</Descriptions.Item>
-                    <Descriptions.Item label="Leave Type">{request.leave_type?.name}</Descriptions.Item>
-                    <Descriptions.Item label="Period">{request.start_date} to {request.end_date}</Descriptions.Item>
-                    <Descriptions.Item label="Duration">{request.days} Days</Descriptions.Item>
-                    <Descriptions.Item label="Reason">{request.reason}</Descriptions.Item>
-                    <Descriptions.Item label="Document">
+                    <Descriptions.Item label={t("common.employee")}>{request.employee?.full_name || `ID: ${request.employee?.id}`}</Descriptions.Item>
+                    <Descriptions.Item label={t("leave.type")}>{translateLeaveType(request.leave_type?.name)}</Descriptions.Item>
+                    <Descriptions.Item label={t("leave.period")}>{request.start_date} {t("common.to")} {request.end_date}</Descriptions.Item>
+                    <Descriptions.Item label={t("common.duration")}>{request.days} {t("leaves.days")}</Descriptions.Item>
+                    <Descriptions.Item label={t("common.reason")}>{request.reason}</Descriptions.Item>
+                    <Descriptions.Item label={t("common.document")}>
                         {request.document ? (
                             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                                 <Button icon={<EyeOutlined />} onClick={() => openDocument(false)} loading={documentLoading}>
-                                    Preview
+                                    {t("common.preview")}
                                 </Button>
                                 <Button icon={<DownloadOutlined />} onClick={() => openDocument(true)} loading={documentLoading}>
-                                    Download
+                                    {t("common.download")}
                                 </Button>
                             </div>
                         ) : (
                             "-"
                         )}
                     </Descriptions.Item>
-                    <Descriptions.Item label="Submitted On">{request.created_at ? new Date(request.created_at).toLocaleDateString() : '-'}</Descriptions.Item>
+                    <Descriptions.Item label={t("common.submittedOn")}>{request.created_at ? new Date(request.created_at).toLocaleDateString() : '-'}</Descriptions.Item>
 
                     {request.status === 'rejected' && (
-                        <Descriptions.Item label="Rejection Reason" contentStyle={{ color: 'red' }}>
+                        <Descriptions.Item label={t("leave.rejectionReason")} contentStyle={{ color: 'red' }}>
                             {request.ceo_decision_note || request.hr_decision_note || request.manager_decision_note || request.rejection_reason || '-'}
                         </Descriptions.Item>
                     )}
                     {request.status === 'pending_ceo' && (
-                        <Descriptions.Item label="Status Note" contentStyle={{ color: '#d4380d' }}>
-                            This request is awaiting CEO approval. No further HR action required.
+                        <Descriptions.Item label={t("leave.statusNote")} contentStyle={{ color: '#d4380d' }}>
+                            {t("leave.ceoApprovalWait")}
                         </Descriptions.Item>
                     )}
                 </Descriptions>
@@ -234,7 +248,7 @@ export default function LeaveRequestDetailsPage() {
                                     onClick={handleSendToCEO}
                                     disabled={processing}
                                 >
-                                    Send to CEO
+                                    {t("leave.sendToCeoBtn")}
                                 </Button>
                             )}
                             <Button
@@ -243,7 +257,7 @@ export default function LeaveRequestDetailsPage() {
                                 onClick={() => setRejectModalVisible(true)}
                                 disabled={processing}
                             >
-                                Reject
+                                {t("leave.reject")}
                             </Button>
                             <Button
                                 type="primary"
@@ -251,7 +265,7 @@ export default function LeaveRequestDetailsPage() {
                                 onClick={handleApprove}
                                 loading={processing}
                             >
-                                Approve
+                                {t("leave.approve")}
                             </Button>
                         </div>
                     </>
@@ -260,23 +274,23 @@ export default function LeaveRequestDetailsPage() {
 
             {/* Reject Modal */}
             <Modal
-                title="Reject Leave Request"
+                title={t("leave.rejectTitle")}
                 open={rejectModalVisible}
                 onOk={handleReject}
                 onCancel={() => setRejectModalVisible(false)}
-                okText="Reject Request"
+                okText={t("leave.rejectBtn")}
                 okType="danger"
                 confirmLoading={processing}
             >
                 <Alert
                     type="warning"
-                    message="This action is irreversible. Please provide a reason to the employee."
+                    message={t("leave.rejectWarning")}
                     showIcon
                     style={{ marginBottom: 16 }}
                 />
                 <TextArea
                     rows={4}
-                    placeholder="Reason for rejection..."
+                    placeholder={t("leave.rejectPlaceholder")}
                     value={rejectionReason}
                     onChange={e => setRejectionReason(e.target.value)}
                 />

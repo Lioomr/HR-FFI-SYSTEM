@@ -40,7 +40,11 @@ export default function MyLeaveBalancePage() {
             title: t("leave.type"),
             dataIndex: "leave_type",
             key: "leave_type",
-            render: (text) => <Typography.Text strong>{text}</Typography.Text>
+            render: (text) => {
+                const translationKey = `leave.balance.${text.toLowerCase().replace(/\s+/g, '.')}`;
+                const translated = t(translationKey, text);
+                return <Typography.Text strong>{translated}</Typography.Text>;
+            }
         },
         {
             title: t("leave.allowed"),

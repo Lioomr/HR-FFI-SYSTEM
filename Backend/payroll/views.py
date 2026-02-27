@@ -2,12 +2,13 @@ import csv
 import io
 from decimal import Decimal
 
+import openpyxl
 from django.db import IntegrityError, transaction
-from django.shortcuts import get_object_or_404
+from django.db.models import Avg, Q, Sum
 from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
-
-from rest_framework import mixins, viewsets, status
+from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -15,24 +16,23 @@ from rest_framework.views import APIView
 
 from audit.utils import audit
 from core.pagination import StandardPagination
-from core.responses import success, error
-from employees.permissions import IsHRManagerOnly
+from core.responses import error, success
+from employees.permissions import IsHRManagerOrAdmin
 
 from .models import PayrollRun, PayrollRunItem, Payslip
+from .permissions import IsEmployeeOnly
 from .serializers import (
-    PayrollRunSerializer,
     PayrollRunCreateSerializer,
     PayrollRunItemSerializer,
-    PayslipListSerializer,
+    PayrollRunSerializer,
     PayslipDetailSerializer,
+    PayslipListSerializer,
 )
-from .permissions import IsEmployeeOnly
 from .throttles import (
+    PayrollExportThrottle,
     PayrollFinalizeThrottle,
     PayrollGeneratePayslipsThrottle,
-    PayrollExportThrottle,
 )
-import openpyxl
 
 
 def _error_list(message, errors_list, status_code):
@@ -141,7 +141,18 @@ def _export_payroll_run_response(request, run):
         response = HttpResponse(content_type="text/csv")
         response["Content-Disposition"] = f'attachment; filename="payroll_run_{run.id}.csv"'
         writer = csv.writer(response)
-        writer.writerow(["employee_id", "employee_name", "department", "position", "basic_salary", "allowances", "deductions", "net_salary"])
+        writer.writerow(
+            [
+                "employee_id",
+                "employee_name",
+                "department",
+                "position",
+                "basic_salary",
+                "allowances",
+                "deductions",
+                "net_salary",
+            ]
+        )
         for item in items:
             writer.writerow(
                 [
@@ -162,7 +173,18 @@ def _export_payroll_run_response(request, run):
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "Payroll"
-        ws.append(["Employee ID", "Employee Name", "Department", "Position", "Basic Salary", "Allowances", "Deductions", "Net Salary"])
+        ws.append(
+            [
+                "Employee ID",
+                "Employee Name",
+                "Department",
+                "Position",
+                "Basic Salary",
+                "Allowances",
+                "Deductions",
+                "Net Salary",
+            ]
+        )
         for item in items:
             ws.append(
                 [
@@ -204,23 +226,22 @@ def _export_payroll_run_response(request, run):
     )
 
 
-
 def _generate_payroll_items(run, request=None):
     """
     Generates PayrollRunItems and Payslips for all active employees.
     Calculates totals and updates the PayrollRun.
     """
     from employees.models import EmployeeProfile
-    
+
     # 1. Fetch active employees
     employees = EmployeeProfile.objects.filter(employment_status=EmployeeProfile.EmploymentStatus.ACTIVE)
-    
+
     items_to_create = []
     payslips_to_create = []
-    
+
     total_net_run = Decimal(0)
     count = 0
-    
+
     for emp in employees:
         # 2. Calculate components
         basic = emp.basic_salary or Decimal(0)
@@ -229,16 +250,23 @@ def _generate_payroll_items(run, request=None):
         telephone = emp.telephone_allowance or Decimal(0)
         petrol = emp.petrol_allowance or Decimal(0)
         other = emp.other_allowance or Decimal(0)
-        
+
         total_allowances = transport + accommodation + telephone + petrol + other
         gross_salary = basic + total_allowances
-        
-        # Loan deduction: one approved loan, once, in the next payroll run.
+
+        # Open-loan deduction policy:
+        # - Deduct in current payroll month target.
+        # - If target month was missed, deduct in the next available run (overdue carry-forward).
         total_deductions = Decimal(0)
         loan_to_deduct = None
         if emp.user:
             from loans.models import LoanRequest
 
+            due_for_run_q = (
+                Q(target_deduction_year__lt=run.year)
+                | Q(target_deduction_year=run.year, target_deduction_month__lte=run.month)
+                | Q(target_deduction_year__isnull=True, target_deduction_month__isnull=True)
+            )
             loan_to_deduct = (
                 LoanRequest.objects.select_for_update()
                 .filter(
@@ -247,15 +275,16 @@ def _generate_payroll_items(run, request=None):
                     deduction_payroll_run__isnull=True,
                     is_active=True,
                 )
-                .order_by("created_at")
+                .filter(due_for_run_q)
+                .order_by("target_deduction_year", "target_deduction_month", "created_at")
                 .first()
             )
             if loan_to_deduct:
                 deduction_amount = loan_to_deduct.approved_amount or loan_to_deduct.requested_amount
                 total_deductions += deduction_amount
-        
+
         net_salary = gross_salary - total_deductions
-        
+
         # 3. Create Run Item
         item = PayrollRunItem(
             payroll_run=run,
@@ -266,10 +295,10 @@ def _generate_payroll_items(run, request=None):
             basic_salary=basic,
             total_allowances=total_allowances,
             total_deductions=total_deductions,
-            net_salary=net_salary
+            net_salary=net_salary,
         )
         items_to_create.append(item)
-        
+
         # 4. Persist deducted loan state
         if loan_to_deduct:
             loan_to_deduct.deduction_payroll_run = run
@@ -310,25 +339,24 @@ def _generate_payroll_items(run, request=None):
                 total_salary=gross_salary,
                 total_deductions=total_deductions,
                 net_salary=net_salary,
-                payment_mode="Bank Transfer", # Default
-                status="PAID", # Default for now
-                is_active=True
+                payment_mode="Bank Transfer",  # Default
+                status="PAID",  # Default for now
+                is_active=True,
             )
             payslips_to_create.append(payslip)
-            
+
         total_net_run += net_salary
         count += 1
-        
+
     # Bulk create
     PayrollRunItem.objects.bulk_create(items_to_create)
     Payslip.objects.bulk_create(payslips_to_create)
-    
+
     # Update Run Totals
     run.total_net = total_net_run
     run.total_employees = count
     run.save(update_fields=["total_net", "total_employees"])
 
-from employees.permissions import IsHRManagerOrAdmin
 
 class PayrollRunViewSet(
     mixins.ListModelMixin,
@@ -395,7 +423,6 @@ class PayrollRunViewSet(
 
         return success(PayrollRunSerializer(run).data, status=status.HTTP_201_CREATED)
 
-
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
         return success(PayrollRunSerializer(instance).data)
@@ -420,6 +447,39 @@ class PayrollRunViewSet(
                     "count": len(serializer.data),
                     "total_pages": 1,
                 },
+            }
+        )
+
+    @action(detail=True, methods=["get"], url_path="summary")
+    def summary(self, request, pk=None):
+        run = self.get_object()
+        items_qs = PayrollRunItem.objects.filter(payroll_run=run)
+        aggregates = items_qs.aggregate(
+            total_basic_salary=Sum("basic_salary"),
+            total_allowances=Sum("total_allowances"),
+            total_deductions=Sum("total_deductions"),
+            average_net_salary=Avg("net_salary"),
+        )
+        employees_with_deductions = items_qs.filter(total_deductions__gt=0).count()
+        total_basic_salary = aggregates["total_basic_salary"] or Decimal("0")
+        total_allowances = aggregates["total_allowances"] or Decimal("0")
+        total_deductions = aggregates["total_deductions"] or Decimal("0")
+        average_net_salary = aggregates["average_net_salary"] or Decimal("0")
+        total_gross_salary = total_basic_salary + total_allowances
+
+        return success(
+            {
+                "run_id": run.id,
+                "year": run.year,
+                "month": run.month,
+                "total_employees": run.total_employees,
+                "employees_with_deductions": employees_with_deductions,
+                "total_basic_salary": total_basic_salary,
+                "total_allowances": total_allowances,
+                "total_gross_salary": total_gross_salary,
+                "total_deductions": total_deductions,
+                "total_net_salary": run.total_net,
+                "average_net_salary": average_net_salary,
             }
         )
 
@@ -506,7 +566,6 @@ class PayrollRunExportView(APIView):
     def get(self, request, pk):
         run = get_object_or_404(PayrollRun.objects.all(), pk=pk)
         return _export_payroll_run_response(request, run)
-
 
 
 class EmployeePayslipViewSet(

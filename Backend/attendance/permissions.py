@@ -1,5 +1,6 @@
 from rest_framework import permissions
-from core.permissions import get_role, IsHRManagerOrAdmin
+
+from core.permissions import IsHRManagerOrAdmin, get_role
 
 
 class IsAttendanceOwner(permissions.BasePermission):

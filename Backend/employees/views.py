@@ -3,37 +3,32 @@ import hashlib
 import io
 import random
 import string
-import uuid
-import zipfile
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.http import FileResponse
-from django.core.files.base import ContentFile
 from django.utils import timezone
-
-from rest_framework import viewsets, status, mixins
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 
-from core.permissions import get_role
-from core.responses import success, error
-from core.pagination import EmployeePagination, StandardPagination
-from core.services import send_document_expiry_reminder_email
-from audit.utils import audit
-
-from hr_reference.models import Department, Position, TaskGroup, Sponsor
 from announcements.models import Announcement
-from .models import EmployeeProfile, EmployeeImport
-from .serializers import EmployeeProfileReadSerializer, EmployeeProfileWriteSerializer, EmployeeImportSerializer
+from audit.utils import audit
+from core.pagination import EmployeePagination, StandardPagination
+from core.permissions import get_role
+from core.responses import error, success
+from core.services import send_document_expiry_reminder_email
+
+from .models import EmployeeImport, EmployeeProfile
 from .notifications import send_document_expiry_whatsapp
-from .permissions import IsHRManagerOrAdmin, IsEmployeeOwner, IsHRManagerOnly
-from .throttles import EmployeeImportThrottle
-from .storage import PrivateUploadStorage
+from .permissions import IsEmployeeOwner, IsHRManagerOnly, IsHRManagerOrAdmin
+from .serializers import EmployeeImportSerializer, EmployeeProfileReadSerializer, EmployeeProfileWriteSerializer
 from .services import EmployeeImporter
+from .storage import PrivateUploadStorage
+from .throttles import EmployeeImportThrottle
 
 try:
     from openpyxl import load_workbook
@@ -340,13 +335,13 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             if ceo_profile:
                 direct_reports_q = direct_reports_q | Q(manager_profile=ceo_profile)
 
-            qs = base_qs.filter(
-                Q(user__groups__name__in=["Manager", "HRManager"]) | direct_reports_q
-            ).distinct()
+            qs = base_qs.filter(Q(user__groups__name__in=["Manager", "HRManager"]) | direct_reports_q).distinct()
         else:
             manager_profile = getattr(request.user, "employee_profile", None)
             qs = base_qs.filter(
-                Q(manager=request.user) | Q(manager_profile=manager_profile) if manager_profile else Q(manager=request.user)
+                Q(manager=request.user) | Q(manager_profile=manager_profile)
+                if manager_profile
+                else Q(manager=request.user)
             )
 
         search = request.query_params.get("search")
@@ -465,7 +460,9 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             page = int(request.query_params.get("page", 1))
             page_size = int(request.query_params.get("page_size", 25))
         except (TypeError, ValueError):
-            return error("Validation error", errors={"query": ["days, page and page_size must be integers."]}, status=422)
+            return error(
+                "Validation error", errors={"query": ["days, page and page_size must be integers."]}, status=422
+            )
 
         if days < 1 or days > 365:
             return error("Validation error", errors={"days": ["Must be between 1 and 365."]}, status=422)
@@ -541,7 +538,9 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         valid_input_channels = {"email", "sms", "whatsapp", "announcement"}
         invalid = [ch for ch in raw_channels if ch not in valid_input_channels]
         if invalid:
-            return error("Validation error", errors={"channels": [f"Unsupported channels: {', '.join(invalid)}"]}, status=422)
+            return error(
+                "Validation error", errors={"channels": [f"Unsupported channels: {', '.join(invalid)}"]}, status=422
+            )
 
         channels = []
         for ch in raw_channels:
@@ -669,30 +668,27 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         Serves from static files directory for easy deployment.
         """
         import os
+
         from django.conf import settings
-        
+
         # Path to the template file in static directory
         template_path = os.path.join(settings.BASE_DIR, "static", "templates", "employee_import_template.xlsx")
-        
+
         if not os.path.exists(template_path):
             return error(
-                "Template file not found. Please contact system administrator.",
-                status=status.HTTP_404_NOT_FOUND
+                "Template file not found. Please contact system administrator.", status=status.HTTP_404_NOT_FOUND
             )
-        
+
         try:
             response = FileResponse(
-                open(template_path, 'rb'),
+                open(template_path, "rb"),
                 as_attachment=True,
                 filename="employee_import_template.xlsx",
                 content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
             return response
         except Exception as e:
-            return error(
-                f"Failed to download template: {str(e)}",
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            return error(f"Failed to download template: {str(e)}", status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class EmployeeImportHistoryViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
@@ -706,11 +702,11 @@ class EmployeeImportHistoryViewSet(mixins.ListModelMixin, mixins.RetrieveModelMi
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
         page = self.paginate_queryset(queryset)
-        
+
         if page is not None:
             serializer = self.get_serializer(page, many=True)
             return self.get_paginated_response(serializer.data)
-        
+
         serializer = self.get_serializer(queryset, many=True)
         return success({"results": serializer.data, "count": queryset.count()})
 

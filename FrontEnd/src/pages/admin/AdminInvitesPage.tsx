@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Button, Card, Form, Input, Select, Space, Table, Tag, Typography, message } from "antd";
+import { Alert, Button, Card, Col, Form, Input, Row, Select, Space, Table, Tag, Typography, message } from "antd";
 import type { ColumnsType, TablePaginationConfig } from "antd/es/table";
 import { MailOutlined, ReloadOutlined, StopOutlined } from "@ant-design/icons";
 import PageHeader from "../../components/ui/PageHeader";
@@ -11,6 +11,7 @@ import type { InviteDto, Role } from "../../services/api/apiTypes";
 import { isApiError } from "../../services/api/apiTypes";
 import { createInvite, listInvites, resendInvite, revokeInvite } from "../../services/api/invitesApi";
 import { useI18n } from "../../i18n/useI18n";
+import { useAuthStore } from "../../auth/authStore";
 
 type UiMode = "loading" | "empty" | "error" | "ok";
 
@@ -296,38 +297,55 @@ export default function AdminInvitesPage() {
         <Typography.Title level={5} style={{ marginTop: 0 }}>{t("admin.invites.sendInvite")}</Typography.Title>
         {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 12 }} />}
         <Form<SendInviteValues> form={form} layout="vertical" requiredMark={false} onFinish={sendInvite} initialValues={{ role: "Employee" }}>
-          <Space style={{ width: "100%" }} align="start" wrap>
-            <Form.Item label={t("common.email")} name="email" style={{ minWidth: 280, flex: 1 }}
-              rules={[
-                { required: true, message: t("auth.emailRequired") },
-                { type: "email", message: t("auth.emailInvalid") },
-              ]}
-            >
-              <Input size="large" placeholder="name@company.com" autoComplete="email" />
-            </Form.Item>
-            <Form.Item label={t("common.role")} name="role" style={{ minWidth: 220 }} rules={[{ required: true, message: t("common.required") }]}>
-              <Select size="large" options={roleOptions} />
-            </Form.Item>
-            <Form.Item label=" " style={{ marginTop: 30 }}>
-              <Button type="primary" htmlType="submit" size="large" loading={sending}>{t("common.submit")}</Button>
-            </Form.Item>
-          </Space>
+          <Row gutter={16} align="bottom">
+            <Col xs={24} md={11}>
+              <Form.Item
+                label={t("common.email")}
+                name="email"
+                rules={[
+                  { required: true, message: t("auth.emailRequired") },
+                  { type: "email", message: t("auth.emailInvalid") },
+                ]}
+              >
+                <Input size="large" placeholder="name@company.com" autoComplete="email" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={7}>
+              <Form.Item
+                label={t("common.role")}
+                name="role"
+                rules={[{ required: true, message: t("common.required") }]}
+              >
+                <Select
+                  size="large"
+                  options={roleOptions.filter(
+                    (r) => r.value !== "SystemAdmin" || useAuthStore.getState().user?.role === "SystemAdmin"
+                  )}
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={6}>
+              <Form.Item>
+                <Button type="primary" htmlType="submit" size="large" loading={sending} block>
+                  {t("common.submit")}
+                </Button>
+              </Form.Item>
+            </Col>
+          </Row>
         </Form>
       </Card>
 
       <Card style={{ borderRadius: 16 }}>
-        <Space style={{ width: "100%", justifyContent: "space-between" }} wrap>
-          <Space wrap>
-            <Input allowClear placeholder={t("admin.users.searchPlaceholder")} style={{ width: 260 }} value={search} onChange={(e) => setSearch(e.target.value)} />
-            <Select value={statusFilter} onChange={setStatusFilter} style={{ width: 180 }} options={[
-              { label: t("common.filter"), value: "All" },
-              { label: t("status.pending"), value: "sent" },
-              { label: t("status.accepted"), value: "accepted" },
-              { label: t("status.rejected"), value: "revoked" },
-              { label: t("status.expired"), value: "expired" },
-            ]} />
-          </Space>
-        </Space>
+        <div className="responsive-filter-bar" style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+          <Input allowClear placeholder={t("admin.users.searchPlaceholder")} style={{ flex: "1 1 200px", minWidth: 150 }} value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Select value={statusFilter} onChange={setStatusFilter} style={{ flex: "0 1 180px", minWidth: 120 }} options={[
+            { label: t("common.filter"), value: "All" },
+            { label: t("status.pending"), value: "sent" },
+            { label: t("status.accepted"), value: "accepted" },
+            { label: t("status.rejected"), value: "revoked" },
+            { label: t("status.expired"), value: "expired" },
+          ]} />
+        </div>
 
         <div style={{ marginTop: 16 }}>
           {(mode === "empty" || (mode === "ok" && rows.length === 0)) ? (
@@ -342,6 +360,7 @@ export default function AdminInvitesPage() {
               rowKey="id"
               columns={columns}
               dataSource={rows}
+              scroll={{ x: 800 }}
               pagination={{
                 current: pagination.current,
                 pageSize: pagination.pageSize,

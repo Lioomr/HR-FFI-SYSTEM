@@ -8,7 +8,7 @@ import LoadingState from "../../../components/ui/LoadingState";
 import ErrorState from "../../../components/ui/ErrorState";
 import { getMyPayslip, downloadMyPayslipPdf, type EmployeePayslip } from "../../../services/api/employeePayslipsApi";
 import { isApiError } from "../../../services/api/apiTypes";
-import { formatNumber } from "../../../utils/currency";
+import AmountWithSAR from "../../../components/ui/AmountWithSAR";
 import { useI18n } from "../../../i18n/useI18n";
 
 export default function EmployeePayslipDetailsPage() {
@@ -79,7 +79,7 @@ export default function EmployeePayslipDetailsPage() {
             </Button>
 
             <PageHeader
-                title={`${t("payslips.details.titlePrefix")} ${new Date(0, payslip.month - 1).toLocaleString('default', { month: 'long' })} ${payslip.year}`}
+                title={`${t("payslips.details.titlePrefix")} ${new Date(0, payslip.month - 1).toLocaleString(language === 'ar' ? 'ar-EG' : 'en-US', { month: 'long' })} ${payslip.year}`}
                 actions={
                     <Button
                         type="primary"
@@ -95,28 +95,40 @@ export default function EmployeePayslipDetailsPage() {
             <Card style={{ borderRadius: 16 }}>
                 <Descriptions title={t("payslips.details.summary")} bordered column={1} labelStyle={{ width: 200 }}>
                     <Descriptions.Item label={t("payslips.list.colPeriod")}>{payslip.month}/{payslip.year}</Descriptions.Item>
-                    <Descriptions.Item label={t("payslips.list.colStatus")}>{payslip.status}</Descriptions.Item>
+                    <Descriptions.Item label={t("payslips.list.colStatus")}>
+                        {t(`status.${(payslip.status || '').toLowerCase()}`)}
+                    </Descriptions.Item>
+                    {payslip.payment_mode && (
+                        <Descriptions.Item label={t("payslips.list.colPaymentMode")}>
+                            {(() => {
+                                const key = payslip.payment_mode.toLowerCase().replace(/\s+/g, '');
+                                const tKey = `paymentMode.${key}`;
+                                const translated = t(tKey);
+                                return translated === tKey ? payslip.payment_mode : translated;
+                            })()}
+                        </Descriptions.Item>
+                    )}
                     <Descriptions.Item label={t("payslips.details.generatedDate")}>{payslip.generated_at ? new Date(payslip.generated_at).toLocaleDateString() : '-'}</Descriptions.Item>
                 </Descriptions>
 
                 <Divider />
 
                 <Descriptions title={t("payslips.details.earnings")} bordered column={1} labelStyle={{ width: 200 }}>
-                    <Descriptions.Item label={t("payroll.details.colBasicSalary")}>{formatNumber(payslip.basic_salary)}</Descriptions.Item>
+                    <Descriptions.Item label={t("payroll.details.colBasicSalary")}><AmountWithSAR amount={payslip.basic_salary} /></Descriptions.Item>
 
                     {/* Allowances Breakdown */}
-                    <Descriptions.Item label={t("payslips.details.transportation")}>{formatNumber(payslip.transportation_allowance)}</Descriptions.Item>
-                    <Descriptions.Item label={t("payslips.details.accommodation")}>{formatNumber(payslip.accommodation_allowance)}</Descriptions.Item>
-                    <Descriptions.Item label={t("payslips.details.telephone")}>{formatNumber(payslip.telephone_allowance)}</Descriptions.Item>
-                    <Descriptions.Item label={t("payslips.details.petrol")}>{formatNumber(payslip.petrol_allowance)}</Descriptions.Item>
-                    <Descriptions.Item label={t("payslips.details.other")}>{formatNumber(payslip.other_allowance)}</Descriptions.Item>
+                    <Descriptions.Item label={t("payslips.details.transportation")}><AmountWithSAR amount={payslip.transportation_allowance} /></Descriptions.Item>
+                    <Descriptions.Item label={t("payslips.details.accommodation")}><AmountWithSAR amount={payslip.accommodation_allowance} /></Descriptions.Item>
+                    <Descriptions.Item label={t("payslips.details.telephone")}><AmountWithSAR amount={payslip.telephone_allowance} /></Descriptions.Item>
+                    <Descriptions.Item label={t("payslips.details.petrol")}><AmountWithSAR amount={payslip.petrol_allowance} /></Descriptions.Item>
+                    <Descriptions.Item label={t("payslips.details.other")}><AmountWithSAR amount={payslip.other_allowance} /></Descriptions.Item>
 
                     <Descriptions.Item label={t("payslips.details.totalAllowances")} contentStyle={{ fontWeight: 'bold' }}>
-                        {formatNumber(payslip.total_allowances)}
+                        <AmountWithSAR amount={payslip.total_allowances} fontWeight="bold" />
                     </Descriptions.Item>
 
                     <Descriptions.Item label={t("payslips.details.grossSalary")} contentStyle={{ fontWeight: 'bold' }}>
-                        {formatNumber(payslip.total_salary ?? (payslip.basic_salary + payslip.total_allowances))}
+                        <AmountWithSAR amount={payslip.total_salary ?? (payslip.basic_salary + payslip.total_allowances)} fontWeight="bold" />
                     </Descriptions.Item>
                 </Descriptions>
 
@@ -124,7 +136,9 @@ export default function EmployeePayslipDetailsPage() {
 
                 <Descriptions title={t("payslips.details.deductions")} bordered column={1} labelStyle={{ width: 200 }}>
                     <Descriptions.Item label={t("payslips.details.totalDeductions")} contentStyle={{ color: 'red' }}>
-                        -{formatNumber(payslip.total_deductions)}
+                        <div style={{ color: 'red', display: 'flex', alignItems: 'center' }}>
+                            - <AmountWithSAR amount={payslip.total_deductions} color="red" />
+                        </div>
                     </Descriptions.Item>
                 </Descriptions>
 
@@ -133,7 +147,7 @@ export default function EmployeePayslipDetailsPage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f5f5f5', padding: 16, borderRadius: 8 }}>
                     <Typography.Title level={4} style={{ margin: 0 }}>{t("payslips.list.colNetSalary")}</Typography.Title>
                     <Typography.Title level={3} style={{ margin: 0, color: '#1890ff' }}>
-                        {formatNumber(payslip.net_salary)}
+                        <AmountWithSAR amount={payslip.net_salary} size={20} color="#1890ff" fontWeight="bold" />
                     </Typography.Title>
                 </div>
             </Card>

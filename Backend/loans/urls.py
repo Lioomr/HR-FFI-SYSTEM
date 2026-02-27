@@ -4,6 +4,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     CEOLoanRequestViewSet,
     CFOLoanRequestViewSet,
+    DisbursementLoanRequestViewSet,
     EmployeeLoanRequestViewSet,
     LoanRequestViewSet,
     ManagerLoanRequestViewSet,
@@ -12,6 +13,8 @@ from .views import (
 router = DefaultRouter()
 router.trailing_slash = "/?"
 router.register(r"loan-requests", LoanRequestViewSet, basename="loan-requests")
+router.register(r"hr/loan-requests", LoanRequestViewSet, basename="hr-loan-requests")
+router.register(r"disbursements", DisbursementLoanRequestViewSet, basename="loan-disbursements")
 router.register(r"employee/loan-requests", EmployeeLoanRequestViewSet, basename="employee-loan-requests")
 router.register(r"manager/loan-requests", ManagerLoanRequestViewSet, basename="manager-loan-requests")
 router.register(r"cfo/loan-requests", CFOLoanRequestViewSet, basename="cfo-loan-requests")

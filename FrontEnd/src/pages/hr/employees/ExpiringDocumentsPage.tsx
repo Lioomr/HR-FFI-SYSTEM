@@ -8,7 +8,7 @@ const { Title, Text } = Typography;
 
 export default function ExpiringDocumentsPage() {
   const { t } = useI18n();
-  const [days, setDays] = useState(30);
+  const [days, setDays] = useState<number | null>(30);
   const [loading, setLoading] = useState(false);
   const [notifyingId, setNotifyingId] = useState<number | null>(null);
   const [items, setItems] = useState<ExpiringEmployee[]>([]);
@@ -19,7 +19,7 @@ export default function ExpiringDocumentsPage() {
   const loadData = async (nextPage = page, nextPageSize = pageSize, nextDays = days) => {
     setLoading(true);
     try {
-      const response = await getExpiringEmployees(nextDays, nextPage, nextPageSize);
+      const response = await getExpiringEmployees(nextDays || 30, nextPage, nextPageSize);
       if (response.status === "success") {
         setItems(response.data.items || []);
         setTotal(response.data.count || 0);
@@ -41,7 +41,7 @@ export default function ExpiringDocumentsPage() {
   const notifyOne = async (employeeId: number, channels: Array<"email" | "whatsapp" | "announcement">) => {
     setNotifyingId(employeeId);
     try {
-      const response = await notifyExpiringEmployee(employeeId, { channels, days });
+      const response = await notifyExpiringEmployee(employeeId, { channels, days: days || 30 });
       if (response.status === "success") {
         const delivery = response.data.delivery || {};
         const sentChannels = Object.entries(delivery)
@@ -161,7 +161,7 @@ export default function ExpiringDocumentsPage() {
         </Title>
         <Space>
           <Text>{t("hr.expiringDocs.windowDays")}</Text>
-          <InputNumber min={1} max={365} value={days} onChange={(v) => setDays(v || 30)} />
+          <InputNumber min={1} max={365} value={days} onChange={(v) => setDays(v)} />
           <Button
             icon={<ReloadOutlined />}
             onClick={() => {

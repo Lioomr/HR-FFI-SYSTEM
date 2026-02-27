@@ -4,12 +4,14 @@ import { Button, Card, Form, Select, notification } from "antd";
 import PageHeader from "../../../components/ui/PageHeader";
 import { createPayrollRun, getPayrollRuns } from "../../../services/api/payrollApi";
 import { isApiError } from "../../../services/api/apiTypes";
+import { useI18n } from "../../../i18n/useI18n";
 
 const { Option } = Select;
 
 export default function CreatePayrollRunPage() {
     const navigate = useNavigate();
     const [form] = Form.useForm();
+    const { t } = useI18n();
     const [submitting, setSubmitting] = useState(false);
 
     const handleSubmit = async (values: { year: number; month: number }) => {
@@ -18,8 +20,8 @@ export default function CreatePayrollRunPage() {
         try {
             notification.open({
                 key: 'payroll_processing',
-                message: 'Processing Payroll',
-                description: 'Calculating salaries and generating payslips for all active employees...',
+                message: t("payroll.processingTitle"),
+                description: t("payroll.processingDesc"),
                 icon: <div className="ant-spin ant-spin-spinning"><span className="ant-spin-dot ant-spin-dot-spin"><i className="ant-spin-dot-item"></i><i className="ant-spin-dot-item"></i><i className="ant-spin-dot-item"></i><i className="ant-spin-dot-item"></i></span></div>,
                 duration: 0,
             });
@@ -45,8 +47,8 @@ export default function CreatePayrollRunPage() {
                             const existing = listRes.data.items.find(r => r.month === values.month && r.year === values.year);
                             if (existing) {
                                 notification.info({
-                                    message: "Payroll Run Exists",
-                                    description: `A run for ${values.month}/${values.year} already exists. Opening it...`,
+                                    message: t("payroll.runExists"),
+                                    description: t("payroll.runExistsDesc", { month: values.month, year: values.year }),
                                     duration: 3,
                                 });
                                 navigate(`/hr/payroll/${existing.id}`);
@@ -58,24 +60,24 @@ export default function CreatePayrollRunPage() {
                     }
 
                     notification.warning({
-                        message: "Already Exists",
-                        description: "A payroll run for this period already exists.",
+                        message: t("payroll.alreadyExists"),
+                        description: t("payroll.alreadyExistsDesc"),
                     });
                     setSubmitting(false);
                     return;
                 }
 
                 notification.error({
-                    message: "Creation Failed",
-                    description: response.message || "Could not create payroll run.",
+                    message: t("payroll.creationFail"),
+                    description: response.message || t("payroll.creationFailDesc"),
                 });
                 setSubmitting(false);
                 return;
             }
 
             notification.success({
-                message: "Success",
-                description: "Payroll run created successfully",
+                message: t("common.success"),
+                description: t("payroll.creationSuccess"),
             });
 
             navigate(`/hr/payroll/${response.data.id}`);
@@ -100,8 +102,8 @@ export default function CreatePayrollRunPage() {
                         const existing = listRes.data.items.find(r => r.month === values.month && r.year === values.year);
                         if (existing) {
                             notification.info({
-                                message: "Payroll Run Exists",
-                                description: `Opening existing run for ${values.month}/${values.year}...`,
+                                message: t("payroll.runExists"),
+                                description: t("payroll.runExistsDesc2", { month: values.month, year: values.year }),
                                 duration: 3
                             });
                             navigate(`/hr/payroll/${existing.id}`);
@@ -111,13 +113,13 @@ export default function CreatePayrollRunPage() {
                 } catch (e) { }
 
                 notification.warning({
-                    message: "Already Exists",
-                    description: "A payroll run for this period already exists, but could not be automatically located.",
+                    message: t("payroll.alreadyExists"),
+                    description: t("payroll.alreadyExistsDesc2"),
                 });
             } else {
                 notification.error({
-                    message: "Error",
-                    description: err.message || "An unexpected error occurred",
+                    message: t("common.error"),
+                    description: err.message || t("payroll.unexpectedError"),
                 });
             }
             setSubmitting(false);
@@ -131,8 +133,8 @@ export default function CreatePayrollRunPage() {
     return (
         <div style={{ maxWidth: 600, margin: "0 auto" }}>
             <PageHeader
-                title="Create Payroll Run"
-                subtitle="Select the period for the new payroll run"
+                title={t("payroll.createTitle")}
+                subtitle={t("payroll.createDesc")}
             />
 
             <Card style={{ borderRadius: 16 }}>
@@ -147,8 +149,8 @@ export default function CreatePayrollRunPage() {
                 >
                     <Form.Item
                         name="year"
-                        label="Year"
-                        rules={[{ required: true, message: "Please select a year" }]}
+                        label={t("payroll.year")}
+                        rules={[{ required: true, message: t("payroll.yearReq") }]}
                     >
                         <Select>
                             {years.map(y => <Option key={y} value={y}>{y}</Option>)}
@@ -157,8 +159,8 @@ export default function CreatePayrollRunPage() {
 
                     <Form.Item
                         name="month"
-                        label="Month"
-                        rules={[{ required: true, message: "Please select a month" }]}
+                        label={t("payroll.month")}
+                        rules={[{ required: true, message: t("payroll.monthReq") }]}
                     >
                         <Select>
                             {months.map(m => (
@@ -170,9 +172,9 @@ export default function CreatePayrollRunPage() {
                     </Form.Item>
 
                     <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 24 }}>
-                        <Button onClick={() => navigate("/hr/payroll")}>Cancel</Button>
+                        <Button onClick={() => navigate("/hr/payroll")}>{t("common.cancel")}</Button>
                         <Button type="primary" htmlType="submit" loading={submitting}>
-                            Create Payroll Run
+                            {t("payroll.createTitle")}
                         </Button>
                     </div>
                 </Form>

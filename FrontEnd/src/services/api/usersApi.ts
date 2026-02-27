@@ -31,8 +31,7 @@ export type ResetPasswordRequest = {
 
 export type ResetPasswordResponse = {
   mode: "temporary_password" | "reset_link";
-  temporary_password?: string;
-  reset_token?: string;
+  message?: string;
 };
 
 export async function listUsers(params: UsersListParams = {}) {

@@ -1,9 +1,8 @@
-import requests
+import os
 import sys
 import uuid
-import datetime
-import random
-import os
+
+import requests
 
 BASE_URL = "http://127.0.0.1:8000"
 EMAIL = os.environ.get("VERIFY_API_EMAIL", "")

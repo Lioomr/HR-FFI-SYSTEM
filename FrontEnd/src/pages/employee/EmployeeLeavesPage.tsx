@@ -6,12 +6,14 @@ import leavesApi from "../../services/api/leavesApi";
 import type { LeaveBalance } from "../../services/api/apiTypes";
 import LeaveBalanceTable from "../../components/leaves/LeaveBalanceTable";
 import type { UploadFile } from "antd/es/upload/interface";
+import { useI18n } from "../../i18n/useI18n";
 
 const { Title } = Typography;
 const { RangePicker } = DatePicker;
 const { TextArea } = Input;
 
 const EmployeeLeavesPage: React.FC = () => {
+    const { t } = useI18n();
     const [year, setYear] = useState<dayjs.Dayjs>(dayjs());
     const [balances, setBalances] = useState<LeaveBalance[]>([]);
     const [loading, setLoading] = useState<boolean>(false);
@@ -33,11 +35,11 @@ const EmployeeLeavesPage: React.FC = () => {
             }
         } catch (error) {
             console.error("Failed to fetch leave balances:", error);
-            message.error("Failed to load leave balances.");
+            message.error(t("leaves.failedToLoadBalances"));
         } finally {
             setLoading(false);
         }
-    }, [year]);
+    }, [year, t]);
 
     useEffect(() => {
         fetchBalances();
@@ -69,16 +71,16 @@ const EmployeeLeavesPage: React.FC = () => {
             const response = await leavesApi.createLeaveRequest(payload);
 
             if (response && response.status === "success") {
-                message.success("Leave request submitted successfully!");
+                message.success(t("leaves.submitSuccess"));
                 setIsModalOpen(false);
                 form.resetFields();
                 fetchBalances(); // Refresh balances
             } else {
-                message.error(response.message || "Failed to submit leave request.");
+                message.error(response.message || t("leaves.submitFailed"));
             }
         } catch (error: any) {
             console.error("Failed to submit leave request:", error);
-            message.error(error?.response?.data?.message || "Failed to submit leave request.");
+            message.error(error?.response?.data?.message || t("leaves.submitFailed"));
         } finally {
             setSubmitting(false);
         }
@@ -88,18 +90,18 @@ const EmployeeLeavesPage: React.FC = () => {
         <div>
             <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
                 <Col>
-                    <Title level={2}>My Leave Balances</Title>
+                    <Title level={2}>{t("leaves.myBalances")}</Title>
                 </Col>
                 <Col>
                     <Button
                         type="primary"
                         icon={<PlusOutlined />}
                         onClick={handleRequestLeave}
-                        style={{ marginRight: 16 }}
+                        style={{ marginInlineEnd: 16 }}
                     >
-                        Request Leave
+                        {t("leaves.requestLeave")}
                     </Button>
-                    <span style={{ marginRight: 8, fontWeight: 500 }}>Select Year:</span>
+                    <span style={{ marginInlineEnd: 8, fontWeight: 500 }}>{t("leaves.selectYear")}</span>
                     <DatePicker
                         picker="year"
                         value={year}
@@ -114,21 +116,21 @@ const EmployeeLeavesPage: React.FC = () => {
             </Card>
 
             <div style={{ marginTop: 24, padding: 16, background: "#f5f5f5", borderRadius: 8 }}>
-                <Title level={4}>How it works</Title>
+                <Title level={4}>{t("leaves.howItWorks")}</Title>
                 <ul>
-                    <li><strong>Opening Balance:</strong> Quota + Carry-over from previous year.</li>
-                    <li><strong>Used:</strong> Approved leave requests in this year.</li>
-                    <li><strong>Remaining:</strong> Look at this number to know what you can request!</li>
+                    <li><strong>{t("leaves.openingBalance")}</strong> {t("leaves.openingBalanceDesc")}</li>
+                    <li><strong>{t("leaves.used")}</strong> {t("leaves.usedDesc")}</li>
+                    <li><strong>{t("leaves.remaining")}:</strong> {t("leaves.remainingDesc")}</li>
                 </ul>
             </div>
 
             <Modal
-                title="Request Leave"
+                title={t("leaves.requestLeave")}
                 open={isModalOpen}
                 onCancel={handleCancel}
                 onOk={() => form.submit()}
                 confirmLoading={submitting}
-                okText="Submit Request"
+                okText={t("common.submit")}
                 width={600}
             >
                 <Form
@@ -145,13 +147,13 @@ const EmployeeLeavesPage: React.FC = () => {
                 >
                     <Form.Item
                         name="leave_type"
-                        label="Leave Type"
-                        rules={[{ required: true, message: "Please select a leave type" }]}
+                        label={t("leaves.leaveType")}
+                        rules={[{ required: true, message: t("leaves.selectLeaveType") }]}
                     >
-                            <Select placeholder="Select leave type">
+                        <Select placeholder={t("leaves.selectLeaveTypePlaceholder")}>
                             {balances.map((balance) => (
                                 <Select.Option key={balance.leave_type_id} value={balance.leave_type_id}>
-                                    {balance.leave_type} (Remaining: {balance.remaining_days} days)
+                                    {t(`leave.balance.${balance.leave_type.toLowerCase().replace(/\s+/g, '.')}`, balance.leave_type)} ({t("leaves.remaining")}: {balance.remaining_days} {t("leaves.days")})
                                 </Select.Option>
                             ))}
                         </Select>
@@ -159,8 +161,8 @@ const EmployeeLeavesPage: React.FC = () => {
 
                     <Form.Item
                         name="dates"
-                        label="Leave Period"
-                        rules={[{ required: true, message: "Please select leave dates" }]}
+                        label={t("leaves.leavePeriod")}
+                        rules={[{ required: true, message: t("leaves.selectLeaveDates") }]}
                     >
                         <RangePicker
                             style={{ width: "100%" }}
@@ -170,18 +172,18 @@ const EmployeeLeavesPage: React.FC = () => {
 
                     <Form.Item
                         name="reason"
-                        label="Reason (Optional)"
+                        label={t("leaves.reasonOptional")}
                     >
                         <TextArea
                             rows={4}
-                            placeholder="Enter reason for leave request"
+                            placeholder={t("leaves.enterReason")}
                             maxLength={500}
                         />
                     </Form.Item>
 
                     <Form.Item
                         name="document"
-                        label={isSickSelected ? "Medical Report (Required)" : "Document (Optional)"}
+                        label={isSickSelected ? t("leaves.medicalReportReq") : t("leaves.documentOptional")}
                         valuePropName="fileList"
                         getValueFromEvent={(e) => (Array.isArray(e) ? e : e?.fileList || [])}
                         rules={[
@@ -190,13 +192,13 @@ const EmployeeLeavesPage: React.FC = () => {
                                     if (!isSickSelected) return Promise.resolve();
                                     return value && value.length > 0
                                         ? Promise.resolve()
-                                        : Promise.reject(new Error("Please upload a medical report for sick leave."));
+                                        : Promise.reject(new Error(t("leaves.uploadMedicalReport")));
                                 },
                             },
                         ]}
                     >
                         <Upload beforeUpload={() => false} maxCount={1} accept=".pdf,.png,.jpg,.jpeg,.doc,.docx">
-                            <Button>Choose File</Button>
+                            <Button>{t("common.upload")}</Button>
                         </Upload>
                     </Form.Item>
                 </Form>

@@ -27,7 +27,6 @@ function splitPhoneNumber(raw: string | undefined | null): { code: string; local
 /**
  * Transform form values from AntD to API payload format
  * - Converts DatePicker dayjs objects to YYYY-MM-DD strings
- * - Ensures numeric fields are numbers
  * - Strips undefined/null values
  * - Maintains snake_case field names
  * 
@@ -48,16 +47,7 @@ export function toPayload(values: any): any {
       continue;
     }
 
-    // Ensure numeric fields are numbers (not strings)
-    if (typeof value === "string" && !isNaN(Number(value)) && value.trim() !== "") {
-      const numValue = Number(value);
-      if (Number.isFinite(numValue)) {
-        transformed[key] = numValue;
-        continue;
-      }
-    }
-
-    // Pass through all other values
+    // Pass through all other values (avoiding aggressive numeric conversion for strings)
     transformed[key] = value;
   }
 
@@ -166,4 +156,3 @@ export function fromEmployeeToFormValues(employee: Employee): any {
 
 // Backward compatibility alias
 export const transformEmployeeFormValues = toPayload;
-

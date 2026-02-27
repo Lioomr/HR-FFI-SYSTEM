@@ -86,10 +86,14 @@ class BirdWhatsAppService:
         base_url: str | None = None,
         timeout_seconds: int | None = None,
     ) -> None:
-        self.api_key = api_key or getattr(settings, "BIRD_API_KEY", "") or getattr(settings, "BIRD_WHATSAPP_API_KEY", "")
+        self.api_key = (
+            api_key or getattr(settings, "BIRD_API_KEY", "") or getattr(settings, "BIRD_WHATSAPP_API_KEY", "")
+        )
         self.workspace_id = workspace_id or getattr(settings, "BIRD_WORKSPACE_ID", "")
         self.channel_id = whatsapp_channel_id or getattr(settings, "BIRD_WHATSAPP_CHANNEL_ID", "")
-        self.base_url = (base_url or getattr(settings, "BIRD_API_BASE_URL", "https://api.bird.com/workspaces")).rstrip("/")
+        self.base_url = (base_url or getattr(settings, "BIRD_API_BASE_URL", "https://api.bird.com/workspaces")).rstrip(
+            "/"
+        )
         self.timeout_seconds = timeout_seconds or int(getattr(settings, "NOTIFICATION_HTTP_TIMEOUT_SECONDS", 10))
 
     def is_configured(self) -> bool:
@@ -117,7 +121,12 @@ class BirdWhatsAppService:
         parameters: dict,
     ) -> dict[str, Any]:
         if not self.is_configured():
-            return {"success": False, "message_id": None, "status_code": 0, "error": "Bird WhatsApp service is not configured."}
+            return {
+                "success": False,
+                "message_id": None,
+                "status_code": 0,
+                "error": "Bird WhatsApp service is not configured.",
+            }
 
         if not self._is_e164(phone_number):
             return {
@@ -128,7 +137,12 @@ class BirdWhatsAppService:
             }
 
         if not project_id or not version_id:
-            return {"success": False, "message_id": None, "status_code": 0, "error": "project_id and version_id are required."}
+            return {
+                "success": False,
+                "message_id": None,
+                "status_code": 0,
+                "error": "project_id and version_id are required.",
+            }
 
         if not isinstance(parameters, dict):
             return {"success": False, "message_id": None, "status_code": 0, "error": "parameters must be a dictionary."}
@@ -147,8 +161,7 @@ class BirdWhatsAppService:
                 "version": version_id,
                 "locale": locale or "en",
                 "parameters": [
-                    {"type": "string", "key": key, "value": str(value or "")}
-                    for key, value in parameters.items()
+                    {"type": "string", "key": key, "value": str(value or "")} for key, value in parameters.items()
                 ],
             },
         }
@@ -190,7 +203,12 @@ class BirdWhatsAppService:
         resolved_template = resolve_template_key(template_name=template_name, template_variables=template_variables)
         spec = WHATSAPP_TEMPLATE_REGISTRY.get(resolved_template or "")
         if not spec:
-            return {"success": False, "message_id": None, "status_code": 0, "error": f"Unknown template: {template_name}"}
+            return {
+                "success": False,
+                "message_id": None,
+                "status_code": 0,
+                "error": f"Unknown template: {template_name}",
+            }
 
         missing = [name for name in spec.variable_order if name not in template_variables]
         if missing:

@@ -28,10 +28,15 @@ def _is_active_profile(profile):
 
 
 def is_finance_approver_user(user):
+    # Legacy alias for accountant approver identity.
+    return is_accountant_user(user)
+
+
+def is_accountant_user(user):
     if not user or not user.is_authenticated:
         return False
 
-    if _is_group_member(user, "SystemAdmin") or _is_group_member(user, "HRManager"):
+    if _is_group_member(user, "SystemAdmin"):
         return True
 
     profile = getattr(user, "employee_profile", None)
@@ -43,6 +48,12 @@ def is_finance_approver_user(user):
         profile.department_ref_id == config.finance_department_id
         and profile.position_ref_id == config.finance_position_id
     )
+
+
+def is_hr_approver_user(user):
+    if not user or not user.is_authenticated:
+        return False
+    return _is_group_member(user, "SystemAdmin") or _is_group_member(user, "HRManager")
 
 
 class IsEmployeeOnly(BasePermission):
@@ -62,7 +73,12 @@ class IsCFOOrAdmin(BasePermission):
 
 class IsFinanceApproverOrAdmin(BasePermission):
     def has_permission(self, request, view):
-        return is_finance_approver_user(request.user)
+        return is_accountant_user(request.user)
+
+
+class IsHRApproverOrAdmin(BasePermission):
+    def has_permission(self, request, view):
+        return is_hr_approver_user(request.user)
 
 
 def is_cfo_approver_user(user):

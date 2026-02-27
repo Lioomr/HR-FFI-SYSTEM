@@ -1,11 +1,75 @@
 {% extends "emails/base_email.html" %}
 
-{% block details %}
-<div class="details">
-  <div><strong>Document / المستند:</strong> {{ document_type }}</div>
-  <div><strong>Expiry Date / تاريخ الانتهاء:</strong> {{ expiry_date }}</div>
-  {% if days_remaining is not None %}
-  <div><strong>Days Remaining / الأيام المتبقية:</strong> {{ days_remaining }}</div>
-  {% endif %}
+{% block status_badge %}
+<div class="status-badge-wrap">
+  <span class="status-badge badge-warning">
+    &#9888;&nbsp; Action Required &nbsp;·&nbsp; إجراء مطلوب
+  </span>
 </div>
+{% endblock %}
+
+{% block details %}
+{% if document_type or expiry_date or days_remaining is not None %}
+<div class="details-card">
+  <div class="details-card-header" style="background: linear-gradient(90deg,#E65100,#F57C00);">&#9888; Document Expiry —
+    انتهاء صلاحية المستند</div>
+  <div class="details-card-body">
+    <div class="detail-row">
+      <span class="detail-label">Document / المستند</span>
+      <span class="detail-value"><strong>{{ document_type }}</strong></span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Expiry Date / تاريخ الانتهاء</span>
+      <span class="detail-value" style="color:#E65100; font-weight:600;">{{ expiry_date }}</span>
+    </div>
+    {% if days_remaining is not None %}
+    <div class="detail-row">
+      <span class="detail-label">Days Remaining / الأيام المتبقية</span>
+      {% if days_remaining <= 7 %}
+      <span class="detail-value" style="color:#C62828; font-weight:700; font-size:16px;">
+      {% elif days_remaining <= 30 %}
+      <span class="detail-value" style="color:#E65100; font-weight:700; font-size:16px;">
+      {% else %}
+      <span class="detail-value" style="color:#2E7D32; font-weight:700; font-size:16px;">
+      {% endif %}
+        {{ days_remaining }} days / يوم
+      </span>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block details_ar %}
+{% if document_type or expiry_date or days_remaining is not None %}
+<div class="details-card" style="direction:rtl;text-align:right;">
+  <div class="details-card-header" style="background: linear-gradient(90deg,#E65100,#F57C00);">&#9888; انتهاء صلاحية
+    المستند — Document Expiry</div>
+  <div class="details-card-body">
+    <div class="detail-row">
+      <span class="ar-detail-label">المستند / Document</span>
+      <span class="detail-value"><strong>{{ document_type }}</strong></span>
+    </div>
+    <div class="detail-row">
+      <span class="ar-detail-label">تاريخ الانتهاء / Expiry Date</span>
+      <span class="detail-value" style="color:#E65100; font-weight:600;">{{ expiry_date }}</span>
+    </div>
+    {% if days_remaining is not None %}
+    <div class="detail-row">
+      <span class="ar-detail-label">الأيام المتبقية / Days Remaining</span>
+      {% if days_remaining <= 7 %}
+      <span class="detail-value" style="color:#C62828; font-weight:700; font-size:16px;">
+      {% elif days_remaining <= 30 %}
+      <span class="detail-value" style="color:#E65100; font-weight:700; font-size:16px;">
+      {% else %}
+      <span class="detail-value" style="color:#2E7D32; font-weight:700; font-size:16px;">
+      {% endif %}
+        {{ days_remaining }} يوم / days
+      </span>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
 {% endblock %}

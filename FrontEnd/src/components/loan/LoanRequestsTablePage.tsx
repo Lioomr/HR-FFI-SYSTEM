@@ -26,9 +26,11 @@ type Props = {
 const statusColors: Record<string, string> = {
   submitted: "blue",
   pending_manager: "orange",
+  pending_hr: "gold",
   pending_finance: "gold",
   pending_cfo: "purple",
   pending_ceo: "volcano",
+  pending_disbursement: "geekblue",
   approved: "green",
   rejected: "red",
   cancelled: "default",
@@ -73,7 +75,22 @@ export default function LoanRequestsTablePage({
 
   const getStatusLabel = (status: string) => {
     if (!status) return "";
-    return status.split('_').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+    const map: Record<string, string> = {
+      submitted: "status.submitted",
+      pending_manager: "status.pendingManager",
+      pending_hr: "status.pendingHr",
+      pending_finance: "status.pendingFinance",
+      pending_cfo: "status.pendingCfo",
+      pending_ceo: "status.pendingCeo",
+      pending_disbursement: "status.pendingDisbursement",
+      approved: "status.approved",
+      rejected: "status.rejected",
+      cancelled: "status.cancelled",
+      deducted: "status.deducted",
+    };
+    const key = map[status];
+    if (key) return t(key);
+    return status.split("_").map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(" ");
   };
 
   const columns: ColumnsType<LoanRequest> = [
@@ -128,9 +145,11 @@ export default function LoanRequestsTablePage({
               options={[
                 { label: getStatusLabel("submitted"), value: "submitted" },
                 { label: getStatusLabel("pending_manager"), value: "pending_manager" },
+                { label: getStatusLabel("pending_hr"), value: "pending_hr" },
                 { label: getStatusLabel("pending_finance"), value: "pending_finance" },
                 { label: getStatusLabel("pending_cfo"), value: "pending_cfo" },
                 { label: getStatusLabel("pending_ceo"), value: "pending_ceo" },
+                { label: getStatusLabel("pending_disbursement"), value: "pending_disbursement" },
                 { label: getStatusLabel("approved"), value: "approved" },
                 { label: getStatusLabel("rejected"), value: "rejected" },
                 { label: getStatusLabel("cancelled"), value: "cancelled" },

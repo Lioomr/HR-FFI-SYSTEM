@@ -1,7 +1,6 @@
 from core.services.whatsapp_service import (
-    WhatsAppService,
     WHATSAPP_TEMPLATE_REGISTRY,
-    get_template_info,
+    WhatsAppService,
     resolve_template_key,
 )
 
@@ -70,8 +69,7 @@ def send_whatsapp_notification(
             "sent": False,
             "provider": "bird_whatsapp",
             "reason": (
-                f"Template '{template_name}' expects {len(spec.variable_order)} params, "
-                f"got {len(template_params)}."
+                f"Template '{template_name}' expects {len(spec.variable_order)} params, got {len(template_params)}."
             ),
         }
 

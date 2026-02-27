@@ -8,9 +8,10 @@ import sys
 def main():
     """Run administrative tasks."""
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
-    
+
     try:
         from dotenv import load_dotenv
+
         load_dotenv()
     except ImportError:
         pass

@@ -147,7 +147,7 @@ export default function UserProfilePage() {
                                         key: '1',
                                         label: <span><UserOutlined /> {t("profile.personalInfo")}</span>,
                                         children: (
-                                            <Descriptions column={2} layout="vertical" style={{ marginTop: 16 }}>
+                                            <Descriptions column={{ xs: 1, sm: 2 }} layout="vertical" style={{ marginTop: 16 }}>
                                                 <Descriptions.Item label={t("profile.fullName")}>{formatValue(employee.full_name)}</Descriptions.Item>
                                                 <Descriptions.Item label={t("profile.dateOfBirth")}>{formatDate((employee as any).date_of_birth)}</Descriptions.Item>
                                                 <Descriptions.Item label={t("profile.nationality")}>
@@ -174,7 +174,7 @@ export default function UserProfilePage() {
                                         key: '2',
                                         label: <span><ContainerOutlined /> {t("profile.employmentInfo")}</span>,
                                         children: (
-                                            <Descriptions column={2} layout="vertical" style={{ marginTop: 16 }}>
+                                            <Descriptions column={{ xs: 1, sm: 2 }} layout="vertical" style={{ marginTop: 16 }}>
                                                 <Descriptions.Item label={t("profile.department")}>{formatValue(employee.department)}</Descriptions.Item>
                                                 <Descriptions.Item label={t("profile.position")}>{formatValue(employee.position)}</Descriptions.Item>
                                                 <Descriptions.Item label={t("profile.taskGroup")}>{formatValue(employee.task_group)}</Descriptions.Item>
@@ -192,7 +192,7 @@ export default function UserProfilePage() {
                                         label: <span><DollarOutlined /> {t("profile.salaryDetails")}</span>,
                                         children: (
                                             <div>
-                                                <Descriptions column={2} layout="vertical" style={{ marginTop: 16 }}>
+                                                <Descriptions column={{ xs: 1, sm: 2 }} layout="vertical" style={{ marginTop: 16 }}>
                                                     <Descriptions.Item label={t("profile.basicSalary")}>{formatCurrency((employee as any).basic_salary)}</Descriptions.Item>
                                                     <Descriptions.Item label={t("profile.totalSalary")}>
                                                         <Text strong style={{ fontSize: 16, color: '#52c41a' }}>
@@ -201,7 +201,7 @@ export default function UserProfilePage() {
                                                     </Descriptions.Item>
                                                 </Descriptions>
                                                 <Divider style={{ margin: '12px 0', fontSize: 13, color: '#8c8c8c' }}>{t("profile.allowances")}</Divider>
-                                                <Descriptions column={3} layout="vertical" size="small">
+                                                <Descriptions column={{ xs: 1, sm: 2, md: 3 }} layout="vertical" size="small">
                                                     <Descriptions.Item label={t("profile.transportation")}>{formatCurrency((employee as any).transportation_allowance)}</Descriptions.Item>
                                                     <Descriptions.Item label={t("profile.accommodation")}>{formatCurrency((employee as any).accommodation_allowance)}</Descriptions.Item>
                                                     <Descriptions.Item label={t("profile.telephone")}>{formatCurrency((employee as any).telephone_allowance)}</Descriptions.Item>

@@ -39,7 +39,8 @@ class Asset(models.Model):
     }
 
     asset_code = models.CharField(max_length=20, unique=True, editable=False, db_index=True)
-    name = models.CharField(max_length=255)
+    name_en = models.CharField(max_length=255)
+    name_ar = models.CharField(max_length=255, blank=True)
     type = models.CharField(max_length=20, choices=AssetType.choices)
     status = models.CharField(max_length=30, choices=AssetStatus.choices, default=AssetStatus.AVAILABLE, db_index=True)
     serial_number = models.CharField(max_length=100, blank=True)
@@ -80,7 +81,7 @@ class Asset(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.asset_code} - {self.name}"
+        return f"{self.asset_code} - {self.name_en}"
 
     def clean(self):
         errors = {}

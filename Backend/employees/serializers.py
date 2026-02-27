@@ -1,10 +1,10 @@
-from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from rest_framework import serializers
 
 from core.permissions import get_role
-from hr_reference.models import Department, Position, TaskGroup, Sponsor
-from .models import EmployeeProfile
-from .models import EmployeeImport
+from hr_reference.models import Department, Position, Sponsor, TaskGroup
+
+from .models import EmployeeImport, EmployeeProfile
 
 User = get_user_model()
 

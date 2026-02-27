@@ -1,10 +1,11 @@
 import os
+
 import django
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
 
-from leaves.models import LeaveType
+from leaves.models import LeaveType  # noqa: E402
 
 types = [
     {"name": "Annual Leave", "code": "ANNUAL", "days": 21, "is_paid": True},

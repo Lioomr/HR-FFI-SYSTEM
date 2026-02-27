@@ -15,6 +15,7 @@ import { isApiError } from "../../services/api/apiTypes";
 import { apply422ToForm } from "../../utils/formErrors";
 import { isForbidden } from "../../services/api/httpErrors";
 import { notifySuccess, notifyError } from "../../utils/notify";
+import { useI18n } from "../../i18n/useI18n";
 
 /**
  * Generic props for ReferenceCrudPage component
@@ -75,6 +76,7 @@ export function ReferenceCrudPage<TItem = any, TCreate = any, TUpdate = any>({
     beforeOpenEdit,
     disableEdit,
 }: ReferenceCrudPageProps<TItem, TCreate, TUpdate>) {
+    const { t } = useI18n();
     // State management
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -114,7 +116,7 @@ export function ReferenceCrudPage<TItem = any, TCreate = any, TUpdate = any>({
             const response = await fetchList(params);
 
             if (isApiError(response)) {
-                setError(response.message || "Failed to load data");
+                setError(response.message || t("reference.loadFailed", { entity: title }, `Failed to load ${title}`));
                 setLoading(false);
                 return;
             }
@@ -134,10 +136,10 @@ export function ReferenceCrudPage<TItem = any, TCreate = any, TUpdate = any>({
                 return;
             }
 
-            setError(err.message || "Failed to load data");
+            setError(err.message || t("reference.loadFailed", { entity: title }, `Failed to load ${title}`));
             setLoading(false);
         }
-    }, [fetchList, mapListResponse, enablePagination, pageSize, searchText]);
+    }, [fetchList, mapListResponse, enablePagination, pageSize, searchText, t, title]);
 
     /**
      * Initial load
@@ -162,12 +164,17 @@ export function ReferenceCrudPage<TItem = any, TCreate = any, TUpdate = any>({
                 if (response.errors && response.errors.length > 0) {
                     apply422ToForm(createFormInstance, response);
                 }
-                notifyError(response.message || `Failed to create ${entityName}`);
+                notifyError(
+                    response.message ||
+                    t("reference.createFailed", { entity: entityName }, `Failed to create ${entityName}`)
+                );
                 setSubmitting(false);
                 return;
             }
 
-            notifySuccess(`${entityName} created successfully`);
+            notifySuccess(
+                t("reference.createSuccess", { entity: entityName }, `${entityName} created successfully`)
+            );
             setCreateModalOpen(false);
             createFormInstance.resetFields();
             setSubmitting(false);
@@ -191,7 +198,10 @@ export function ReferenceCrudPage<TItem = any, TCreate = any, TUpdate = any>({
             }
 
             if (!err.response || err.response.status !== 422) {
-                notifyError(err.message || `Failed to create ${entityName}`);
+                notifyError(
+                    err.message ||
+                    t("reference.createFailed", { entity: entityName }, `Failed to create ${entityName}`)
+                );
             }
         }
     };
@@ -215,12 +225,17 @@ export function ReferenceCrudPage<TItem = any, TCreate = any, TUpdate = any>({
                 if (response.errors && response.errors.length > 0) {
                     apply422ToForm(editFormInstance, response);
                 }
-                notifyError(response.message || `Failed to update ${entityName}`);
+                notifyError(
+                    response.message ||
+                    t("reference.updateFailed", { entity: entityName }, `Failed to update ${entityName}`)
+                );
                 setSubmitting(false);
                 return;
             }
 
-            notifySuccess(`${entityName} updated successfully`);
+            notifySuccess(
+                t("reference.updateSuccess", { entity: entityName }, `${entityName} updated successfully`)
+            );
             setEditModalOpen(false);
             editFormInstance.resetFields();
             setCurrentRow(null);
@@ -243,7 +258,10 @@ export function ReferenceCrudPage<TItem = any, TCreate = any, TUpdate = any>({
             }
 
             if (!err.response || err.response.status !== 422) {
-                notifyError(err.message || `Failed to update ${entityName}`);
+                notifyError(
+                    err.message ||
+                    t("reference.updateFailed", { entity: entityName }, `Failed to update ${entityName}`)
+                );
             }
         }
     };
@@ -274,7 +292,7 @@ export function ReferenceCrudPage<TItem = any, TCreate = any, TUpdate = any>({
         ? [
             ...columns,
             {
-                title: "Actions",
+                title: t("common.actions"),
                 key: "actions",
                 width: 100,
                 render: (_, record) => (
@@ -283,7 +301,7 @@ export function ReferenceCrudPage<TItem = any, TCreate = any, TUpdate = any>({
                         onClick={() => openEditModal(record)}
                         disabled={disableEdit ? disableEdit(record) : false}
                     >
-                        Edit
+                        {t("common.edit")}
                     </Button>
                 ),
             },
@@ -297,14 +315,14 @@ export function ReferenceCrudPage<TItem = any, TCreate = any, TUpdate = any>({
 
     // Render loading state
     if (loading && items.length === 0) {
-        return <LoadingState title={`Loading ${title}...`} />;
+        return <LoadingState title={t("loading.generic")} />;
     }
 
     // Render error state
     if (error && items.length === 0) {
         return (
             <ErrorState
-                title={`Failed to load ${title}`}
+                title={t("reference.loadFailed", { entity: title }, `Failed to load ${title}`)}
                 description={error}
                 onRetry={() => loadData(page)}
             />
@@ -315,9 +333,9 @@ export function ReferenceCrudPage<TItem = any, TCreate = any, TUpdate = any>({
     if (!loading && items.length === 0) {
         return (
             <EmptyState
-                title="No data available"
-                description={`No ${title.toLowerCase()} found.`}
-                actionText={createForm ? `Create ${entityName}` : undefined}
+                title={t("common.noData")}
+                description={t("reference.noItemsFound", { entity: entityName }, `No ${entityName} found.`)}
+                actionText={createForm ? `${t("common.create")} ${entityName}` : undefined}
                 onAction={createForm ? () => setCreateModalOpen(true) : undefined}
             />
         );
@@ -331,7 +349,7 @@ export function ReferenceCrudPage<TItem = any, TCreate = any, TUpdate = any>({
                 actions={
                     <Space>
                         <Input.Search
-                            placeholder="Search..."
+                            placeholder={`${t("common.search")}...`}
                             allowClear
                             onSearch={(value) => {
                                 setSearchText(value);
@@ -352,7 +370,7 @@ export function ReferenceCrudPage<TItem = any, TCreate = any, TUpdate = any>({
                                     setCreateModalOpen(true);
                                 }}
                             >
-                                Create {entityName}
+                                {`${t("common.create")} ${entityName}`}
                             </Button>
                         )}
                     </Space>
@@ -381,7 +399,7 @@ export function ReferenceCrudPage<TItem = any, TCreate = any, TUpdate = any>({
             {/* Create Modal */}
             {createForm && (
                 <Modal
-                    title={`Create ${entityName}`}
+                    title={`${t("common.create")} ${entityName}`}
                     open={createModalOpen}
                     onOk={handleCreate}
                     onCancel={() => {
@@ -389,7 +407,7 @@ export function ReferenceCrudPage<TItem = any, TCreate = any, TUpdate = any>({
                         createFormInstance.resetFields();
                     }}
                     confirmLoading={submitting}
-                    okText="Create"
+                    okText={t("common.create")}
                 >
                     <Form form={createFormInstance} layout="vertical">
                         {createForm}
@@ -400,7 +418,7 @@ export function ReferenceCrudPage<TItem = any, TCreate = any, TUpdate = any>({
             {/* Edit Modal */}
             {editForm && (
                 <Modal
-                    title={`Edit ${entityName}`}
+                    title={`${t("common.edit")} ${entityName}`}
                     open={editModalOpen}
                     onOk={handleEdit}
                     onCancel={() => {
@@ -409,7 +427,7 @@ export function ReferenceCrudPage<TItem = any, TCreate = any, TUpdate = any>({
                         setCurrentRow(null);
                     }}
                     confirmLoading={submitting}
-                    okText="Save"
+                    okText={t("common.save")}
                 >
                     <Form form={editFormInstance} layout="vertical">
                         {editForm}

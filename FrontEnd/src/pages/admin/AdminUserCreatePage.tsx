@@ -8,6 +8,7 @@ import Unauthorized403Page from "../Unauthorized403Page";
 import type { Role } from "../../services/api/apiTypes";
 import { createUser } from "../../services/api/usersApi";
 import { useI18n } from "../../i18n/useI18n";
+import { useAuthStore } from "../../auth/authStore";
 
 type FormValues = {
   full_name: string;
@@ -128,7 +129,7 @@ export default function AdminUserCreatePage() {
               rules={[{ required: true, message: t("admin.userCreate.reqRole") }]}
               style={{ minWidth: 220 }}
             >
-              <Select options={roleOptions} />
+              <Select options={roleOptions.filter(r => r.value !== "SystemAdmin" || useAuthStore.getState().user?.role === "SystemAdmin")} />
             </Form.Item>
 
             <Form.Item

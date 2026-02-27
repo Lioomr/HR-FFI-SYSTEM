@@ -178,7 +178,7 @@ export async function updateEmployee(
   id: string | number,
   payload: CreateEmployeeDto
 ): Promise<ApiResponse<Employee>> {
-  const { data } = await api.put<ApiResponse<Employee>>(
+  const { data } = await api.patch<ApiResponse<Employee>>(
     `/employees/${id}`,
     payload
   );

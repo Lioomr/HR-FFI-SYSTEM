@@ -1,3 +1,6 @@
+from rest_framework.permissions import BasePermission
+
+
 class IsManagerOfEmployee(BasePermission):
     """
     Allows access if the request user is the manager of the leave request's employee.
@@ -11,5 +14,5 @@ class IsManagerOfEmployee(BasePermission):
         # Check if obj.employee (User) -> employee_profile -> manager is request.user
         try:
             return obj.employee.employee_profile.manager == request.user
-        except:
+        except Exception:
             return False

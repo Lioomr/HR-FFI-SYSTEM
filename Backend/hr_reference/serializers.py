@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Department, Position, TaskGroup, Sponsor
+from .models import Department, Position, Sponsor, TaskGroup
 
 
 class BaseReferenceSerializer(serializers.ModelSerializer):

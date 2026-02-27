@@ -9,7 +9,7 @@ interface PayrollReportsProps {
     status: string;
 }
 
-export default function PayrollReports({ runId, status }: PayrollReportsProps) {
+export default function PayrollReports({ runId }: PayrollReportsProps) {
     const { t } = useI18n();
     const [downloading, setDownloading] = useState<"csv" | "pdf" | "xlsx" | null>(null);
 

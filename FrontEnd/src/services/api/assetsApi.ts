@@ -14,7 +14,8 @@ export interface AssetAssignmentSummary {
 export interface Asset {
   id: number;
   asset_code: string;
-  name: string;
+  name_en: string;
+  name_ar: string;
   type: "VEHICLE" | "LAPTOP" | "OTHER";
   status: "AVAILABLE" | "ASSIGNED" | "UNDER_MAINTENANCE" | "LOST" | "DAMAGED" | "RETIRED";
   serial_number?: string;
@@ -41,7 +42,8 @@ export interface Asset {
 }
 
 export interface CreateAssetPayload {
-  name: string;
+  name_en: string;
+  name_ar: string;
   type: "VEHICLE" | "LAPTOP" | "OTHER";
   status?: "AVAILABLE" | "ASSIGNED" | "UNDER_MAINTENANCE" | "LOST" | "DAMAGED" | "RETIRED";
   serial_number?: string;

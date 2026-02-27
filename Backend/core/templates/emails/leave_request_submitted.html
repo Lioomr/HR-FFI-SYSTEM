@@ -1,13 +1,75 @@
 {% extends "emails/base_email.html" %}
 
-{% block details %}
-<div class="details">
-  <div><strong>Leave Type / نوع الإجازة:</strong> {{ leave_type }}</div>
-  <div><strong>Start Date / تاريخ البداية:</strong> {{ start_date }}</div>
-  <div><strong>End Date / تاريخ النهاية:</strong> {{ end_date }}</div>
-  <div><strong>Total Days / إجمالي الأيام:</strong> {{ total_days }}</div>
-  {% if manager_name %}
-  <div><strong>Approver / المسؤول المعتمد:</strong> {{ manager_name }}</div>
-  {% endif %}
+{% block status_badge %}
+<div class="status-badge-wrap">
+  <span class="status-badge badge-pending">
+    &#9711;&nbsp; Pending Review &nbsp;·&nbsp; قيد المراجعة
+  </span>
 </div>
+{% endblock %}
+
+{% block details %}
+{% if leave_type or start_date or end_date or total_days or manager_name %}
+<div class="details-card">
+  <div class="details-card-header" style="background: linear-gradient(90deg,#EF6C00,#F57C00);">&#128197; Leave Request
+    Details — تفاصيل طلب الإجازة</div>
+  <div class="details-card-body">
+    <div class="detail-row">
+      <span class="detail-label">Leave Type / نوع الإجازة</span>
+      <span class="detail-value">{{ leave_type }}</span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Start Date / تاريخ البداية</span>
+      <span class="detail-value">{{ start_date }}</span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">End Date / تاريخ النهاية</span>
+      <span class="detail-value">{{ end_date }}</span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Total Days / إجمالي الأيام</span>
+      <span class="detail-value"><strong>{{ total_days }}</strong></span>
+    </div>
+    {% if manager_name %}
+    <div class="detail-row">
+      <span class="detail-label">Approver / المعتمد</span>
+      <span class="detail-value">{{ manager_name }}</span>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block details_ar %}
+{% if leave_type or start_date or end_date or total_days or manager_name %}
+<div class="details-card" style="direction:rtl;text-align:right;">
+  <div class="details-card-header" style="background: linear-gradient(90deg,#EF6C00,#F57C00);">&#128197; تفاصيل طلب
+    الإجازة — Leave Request Details</div>
+  <div class="details-card-body">
+    <div class="detail-row">
+      <span class="ar-detail-label">نوع الإجازة / Leave Type</span>
+      <span class="detail-value">{{ leave_type }}</span>
+    </div>
+    <div class="detail-row">
+      <span class="ar-detail-label">تاريخ البداية / Start Date</span>
+      <span class="detail-value">{{ start_date }}</span>
+    </div>
+    <div class="detail-row">
+      <span class="ar-detail-label">تاريخ النهاية / End Date</span>
+      <span class="detail-value">{{ end_date }}</span>
+    </div>
+    <div class="detail-row">
+      <span class="ar-detail-label">إجمالي الأيام / Total Days</span>
+      <span class="detail-value"><strong>{{ total_days }}</strong></span>
+    </div>
+    {% if manager_name %}
+    <div class="detail-row">
+      <span class="ar-detail-label">المعتمد / Approver</span>
+      <span class="detail-value">{{ manager_name }}</span>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
 {% endblock %}

@@ -4,6 +4,7 @@ import { ReloadOutlined, DownloadOutlined } from "@ant-design/icons";
 import { getImportHistory, downloadImportErrors } from "../../../services/api/employeesApi";
 import type { ImportHistoryItem } from "../../../services/api/employeesApi";
 import { unwrapEnvelope } from "../../../utils/dataUtils";
+import { useI18n } from "../../../i18n/useI18n";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 
@@ -11,6 +12,7 @@ const { RangePicker } = DatePicker;
 const { Option } = Select;
 
 const ImportHistoryPage: React.FC = () => {
+    const { t } = useI18n();
     const [loading, setLoading] = useState(false);
     const [data, setData] = useState<ImportHistoryItem[]>([]);
     const [total, setTotal] = useState(0);
@@ -40,7 +42,7 @@ const ImportHistoryPage: React.FC = () => {
             const unwrapped = unwrapEnvelope(response);
 
             // StandardPagination returns { items, count, page, page_size, total_pages }
-            const items = unwrapped.items || unwrapped.results || [];
+            const items = unwrapped.items || [];
             const count = unwrapped.count || 0;
 
             setData(items);
@@ -65,7 +67,7 @@ const ImportHistoryPage: React.FC = () => {
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
         } catch (err) {
-            message.error("Failed to download error file");
+            message.error(t("import.history.downloadFail"));
             console.error(err);
         } finally {
             setDownloadingId(null);
@@ -79,19 +81,19 @@ const ImportHistoryPage: React.FC = () => {
 
     const columns: ColumnsType<ImportHistoryItem> = [
         {
-            title: "Date",
+            title: t("common.date"),
             dataIndex: "created_at",
             key: "created_at",
             render: (val: string) => dayjs(val).format("YYYY-MM-DD HH:mm"),
         },
         {
-            title: "Uploaded By",
+            title: t("import.history.uploadedBy"),
             dataIndex: "uploader",
             key: "uploader",
         },
         // Backend does not return filename, so column removed.
         {
-            title: "Status",
+            title: t("common.status"),
             dataIndex: "status",
             key: "status",
             render: (val: string) => {
@@ -104,13 +106,13 @@ const ImportHistoryPage: React.FC = () => {
             },
         },
         {
-            title: "Total Rows",
+            title: t("import.history.totalRows"),
             dataIndex: "row_count",
             key: "row_count",
             align: 'center',
         },
         {
-            title: "Inserted",
+            title: t("import.history.inserted"),
             dataIndex: "inserted_rows",
             key: "inserted_rows",
             align: 'center',
@@ -120,11 +122,11 @@ const ImportHistoryPage: React.FC = () => {
             },
         },
         {
-            title: "Actions",
+            title: t("common.actions"),
             key: "actions",
             render: (_, record) => (
                 record.status?.toLowerCase() === 'failed' ? (
-                    <Tooltip title="Download Error File">
+                    <Tooltip title={t("import.history.downloadError")}>
                         <Button
                             type="link"
                             danger
@@ -140,24 +142,24 @@ const ImportHistoryPage: React.FC = () => {
 
     return (
         <Card
-            title="Import History"
+            title={t("import.history.title")}
             extra={
                 <Button icon={<ReloadOutlined />} onClick={fetchHistory}>
-                    Refresh
+                    {t("common.refresh")}
                 </Button>
             }
         >
             <Space style={{ marginBottom: 16 }} wrap>
                 <Select
-                    placeholder="Filter by Status"
+                    placeholder={t("import.history.filterStatus")}
                     allowClear
                     style={{ width: 150 }}
                     onChange={setStatusFilter}
                     value={statusFilter}
                 >
-                    <Option value="SUCCESS">Success</Option>
-                    <Option value="FAILED">Failed</Option>
-                    <Option value="PROCESSING">Processing</Option>
+                    <Option value="SUCCESS">{t("import.history.success")}</Option>
+                    <Option value="FAILED">{t("import.history.failed")}</Option>
+                    <Option value="PROCESSING">{t("import.history.processing")}</Option>
                 </Select>
 
                 <RangePicker
@@ -171,6 +173,7 @@ const ImportHistoryPage: React.FC = () => {
                 dataSource={data}
                 rowKey="id"
                 loading={loading}
+                scroll={{ x: 700 }}
                 pagination={{
                     current: page,
                     pageSize: pageSize,

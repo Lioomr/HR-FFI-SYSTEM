@@ -19,9 +19,15 @@ class EmailService:
         default_sender: str | None = None,
     ) -> None:
         self.api_key = api_key or getattr(settings, "BIRD_API_KEY", "") or getattr(settings, "BIRD_ACCESS_KEY", "")
-        self.channel_id = email_channel_id or getattr(settings, "BIRD_EMAIL_CHANNEL_ID", "") or getattr(settings, "BIRD_CHANNEL_ID", "")
+        self.channel_id = (
+            email_channel_id
+            or getattr(settings, "BIRD_EMAIL_CHANNEL_ID", "")
+            or getattr(settings, "BIRD_CHANNEL_ID", "")
+        )
         self.workspace_id = workspace_id or getattr(settings, "BIRD_WORKSPACE_ID", "")
-        self.base_url = (base_url or getattr(settings, "BIRD_API_BASE_URL", "https://api.bird.com/workspaces")).rstrip("/")
+        self.base_url = (base_url or getattr(settings, "BIRD_API_BASE_URL", "https://api.bird.com/workspaces")).rstrip(
+            "/"
+        )
         self.timeout_seconds = timeout_seconds or int(getattr(settings, "NOTIFICATION_HTTP_TIMEOUT_SECONDS", 10))
         self.default_sender = default_sender or getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@fficontracting.com")
 
@@ -108,12 +114,15 @@ class EmailService:
 
         if 200 <= response.status_code < 300:
             message_id = (
-                response_data.get("id")
-                or response_data.get("messageId")
-                or response_data.get("message_id")
-                or None
+                response_data.get("id") or response_data.get("messageId") or response_data.get("message_id") or None
             )
-            return {"success": True, "provider": "bird", "status_code": response.status_code, "message_id": message_id, "error": None}
+            return {
+                "success": True,
+                "provider": "bird",
+                "status_code": response.status_code,
+                "message_id": message_id,
+                "error": None,
+            }
 
         error_message = response_data.get("message") or response_data.get("error") or response.text[:500]
         logger.error(
