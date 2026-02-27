@@ -18,3 +18,8 @@ node_modules/
 FrontEnd/node_modules/
 dist/
 build/
+
+# Spreadsheet files
+*.xls
+*.xlsx
+*.xlsm
