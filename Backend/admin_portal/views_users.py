@@ -4,6 +4,7 @@ import hashlib
 import logging
 
 from django.conf import settings
+from django.template.loader import render_to_string
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.cache import cache
@@ -205,13 +206,23 @@ class UserResetPasswordView(APIView):
             temp_password = generate_temp_password()
             user.set_password(temp_password)
             user.save(update_fields=["password"])
+            
+            context = {
+                "title": "Your temporary password",
+                "title_ar": "كلمة المرور المؤقتة الخاصة بك",
+                "employee_name": user.full_name or user.email,
+                "message": "Your password has been reset by an administrator.",
+                "message_ar": "تمت إعاده تعيين كلمة المرور الخاصة بك من قبل مسؤول النظام.",
+                "reset_instructions": "Use the temporary password below to log in. You will be prompted to change it immediately.",
+                "reset_instructions_ar": "استخدم كلمة المرور المؤقتة أدناه لتسجيل الدخول. سيُطلب منك تغييرها على الفور.",
+                "temp_password": temp_password,
+            }
+            html = render_to_string("emails/password_reset_email.html", context)
+            
             _send_password_reset_material(
                 user,
                 subject="Your temporary password",
-                html_content=(
-                    "<p>Your password has been reset by an administrator.</p>"
-                    f"<p>Temporary password: <strong>{temp_password}</strong></p>"
-                ),
+                html_content=html,
                 fallback_text=f"Your temporary password is: {temp_password}",
             )
 
@@ -223,13 +234,23 @@ class UserResetPasswordView(APIView):
         token = secrets.token_urlsafe(32)
         _store_hashed_reset_token(user.id, token)
         reset_link = f"{settings.FRONTEND_URL.rstrip('/')}/change-password?token={token}&uid={user.id}"
+        
+        context = {
+            "title": "Reset your password",
+            "title_ar": "إعادة تعيين كلمة المرور",
+            "employee_name": user.full_name or user.email,
+            "message": "Your password reset was requested by an administrator.",
+            "message_ar": "تم طلب إعادة تعيين كلمة المرور الخاصة بك من قبل مسؤول النظام.",
+            "reset_instructions": "Click the button below to set a new password. This link is only valid once.",
+            "reset_instructions_ar": "انقر على الزر أدناه لتعيين كلمة مرور جديدة. هذا الرابط صالح للاستخدام مرة واحدة فقط.",
+            "reset_link": reset_link,
+        }
+        html = render_to_string("emails/password_reset_email.html", context)
+        
         _send_password_reset_material(
             user,
             subject="Reset your password",
-            html_content=(
-                "<p>Your password reset was requested by an administrator.</p>"
-                f'<p>Use this one-time link: <a href="{reset_link}">{reset_link}</a></p>'
-            ),
+            html_content=html,
             fallback_text=f"Use this one-time reset link: {reset_link}",
         )
 
