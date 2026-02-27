@@ -2,8 +2,9 @@ from django.contrib.auth import authenticate, get_user_model
 from rest_framework import serializers
 from rest_framework.exceptions import AuthenticationFailed
 
-from .security import get_client_ip, is_locked_out, record_login_failure, clear_login_failures
 from audit.utils import audit
+
+from .security import clear_login_failures, get_client_ip, is_locked_out, record_login_failure
 
 User = get_user_model()
 

@@ -6,16 +6,22 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('announcements', '0001_initial'),
+        ("announcements", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='announcement',
-            name='target_user',
-            field=models.ForeignKey(blank=True, help_text='Optional single-user target for private announcement delivery', null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='targeted_announcements', to=settings.AUTH_USER_MODEL),
+            model_name="announcement",
+            name="target_user",
+            field=models.ForeignKey(
+                blank=True,
+                help_text="Optional single-user target for private announcement delivery",
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="targeted_announcements",
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
     ]

@@ -1,7 +1,7 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from .views import DepartmentViewSet, PositionViewSet, TaskGroupViewSet, SponsorViewSet
+from .views import DepartmentViewSet, PositionViewSet, SponsorViewSet, TaskGroupViewSet
 
 router = DefaultRouter()
 router.trailing_slash = "/?"

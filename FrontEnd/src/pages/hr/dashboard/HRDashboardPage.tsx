@@ -21,7 +21,7 @@ import type { HRSummary } from "../../../services/api/hrSummaryApi";
 import { isApiError } from "../../../services/api/apiTypes";
 import { isForbidden } from "../../../services/api/httpErrors";
 import AnnouncementWidget from "../../../components/announcements/AnnouncementWidget";
-import SARIcon from "../../../components/icons/SARIcon";
+import AmountWithSAR from "../../../components/ui/AmountWithSAR";
 import { useI18n } from "../../../i18n/useI18n";
 
 export default function HRDashboardPage() {
@@ -86,10 +86,11 @@ export default function HRDashboardPage() {
                         title={t("hr.dashboard.activePayroll")}
                         value={
                             summary?.latest_payroll?.latest_total_net ? (
-                                <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                    {(summary.latest_payroll.latest_total_net / 1000).toFixed(0)}k
-                                    <SARIcon size={20} />
-                                </span>
+                                <AmountWithSAR
+                                    amount={(summary.latest_payroll.latest_total_net / 1000).toFixed(0)}
+                                    size={20}
+                                    suffix="k"
+                                />
                             ) : "N/A"
                         }
                         icon={<DollarOutlined />}

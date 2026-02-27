@@ -15,6 +15,15 @@ const { RangePicker } = DatePicker;
 export default function LeaveInboxPage() {
     const navigate = useNavigate();
     const { t } = useI18n();
+
+    // Translate leave type names from the API
+    const translateLeaveType = (name?: string): string => {
+        if (!name) return '-';
+        const key = `leave.type.${name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z_]/g, '')}`;
+        const translated = t(key);
+        return translated === key ? name : translated;
+    };
+
     const [loading, setLoading] = useState(false);
     const [data, setData] = useState<LeaveRequest[]>([]);
     const [total, setTotal] = useState(0);
@@ -81,7 +90,7 @@ export default function LeaveInboxPage() {
         {
             title: t("leave.leaveType"),
             key: "leave_type",
-            render: (_, record) => record.leave_type?.name || "-"
+            render: (_, record) => translateLeaveType(record.leave_type?.name)
         },
         {
             title: t("leave.startDate"),
@@ -99,7 +108,11 @@ export default function LeaveInboxPage() {
             dataIndex: "status",
             key: "status",
             render: (status) => {
-                const display = (status?.charAt(0).toUpperCase() + status?.slice(1).toLowerCase()).replace('_', ' ');
+                const statusKey = `leave.status.${status?.toLowerCase()}`;
+                const translated = t(statusKey);
+                const display = translated === statusKey
+                    ? (status?.charAt(0).toUpperCase() + status?.slice(1).toLowerCase()).replace(/_/g, ' ')
+                    : translated;
                 return (
                     <Tag color={getStatusColor(status)}>
                         {display}

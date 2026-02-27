@@ -5,52 +5,20 @@ import type { UploadProps } from "antd";
 import { useNavigate } from "react-router-dom";
 import { importEmployees, downloadImportTemplate } from "../../../services/api/employeesApi";
 import { unwrapEnvelope } from "../../../utils/dataUtils";
+import { useI18n } from "../../../i18n/useI18n";
 
 const { Title, Text } = Typography;
 const { Dragger } = Upload;
 
-// Exact headers required by Backend (employees/views.py)
-// Note: Spaces are intentionally preserved as per backend contract.
-const REQUIRED_HEADERS = [
-    "Emp Full Name",
-    "Employee number ",       // Space at the end
-    "Nationality ",           // Space at the end
-    "Position Name",
-    "Passport Number",
-    "Passport Expiry",
-    " ID",                    // Space at the start
-    " ID Expiry",             // Space at the start
-    "Date Of Birth",
-    "JOB OFFER ",             // Space at the end
-    " Joining Date",          // Space at the start
-    "Contract date ",         // Space at the end
-    "Contract Expiry Date ",  // Space at the end
-    "Task Group Name",
-    "Health Card",
-    "Health Card Expiry",
-    "Mobile Number",
-    "Sponsor Code",
-    "Basic Salary",
-    "Transportation Allowance",
-    "Accommodation Allowance",
-    "Telephone Allowance",
-    "Petrol Allowance",
-    "Other Allowance",
-    "Total Salary",
-    "Payment Mode",
-    "Allowed Overtime",
-    "department",
-    "SID monthly expense"
-];
-
 const ImportEmployeesEntryPage: React.FC = () => {
     const navigate = useNavigate();
+    const { t } = useI18n();
     const [uploading, setUploading] = useState(false);
     const [fileList, setFileList] = useState<any[]>([]);
 
     const handleUpload = async () => {
         if (fileList.length === 0) {
-            message.error("Please select a file to upload");
+            message.error(t("import.employees.selectFile"));
             return;
         }
 
@@ -60,7 +28,7 @@ const ImportEmployeesEntryPage: React.FC = () => {
         try {
             const response = await importEmployees(file as File);
             const { inserted_rows } = unwrapEnvelope(response);
-            message.success(`Import Successful! ${inserted_rows} employees inserted.`);
+            message.success(t("import.employees.successMsg", { inserted: inserted_rows }));
             // Backend is synchronous and doesn't return ID, so we go to history
             setTimeout(() => {
                 navigate("/hr/import/employees/history");
@@ -108,13 +76,13 @@ const ImportEmployeesEntryPage: React.FC = () => {
         beforeUpload: (file) => {
             const isXlsx = file.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
             if (!isXlsx) {
-                message.error("You can only upload Excel (.xlsx) files!");
+                message.error(t("import.employees.excelOnly"));
                 return Upload.LIST_IGNORE;
             }
 
             const isLt5M = file.size / 1024 / 1024 < 5;
             if (!isLt5M) {
-                message.error("File must be smaller than 5MB!");
+                message.error(t("import.employees.sizeLimit"));
                 return Upload.LIST_IGNORE;
             }
 
@@ -130,40 +98,40 @@ const ImportEmployeesEntryPage: React.FC = () => {
     return (
         <div style={{ maxWidth: 800, margin: "0 auto", padding: "24px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-                <Title level={2} style={{ margin: 0 }}>Import Employees</Title>
+                <Title level={2} style={{ margin: 0 }}>{t("import.employees.title")}</Title>
                 <Button
                     onClick={() => navigate("/hr/import/employees/history")}
                     icon={<FileExcelOutlined />}
                 >
-                    View Import History
+                    {t("import.employees.viewHistory")}
                 </Button>
             </div>
 
             <Alert
-                message="Running in All-or-Nothing Mode"
-                description="If any row in the file fails validation, the entire import will be rejected. Please ensure your data is clean."
+                message={t("import.employees.alertTitle")}
+                description={t("import.employees.alertDesc")}
                 type="warning"
                 showIcon
                 style={{ marginBottom: 24 }}
             />
 
             {/* Instructions Card */}
-            <Card title="📋 Instructions" style={{ marginBottom: 24 }}>
+            <Card title={t("import.employees.instructionsTitle")} style={{ marginBottom: 24 }}>
                 <div style={{ marginBottom: 16 }}>
-                    <Text strong>Requirements:</Text>
+                    <Text strong>{t("import.employees.requirements")}</Text>
                     <ul style={{ marginTop: 8, marginBottom: 16 }}>
-                        <li>File format: <Text code>.xlsx</Text> only</li>
-                        <li>Maximum file size: <Text code>5MB</Text></li>
-                        <li>Maximum rows: <Text code>5,000</Text></li>
-                        <li>Headers must match the template exactly</li>
+                        <li>{t("import.employees.fileFormat")} <Text code>.xlsx</Text></li>
+                        <li>{t("import.employees.maxSize")} <Text code>5MB</Text></li>
+                        <li>{t("import.employees.maxRows")} <Text code>5,000</Text></li>
+                        <li>{t("import.employees.headersMatch")}</li>
                     </ul>
                 </div>
 
                 <div style={{ marginBottom: 16 }}>
-                    <Text strong>Auto-Creation:</Text>
+                    <Text strong>{t("import.employees.autoCreation")}</Text>
                     <ul style={{ marginTop: 8, marginBottom: 16 }}>
-                        <li>Departments and Positions will be <Text type="success">auto-created</Text> if they don't exist</li>
-                        <li>Task Groups and Sponsors must exist in the system beforehand</li>
+                        <li>{t("import.employees.autoCreateDesc")} <Text type="success">{t("import.employees.autoCreatedLabel")}</Text></li>
+                        <li>{t("import.employees.existDesc")}</li>
                     </ul>
                 </div>
 
@@ -182,27 +150,27 @@ const ImportEmployeesEntryPage: React.FC = () => {
                             a.click();
                             window.URL.revokeObjectURL(url);
                             document.body.removeChild(a);
-                            message.success("Template downloaded successfully");
+                            message.success(t("import.employees.templateSuccess"));
                         } catch (e) {
-                            message.error("Failed to download template");
+                            message.error(t("import.employees.templateFail"));
                         }
                     }}
                 >
-                    Download Excel Template
+                    {t("import.employees.download")}
                 </Button>
             </Card>
 
             {/* Upload Card */}
-            <Card title="📤 Upload File">
+            <Card title={t("import.employees.uploadTitle")}>
                 <Dragger {...uploadProps} disabled={uploading} style={{ padding: 20 }}>
                     <p className="ant-upload-drag-icon">
                         <InboxOutlined style={{ fontSize: 48, color: "#1890ff" }} />
                     </p>
                     <p className="ant-upload-text" style={{ fontSize: 16, fontWeight: 500 }}>
-                        Click or drag Excel file to upload
+                        {t("import.employees.dragDrop")}
                     </p>
                     <p className="ant-upload-hint" style={{ color: "#8c8c8c" }}>
-                        Only .xlsx files are supported. File will be validated before import.
+                        {t("import.employees.uploadHint")}
                     </p>
                 </Dragger>
 
@@ -215,7 +183,7 @@ const ImportEmployeesEntryPage: React.FC = () => {
                         loading={uploading}
                         icon={<UploadOutlined />}
                     >
-                        {uploading ? 'Processing Import...' : 'Start Import'}
+                        {uploading ? t("import.employees.processing") : t("import.employees.start")}
                     </Button>
                 </div>
             </Card>

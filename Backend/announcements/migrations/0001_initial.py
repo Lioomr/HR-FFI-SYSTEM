@@ -6,7 +6,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
@@ -15,23 +14,39 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
-            name='Announcement',
+            name="Announcement",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('title', models.CharField(max_length=200)),
-                ('content', models.TextField()),
-                ('target_roles', models.JSONField(help_text='List of role names that should see this announcement')),
-                ('publish_to_dashboard', models.BooleanField(default=True, help_text='Show announcement on user dashboards')),
-                ('publish_to_email', models.BooleanField(default=False, help_text='Send announcement via email')),
-                ('publish_to_sms', models.BooleanField(default=False, help_text='Send announcement via SMS (placeholder)')),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('is_active', models.BooleanField(default=True)),
-                ('created_by', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='announcements_created', to=settings.AUTH_USER_MODEL)),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("title", models.CharField(max_length=200)),
+                ("content", models.TextField()),
+                ("target_roles", models.JSONField(help_text="List of role names that should see this announcement")),
+                (
+                    "publish_to_dashboard",
+                    models.BooleanField(default=True, help_text="Show announcement on user dashboards"),
+                ),
+                ("publish_to_email", models.BooleanField(default=False, help_text="Send announcement via email")),
+                (
+                    "publish_to_sms",
+                    models.BooleanField(default=False, help_text="Send announcement via SMS (placeholder)"),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("is_active", models.BooleanField(default=True)),
+                (
+                    "created_by",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="announcements_created",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-created_at'],
-                'indexes': [models.Index(fields=['-created_at'], name='announcemen_created_da46df_idx'), models.Index(fields=['is_active'], name='announcemen_is_acti_a26055_idx')],
+                "ordering": ["-created_at"],
+                "indexes": [
+                    models.Index(fields=["-created_at"], name="announcemen_created_da46df_idx"),
+                    models.Index(fields=["is_active"], name="announcemen_is_acti_a26055_idx"),
+                ],
             },
         ),
     ]

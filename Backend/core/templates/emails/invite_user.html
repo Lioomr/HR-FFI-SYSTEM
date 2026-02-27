@@ -1,15 +1,71 @@
 {% extends "emails/base_email.html" %}
 
+{% block status_badge %}
+<div class="status-badge-wrap">
+  <span class="status-badge badge-invite">
+    &#128231;&nbsp; You're Invited &nbsp;·&nbsp; أنت مدعو
+  </span>
+</div>
+{% endblock %}
+
 {% block details %}
-<div class="details">
-  <div><strong>Role / الدور:</strong> {{ role }}</div>
-  <div><strong>Expires In / تنتهي خلال:</strong> {{ expires_in_hours }} hours</div>
-  {% if inviter_name %}
-  <div><strong>Invited By / تم الإرسال بواسطة:</strong> {{ inviter_name }}</div>
-  {% endif %}
-  <div style="margin-top: 10px;">
-    <strong>Invite Link / رابط الدعوة:</strong><br />
-    <a href="{{ invite_link }}" target="_blank" rel="noopener noreferrer">{{ invite_link }}</a>
+{% if role or inviter_name or expires_in_hours is not None or invite_link %}
+<div class="details-card">
+  <div class="details-card-header" style="background: linear-gradient(90deg,#6A1B9A,#8E24AA);">&#128231; Invitation
+    Details — تفاصيل الدعوة</div>
+  <div class="details-card-body">
+    <div class="detail-row">
+      <span class="detail-label">Assigned Role / الدور</span>
+      <span class="detail-value"><strong>{{ role }}</strong></span>
+    </div>
+    {% if inviter_name %}
+    <div class="detail-row">
+      <span class="detail-label">Invited By / تم الإرسال بواسطة</span>
+      <span class="detail-value">{{ inviter_name }}</span>
+    </div>
+    {% endif %}
+    <div class="detail-row">
+      <span class="detail-label">Invite Expires / تنتهي خلال</span>
+      <span class="detail-value">{{ expires_in_hours }} hours / ساعة</span>
+    </div>
+    {% if invite_link %}
+    <div class="detail-row">
+      <span class="detail-label">Invite Link / رابط الدعوة</span>
+      <span class="detail-value">{{ invite_link }}</span>
+    </div>
+    {% endif %}
   </div>
 </div>
+{% endif %}
+{% endblock %}
+
+{% block details_ar %}
+{% if role or inviter_name or expires_in_hours is not None or invite_link %}
+<div class="details-card" style="direction:rtl;text-align:right;">
+  <div class="details-card-header" style="background: linear-gradient(90deg,#6A1B9A,#8E24AA);">&#128231; تفاصيل الدعوة —
+    Invitation Details</div>
+  <div class="details-card-body">
+    <div class="detail-row">
+      <span class="ar-detail-label">الدور المعيّن / Assigned Role</span>
+      <span class="detail-value"><strong>{{ role }}</strong></span>
+    </div>
+    {% if inviter_name %}
+    <div class="detail-row">
+      <span class="ar-detail-label">تم الإرسال بواسطة / Invited By</span>
+      <span class="detail-value">{{ inviter_name }}</span>
+    </div>
+    {% endif %}
+    <div class="detail-row">
+      <span class="ar-detail-label">تنتهي الدعوة خلال / Expires In</span>
+      <span class="detail-value">{{ expires_in_hours }} ساعة / hours</span>
+    </div>
+    {% if invite_link %}
+    <div class="detail-row">
+      <span class="ar-detail-label">رابط الدعوة / Invite Link</span>
+      <span class="detail-value">{{ invite_link }}</span>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
 {% endblock %}

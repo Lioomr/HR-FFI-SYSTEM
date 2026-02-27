@@ -1,15 +1,67 @@
 {% extends "emails/base_email.html" %}
 
-{% block details %}
-<div class="details">
-  {% if announcement_title %}
-  <div><strong>Announcement / الإعلان:</strong> {{ announcement_title }}</div>
-  {% endif %}
-  {% if published_at %}
-  <div><strong>Published / تاريخ النشر:</strong> {{ published_at }}</div>
-  {% endif %}
-  {% if publisher_name %}
-  <div><strong>Posted By / تم النشر بواسطة:</strong> {{ publisher_name }}</div>
-  {% endif %}
+{% block status_badge %}
+<div class="status-badge-wrap">
+  <span class="status-badge badge-info">
+    &#128226;&nbsp; New Announcement &nbsp;·&nbsp; إعلان جديد
+  </span>
 </div>
+{% endblock %}
+
+{% block details %}
+{% if announcement_title or published_at or publisher_name %}
+<div class="details-card">
+  <div class="details-card-header" style="background: linear-gradient(90deg,#1565C0,#1E88E5);">&#128226; Announcement
+    Details — تفاصيل الإعلان</div>
+  <div class="details-card-body">
+    {% if announcement_title %}
+    <div class="detail-row">
+      <span class="detail-label">Title / العنوان</span>
+      <span class="detail-value"><strong>{{ announcement_title }}</strong></span>
+    </div>
+    {% endif %}
+    {% if publisher_name %}
+    <div class="detail-row">
+      <span class="detail-label">Posted By / نُشر بواسطة</span>
+      <span class="detail-value">{{ publisher_name }}</span>
+    </div>
+    {% endif %}
+    {% if published_at %}
+    <div class="detail-row">
+      <span class="detail-label">Published / تاريخ النشر</span>
+      <span class="detail-value">{{ published_at }}</span>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block details_ar %}
+{% if announcement_title or published_at or publisher_name %}
+<div class="details-card" style="direction:rtl;text-align:right;">
+  <div class="details-card-header" style="background: linear-gradient(90deg,#1565C0,#1E88E5);">&#128226; تفاصيل الإعلان
+    — Announcement Details</div>
+  <div class="details-card-body">
+    {% if announcement_title %}
+    <div class="detail-row">
+      <span class="ar-detail-label">العنوان / Title</span>
+      <span class="detail-value"><strong>{{ announcement_title }}</strong></span>
+    </div>
+    {% endif %}
+    {% if publisher_name %}
+    <div class="detail-row">
+      <span class="ar-detail-label">نُشر بواسطة / Posted By</span>
+      <span class="detail-value">{{ publisher_name }}</span>
+    </div>
+    {% endif %}
+    {% if published_at %}
+    <div class="detail-row">
+      <span class="ar-detail-label">تاريخ النشر / Published</span>
+      <span class="detail-value">{{ published_at }}</span>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
 {% endblock %}

@@ -1,7 +1,7 @@
 from datetime import date, datetime
 
-from employees.models import EmployeeProfile
 from core.whatsapp_service import BirdWhatsAppTemplateService
+from employees.models import EmployeeProfile
 
 
 def _normalize_phone_for_bird(raw_mobile: str | None) -> str:

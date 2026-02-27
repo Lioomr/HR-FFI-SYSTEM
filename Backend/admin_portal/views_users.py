@@ -1,30 +1,32 @@
 import secrets
 import string
+import hashlib
+import logging
 
-from django.contrib.auth import get_user_model
-import secrets
-import string
-
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.core.cache import cache
 from django.db.models import Q
-from rest_framework.views import APIView
 from rest_framework import status
-from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from core.permissions import IsSystemAdmin, IsHRManagerOrAdmin
-from core.responses import success, error
-from core.pagination import StandardPagination
 from audit.utils import audit
+from core.pagination import StandardPagination
+from core.permissions import IsHRManagerOrAdmin, IsSystemAdmin
+from core.responses import error, success
+from core.services.email_service import EmailService
+
 from .serializers import (
-    UserListSerializer,
     CreateUserSerializer,
-    UpdateStatusSerializer,
-    UpdateRoleSerializer,
     ResetPasswordSerializer,
+    UpdateRoleSerializer,
+    UpdateStatusSerializer,
+    UserListSerializer,
 )
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 ROLE_SYSTEM_ADMIN = "SystemAdmin"
 
@@ -43,6 +45,29 @@ def is_last_active_system_admin(user: User) -> bool:
 def generate_temp_password(length=12):
     alphabet = string.ascii_letters + string.digits
     return "".join(secrets.choice(alphabet) for _ in range(length))
+
+
+def _password_reset_cache_key(user_id: int) -> str:
+    return f"password_reset_token:{user_id}"
+
+
+def _store_hashed_reset_token(user_id: int, token: str) -> None:
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    ttl_seconds = int(getattr(settings, "PASSWORD_RESET_TOKEN_TTL_SECONDS", 3600))
+    cache.set(_password_reset_cache_key(user_id), {"token_hash": token_hash}, ttl_seconds)
+
+
+def _send_password_reset_material(user: User, *, subject: str, html_content: str, fallback_text: str) -> None:
+    email_service = EmailService()
+    if not email_service.is_configured():
+        logger.warning("password_reset_email_not_sent_email_service_unconfigured", extra={"user_id": user.id})
+        return
+    email_service.send_html_email(
+        to_email=user.email,
+        subject=subject,
+        html_content=html_content,
+        fallback_text=fallback_text,
+    )
 
 
 class UsersListCreateView(APIView):
@@ -70,8 +95,8 @@ class UsersListCreateView(APIView):
         return paginator.get_paginated_response(data)
 
     def post(self, request):
-        s = CreateUserSerializer(data=request.data)
-        
+        s = CreateUserSerializer(data=request.data, context={"request": request})
+
         # Validate and return user-friendly errors
         if not s.is_valid():
             # Extract the first error message for user-friendly display
@@ -80,17 +105,17 @@ class UsersListCreateView(APIView):
                 # Get first field with error
                 first_field = next(iter(errors.keys()))
                 first_error = errors[first_field]
-                
+
                 # Extract message from list if needed
                 if isinstance(first_error, list) and len(first_error) > 0:
                     error_message = str(first_error[0])
                 else:
                     error_message = str(first_error)
-                
+
                 return error(error_message, errors=errors, status=422)
-            
+
             return error("Validation failed", errors=errors, status=422)
-        
+
         user = s.save()
 
         audit(
@@ -147,7 +172,7 @@ class UserRoleView(APIView):
 
     def put(self, request, user_id):
         user = User.objects.get(pk=user_id)
-        s = UpdateRoleSerializer(data=request.data)
+        s = UpdateRoleSerializer(data=request.data, context={"request": request})
         s.is_valid(raise_exception=True)
 
         new_role = s.validated_data["role"]
@@ -180,17 +205,34 @@ class UserResetPasswordView(APIView):
             temp_password = generate_temp_password()
             user.set_password(temp_password)
             user.save(update_fields=["password"])
+            _send_password_reset_material(
+                user,
+                subject="Your temporary password",
+                html_content=(
+                    "<p>Your password has been reset by an administrator.</p>"
+                    f"<p>Temporary password: <strong>{temp_password}</strong></p>"
+                ),
+                fallback_text=f"Your temporary password is: {temp_password}",
+            )
 
             audit(request, "user_password_reset", entity="user", entity_id=user.id, metadata={"mode": mode})
 
-            # Return temp password ONCE (Phase 1). Frontend can show it in modal.
-            return success({"mode": mode, "temporary_password": temp_password})
+            return success({"mode": mode, "message": "Password reset processed."})
 
         # mode == reset_link
-        # Phase 1: generate a token you can later email. We'll return it for now.
-        # In production: send email + don't return token.
         token = secrets.token_urlsafe(32)
+        _store_hashed_reset_token(user.id, token)
+        reset_link = f"{settings.FRONTEND_URL.rstrip('/')}/change-password?token={token}&uid={user.id}"
+        _send_password_reset_material(
+            user,
+            subject="Reset your password",
+            html_content=(
+                "<p>Your password reset was requested by an administrator.</p>"
+                f'<p>Use this one-time link: <a href="{reset_link}">{reset_link}</a></p>'
+            ),
+            fallback_text=f"Use this one-time reset link: {reset_link}",
+        )
 
         audit(request, "user_password_reset", entity="user", entity_id=user.id, metadata={"mode": mode})
 
-        return success({"mode": mode, "reset_token": token})
+        return success({"mode": mode, "message": "Password reset processed."})

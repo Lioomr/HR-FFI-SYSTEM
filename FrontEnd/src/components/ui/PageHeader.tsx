@@ -4,16 +4,35 @@ import type { ReactNode } from "react";
 export default function PageHeader({
   title,
   subtitle,
+  secondarySubtitle,
+  breadcrumb,
   tags,
   actions,
 }: {
   title: string;
   subtitle?: string;
+  secondarySubtitle?: string;
+  breadcrumb?: string;
   tags?: ReactNode;
   actions?: ReactNode;
 }) {
   return (
     <div style={{ marginBottom: 24 }}>
+      {breadcrumb && (
+        <div
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            textTransform: "uppercase",
+            letterSpacing: "0.05em",
+            color: "#94a3b8",
+            marginBottom: 4,
+            marginLeft: 18, // Align with title
+          }}
+        >
+          {breadcrumb}
+        </div>
+      )}
       <div
         style={{
           display: "flex",
@@ -29,7 +48,7 @@ export default function PageHeader({
           <div
             style={{
               width: 4,
-              height: 44,
+              height: 48,
               borderRadius: 4,
               background: "linear-gradient(180deg, #f97316, #fb923c)",
               flexShrink: 0,
@@ -37,34 +56,49 @@ export default function PageHeader({
             }}
           />
           <div>
-            <Space align="center" style={{ marginBottom: subtitle ? 2 : 0 }}>
+            <Space align="center" style={{ marginBottom: (subtitle || secondarySubtitle) ? 0 : 0 }}>
               <Typography.Title
                 level={3}
                 style={{
                   margin: 0,
-                  fontSize: 22,
-                  fontWeight: 700,
+                  fontSize: 24,
+                  fontWeight: 800,
                   color: "#0f172a",
                   letterSpacing: "-0.02em",
+                  fontFamily: "'Outfit', sans-serif",
                 }}
               >
                 {title}
               </Typography.Title>
               {tags}
             </Space>
-            {subtitle && (
-              <Typography.Text
-                style={{ color: "#64748b", fontSize: 14, fontWeight: 400 }}
-              >
-                {subtitle}
-              </Typography.Text>
+            {(subtitle || secondarySubtitle) && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: -2 }}>
+                {subtitle && (
+                  <Typography.Text
+                    style={{ color: "#64748b", fontSize: 16, fontWeight: 500 }}
+                  >
+                    {subtitle}
+                  </Typography.Text>
+                )}
+                {subtitle && secondarySubtitle && (
+                  <span style={{ color: "#cbd5e1" }}>•</span>
+                )}
+                {secondarySubtitle && (
+                  <Typography.Text
+                    style={{ color: "#94a3b8", fontSize: 14, fontWeight: 400 }}
+                  >
+                    {secondarySubtitle}
+                  </Typography.Text>
+                )}
+              </div>
             )}
           </div>
         </div>
 
         {/* Right: action buttons */}
         {actions && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 4 }}>
             {actions}
           </div>
         )}

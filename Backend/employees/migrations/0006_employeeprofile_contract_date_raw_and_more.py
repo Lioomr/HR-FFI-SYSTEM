@@ -6,111 +6,126 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('employees', '0005_alter_employeeprofile_user'),
+        ("employees", "0005_alter_employeeprofile_user"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='employeeprofile',
-            name='contract_date_raw',
+            model_name="employeeprofile",
+            name="contract_date_raw",
             field=models.CharField(blank=True, max_length=50, null=True),
         ),
         migrations.AddField(
-            model_name='employeeprofile',
-            name='contract_expiry_raw',
+            model_name="employeeprofile",
+            name="contract_expiry_raw",
             field=models.CharField(blank=True, max_length=50, null=True),
         ),
         migrations.AddField(
-            model_name='employeeprofile',
-            name='data_source',
-            field=models.CharField(choices=[('IMPORT_EXCEL', 'Import Excel'), ('MANUAL', 'Manual')], default='MANUAL', max_length=20),
+            model_name="employeeprofile",
+            name="data_source",
+            field=models.CharField(
+                choices=[("IMPORT_EXCEL", "Import Excel"), ("MANUAL", "Manual")], default="MANUAL", max_length=20
+            ),
         ),
         migrations.AddField(
-            model_name='employeeprofile',
-            name='date_of_birth_raw',
+            model_name="employeeprofile",
+            name="date_of_birth_raw",
             field=models.CharField(blank=True, max_length=50, null=True),
         ),
         migrations.AddField(
-            model_name='employeeprofile',
-            name='department_name_ar',
+            model_name="employeeprofile",
+            name="department_name_ar",
             field=models.CharField(blank=True, max_length=100, null=True),
         ),
         migrations.AddField(
-            model_name='employeeprofile',
-            name='department_name_en',
+            model_name="employeeprofile",
+            name="department_name_en",
             field=models.CharField(blank=True, max_length=100, null=True),
         ),
         migrations.AddField(
-            model_name='employeeprofile',
-            name='full_name_ar',
+            model_name="employeeprofile",
+            name="full_name_ar",
             field=models.CharField(blank=True, max_length=255, null=True),
         ),
         migrations.AddField(
-            model_name='employeeprofile',
-            name='full_name_en',
+            model_name="employeeprofile",
+            name="full_name_en",
             field=models.CharField(blank=True, max_length=255, null=True),
         ),
         migrations.AddField(
-            model_name='employeeprofile',
-            name='health_card_expiry_raw',
+            model_name="employeeprofile",
+            name="health_card_expiry_raw",
             field=models.CharField(blank=True, max_length=50, null=True),
         ),
         migrations.AddField(
-            model_name='employeeprofile',
-            name='hire_date_raw',
+            model_name="employeeprofile",
+            name="hire_date_raw",
             field=models.CharField(blank=True, max_length=50, null=True),
         ),
         migrations.AddField(
-            model_name='employeeprofile',
-            name='id_expiry_raw',
+            model_name="employeeprofile",
+            name="id_expiry_raw",
             field=models.CharField(blank=True, max_length=50, null=True),
         ),
         migrations.AddField(
-            model_name='employeeprofile',
-            name='is_saudi',
+            model_name="employeeprofile",
+            name="is_saudi",
             field=models.BooleanField(default=False),
         ),
         migrations.AddField(
-            model_name='employeeprofile',
-            name='job_title_ar',
+            model_name="employeeprofile",
+            name="job_title_ar",
             field=models.CharField(blank=True, max_length=100, null=True),
         ),
         migrations.AddField(
-            model_name='employeeprofile',
-            name='job_title_en',
+            model_name="employeeprofile",
+            name="job_title_en",
             field=models.CharField(blank=True, max_length=100, null=True),
         ),
         migrations.AddField(
-            model_name='employeeprofile',
-            name='manager_profile',
-            field=models.ForeignKey(blank=True, help_text='Direct manager (EmployeeProfile).', null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='direct_reports', to='employees.employeeprofile'),
+            model_name="employeeprofile",
+            name="manager_profile",
+            field=models.ForeignKey(
+                blank=True,
+                help_text="Direct manager (EmployeeProfile).",
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="direct_reports",
+                to="employees.employeeprofile",
+            ),
         ),
         migrations.AddField(
-            model_name='employeeprofile',
-            name='nationality_ar',
+            model_name="employeeprofile",
+            name="nationality_ar",
             field=models.CharField(blank=True, max_length=100, null=True),
         ),
         migrations.AddField(
-            model_name='employeeprofile',
-            name='nationality_en',
+            model_name="employeeprofile",
+            name="nationality_en",
             field=models.CharField(blank=True, max_length=100, null=True),
         ),
         migrations.AddField(
-            model_name='employeeprofile',
-            name='passport_expiry_raw',
+            model_name="employeeprofile",
+            name="passport_expiry_raw",
             field=models.CharField(blank=True, max_length=50, null=True),
         ),
         migrations.AlterField(
-            model_name='employeeprofile',
-            name='manager',
-            field=models.ForeignKey(blank=True, help_text='Legacy manager field (User). Prefer manager_profile.', null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='managed_employees', to=settings.AUTH_USER_MODEL),
+            model_name="employeeprofile",
+            name="manager",
+            field=models.ForeignKey(
+                blank=True,
+                help_text="Legacy manager field (User). Prefer manager_profile.",
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="managed_employees",
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
         migrations.AlterField(
-            model_name='employeeprofile',
-            name='passport_no',
+            model_name="employeeprofile",
+            name="passport_no",
             field=models.CharField(blank=True, max_length=50, null=True),
         ),
     ]

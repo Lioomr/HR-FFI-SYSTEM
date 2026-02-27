@@ -5,6 +5,7 @@ import { createAnnouncement, type CreateAnnouncementData } from "../../services/
 import { getManagerTeam, type ManagerTeamMember } from "../../services/api/managerApi";
 import { isApiError } from "../../services/api/apiTypes";
 import { useAuthStore } from "../../auth/authStore";
+import { useI18n } from "../../i18n/useI18n";
 
 const { Title } = Typography;
 
@@ -13,6 +14,7 @@ export default function CreateTeamAnnouncementPage() {
   const role = useAuthStore((s) => s.user?.role);
   const announcementsPath = role === "CEO" ? "/ceo/announcements" : "/manager/announcements";
   const [form] = Form.useForm();
+  const { t } = useI18n();
   const [loading, setLoading] = useState(false);
   const [team, setTeam] = useState<ManagerTeamMember[]>([]);
   const [targetMode, setTargetMode] = useState<"all" | "single">("all");
@@ -27,7 +29,7 @@ export default function CreateTeamAnnouncementPage() {
           setTeam([]);
         }
       } catch {
-        message.error("Failed to load team members");
+        message.error(t("announcements.loadTeamFail"));
       }
     };
     loadTeam();
@@ -50,10 +52,10 @@ export default function CreateTeamAnnouncementPage() {
       }
 
       await createAnnouncement(data);
-      message.success("Announcement sent to team successfully");
+      message.success(t("announcements.sendSuccess"));
       navigate(announcementsPath);
     } catch (e: any) {
-      message.error(e?.response?.data?.message || "Failed to create announcement");
+      message.error(e?.response?.data?.message || t("announcements.createFail"));
     } finally {
       setLoading(false);
     }
@@ -63,9 +65,9 @@ export default function CreateTeamAnnouncementPage() {
     <div style={{ padding: 24, maxWidth: 820, margin: "0 auto" }}>
       <div style={{ marginBottom: 24, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <Title level={2} style={{ margin: 0 }}>
-          {role === "CEO" ? "CEO Team Announcement" : "Team Announcement"}
+          {role === "CEO" ? t("announcements.ceoTitle") : t("announcements.teamTitle")}
         </Title>
-        <Button onClick={() => navigate(announcementsPath)}>Cancel</Button>
+        <Button onClick={() => navigate(announcementsPath)}>{t("common.cancel")}</Button>
       </div>
 
       <Card>
@@ -78,26 +80,26 @@ export default function CreateTeamAnnouncementPage() {
             publish_to_sms: false,
           }}
         >
-          <Form.Item name="title" label="Title" rules={[{ required: true, message: "Please enter a title" }]}>
-            <Input placeholder="Enter announcement title" size="large" />
+          <Form.Item name="title" label={t("hr.announcements.titleLabel")} rules={[{ required: true, message: t("hr.announcements.titleRequired") }]}>
+            <Input placeholder={t("hr.announcements.titlePlaceholder")} size="large" />
           </Form.Item>
 
-          <Form.Item name="content" label="Content" rules={[{ required: true, message: "Please enter content" }]}>
-            <Input.TextArea rows={6} placeholder="Enter announcement content" showCount maxLength={2000} />
+          <Form.Item name="content" label={t("hr.announcements.contentLabel")} rules={[{ required: true, message: t("hr.announcements.contentRequired") }]}>
+            <Input.TextArea rows={6} placeholder={t("hr.announcements.contentPlaceholder")} showCount maxLength={2000} />
           </Form.Item>
 
-          <Form.Item label="Audience">
+          <Form.Item label={t("announcements.audience")}>
             <Radio.Group value={targetMode} onChange={(e) => setTargetMode(e.target.value)}>
-              <Radio.Button value="all">All My Team</Radio.Button>
-              <Radio.Button value="single">Single Team Member</Radio.Button>
+              <Radio.Button value="all">{t("announcements.allTeam")}</Radio.Button>
+              <Radio.Button value="single">{t("announcements.singleMember")}</Radio.Button>
             </Radio.Group>
           </Form.Item>
 
           {targetMode === "single" && (
             <Form.Item
               name="target_user"
-              label="Team Member"
-              rules={[{ required: true, message: "Please select a team member" }]}
+              label={t("announcements.teamMember")}
+              rules={[{ required: true, message: t("announcements.memberReq") }]}
             >
               <Select
                 showSearch
@@ -106,23 +108,23 @@ export default function CreateTeamAnnouncementPage() {
                   value: m.user_id ?? m.id,
                   label: `${m.full_name_en || m.full_name || m.employee_id} (${m.employee_id})`,
                 }))}
-                placeholder="Select team member"
+                placeholder={t("announcements.memberPlaceholder")}
               />
             </Form.Item>
           )}
 
           <div style={{ background: "#fafafa", padding: 16, borderRadius: 8, marginBottom: 24 }}>
             <Form.Item name="publish_to_email" valuePropName="checked" style={{ marginBottom: 12 }}>
-              <Switch /> Email Notification
+              <Switch /> {t("announcements.emailNotif")}
             </Form.Item>
             <Form.Item name="publish_to_sms" valuePropName="checked" style={{ marginBottom: 0 }}>
-              <Switch /> SMS/WhatsApp Notification
+              <Switch /> {t("announcements.smsNotif")}
             </Form.Item>
           </div>
 
           <Form.Item>
             <Button type="primary" htmlType="submit" loading={loading} block size="large">
-              Send to Team
+              {t("announcements.sendToTeam")}
             </Button>
           </Form.Item>
         </Form>

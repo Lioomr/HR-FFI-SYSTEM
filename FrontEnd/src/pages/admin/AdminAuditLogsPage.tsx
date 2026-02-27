@@ -41,6 +41,20 @@ function inferSeverity(action: string): AuditSeverity {
   return "Info";
 }
 
+function formatAuditTimestamp(value: string, language: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat(language === "ar" ? "ar-SA" : "en-US", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  }).format(date);
+}
+
 function toAuditRow(log: AuditLogDto): AuditRow {
   const target = log.entity_id
     ? `${log.entity}:${log.entity_id}`
@@ -58,7 +72,7 @@ function toAuditRow(log: AuditLogDto): AuditRow {
 }
 
 export default function AdminAuditLogsPage() {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const [mode, setMode] = useState<UiMode>("loading");
   const [rows, setRows] = useState<AuditRow[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -174,9 +188,19 @@ export default function AdminAuditLogsPage() {
   }
 
   const columns: ColumnsType<AuditRow> = [
-    { title: t("admin.dashboard.time"), dataIndex: "timestamp", key: "timestamp", width: 190 },
+    {
+      title: t("admin.dashboard.time"),
+      dataIndex: "timestamp",
+      key: "timestamp",
+      width: 220,
+      render: (v: string) => (
+        <Typography.Text title={v}>
+          {formatAuditTimestamp(v, language)}
+        </Typography.Text>
+      ),
+    },
     { title: t("admin.dashboard.actor"), dataIndex: "actorEmail", key: "actorEmail", render: (v) => <Typography.Text strong>{v}</Typography.Text>, width: 200 },
-    { title: t("admin.dashboard.action"), dataIndex: "action", key: "action", render: (v) => <Tag>{v}</Tag>, width: 180 },
+    { title: t("admin.dashboard.action"), dataIndex: "action", key: "action", render: (v) => <Tag>{t(`audit.action.${v}`, v)}</Tag>, width: 180 },
     { title: "Target", dataIndex: "target", key: "target" },
     { title: t("admin.dashboard.severity"), dataIndex: "severity", key: "severity", render: (v: AuditSeverity) => severityTag(v), width: 120 },
     { title: "IP", dataIndex: "ip", key: "ip", width: 140 },
@@ -201,27 +225,26 @@ export default function AdminAuditLogsPage() {
       />
 
       <Card style={{ borderRadius: 16 }}>
-        <Space style={{ width: "100%", justifyContent: "space-between" }} wrap>
-          <Space wrap>
-            <Input allowClear placeholder={t("admin.audit.searchPlaceholder")} style={{ width: 280 }} value={q} onChange={(e) => setQ(e.target.value)} />
-            <Select value={severity} onChange={setSeverity} style={{ width: 160 }} options={[
-              { label: t("common.filter"), value: "All" },
-              { label: t("status.info"), value: "Info" },
-              { label: t("status.warning"), value: "Warning" },
-              { label: t("status.critical"), value: "Critical" },
-            ]} />
-            <Select value={actionType} onChange={setActionType} style={{ width: 200 }} options={[
-              { label: t("common.filter"), value: "All" },
-              ...actionOptions.map((a) => ({ label: a, value: a })),
-            ]} />
-            <RangePicker onChange={(v) => setDateRange(v)} placeholder={[t("leave.startDate"), t("leave.endDate")]} />
-          </Space>
-        </Space>
+        <div className="responsive-filter-bar" style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+          <Input allowClear placeholder={t("admin.audit.searchPlaceholder")} style={{ flex: "1 1 200px", minWidth: 150 }} value={q} onChange={(e) => setQ(e.target.value)} />
+          <Select value={severity} onChange={setSeverity} style={{ flex: "0 1 160px", minWidth: 120 }} options={[
+            { label: t("common.filter"), value: "All" },
+            { label: t("status.info"), value: "Info" },
+            { label: t("status.warning"), value: "Warning" },
+            { label: t("status.critical"), value: "Critical" },
+          ]} />
+          <Select value={actionType} onChange={setActionType} style={{ flex: "0 1 200px", minWidth: 140 }} options={[
+            { label: t("common.filter"), value: "All" },
+            ...actionOptions.map((a) => ({ label: t(`audit.action.${a}`, a), value: a })),
+          ]} />
+          <RangePicker onChange={(v) => setDateRange(v)} placeholder={[t("leave.startDate"), t("leave.endDate")]} style={{ flex: "0 1 280px" }} />
+        </div>
         <div style={{ marginTop: 16 }}>
           <Table<AuditRow>
             rowKey="id"
             columns={columns}
             dataSource={filtered}
+            scroll={{ x: 900 }}
             pagination={{ current: pagination.current, pageSize: pagination.pageSize, total: pagination.total, showSizeChanger: true }}
             onChange={(pager) => setPagination((prev) => ({ ...prev, current: pager.current, pageSize: pager.pageSize }))}
           />

@@ -12,6 +12,7 @@ from audit.utils import audit
 from core.pagination import StandardPagination
 from core.permissions import get_role
 from core.responses import error, success
+from core.services import get_hr_approver_users, notify_users_for_pending_status, send_request_submission_email
 from employees.models import EmployeeProfile
 
 from .models import Asset, AssetAssignment, AssetDamageReport, AssetReturnRequest
@@ -31,7 +32,7 @@ class AssetViewSet(viewsets.ModelViewSet):
     pagination_class = StandardPagination
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter, filters.SearchFilter]
     filterset_fields = ["type", "status", "vendor", "purchase_date", "warranty_expiry"]
-    search_fields = ["asset_code", "name", "serial_number", "plate_number", "mac_address"]
+    search_fields = ["asset_code", "name_en", "name_ar", "serial_number", "plate_number", "mac_address"]
     ordering_fields = ["created_at", "updated_at", "warranty_expiry", "asset_code"]
     ordering = ["-created_at"]
 
@@ -62,13 +63,18 @@ class AssetViewSet(viewsets.ModelViewSet):
         return {
             "id": asset.id,
             "asset_code": asset.asset_code,
-            "name": asset.name,
+            "name_en": asset.name_en,
+            "name_ar": asset.name_ar,
             "type": asset.type,
             "status": asset.status,
             "serial_number": asset.serial_number,
             "vendor": asset.vendor,
             "warranty_expiry": str(asset.warranty_expiry) if asset.warranty_expiry else None,
         }
+
+    @staticmethod
+    def _asset_display_name(asset: Asset) -> str:
+        return asset.name_en or asset.name_ar or asset.asset_code
 
     def _get_request_profile(self):
         try:
@@ -212,7 +218,9 @@ class AssetViewSet(viewsets.ModelViewSet):
             assignment.return_note = serializer.validated_data.get("return_note", "")
             assignment.condition_on_return = serializer.validated_data.get("condition_on_return", "")
             assignment.is_active = False
-            assignment.save(update_fields=["returned_at", "return_note", "condition_on_return", "is_active", "updated_at"])
+            assignment.save(
+                update_fields=["returned_at", "return_note", "condition_on_return", "is_active", "updated_at"]
+            )
 
             old_status = asset.status
             asset.status = Asset.AssetStatus.AVAILABLE
@@ -309,6 +317,32 @@ class AssetViewSet(viewsets.ModelViewSet):
             entity_id=report.id,
             metadata={"asset_id": asset.id, "employee_id": profile.id},
         )
+        try:
+            send_request_submission_email(
+                to_email=getattr(request.user, "email", None),
+                employee_name=profile.full_name or request.user.email,
+                request_type="Asset Damage Report",
+                request_id=report.id,
+                status_label="submitted",
+                details=[
+                    f"Asset: {self._asset_display_name(asset)} ({asset.asset_code})",
+                ],
+                action_path="/employee/assets",
+            )
+        except Exception:
+            pass
+        try:
+            notify_users_for_pending_status(
+                users=get_hr_approver_users(),
+                request_type="Asset Damage Report",
+                request_id=report.id,
+                requester_name=profile.full_name or request.user.email,
+                status_label="pending_hr",
+                details=[f"Asset: {self._asset_display_name(asset)} ({asset.asset_code})"],
+                action_path="/hr/assets",
+            )
+        except Exception:
+            pass
         return success({"id": report.id, "reported_at": report.reported_at}, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"], url_path="return-request")
@@ -341,6 +375,35 @@ class AssetViewSet(viewsets.ModelViewSet):
             entity_id=return_request.id,
             metadata={"asset_id": asset.id, "employee_id": profile.id},
         )
+        try:
+            send_request_submission_email(
+                to_email=getattr(request.user, "email", None),
+                employee_name=profile.full_name or request.user.email,
+                request_type="Asset Return Request",
+                request_id=return_request.id,
+                status_label=return_request.status,
+                details=[
+                    f"Asset: {self._asset_display_name(asset)} ({asset.asset_code})",
+                ],
+                action_path="/employee/assets",
+            )
+        except Exception:
+            pass
+        try:
+            notify_users_for_pending_status(
+                users=get_hr_approver_users(),
+                request_type="Asset Return Request",
+                request_id=return_request.id,
+                requester_name=profile.full_name or request.user.email,
+                status_label="pending_hr",
+                details=[
+                    f"Asset: {self._asset_display_name(asset)} ({asset.asset_code})",
+                    f"Current status: {return_request.status}",
+                ],
+                action_path="/hr/assets",
+            )
+        except Exception:
+            pass
         return success(
             {
                 "id": return_request.id,

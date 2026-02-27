@@ -1,15 +1,16 @@
 import os
+import sys
+
 import django
 import requests
-import sys
 
 # Setup Django
 sys.path.append(os.getcwd())
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
 
-from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
+from django.contrib.auth import get_user_model  # noqa: E402
+from django.contrib.auth.models import Group  # noqa: E402
 
 User = get_user_model()
 email = "hr_manager_test@example.com"

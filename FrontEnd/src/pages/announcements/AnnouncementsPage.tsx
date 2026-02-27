@@ -55,7 +55,7 @@ export default function AnnouncementsPage() {
         <div style={{ padding: 24, paddingBottom: 48, maxWidth: 1200, margin: '0 auto' }}>
             <div style={{ textAlign: 'center', marginBottom: 48 }}>
                 <Title level={2} style={{ color: '#FF7F3E' }}>📢 {t("announcements.title")}</Title>
-                <Text type="secondary">{t("announcements.noAnnouncements", "Stay updated with the latest company news")}</Text>
+                <Text type="secondary">{t("announcements.subtitle")}</Text>
                 {(role === "Manager" || role === "CEO") && (
                     <div style={{ marginTop: 12 }}>
                         <Button

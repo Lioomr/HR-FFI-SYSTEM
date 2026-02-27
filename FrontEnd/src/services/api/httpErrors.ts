@@ -105,6 +105,27 @@ export function getHttpErrorMessage(err: unknown): string {
     return "An unknown error occurred";
   }
 
+  const status = getHttpStatus(err);
+
+  // Mask internal server errors to prevent stack trace or raw SQL exposure
+  if (status !== undefined && status >= 500) {
+    return "An internal server error occurred. Please try again later.";
+  }
+
+  // Generic safe message for validation errors instead of leaking backend model structures
+  if (status === 422) {
+    return "Please check your input. Validation failed.";
+  }
+
+  // Handle Axios errors cleanly
+  if (isAxiosError(err)) {
+    const data = err.response?.data as any;
+    if (data && data.message) {
+      const msg = data.message;
+      return typeof msg === "string" ? msg : "An unexpected server response occurred.";
+    }
+  }
+
   if (typeof err === "string") {
     return err;
   }
@@ -115,12 +136,10 @@ export function getHttpErrorMessage(err: unknown): string {
 
   const error = err as any;
 
-  // API error format
   if (error.response?.data?.message) {
     return error.response.data.message;
   }
 
-  // Direct message property
   if (typeof error.message === "string") {
     return error.message;
   }

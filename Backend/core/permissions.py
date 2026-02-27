@@ -31,7 +31,12 @@ class IsManager(BasePermission):
     def has_permission(self, request, view):
         # Allow SystemAdmin/HRManager to act as manager if needed, or strictly manager
         # Usually Managers are distinct, but let's allow Admin for override
-        return request.user.is_authenticated and get_role(request.user) in ["SystemAdmin", "HRManager", "Manager", "CEO"]
+        return request.user.is_authenticated and get_role(request.user) in [
+            "SystemAdmin",
+            "HRManager",
+            "Manager",
+            "CEO",
+        ]
 
 
 class IsCEO(BasePermission):

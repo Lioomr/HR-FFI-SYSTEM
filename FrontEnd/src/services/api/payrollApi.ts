@@ -28,7 +28,7 @@ export interface PayrollRun {
 export interface PayrollRunItem {
   id: number;
   payroll_run: number;
-  employee_id: number;
+  employee_id: string | number;
   employee_name: string;
   department?: string;
   position?: string;
@@ -43,6 +43,20 @@ export interface PayrollRunItem {
 
   // We might generally just show the aggregates in the list, 
   // and have a full detail view if needed, but for "Review" this usually suffices.
+}
+
+export interface PayrollRunSummary {
+  run_id: number;
+  year: number;
+  month: number;
+  total_employees: number;
+  employees_with_deductions: number;
+  total_basic_salary: number;
+  total_allowances: number;
+  total_gross_salary: number;
+  total_deductions: number;
+  total_net_salary: number;
+  average_net_salary: number;
 }
 
 /**
@@ -156,6 +170,17 @@ export async function generatePayslips(
     `/payroll-runs/${runId}/generate-payslips`,
     {}
   );
+  return data;
+}
+
+/**
+ * Get payroll run summary
+ * GET /payroll-runs/{id}/summary
+ */
+export async function getPayrollRunSummary(
+  runId: string | number
+): Promise<ApiResponse<PayrollRunSummary>> {
+  const { data } = await api.get<ApiResponse<PayrollRunSummary>>(`/payroll-runs/${runId}/summary`);
   return data;
 }
 

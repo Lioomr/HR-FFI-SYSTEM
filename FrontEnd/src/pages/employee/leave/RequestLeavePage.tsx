@@ -9,6 +9,7 @@ import PageHeader from "../../../components/ui/PageHeader";
 import { useI18n } from "../../../i18n/useI18n";
 import { getLeaveTypes, createLeaveRequest, getMyLeaveBalance, type LeaveType, type LeaveBalance } from "../../../services/api/leaveApi";
 import { isApiError } from "../../../services/api/apiTypes";
+import { getDetailedHttpErrorMessage } from "../../../services/api/userErrorMessages";
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -18,6 +19,14 @@ export default function RequestLeavePage() {
     const navigate = useNavigate();
     const { t } = useI18n();
     const [form] = Form.useForm();
+
+    // Translate leave type names coming from the API
+    const translateLeaveType = (name?: string): string => {
+        if (!name) return '';
+        const key = `leave.type.${name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z_]/g, '')}`;
+        const translated = t(key);
+        return translated === key ? name : translated;
+    };
 
     const [loading, setLoading] = useState(false);
     const [submitting, setSubmitting] = useState(false);
@@ -127,10 +136,20 @@ export default function RequestLeavePage() {
             console.error("Submit Error:", err);
 
             const data = err.apiData || err.response?.data;
-            let description = err.message || t("common.tryAgain");
+            let description = getDetailedHttpErrorMessage(t, err);
             if (data?.errors) {
                 if (Array.isArray(data.errors)) {
-                    description = data.errors.join(", ");
+                    description = data.errors
+                        .map((entry: unknown) => {
+                            if (typeof entry === "string") return entry;
+                            if (entry && typeof entry === "object" && "message" in entry) {
+                                const msg = (entry as { message?: unknown }).message;
+                                return typeof msg === "string" ? msg : "";
+                            }
+                            return "";
+                        })
+                        .filter(Boolean)
+                        .join(", ");
                 } else {
                     description = Object.values(data.errors).flat().join(", ");
                 }
@@ -180,8 +199,8 @@ export default function RequestLeavePage() {
                         rules={[{ required: true, message: t("common.required") }]}
                     >
                         <Select placeholder={t("leave.selectType")}>
-                            {leaveTypes.map(t => (
-                                <Option key={t.id} value={t.id}>{t.name}</Option>
+                            {leaveTypes.map(lt => (
+                                <Option key={lt.id} value={lt.id}>{translateLeaveType(lt.name)}</Option>
                             ))}
                         </Select>
                     </Form.Item>

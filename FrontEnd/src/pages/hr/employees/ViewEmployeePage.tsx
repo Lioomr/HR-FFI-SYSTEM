@@ -15,7 +15,8 @@ import { listUsers } from "../../../services/api/usersApi";
 import type { UserDto } from "../../../services/api/apiTypes";
 import { isApiError } from "../../../services/api/apiTypes";
 import { isForbidden } from "../../../services/api/httpErrors";
-import { formatNumber } from "../../../utils/currency";
+import AmountWithSAR from "../../../components/ui/AmountWithSAR";
+import { useI18n } from "../../../i18n/useI18n";
 
 /**
  * Format value for display (show "—" for missing values)
@@ -30,11 +31,11 @@ const formatValue = (value: any): string => {
 /**
  * Format currency value
  */
-const formatCurrency = (value: any): string => {
+const formatCurrency = (value: any): React.ReactNode => {
     if (value === null || value === undefined || value === "") {
         return "—";
     }
-    return formatNumber(value);
+    return <AmountWithSAR amount={value} size={12} />;
 };
 
 /**
@@ -54,6 +55,7 @@ const formatDate = (value: any): string => {
 const { Title, Text } = Typography;
 
 export default function ViewEmployeePage() {
+    const { t } = useI18n();
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
 
@@ -76,7 +78,7 @@ export default function ViewEmployeePage() {
      */
     const loadEmployee = async () => {
         if (!id) {
-            setError("No employee ID provided");
+            setError(t("hr.employees.noIdError"));
             setLoading(false);
             return;
         }
@@ -89,7 +91,7 @@ export default function ViewEmployeePage() {
             const response = await getEmployee(id);
 
             if (isApiError(response)) {
-                setError(response.message || "Failed to load employee");
+                setError(response.message || t("hr.employees.loadFailed"));
                 setLoading(false);
                 return;
             }
@@ -103,7 +105,7 @@ export default function ViewEmployeePage() {
                 return;
             }
 
-            setError(err.message || "Failed to load employee");
+            setError(err.message || t("hr.employees.loadFailed"));
             setLoading(false);
         }
     };
@@ -127,7 +129,7 @@ export default function ViewEmployeePage() {
                     const userList = (response as any).data?.items || (response as any).data?.results || [];
                     setUsers(userList as any[]);
                 } catch (error) {
-                    message.error("Failed to load users");
+                    message.error(t("hr.employees.loadUsersFailed"));
                 } finally {
                     setUsersLoading(false);
                 }
@@ -146,11 +148,11 @@ export default function ViewEmployeePage() {
             const { api } = await import("../../../services/api/apiClient");
             await api.patch(`/employees/${id}`, { user_id: selectedUserId });
 
-            message.success("User linked successfully");
+            message.success(t("hr.employees.linkSuccess"));
             setIsLinkModalOpen(false);
             loadEmployee();
         } catch (err: any) {
-            message.error(err.message || "Failed to link user");
+            message.error(err.message || t("hr.employees.linkFailed"));
         } finally {
             setLinking(false);
         }
@@ -162,16 +164,16 @@ export default function ViewEmployeePage() {
     const handleUnlinkUser = async () => {
         if (!employee) return;
         Modal.confirm({
-            title: "Unlink User",
-            content: "Are you sure you want to unlink the user account from this employee?",
+            title: t("hr.employees.unlinkUser"),
+            content: t("hr.employees.unlinkUserConfirm"),
             onOk: async () => {
                 try {
                     const { api } = await import("../../../services/api/apiClient");
                     await api.patch(`/employees/${id}`, { user_id: null });
-                    message.success("User unlinked successfully");
+                    message.success(t("hr.employees.unlinkSuccess"));
                     loadEmployee();
                 } catch (err: any) {
-                    message.error(err.message || "Failed to unlink user");
+                    message.error(err.message || t("hr.employees.unlinkFailed"));
                 }
             }
         });
@@ -190,13 +192,13 @@ export default function ViewEmployeePage() {
     }
 
     if (loading) {
-        return <LoadingState title="Loading employee details..." />;
+        return <LoadingState title={t("common.loading")} />;
     }
 
     if (error) {
         return (
             <ErrorState
-                title="Failed to load employee"
+                title={t("hr.employees.loadFailed")}
                 description={error}
                 onRetry={() => window.location.reload()}
             />
@@ -206,30 +208,26 @@ export default function ViewEmployeePage() {
     if (!employee) {
         return (
             <EmptyState
-                title="No data available"
-                description="Employee not found"
-                actionText="Back to List"
+                title={t("hr.employees.noData")}
+                description={t("hr.employees.notFound")}
+                actionText={t("hr.employees.backToList")}
                 onAction={handleBack}
             />
         );
     }
 
-    const subtitle = [
-        employee.full_name,
-        employee.mobile ? `Mobile: ${employee.mobile}` : null,
-    ]
-        .filter(Boolean)
-        .join(" • ");
 
     return (
         <div>
             <PageHeader
-                title="Employee Details"
-                subtitle={subtitle || undefined}
+                title={t("hr.employees.view")}
+                breadcrumb={t("layout.hrManagement")}
+                subtitle={employee.full_name}
+                secondarySubtitle={employee.mobile ? `Mobile: ${employee.mobile}` : undefined}
                 actions={
                     <Space>
                         <Button icon={<ArrowLeftOutlined />} onClick={handleBack}>
-                            Back
+                            {t("hr.employees.back")}
                         </Button>
                         {employee.user_id ? (
                             <Tooltip title={`Linked to: ${employee.email}`}>
@@ -238,7 +236,7 @@ export default function ViewEmployeePage() {
                                     onClick={handleUnlinkUser}
                                     danger
                                 >
-                                    Unlink User
+                                    {t("hr.employees.unlinkUser")}
                                 </Button>
                             </Tooltip>
                         ) : (
@@ -246,11 +244,11 @@ export default function ViewEmployeePage() {
                                 icon={<UserAddOutlined />}
                                 onClick={() => setIsLinkModalOpen(true)}
                             >
-                                Connect User
+                                {t("hr.employees.connectUser")}
                             </Button>
                         )}
                         <Button type="primary" icon={<EditOutlined />} onClick={handleEdit}>
-                            Edit
+                            {t("hr.employees.edit")}
                         </Button>
                     </Space>
                 }
@@ -269,34 +267,34 @@ export default function ViewEmployeePage() {
                                         label: (
                                             <span>
                                                 <UserOutlined />
-                                                Personal Info
+                                                {t("hr.employees.personalInfo")}
                                             </span>
                                         ),
                                         children: (
-                                            <Descriptions column={2} layout="vertical" style={{ marginTop: 16 }}>
-                                                <Descriptions.Item label="Full Name">{formatValue(employee.full_name)}</Descriptions.Item>
-                                                <Descriptions.Item label="Date of Birth">{formatDate((employee as any).date_of_birth)}</Descriptions.Item>
-                                                <Descriptions.Item label="Nationality">
+                                            <Descriptions column={{ xs: 1, sm: 2 }} layout="vertical" style={{ marginTop: 16 }}>
+                                                <Descriptions.Item label={t("hr.employees.fullName")}>{formatValue(employee.full_name)}</Descriptions.Item>
+                                                <Descriptions.Item label={t("employees.form.dateOfBirth")}>{formatDate((employee as any).date_of_birth)}</Descriptions.Item>
+                                                <Descriptions.Item label={t("employees.form.nationality")}>
                                                     <Space>
                                                         <span>{getCountryFlag((employee as any).nationality)}</span>
                                                         {formatValue((employee as any).nationality)}
                                                     </Space>
                                                 </Descriptions.Item>
-                                                <Descriptions.Item label="Employee Number">{formatValue((employee as any).employee_number)}</Descriptions.Item>
-                                                <Descriptions.Item label="Mobile Number">
+                                                <Descriptions.Item label={t("employees.form.empNumber")}>{formatValue((employee as any).employee_number)}</Descriptions.Item>
+                                                <Descriptions.Item label={t("employees.form.mobile")}>
                                                     <Space>
                                                         <PhoneOutlined style={{ color: '#bfbfbf' }} />
                                                         {formatValue(employee.mobile)}
                                                     </Space>
                                                 </Descriptions.Item>
-                                                <Descriptions.Item label="Linked Account">
+                                                <Descriptions.Item label={t("hr.employees.linkedAccount")}>
                                                     {employee.user_id ? (
                                                         <Space>
                                                             <MailOutlined style={{ color: '#bfbfbf' }} />
                                                             <span style={{ color: '#1890ff' }}>{employee.email}</span>
                                                         </Space>
                                                     ) : (
-                                                        <Tag color="warning">Not Linked</Tag>
+                                                        <Tag color="warning">{t("hr.employees.notLinked")}</Tag>
                                                     )}
                                                 </Descriptions.Item>
                                             </Descriptions>
@@ -307,20 +305,20 @@ export default function ViewEmployeePage() {
                                         label: (
                                             <span>
                                                 <ContainerOutlined />
-                                                Employment Info
+                                                {t("hr.employees.employmentInfo")}
                                             </span>
                                         ),
                                         children: (
-                                            <Descriptions column={2} layout="vertical" style={{ marginTop: 16 }}>
-                                                <Descriptions.Item label="Department">{formatValue(employee.department)}</Descriptions.Item>
-                                                <Descriptions.Item label="Position">{formatValue(employee.position)}</Descriptions.Item>
-                                                <Descriptions.Item label="Task Group">{formatValue(employee.task_group)}</Descriptions.Item>
-                                                <Descriptions.Item label="Sponsor">{formatValue(employee.sponsor)}</Descriptions.Item>
-                                                <Descriptions.Item label="Job Offer">{formatValue((employee as any).job_offer)}</Descriptions.Item>
-                                                <Descriptions.Item label="Joining Date">{formatDate((employee as any).join_date || employee.hire_date)}</Descriptions.Item>
-                                                <Descriptions.Item label="Contract Date">{formatDate((employee as any).contract_date)}</Descriptions.Item>
-                                                <Descriptions.Item label="Contract Expiry">{formatDate((employee as any).contract_expiry)}</Descriptions.Item>
-                                                <Descriptions.Item label="Allowed Overtime">{formatValue((employee as any).allowed_overtime)} Hours</Descriptions.Item>
+                                            <Descriptions column={{ xs: 1, sm: 2 }} layout="vertical" style={{ marginTop: 16 }}>
+                                                <Descriptions.Item label={t("employees.form.department")}>{formatValue(employee.department)}</Descriptions.Item>
+                                                <Descriptions.Item label={t("employees.form.position")}>{formatValue(employee.position)}</Descriptions.Item>
+                                                <Descriptions.Item label={t("employees.form.taskGroup")}>{formatValue(employee.task_group)}</Descriptions.Item>
+                                                <Descriptions.Item label={t("employees.form.sponsor")}>{formatValue(employee.sponsor)}</Descriptions.Item>
+                                                <Descriptions.Item label={t("employees.form.jobOffer")}>{formatValue((employee as any).job_offer)}</Descriptions.Item>
+                                                <Descriptions.Item label={t("employees.form.joiningDate")}>{formatDate((employee as any).join_date || employee.hire_date)}</Descriptions.Item>
+                                                <Descriptions.Item label={t("employees.form.contractDate")}>{formatDate((employee as any).contract_date)}</Descriptions.Item>
+                                                <Descriptions.Item label={t("employees.form.contractExpiry")}>{formatDate((employee as any).contract_expiry)}</Descriptions.Item>
+                                                <Descriptions.Item label={t("employees.form.allowedOvertime")}>{formatValue((employee as any).allowed_overtime)} {t("hr.employees.hours")}</Descriptions.Item>
                                             </Descriptions>
                                         ),
                                     },
@@ -329,28 +327,32 @@ export default function ViewEmployeePage() {
                                         label: (
                                             <span>
                                                 <DollarOutlined />
-                                                Salary Details
+                                                {t("hr.employees.salaryDetails")}
                                             </span>
                                         ),
                                         children: (
                                             <div>
-                                                <Descriptions column={2} layout="vertical" style={{ marginTop: 16 }}>
-                                                    <Descriptions.Item label="Basic Salary">{formatCurrency((employee as any).basic_salary)}</Descriptions.Item>
-                                                    <Descriptions.Item label="Total Salary">
-                                                        <Text strong style={{ fontSize: 16, color: '#52c41a' }}>
-                                                            {formatCurrency((employee as any).total_salary)}
-                                                        </Text>
+                                                <Descriptions column={{ xs: 1, sm: 2 }} layout="vertical" style={{ marginTop: 16 }}>
+                                                    <Descriptions.Item label={t("employees.form.basicSalary")}>{formatCurrency((employee as any).basic_salary)}</Descriptions.Item>
+                                                    <Descriptions.Item label={t("employees.form.totalSalary")}>
+                                                        <AmountWithSAR
+                                                            amount={(employee as any).total_salary}
+                                                            size={16}
+                                                            color="#52c41a"
+                                                            fontWeight="bold"
+                                                            style={{ fontSize: 16 }}
+                                                        />
                                                     </Descriptions.Item>
                                                 </Descriptions>
 
-                                                <Divider style={{ margin: '12px 0', fontSize: 13, color: '#8c8c8c' }}>Allowances</Divider>
+                                                <Divider style={{ margin: '12px 0', fontSize: 13, color: '#8c8c8c' }}>{t("employees.form.allowances")}</Divider>
 
-                                                <Descriptions column={3} layout="vertical" size="small">
-                                                    <Descriptions.Item label="Transportation">{formatCurrency((employee as any).transportation_allowance)}</Descriptions.Item>
-                                                    <Descriptions.Item label="Accommodation">{formatCurrency((employee as any).accommodation_allowance)}</Descriptions.Item>
-                                                    <Descriptions.Item label="Telephone">{formatCurrency((employee as any).telephone_allowance)}</Descriptions.Item>
-                                                    <Descriptions.Item label="Petrol">{formatCurrency((employee as any).petrol_allowance)}</Descriptions.Item>
-                                                    <Descriptions.Item label="Other">{formatCurrency((employee as any).other_allowance)}</Descriptions.Item>
+                                                <Descriptions column={{ xs: 1, sm: 2, md: 3 }} layout="vertical" size="small">
+                                                    <Descriptions.Item label={t("employees.form.transportation")}>{formatCurrency((employee as any).transportation_allowance)}</Descriptions.Item>
+                                                    <Descriptions.Item label={t("employees.form.accommodation")}>{formatCurrency((employee as any).accommodation_allowance)}</Descriptions.Item>
+                                                    <Descriptions.Item label={t("employees.form.telephone")}>{formatCurrency((employee as any).telephone_allowance)}</Descriptions.Item>
+                                                    <Descriptions.Item label={t("employees.form.petrol")}>{formatCurrency((employee as any).petrol_allowance)}</Descriptions.Item>
+                                                    <Descriptions.Item label={t("employees.form.other")}>{formatCurrency((employee as any).other_allowance)}</Descriptions.Item>
                                                 </Descriptions>
                                             </div>
                                         ),
@@ -360,7 +362,7 @@ export default function ViewEmployeePage() {
                                         label: (
                                             <span>
                                                 <ContainerOutlined />
-                                                Leave Balances
+                                                {t("hr.employees.leaveBalances")}
                                             </span>
                                         ),
                                         children: <EmployeeLeaveBalances employeeId={Number(id)} />
@@ -380,14 +382,14 @@ export default function ViewEmployeePage() {
                                 </Avatar>
                             </div>
                             <Title level={3} style={{ marginBottom: 4 }}>{employee.full_name}</Title>
-                            <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>{employee.position || 'No Position'}</Text>
+                            <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>{employee.position || t("hr.employees.noPosition")}</Text>
 
                             <Tag color={employee.employment_status === 'ACTIVE' ? 'success' : 'default'} style={{ padding: '4px 12px', fontSize: 14 }}>
                                 {employee.employment_status || 'ACTIVE'}
                             </Tag>
 
                             <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #f0f0f0' }}>
-                                <Text type="secondary" style={{ fontSize: 12 }}>Employee ID</Text>
+                                <Text type="secondary" style={{ fontSize: 12 }}>{t("hr.employees.employeeId")}</Text>
                                 <div style={{ fontSize: 16, fontWeight: 500 }}>{employee.employee_id}</div>
                             </div>
                         </Card>
@@ -397,7 +399,7 @@ export default function ViewEmployeePage() {
                             title={
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                     <FolderOpenOutlined style={{ color: '#fa8c16' }} />
-                                    <span>Documents</span>
+                                    <span>{t("hr.employees.documents")}</span>
                                 </div>
                             }
                             style={{ borderRadius: 16, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}
@@ -407,42 +409,42 @@ export default function ViewEmployeePage() {
                                 {/* Passport */}
                                 <div style={{ padding: 12, background: '#fafafa', borderRadius: 8, border: '1px solid #f0f0f0' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                                        <Text strong><SafetyCertificateOutlined /> Passport</Text>
+                                        <Text strong><SafetyCertificateOutlined /> {t("employees.form.passport")}</Text>
                                         <Tag color="cyan">Doc</Tag>
                                     </div>
                                     <div style={{ fontSize: 13, color: '#595959', marginBottom: 4 }}>
                                         {formatValue(employee.passport || (employee as any).passport_no)}
                                     </div>
                                     <div style={{ fontSize: 12, color: '#8c8c8c' }}>
-                                        Expires: {formatDate((employee as any).passport_expiry)}
+                                        {t("hr.employees.expires")}: {formatDate((employee as any).passport_expiry)}
                                     </div>
                                 </div>
 
                                 {/* National ID */}
                                 <div style={{ padding: 12, background: '#fafafa', borderRadius: 8, border: '1px solid #f0f0f0' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                                        <Text strong><SafetyCertificateOutlined /> National ID</Text>
+                                        <Text strong><SafetyCertificateOutlined /> {t("employees.form.nationalId")}</Text>
                                         <Tag color="blue">ID</Tag>
                                     </div>
                                     <div style={{ fontSize: 13, color: '#595959', marginBottom: 4 }}>
                                         {formatValue((employee as any).national_id)}
                                     </div>
                                     <div style={{ fontSize: 12, color: '#8c8c8c' }}>
-                                        Expires: {formatDate((employee as any).id_expiry)}
+                                        {t("hr.employees.expires")}: {formatDate((employee as any).id_expiry)}
                                     </div>
                                 </div>
 
                                 {/* Health Card */}
                                 <div style={{ padding: 12, background: '#fafafa', borderRadius: 8, border: '1px solid #f0f0f0' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                                        <Text strong><SafetyCertificateOutlined /> Health Card</Text>
+                                        <Text strong><SafetyCertificateOutlined /> {t("employees.form.healthCard")}</Text>
                                         <Tag color="green">Health</Tag>
                                     </div>
                                     <div style={{ fontSize: 13, color: '#595959', marginBottom: 4 }}>
                                         {formatValue((employee as any).health_card)}
                                     </div>
                                     <div style={{ fontSize: 12, color: '#8c8c8c' }}>
-                                        Expires: {formatDate((employee as any).health_card_expiry)}
+                                        {t("hr.employees.expires")}: {formatDate((employee as any).health_card_expiry)}
                                     </div>
                                 </div>
 
@@ -453,19 +455,19 @@ export default function ViewEmployeePage() {
             </div>
 
             <Modal
-                title="Connect User Account"
+                title={t("hr.employees.connectUserTitle")}
                 open={isLinkModalOpen}
                 onOk={handleLinkUser}
                 onCancel={() => setIsLinkModalOpen(false)}
                 confirmLoading={linking}
-                okText="Connect"
+                okText={t("hr.employees.connectUser")}
                 okButtonProps={{ disabled: !selectedUserId }}
             >
-                <p>Select a system user to link to this employee profile.</p>
+                <p>{t("hr.employees.connectUserDesc")}</p>
                 <Select
                     showSearch
                     style={{ width: '100%' }}
-                    placeholder="Search by name or email"
+                    placeholder={t("hr.employees.searchUserPlaceholder")}
                     optionFilterProp="children"
                     onChange={(value) => setSelectedUserId(value)}
                     loading={usersLoading}
@@ -477,7 +479,7 @@ export default function ViewEmployeePage() {
                         const isLinked = !!u.linked_employee_id;
                         return {
                             value: u.id,
-                            label: `${u.full_name} (${u.email}) ${isLinked ? `[Linked to: ${u.linked_employee_name}]` : ''}`,
+                            label: `${u.full_name} (${u.email}) ${isLinked ? `[${t("hr.employees.linkedAccount")}: ${u.linked_employee_name}]` : ''}`,
                             disabled: isLinked
                         };
                     })}

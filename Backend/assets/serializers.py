@@ -1,9 +1,15 @@
+from pathlib import Path
+
+from django.conf import settings
 from django.utils import timezone
 from rest_framework import serializers
 
 from employees.models import EmployeeProfile
 
 from .models import Asset, AssetAssignment, AssetDamageReport, AssetReturnRequest
+
+ASSET_INVOICE_ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png"}
+ASSET_INVOICE_MAX_UPLOAD_SIZE = int(getattr(settings, "MAX_ASSET_INVOICE_SIZE_BYTES", 5 * 1024 * 1024))
 
 
 class AssetAssignmentSummarySerializer(serializers.ModelSerializer):
@@ -31,7 +37,8 @@ class AssetSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "asset_code",
-            "name",
+            "name_en",
+            "name_ar",
             "type",
             "status",
             "serial_number",
@@ -96,6 +103,16 @@ class AssetSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(errors)
 
         return attrs
+
+    def validate_invoice_file(self, value):
+        if not value:
+            return value
+        extension = Path(value.name).suffix.lower()
+        if extension not in ASSET_INVOICE_ALLOWED_EXTENSIONS:
+            raise serializers.ValidationError("Unsupported file type.")
+        if value.size > ASSET_INVOICE_MAX_UPLOAD_SIZE:
+            raise serializers.ValidationError("File size exceeds maximum limit.")
+        return value
 
 
 class AssetAssignmentCreateSerializer(serializers.Serializer):

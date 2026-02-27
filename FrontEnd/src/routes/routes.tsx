@@ -25,6 +25,7 @@ import DepartmentsPage from "../pages/hr/reference/DepartmentsPage";
 import PositionsPage from "../pages/hr/reference/PositionsPage";
 import TaskGroupsPage from "../pages/hr/reference/TaskGroupsPage";
 import SponsorsPage from "../pages/hr/reference/SponsorsPage";
+import RentTypesPage from "../pages/hr/reference/RentTypesPage";
 import EmployeesListPage from "../pages/hr/employees/EmployeesListPage";
 import CreateEmployeePage from "../pages/hr/employees/CreateEmployeePage";
 import ViewEmployeePage from "../pages/hr/employees/ViewEmployeePage";
@@ -39,6 +40,7 @@ import PayrollDashboardPage from "../pages/hr/payroll/PayrollDashboardPage";
 import CreatePayrollRunPage from "../pages/hr/payroll/CreatePayrollRunPage";
 import PayrollRunDetailsPage from "../pages/hr/payroll/PayrollRunDetailsPage";
 import HRAssetsPage from "../pages/hr/assets/HRAssetsPage";
+import HRRentsPage from "../pages/hr/rents/HRRentsPage";
 import EmployeePayslipsListPage from "../pages/employee/payslips/EmployeePayslipsListPage";
 import EmployeePayslipDetailsPage from "../pages/employee/payslips/EmployeePayslipDetailsPage";
 
@@ -153,6 +155,8 @@ export const routes = [
               { path: "hr/positions", element: <PositionsPage /> },
               { path: "hr/task-groups", element: <TaskGroupsPage /> },
               { path: "hr/sponsors", element: <SponsorsPage /> },
+              { path: "hr/rent-types", element: <RentTypesPage /> },
+              { path: "hr/rents", element: <HRRentsPage /> },
 
               // Import Employees
               { path: "hr/import/employees", element: <ImportEmployeesEntryPage /> },

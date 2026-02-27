@@ -1,11 +1,14 @@
 from datetime import date, timedelta
-from django.test import TestCase
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from rest_framework.test import APIClient
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase
 from rest_framework import status
-from leaves.models import LeaveType, LeaveRequest
+from rest_framework.test import APIClient
+
 from audit.models import AuditLog
+from leaves.models import LeaveRequest, LeaveType
 
 User = get_user_model()
 
@@ -179,6 +182,35 @@ class LeaveManagementTests(TestCase):
         }
         response = self.client.post("/api/leaves/leave-requests/", data)
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+    def test_sick_leave_requires_document(self):
+        self.client.force_authenticate(user=self.emp1)
+        start = date.today() + timedelta(days=3)
+        end = date.today() + timedelta(days=4)
+        data = {
+            "leave_type": self.sick_leave.id,
+            "start_date": str(start),
+            "end_date": str(end),
+            "reason": "Flu",
+        }
+        response = self.client.post("/api/leaves/leave-requests/", data)
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertIn("document", str(response.data))
+
+    def test_sick_leave_with_document_allowed(self):
+        self.client.force_authenticate(user=self.emp1)
+        start = date.today() + timedelta(days=6)
+        end = date.today() + timedelta(days=7)
+        document = SimpleUploadedFile("medical_report.txt", b"approved report", content_type="text/plain")
+        data = {
+            "leave_type": self.sick_leave.id,
+            "start_date": str(start),
+            "end_date": str(end),
+            "reason": "Doctor advised rest",
+            "document": document,
+        }
+        response = self.client.post("/api/leaves/leave-requests/", data, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
     def test_delete_leave_request_forbidden(self):
         self.client.force_authenticate(user=self.admin)

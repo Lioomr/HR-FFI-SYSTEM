@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+
 from employees.storage import PrivateUploadStorage
 
 
@@ -9,9 +10,7 @@ class LeaveType(models.Model):
     code = models.CharField(max_length=20, unique=True, blank=True, help_text=_("Optional code (e.g. ANNUAL, SICK)"))
     is_paid = models.BooleanField(default=True)
     requires_attachment = models.BooleanField(default=False)
-    requires_ceo_approval = models.BooleanField(
-        default=False, help_text=_("If true, requires CEO approval after HR.")
-    )
+    requires_ceo_approval = models.BooleanField(default=False, help_text=_("If true, requires CEO approval after HR."))
     is_active = models.BooleanField(default=True)
 
     # Quota and Carry-over (Phase 2.4)

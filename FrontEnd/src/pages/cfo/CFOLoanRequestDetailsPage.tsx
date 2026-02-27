@@ -1,5 +1,10 @@
 import LoanRequestDetailsPage from "../../components/loan/LoanRequestDetailsPage";
-import { approveCFOLoanRequest, getCFOLoanRequest, rejectCFOLoanRequest } from "../../services/api/loanApi";
+import {
+  approveCFOLoanRequest,
+  getCFOLoanRequest,
+  referCFOLoanRequestToCEO,
+  rejectCFOLoanRequest,
+} from "../../services/api/loanApi";
 import { useI18n } from "../../i18n/useI18n";
 
 export default function CFOLoanRequestDetailsPage() {
@@ -12,7 +17,13 @@ export default function CFOLoanRequestDetailsPage() {
       approve={approveCFOLoanRequest}
       reject={rejectCFOLoanRequest}
       canActWhenStatus="pending_cfo"
+      extraAction={{
+        label: t("loans.inbox.btnReferToCEO"),
+        successMessage: t("loans.inbox.referredToCEOSuccess"),
+        failedMessage: t("loans.inbox.referFailed"),
+        requireComment: true,
+        handler: referCFOLoanRequestToCEO,
+      }}
     />
   );
 }
-

@@ -140,6 +140,8 @@ function getTitle(pathname: string, t: (key: string, fallback?: string) => strin
   if (pathname.startsWith("/ceo/profile")) return t("layout.profile");
   if (pathname.startsWith("/hr/loan-requests")) return t("layout.loanRequests", "Loan Requests");
   if (pathname.startsWith("/hr/assets")) return t("layout.assets", "Assets");
+  if (pathname.startsWith("/hr/rents")) return t("layout.rents", "Rents");
+  if (pathname.startsWith("/hr/rent-types")) return t("layout.rentTypes", "Rent Types");
   if (pathname.startsWith("/finance/loan-requests")) return t("layout.loanRequests", "Loan Requests");
   if (pathname.startsWith("/manager/loan-requests")) return t("layout.loanRequests", "Loan Requests");
   if (pathname.startsWith("/cfo/loan-requests")) return t("layout.loanRequests", "Loan Requests");
@@ -240,6 +242,8 @@ export default function BaseLayout() {
     { key: "/hr/import/employees", icon: <UploadOutlined />, label: <Link to="/hr/import/employees">{t("layout.importEmployees")}</Link> },
     { key: "/hr/payroll", icon: <DollarOutlined />, label: <Link to="/hr/payroll">{t("layout.payroll")}</Link> },
     { key: "/hr/assets", icon: <AppstoreOutlined />, label: <Link to="/hr/assets">{t("layout.assets", "Assets")}</Link> },
+    { key: "/hr/rents", icon: <BellOutlined />, label: <Link to="/hr/rents">{t("layout.rents", "Rents")}</Link> },
+    { key: "/hr/rent-types", icon: <SettingOutlined />, label: <Link to="/hr/rent-types">{t("layout.rentTypes", "Rent Types")}</Link> },
     { key: "/hr/leave/requests", icon: <CalendarOutlined />, label: <Link to="/hr/leave/requests">{t("layout.leaveInbox")}</Link> },
     { key: "/hr/loan-requests", icon: <DollarOutlined />, label: <Link to="/hr/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
     { key: "/hr/attendance", icon: <ClockCircleOutlined />, label: <Link to="/hr/attendance">{t("layout.attendance")}</Link> },
@@ -439,10 +443,12 @@ export default function BaseLayout() {
               level={isMobile ? 5 : 4}
               style={{
                 margin: 0,
-                fontWeight: 700,
-                fontSize: isMobile ? 16 : 20,
-                color: "#0f172a",
-                letterSpacing: "-0.02em",
+                fontWeight: 600,
+                fontSize: isMobile ? 14 : 15,
+                color: "#64748b",
+                letterSpacing: "0.02em",
+                textTransform: "uppercase",
+                fontFamily: "'Outfit', sans-serif",
               }}
             >
               {getTitle(location.pathname, t)}
@@ -455,8 +461,8 @@ export default function BaseLayout() {
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 16,
-              padding: "8px 16px",
+              gap: isMobile ? 8 : 16,
+              padding: isMobile ? "6px 10px" : "8px 16px",
               borderRadius: 50,
               boxShadow: "0 2px 20px rgba(0,0,0,0.06)",
             }}
@@ -467,11 +473,11 @@ export default function BaseLayout() {
               value={language}
               onChange={(value) => setLanguage(value as AppLanguage)}
               options={[
-                { value: "en", label: t("language.english") },
-                { value: "ar", label: t("language.arabic") },
+                { value: "en", label: isMobile ? "EN" : t("language.english") },
+                { value: "ar", label: isMobile ? "AR" : t("language.arabic") },
               ]}
               variant="borderless"
-              style={{ minWidth: 90, fontWeight: 500, fontSize: 13 }}
+              style={{ minWidth: isMobile ? 56 : 90, fontWeight: 500, fontSize: 13 }}
             />
 
             {/* Notification Bell */}
@@ -480,8 +486,8 @@ export default function BaseLayout() {
                 icon={<BellOutlined />}
                 type="text"
                 style={{
-                  width: 36,
-                  height: 36,
+                  width: isMobile ? 30 : 36,
+                  height: isMobile ? 30 : 36,
                   borderRadius: 10,
                   color: "#64748b",
                   display: "flex",
@@ -492,7 +498,7 @@ export default function BaseLayout() {
             </Badge>
 
             {/* Divider */}
-            <div style={{ width: 1, height: 24, background: "rgba(0,0,0,0.08)" }} />
+            {!isMobile && <div style={{ width: 1, height: 24, background: "rgba(0,0,0,0.08)" }} />}
 
             {/* User Profile Dropdown */}
             <Dropdown menu={userMenu} placement="bottomRight" trigger={["click"]}>

@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django.urls import include, path, re_path
+
 from core.views import HrSummaryView
 from payroll.views import PayrollRunExportView
 
@@ -17,6 +18,7 @@ urlpatterns = [
     path("api/", include("employees.urls")),
     path("api/hr/summary/", HrSummaryView.as_view()),
     path("api/hr/", include("hr_reference.urls")),
+    path("api/hr/", include("rents.urls")),
     path("api/leaves/", include("leaves.urls")),
     path("api/", include("assets.urls")),
     path("api/loans/", include("loans.urls")),

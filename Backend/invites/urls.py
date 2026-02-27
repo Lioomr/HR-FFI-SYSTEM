@@ -1,5 +1,6 @@
 from django.urls import path
-from .views import InvitesListCreateView, InviteResendView, InviteRevokeView, InviteAcceptView
+
+from .views import InviteAcceptView, InviteResendView, InviteRevokeView, InvitesListCreateView
 
 urlpatterns = [
     path("invites/", InvitesListCreateView.as_view()),

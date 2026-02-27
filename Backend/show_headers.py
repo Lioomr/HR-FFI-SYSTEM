@@ -1,4 +1,5 @@
 """Quick script to show Excel headers"""
+
 from openpyxl import load_workbook
 
 file_path = r"D:\FFI HR SYSTEM\HR FFI.xlsx"

@@ -1,7 +1,7 @@
 
 import { useCallback, useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Card, Input, Select, Table, Avatar, Dropdown, Typography, Tooltip } from "antd";
+import { Button, Card, Input, Select, Table, Dropdown, Typography, Tooltip } from "antd";
 import type { MenuProps } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
@@ -10,10 +10,9 @@ import {
     FilterOutlined,
     DownloadOutlined,
     EllipsisOutlined,
-    UserOutlined
 } from "@ant-design/icons";
 import dayjs from "dayjs";
-import { getCountryCode, getCountryFlag, getCountryFlagImageUrl } from "../../../utils/countries";
+import { getCountryCode } from "../../../utils/countries";
 import { useI18n } from "../../../i18n/useI18n";
 
 /**
@@ -51,6 +50,53 @@ import { isForbidden } from "../../../services/api/httpErrors";
 
 const { Option } = Select;
 const { Title, Text } = Typography;
+
+const AVATAR_BG_COLORS = ["#f56a00", "#1677ff", "#389e0d", "#722ed1", "#d46b08", "#08979c"];
+
+function getInitials(name?: string) {
+    if (!name) return "U";
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "U";
+    if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+    return `${parts[0].charAt(0)}${parts[1].charAt(0)}`.toUpperCase();
+}
+
+function getAvatarColor(name?: string) {
+    const source = name || "";
+    let hash = 0;
+    for (let i = 0; i < source.length; i += 1) {
+        hash = source.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const index = Math.abs(hash) % AVATAR_BG_COLORS.length;
+    return AVATAR_BG_COLORS[index];
+}
+
+function FlagBadge({ nationality }: { nationality?: string }) {
+    const code = getCountryCode(nationality);
+
+    if (!code) {
+        return (
+            <span style={{ minWidth: 24, textAlign: "center", color: "#8c8c8c", fontWeight: 600 }}>--</span>
+        );
+    }
+
+    return (
+        <span
+            className={`fi fi-${code.toLowerCase()}`}
+            aria-label={`${code} flag`}
+            title={code}
+            style={{
+                width: 24,
+                height: 18,
+                borderRadius: 3,
+                display: "inline-flex",
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+                boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.08)",
+            }}
+        />
+    );
+}
 
 // Status Badge Helper
 const StatusBadge = ({ status, t }: { status?: string; t: (k: string, f?: string) => string }) => {
@@ -236,7 +282,25 @@ export default function EmployeesListPage() {
             width: 250,
             render: (_, record) => (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <Avatar size={40} src={`https://ui-avatars.com/api/?name=${record.full_name}&background=random`} icon={<UserOutlined />} />
+                    <div
+                        style={{
+                            width: 48,
+                            height: 48,
+                            minWidth: 48,
+                            borderRadius: "50%",
+                            backgroundColor: getAvatarColor(record.full_name),
+                            color: "#fff",
+                            fontWeight: 700,
+                            fontSize: 24,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            lineHeight: 1,
+                            boxSizing: "border-box",
+                        }}
+                    >
+                        {getInitials(record.full_name)}
+                    </div>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                         <Text strong style={{ fontSize: 14 }}>{record.full_name}</Text>
                         <Text type="secondary" style={{ fontSize: 12 }}>{record.email}</Text>
@@ -250,26 +314,7 @@ export default function EmployeesListPage() {
             width: 150,
             render: (_, record) => (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    {getCountryFlagImageUrl(record.nationality) ? (
-                        <img
-                            src={getCountryFlagImageUrl(record.nationality)!}
-                            alt={`${getCountryCode(record.nationality) || "country"} flag`}
-                            width={20}
-                            height={15}
-                            style={{ objectFit: "cover", borderRadius: 2, border: "1px solid #f0f0f0" }}
-                            loading="lazy"
-                        />
-                    ) : (
-                        <span
-                            style={{
-                                fontSize: 18,
-                                fontFamily: "'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif",
-                                lineHeight: 1,
-                            }}
-                        >
-                            {getCountryFlag(record.nationality)}
-                        </span>
-                    )}
+                    <FlagBadge nationality={record.nationality} />
                     <Text>{record.nationality || t("employees.list.saudiArabia")}</Text>
                 </div>
             )
@@ -328,7 +373,7 @@ export default function EmployeesListPage() {
     return (
         <div style={{ padding: '0 12px' }}>
             {/* Header Section */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
                 <div>
                     <Title level={2} style={{ margin: 0, fontWeight: 700 }}>{t("employees.list.title")}</Title>
                     <Text type="secondary">{t("employees.list.subtitle")}</Text>
@@ -355,7 +400,7 @@ export default function EmployeesListPage() {
             {/* Filter Section */}
             <Card bordered={false} style={{ borderRadius: 12, marginBottom: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }} bodyStyle={{ padding: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
-                    <div style={{ flex: 1, minWidth: 300 }}>
+                    <div style={{ flex: 1, minWidth: 200 }}>
                         <Input
                             placeholder={t("employees.list.searchPlaceholder")}
                             prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
@@ -373,13 +418,13 @@ export default function EmployeesListPage() {
                         />
                     </div>
 
-                    <div style={{ display: 'flex', gap: 12 }}>
+                    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                         <Select
                             placeholder={t("employees.list.departmentPlaceholder")}
                             value={filters.department || undefined}
                             onChange={(value) => setFilters({ department: value })}
                             size="large"
-                            style={{ width: 160 }}
+                            style={{ flex: '0 1 160px', minWidth: 120 }}
                             allowClear
                             bordered={false}
                             className="custom-select-filter"
@@ -395,7 +440,7 @@ export default function EmployeesListPage() {
                             value={filters.status || undefined}
                             onChange={(value) => setFilters({ status: value })}
                             size="large"
-                            style={{ width: 140 }}
+                            style={{ flex: '0 1 140px', minWidth: 110 }}
                             allowClear
                             bordered={false}
                             className="custom-select-filter"

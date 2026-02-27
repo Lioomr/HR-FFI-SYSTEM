@@ -14,7 +14,7 @@ import type { PayrollRun } from "../../../services/api/payrollApi";
 import { getPayrollRuns } from "../../../services/api/payrollApi";
 import { isApiError } from "../../../services/api/apiTypes";
 import { isForbidden } from "../../../services/api/httpErrors";
-import { formatNumber } from "../../../utils/currency";
+import AmountWithSAR from "../../../components/ui/AmountWithSAR";
 
 const { Option } = Select;
 
@@ -75,7 +75,7 @@ export default function PayrollDashboardPage() {
             dataIndex: "total_net",
             key: "total_net",
             align: 'right',
-            render: (val) => val !== null && val !== undefined ? formatNumber(val) : "-",
+            render: (val) => val !== null && val !== undefined ? <AmountWithSAR amount={val} /> : "-",
         },
         {
             title: t("common.actions"),

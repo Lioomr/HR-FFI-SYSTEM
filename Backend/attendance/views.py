@@ -1,27 +1,30 @@
+from datetime import date as date_type
+from datetime import timedelta
+
+from django.contrib.auth import get_user_model
+from django.db.models import Q
 from django.utils import timezone
-from django.shortcuts import get_object_or_404
-from rest_framework import viewsets, status, filters
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.throttling import UserRateThrottle
-from django_filters.rest_framework import DjangoFilterBackend
-from datetime import timedelta, date as date_type
-from django.db.models import Q
-from django.contrib.auth import get_user_model
+
+from audit.utils import audit
+from core.permissions import IsManager, get_role
+from core.responses import error, success
+from core.services import get_direct_manager_user, get_hr_approver_users, notify_users_for_pending_status
+from employees.models import EmployeeProfile
 
 from .models import AttendanceRecord
+from .permissions import IsAttendanceSelfServiceRole, IsHRManagerOrAdmin
 from .serializers import (
-    AttendanceRecordSerializer,
     AttendanceOverrideSerializer,
+    AttendanceRecordSerializer,
     CheckInResponseSerializer,
     CheckOutResponseSerializer,
 )
-from .permissions import IsAttendanceOwner, IsHRManagerOrAdmin
-from .permissions import IsAttendanceSelfServiceRole
-from core.permissions import get_role
-from core.responses import success, error
-from audit.utils import audit
-from employees.models import EmployeeProfile
+
 User = get_user_model()
 
 
@@ -126,11 +129,11 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
             return error(f"Invalid date filter: {self._date_filter_error}", status=status.HTTP_400_BAD_REQUEST)
 
         response = super().list(request, *args, **kwargs)
-        
+
         # Avoid double wrapping if pagination already added the envelope
         if isinstance(response.data, dict) and response.data.get("status") == "success":
             return response
-            
+
         return success(response.data)
 
     def retrieve(self, request, *args, **kwargs):
@@ -157,12 +160,18 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         instance.save()
 
         # Serialize metadata to ensure datetimes are strings
-        from django.core.serializers.json import DjangoJSONEncoder
         import json
+
+        from django.core.serializers.json import DjangoJSONEncoder
+
         serialized_metadata = json.loads(json.dumps(s.validated_data, cls=DjangoJSONEncoder))
 
         audit(
-            request, "attendance.override", entity="attendance_record", entity_id=instance.id, metadata=serialized_metadata
+            request,
+            "attendance.override",
+            entity="attendance_record",
+            entity_id=instance.id,
+            metadata=serialized_metadata,
         )
 
         return success(AttendanceRecordSerializer(instance).data)
@@ -203,6 +212,32 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         )
 
         audit(request, "attendance.check_in", entity="attendance_record", entity_id=record.id)
+        try:
+            requester_name = profile.full_name or user.email
+            if record.status == AttendanceRecord.Status.PENDING_MANAGER:
+                manager = get_direct_manager_user(user)
+                if manager:
+                    notify_users_for_pending_status(
+                        users=[manager],
+                        request_type="Attendance Request",
+                        request_id=record.id,
+                        requester_name=requester_name,
+                        status_label=record.status,
+                        details=[f"Date: {record.date}", "Action: Check-in"],
+                        action_path="/manager/attendance",
+                    )
+            elif record.status == AttendanceRecord.Status.PENDING_HR:
+                notify_users_for_pending_status(
+                    users=get_hr_approver_users(),
+                    request_type="Attendance Request",
+                    request_id=record.id,
+                    requester_name=requester_name,
+                    status_label=record.status,
+                    details=[f"Date: {record.date}", "Action: Check-in"],
+                    action_path="/hr/attendance",
+                )
+        except Exception:
+            pass
         return success(CheckInResponseSerializer(record).data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=["post"], url_path="me/check-out", throttle_classes=[AttendanceThrottle])
@@ -245,13 +280,11 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         return success(serializer.data)
 
 
-from core.permissions import IsManager 
-
-
 class ManagerAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
     """
     Endpoints for managers to view and act on their direct reports' attendance.
     """
+
     serializer_class = AttendanceRecordSerializer
     permission_classes = [IsAuthenticated, IsManager]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
@@ -289,14 +322,16 @@ class ManagerAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
             leadership_user_ids = User.objects.filter(groups__name__in=["Manager", "HRManager"]).values_list(
                 "id", flat=True
             )
-            direct_report_user_ids = EmployeeProfile.objects.filter(direct_reports_q).exclude(user__isnull=True).values_list(
-                "user_id", flat=True
+            direct_report_user_ids = (
+                EmployeeProfile.objects.filter(direct_reports_q)
+                .exclude(user__isnull=True)
+                .values_list("user_id", flat=True)
             )
             scope_user_ids = set(leadership_user_ids).union(set(direct_report_user_ids))
 
-            return AttendanceRecord.objects.filter(
-                employee_profile__user_id__in=scope_user_ids
-            ).select_related("employee_profile__user", "employee_profile__manager_profile")
+            return AttendanceRecord.objects.filter(employee_profile__user_id__in=scope_user_ids).select_related(
+                "employee_profile__user", "employee_profile__manager_profile"
+            )
 
         # Only records where the employee's manager maps to current user
         manager_profile = getattr(self.request.user, "employee_profile", None)
@@ -318,18 +353,29 @@ class ManagerAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
             return error("Not found", errors=["Not found."], status=404)
 
         if instance.status != AttendanceRecord.Status.PENDING_MANAGER:
-             return error("Validation error", errors=["Request is not in a state to be approved by manager."], status=422)
+            return error(
+                "Validation error", errors=["Request is not in a state to be approved by manager."], status=422
+            )
 
-        s = AttendanceOverrideSerializer(data=request.data, partial=True) # Basic validation if any comments
-        # We don't need full validation for approve, just maybe note
-        
         instance.status = AttendanceRecord.Status.PENDING_HR
         instance.manager_decision_by = request.user
         instance.manager_decision_at = timezone.now()
-        instance.manager_decision_note = request.data.get("notes", "") # Simple note
+        instance.manager_decision_note = request.data.get("notes", "")  # Simple note
         instance.save()
 
         audit(request, "approve", entity="AttendanceRecord", entity_id=instance.id)
+        try:
+            notify_users_for_pending_status(
+                users=get_hr_approver_users(),
+                request_type="Attendance Request",
+                request_id=instance.id,
+                requester_name=instance.employee_profile.full_name or instance.employee_profile.user.email,
+                status_label=instance.status,
+                details=[f"Date: {instance.date}", "Manager forwarded for HR approval"],
+                action_path="/hr/attendance",
+            )
+        except Exception:
+            pass
         return success(AttendanceRecordSerializer(instance).data)
 
     @action(detail=True, methods=["post"])
@@ -337,14 +383,16 @@ class ManagerAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
         try:
             instance = self.get_queryset().get(pk=pk)
         except AttendanceRecord.DoesNotExist:
-             return error("Not found", errors=["Not found."], status=404)
+            return error("Not found", errors=["Not found."], status=404)
 
         if instance.status != AttendanceRecord.Status.PENDING_MANAGER:
-             return error("Validation error", errors=["Request is not in a state to be rejected by manager."], status=422)
-        
+            return error(
+                "Validation error", errors=["Request is not in a state to be rejected by manager."], status=422
+            )
+
         note = request.data.get("notes", "")
         if not note:
-             return error("Validation error", errors=["notes/comment is required for rejection."], status=422)
+            return error("Validation error", errors=["notes/comment is required for rejection."], status=422)
 
         instance.status = AttendanceRecord.Status.REJECTED
         instance.manager_decision_by = request.user

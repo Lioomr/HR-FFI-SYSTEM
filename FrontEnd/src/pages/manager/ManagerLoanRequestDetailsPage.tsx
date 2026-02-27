@@ -16,6 +16,10 @@ export default function ManagerLoanRequestDetailsPage() {
       approve={approveManagerLoanRequest}
       reject={rejectManagerLoanRequest}
       canActWhenStatus="pending_manager"
+      approveLabel={t("loans.inbox.btnRecommendApprove")}
+      rejectLabel={t("loans.inbox.btnRecommendReject")}
+      approveSuccessMessage={t("loans.inbox.managerRecommendedApprove")}
+      rejectSuccessMessage={t("loans.inbox.managerRecommendedReject")}
     />
   );
 }

@@ -1,13 +1,14 @@
 import os
-import django
 import sys
+
+import django
 
 # Setup Django environment
 sys.path.append(os.getcwd())
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
 
-from employees.models import EmployeeProfile
+from employees.models import EmployeeProfile  # noqa: E402
 
 try:
     p = EmployeeProfile.objects.get(id=1)

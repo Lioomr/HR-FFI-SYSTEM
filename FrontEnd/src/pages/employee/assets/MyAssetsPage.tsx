@@ -8,6 +8,8 @@ import LoadingState from "../../../components/ui/LoadingState";
 import PageHeader from "../../../components/ui/PageHeader";
 import { listMyAssets, reportAssetIssue, type Asset } from "../../../services/api/assetsApi";
 import { isApiError } from "../../../services/api/apiTypes";
+import { useI18n } from "../../../i18n/useI18n";
+import { getDetailedApiMessage, getDetailedHttpErrorMessage } from "../../../services/api/userErrorMessages";
 
 const statusColorMap: Record<string, string> = {
   AVAILABLE: "green",
@@ -19,6 +21,7 @@ const statusColorMap: Record<string, string> = {
 };
 
 export default function MyAssetsPage() {
+  const { t } = useI18n();
   const [apiMessage, contextHolder] = message.useMessage();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -35,12 +38,12 @@ export default function MyAssetsPage() {
       setError(null);
       const res = await listMyAssets({ page: 1, page_size: 25 });
       if (isApiError(res)) {
-        setError(res.message || "Failed to load your assets.");
+        setError(res.message || t("assets.loadFailed"));
         return;
       }
       setAssets(res.data.items || []);
     } catch (err: any) {
-      setError(err?.message || "Failed to load your assets.");
+      setError(err?.message || t("assets.loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -58,7 +61,7 @@ export default function MyAssetsPage() {
 
   const columns: ColumnsType<Asset> = [
     {
-      title: "Asset Code",
+      title: t("assets.assetCode"),
       dataIndex: "asset_code",
       key: "asset_code",
       width: 140,
@@ -76,7 +79,7 @@ export default function MyAssetsPage() {
       ),
     },
     {
-      title: "Name",
+      title: t("common.name"),
       dataIndex: "name",
       key: "name",
       render: (value: string, record) => (
@@ -92,30 +95,30 @@ export default function MyAssetsPage() {
         </Button>
       ),
     },
-    { title: "Type", dataIndex: "type", key: "type", width: 120 },
+    { title: t("common.type"), dataIndex: "type", key: "type", width: 120 },
     {
-      title: "Status",
+      title: t("common.status"),
       dataIndex: "status",
       key: "status",
       width: 180,
       render: (status: string) => <Tag color={statusColorMap[status] || "default"}>{status}</Tag>,
     },
     {
-      title: "Serial Number",
+      title: t("assets.serialNumber"),
       dataIndex: "serial_number",
       key: "serial_number",
       width: 180,
       render: (value?: string) => value || "-",
     },
     {
-      title: "Warranty Expiry",
+      title: t("assets.warrantyExpiry"),
       dataIndex: "warranty_expiry",
       key: "warranty_expiry",
       width: 160,
       render: (value?: string | null) => value || "-",
     },
     {
-      title: "Actions",
+      title: t("common.actions"),
       key: "actions",
       width: 220,
       render: (_, record) => (
@@ -127,7 +130,7 @@ export default function MyAssetsPage() {
               openDetails(record);
             }}
           >
-            View
+            {t("common.view")}
           </Button>
           <Button
             size="small"
@@ -139,7 +142,7 @@ export default function MyAssetsPage() {
               setReportOpen(true);
             }}
           >
-            Report
+            {t("assets.report")}
           </Button>
         </Space>
       ),
@@ -157,31 +160,31 @@ export default function MyAssetsPage() {
 
       const response = await reportAssetIssue(selectedAsset.id, { description: payloadDescription });
       if (isApiError(response)) {
-        await apiMessage.error(response.message || "Failed to submit issue report.");
+        await apiMessage.error(getDetailedApiMessage(t, response.message, "assets.submitIssueFailed"));
         return;
       }
 
-      await apiMessage.success("Issue reported successfully.");
+      await apiMessage.success(t("assets.submitIssueSuccess"));
       setReportOpen(false);
       reportForm.resetFields();
     } catch (err: any) {
       if (!err?.errorFields) {
-        await apiMessage.error(err?.message || "Failed to submit issue report.");
+        await apiMessage.error(getDetailedHttpErrorMessage(t, err, "assets.submitIssueFailed"));
       }
     } finally {
       setReporting(false);
     }
   };
 
-  if (loading) return <LoadingState title="Loading my assets" lines={5} />;
-  if (error) return <ErrorState title="Unable to load assets" description={error} onRetry={() => void loadData()} />;
+  if (loading) return <LoadingState title={t("assets.loadingMyAssets")} lines={5} />;
+  if (error) return <ErrorState title={t("assets.unableToLoad")} description={error} onRetry={() => void loadData()} />;
 
   return (
     <div>
       {contextHolder}
-      <PageHeader title="My Assets" subtitle="Assets currently assigned to you." />
+      <PageHeader title={t("assets.myAssets")} subtitle={t("assets.myAssetsDesc")} />
       {assets.length === 0 ? (
-        <EmptyState title="No assigned assets" description="You currently have no active asset assignments." />
+        <EmptyState title={t("assets.noAssets")} description={t("assets.noAssetsDesc")} />
       ) : (
         <Card>
           <Table
@@ -198,7 +201,7 @@ export default function MyAssetsPage() {
       )}
 
       <Modal
-        title={`Asset Details${selectedAsset ? `: ${selectedAsset.asset_code}` : ""}`}
+        title={`${t("assets.details")}${selectedAsset ? `: ${selectedAsset.asset_code}` : ""}`}
         open={detailsOpen}
         onCancel={() => {
           setDetailsOpen(false);
@@ -212,40 +215,40 @@ export default function MyAssetsPage() {
               setSelectedAsset(null);
             }}
           >
-            Close
+            {t("common.close")}
           </Button>,
         ]}
         width={860}
       >
         {selectedAsset && (
           <Descriptions bordered size="small" column={2}>
-            <Descriptions.Item label="Asset Code">{selectedAsset.asset_code}</Descriptions.Item>
-            <Descriptions.Item label="Name">{selectedAsset.name || "-"}</Descriptions.Item>
-            <Descriptions.Item label="Type">{selectedAsset.type || "-"}</Descriptions.Item>
-            <Descriptions.Item label="Status">
+            <Descriptions.Item label={t("assets.assetCode")}>{selectedAsset.asset_code}</Descriptions.Item>
+            <Descriptions.Item label={t("common.name")}>{selectedAsset.name || "-"}</Descriptions.Item>
+            <Descriptions.Item label={t("common.type")}>{selectedAsset.type || "-"}</Descriptions.Item>
+            <Descriptions.Item label={t("common.status")}>
               <Tag color={statusColorMap[selectedAsset.status] || "default"}>{selectedAsset.status}</Tag>
             </Descriptions.Item>
-            <Descriptions.Item label="Serial Number">{selectedAsset.serial_number || "-"}</Descriptions.Item>
-            <Descriptions.Item label="Vendor">{selectedAsset.vendor || "-"}</Descriptions.Item>
-            <Descriptions.Item label="Purchase Date">{selectedAsset.purchase_date || "-"}</Descriptions.Item>
-            <Descriptions.Item label="Warranty Expiry">{selectedAsset.warranty_expiry || "-"}</Descriptions.Item>
-            <Descriptions.Item label="Notes" span={2}>{selectedAsset.notes || "-"}</Descriptions.Item>
+            <Descriptions.Item label={t("assets.serialNumber")}>{selectedAsset.serial_number || "-"}</Descriptions.Item>
+            <Descriptions.Item label={t("assets.vendor")}>{selectedAsset.vendor || "-"}</Descriptions.Item>
+            <Descriptions.Item label={t("assets.purchaseDate")}>{selectedAsset.purchase_date || "-"}</Descriptions.Item>
+            <Descriptions.Item label={t("assets.warrantyExpiry")}>{selectedAsset.warranty_expiry || "-"}</Descriptions.Item>
+            <Descriptions.Item label={t("common.notes")} span={2}>{selectedAsset.notes || "-"}</Descriptions.Item>
 
             {selectedAsset.type === "VEHICLE" && (
               <>
-                <Descriptions.Item label="Plate Number">{selectedAsset.plate_number || "-"}</Descriptions.Item>
-                <Descriptions.Item label="Chassis Number">{selectedAsset.chassis_number || "-"}</Descriptions.Item>
-                <Descriptions.Item label="Engine Number">{selectedAsset.engine_number || "-"}</Descriptions.Item>
-                <Descriptions.Item label="Fuel Type">{selectedAsset.fuel_type || "-"}</Descriptions.Item>
+                <Descriptions.Item label={t("assets.plateNumber")}>{selectedAsset.plate_number || "-"}</Descriptions.Item>
+                <Descriptions.Item label={t("assets.chassisNumber")}>{selectedAsset.chassis_number || "-"}</Descriptions.Item>
+                <Descriptions.Item label={t("assets.engineNumber")}>{selectedAsset.engine_number || "-"}</Descriptions.Item>
+                <Descriptions.Item label={t("assets.fuelType")}>{selectedAsset.fuel_type || "-"}</Descriptions.Item>
               </>
             )}
 
             {selectedAsset.type === "LAPTOP" && (
               <>
-                <Descriptions.Item label="CPU">{selectedAsset.cpu || "-"}</Descriptions.Item>
-                <Descriptions.Item label="RAM">{selectedAsset.ram || "-"}</Descriptions.Item>
-                <Descriptions.Item label="Storage">{selectedAsset.storage || "-"}</Descriptions.Item>
-                <Descriptions.Item label="Operating System">{selectedAsset.operating_system || "-"}</Descriptions.Item>
+                <Descriptions.Item label={t("assets.cpu")}>{selectedAsset.cpu || "-"}</Descriptions.Item>
+                <Descriptions.Item label={t("assets.ram")}>{selectedAsset.ram || "-"}</Descriptions.Item>
+                <Descriptions.Item label={t("assets.storage")}>{selectedAsset.storage || "-"}</Descriptions.Item>
+                <Descriptions.Item label={t("assets.os")}>{selectedAsset.operating_system || "-"}</Descriptions.Item>
               </>
             )}
 
@@ -264,7 +267,7 @@ export default function MyAssetsPage() {
                     );
                   })
                 ) : (
-                  <Descriptions.Item label="Custom Details" span={2}>
+                  <Descriptions.Item label={t("assets.customDetails")} span={2}>
                     -
                   </Descriptions.Item>
                 )}
@@ -275,37 +278,37 @@ export default function MyAssetsPage() {
       </Modal>
 
       <Modal
-        title={`Report Issue${selectedAsset ? `: ${selectedAsset.asset_code}` : ""}`}
+        title={`${t("assets.reportIssue")}${selectedAsset ? `: ${selectedAsset.asset_code}` : ""}`}
         open={reportOpen}
         onCancel={() => {
           setReportOpen(false);
           reportForm.resetFields();
         }}
         onOk={handleSubmitIssue}
-        okText="Submit Report"
+        okText={t("assets.submitReport")}
         confirmLoading={reporting}
       >
         <Form form={reportForm} layout="vertical">
           <Form.Item
             name="report_type"
-            label="Report Type"
-            rules={[{ required: true, message: "Please select report type." }]}
+            label={t("assets.reportType")}
+            rules={[{ required: true, message: t("assets.selectReportType") }]}
           >
             <Select
               options={[
-                { label: "Damage", value: "DAMAGE" },
-                { label: "Lost", value: "LOST" },
-                { label: "Other", value: "OTHER" },
+                { label: t("assets.damage"), value: "DAMAGE" },
+                { label: t("assets.lost"), value: "LOST" },
+                { label: t("assets.other"), value: "OTHER" },
               ]}
             />
           </Form.Item>
 
           <Form.Item
             name="description"
-            label="Details"
-            rules={[{ required: true, message: "Please provide issue details." }]}
+            label={t("common.details")}
+            rules={[{ required: true, message: t("assets.provideIssueDetails") }]}
           >
-            <Input.TextArea rows={4} placeholder="Describe the issue..." />
+            <Input.TextArea rows={4} placeholder={t("assets.describeIssue")} />
           </Form.Item>
         </Form>
       </Modal>
