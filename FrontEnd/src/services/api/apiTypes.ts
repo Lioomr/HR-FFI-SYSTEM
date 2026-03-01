@@ -38,6 +38,14 @@ export function isApiError<T>(res: ApiResponse<T>): res is ApiError {
 
 export type Role = "SystemAdmin" | "HRManager" | "Manager" | "Employee" | "CEO" | "CFO";
 
+export type EmailDeliveryStatus = {
+  sent: boolean;
+  provider: string;
+  status_code?: number | null;
+  message_id?: string | null;
+  error?: string | null;
+};
+
 export type PaginatedResponse<T> = {
   items: T[];
   page?: number;
@@ -88,6 +96,7 @@ export type InviteDto = {
   expires_at: string | null;
   resend_count: number;
   last_resent_at: string | null;
+  email_delivery?: EmailDeliveryStatus;
 };
 
 export type AuditLogDto = {

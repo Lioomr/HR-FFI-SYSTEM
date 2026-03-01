@@ -9,6 +9,7 @@ from django.contrib.auth import get_user_model
 
 from employees.models import EmployeeProfile
 
+from .bird_email_service import _load_logo_base64
 from .email_service import EmailService
 
 logger = logging.getLogger(__name__)
@@ -101,6 +102,8 @@ def send_pending_approval_email(
     subject = f"{request_type} pending approval - #{request_id}"
 
     context = {
+        "logo_url": _load_logo_base64(),
+        "contact_email": getattr(settings, "EMAIL_CONTACT_EMAIL", "hr@fficontracting.com"),
         "title": f"{request_type} requires your review",
         "title_ar": f"طلب {request_type} يتطلب مراجعتك",
         "employee_name": approver_name,
@@ -117,6 +120,8 @@ def send_pending_approval_email(
     }
     
     html = render_to_string("emails/pending_approval_email.html", context)
+    details_list = [str(item) for item in (details or [])]
+    details_text = "\n".join(f"- {item}" for item in details_list) if details_list else "-"
 
     text = (
         f"{request_type} requires your review.\n"

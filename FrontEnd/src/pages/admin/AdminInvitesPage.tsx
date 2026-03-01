@@ -36,6 +36,7 @@ const roleOptions: { label: string; value: Role }[] = [
   { label: "System Admin", value: "SystemAdmin" },
   { label: "HR Manager", value: "HRManager" },
   { label: "Manager", value: "Manager" },
+  { label: "CEO", value: "CEO" },
   { label: "Employee", value: "Employee" },
 ];
 
@@ -153,7 +154,14 @@ export default function AdminInvitesPage() {
         return;
       }
 
-      message.success("Invite sent successfully.");
+      const delivery = res.data.email_delivery;
+      if (delivery && !delivery.sent) {
+        message.warning(
+          `Invite created, but email was not delivered${delivery.error ? `: ${delivery.error}` : "."}`
+        );
+      } else {
+        message.success("Invite sent successfully.");
+      }
       form.resetFields();
       loadInvites(1, pagination.pageSize || 8);
     } catch (e: any) {
@@ -188,7 +196,15 @@ export default function AdminInvitesPage() {
         return;
       }
 
-      message.success({ content: "Invite resent.", key: `resend-${invite.id}` });
+      const delivery = res.data.email_delivery;
+      if (delivery && !delivery.sent) {
+        message.warning({
+          content: `Invite updated, but email was not delivered${delivery.error ? `: ${delivery.error}` : "."}`,
+          key: `resend-${invite.id}`,
+        });
+      } else {
+        message.success({ content: "Invite resent.", key: `resend-${invite.id}` });
+      }
       loadInvites(pagination.current || 1, pagination.pageSize || 8);
     } catch (e: any) {
       if (e?.response?.status === 403) {
@@ -238,6 +254,8 @@ export default function AdminInvitesPage() {
           <Tag color="blue">HRManager</Tag>
         ) : v === "Manager" ? (
           <Tag color="geekblue">Manager</Tag>
+        ) : v === "CEO" ? (
+          <Tag color="purple">CEO</Tag>
         ) : (
           <Tag>Employee</Tag>
         ),
