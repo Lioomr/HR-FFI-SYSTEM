@@ -8,7 +8,7 @@ from .models import Invite
 
 User = get_user_model()
 
-ALLOWED_ROLES = {"SystemAdmin", "HRManager", "Manager", "Employee", "CFO"}
+ALLOWED_ROLES = {"SystemAdmin", "HRManager", "Manager", "Employee", "CEO", "CFO"}
 
 
 class InviteCreateSerializer(serializers.Serializer):

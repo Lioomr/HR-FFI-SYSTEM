@@ -21,6 +21,8 @@ ENV/
 # Local test outputs and logs
 *.txt
 *.postman_collection.json
+*.sqlite3
+!requirements.txt
 
 # Private Uploads (Employee Imports, etc)
 private_uploads/

@@ -1,6 +1,8 @@
 # invites/views.py
 
 from datetime import timedelta
+import logging
+from typing import Any
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -23,6 +25,25 @@ from .models import Invite
 from .serializers import InviteAcceptSerializer, InviteCreateSerializer, InviteSerializer
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
+
+
+def _normalize_email_delivery_result(result: dict[str, Any] | None) -> dict[str, Any]:
+    if not result:
+        return {
+            "sent": False,
+            "provider": "bird",
+            "status_code": None,
+            "message_id": None,
+            "error": "Unknown email delivery error.",
+        }
+    return {
+        "sent": bool(result.get("success")),
+        "provider": "bird",
+        "status_code": result.get("status_code"),
+        "message_id": result.get("message_id"),
+        "error": result.get("error"),
+    }
 
 
 class InvitesPagination(PageNumberPagination):
@@ -129,9 +150,14 @@ class InvitesListCreateView(APIView):
             inviter_name=getattr(request.user, "full_name", "") or request.user.email,
         )
         if not email_result.get("success"):
-            print(f"Failed to send invite email: {email_result.get('error', 'Unknown error')}")
+            logger.warning(
+                "invite_email_send_failed",
+                extra={"invite_id": invite.id, "to_email": email, "error": email_result.get("error")},
+            )
 
-        return success(InviteSerializer(invite).data, status=status.HTTP_201_CREATED)
+        response_data = InviteSerializer(invite).data
+        response_data["email_delivery"] = _normalize_email_delivery_result(email_result)
+        return success(response_data, status=status.HTTP_201_CREATED)
 
 
 class InviteResendView(APIView):
@@ -195,9 +221,14 @@ class InviteResendView(APIView):
             is_reminder=True,
         )
         if not email_result.get("success"):
-            print(f"Failed to resend invite email: {email_result.get('error', 'Unknown error')}")
+            logger.warning(
+                "invite_email_resend_failed",
+                extra={"invite_id": invite.id, "to_email": invite.email, "error": email_result.get("error")},
+            )
 
-        return success(InviteSerializer(invite).data)
+        response_data = InviteSerializer(invite).data
+        response_data["email_delivery"] = _normalize_email_delivery_result(email_result)
+        return success(response_data)
 
 
 class InviteRevokeView(APIView):

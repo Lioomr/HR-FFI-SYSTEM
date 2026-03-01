@@ -4,6 +4,7 @@ import { CheckCircleOutlined, ClockCircleOutlined, TeamOutlined } from "@ant-des
 import { Link } from "react-router-dom";
 import PageHeader from "../../components/ui/PageHeader";
 import { getManagerLeaveRequests, getManagerAttendance, getManagerTeam } from "../../services/api/managerApi";
+import { getManagerLoanRequests } from "../../services/api/loanApi";
 import { isApiError } from "../../services/api/apiTypes";
 import AnnouncementWidget from "../../components/announcements/AnnouncementWidget";
 import { useI18n } from "../../i18n/useI18n";
@@ -11,6 +12,7 @@ import { useI18n } from "../../i18n/useI18n";
 export default function ManagerDashboardPage() {
     const { t } = useI18n();
     const [pendingLeaves, setPendingLeaves] = useState(0);
+    const [pendingLoans, setPendingLoans] = useState(0);
     const [pendingAttendance, setPendingAttendance] = useState(0);
     const [teamCount, setTeamCount] = useState(0);
 
@@ -20,6 +22,11 @@ export default function ManagerDashboardPage() {
                 const leavesRes = await getManagerLeaveRequests("pending_manager");
                 if (!isApiError(leavesRes) && leavesRes.data) {
                     setPendingLeaves(leavesRes.data.length);
+                }
+
+                const loansRes = await getManagerLoanRequests({ status: "pending_manager" });
+                if (!isApiError(loansRes) && loansRes.data) {
+                    setPendingLoans(loansRes.data.count || loansRes.data.items?.length || 0);
                 }
 
                 const attRes = await getManagerAttendance("PENDING_MGR");
@@ -46,7 +53,7 @@ export default function ManagerDashboardPage() {
             />
 
             <Row gutter={[16, 16]}>
-                <Col xs={24} sm={8}>
+                <Col xs={24} sm={6}>
                     <Card>
                         <Statistic
                             title={t("manager.dashboard.pendingLeaveRequests")}
@@ -57,7 +64,18 @@ export default function ManagerDashboardPage() {
                         <Link to="/manager/team-requests?tab=leave">{t("manager.dashboard.viewRequests")}</Link>
                     </Card>
                 </Col>
-                <Col xs={24} sm={8}>
+                <Col xs={24} sm={6}>
+                    <Card>
+                        <Statistic
+                            title={t("manager.dashboard.pendingLoanRequests")}
+                            value={pendingLoans}
+                            prefix={<ClockCircleOutlined />}
+                            valueStyle={{ color: pendingLoans > 0 ? '#cf1322' : '#3f8600' }}
+                        />
+                        <Link to="/manager/loan-requests">{t("manager.dashboard.viewRequests")}</Link>
+                    </Card>
+                </Col>
+                <Col xs={24} sm={6}>
                     <Card>
                         <Statistic
                             title={t("manager.dashboard.pendingAttendance")}
@@ -68,7 +86,7 @@ export default function ManagerDashboardPage() {
                         <Link to="/manager/team-requests?tab=attendance">{t("manager.dashboard.viewAttendance")}</Link>
                     </Card>
                 </Col>
-                <Col xs={24} sm={8}>
+                <Col xs={24} sm={6}>
                     <Card>
                         <Statistic
                             title={t("manager.dashboard.myTeam")}
