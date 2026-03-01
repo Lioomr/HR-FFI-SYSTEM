@@ -18,11 +18,14 @@ def _load_logo_base64() -> str:
     without requiring a publicly accessible URL.
     Falls back to EMAIL_LOGO_URL if the file cannot be opened.
     """
-    logo_path = getattr(
-        settings,
-        "EMAIL_LOGO_PATH",
+    configured_logo_path = getattr(settings, "EMAIL_LOGO_PATH", "")
+    default_candidates = [
         os.path.join(str(settings.BASE_DIR.parent), "Logo FFI.png"),
-    )
+        os.path.join(str(settings.BASE_DIR), "Logo FFI.png"),
+        "/app/Logo FFI.png",
+    ]
+    candidate_paths = [configured_logo_path] if configured_logo_path else default_candidates
+    logo_path = next((path for path in candidate_paths if path and os.path.exists(path)), "")
     try:
         with open(logo_path, "rb") as fh:
             encoded = base64.b64encode(fh.read()).decode("ascii")
@@ -30,7 +33,10 @@ def _load_logo_base64() -> str:
         mime_type = "jpeg" if ext in ("jpg", "jpeg") else ext  # e.g. "png"
         return f"data:image/{mime_type};base64,{encoded}"
     except Exception:
-        logger.warning("email_logo_file_not_found", extra={"logo_path": logo_path})
+        logger.warning(
+            "email_logo_file_not_found",
+            extra={"logo_path": logo_path or configured_logo_path, "candidate_paths": candidate_paths},
+        )
         return getattr(settings, "EMAIL_LOGO_URL", "https://mail.fficontracting.com/logo.png")
 
 

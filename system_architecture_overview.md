@@ -22,6 +22,9 @@
 - **Employee Data Management**: Complete employee lifecycle from onboarding to offboarding
 - **Payroll Processing**: Monthly payroll runs with automated calculations and payslip generation
 - **Leave Management**: Multi-tier leave request approval workflow (Employee → Manager → HR)
+- **Loan Management**: Multi-tier loan request workflow with automated payroll deductions
+- **Asset Management**: Asset tracking and allocation for employees
+- **Rent Processing**: Automated tracking and reminders for company rent obligations
 - **User Administration**: Role-based access control with System Admin, HR Manager, Manager, and Employee roles
 - **Audit Logging**: Complete audit trail for compliance and security
 - **Announcements**: Organization-wide communication system
@@ -40,6 +43,7 @@
 ## Technology Stack
 
 ### Backend
+
 - **Framework**: Django 5.2 (Python)
 - **Database**: PostgreSQL
 - **Authentication**: JWT (SimpleJWT) with token blacklisting
@@ -50,6 +54,7 @@
 - **CORS**: django-cors-headers
 
 ### Frontend
+
 - **Framework**: React 18+ with TypeScript
 - **Build Tool**: Vite
 - **Routing**: React Router v6
@@ -59,6 +64,7 @@
 - **Styling**: CSS with Ant Design theme
 
 ### DevOps
+
 - **Version Control**: Git
 - **Package Management**: npm (frontend), pip (backend)
 - **Development**: Hot reload on both frontend and backend
@@ -68,7 +74,9 @@
 ## User Roles and Permissions
 
 ### 1. System Admin (SystemAdmin)
+
 **Full system access including:**
+
 - User management (create, disable, activate users)
 - Role assignment
 - Password resets
@@ -78,7 +86,9 @@
 - Can view announcements
 
 ### 2. HR Manager (HRManager)
+
 **HR operations access:**
+
 - Employee management (CRUD operations)
 - Department, Position, Task Group, Sponsor management
 - Employee Excel import
@@ -90,14 +100,18 @@
 - Attendance management
 
 ### 3. Manager
+
 **Team management access:**
+
 - View team members
 - Pre-approve/reject leave requests for direct reports
 - View team announcements
 - Dashboard with team insights
 
 ### 4. Employee
+
 **Self-service access:**
+
 - View own profile (read-only)
 - View payslips and download PDFs
 - Submit leave requests
@@ -113,6 +127,7 @@
 ### Core Tables
 
 #### **User Management**
+
 - **`User`** (accounts.User): Custom user model with email-based authentication
   - Fields: `email`, `full_name`, `password`, `is_active`, `date_joined`
   - Uses email as USERNAME_FIELD (no username)
@@ -120,6 +135,7 @@
   - Fields: `email`, `ip_address`, `failed_count`, `locked_until`
 
 #### **Employee Data**
+
 - **`EmployeeProfile`** (employees.EmployeeProfile): Core employee information
   - Auto-generated `employee_id` (e.g., EMP-00123)
   - Personal: `full_name`, `nationality`, `date_of_birth`, `mobile`
@@ -130,12 +146,14 @@
   - Links to `User` (OneToOne, optional)
 
 #### **HR Reference Data**
+
 - **`Department`**: Organization departments
 - **`Position`**: Job positions
 - **`TaskGroup`**: Task groupings
 - **`Sponsor`**: Sponsor codes for employees
 
 #### **Payroll**
+
 - **`PayrollRun`**: Monthly payroll cycle
   - Fields: `year`, `month`, `status` (DRAFT/COMPLETED/PAID/CANCELLED), `total_net`
   - Unique constraint on (year, month)
@@ -145,7 +163,27 @@
   - Detailed allowance breakdown
   - Linked to PayrollRun and Employee
 
+#### **Loan Management**
+
+- **`LoanRequest`**: Employee loan applications
+  - Status workflow: SUBMITTED → PENDING_MANAGER → PENDING_HR → PENDING_FINANCE/CFO/CEO → APPROVED
+  - Supports installment or open loans
+  - Integrates with PayrollRun for automatic monthly deductions
+
+#### **Asset Management**
+
+- **`Asset`**, **`AssetCategory`**, **`AssetAssignment`**: Tracks physical and digital assets
+  - Handles assignment to, and return from, employees
+  - Maintenance and condition tracking
+
+#### **Rent Management**
+
+- **`RentType`**, **`Rent`**: Manages company rent obligations
+  - Supports recurring schedules
+  - Generates email reminders before due dates
+
 #### **Leave Management**
+
 - **`LeaveType`**: Types of leave (Annual, Sick, etc.)
   - Fields: `name`, `code`, `is_paid`, `annual_quota`, `allow_carry_over`
 - **`LeaveRequest`**: Employee leave applications
@@ -156,6 +194,7 @@
 - **`LeaveBalanceAdjustment`**: Manual balance corrections
 
 #### **Administration**
+
 - **`AuditLog`**: System-wide audit trail
   - Fields: `user`, `action`, `entity_type`, `entity_id`, `ip_address`, `timestamp`
 - **`Invite`**: User invitation system
@@ -164,10 +203,12 @@
   - Fields: `title`, `content`, `priority`, `target_roles`, `is_pinned`
 
 #### **Import Tracking**
+
 - **`EmployeeImport`**: Excel import history
   - Fields: `uploader`, `original_filename`, `status`, `row_count`, `inserted_rows`, `error_summary`
 
 #### **Attendance**
+
 - **`AttendanceRecord`**: Daily attendance tracking
   - Fields: `employee`, `date`, `check_in`, `check_out`, `status`
 
@@ -213,6 +254,9 @@ Backend/
 ├── announcements/         # Announcements system
 ├── audit/                 # Audit logging
 ├── invites/               # User invitation system
+├── loans/                 # Loan management and deductions
+├── assets/                # Asset tracking
+├── rents/                 # Rent processing
 └── core/                  # Shared utilities
     ├── pagination.py      # Standard pagination (25 items/page)
     ├── exceptions.py      # Custom exception handler
@@ -222,6 +266,7 @@ Backend/
 ### Key Backend Apps
 
 #### 1. **accounts** - Authentication
+
 - JWT-based authentication with access + refresh tokens
 - Token blacklisting on logout
 - Rate limiting (10 login attempts per minute)
@@ -229,6 +274,7 @@ Backend/
 - Password validation (min length, complexity, common passwords)
 
 #### 2. **employees** - Employee Management
+
 - Auto-generated employee IDs
 - Excel import with comprehensive validation:
   - File size limit (5-10MB)
@@ -240,6 +286,7 @@ Backend/
 - Salary component tracking
 
 #### 3. **payroll** - Payroll Processing
+
 - Monthly payroll runs (unique per year/month)
 - Automated PayrollRunItem generation from active employees
 - Automated Payslip creation on finalization
@@ -248,6 +295,7 @@ Backend/
 - Throttling on finalize, generate, export operations
 
 #### 4. **leaves** - Leave Management
+
 - Multi-tier approval workflow:
   1. Employee submits → SUBMITTED
   2. Manager reviews → PENDING_HR (approved) or REJECTED
@@ -258,6 +306,7 @@ Backend/
 - Manager can only review own team members
 
 #### 5. **admin_portal** - System Administration
+
 - User CRUD operations
 - Role assignment (SystemAdmin, HRManager, Manager, Employee)
 - Password reset (temporary password or reset link)
@@ -327,9 +376,17 @@ FrontEnd/src/
   │   ├── /dashboard
   │   ├── /employees
   │   ├── /payroll
-  │   ├── /leave/requests
+  │   ├── /leave/request
+  │   ├── /loans
+  │   ├── /assets
   │   ├── /announcements
   │   └── /import/employees
+  ├── /ceo/*                   → RequireRole(['CEO', 'SystemAdmin'])
+  │   ├── /dashboard
+  │   └── /leave/requests
+  ├── /cfo/*                   → RequireCFOApprover()
+  │   ├── /dashboard
+  │   └── /loan-requests
   ├── /manager/*                 → RequireRole(['Manager', 'SystemAdmin'])
   │   ├── /dashboard
   │   └── /team-requests
@@ -343,6 +400,7 @@ FrontEnd/src/
 ### State Management
 
 **Zustand** store for authentication:
+
 - `user`: Current user object
 - `token`: JWT access token
 - `refreshToken`: JWT refresh token
@@ -352,6 +410,7 @@ FrontEnd/src/
 ### API Service Layer
 
 All API calls centralized in `services/api/`:
+
 - **Axios** instance with interceptors
 - Automatic token attachment
 - Token refresh on 401
@@ -417,6 +476,7 @@ GET /api/payroll-runs/{id}/export/?format=csv|xlsx|pdf
 ### Leave Endpoints
 
 **Employee**:
+
 ```
 POST /api/leaves/requests/
   Body: { leave_type_id, start_date, end_date, reason }
@@ -427,6 +487,7 @@ GET /api/leaves/employee/balance/?year=2026
 ```
 
 **Manager**:
+
 ```
 GET /api/leaves/manager/team-requests/?status=pending_manager
 POST /api/leaves/manager/requests/{id}/approve/
@@ -439,6 +500,7 @@ POST /api/leaves/manager/requests/{id}/reject/
 ```
 
 **HR**:
+
 ```
 GET /api/leaves/requests/?status=pending_hr
 POST /api/leaves/requests/{id}/approve/
@@ -479,13 +541,16 @@ GET /api/audit-logs/export/?format=csv
 - **Authentication**: `Authorization: Bearer <access_token>`
 - **Pagination**: `?page=1&page_size=25` (default: 25 items/page)
 - **Response Format**:
+
   ```json
   {
     "status": "success",
     "data": { ... }
   }
   ```
+
   or
+
   ```json
   {
     "status": "error",
@@ -493,6 +558,7 @@ GET /api/audit-logs/export/?format=csv
     "errors": [...]
   }
   ```
+
 - **Throttling**: Rate limits on login, import, payroll operations
 - **Filtering**: django-filter on list endpoints
 
@@ -503,6 +569,7 @@ GET /api/audit-logs/export/?format=csv
 ### Threat Model
 
 The system defends against:
+
 1. **Credential attacks**: Brute force, password spraying
 2. **Session attacks**: Token theft, replay attacks
 3. **Privilege escalation**: Employees accessing HR/Admin endpoints
@@ -515,8 +582,9 @@ The system defends against:
 ### Security Controls
 
 #### 1. **Authentication & Session Security**
+
 - **Password Storage**: Hashed with Django's PBKDF2 (can upgrade to Argon2/bcrypt)
-- **Password Policy**: 
+- **Password Policy**:
   - Minimum length (default 8, recommended 12+)
   - Common password validation
   - User attribute similarity check
@@ -531,6 +599,7 @@ The system defends against:
   - Payroll operations: 5/min
 
 #### 2. **Authorization (RBAC)**
+
 - **Server-side enforcement** on every endpoint
 - **Custom permissions**:
   - `IsSystemAdmin`
@@ -541,11 +610,13 @@ The system defends against:
 - **Golden rule**: Frontend checks are UI-only; backend validates all actions
 
 #### 3. **SQL Injection Prevention**
+
 - Django ORM with parameterized queries
 - No raw SQL string concatenation
 - Least-privilege DB user
 
 #### 4. **File Upload Security (Excel)**
+
 - **File Validation**:
   - Extension: .xlsx only
   - MIME type + file signature validation
@@ -559,6 +630,7 @@ The system defends against:
 - **Audit Logging**: Who uploaded, when, file hash, result
 
 #### 5. **API Hardening**
+
 - **Input Validation**: Schema validation on all request bodies
 - **Mass Assignment Protection**: Reject unexpected fields
 - **Error Handling**: Generic error messages (no stack traces to clients)
@@ -569,6 +641,7 @@ The system defends against:
   - CSP (if applicable)
 
 #### 6. **Data Protection**
+
 - **HTTPS Only**: TLS in production
 - **CORS**: Restricted to specific origins (localhost in dev)
 - **Logging Rules**:
@@ -577,6 +650,7 @@ The system defends against:
 - **Audit Trail**: All privileged actions logged with user, IP, timestamp
 
 #### 7. **Deployment Security**
+
 - Secrets in environment variables (not in repo)
 - Separate dev/staging/prod environments
 - Database backups (recommended: daily)
@@ -591,6 +665,7 @@ The system defends against:
 ![Database Schema](file:///d:/HR-FFI-SYSTEM/Diagrams/DB.png)
 
 **Key relationships**:
+
 - User (1) ← (0..1) EmployeeProfile
 - EmployeeProfile (*) → (1) Department, Position, TaskGroup, Sponsor
 - LeaveRequest (*) → (1) LeaveType
@@ -606,6 +681,7 @@ The system defends against:
 ![Admin Screen Flow](file:///d:/HR-FFI-SYSTEM/Diagrams/Admin%20screen.png)
 
 **Admin workflow**:
+
 - Login → Admin Dashboard
 - User Management: Create, disable/activate, reset password, assign roles
 - Invites: Send, resend, revoke
@@ -617,6 +693,7 @@ The system defends against:
 ![HR Screen Flow](file:///d:/HR-FFI-SYSTEM/Diagrams/HR%20Screen.png)
 
 **HR workflow**:
+
 - Login → HR Dashboard
 - **Payroll**: Create run → Review → Finalize → Generate payslips → Export
 - **Leave Management**: Inbox → Review request → Approve/Reject
@@ -633,6 +710,7 @@ The system defends against:
 ![User Activity](file:///d:/HR-FFI-SYSTEM/Diagrams/User%20activaty.png)
 
 **Multi-role activity flows**:
+
 - **System Admin**: User administration, role assignment, audit logging
 - **HR Manager**: Employee lifecycle, payroll, leave approval (final), announcements
 - **Manager**: Pre-approve team leave requests, view team dashboard
@@ -645,24 +723,29 @@ The system defends against:
 Based on recent conversation history:
 
 ### 1. Dashboard Announcements (February 14-15, 2026)
+
 **Objective**: Display announcements on dashboards for all user roles.
 
 **Implementation**:
+
 - Created reusable `AnnouncementWidget` component
 - Integrated widget into Employee, HR, and Admin dashboards
 - Modal view for full announcement content
 - API: `GET /api/announcements/` with role-based filtering
 
 **Files**:
+
 - Backend: [announcements/views.py](file:///d:/HR-FFI-SYSTEM/Backend/announcements/views.py)
-- Frontend: 
+- Frontend:
   - [announcementApi.ts](file:///d:/HR-FFI-SYSTEM/FrontEnd/src/services/api/announcementApi.ts)
   - [ManagerDashboardPage.tsx](file:///d:/HR-FFI-SYSTEM/FrontEnd/src/pages/manager/ManagerDashboardPage.tsx)
 
 ### 2. Payroll Processing (February 14, 2026)
+
 **Objective**: Implement monthly/yearly payroll with automated calculations, payslip generation, and export.
 
 **Implementation**:
+
 - Monthly payroll run creation with auto-generated `PayrollRunItem` for all active employees
 - Salary calculation including allowances and deductions
 - Finalization: Locks payroll and generates `Payslip` records
@@ -670,6 +753,7 @@ Based on recent conversation history:
 - Validation: Prevent duplicate runs for same year/month
 
 **Key Features**:
+
 - Rate limiting on finalize/export operations
 - Audit logging for all payroll actions
 - User feedback via notifications
@@ -680,43 +764,51 @@ Based on recent conversation history:
 ## Key Architectural Decisions
 
 ### 1. **Email as Username**
+
 - No separate username field
 - Email is unique identifier (USERNAME_FIELD)
 - Simplifies user management
 
 ### 2. **Auto-generated Employee IDs**
+
 - Format: `EMP-00123`
 - Generated on save, not exposed to users
 - Separate from User ID
 
 ### 3. **Separate User and EmployeeProfile**
+
 - User: Authentication and authorization
 - EmployeeProfile: HR data (salary, documents, employment details)
 - OneToOne relationship (optional: not all users are employees)
 
 ### 4. **All-or-Nothing Import**
+
 - Validate entire Excel file before inserting
 - Use database transaction: commit all or rollback all
 - Prevents partial data corruption
 - Generate error file with row-level details
 
 ### 5. **Multi-tier Leave Approval**
+
 - Phase 1: Manager pre-approval (SUBMITTED → PENDING_HR or REJECTED)
 - Phase 2: HR final approval (PENDING_HR → APPROVED or REJECTED)
 - Manager can only approve own direct reports
 - HR has final say on all requests
 
 ### 6. **Payslip Auto-generation**
+
 - Payslips created only on PayrollRun finalization
 - Links to both PayrollRun and Employee
 - Immutable once created (payroll is locked)
 
 ### 7. **Private File Storage**
+
 - Sensitive files (Excel imports, error reports) not publicly accessible
 - Custom storage backend: `PrivateUploadStorage`
 - Downloaded via authenticated endpoints only
 
 ### 8. **Role-based Frontend Routing**
+
 - Nested routes with role guards
 - SystemAdmin can access all routes
 - HRManager can access HR + Employee routes
@@ -767,6 +859,7 @@ Based on system architecture:
 ## Development Setup
 
 ### Backend
+
 ```bash
 cd Backend
 python -m venv .venv
@@ -777,6 +870,7 @@ python manage.py runserver
 ```
 
 ### Frontend
+
 ```bash
 cd FrontEnd
 npm install
@@ -784,6 +878,7 @@ npm run dev
 ```
 
 ### Environment Variables
+
 ```
 # Backend (.env)
 DJANGO_SECRET_KEY=...

@@ -6,6 +6,7 @@ from typing import Iterable
 from django.conf import settings
 from django.template.loader import render_to_string
 
+from .bird_email_service import _load_logo_base64
 from .email_service import EmailService
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,8 @@ def send_request_submission_email(
     subject = f"{request_type} submitted - #{request_id}"
 
     context = {
+        "logo_url": _load_logo_base64(),
+        "contact_email": getattr(settings, "EMAIL_CONTACT_EMAIL", "hr@fficontracting.com"),
         "title": f"{request_type} submitted successfully",
         "title_ar": f"تم تقديم طلب {request_type} بنجاح",
         "employee_name": employee_name,
@@ -53,6 +56,8 @@ def send_request_submission_email(
     }
     
     html = render_to_string("emails/request_submission_email.html", context)
+    details_list = [str(item) for item in (details or [])]
+    details_text = "\n".join(f"- {item}" for item in details_list) if details_list else "-"
 
     text = (
         f"{request_type} submitted successfully.\n"

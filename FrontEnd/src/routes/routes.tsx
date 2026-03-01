@@ -75,10 +75,12 @@ import CreateAnnouncementPage from "../pages/hr/announcements/CreateAnnouncement
 import AnnouncementsPage from "../pages/announcements/AnnouncementsPage";
 
 // CEO
+import CEODashboardPage from "../pages/ceo/CEODashboardPage";
 import CEOLeaveInboxPage from "../pages/ceo/CEOLeaveInboxPage";
 import CEOTeamPage from "../pages/ceo/CEOTeamPage";
 import CEOLoanRequestsPage from "../pages/ceo/CEOLoanRequestsPage";
 import CEOLoanRequestDetailsPage from "../pages/ceo/CEOLoanRequestDetailsPage";
+import CFODashboardPage from "../pages/cfo/CFODashboardPage";
 import CFOLoanRequestsPage from "../pages/cfo/CFOLoanRequestsPage";
 import CFOLoanRequestDetailsPage from "../pages/cfo/CFOLoanRequestDetailsPage";
 
@@ -242,7 +244,8 @@ export const routes = [
           {
             element: <RequireRole roles={["CEO", "SystemAdmin"]} />,
             children: [
-              { path: "ceo", element: <Navigate to="/ceo/leave/requests" replace /> },
+              { path: "ceo", element: <Navigate to="/ceo/dashboard" replace /> },
+              { path: "ceo/dashboard", element: <CEODashboardPage /> },
               { path: "ceo/leave/requests", element: <CEOLeaveInboxPage /> },
               { path: "ceo/team-requests", element: <ManagerTeamRequestsPage /> },
               { path: "ceo/team", element: <CEOTeamPage /> },
@@ -265,7 +268,8 @@ export const routes = [
           {
             element: <RequireCFOApprover />,
             children: [
-              { path: "cfo", element: <Navigate to="/cfo/loan-requests" replace /> },
+              { path: "cfo", element: <Navigate to="/cfo/dashboard" replace /> },
+              { path: "cfo/dashboard", element: <CFODashboardPage /> },
               { path: "cfo/loan-requests", element: <CFOLoanRequestsPage /> },
               { path: "cfo/loan-requests/:id", element: <CFOLoanRequestDetailsPage /> },
               { path: "cfo/profile", element: <UserProfilePage /> },
