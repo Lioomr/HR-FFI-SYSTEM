@@ -4,8 +4,8 @@ import logging
 from typing import Iterable
 
 from django.conf import settings
-from django.template.loader import render_to_string
 from django.contrib.auth import get_user_model
+from django.template.loader import render_to_string
 
 from employees.models import EmployeeProfile
 

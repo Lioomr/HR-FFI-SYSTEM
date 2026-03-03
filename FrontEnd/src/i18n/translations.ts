@@ -213,6 +213,7 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "status.sent": "Sent",
     "status.accepted": "Accepted",
     "status.expired": "Expired",
+    "status.revoked": "Revoked",
     "status.checkedIn": "Checked In",
     "status.checkedOut": "Checked Out",
     "status.absent": "Absent",
@@ -770,6 +771,9 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "admin.invites.colAction": "Action",
     "admin.invites.resend": "Resend",
     "admin.invites.revoke": "Revoke",
+    "admin.invites.invited": "Invited At",
+    "admin.invites.expires": "Expires At",
+    "admin.invites.invitedBy": "Invited By",
 
     // Admin - Audit Logs
     "audit.action.login_success": "Login Success",
@@ -1601,6 +1605,7 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "status.sent": "مُرسَل",
     "status.accepted": "مقبول",
     "status.expired": "منتهي الصلاحية",
+    "status.revoked": "مسحوبة",
     "status.checkedIn": "تم تسجيل الحضور",
     "status.checkedOut": "تم تسجيل الانصراف",
     "paymentMode.banktransfer": "تحويل بنكي",
