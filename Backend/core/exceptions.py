@@ -1,6 +1,6 @@
 from django.http import Http404
 from django.utils.translation import get_language
-from rest_framework.exceptions import ValidationError, ErrorDetail
+from rest_framework.exceptions import ErrorDetail, ValidationError
 from rest_framework.views import exception_handler
 
 from core.error_translations import ARABIC_ERRORS

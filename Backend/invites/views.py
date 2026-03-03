@@ -1,7 +1,7 @@
 # invites/views.py
 
-from datetime import timedelta
 import logging
+from datetime import timedelta
 from typing import Any
 
 from django.conf import settings

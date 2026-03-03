@@ -264,7 +264,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
                     f"From: {instance.start_date}",
                     f"To: {instance.end_date}",
                 ],
-                action_path=f"/employee/leave/requests",
+                action_path="/employee/leave/requests",
             )
         except Exception:
             pass
@@ -421,7 +421,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
                     requester_name=instance.employee.full_name or instance.employee.email,
                     status_label=instance.status,
                     details=[f"Leave Type: {instance.leave_type.name}", f"Employee: {instance.employee.email}"],
-                    action_path=f"/ceo/leave/requests",
+                    action_path="/ceo/leave/requests",
                 )
             except Exception:
                 pass
@@ -521,7 +521,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
                 requester_name=instance.employee.full_name or instance.employee.email,
                 status_label=instance.status,
                 details=[f"Leave Type: {instance.leave_type.name}", f"Employee: {instance.employee.email}"],
-                action_path=f"/ceo/leave/requests",
+                action_path="/ceo/leave/requests",
             )
         except Exception:
             pass

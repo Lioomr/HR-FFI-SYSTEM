@@ -32,19 +32,13 @@ type SendInviteValues = {
   role: Role;
 };
 
-const roleOptions: { label: string; value: Role }[] = [
-  { label: "System Admin", value: "SystemAdmin" },
-  { label: "HR Manager", value: "HRManager" },
-  { label: "Manager", value: "Manager" },
-  { label: "CEO", value: "CEO" },
-  { label: "Employee", value: "Employee" },
-];
+const roleOptions: Role[] = ["SystemAdmin", "HRManager", "Manager", "CEO", "Employee"];
 
-function statusTag(status: InviteStatus) {
-  if (status === "sent") return <Tag color="gold">Pending</Tag>;
-  if (status === "accepted") return <Tag color="green">Accepted</Tag>;
-  if (status === "revoked") return <Tag color="red">Revoked</Tag>;
-  return <Tag>Expired</Tag>;
+function statusTag(status: InviteStatus, t: any) {
+  if (status === "sent") return <Tag color="gold">{t("status.pending")}</Tag>;
+  if (status === "accepted") return <Tag color="green">{t("status.accepted")}</Tag>;
+  if (status === "revoked") return <Tag color="red">{t("status.revoked")}</Tag>;
+  return <Tag>{t("status.expired")}</Tag>;
 }
 
 function formatDate(value?: string | null) {
@@ -249,22 +243,22 @@ export default function AdminInvitesPage() {
       key: "role",
       render: (v: Role) =>
         v === "SystemAdmin" ? (
-          <Tag color="orange">SystemAdmin</Tag>
+          <Tag color="orange">{t(`role.${v}`, v)}</Tag>
         ) : v === "HRManager" ? (
-          <Tag color="blue">HRManager</Tag>
+          <Tag color="blue">{t(`role.${v}`, v)}</Tag>
         ) : v === "Manager" ? (
-          <Tag color="geekblue">Manager</Tag>
+          <Tag color="geekblue">{t(`role.${v}`, v)}</Tag>
         ) : v === "CEO" ? (
-          <Tag color="purple">CEO</Tag>
+          <Tag color="purple">{t(`role.${v}`, v)}</Tag>
         ) : (
-          <Tag>Employee</Tag>
+          <Tag>{t(`role.${v}`, v)}</Tag>
         ),
     },
     {
       title: t("common.status"),
       dataIndex: "status",
       key: "status",
-      render: (v: InviteStatus) => statusTag(v),
+      render: (v: InviteStatus) => statusTag(v, t),
     },
     { title: t("admin.invites.invited"), dataIndex: "invitedAt", key: "invitedAt" },
     { title: t("admin.invites.expires"), dataIndex: "expiresAt", key: "expiresAt" },
@@ -337,8 +331,8 @@ export default function AdminInvitesPage() {
                 <Select
                   size="large"
                   options={roleOptions.filter(
-                    (r) => r.value !== "SystemAdmin" || useAuthStore.getState().user?.role === "SystemAdmin"
-                  )}
+                    (r) => r !== "SystemAdmin" || useAuthStore.getState().user?.role === "SystemAdmin"
+                  ).map((r) => ({ label: t(`role.${r}`, r), value: r }))}
                 />
               </Form.Item>
             </Col>
@@ -360,7 +354,7 @@ export default function AdminInvitesPage() {
             { label: t("common.filter"), value: "All" },
             { label: t("status.pending"), value: "sent" },
             { label: t("status.accepted"), value: "accepted" },
-            { label: t("status.rejected"), value: "revoked" },
+            { label: t("status.revoked"), value: "revoked" },
             { label: t("status.expired"), value: "expired" },
           ]} />
         </div>

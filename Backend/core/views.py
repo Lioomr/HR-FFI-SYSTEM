@@ -5,9 +5,9 @@ from django.core.mail import send_mail
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework.views import APIView
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from attendance.models import AttendanceRecord
 from core.permissions import IsHRManagerOrAdmin
