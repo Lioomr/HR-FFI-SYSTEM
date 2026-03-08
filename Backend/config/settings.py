@@ -129,6 +129,9 @@ BIRD_EMAIL_CHANNEL_ID = os.environ.get("BIRD_EMAIL_CHANNEL_ID", "")
 BIRD_SMS_CHANNEL_ID = os.environ.get("BIRD_SMS_CHANNEL_ID", "")
 BIRD_WHATSAPP_CHANNEL_ID = os.environ.get("BIRD_WHATSAPP_CHANNEL_ID", "")
 BIRD_API_BASE_URL = os.environ.get("BIRD_API_BASE_URL", "https://api.bird.com/workspaces")
+EMAIL_LOGO_PATH = os.environ.get("EMAIL_LOGO_PATH", "")
+EMAIL_LOGO_URL = os.environ.get("EMAIL_LOGO_URL", "")
+EMAIL_CONTACT_EMAIL = os.environ.get("EMAIL_CONTACT_EMAIL", "hr@fficontracting.com")
 
 if not BIRD_API_KEY:
     BIRD_API_KEY = BIRD_ACCESS_KEY

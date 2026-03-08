@@ -96,58 +96,59 @@ class HrSummaryView(APIView):
         for item in pending_approvals:
             del item["sort_key"]
 
-        # 5. Recent Activity (Combine recent leaves and recent employees)
-        # This acts as a pseudo-audit log
+        # 5. Recent Activity (From AuditLogs)
+        from audit.models import AuditLog
+
         recent_activity = []
+        # Get the latest 10 audit logs with actor and user information, filtered strictly for HR managers/Admins
+        latest_logs = AuditLog.objects.filter(
+            actor__groups__name__in=["HRManager", "SystemAdmin"]
+        ).select_related("actor").order_by("-created_at")[:10]
+        
+        for log in latest_logs:
+            # Determine the actor name
+            actor_name = "System"
+            if log.actor:
+                profile = getattr(log.actor, "employee_profile", None)
+                actor_name = profile.full_name if profile else log.actor.email
 
-        # Latest Leaves
-        latest_leaves = LeaveRequest.objects.select_related("employee__employee_profile").order_by("-created_at")[:5]
-        for leave in latest_leaves:
-            profile = getattr(leave.employee, "employee_profile", None)
-            name = profile.full_name if profile else leave.employee.email
-
-            status_color = "orange"
-            if leave.status == LeaveRequest.RequestStatus.APPROVED:
+            # Determine a nice color and formatted status based on the action/entity
+            status_color = "default"
+            action_lower = log.action.lower()
+            
+            if "create" in action_lower or "add" in action_lower or "new" in action_lower:
+                status_color = "blue"
+            elif "approv" in action_lower or "accept" in action_lower or "success" in action_lower:
                 status_color = "green"
-            elif leave.status == LeaveRequest.RequestStatus.REJECTED:
+            elif "reject" in action_lower or "decline" in action_lower or "fail" in action_lower or "error" in action_lower:
                 status_color = "red"
-            elif leave.status == LeaveRequest.RequestStatus.CANCELLED:
-                status_color = "default"
+            elif "updat" in action_lower or "edit" in action_lower or "modify" in action_lower:
+                status_color = "orange"
+            elif "delet" in action_lower or "remove" in action_lower:
+                status_color = "volcano"
+            elif "login" in action_lower:
+                status_color = "cyan"
+                
+            # Construct a human-readable "status" or "details" string from entity/metadata
+            details_str = log.entity
+            if log.entity_id:
+                details_str += f" (#{log.entity_id})"
+            
+            # If there's specific metadata we want to highlight, we could add it here
+            # But let's keep it simple with just the entity name for now
+            if not details_str:
+                details_str = "System Action"
 
             recent_activity.append(
                 {
-                    "key": f"leave_{leave.id}",
-                    "employee": name,
-                    "action": "Leave Request",
-                    "date": leave.created_at.strftime("%b %d, %I:%M %p"),
-                    "status": leave.status.replace("_", " ").title(),
+                    "key": f"audit_{log.id}",
+                    "employee": actor_name,
+                    "action": log.action,
+                    "date": log.created_at.strftime("%b %d, %I:%M %p"),
+                    "status": details_str,
                     "statusColor": status_color,
-                    "sort_key": leave.created_at,
                 }
             )
-
-        # New Employees
-        new_employees = EmployeeProfile.objects.order_by("-created_at")[:5]
-        for e in new_employees:
-            recent_activity.append(
-                {
-                    "key": f"emp_{e.id}",
-                    "employee": e.full_name or e.employee_id,
-                    "action": "New Joiner",
-                    "date": e.created_at.strftime("%b %d, %I:%M %p"),
-                    "status": "Active",
-                    "statusColor": "blue",
-                    "sort_key": e.created_at,
-                }
-            )
-
-        # Sort combined list and slice
-        recent_activity.sort(key=lambda x: x["sort_key"], reverse=True)
-        recent_activity = recent_activity[:6]
-
-        # Remove sort_key before sending
-        for item in recent_activity:
-            del item["sort_key"]
 
         # 6. Latest Payroll Run
         latest_payroll = PayrollRun.objects.order_by("-year", "-month").first()

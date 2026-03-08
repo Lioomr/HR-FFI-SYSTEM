@@ -16,7 +16,7 @@ from rest_framework.views import APIView
 
 from audit.utils import audit
 from core.pagination import StandardPagination
-from core.permissions import IsCEO, get_role
+from core.permissions import IsDepartmentCEOApprover, get_role
 from core.responses import error, success
 from core.services import (
     get_ceo_approver_users,
@@ -42,6 +42,7 @@ from .permissions import (
     IsOwnerOrHR,
 )
 from .serializers import (
+    HRManualLeaveRequestSerializer,
     LeaveBalanceAdjustmentSerializer,
     LeaveBalanceSerializer,
     LeaveRequestActionSerializer,
@@ -67,6 +68,15 @@ def _flatten_errors(error_dict):
 
 def _to_bool(value):
     return str(value).strip().lower() in {"1", "true", "yes", "y"}
+
+
+def _is_hr_manager_user(user):
+    return bool(user and user.is_authenticated and user.groups.filter(name="HRManager").exists())
+
+
+def _is_hr_manager_origin_request(instance: LeaveRequest):
+    employee = getattr(instance, "employee", None)
+    return bool(employee and employee.groups.filter(name="HRManager").exists())
 
 
 def _serve_leave_document(instance, request):
@@ -222,7 +232,9 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
                 manager_user_id = profile.manager_profile.user_id
             has_manager = bool(manager_user_id)
 
-        if has_manager:
+        if _is_hr_manager_user(user):
+            initial_status = LeaveRequest.RequestStatus.PENDING_CEO
+        elif has_manager:
             initial_status = LeaveRequest.RequestStatus.PENDING_MANAGER
         else:
             initial_status = LeaveRequest.RequestStatus.PENDING_HR
@@ -297,6 +309,16 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
                     details=details,
                     action_path=f"/hr/leave/requests/{instance.id}",
                 )
+            elif instance.status == LeaveRequest.RequestStatus.PENDING_CEO:
+                notify_users_for_pending_status(
+                    users=get_ceo_approver_users(),
+                    request_type="Leave Request",
+                    request_id=instance.id,
+                    requester_name=requester_name,
+                    status_label=instance.status,
+                    details=details,
+                    action_path=f"/ceo/leave/requests/{instance.id}",
+                )
         except Exception:
             pass
 
@@ -367,6 +389,12 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             instance = self.get_queryset().get(pk=pk)
         except LeaveRequest.DoesNotExist:
             return error("Not found", errors=["Not found."], status=404)
+        if _is_hr_manager_origin_request(instance):
+            return error(
+                "Validation error",
+                errors=["HR manager requests must be approved by CEO."],
+                status=422,
+            )
 
         allowed_statuses = [LeaveRequest.RequestStatus.SUBMITTED, LeaveRequest.RequestStatus.PENDING_HR]
 
@@ -433,6 +461,12 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             instance = self.get_queryset().get(pk=pk)
         except LeaveRequest.DoesNotExist:
             return error("Not found", errors=["Not found."], status=404)
+        if _is_hr_manager_origin_request(instance):
+            return error(
+                "Validation error",
+                errors=["HR manager requests must be approved by CEO."],
+                status=422,
+            )
 
         # HR can reject at any pending stage? Or only pending HR?
         # Let's allow rejecting from PENDING_HR or SUBMITTED
@@ -485,11 +519,18 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             instance = self.get_queryset().get(pk=pk)
         except LeaveRequest.DoesNotExist:
             return error("Not found", errors=["Not found."], status=404)
+        if _is_hr_manager_origin_request(instance):
+            return error(
+                "Validation error",
+                errors=["Request is already under CEO workflow."],
+                status=422,
+            )
 
         allowed_statuses = [
             LeaveRequest.RequestStatus.SUBMITTED,
             LeaveRequest.RequestStatus.PENDING_HR,
             LeaveRequest.RequestStatus.PENDING_MANAGER,
+            LeaveRequest.RequestStatus.PENDING_CEO,
         ]
         if instance.status not in allowed_statuses:
             return error("Validation error", errors=["Request cannot be sent to CEO in current state."], status=422)
@@ -556,6 +597,123 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         except LeaveRequest.DoesNotExist:
             return error("Not found", errors=["Not found."], status=404)
         return _serve_leave_document(instance, request)
+
+
+class HRManualLeaveRequestViewSet(viewsets.ModelViewSet):
+    """
+    HR-only endpoints for creating/updating/deleting manual leave records.
+    Manual records are always auto-approved and flagged as HR manual source.
+    """
+
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+    permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
+    queryset = LeaveRequest.objects.filter(
+        is_active=True,
+        source=LeaveRequest.RequestSource.HR_MANUAL,
+    ).select_related("employee", "leave_type", "employee__employee_profile")
+    serializer_class = HRManualLeaveRequestSerializer
+    http_method_names = ["post", "patch", "delete", "get", "head", "options"]
+
+    def _notify_manager(self, instance: LeaveRequest, action_label: str):
+        try:
+            manager = get_direct_manager_user(instance.employee)
+            if not manager:
+                return
+            notify_users_for_pending_status(
+                users=[manager],
+                request_type="Manual Leave Record",
+                request_id=instance.id,
+                requester_name=instance.employee.full_name or instance.employee.email,
+                status_label=action_label,
+                details=[
+                    f"Leave Type: {instance.leave_type.name}",
+                    f"From: {instance.start_date}",
+                    f"To: {instance.end_date}",
+                ],
+                action_path=f"/hr/leave/requests/{instance.id}",
+            )
+        except Exception:
+            pass
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data, context={"request": request})
+        if not serializer.is_valid():
+            return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
+
+        instance = serializer.save()
+        warnings = serializer.policy_warnings
+
+        audit(
+            request,
+            "manual_leave_record_created",
+            entity="LeaveRequest",
+            entity_id=instance.id,
+            metadata={
+                "employee_id": instance.employee_id,
+                "source": instance.source,
+                "manual_entry_reason": instance.manual_entry_reason,
+                "source_document_ref": instance.source_document_ref,
+                "warning_messages": warnings,
+            },
+        )
+        self._notify_manager(instance, "manual_record_created")
+
+        data = LeaveRequestSerializer(instance).data
+        data["warning_messages"] = warnings
+        return success(data, status=status.HTTP_201_CREATED)
+
+    def partial_update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=True, context={"request": request})
+        if not serializer.is_valid():
+            return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
+
+        updated = serializer.save()
+        warnings = serializer.policy_warnings
+
+        audit(
+            request,
+            "manual_leave_record_updated",
+            entity="LeaveRequest",
+            entity_id=updated.id,
+            metadata={
+                "employee_id": updated.employee_id,
+                "source": updated.source,
+                "manual_entry_reason": updated.manual_entry_reason,
+                "source_document_ref": updated.source_document_ref,
+                "warning_messages": warnings,
+            },
+        )
+        self._notify_manager(updated, "manual_record_updated")
+
+        data = LeaveRequestSerializer(updated).data
+        data["warning_messages"] = warnings
+        return success(data)
+
+    def update(self, request, *args, **kwargs):
+        return self.partial_update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.is_active = False
+        instance.deleted_by = request.user
+        instance.deleted_at = timezone.now()
+        instance.save(update_fields=["is_active", "deleted_by", "deleted_at", "updated_at"])
+
+        audit(
+            request,
+            "manual_leave_record_deleted",
+            entity="LeaveRequest",
+            entity_id=instance.id,
+            metadata={
+                "employee_id": instance.employee_id,
+                "source": instance.source,
+                "manual_entry_reason": instance.manual_entry_reason,
+                "source_document_ref": instance.source_document_ref,
+            },
+        )
+        self._notify_manager(instance, "manual_record_deleted")
+        return success({})
 
 
 class ManagerLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
@@ -835,7 +993,7 @@ class CEOLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
     """
 
     serializer_class = LeaveRequestSerializer
-    permission_classes = [IsAuthenticated, IsCEO]
+    permission_classes = [IsAuthenticated, IsDepartmentCEOApprover]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ["status", "leave_type"]
     ordering_fields = ["created_at", "start_date"]
@@ -854,6 +1012,8 @@ class CEOLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
         if instance.status != LeaveRequest.RequestStatus.PENDING_CEO:
             return error("Validation error", errors=["Request is not in a state to be approved by CEO."], status=422)
+        if _is_hr_manager_origin_request(instance) and instance.employee_id == request.user.id:
+            return error("Validation error", errors=["Self approval is not allowed."], status=422)
 
         s = LeaveRequestActionSerializer(data=request.data)
         if not s.is_valid():
@@ -878,6 +1038,8 @@ class CEOLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
         if instance.status != LeaveRequest.RequestStatus.PENDING_CEO:
             return error("Validation error", errors=["Request is not in a state to be rejected by CEO."], status=422)
+        if _is_hr_manager_origin_request(instance) and instance.employee_id == request.user.id:
+            return error("Validation error", errors=["Self approval is not allowed."], status=422)
 
         s = LeaveRequestActionSerializer(data=request.data)
         if not s.is_valid():

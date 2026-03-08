@@ -18,6 +18,7 @@ const getStatusColor = (status: AttendanceStatus) => {
         case "PENDING":
         case "PENDING_HR":
         case "PENDING_MGR":
+        case "PENDING_CEO":
             return "gold";
         case "REJECTED":
             return "magenta";

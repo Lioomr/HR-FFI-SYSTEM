@@ -15,6 +15,7 @@ const getStatusColor = (status: AttendanceStatus) => {
         case "PENDING": return "orange";
         case "PENDING_HR": return "orange";
         case "PENDING_MGR": return "gold";
+        case "PENDING_CEO": return "purple";
         case "PRESENT": return "green";
         case "LATE": return "gold";
         case "ABSENT": return "red";
@@ -137,6 +138,7 @@ const HRAttendancePage: React.FC = () => {
                     case "REJECTED": displayStatus = t("status.rejected") as any; break;
                     case "PENDING_HR": displayStatus = t("status.pendingHr") as any; break;
                     case "PENDING_MGR": displayStatus = t("status.pendingManager") as any; break;
+                    case "PENDING_CEO": displayStatus = t("status.pendingCeo") as any; break;
                 }
                 return <Tag color={getStatusColor(status)}>{displayStatus}</Tag>;
             },

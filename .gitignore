@@ -8,8 +8,8 @@ Backend/.venv/
 .env.*
 Backend/.env
 !Backend/.env.example
-!Backend/.env.docker
 !Backend/.env.production.example
+!Backend/.env.docker.example
 
 # Python cache
 __pycache__/

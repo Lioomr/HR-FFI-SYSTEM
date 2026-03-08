@@ -7,6 +7,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.template.loader import render_to_string
 
+from core.permissions import CEO_APPROVER_DEPARTMENT_ID
 from employees.models import EmployeeProfile
 
 from .bird_email_service import _load_logo_base64
@@ -38,6 +39,14 @@ def _active_profile_users_by_position(position_ref_id: int):
     ).exclude(email="")
 
 
+def _active_profile_users_by_department(department_ref_id: int):
+    return User.objects.filter(
+        is_active=True,
+        employee_profile__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        employee_profile__department_ref_id=department_ref_id,
+    ).exclude(email="")
+
+
 def get_direct_manager_user(employee_user):
     profile = getattr(employee_user, "employee_profile", None)
     if not profile:
@@ -66,12 +75,7 @@ def get_cfo_approver_users():
 
 
 def get_ceo_approver_users():
-    from loans.permissions import get_active_workflow_config
-
-    config = get_active_workflow_config()
-    return (
-        _active_users_in_groups(["CEO", "SystemAdmin"]) | _active_profile_users_by_position(config.ceo_position_id)
-    ).distinct()
+    return _active_profile_users_by_department(CEO_APPROVER_DEPARTMENT_ID).distinct()
 
 
 def get_disbursement_approver_users():

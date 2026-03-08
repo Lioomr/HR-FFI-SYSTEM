@@ -20,6 +20,10 @@ def _load_logo_base64() -> str:
     """
     configured_logo_path = getattr(settings, "EMAIL_LOGO_PATH", "")
     default_candidates = [
+        os.path.join(str(settings.BASE_DIR), "ffi-logo.png"),
+        os.path.join(str(settings.BASE_DIR.parent), "ffi-logo.png"),
+        "/app/ffi-logo.png",
+        os.path.join(str(settings.BASE_DIR.parent), "FrontEnd", "public", "ffi-logo.png"),
         os.path.join(str(settings.BASE_DIR.parent), "Logo FFI.png"),
         os.path.join(str(settings.BASE_DIR), "Logo FFI.png"),
         "/app/Logo FFI.png",
@@ -38,6 +42,17 @@ def _load_logo_base64() -> str:
             extra={"logo_path": logo_path or configured_logo_path, "candidate_paths": candidate_paths},
         )
         return getattr(settings, "EMAIL_LOGO_URL", "https://mail.fficontracting.com/logo.png")
+
+
+def _is_inline_logo(value: Any) -> bool:
+    return isinstance(value, str) and value.startswith("data:image/")
+
+
+def _resolve_logo_source() -> str:
+    configured_logo_url = (getattr(settings, "EMAIL_LOGO_URL", "") or "").strip()
+    if configured_logo_url:
+        return configured_logo_url
+    return _load_logo_base64()
 
 
 class BirdEmailService:
@@ -97,39 +112,42 @@ class BirdEmailService:
             logger.error("bird_email_not_configured")
             return {"success": False, "status_code": None, "error": reason, "response": {}}
 
-        try:
-            html_content = self.render_template(template_name, context)
-        except Exception as exc:
-            logger.exception("bird_email_template_render_failed", extra={"template_name": template_name})
-            return {"success": False, "status_code": None, "error": str(exc), "response": {}}
-
-        text_fallback = strip_tags(html_content).strip()
         sender_email = from_email or self.default_sender
+        current_context = dict(context)
 
-        payload = {
-            "receiver": {
-                "contacts": [
-                    {
-                        "identifierKey": "emailaddress",
-                        "identifierValue": to_email,
-                    }
-                ]
-            },
-            "body": {
-                "type": "html",
-                "html": {
-                    "text": text_fallback,
-                    "html": html_content,
-                    "metadata": {
-                        "subject": subject,
-                        "emailFrom": {
-                            "username": self._username_from_email(sender_email),
+        def _build_payload(render_context: dict[str, Any]) -> dict[str, Any]:
+            html_content = self.render_template(template_name, render_context)
+            text_fallback = strip_tags(html_content).strip()
+            return {
+                "receiver": {
+                    "contacts": [
+                        {
+                            "identifierKey": "emailaddress",
+                            "identifierValue": to_email,
+                        }
+                    ]
+                },
+                "body": {
+                    "type": "html",
+                    "html": {
+                        "text": text_fallback,
+                        "html": html_content,
+                        "metadata": {
+                            "subject": subject,
+                            "emailFrom": {
+                                "username": self._username_from_email(sender_email),
+                            },
                         },
                     },
                 },
-            },
-            "meta": {"email": {"subject": subject}},
-        }
+                "meta": {"email": {"subject": subject}},
+            }
+
+        try:
+            payload = _build_payload(current_context)
+        except Exception as exc:
+            logger.exception("bird_email_template_render_failed", extra={"template_name": template_name})
+            return {"success": False, "status_code": None, "error": str(exc), "response": {}}
 
         try:
             response = requests.post(
@@ -141,6 +159,30 @@ class BirdEmailService:
         except requests.RequestException as exc:
             logger.exception("bird_email_request_failed", extra={"to_email": to_email, "template_name": template_name})
             return {"success": False, "status_code": None, "error": str(exc), "response": {}}
+
+        if response.status_code == 413 and _is_inline_logo(current_context.get("logo_url")):
+            logger.warning(
+                "bird_email_payload_too_large_retrying_without_inline_logo",
+                extra={"to_email": to_email, "template_name": template_name},
+            )
+            current_context["logo_url"] = self.logo_url
+            try:
+                retry_payload = _build_payload(current_context)
+                response = requests.post(
+                    self._endpoint(),
+                    headers=self._headers(),
+                    json=retry_payload,
+                    timeout=self.timeout_seconds,
+                )
+            except requests.RequestException as exc:
+                logger.exception(
+                    "bird_email_retry_request_failed",
+                    extra={"to_email": to_email, "template_name": template_name},
+                )
+                return {"success": False, "status_code": None, "error": str(exc), "response": {}}
+            except Exception as exc:
+                logger.exception("bird_email_template_render_failed", extra={"template_name": template_name})
+                return {"success": False, "status_code": None, "error": str(exc), "response": {}}
 
         try:
             response_data = response.json()
@@ -187,7 +229,7 @@ def _base_email_context(
     action_text_ar: str | None = None,
 ) -> dict[str, Any]:
     return {
-        "logo_url": _load_logo_base64(),
+        "logo_url": _resolve_logo_source(),
         "contact_email": getattr(settings, "EMAIL_CONTACT_EMAIL", "hr@fficontracting.com"),
         "title": title,
         "title_ar": title_ar,

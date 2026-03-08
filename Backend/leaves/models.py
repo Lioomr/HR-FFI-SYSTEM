@@ -36,6 +36,10 @@ class LeaveType(models.Model):
 
 
 class LeaveRequest(models.Model):
+    class RequestSource(models.TextChoices):
+        EMPLOYEE = "employee", _("Employee")
+        HR_MANUAL = "hr_manual", _("HR Manual")
+
     class RequestStatus(models.TextChoices):
         SUBMITTED = "submitted", _("Submitted")
         PENDING_MANAGER = "pending_manager", _("Pending Manager")
@@ -64,6 +68,21 @@ class LeaveRequest(models.Model):
     )
 
     status = models.CharField(max_length=20, choices=RequestStatus.choices, default=RequestStatus.SUBMITTED)
+    source = models.CharField(max_length=20, choices=RequestSource.choices, default=RequestSource.EMPLOYEE)
+    manual_entry_reason = models.TextField(blank=True, help_text=_("Reason entered by HR for manual records."))
+    source_document_ref = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text=_("Reference to source document for manual HR entries."),
+    )
+    entered_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="hr_entered_leaves",
+        help_text=_("HR user who entered this record manually."),
+    )
 
     # Manager Decision
     manager_decision_at = models.DateTimeField(null=True, blank=True)
@@ -107,6 +126,14 @@ class LeaveRequest(models.Model):
     decision_reason = models.TextField(blank=True, help_text=_("Reason for rejection or approval note (Legacy/HR)."))
 
     is_active = models.BooleanField(default=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    deleted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="deleted_leave_requests",
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

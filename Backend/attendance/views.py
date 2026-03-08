@@ -13,11 +13,16 @@ from rest_framework.throttling import UserRateThrottle
 from audit.utils import audit
 from core.permissions import IsManager, get_role
 from core.responses import error, success
-from core.services import get_direct_manager_user, get_hr_approver_users, notify_users_for_pending_status
+from core.services import (
+    get_ceo_approver_users,
+    get_direct_manager_user,
+    get_hr_approver_users,
+    notify_users_for_pending_status,
+)
 from employees.models import EmployeeProfile
 
 from .models import AttendanceRecord
-from .permissions import IsAttendanceSelfServiceRole, IsHRManagerOrAdmin
+from .permissions import IsAttendanceSelfServiceRole, IsDepartmentCEOApprover, IsHRManagerOrAdmin
 from .serializers import (
     AttendanceOverrideSerializer,
     AttendanceRecordSerializer,
@@ -26,6 +31,15 @@ from .serializers import (
 )
 
 User = get_user_model()
+
+
+def _is_hr_manager_user(user):
+    return bool(user and user.is_authenticated and user.groups.filter(name="HRManager").exists())
+
+
+def _is_hr_manager_origin_record(instance: AttendanceRecord):
+    employee_user = getattr(getattr(instance, "employee_profile", None), "user", None)
+    return bool(employee_user and employee_user.groups.filter(name="HRManager").exists())
 
 
 class AttendanceThrottle(UserRateThrottle):
@@ -146,6 +160,12 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
     def partial_update(self, request, *args, **kwargs):
         # HR Override logic (PATCH routes here)
         instance = self.get_object()
+        if _is_hr_manager_origin_record(instance) and instance.status == AttendanceRecord.Status.PENDING_CEO:
+            return error(
+                "Validation error",
+                errors=["HR manager attendance requests must be approved by CEO."],
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
         s = AttendanceOverrideSerializer(instance, data=request.data, partial=True)
         s.is_valid(raise_exception=True)
 
@@ -198,7 +218,10 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         if profile.manager or profile.manager_profile:
             has_manager = True
 
-        status_value = AttendanceRecord.Status.PENDING_MANAGER if has_manager else AttendanceRecord.Status.PENDING_HR
+        if _is_hr_manager_user(user):
+            status_value = AttendanceRecord.Status.PENDING_CEO
+        else:
+            status_value = AttendanceRecord.Status.PENDING_MANAGER if has_manager else AttendanceRecord.Status.PENDING_HR
         # Fallback/Legacy note: PENDING_HR maps to old 'PENDING' concept effectively
 
         record = AttendanceRecord.objects.create(
@@ -235,6 +258,16 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
                     status_label=record.status,
                     details=[f"Date: {record.date}", "Action: Check-in"],
                     action_path="/hr/attendance",
+                )
+            elif record.status == AttendanceRecord.Status.PENDING_CEO:
+                notify_users_for_pending_status(
+                    users=get_ceo_approver_users(),
+                    request_type="Attendance Request",
+                    request_id=record.id,
+                    requester_name=requester_name,
+                    status_label=record.status,
+                    details=[f"Date: {record.date}", "Action: Check-in"],
+                    action_path="/ceo/attendance",
                 )
         except Exception:
             pass
@@ -401,4 +434,72 @@ class ManagerAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
         instance.save()
 
         audit(request, "reject", entity="AttendanceRecord", entity_id=instance.id)
+        return success(AttendanceRecordSerializer(instance).data)
+
+
+class CEOAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = AttendanceRecordSerializer
+    permission_classes = [IsAuthenticated, IsDepartmentCEOApprover]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ["status"]
+    ordering_fields = ["date", "created_at"]
+    ordering = ["-date"]
+
+    def get_queryset(self):
+        qs = AttendanceRecord.objects.select_related("employee_profile__user")
+        status_param = self.request.query_params.get("status")
+        if status_param:
+            return qs.filter(status=status_param)
+        return qs.filter(status=AttendanceRecord.Status.PENDING_CEO)
+
+    @action(detail=True, methods=["post"])
+    def approve(self, request, pk=None):
+        instance = self.get_object()
+        if instance.status != AttendanceRecord.Status.PENDING_CEO:
+            return error("Validation error", errors=["Request is not pending CEO approval."], status=422)
+        if _is_hr_manager_origin_record(instance) and instance.employee_profile.user_id == request.user.id:
+            return error("Validation error", errors=["Self approval is not allowed."], status=422)
+
+        instance.status = AttendanceRecord.Status.PRESENT
+        instance.ceo_decision_by = request.user
+        instance.ceo_decision_at = timezone.now()
+        instance.ceo_decision_note = request.data.get("notes", "")
+        instance.save(
+            update_fields=[
+                "status",
+                "ceo_decision_by",
+                "ceo_decision_at",
+                "ceo_decision_note",
+                "updated_at",
+            ]
+        )
+        audit(request, "approve_ceo", entity="AttendanceRecord", entity_id=instance.id)
+        return success(AttendanceRecordSerializer(instance).data)
+
+    @action(detail=True, methods=["post"])
+    def reject(self, request, pk=None):
+        instance = self.get_object()
+        if instance.status != AttendanceRecord.Status.PENDING_CEO:
+            return error("Validation error", errors=["Request is not pending CEO approval."], status=422)
+        if _is_hr_manager_origin_record(instance) and instance.employee_profile.user_id == request.user.id:
+            return error("Validation error", errors=["Self approval is not allowed."], status=422)
+
+        note = (request.data.get("notes") or "").strip()
+        if not note:
+            return error("Validation error", errors=["notes/comment is required for rejection."], status=422)
+
+        instance.status = AttendanceRecord.Status.REJECTED
+        instance.ceo_decision_by = request.user
+        instance.ceo_decision_at = timezone.now()
+        instance.ceo_decision_note = note
+        instance.save(
+            update_fields=[
+                "status",
+                "ceo_decision_by",
+                "ceo_decision_at",
+                "ceo_decision_note",
+                "updated_at",
+            ]
+        )
+        audit(request, "reject_ceo", entity="AttendanceRecord", entity_id=instance.id)
         return success(AttendanceRecordSerializer(instance).data)
