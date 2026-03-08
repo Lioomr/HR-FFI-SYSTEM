@@ -8,6 +8,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from employees.models import EmployeeProfile
+from hr_reference.models import Department, Position
 
 from .models import Asset, AssetAssignment
 
@@ -25,6 +26,17 @@ class AssetsTests(TestCase):
 
         self.hr_user = User.objects.create_user(email="hr-assets@ffi.com", password="password")
         self.hr_user.groups.add(self.hr_group)
+        self.department_ceo = Department.objects.create(id=1, code="CEO", name="CEO Department")
+        self.department_ops = Department.objects.create(id=12, code="OPS", name="Operations")
+        self.position = Position.objects.create(id=501, code="GEN", name="General")
+        self.hr_profile = EmployeeProfile.objects.create(
+            user=self.hr_user,
+            employee_id="EMP-ASSET-HR",
+            full_name="Asset HR",
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+            department_ref=self.department_ops,
+            position_ref=self.position,
+        )
 
         self.employee_user = User.objects.create_user(email="emp-assets@ffi.com", password="password")
         self.employee_user.groups.add(self.employee_group)
@@ -37,6 +49,8 @@ class AssetsTests(TestCase):
             employee_id="EMP-ASSET-001",
             full_name="Asset Employee",
             employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+            department_ref=self.department_ops,
+            position_ref=self.position,
         )
 
         self.manager_profile = EmployeeProfile.objects.create(
@@ -44,6 +58,8 @@ class AssetsTests(TestCase):
             employee_id="EMP-ASSET-002",
             full_name="Asset Manager",
             employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+            department_ref=self.department_ops,
+            position_ref=self.position,
         )
 
     def test_vehicle_validation_requires_vehicle_fields(self):
@@ -218,6 +234,30 @@ class AssetsTests(TestCase):
             {"note": "Leaving project"},
         )
         self.assertEqual(return_request_response.status_code, status.HTTP_201_CREATED)
+
+    def test_hr_manager_asset_requests_start_pending_ceo(self):
+        asset = Asset.objects.create(
+            name_en="Laptop HR",
+            type=Asset.AssetType.LAPTOP,
+            cpu="i5",
+            ram="8GB",
+            storage="256GB",
+            mac_address="AA:BB:CC:DD:EE:99",
+            operating_system="Linux",
+            status=Asset.AssetStatus.ASSIGNED,
+        )
+        AssetAssignment.objects.create(
+            asset=asset, employee=self.hr_profile, assigned_by=self.hr_user, is_active=True
+        )
+        self.client.force_authenticate(user=self.hr_user)
+
+        damage_response = self.client.post(f"/api/assets/{asset.id}/damage-report/", {"description": "Broken charger"})
+        self.assertEqual(damage_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(damage_response.data["data"]["status"], "PENDING_CEO")
+
+        return_response = self.client.post(f"/api/assets/{asset.id}/return-request/", {"note": "Need replacement"})
+        self.assertEqual(return_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(return_response.data["data"]["status"], "PENDING_CEO")
 
     def test_dashboard_summary_and_warranty_window(self):
         today = timezone.localdate()

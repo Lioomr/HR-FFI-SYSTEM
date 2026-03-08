@@ -24,14 +24,6 @@ export default function RequireCEOApprover() {
         return;
       }
 
-      if (user.role === "SystemAdmin" || user.role === "CEO") {
-        if (mounted) {
-          setAllowed(true);
-          setLoading(false);
-        }
-        return;
-      }
-
       try {
         const res = await getEmployee("me");
         if (!mounted) return;

@@ -1,6 +1,6 @@
 from rest_framework import permissions
 
-from core.permissions import IsHRManagerOrAdmin, get_role
+from core.permissions import IsDepartmentCEOApprover, IsHRManagerOrAdmin, get_role
 
 
 class IsAttendanceOwner(permissions.BasePermission):
@@ -26,4 +26,4 @@ class IsAttendanceSelfServiceRole(permissions.BasePermission):
     """
 
     def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and get_role(request.user) in ["Employee", "Manager"]
+        return request.user and request.user.is_authenticated and get_role(request.user) in ["Employee", "Manager", "HRManager"]

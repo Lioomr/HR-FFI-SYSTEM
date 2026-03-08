@@ -80,6 +80,9 @@ import CEOLeaveInboxPage from "../pages/ceo/CEOLeaveInboxPage";
 import CEOTeamPage from "../pages/ceo/CEOTeamPage";
 import CEOLoanRequestsPage from "../pages/ceo/CEOLoanRequestsPage";
 import CEOLoanRequestDetailsPage from "../pages/ceo/CEOLoanRequestDetailsPage";
+import CEOAttendancePage from "../pages/ceo/CEOAttendancePage";
+import CEOAssetDamageReportsPage from "../pages/ceo/CEOAssetDamageReportsPage";
+import CEOAssetReturnRequestsPage from "../pages/ceo/CEOAssetReturnRequestsPage";
 import CFODashboardPage from "../pages/cfo/CFODashboardPage";
 import CFOLoanRequestsPage from "../pages/cfo/CFOLoanRequestsPage";
 import CFOLoanRequestDetailsPage from "../pages/cfo/CFOLoanRequestDetailsPage";
@@ -261,6 +264,9 @@ export const routes = [
             children: [
               { path: "ceo/loan-requests", element: <CEOLoanRequestsPage /> },
               { path: "ceo/loan-requests/:id", element: <CEOLoanRequestDetailsPage /> },
+              { path: "ceo/attendance", element: <CEOAttendancePage /> },
+              { path: "ceo/assets/damage-reports", element: <CEOAssetDamageReportsPage /> },
+              { path: "ceo/assets/return-requests", element: <CEOAssetReturnRequestsPage /> },
             ],
           },
 

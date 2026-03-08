@@ -16,6 +16,7 @@ from audit.utils import audit
 from core.pagination import StandardPagination
 from core.permissions import IsHRManagerOrAdmin, IsSystemAdmin
 from core.responses import error, success
+from core.services.bird_email_service import _load_logo_base64
 from core.services.email_service import EmailService
 
 from .serializers import (
@@ -208,6 +209,8 @@ class UserResetPasswordView(APIView):
             user.save(update_fields=["password"])
             
             context = {
+                "logo_url": _load_logo_base64(),
+                "contact_email": getattr(settings, "EMAIL_CONTACT_EMAIL", "hr@fficontracting.com"),
                 "title": "Your temporary password",
                 "title_ar": "كلمة المرور المؤقتة الخاصة بك",
                 "employee_name": user.full_name or user.email,
@@ -236,6 +239,8 @@ class UserResetPasswordView(APIView):
         reset_link = f"{settings.FRONTEND_URL.rstrip('/')}/change-password?token={token}&uid={user.id}"
         
         context = {
+            "logo_url": _load_logo_base64(),
+            "contact_email": getattr(settings, "EMAIL_CONTACT_EMAIL", "hr@fficontracting.com"),
             "title": "Reset your password",
             "title_ar": "إعادة تعيين كلمة المرور",
             "employee_name": user.full_name or user.email,

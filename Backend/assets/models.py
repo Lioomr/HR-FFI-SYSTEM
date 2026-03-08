@@ -156,12 +156,35 @@ class AssetAssignment(models.Model):
 
 
 class AssetDamageReport(models.Model):
+    class RequestStatus(models.TextChoices):
+        PENDING_HR = "PENDING_HR", _("Pending HR")
+        PENDING_CEO = "PENDING_CEO", _("Pending CEO")
+        APPROVED = "APPROVED", _("Approved")
+        REJECTED = "REJECTED", _("Rejected")
+
     asset = models.ForeignKey(Asset, on_delete=models.CASCADE, related_name="damage_reports")
     employee = models.ForeignKey(EmployeeProfile, on_delete=models.CASCADE, related_name="asset_damage_reports")
     description = models.TextField()
+    status = models.CharField(max_length=20, choices=RequestStatus.choices, default=RequestStatus.PENDING_HR)
     reported_at = models.DateTimeField(auto_now_add=True)
-    resolved = models.BooleanField(default=False)
-    resolution_note = models.TextField(blank=True)
+    hr_decision_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="hr_decided_asset_damage_reports",
+    )
+    hr_decision_at = models.DateTimeField(null=True, blank=True)
+    hr_decision_note = models.TextField(blank=True)
+    ceo_decision_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ceo_decided_asset_damage_reports",
+    )
+    ceo_decision_at = models.DateTimeField(null=True, blank=True)
+    ceo_decision_note = models.TextField(blank=True)
 
     class Meta:
         ordering = ["-reported_at"]
@@ -170,6 +193,8 @@ class AssetDamageReport(models.Model):
 class AssetReturnRequest(models.Model):
     class RequestStatus(models.TextChoices):
         PENDING = "PENDING", _("Pending")
+        PENDING_CEO = "PENDING_CEO", _("Pending CEO")
+        APPROVED = "APPROVED", _("Approved")
         PROCESSED = "PROCESSED", _("Processed")
         REJECTED = "REJECTED", _("Rejected")
 
@@ -186,6 +211,24 @@ class AssetReturnRequest(models.Model):
         related_name="processed_asset_return_requests",
     )
     processed_at = models.DateTimeField(null=True, blank=True)
+    hr_decision_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="hr_decided_asset_return_requests",
+    )
+    hr_decision_at = models.DateTimeField(null=True, blank=True)
+    hr_decision_note = models.TextField(blank=True)
+    ceo_decision_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ceo_decided_asset_return_requests",
+    )
+    ceo_decision_at = models.DateTimeField(null=True, blank=True)
+    ceo_decision_note = models.TextField(blank=True)
 
     class Meta:
         ordering = ["-requested_at"]

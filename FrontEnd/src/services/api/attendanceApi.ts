@@ -11,7 +11,7 @@ export interface AttendanceRecord {
   date: string;
   check_in_at: string | null;
   check_out_at: string | null;
-  status: "PRESENT" | "ABSENT" | "LATE" | "PENDING" | "PENDING_HR" | "PENDING_MGR" | "REJECTED";
+  status: "PRESENT" | "ABSENT" | "LATE" | "PENDING" | "PENDING_HR" | "PENDING_MGR" | "PENDING_CEO" | "REJECTED";
   source: "EMPLOYEE" | "HR" | "SYSTEM";
   is_overridden: boolean;
   notes?: string;
@@ -33,6 +33,10 @@ export interface OverrideAttendanceDto {
   check_out_at?: string | null;
   notes?: string;
   override_reason?: string;
+}
+
+export interface AttendanceDecisionDto {
+  notes?: string;
 }
 
 // Employee Endpoints
@@ -79,5 +83,20 @@ export async function overrideAttendance(
     `/api/attendance/${id}/`,
     payload
   );
+  return data;
+}
+
+export async function getCEOAttendance(params?: AttendanceFilters): Promise<ApiResponse<AttendanceListResponse>> {
+  const { data } = await api.get<ApiResponse<AttendanceListResponse>>("/api/attendance/ceo/attendance/", { params });
+  return data;
+}
+
+export async function approveCEOAttendance(id: string | number, payload?: AttendanceDecisionDto): Promise<ApiResponse<AttendanceRecord>> {
+  const { data } = await api.post<ApiResponse<AttendanceRecord>>(`/api/attendance/ceo/attendance/${id}/approve/`, payload || {});
+  return data;
+}
+
+export async function rejectCEOAttendance(id: string | number, payload: AttendanceDecisionDto): Promise<ApiResponse<AttendanceRecord>> {
+  const { data } = await api.post<ApiResponse<AttendanceRecord>>(`/api/attendance/ceo/attendance/${id}/reject/`, payload);
   return data;
 }

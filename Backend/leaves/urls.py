@@ -5,6 +5,7 @@ from .views import (
     CEOLeaveRequestViewSet,
     EmployeeLeaveBalanceView,
     EmployeeLeaveRequestViewSet,
+    HRManualLeaveRequestViewSet,
     LeaveBalanceAdjustmentViewSet,
     LeaveBalanceViewSet,
     LeaveRequestViewSet,
@@ -16,6 +17,7 @@ router = DefaultRouter()
 router.register(r"leave-types", LeaveTypeViewSet, basename="leave-types")
 router.register(r"leave-balances", LeaveBalanceViewSet, basename="leave-balances")
 router.register(r"leave-requests", LeaveRequestViewSet, basename="leave-requests")
+router.register(r"hr/manual-leave-requests", HRManualLeaveRequestViewSet, basename="hr-manual-leave-requests")
 router.register(r"employee/leave-requests", EmployeeLeaveRequestViewSet, basename="employee-leave-requests")
 router.register(r"manager/leave-requests", ManagerLeaveRequestViewSet, basename="manager-leave-requests")
 router.register(r"ceo/leave-requests", CEOLeaveRequestViewSet, basename="ceo-leave-requests")

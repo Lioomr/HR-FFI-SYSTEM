@@ -112,6 +112,15 @@ class LeaveManagementTests(TestCase):
         self.assertEqual(req.status, "approved")
         self.assertEqual(req.decided_by, self.hr)
 
+    def test_hr_manager_self_request_starts_pending_ceo(self):
+        self.client.force_authenticate(user=self.hr)
+        start = date.today() + timedelta(days=2)
+        end = date.today() + timedelta(days=3)
+        data = {"leave_type": self.annual_leave.id, "start_date": str(start), "end_date": str(end), "reason": "HR leave"}
+        response = self.client.post("/api/leaves/leave-requests/", data)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["data"]["status"], LeaveRequest.RequestStatus.PENDING_CEO)
+
     def test_cancel_leave_request(self):
         self.client.force_authenticate(user=self.emp1)
         start = date.today() + timedelta(days=10)

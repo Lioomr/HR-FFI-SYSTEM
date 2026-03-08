@@ -9,6 +9,7 @@ from rest_framework.test import APIClient
 
 from audit.models import AuditLog
 from employees.models import EmployeeProfile
+from hr_reference.models import Department, Position
 
 from .models import AttendanceRecord
 
@@ -27,6 +28,11 @@ class AttendanceTests(TestCase):
         # HR User
         self.hr = User.objects.create_user(email="hr@ffi.com", password="password")
         self.hr.groups.add(self.hr_group)
+        self.ceo_approver = User.objects.create_user(email="ceo-approver@ffi.com", password="password")
+
+        self.ceo_dept = Department.objects.create(id=1, code="CEO", name="CEO Department")
+        self.base_dept = Department.objects.create(id=11, code="ENG", name="Engineering Department")
+        self.base_position = Position.objects.create(id=901, code="EMP", name="Employee")
 
         # Employee 1
         self.emp1 = User.objects.create_user(email="emp1@ffi.com", password="password")
@@ -36,6 +42,8 @@ class AttendanceTests(TestCase):
             employee_id="EMP001",
             department="Engineering",
             job_title="Software Engineer",
+            department_ref=self.base_dept,
+            position_ref=self.base_position,
             hire_date=date.today(),
         )
 
@@ -47,6 +55,16 @@ class AttendanceTests(TestCase):
             employee_id="EMP002",
             department="Engineering",
             job_title="Software Engineer",
+            department_ref=self.base_dept,
+            position_ref=self.base_position,
+            hire_date=date.today(),
+        )
+        self.ceo_profile = EmployeeProfile.objects.create(
+            user=self.ceo_approver,
+            employee_id="EMP003",
+            department_ref=self.ceo_dept,
+            position_ref=self.base_position,
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
             hire_date=date.today(),
         )
 
@@ -54,7 +72,7 @@ class AttendanceTests(TestCase):
         self.client.force_authenticate(user=self.emp1)
         response = self.client.post("/api/attendance/me/check-in/")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data["data"]["status"], "PRESENT")
+        self.assertEqual(response.data["data"]["status"], "PENDING_HR")
         self.assertTrue(
             AttendanceRecord.objects.filter(employee_profile=self.profile1, date=timezone.localdate()).exists()
         )
@@ -182,3 +200,15 @@ class AttendanceTests(TestCase):
         self.client.force_authenticate(user=self.emp1)
         self.client.post("/api/attendance/me/check-in/")
         self.assertTrue(AuditLog.objects.filter(action="attendance.check_in").exists())
+
+    def test_hr_manager_check_in_goes_to_pending_ceo_and_ceo_can_approve(self):
+        self.client.force_authenticate(user=self.hr)
+        create_response = self.client.post("/api/attendance/me/check-in/")
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        record_id = create_response.data["data"]["id"]
+        self.assertEqual(create_response.data["data"]["status"], "PENDING_CEO")
+
+        self.client.force_authenticate(user=self.ceo_approver)
+        approve_response = self.client.post(f"/api/attendance/ceo/attendance/{record_id}/approve/", {"notes": "Approved"})
+        self.assertEqual(approve_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(approve_response.data["data"]["status"], "PRESENT")

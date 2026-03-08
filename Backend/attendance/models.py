@@ -7,6 +7,7 @@ class AttendanceRecord(models.Model):
     class Status(models.TextChoices):
         PENDING_MANAGER = "PENDING_MGR", _("Pending Manager")
         PENDING_HR = "PENDING_HR", _("Pending HR")
+        PENDING_CEO = "PENDING_CEO", _("Pending CEO")
         PRESENT = "PRESENT", _("Present")
         ABSENT = "ABSENT", _("Absent")
         LATE = "LATE", _("Late")
@@ -40,6 +41,17 @@ class AttendanceRecord(models.Model):
         related_name="manager_decided_attendance",
     )
     manager_decision_note = models.TextField(blank=True, help_text=_("Manager's note."))
+
+    # CEO Decision
+    ceo_decision_at = models.DateTimeField(null=True, blank=True)
+    ceo_decision_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ceo_decided_attendance",
+    )
+    ceo_decision_note = models.TextField(blank=True, help_text=_("CEO's decision note."))
 
     is_overridden = models.BooleanField(default=False)
     override_reason = models.TextField(null=True, blank=True)

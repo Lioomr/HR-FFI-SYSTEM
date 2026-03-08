@@ -1,6 +1,6 @@
 from rest_framework.permissions import BasePermission
 
-from core.permissions import get_role
+from core.permissions import CEO_APPROVER_DEPARTMENT_ID, get_role
 from employees.models import EmployeeProfile
 from loans.models import LoanWorkflowConfig
 
@@ -58,7 +58,7 @@ def is_hr_approver_user(user):
 
 class IsEmployeeOnly(BasePermission):
     def has_permission(self, request, view):
-        return request.user.is_authenticated and get_role(request.user) == "Employee"
+        return request.user.is_authenticated and get_role(request.user) in ["Employee", "HRManager"]
 
 
 class IsManagerOrAdmin(BasePermission):
@@ -100,15 +100,11 @@ def is_ceo_approver_user(user):
     if not user or not user.is_authenticated:
         return False
 
-    if _is_group_member(user, "SystemAdmin") or _is_group_member(user, "CEO"):
-        return True
-
     profile = getattr(user, "employee_profile", None)
     if not _is_active_profile(profile):
         return False
 
-    config = get_active_workflow_config()
-    return profile.position_ref_id == config.ceo_position_id
+    return profile.department_ref_id == CEO_APPROVER_DEPARTMENT_ID
 
 
 def is_cfo_requester_profile(profile):

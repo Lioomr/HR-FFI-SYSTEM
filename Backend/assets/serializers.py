@@ -145,6 +145,34 @@ class AssetDamageReportCreateSerializer(serializers.ModelSerializer):
         return value
 
 
+class AssetDamageReportSerializer(serializers.ModelSerializer):
+    employee_name = serializers.CharField(source="employee.full_name", read_only=True)
+    employee_email = serializers.EmailField(source="employee.user.email", read_only=True)
+    asset_code = serializers.CharField(source="asset.asset_code", read_only=True)
+    asset_name = serializers.CharField(source="asset.name_en", read_only=True)
+
+    class Meta:
+        model = AssetDamageReport
+        fields = [
+            "id",
+            "asset",
+            "asset_code",
+            "asset_name",
+            "employee",
+            "employee_name",
+            "employee_email",
+            "description",
+            "status",
+            "reported_at",
+            "hr_decision_by",
+            "hr_decision_at",
+            "hr_decision_note",
+            "ceo_decision_by",
+            "ceo_decision_at",
+            "ceo_decision_note",
+        ]
+
+
 class AssetReturnRequestCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = AssetReturnRequest
@@ -154,3 +182,37 @@ class AssetReturnRequestCreateSerializer(serializers.ModelSerializer):
         if not value.strip():
             raise serializers.ValidationError("Note is required.")
         return value
+
+
+class AssetReturnRequestSerializer(serializers.ModelSerializer):
+    employee_name = serializers.CharField(source="employee.full_name", read_only=True)
+    employee_email = serializers.EmailField(source="employee.user.email", read_only=True)
+    asset_code = serializers.CharField(source="asset.asset_code", read_only=True)
+    asset_name = serializers.CharField(source="asset.name_en", read_only=True)
+
+    class Meta:
+        model = AssetReturnRequest
+        fields = [
+            "id",
+            "asset",
+            "asset_code",
+            "asset_name",
+            "employee",
+            "employee_name",
+            "employee_email",
+            "requested_at",
+            "note",
+            "status",
+            "processed_by",
+            "processed_at",
+            "hr_decision_by",
+            "hr_decision_at",
+            "hr_decision_note",
+            "ceo_decision_by",
+            "ceo_decision_at",
+            "ceo_decision_note",
+        ]
+
+
+class AssetRequestActionSerializer(serializers.Serializer):
+    comment = serializers.CharField(required=False, allow_blank=True)

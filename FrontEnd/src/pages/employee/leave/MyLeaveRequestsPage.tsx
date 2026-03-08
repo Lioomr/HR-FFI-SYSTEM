@@ -142,16 +142,17 @@ export default function MyLeaveRequestsPage() {
             title: t("common.status"),
             dataIndex: "status",
             key: "status",
-            render: (status) => {
+            render: (status, record) => {
                 const statusKey = `leave.status.${status?.toLowerCase()}`;
                 const translated = t(statusKey);
                 const display = translated === statusKey
                     ? (status?.charAt(0).toUpperCase() + status?.slice(1).toLowerCase()).replace(/_/g, ' ')
                     : translated;
                 return (
-                    <Tag color={getStatusColor(status)}>
-                        {display}
-                    </Tag>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                        <Tag color={getStatusColor(status)}>{display}</Tag>
+                        {record.source === "hr_manual" && <Tag color="cyan">{t("leave.manual.badge")}</Tag>}
+                    </div>
                 );
             }
         },
