@@ -1,8 +1,9 @@
 {% extends "emails/base_email.html" %}
 
 {% block status_badge %}
-<div class="status-badge-wrap">
-  <span class="status-badge badge-pending">
+<div class="status-badge-wrap" style="background:#f8f9fa;text-align:center;padding:20px 16px 0;">
+  <span class="status-badge badge-pending"
+    style="display:inline-block;padding:8px 22px;border-radius:100px;font-size:13px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;background:#FFF3E0;color:#E65100;border:1px solid #FFB74D;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
     &#9711;&nbsp; Pending Review &nbsp;·&nbsp; قيد المراجعة
   </span>
 </div>
@@ -10,66 +11,109 @@
 
 {% block details %}
 {% if leave_type or start_date or end_date or total_days or manager_name %}
-<div class="details-card">
-  <div class="details-card-header" style="background: linear-gradient(90deg,#EF6C00,#F57C00);">&#128197; Leave Request
-    Details — تفاصيل طلب الإجازة</div>
-  <div class="details-card-body">
-    <div class="detail-row">
-      <span class="detail-label">Leave Type / نوع الإجازة</span>
-      <span class="detail-value">{{ leave_type }}</span>
-    </div>
-    <div class="detail-row">
-      <span class="detail-label">Start Date / تاريخ البداية</span>
-      <span class="detail-value">{{ start_date }}</span>
-    </div>
-    <div class="detail-row">
-      <span class="detail-label">End Date / تاريخ النهاية</span>
-      <span class="detail-value">{{ end_date }}</span>
-    </div>
-    <div class="detail-row">
-      <span class="detail-label">Total Days / إجمالي الأيام</span>
-      <span class="detail-value"><strong>{{ total_days }}</strong></span>
-    </div>
+<div class="details-card" style="margin:0 0 24px;border-radius:12px;border:1px solid #E5E7EB;overflow:hidden;">
+  <div class="details-card-header"
+    style="background:linear-gradient(90deg,#EF6C00,#F57C00);padding:10px 18px;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#fff;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+    &#128197; Leave Request Details — تفاصيل طلب الإجازة</div>
+  <table class="detail-row-table" style="width:100%;border-collapse:collapse;" role="presentation">
+    <tr>
+      <td class="detail-label"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        Leave Type / نوع الإجازة</td>
+      <td class="detail-value"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;color:#6B7280;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        {{ leave_type }}</td>
+    </tr>
+    <tr>
+      <td class="detail-label"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        Start Date / تاريخ البداية</td>
+      <td class="detail-value"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;color:#6B7280;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        {{ start_date }}</td>
+    </tr>
+    <tr>
+      <td class="detail-label"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        End Date / تاريخ النهاية</td>
+      <td class="detail-value"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;color:#6B7280;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        {{ end_date }}</td>
+    </tr>
+    <tr>
+      <td class="detail-label"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        Total Days / إجمالي الأيام</td>
+      <td class="detail-value"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;color:#6B7280;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        <strong>{{ total_days }}</strong></td>
+    </tr>
     {% if manager_name %}
-    <div class="detail-row">
-      <span class="detail-label">Approver / المعتمد</span>
-      <span class="detail-value">{{ manager_name }}</span>
-    </div>
+    <tr>
+      <td class="detail-label"
+        style="padding:11px 18px;font-size:14px;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        Approver / المعتمد</td>
+      <td class="detail-value"
+        style="padding:11px 18px;font-size:14px;color:#6B7280;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        {{ manager_name }}</td>
+    </tr>
     {% endif %}
-  </div>
+  </table>
 </div>
 {% endif %}
 {% endblock %}
 
 {% block details_ar %}
 {% if leave_type or start_date or end_date or total_days or manager_name %}
-<div class="details-card" style="direction:rtl;text-align:right;">
-  <div class="details-card-header" style="background: linear-gradient(90deg,#EF6C00,#F57C00);">&#128197; تفاصيل طلب
-    الإجازة — Leave Request Details</div>
-  <div class="details-card-body">
-    <div class="detail-row">
-      <span class="ar-detail-label">نوع الإجازة / Leave Type</span>
-      <span class="detail-value">{{ leave_type }}</span>
-    </div>
-    <div class="detail-row">
-      <span class="ar-detail-label">تاريخ البداية / Start Date</span>
-      <span class="detail-value">{{ start_date }}</span>
-    </div>
-    <div class="detail-row">
-      <span class="ar-detail-label">تاريخ النهاية / End Date</span>
-      <span class="detail-value">{{ end_date }}</span>
-    </div>
-    <div class="detail-row">
-      <span class="ar-detail-label">إجمالي الأيام / Total Days</span>
-      <span class="detail-value"><strong>{{ total_days }}</strong></span>
-    </div>
+<div class="details-card"
+  style="margin:0 0 24px;border-radius:12px;border:1px solid #E5E7EB;overflow:hidden;direction:rtl;text-align:right;">
+  <div class="details-card-header"
+    style="background:linear-gradient(90deg,#EF6C00,#F57C00);padding:10px 18px;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#fff;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+    &#128197; تفاصيل طلب الإجازة — Leave Request Details</div>
+  <table class="detail-row-table" style="width:100%;border-collapse:collapse;direction:rtl;" role="presentation">
+    <tr>
+      <td class="ar-detail-label"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        نوع الإجازة / Leave Type</td>
+      <td class="detail-value"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;color:#6B7280;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        {{ leave_type }}</td>
+    </tr>
+    <tr>
+      <td class="ar-detail-label"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        تاريخ البداية / Start Date</td>
+      <td class="detail-value"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;color:#6B7280;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        {{ start_date }}</td>
+    </tr>
+    <tr>
+      <td class="ar-detail-label"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        تاريخ النهاية / End Date</td>
+      <td class="detail-value"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;color:#6B7280;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        {{ end_date }}</td>
+    </tr>
+    <tr>
+      <td class="ar-detail-label"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        إجمالي الأيام / Total Days</td>
+      <td class="detail-value"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;color:#6B7280;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        <strong>{{ total_days }}</strong></td>
+    </tr>
     {% if manager_name %}
-    <div class="detail-row">
-      <span class="ar-detail-label">المعتمد / Approver</span>
-      <span class="detail-value">{{ manager_name }}</span>
-    </div>
+    <tr>
+      <td class="ar-detail-label"
+        style="padding:11px 18px;font-size:14px;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        المعتمد / Approver</td>
+      <td class="detail-value"
+        style="padding:11px 18px;font-size:14px;color:#6B7280;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        {{ manager_name }}</td>
+    </tr>
     {% endif %}
-  </div>
+  </table>
 </div>
 {% endif %}
 {% endblock %}

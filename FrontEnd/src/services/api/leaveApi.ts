@@ -33,6 +33,11 @@ export interface LeaveRequest {
   reason: string;
   document?: string | null;
   status: "submitted" | "pending_manager" | "pending_hr" | "pending_ceo" | "approved" | "rejected" | "cancelled";
+  source?: "employee" | "hr_manual";
+  manual_entry_reason?: string;
+  source_document_ref?: string;
+  entered_by?: number | null;
+  warning_messages?: string[];
   rejection_reason?: string; // If mapped from hr_decision_note? Serializer fields=__all__. 
   // Model has hr_decision_note, manager_decision_note. Frontend might want generic 'rejection_reason'.
   // Backend keys: hr_decision_note, manager_decision_note.
@@ -193,6 +198,17 @@ export async function rejectLeaveRequest(
   return data;
 }
 
+export interface HRManualLeaveRequestPayload {
+  employee_id: number;
+  leave_type: number;
+  start_date: string;
+  end_date: string;
+  reason?: string;
+  manual_entry_reason: string;
+  source_document_ref: string;
+  document?: File;
+}
+
 export async function sendLeaveRequestToCEO(
   id: string | number,
   comment?: string
@@ -201,6 +217,28 @@ export async function sendLeaveRequestToCEO(
     `/api/leaves/leave-requests/${id}/send-to-ceo/`,
     { comment }
   );
+  return data;
+}
+
+export async function createHRManualLeaveRequest(
+  payload: HRManualLeaveRequestPayload | FormData
+): Promise<ApiResponse<LeaveRequest>> {
+  const config = payload instanceof FormData ? { headers: { "Content-Type": "multipart/form-data" } } : undefined;
+  const { data } = await api.post<ApiResponse<LeaveRequest>>("/api/leaves/hr/manual-leave-requests/", payload, config);
+  return data;
+}
+
+export async function updateHRManualLeaveRequest(
+  id: string | number,
+  payload: Partial<HRManualLeaveRequestPayload> | FormData
+): Promise<ApiResponse<LeaveRequest>> {
+  const config = payload instanceof FormData ? { headers: { "Content-Type": "multipart/form-data" } } : undefined;
+  const { data } = await api.patch<ApiResponse<LeaveRequest>>(`/api/leaves/hr/manual-leave-requests/${id}/`, payload, config);
+  return data;
+}
+
+export async function deleteHRManualLeaveRequest(id: string | number): Promise<ApiResponse<Record<string, never>>> {
+  const { data } = await api.delete<ApiResponse<Record<string, never>>>(`/api/leaves/hr/manual-leave-requests/${id}/`);
   return data;
 }
 

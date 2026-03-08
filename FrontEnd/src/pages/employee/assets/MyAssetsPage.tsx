@@ -6,7 +6,7 @@ import EmptyState from "../../../components/ui/EmptyState";
 import ErrorState from "../../../components/ui/ErrorState";
 import LoadingState from "../../../components/ui/LoadingState";
 import PageHeader from "../../../components/ui/PageHeader";
-import { listMyAssets, reportAssetIssue, type Asset } from "../../../services/api/assetsApi";
+import { listMyAssets, reportAssetIssue, requestAssetReturn, type Asset } from "../../../services/api/assetsApi";
 import { isApiError } from "../../../services/api/apiTypes";
 import { useI18n } from "../../../i18n/useI18n";
 import { getDetailedApiMessage, getDetailedHttpErrorMessage } from "../../../services/api/userErrorMessages";
@@ -30,7 +30,10 @@ export default function MyAssetsPage() {
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
   const [reporting, setReporting] = useState(false);
+  const [returning, setReturning] = useState(false);
   const [reportForm] = Form.useForm();
+  const [returnForm] = Form.useForm();
+  const [returnOpen, setReturnOpen] = useState(false);
 
   const loadData = async () => {
     try {
@@ -144,6 +147,17 @@ export default function MyAssetsPage() {
           >
             {t("assets.report")}
           </Button>
+          <Button
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedAsset(record);
+              returnForm.resetFields();
+              setReturnOpen(true);
+            }}
+          >
+            {t("assets.returnRequest", "Return Request")}
+          </Button>
         </Space>
       ),
     },
@@ -173,6 +187,28 @@ export default function MyAssetsPage() {
       }
     } finally {
       setReporting(false);
+    }
+  };
+
+  const handleReturnRequest = async () => {
+    if (!selectedAsset) return;
+    try {
+      const values = await returnForm.validateFields();
+      setReturning(true);
+      const response = await requestAssetReturn(selectedAsset.id, { note: (values.note || "").trim() });
+      if (isApiError(response)) {
+        await apiMessage.error(getDetailedApiMessage(t, response.message, "assets.submitIssueFailed"));
+        return;
+      }
+      await apiMessage.success(t("assets.returnRequested", "Return request submitted"));
+      setReturnOpen(false);
+      returnForm.resetFields();
+    } catch (err: any) {
+      if (!err?.errorFields) {
+        await apiMessage.error(getDetailedHttpErrorMessage(t, err, "assets.submitIssueFailed"));
+      }
+    } finally {
+      setReturning(false);
     }
   };
 
@@ -309,6 +345,28 @@ export default function MyAssetsPage() {
             rules={[{ required: true, message: t("assets.provideIssueDetails") }]}
           >
             <Input.TextArea rows={4} placeholder={t("assets.describeIssue")} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={`${t("assets.returnRequest", "Return Request")}${selectedAsset ? `: ${selectedAsset.asset_code}` : ""}`}
+        open={returnOpen}
+        onCancel={() => {
+          setReturnOpen(false);
+          returnForm.resetFields();
+        }}
+        onOk={handleReturnRequest}
+        okText={t("assets.returnRequest", "Return Request")}
+        confirmLoading={returning}
+      >
+        <Form form={returnForm} layout="vertical">
+          <Form.Item
+            name="note"
+            label={t("common.notes")}
+            rules={[{ required: true, message: t("assets.provideIssueDetails") }]}
+          >
+            <Input.TextArea rows={3} placeholder={t("assets.describeIssue")} />
           </Form.Item>
         </Form>
       </Modal>

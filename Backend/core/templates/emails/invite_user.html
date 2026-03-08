@@ -1,8 +1,9 @@
 {% extends "emails/base_email.html" %}
 
 {% block status_badge %}
-<div class="status-badge-wrap">
-  <span class="status-badge badge-invite">
+<div class="status-badge-wrap" style="background:#f8f9fa;text-align:center;padding:20px 16px 0;">
+  <span class="status-badge badge-invite"
+    style="display:inline-block;padding:8px 22px;border-radius:100px;font-size:13px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;background:#F3E5F5;color:#6A1B9A;border:1px solid #CE93D8;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
     &#128231;&nbsp; You're Invited &nbsp;·&nbsp; أنت مدعو
   </span>
 </div>
@@ -10,62 +11,105 @@
 
 {% block details %}
 {% if role or inviter_name or expires_in_hours is not None or invite_link %}
-<div class="details-card">
-  <div class="details-card-header" style="background: linear-gradient(90deg,#6A1B9A,#8E24AA);">&#128231; Invitation
-    Details — تفاصيل الدعوة</div>
-  <div class="details-card-body">
-    <div class="detail-row">
-      <span class="detail-label">Assigned Role / الدور</span>
-      <span class="detail-value"><strong>{{ role }}</strong></span>
-    </div>
+<div class="details-card" style="margin:0 0 24px;border-radius:12px;border:1px solid #E5E7EB;overflow:hidden;">
+  <div class="details-card-header"
+    style="background:linear-gradient(90deg,#6A1B9A,#8E24AA);padding:10px 18px;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#fff;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+    &#128231; Invitation Details — تفاصيل الدعوة</div>
+  <table class="detail-row-table" style="width:100%;border-collapse:collapse;" role="presentation">
+    <tr>
+      <td class="detail-label"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        Assigned Role / الدور</td>
+      <td class="detail-value"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;color:#6B7280;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        <strong>{{ role }}</strong></td>
+    </tr>
     {% if inviter_name %}
-    <div class="detail-row">
-      <span class="detail-label">Invited By / تم الإرسال بواسطة</span>
-      <span class="detail-value">{{ inviter_name }}</span>
-    </div>
+    <tr>
+      <td class="detail-label"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        Invited By / تم الإرسال بواسطة</td>
+      <td class="detail-value"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;color:#6B7280;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        {{ inviter_name }}</td>
+    </tr>
     {% endif %}
-    <div class="detail-row">
-      <span class="detail-label">Invite Expires / تنتهي خلال</span>
-      <span class="detail-value">{{ expires_in_hours }} hours / ساعة</span>
-    </div>
+    <tr>
+      <td class="detail-label"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        Invite Expires / تنتهي خلال</td>
+      <td class="detail-value"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;color:#6B7280;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        {{ expires_in_hours }} hours / ساعة</td>
+    </tr>
     {% if invite_link %}
-    <div class="detail-row">
-      <span class="detail-label">Invite Link / رابط الدعوة</span>
-      <span class="detail-value">{{ invite_link }}</span>
-    </div>
+    <tr>
+      <td class="detail-label"
+        style="padding:11px 18px;font-size:14px;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        Invite Link / رابط الدعوة</td>
+      <td class="detail-value"
+        style="padding:11px 18px;font-size:14px;color:#6B7280;word-break:break-all;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        <a href="{{ invite_link }}" target="_blank" rel="noopener noreferrer"
+          style="color:#F47920;text-decoration:none;direction:ltr;unicode-bidi:embed;word-break:break-all;display:inline-block;">
+          {{ invite_link }}
+        </a>
+      </td>
+    </tr>
     {% endif %}
-  </div>
+  </table>
 </div>
 {% endif %}
 {% endblock %}
 
 {% block details_ar %}
 {% if role or inviter_name or expires_in_hours is not None or invite_link %}
-<div class="details-card" style="direction:rtl;text-align:right;">
-  <div class="details-card-header" style="background: linear-gradient(90deg,#6A1B9A,#8E24AA);">&#128231; تفاصيل الدعوة —
-    Invitation Details</div>
-  <div class="details-card-body">
-    <div class="detail-row">
-      <span class="ar-detail-label">الدور المعيّن / Assigned Role</span>
-      <span class="detail-value"><strong>{{ role }}</strong></span>
-    </div>
+<div class="details-card"
+  style="margin:0 0 24px;border-radius:12px;border:1px solid #E5E7EB;overflow:hidden;direction:rtl;text-align:right;">
+  <div class="details-card-header"
+    style="background:linear-gradient(90deg,#6A1B9A,#8E24AA);padding:10px 18px;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#fff;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+    &#128231; تفاصيل الدعوة — Invitation Details</div>
+  <table class="detail-row-table" style="width:100%;border-collapse:collapse;direction:rtl;" role="presentation">
+    <tr>
+      <td class="ar-detail-label"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        الدور المعيّن / Assigned Role</td>
+      <td class="detail-value"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;color:#6B7280;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        <strong>{{ role }}</strong></td>
+    </tr>
     {% if inviter_name %}
-    <div class="detail-row">
-      <span class="ar-detail-label">تم الإرسال بواسطة / Invited By</span>
-      <span class="detail-value">{{ inviter_name }}</span>
-    </div>
+    <tr>
+      <td class="ar-detail-label"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        تم الإرسال بواسطة / Invited By</td>
+      <td class="detail-value"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;color:#6B7280;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        {{ inviter_name }}</td>
+    </tr>
     {% endif %}
-    <div class="detail-row">
-      <span class="ar-detail-label">تنتهي الدعوة خلال / Expires In</span>
-      <span class="detail-value">{{ expires_in_hours }} ساعة / hours</span>
-    </div>
+    <tr>
+      <td class="ar-detail-label"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        تنتهي الدعوة خلال / Expires In</td>
+      <td class="detail-value"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;color:#6B7280;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        {{ expires_in_hours }} ساعة / hours</td>
+    </tr>
     {% if invite_link %}
-    <div class="detail-row">
-      <span class="ar-detail-label">رابط الدعوة / Invite Link</span>
-      <span class="detail-value">{{ invite_link }}</span>
-    </div>
+    <tr>
+      <td class="ar-detail-label"
+        style="padding:11px 18px;font-size:14px;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        رابط الدعوة / Invite Link</td>
+      <td class="detail-value"
+        style="padding:11px 18px;font-size:14px;color:#6B7280;word-break:break-all;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        <a href="{{ invite_link }}" target="_blank" rel="noopener noreferrer"
+          style="color:#F47920;text-decoration:none;direction:ltr;unicode-bidi:embed;word-break:break-all;display:inline-block;">
+          {{ invite_link }}
+        </a>
+      </td>
+    </tr>
     {% endif %}
-  </div>
+  </table>
 </div>
 {% endif %}
 {% endblock %}

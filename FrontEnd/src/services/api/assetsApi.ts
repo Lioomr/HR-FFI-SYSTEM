@@ -84,6 +84,34 @@ export interface AssetDashboardSummary {
   warranty_expiring_soon: number;
 }
 
+export interface AssetDamageReport {
+  id: number;
+  asset: number;
+  asset_code: string;
+  asset_name: string;
+  employee: number;
+  employee_name?: string;
+  employee_email?: string;
+  description: string;
+  status: "PENDING_HR" | "PENDING_CEO" | "APPROVED" | "REJECTED";
+  reported_at: string;
+  ceo_decision_note?: string;
+}
+
+export interface AssetReturnRequest {
+  id: number;
+  asset: number;
+  asset_code: string;
+  asset_name: string;
+  employee: number;
+  employee_name?: string;
+  employee_email?: string;
+  note: string;
+  status: "PENDING" | "PENDING_CEO" | "APPROVED" | "PROCESSED" | "REJECTED";
+  requested_at: string;
+  ceo_decision_note?: string;
+}
+
 export async function listAssets(params?: {
   page?: number;
   page_size?: number;
@@ -148,6 +176,65 @@ export async function reportAssetIssue(
   const { data } = await api.post<ApiResponse<{ id: number; reported_at: string }>>(
     `/api/assets/${assetId}/damage-report/`,
     payload
+  );
+  return data;
+}
+
+export async function requestAssetReturn(
+  assetId: number | string,
+  payload: { note: string }
+) {
+  const { data } = await api.post<ApiResponse<{ id: number; requested_at: string; status: string }>>(
+    `/api/assets/${assetId}/return-request/`,
+    payload
+  );
+  return data;
+}
+
+export async function getCEOAssetDamageReports(params?: { status?: string; page?: number; page_size?: number }) {
+  const { data } = await api.get<ApiResponse<{ items: AssetDamageReport[]; count: number } | AssetDamageReport[]>>(
+    "/api/assets/ceo/assets/damage-reports/",
+    { params }
+  );
+  return data;
+}
+
+export async function approveCEOAssetDamageReport(id: number | string, comment?: string) {
+  const { data } = await api.post<ApiResponse<AssetDamageReport>>(
+    `/api/assets/ceo/assets/damage-reports/${id}/approve/`,
+    { comment }
+  );
+  return data;
+}
+
+export async function rejectCEOAssetDamageReport(id: number | string, comment: string) {
+  const { data } = await api.post<ApiResponse<AssetDamageReport>>(
+    `/api/assets/ceo/assets/damage-reports/${id}/reject/`,
+    { comment }
+  );
+  return data;
+}
+
+export async function getCEOAssetReturnRequests(params?: { status?: string; page?: number; page_size?: number }) {
+  const { data } = await api.get<ApiResponse<{ items: AssetReturnRequest[]; count: number } | AssetReturnRequest[]>>(
+    "/api/assets/ceo/assets/return-requests/",
+    { params }
+  );
+  return data;
+}
+
+export async function approveCEOAssetReturnRequest(id: number | string, comment?: string) {
+  const { data } = await api.post<ApiResponse<AssetReturnRequest>>(
+    `/api/assets/ceo/assets/return-requests/${id}/approve/`,
+    { comment }
+  );
+  return data;
+}
+
+export async function rejectCEOAssetReturnRequest(id: number | string, comment: string) {
+  const { data } = await api.post<ApiResponse<AssetReturnRequest>>(
+    `/api/assets/ceo/assets/return-requests/${id}/reject/`,
+    { comment }
   );
   return data;
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Button, Card, InputNumber, message, Space, Table, Tag, Typography } from "antd";
 import { BellOutlined, MailOutlined, MessageOutlined, ReloadOutlined } from "@ant-design/icons";
 import { getExpiringEmployees, notifyExpiringEmployee, type ExpiringEmployee } from "../../../services/api/employeesApi";
@@ -48,16 +49,20 @@ export default function ExpiringDocumentsPage() {
           .filter(([, v]: any) => v?.sent)
           .map(([k]) => k);
         if (sentChannels.length > 0) {
-          const displayChannels = sentChannels.map((ch) => (ch === "whatsapp" ? "WhatsApp" : ch));
+          const displayChannels = sentChannels.map((ch) => {
+            if (ch === "email") return t("hr.expiringDocs.notifyEmail");
+            if (ch === "whatsapp") return t("hr.expiringDocs.notifySms");
+            return t("hr.expiringDocs.notifyAnnouncement");
+          });
           const annId = delivery?.announcement?.announcement_id;
-          const extra = annId ? ` (announcement #${annId})` : "";
+          const extra = annId ? ` (${t("hr.expiringDocs.announcementRef", { id: annId })})` : "";
           message.success(t("hr.expiringDocs.successNotify", { channels: displayChannels.join(", ") }) + extra);
         } else {
           const reasons = Object.entries(delivery)
             .map(([k, v]: any) => (v?.reason ? `${k}: ${v.reason}` : null))
             .filter(Boolean)
             .join(" | ");
-          message.warning(reasons ? `Not delivered. ${reasons}` : "No notification channel was delivered");
+          message.warning(reasons ? `${t("hr.expiringDocs.notDelivered")} ${reasons}` : t("hr.expiringDocs.noDeliveredChannels"));
         }
       } else {
         message.error(response.message || t("hr.expiringDocs.errorNotify"));
@@ -75,7 +80,9 @@ export default function ExpiringDocumentsPage() {
       key: "employee",
       render: (_: unknown, record: ExpiringEmployee) => (
         <div>
-          <div style={{ fontWeight: 600 }}>{record.full_name || record.employee_id}</div>
+          <div style={{ fontWeight: 600 }}>
+            <Link to={`/hr/employees/${record.id}`} style={{ color: "var(--ant-color-primary)", textDecoration: "none" }}>{record.full_name || record.employee_id}</Link>
+          </div>
           <Text type="secondary" style={{ fontSize: 12 }}>
             {record.employee_id}
           </Text>
@@ -102,7 +109,7 @@ export default function ExpiringDocumentsPage() {
         <Space direction="vertical" size={4}>
           {docs.map((doc) => (
             <Tag key={`${doc.doc_type}-${doc.expiry_date}`} color={doc.days_left <= 7 ? "red" : "orange"}>
-              {doc.label}: {doc.expiry_date} ({doc.days_left}d)
+              {t(`hr.expiringDocs.docType.${doc.doc_type}`)}: {doc.expiry_date} ({doc.days_left} {t("hr.expiringDocs.daysShort")})
             </Tag>
           ))}
         </Space>

@@ -1,8 +1,9 @@
 {% extends "emails/base_email.html" %}
 
 {% block status_badge %}
-<div class="status-badge-wrap">
-  <span class="status-badge badge-rejected">
+<div class="status-badge-wrap" style="background:#f8f9fa;text-align:center;padding:20px 16px 0;">
+  <span class="status-badge badge-rejected"
+    style="display:inline-block;padding:8px 22px;border-radius:100px;font-size:13px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;background:#FFEBEE;color:#C62828;border:1px solid #EF9A9A;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
     &#10007;&nbsp; Not Approved &nbsp;·&nbsp; غير معتمد
   </span>
 </div>
@@ -10,58 +11,93 @@
 
 {% block details %}
 {% if leave_type or start_date or end_date or rejection_reason %}
-<div class="details-card">
-  <div class="details-card-header" style="background: linear-gradient(90deg,#C62828,#E53935);">&#10007; Request Details
-    — تفاصيل الطلب</div>
-  <div class="details-card-body">
-    <div class="detail-row">
-      <span class="detail-label">Leave Type / نوع الإجازة</span>
-      <span class="detail-value">{{ leave_type }}</span>
-    </div>
-    <div class="detail-row">
-      <span class="detail-label">Requested From / بداية المطلوبة</span>
-      <span class="detail-value">{{ start_date }}</span>
-    </div>
-    <div class="detail-row">
-      <span class="detail-label">Requested To / نهاية المطلوبة</span>
-      <span class="detail-value">{{ end_date }}</span>
-    </div>
+<div class="details-card" style="margin:0 0 24px;border-radius:12px;border:1px solid #E5E7EB;overflow:hidden;">
+  <div class="details-card-header"
+    style="background:linear-gradient(90deg,#C62828,#E53935);padding:10px 18px;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#fff;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+    &#10007; Request Details — تفاصيل الطلب</div>
+  <table class="detail-row-table" style="width:100%;border-collapse:collapse;" role="presentation">
+    <tr>
+      <td class="detail-label"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        Leave Type / نوع الإجازة</td>
+      <td class="detail-value"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;color:#6B7280;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        {{ leave_type }}</td>
+    </tr>
+    <tr>
+      <td class="detail-label"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        Requested From / بداية المطلوبة</td>
+      <td class="detail-value"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;color:#6B7280;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        {{ start_date }}</td>
+    </tr>
+    <tr>
+      <td class="detail-label"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        Requested To / نهاية المطلوبة</td>
+      <td class="detail-value"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;color:#6B7280;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        {{ end_date }}</td>
+    </tr>
     {% if rejection_reason %}
-    <div class="detail-row">
-      <span class="detail-label">Reason / السبب</span>
-      <span class="detail-value" style="color:#C62828;">{{ rejection_reason }}</span>
-    </div>
+    <tr>
+      <td class="detail-label"
+        style="padding:11px 18px;font-size:14px;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        Reason / السبب</td>
+      <td class="detail-value"
+        style="padding:11px 18px;font-size:14px;color:#C62828;font-weight:600;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        {{ rejection_reason }}</td>
+    </tr>
     {% endif %}
-  </div>
+  </table>
 </div>
 {% endif %}
 {% endblock %}
 
 {% block details_ar %}
 {% if leave_type or start_date or end_date or rejection_reason %}
-<div class="details-card" style="direction:rtl;text-align:right;">
-  <div class="details-card-header" style="background: linear-gradient(90deg,#C62828,#E53935);">&#10007; تفاصيل الطلب —
-    Request Details</div>
-  <div class="details-card-body">
-    <div class="detail-row">
-      <span class="ar-detail-label">نوع الإجازة / Leave Type</span>
-      <span class="detail-value">{{ leave_type }}</span>
-    </div>
-    <div class="detail-row">
-      <span class="ar-detail-label">بداية الإجازة المطلوبة / Requested From</span>
-      <span class="detail-value">{{ start_date }}</span>
-    </div>
-    <div class="detail-row">
-      <span class="ar-detail-label">نهاية الإجازة المطلوبة / Requested To</span>
-      <span class="detail-value">{{ end_date }}</span>
-    </div>
+<div class="details-card"
+  style="margin:0 0 24px;border-radius:12px;border:1px solid #E5E7EB;overflow:hidden;direction:rtl;text-align:right;">
+  <div class="details-card-header"
+    style="background:linear-gradient(90deg,#C62828,#E53935);padding:10px 18px;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#fff;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+    &#10007; تفاصيل الطلب — Request Details</div>
+  <table class="detail-row-table" style="width:100%;border-collapse:collapse;direction:rtl;" role="presentation">
+    <tr>
+      <td class="ar-detail-label"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        نوع الإجازة / Leave Type</td>
+      <td class="detail-value"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;color:#6B7280;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        {{ leave_type }}</td>
+    </tr>
+    <tr>
+      <td class="ar-detail-label"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        بداية الإجازة المطلوبة / Requested From</td>
+      <td class="detail-value"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;color:#6B7280;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        {{ start_date }}</td>
+    </tr>
+    <tr>
+      <td class="ar-detail-label"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        نهاية الإجازة المطلوبة / Requested To</td>
+      <td class="detail-value"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;color:#6B7280;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        {{ end_date }}</td>
+    </tr>
     {% if rejection_reason %}
-    <div class="detail-row">
-      <span class="ar-detail-label">السبب / Reason</span>
-      <span class="detail-value" style="color:#C62828;">{{ rejection_reason }}</span>
-    </div>
+    <tr>
+      <td class="ar-detail-label"
+        style="padding:11px 18px;font-size:14px;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        السبب / Reason</td>
+      <td class="detail-value"
+        style="padding:11px 18px;font-size:14px;color:#C62828;font-weight:600;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        {{ rejection_reason }}</td>
+    </tr>
     {% endif %}
-  </div>
+  </table>
 </div>
 {% endif %}
 {% endblock %}

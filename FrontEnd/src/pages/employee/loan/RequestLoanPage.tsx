@@ -6,7 +6,7 @@ import { ArrowLeftOutlined, SendOutlined, ArrowRightOutlined } from "@ant-design
 import PageHeader from "../../../components/ui/PageHeader";
 import { createLoanRequest } from "../../../services/api/loanApi";
 import { getEmployee, type Employee } from "../../../services/api/employeesApi";
-import { isApiError } from "../../../services/api/apiTypes";
+import { isApiError, type ApiError } from "../../../services/api/apiTypes";
 import { getHttpStatus } from "../../../services/api/httpErrors";
 import { formatNumber } from "../../../utils/currency";
 import { useI18n } from "../../../i18n/useI18n";
@@ -79,11 +79,53 @@ export default function RequestLoanPage() {
     return t("loans.request.error.generic");
   }
 
-  function getApiMessageDescription(message?: string): string {
+  function getApiMessageDescription(apiError: ApiError): string {
+    const firstError = Array.isArray(apiError.errors) && apiError.errors.length > 0 ? apiError.errors[0] : undefined;
+    if (typeof firstError === "string" && firstError.trim()) {
+      return firstError;
+    }
+    if (firstError && typeof firstError === "object" && "message" in firstError) {
+      const msg = String(firstError.message || "").trim();
+      if (msg) return msg;
+    }
+    const message = apiError.message;
     const normalized = (message || "").trim().toLowerCase();
     if (!normalized) return t("loans.request.error.generic");
     if (normalized === "server error") return t("loans.request.error.server");
-    return message ?? t("loans.request.error.generic");
+    return translateBackendLoanValidationMessage(message);
+  }
+
+  function translateBackendLoanValidationMessage(message?: string): string {
+    const raw = (message || "").trim();
+    if (!raw) return t("loans.request.error.generic");
+    const normalized = raw.toLowerCase();
+
+    if (normalized.includes("employee profile not found")) return t("loans.request.error.profileNotFound");
+    if (normalized.includes("only active employees can request loans")) return t("loans.request.error.inactiveEmployee");
+    if (normalized.includes("basic salary is not configured")) return t("loans.request.error.basicSalaryMissing");
+    if (normalized.includes("last 10 days of the month")) return t("loans.request.error.openLoanWindow");
+    if (normalized.includes("installment months are only for installment loans")) {
+      return t("loans.request.error.installmentMonthsOnlyForInstallment");
+    }
+    if (normalized.includes("installment months are required for installment loans")) {
+      return t("loans.request.error.installmentMonthsRequired");
+    }
+    if (normalized.includes("requires a configured joining date")) {
+      return t("loans.request.error.installmentNeedsJoinDate");
+    }
+    if (normalized.includes("at least 6 months of service")) {
+      return t("loans.request.error.installmentMinService");
+    }
+    if (normalized.includes("loan amount cannot exceed your basic salary")) {
+      return t("loans.request.error.exceedsBasicSalary");
+    }
+
+    const openLimitMatch = raw.match(/Open loan amount cannot exceed 25% of basic salary \(([^)]+)\)\.?/i);
+    if (openLimitMatch) {
+      return t("loans.request.error.openExceedsLimit", { limit: openLimitMatch[1] });
+    }
+
+    return raw;
   }
 
   async function onFinish(values: { amount: number; reason?: string; loan_type: "open" | "installment"; installment_months?: number }) {
@@ -98,7 +140,7 @@ export default function RequestLoanPage() {
       if (isApiError(res)) {
         notification.error({
           message: t("loans.request.failedLoad"),
-          description: getApiMessageDescription(res.message),
+          description: getApiMessageDescription(res),
         });
         return;
       }

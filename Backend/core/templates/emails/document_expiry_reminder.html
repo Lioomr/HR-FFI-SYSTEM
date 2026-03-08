@@ -1,8 +1,9 @@
 {% extends "emails/base_email.html" %}
 
 {% block status_badge %}
-<div class="status-badge-wrap">
-  <span class="status-badge badge-warning">
+<div class="status-badge-wrap" style="background:#f8f9fa;text-align:center;padding:20px 16px 0;">
+  <span class="status-badge badge-warning"
+    style="display:inline-block;padding:8px 22px;border-radius:100px;font-size:13px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;background:#FFF8E1;color:#F57F17;border:1px solid #FFD54F;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
     &#9888;&nbsp; Action Required &nbsp;·&nbsp; إجراء مطلوب
   </span>
 </div>
@@ -10,66 +11,91 @@
 
 {% block details %}
 {% if document_type or expiry_date or days_remaining is not None %}
-<div class="details-card">
-  <div class="details-card-header" style="background: linear-gradient(90deg,#E65100,#F57C00);">&#9888; Document Expiry —
-    انتهاء صلاحية المستند</div>
-  <div class="details-card-body">
-    <div class="detail-row">
-      <span class="detail-label">Document / المستند</span>
-      <span class="detail-value"><strong>{{ document_type }}</strong></span>
-    </div>
-    <div class="detail-row">
-      <span class="detail-label">Expiry Date / تاريخ الانتهاء</span>
-      <span class="detail-value" style="color:#E65100; font-weight:600;">{{ expiry_date }}</span>
-    </div>
+<div class="details-card" style="margin:0 0 24px;border-radius:12px;border:1px solid #E5E7EB;overflow:hidden;">
+  <div class="details-card-header"
+    style="background:linear-gradient(90deg,#E65100,#F57C00);padding:10px 18px;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#fff;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+    &#9888; Document Expiry — انتهاء صلاحية المستند</div>
+  <table class="detail-row-table" style="width:100%;border-collapse:collapse;" role="presentation">
+    <tr>
+      <td class="detail-label"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        Document / المستند</td>
+      <td class="detail-value"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;color:#6B7280;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        <strong>{{ document_type }}</strong></td>
+    </tr>
+    <tr>
+      <td class="detail-label"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        Expiry Date / تاريخ الانتهاء</td>
+      <td class="detail-value"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;color:#E65100;font-weight:600;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        {{ expiry_date }}</td>
+    </tr>
     {% if days_remaining is not None %}
-    <div class="detail-row">
-      <span class="detail-label">Days Remaining / الأيام المتبقية</span>
-      {% if days_remaining <= 7 %}
-      <span class="detail-value" style="color:#C62828; font-weight:700; font-size:16px;">
-      {% elif days_remaining <= 30 %}
-      <span class="detail-value" style="color:#E65100; font-weight:700; font-size:16px;">
-      {% else %}
-      <span class="detail-value" style="color:#2E7D32; font-weight:700; font-size:16px;">
-      {% endif %}
-        {{ days_remaining }} days / يوم
-      </span>
-    </div>
+    <tr>
+      <td class="detail-label"
+        style="padding:11px 18px;font-size:14px;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        Days Remaining / الأيام المتبقية</td>
+      {% if days_remaining <= 7 %} <td class="detail-value"
+        style="padding:11px 18px;font-size:16px;color:#C62828;font-weight:700;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        {% elif days_remaining <= 30 %} <td class="detail-value"
+          style="padding:11px 18px;font-size:16px;color:#E65100;font-weight:700;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+          {% else %}
+          <td class="detail-value"
+            style="padding:11px 18px;font-size:16px;color:#2E7D32;font-weight:700;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+            {% endif %}
+            {{ days_remaining }} days / يوم
+          </td>
+    </tr>
     {% endif %}
-  </div>
+  </table>
 </div>
 {% endif %}
 {% endblock %}
 
 {% block details_ar %}
 {% if document_type or expiry_date or days_remaining is not None %}
-<div class="details-card" style="direction:rtl;text-align:right;">
-  <div class="details-card-header" style="background: linear-gradient(90deg,#E65100,#F57C00);">&#9888; انتهاء صلاحية
-    المستند — Document Expiry</div>
-  <div class="details-card-body">
-    <div class="detail-row">
-      <span class="ar-detail-label">المستند / Document</span>
-      <span class="detail-value"><strong>{{ document_type }}</strong></span>
-    </div>
-    <div class="detail-row">
-      <span class="ar-detail-label">تاريخ الانتهاء / Expiry Date</span>
-      <span class="detail-value" style="color:#E65100; font-weight:600;">{{ expiry_date }}</span>
-    </div>
+<div class="details-card"
+  style="margin:0 0 24px;border-radius:12px;border:1px solid #E5E7EB;overflow:hidden;direction:rtl;text-align:right;">
+  <div class="details-card-header"
+    style="background:linear-gradient(90deg,#E65100,#F57C00);padding:10px 18px;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#fff;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+    &#9888; انتهاء صلاحية المستند — Document Expiry</div>
+  <table class="detail-row-table" style="width:100%;border-collapse:collapse;direction:rtl;" role="presentation">
+    <tr>
+      <td class="ar-detail-label"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        المستند / Document</td>
+      <td class="detail-value"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;color:#6B7280;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        <strong>{{ document_type }}</strong></td>
+    </tr>
+    <tr>
+      <td class="ar-detail-label"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        تاريخ الانتهاء / Expiry Date</td>
+      <td class="detail-value"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;color:#E65100;font-weight:600;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        {{ expiry_date }}</td>
+    </tr>
     {% if days_remaining is not None %}
-    <div class="detail-row">
-      <span class="ar-detail-label">الأيام المتبقية / Days Remaining</span>
-      {% if days_remaining <= 7 %}
-      <span class="detail-value" style="color:#C62828; font-weight:700; font-size:16px;">
-      {% elif days_remaining <= 30 %}
-      <span class="detail-value" style="color:#E65100; font-weight:700; font-size:16px;">
-      {% else %}
-      <span class="detail-value" style="color:#2E7D32; font-weight:700; font-size:16px;">
-      {% endif %}
-        {{ days_remaining }} يوم / days
-      </span>
-    </div>
+    <tr>
+      <td class="ar-detail-label"
+        style="padding:11px 18px;font-size:14px;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        الأيام المتبقية / Days Remaining</td>
+      {% if days_remaining <= 7 %} <td class="detail-value"
+        style="padding:11px 18px;font-size:16px;color:#C62828;font-weight:700;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        {% elif days_remaining <= 30 %} <td class="detail-value"
+          style="padding:11px 18px;font-size:16px;color:#E65100;font-weight:700;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+          {% else %}
+          <td class="detail-value"
+            style="padding:11px 18px;font-size:16px;color:#2E7D32;font-weight:700;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+            {% endif %}
+            {{ days_remaining }} يوم / days
+          </td>
+    </tr>
     {% endif %}
-  </div>
+  </table>
 </div>
 {% endif %}
 {% endblock %}

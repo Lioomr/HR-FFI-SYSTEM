@@ -213,7 +213,7 @@ export default function HRDashboardPage() {
                             size="middle"
                             columns={[
                                 {
-                                    title: t("hr.dashboard.employee"),
+                                    title: t("hr.dashboard.actor", "Actor"),
                                     dataIndex: "employee",
                                     key: "employee",
                                     render: (text: string) => (
@@ -237,7 +237,7 @@ export default function HRDashboardPage() {
                                     title: t("hr.dashboard.actionType"),
                                     dataIndex: "action",
                                     key: "action",
-                                    render: (text: string) => <span style={{ color: "#64748b", fontSize: 13 }}>{text}</span>,
+                                    render: (text: string) => <span style={{ color: "#64748b", fontSize: 13 }}>{t(`audit.action.${text}`, text.replace(/_/g, ' '))}</span>,
                                 },
                                 {
                                     title: t("hr.dashboard.dateTime"),
@@ -246,14 +246,23 @@ export default function HRDashboardPage() {
                                     render: (text: string) => <span style={{ color: "#94a3b8", fontSize: 13 }}>{text}</span>,
                                 },
                                 {
-                                    title: t("common.status"),
+                                    title: t("common.details", "Details"),
                                     dataIndex: "status",
                                     key: "status",
-                                    render: (text: string, record: any) => (
-                                        <Tag color={record.statusColor} style={{ borderRadius: 20, padding: "2px 10px", border: 0, fontWeight: 600, fontSize: 11 }}>
-                                            {text}
-                                        </Tag>
-                                    ),
+                                    render: (text: string, record: any) => {
+                                        let display = text;
+                                        const match = text.match(/^(.*?)( \(\#.*\))?$/);
+                                        if (match) {
+                                            const entity = match[1];
+                                            const suffix = match[2] || '';
+                                            display = t(`audit.entity.${entity}`, entity) + suffix;
+                                        }
+                                        return (
+                                            <Tag color={record.statusColor} style={{ borderRadius: 20, padding: "2px 10px", border: 0, fontWeight: 600, fontSize: 11 }}>
+                                                {display}
+                                            </Tag>
+                                        );
+                                    },
                                 },
                             ]}
                         />

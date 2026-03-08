@@ -74,4 +74,4 @@ class IsEmployeeOnly(BasePermission):
     """
 
     def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and get_role(request.user) in ["Employee", "Manager"]
+        return request.user and request.user.is_authenticated and get_role(request.user) in ["Employee", "Manager", "HRManager"]

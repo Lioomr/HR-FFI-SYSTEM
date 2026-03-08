@@ -78,7 +78,8 @@ def _scope_ceo_queryset_for_user(user, qs):
 
 
 def _reject_self_approval(request, instance):
-    if instance.employee_id == request.user.id:
+    is_hr_manager_origin = bool(instance.employee and instance.employee.groups.filter(name="HRManager").exists())
+    if is_hr_manager_origin and instance.employee_id == request.user.id:
         return error("Validation error", errors=["Self approval is not allowed."], status=422)
     return None
 
@@ -87,6 +88,10 @@ def _next_year_month(year, month):
     if month == 12:
         return year + 1, 1
     return year, month + 1
+
+
+def _is_hr_manager_user(user):
+    return bool(user and user.is_authenticated and user.groups.filter(name="HRManager").exists())
 
 
 def _resolve_open_loan_target_period():
@@ -144,7 +149,9 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
             manager_user = profile.manager
 
         config = get_active_workflow_config()
-        if manager_user and config.require_manager_stage:
+        if _is_hr_manager_user(request.user):
+            initial_status = LoanRequest.RequestStatus.PENDING_CEO
+        elif manager_user and config.require_manager_stage:
             initial_status = LoanRequest.RequestStatus.PENDING_MANAGER
         else:
             initial_status = LoanRequest.RequestStatus.PENDING_HR
@@ -205,6 +212,16 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
                     status_label=instance.status,
                     details=details,
                     action_path=f"/finance/loan-requests/{instance.id}",
+                )
+            elif instance.status == LoanRequest.RequestStatus.PENDING_CEO:
+                notify_users_for_pending_status(
+                    users=get_ceo_approver_users(),
+                    request_type="Loan Request",
+                    request_id=instance.id,
+                    requester_name=requester_name,
+                    status_label=instance.status,
+                    details=details,
+                    action_path=f"/ceo/loan-requests/{instance.id}",
                 )
         except Exception:
             pass

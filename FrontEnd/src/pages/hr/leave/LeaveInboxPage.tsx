@@ -1,16 +1,29 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Card, Table, Tag, Tooltip, notification, Form, Select, DatePicker, Row, Col } from "antd";
+import { Button, Card, Table, Tag, Tooltip, notification, Form, Select, DatePicker, Row, Col, Modal, Input, Upload, Popconfirm } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { EyeOutlined } from "@ant-design/icons";
+import { EyeOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
+import type { UploadFile } from "antd/es/upload/interface";
+import dayjs from "dayjs";
 
 import PageHeader from "../../../components/ui/PageHeader";
-import { getLeaveRequests, type LeaveRequest, type LeaveRequestFilter } from "../../../services/api/leaveApi";
+import {
+    createHRManualLeaveRequest,
+    deleteHRManualLeaveRequest,
+    getLeaveRequests,
+    getLeaveTypes,
+    updateHRManualLeaveRequest,
+    type LeaveRequest,
+    type LeaveRequestFilter,
+    type LeaveType,
+} from "../../../services/api/leaveApi";
 import { isApiError } from "../../../services/api/apiTypes";
+import { listEmployees, type Employee } from "../../../services/api/employeesApi";
 import { useI18n } from "../../../i18n/useI18n";
 
 const { Option } = Select;
 const { RangePicker } = DatePicker;
+const { TextArea } = Input;
 
 export default function LeaveInboxPage() {
     const navigate = useNavigate();
@@ -33,6 +46,16 @@ export default function LeaveInboxPage() {
     // Filters
     const [filters, setFilters] = useState<LeaveRequestFilter>({});
     const [form] = Form.useForm();
+    const [manualForm] = Form.useForm();
+
+    const [manualModalOpen, setManualModalOpen] = useState(false);
+    const [manualModalLoading, setManualModalLoading] = useState(false);
+    const [editingRecord, setEditingRecord] = useState<LeaveRequest | null>(null);
+    const [employees, setEmployees] = useState<Employee[]>([]);
+    const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
+    const selectedLeaveTypeId = Form.useWatch("leave_type", manualForm);
+    const selectedLeaveType = leaveTypes.find((lt) => lt.id === selectedLeaveTypeId);
+    const isSickSelected = ["SICK", "SICK_LEAVE"].includes((selectedLeaveType?.code || "").toUpperCase());
 
     const loadData = useCallback(async () => {
         setLoading(true);
@@ -51,9 +74,31 @@ export default function LeaveInboxPage() {
         }
     }, [page, pageSize, filters]);
 
+    const loadManualFormReferences = useCallback(async () => {
+        try {
+            const [employeesRes, leaveTypesRes] = await Promise.all([
+                listEmployees({ page: 1, page_size: 300 }),
+                getLeaveTypes(),
+            ]);
+
+            if (!isApiError(employeesRes)) {
+                setEmployees(employeesRes.data.results || []);
+            }
+            if (!isApiError(leaveTypesRes)) {
+                setLeaveTypes(leaveTypesRes.data || []);
+            }
+        } catch {
+            notification.error({ message: t("common.error"), description: t("common.tryAgain") });
+        }
+    }, []);
+
     useEffect(() => {
         loadData();
     }, [loadData]);
+
+    useEffect(() => {
+        loadManualFormReferences();
+    }, [loadManualFormReferences]);
 
     const handleFilterChange = (values: any) => {
         const newFilters: LeaveRequestFilter = {};
@@ -107,16 +152,17 @@ export default function LeaveInboxPage() {
             title: t("common.status"),
             dataIndex: "status",
             key: "status",
-            render: (status) => {
+            render: (status, record) => {
                 const statusKey = `leave.status.${status?.toLowerCase()}`;
                 const translated = t(statusKey);
                 const display = translated === statusKey
                     ? (status?.charAt(0).toUpperCase() + status?.slice(1).toLowerCase()).replace(/_/g, ' ')
                     : translated;
                 return (
-                    <Tag color={getStatusColor(status)}>
-                        {display}
-                    </Tag>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                        <Tag color={getStatusColor(status)}>{display}</Tag>
+                        {record.source === "hr_manual" && <Tag color="cyan">{t("leave.manual.badge")}</Tag>}
+                    </div>
                 );
             }
         },
@@ -131,22 +177,136 @@ export default function LeaveInboxPage() {
             key: "actions",
             align: 'center',
             render: (_, record) => (
-                <Tooltip title={t("common.details")}>
-                    <Button
-                        icon={<EyeOutlined />}
-                        onClick={() => navigate(`/hr/leave/requests/${record.id}`)}
-                        size="small"
-                    />
-                </Tooltip>
+                <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+                    <Tooltip title={t("common.details")}>
+                        <Button
+                            icon={<EyeOutlined />}
+                            onClick={() => navigate(`/hr/leave/requests/${record.id}`)}
+                            size="small"
+                        />
+                    </Tooltip>
+                    {record.source === "hr_manual" && (
+                        <>
+                            <Tooltip title={t("common.edit")}>
+                                <Button
+                                    icon={<EditOutlined />}
+                                    size="small"
+                                    onClick={() => openEditModal(record)}
+                                />
+                            </Tooltip>
+                            <Popconfirm
+                                title={t("leave.manual.deleteConfirm")}
+                                okText={t("common.delete")}
+                                cancelText={t("common.cancel")}
+                                onConfirm={() => handleDeleteManual(record.id)}
+                            >
+                                <Button danger icon={<DeleteOutlined />} size="small" />
+                            </Popconfirm>
+                        </>
+                    )}
+                </div>
             ),
         },
     ];
+
+    const openCreateModal = () => {
+        setEditingRecord(null);
+        manualForm.resetFields();
+        setManualModalOpen(true);
+    };
+
+    const openEditModal = (record: LeaveRequest) => {
+        const matchedEmployeeProfile = employees.find((e) => e.user_id === record.employee?.id);
+        setEditingRecord(record);
+        manualForm.setFieldsValue({
+            employee_id: matchedEmployeeProfile?.id,
+            leave_type: record.leave_type?.id,
+            dates: [
+                record.start_date ? dayjs(record.start_date) : null,
+                record.end_date ? dayjs(record.end_date) : null,
+            ],
+            reason: record.reason || "",
+            manual_entry_reason: record.manual_entry_reason || "",
+            source_document_ref: record.source_document_ref || "",
+            document: [],
+        });
+        setManualModalOpen(true);
+    };
+
+    const handleDeleteManual = async (id: number) => {
+        try {
+            const res = await deleteHRManualLeaveRequest(id);
+            if (isApiError(res)) {
+                notification.error({ message: t("common.error"), description: res.message });
+                return;
+            }
+            notification.success({ message: t("leave.manual.deleted") });
+            loadData();
+        } catch {
+            notification.error({ message: t("common.error"), description: t("common.tryAgain") });
+        }
+    };
+
+    const handleSubmitManual = async () => {
+        const values = await manualForm.validateFields();
+        setManualModalLoading(true);
+        try {
+            const payload = new FormData();
+            payload.append("employee_id", String(values.employee_id));
+            payload.append("leave_type", String(values.leave_type));
+            payload.append("start_date", values.dates[0].format("YYYY-MM-DD"));
+            payload.append("end_date", values.dates[1].format("YYYY-MM-DD"));
+            payload.append("reason", values.reason || "");
+            payload.append("manual_entry_reason", values.manual_entry_reason || "");
+            payload.append("source_document_ref", values.source_document_ref || "");
+
+            const fileList = (values.document || []) as UploadFile[];
+            const file = fileList[0]?.originFileObj;
+            if (file) {
+                payload.append("document", file);
+            }
+
+            const res = editingRecord
+                ? await updateHRManualLeaveRequest(editingRecord.id, payload)
+                : await createHRManualLeaveRequest(payload);
+
+            if (isApiError(res)) {
+                notification.error({ message: t("common.error"), description: res.message });
+                return;
+            }
+
+            const warnings = res.data.warning_messages || [];
+            if (warnings.length > 0) {
+                notification.warning({
+                    message: t("leave.manual.savedWithWarnings"),
+                    description: warnings.join(" | "),
+                    duration: 8,
+                });
+            } else {
+                notification.success({ message: editingRecord ? t("leave.manual.updated") : t("leave.manual.created") });
+            }
+
+            setManualModalOpen(false);
+            manualForm.resetFields();
+            setEditingRecord(null);
+            loadData();
+        } catch (err: any) {
+            notification.error({ message: t("common.error"), description: err?.message || t("common.tryAgain") });
+        } finally {
+            setManualModalLoading(false);
+        }
+    };
 
     return (
         <div style={{ maxWidth: 1200, margin: "0 auto" }}>
             <PageHeader
                 title={t("leave.title")}
                 subtitle={t("layout.leaveInbox")}
+                actions={
+                    <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
+                        {t("leave.manual.addButton")}
+                    </Button>
+                }
             />
 
             <Card style={{ marginBottom: 16, borderRadius: 16 }}>
@@ -191,6 +351,65 @@ export default function LeaveInboxPage() {
                     }}
                 />
             </Card>
+
+            <Modal
+                title={editingRecord ? t("leave.manual.editTitle") : t("leave.manual.addTitle")}
+                open={manualModalOpen}
+                onCancel={() => {
+                    setManualModalOpen(false);
+                    setEditingRecord(null);
+                    manualForm.resetFields();
+                }}
+                onOk={handleSubmitManual}
+                confirmLoading={manualModalLoading}
+                okText={editingRecord ? t("common.save") : t("common.create")}
+            >
+                <Form form={manualForm} layout="vertical">
+                    <Form.Item label={t("common.employee")} name="employee_id" rules={[{ required: true }]}>
+                        <Select showSearch optionFilterProp="label" options={employees.map((e) => ({
+                            value: e.id,
+                            label: `${e.full_name_en || e.full_name || e.employee_id} (${e.employee_id})`,
+                        }))} />
+                    </Form.Item>
+                    <Form.Item label={t("leave.leaveType")} name="leave_type" rules={[{ required: true }]}>
+                        <Select options={leaveTypes.map((lt) => ({ value: lt.id, label: lt.name }))} />
+                    </Form.Item>
+                    <Form.Item label={`${t("leave.startDate")} - ${t("leave.endDate")}`} name="dates" rules={[{ required: true }]}>
+                        <RangePicker style={{ width: "100%" }} />
+                    </Form.Item>
+                    <Form.Item label={t("common.reason")} name="reason">
+                        <TextArea rows={2} />
+                    </Form.Item>
+                    <Form.Item label={t("leave.manual.entryReason")} name="manual_entry_reason" rules={[{ required: true }]}>
+                        <TextArea rows={2} />
+                    </Form.Item>
+                    <Form.Item label={t("leave.manual.sourceDocumentRef")} name="source_document_ref" rules={[{ required: true }]}>
+                        <Input />
+                    </Form.Item>
+                    <Form.Item
+                        label={t("common.document")}
+                        name="document"
+                        valuePropName="fileList"
+                        getValueFromEvent={(e) => (Array.isArray(e) ? e : e?.fileList || [])}
+                        rules={[
+                            {
+                                validator: (_, value: UploadFile[]) => {
+                                    if (!isSickSelected) return Promise.resolve();
+                                    const hasExistingDocument = Boolean(editingRecord?.document);
+                                    if (hasExistingDocument) return Promise.resolve();
+                                    return value && value.length > 0
+                                        ? Promise.resolve()
+                                        : Promise.reject(new Error(t("leave.manual.sickDocRequired")));
+                                },
+                            },
+                        ]}
+                    >
+                        <Upload beforeUpload={() => false} maxCount={1} accept=".pdf,.png,.jpg,.jpeg">
+                            <Button>{t("leave.chooseFile")}</Button>
+                        </Upload>
+                    </Form.Item>
+                </Form>
+            </Modal>
         </div>
     );
 }

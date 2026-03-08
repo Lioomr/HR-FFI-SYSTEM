@@ -5,6 +5,7 @@ export type AttendanceStatus =
   | "PENDING"
   | "PENDING_HR"
   | "PENDING_MGR"
+  | "PENDING_CEO"
   | "REJECTED";
 export type AttendanceSource = "EMPLOYEE" | "HR" | "SYSTEM";
 

@@ -112,6 +112,8 @@ function getSelectedKey(pathname: string, items: MenuProps["items"]): string {
           longestMatchLength = key.length;
         }
       }
+      const children = (item as { children?: MenuProps["items"] }).children;
+      if (children) checkItems(children);
     });
   };
   checkItems(items);
@@ -136,6 +138,8 @@ function getTitle(pathname: string, t: (key: string, fallback?: string) => strin
   if (pathname.startsWith("/ceo/team-requests")) return t("layout.teamRequests", "Team Requests");
   if (pathname.startsWith("/ceo/team")) return t("layout.ceoTeam", "Leadership Team");
   if (pathname.startsWith("/ceo/loan-requests")) return t("layout.loanRequests", "Loan Requests");
+  if (pathname.startsWith("/ceo/attendance")) return t("layout.attendance");
+  if (pathname.startsWith("/ceo/assets")) return t("layout.assets", "Assets");
   if (pathname.startsWith("/ceo/announcements")) return t("layout.announcements", "Announcements");
   if (pathname.startsWith("/ceo/profile")) return t("layout.profile");
   if (pathname.startsWith("/hr/loan-requests")) return t("layout.loanRequests", "Loan Requests");
@@ -233,21 +237,56 @@ export default function BaseLayout() {
 
   const hrItems: MenuProps["items"] = [
     { key: "/hr/dashboard", icon: <DashboardOutlined />, label: <Link to="/hr/dashboard">{t("layout.dashboard")}</Link> },
-    { key: "/hr/employees", icon: <TeamOutlined />, label: <Link to="/hr/employees">{t("layout.employees")}</Link> },
-    { key: "/hr/departments", icon: <ApartmentOutlined />, label: <Link to="/hr/departments">{t("layout.departments")}</Link> },
-    { key: "/hr/positions", icon: <IdcardOutlined />, label: <Link to="/hr/positions">{t("layout.positions")}</Link> },
-    { key: "/hr/task-groups", icon: <GroupOutlined />, label: <Link to="/hr/task-groups">{t("layout.taskGroups")}</Link> },
-    { key: "/hr/sponsors", icon: <SafetyOutlined />, label: <Link to="/hr/sponsors">{t("layout.sponsors")}</Link> },
-    { type: "divider" },
-    { key: "/hr/import/employees", icon: <UploadOutlined />, label: <Link to="/hr/import/employees">{t("layout.importEmployees")}</Link> },
-    { key: "/hr/payroll", icon: <DollarOutlined />, label: <Link to="/hr/payroll">{t("layout.payroll")}</Link> },
-    { key: "/hr/assets", icon: <AppstoreOutlined />, label: <Link to="/hr/assets">{t("layout.assets", "Assets")}</Link> },
-    { key: "/hr/rents", icon: <BellOutlined />, label: <Link to="/hr/rents">{t("layout.rents", "Rents")}</Link> },
-    { key: "/hr/rent-types", icon: <SettingOutlined />, label: <Link to="/hr/rent-types">{t("layout.rentTypes", "Rent Types")}</Link> },
-    { key: "/hr/leave/requests", icon: <CalendarOutlined />, label: <Link to="/hr/leave/requests">{t("layout.leaveInbox")}</Link> },
-    { key: "/hr/loan-requests", icon: <DollarOutlined />, label: <Link to="/hr/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
-    { key: "/hr/attendance", icon: <ClockCircleOutlined />, label: <Link to="/hr/attendance">{t("layout.attendance")}</Link> },
-    { key: "/hr/profile", icon: <IdcardOutlined />, label: <Link to="/hr/profile">{t("layout.profile")}</Link> },
+    {
+      type: "group",
+      label: t("layout.menu.workInbox", "Work Inbox"),
+      children: [
+        { key: "/hr/leave/requests", icon: <CalendarOutlined />, label: <Link to="/hr/leave/requests">{t("layout.leaveInbox")}</Link> },
+        { key: "/hr/loan-requests", icon: <DollarOutlined />, label: <Link to="/hr/loan-requests">{t("layout.loanInbox", "Loan Inbox")}</Link> },
+        { key: "/hr/attendance", icon: <ClockCircleOutlined />, label: <Link to="/hr/attendance">{t("layout.attendanceApprovals", "Attendance Approvals")}</Link> },
+      ],
+    },
+    {
+      type: "group",
+      label: t("layout.menu.myRequests", "My Requests"),
+      children: [
+        { key: "/employee/leave/request", icon: <CalendarOutlined />, label: <Link to="/employee/leave/request">{t("layout.requestLeave", "Request Leave")}</Link> },
+        { key: "/employee/leave/requests", icon: <FileSearchOutlined />, label: <Link to="/employee/leave/requests">{t("layout.myRequests")}</Link> },
+        { key: "/employee/attendance", icon: <ClockCircleOutlined />, label: <Link to="/employee/attendance">{t("layout.attendance")}</Link> },
+        { key: "/employee/assets", icon: <AppstoreOutlined />, label: <Link to="/employee/assets">{t("layout.myAssets", "My Assets")}</Link> },
+        { key: "/employee/loans/request", icon: <DollarOutlined />, label: <Link to="/employee/loans/request">{t("loans.myRequests.newRequest", "New Loan Request")}</Link> },
+        { key: "/employee/loans", icon: <DollarOutlined />, label: <Link to="/employee/loans">{t("layout.loanRequests", "Loan Requests")}</Link> },
+      ],
+    },
+    {
+      type: "group",
+      label: t("layout.menu.peopleOrg", "People & Organization"),
+      children: [
+        { key: "/hr/employees", icon: <TeamOutlined />, label: <Link to="/hr/employees">{t("layout.employees")}</Link> },
+        { key: "/hr/departments", icon: <ApartmentOutlined />, label: <Link to="/hr/departments">{t("layout.departments")}</Link> },
+        { key: "/hr/positions", icon: <IdcardOutlined />, label: <Link to="/hr/positions">{t("layout.positions")}</Link> },
+        { key: "/hr/task-groups", icon: <GroupOutlined />, label: <Link to="/hr/task-groups">{t("layout.taskGroups")}</Link> },
+        { key: "/hr/sponsors", icon: <SafetyOutlined />, label: <Link to="/hr/sponsors">{t("layout.sponsors")}</Link> },
+      ],
+    },
+    {
+      type: "group",
+      label: t("layout.menu.operations", "Operations"),
+      children: [
+        { key: "/hr/import/employees", icon: <UploadOutlined />, label: <Link to="/hr/import/employees">{t("layout.importEmployees")}</Link> },
+        { key: "/hr/payroll", icon: <DollarOutlined />, label: <Link to="/hr/payroll">{t("layout.payroll")}</Link> },
+        { key: "/hr/assets", icon: <AppstoreOutlined />, label: <Link to="/hr/assets">{t("layout.assets", "Assets")}</Link> },
+        { key: "/hr/rents", icon: <BellOutlined />, label: <Link to="/hr/rents">{t("layout.rents", "Rents")}</Link> },
+        { key: "/hr/rent-types", icon: <SettingOutlined />, label: <Link to="/hr/rent-types">{t("layout.rentTypes", "Rent Types")}</Link> },
+      ],
+    },
+    {
+      type: "group",
+      label: t("layout.menu.account", "Account"),
+      children: [
+        { key: "/hr/profile", icon: <IdcardOutlined />, label: <Link to="/hr/profile">{t("layout.profile")}</Link> },
+      ],
+    },
   ];
 
   const employeeItems: MenuProps["items"] = [
@@ -283,6 +322,9 @@ export default function BaseLayout() {
     { key: "/ceo/team-requests", icon: <FileSearchOutlined />, label: <Link to="/ceo/team-requests">{t("layout.teamRequests", "Team Requests")}</Link> },
     { key: "/ceo/team", icon: <TeamOutlined />, label: <Link to="/ceo/team">{t("layout.ceoTeam", "Leadership Team")}</Link> },
     { key: "/ceo/loan-requests", icon: <DollarOutlined />, label: <Link to="/ceo/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
+    { key: "/ceo/attendance", icon: <ClockCircleOutlined />, label: <Link to="/ceo/attendance">{t("layout.attendance")}</Link> },
+    { key: "/ceo/assets/damage-reports", icon: <AppstoreOutlined />, label: <Link to="/ceo/assets/damage-reports">{t("assets.damageReports", "Damage Reports")}</Link> },
+    { key: "/ceo/assets/return-requests", icon: <AppstoreOutlined />, label: <Link to="/ceo/assets/return-requests">{t("assets.returnRequests", "Return Requests")}</Link> },
     { key: "/ceo/announcements", icon: <BellOutlined />, label: <Link to="/ceo/announcements">{t("layout.announcements", "Announcements")}</Link> },
     { key: "/ceo/announcements/create", icon: <UserAddOutlined />, label: <Link to="/ceo/announcements/create">{t("layout.createAnnouncement", "Create Announcement")}</Link> },
     { key: "/ceo/profile", icon: <IdcardOutlined />, label: <Link to="/ceo/profile">{t("layout.profile")}</Link> },
@@ -303,7 +345,12 @@ export default function BaseLayout() {
                 ? [
                   ...employeeItems,
                   ...(isCFOApprover ? [{ key: "/cfo/loan-requests", icon: <DollarOutlined />, label: <Link to="/cfo/loan-requests">{t("layout.cfoLoanInbox", "CFO Loan Inbox")}</Link> }] : []),
-                  ...(isCEOApprover ? [{ key: "/ceo/loan-requests", icon: <DollarOutlined />, label: <Link to="/ceo/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> }] : []),
+                  ...(isCEOApprover ? [
+                    { key: "/ceo/loan-requests", icon: <DollarOutlined />, label: <Link to="/ceo/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
+                    { key: "/ceo/attendance", icon: <ClockCircleOutlined />, label: <Link to="/ceo/attendance">{t("layout.attendance")}</Link> },
+                    { key: "/ceo/assets/damage-reports", icon: <AppstoreOutlined />, label: <Link to="/ceo/assets/damage-reports">{t("assets.damageReports", "Damage Reports")}</Link> },
+                    { key: "/ceo/assets/return-requests", icon: <AppstoreOutlined />, label: <Link to="/ceo/assets/return-requests">{t("assets.returnRequests", "Return Requests")}</Link> },
+                  ] : []),
                 ]
                 : [];
 

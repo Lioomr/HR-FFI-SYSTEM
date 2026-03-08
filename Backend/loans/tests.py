@@ -25,6 +25,7 @@ class LoanWorkflowTests(APITestCase):
 
         self.finance_dept = Department.objects.create(id=8, code="ACCOUNTANT", name="Accounting Department")
         self.it_dept = Department.objects.create(id=4, code="IT", name="IT Department")
+        self.ceo_dept = Department.objects.create(id=1, code="CEO", name="CEO Department")
         self.finance_position = Position.objects.create(id=24, code="ACCOUNTANT", name="Accountant")
         self.cfo_position = Position.objects.create(id=3, code="CFO", name="CFO")
         self.ceo_position = Position.objects.create(id=1, code="CEO", name="Chief Executive Officer")
@@ -107,7 +108,7 @@ class LoanWorkflowTests(APITestCase):
             user=self.ceo,
             employee_id="EMP-CEO-1",
             full_name="CEO User",
-            department_ref=self.it_dept,
+            department_ref=self.ceo_dept,
             position_ref=self.ceo_position,
             employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
             basic_salary=Decimal("18000.00"),
@@ -176,6 +177,12 @@ class LoanWorkflowTests(APITestCase):
         response = self.client.post(self.loan_requests_url, {"amount": "1200", "reason": "Medical"}, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["data"]["status"], LoanRequest.RequestStatus.PENDING_HR)
+
+    def test_hr_manager_submission_sets_pending_ceo(self):
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.post(self.loan_requests_url, {"amount": "800", "reason": "Travel"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["data"]["status"], LoanRequest.RequestStatus.PENDING_CEO)
 
     def test_manager_reject_forwards_to_hr_with_recommendation(self):
         request_obj = self._create_pending_manager_request()

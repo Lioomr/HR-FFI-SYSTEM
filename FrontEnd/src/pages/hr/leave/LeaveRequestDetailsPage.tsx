@@ -225,6 +225,17 @@ export default function LeaveRequestDetailsPage() {
                         )}
                     </Descriptions.Item>
                     <Descriptions.Item label={t("common.submittedOn")}>{request.created_at ? new Date(request.created_at).toLocaleDateString() : '-'}</Descriptions.Item>
+                    {request.source === "hr_manual" && (
+                        <Descriptions.Item label={t("leave.manual.recordSource")}>
+                            <Tag color="cyan">{t("leave.manual.badge")}</Tag>
+                        </Descriptions.Item>
+                    )}
+                    {request.source === "hr_manual" && (
+                        <Descriptions.Item label={t("leave.manual.entryReason")}>{request.manual_entry_reason || "-"}</Descriptions.Item>
+                    )}
+                    {request.source === "hr_manual" && (
+                        <Descriptions.Item label={t("leave.manual.sourceDocumentRef")}>{request.source_document_ref || "-"}</Descriptions.Item>
+                    )}
 
                     {request.status === 'rejected' && (
                         <Descriptions.Item label={t("leave.rejectionReason")} contentStyle={{ color: 'red' }}>
