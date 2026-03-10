@@ -78,6 +78,8 @@ export interface ListEmployeesParams {
   task_group?: string;
   sponsor?: string;
   status?: string;
+  nationality?: string;
+  join_date_order?: "asc" | "desc";
 }
 
 /**

@@ -4,6 +4,8 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils import timezone
 from rest_framework import serializers
 
+from core.permissions import get_role
+
 from .models import Invite
 
 User = get_user_model()
@@ -20,6 +22,16 @@ class InviteCreateSerializer(serializers.Serializer):
         if value not in ALLOWED_ROLES:
             raise serializers.ValidationError("Invalid role.")
         return value
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+        requester = getattr(request, "user", None)
+        requested_role = attrs.get("role")
+
+        if requested_role == "SystemAdmin" and get_role(requester) != "SystemAdmin":
+            raise serializers.ValidationError({"role": ["Only SystemAdmin can assign SystemAdmin role."]})
+
+        return attrs
 
     def validate_email(self, value: str) -> str:
         normalized = value.strip().lower()

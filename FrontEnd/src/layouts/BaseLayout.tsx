@@ -128,6 +128,7 @@ function getTitle(pathname: string, t: (key: string, fallback?: string) => strin
   if (pathname.startsWith("/admin/audit-logs")) return t("layout.auditLogs");
   if (pathname.startsWith("/admin/settings")) return t("layout.systemSettings");
   if (pathname.startsWith("/hr/dashboard")) return t("layout.dashboardOverview");
+  if (pathname.startsWith("/hr/invites")) return t("layout.invites");
   if (pathname.startsWith("/hr")) return t("layout.hrManagement");
   if (pathname.startsWith("/manager/dashboard")) return t("layout.managerDashboard", "Manager Dashboard");
   if (pathname.startsWith("/manager/team-requests")) return t("layout.teamRequests", "Team Requests");
@@ -237,6 +238,7 @@ export default function BaseLayout() {
 
   const hrItems: MenuProps["items"] = [
     { key: "/hr/dashboard", icon: <DashboardOutlined />, label: <Link to="/hr/dashboard">{t("layout.dashboard")}</Link> },
+    { key: "/hr/invites", icon: <UserAddOutlined />, label: <Link to="/hr/invites">{t("layout.invites")}</Link> },
     {
       type: "group",
       label: t("layout.menu.workInbox", "Work Inbox"),

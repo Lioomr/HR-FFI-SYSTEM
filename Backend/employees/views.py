@@ -282,6 +282,20 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         if status_value:
             qs = qs.filter(employment_status=status_value)
 
+        nationality = params.get("nationality")
+        if nationality:
+            qs = qs.filter(
+                Q(nationality__icontains=nationality)
+                | Q(nationality_en__icontains=nationality)
+                | Q(nationality_ar__icontains=nationality)
+            )
+
+        join_date_order = params.get("join_date_order")
+        if join_date_order == "asc":
+            qs = qs.order_by("hire_date", "employee_id")
+        elif join_date_order == "desc":
+            qs = qs.order_by("-hire_date", "employee_id")
+
         return qs
 
     def list(self, request, *args, **kwargs):
