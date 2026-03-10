@@ -1359,6 +1359,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "payroll.runDetails.pdfReportName": "PDF Report",
     "payroll.runDetails.pdfReportDesc": "Printable PDF summary of the payroll run, suitable for official records.",
     "payroll.runDetails.exportPdf": "Export PDF",
+    "payroll.runDetails.exportReady": "Report downloaded successfully.",
+    "payroll.runDetails.exportFailed": "Failed to download report.",
 
     // Loans
     "loans.title": "Loan Requests",
@@ -2245,6 +2247,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "payroll.runDetails.pdfReportName": "تقرير PDF",
     "payroll.runDetails.pdfReportDesc": "ملخص PDF قابل للطباعة لدورة الرواتب، مناسب للسجلات الرسمية.",
     "payroll.runDetails.exportPdf": "تصدير PDF",
+    "payroll.runDetails.exportReady": "تم تنزيل التقرير بنجاح.",
+    "payroll.runDetails.exportFailed": "فشل تنزيل التقرير.",
     "payroll.details.colBasicSalary": "الراتب الأساسي",
     "payroll.totalNet": "إجمالي الصافي",
     "payroll.payslip": "قسيمة الراتب",
@@ -2256,7 +2260,22 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "payroll.transport": "بدل المواصلات",
     "payroll.gosi": "التأمينات الاجتماعية",
     "payroll.absence": "استقطاع الغياب",
-
+    "payroll.processingTitle": "جاري معالجة الرواتب",
+    "payroll.processingDesc": "يتم حساب الرواتب وإنشاء قسائم جميع الموظفين النشطين...",
+    "payroll.runExists": "دورة الرواتب موجودة",
+    "payroll.runExistsDesc": "توجد دورة بالفعل لـ {month}/{year}. جاري فتحها...",
+    "payroll.alreadyExists": "موجودة مسبقاً",
+    "payroll.alreadyExistsDesc": "توجد بالفعل دورة رواتب لهذه الفترة.",
+    "payroll.creationFail": "فشل الإنشاء",
+    "payroll.creationFailDesc": "تعذّر إنشاء دورة الرواتب.",
+    "payroll.creationSuccess": "تم إنشاء دورة الرواتب بنجاح",
+    "payroll.runExistsDesc2": "جاري فتح الدورة الموجودة لـ {month}/{year}...",
+    "payroll.alreadyExistsDesc2": "توجد بالفعل دورة رواتب لهذه الفترة، لكن تعذّر تحديدها تلقائياً.",
+    "payroll.unexpectedError": "حدث خطأ غير متوقع",
+    "payroll.createTitle": "إنشاء دورة رواتب",
+    "payroll.createDesc": "حدد الفترة لدورة الرواتب الجديدة",
+    "payroll.yearReq": "يرجى اختيار السنة",
+    "payroll.monthReq": "يرجى اختيار الشهر",
 
     // Announcements
     "announcements.title": "الإعلانات",

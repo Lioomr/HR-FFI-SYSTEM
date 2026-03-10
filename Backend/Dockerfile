@@ -6,7 +6,13 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential libpq-dev \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        libpq-dev \
+        fonts-dejavu-core \
+        libfreetype6-dev \
+        libjpeg62-turbo-dev \
+        zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt /app/requirements.txt
