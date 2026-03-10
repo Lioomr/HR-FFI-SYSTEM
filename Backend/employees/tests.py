@@ -218,6 +218,52 @@ class EmployeeProfileTests(TestCase):
         self.assertEqual(profile.manager_id, manager_user.id)
         self.assertEqual(profile.data_source, EmployeeProfile.DataSource.MANUAL)
 
+    def test_list_filters_by_nationality_and_orders_by_joining_date(self):
+        EmployeeProfile.objects.create(
+            user=self.employee_user,
+            employee_id="EMP-FLT-01",
+            department_ref=self.dept,
+            position_ref=self.pos,
+            department=self.dept.name,
+            job_title=self.pos.name,
+            full_name="Older Saudi Employee",
+            nationality="Saudi",
+            hire_date="2023-01-01",
+        )
+        EmployeeProfile.objects.create(
+            user=self.employee_user_2,
+            employee_id="EMP-FLT-02",
+            department_ref=self.dept,
+            position_ref=self.pos_senior,
+            department=self.dept.name,
+            job_title=self.pos_senior.name,
+            full_name="Newer Saudi Employee",
+            nationality="Saudi Arabia",
+            hire_date="2024-06-01",
+        )
+        outsider_user = User.objects.create_user(email="emp3@ffi.com", password="password")
+        EmployeeProfile.objects.create(
+            user=outsider_user,
+            employee_id="EMP-FLT-03",
+            department_ref=self.dept,
+            position_ref=self.pos,
+            department=self.dept.name,
+            job_title=self.pos.name,
+            full_name="Egyptian Employee",
+            nationality="Egyptian",
+            hire_date="2025-01-01",
+        )
+
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.get("/api/employees/?nationality=saudi&join_date_order=desc")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data["data"]["results"]
+
+        self.assertEqual(len(results), 2)
+        self.assertEqual(results[0]["full_name"], "Newer Saudi Employee")
+        self.assertEqual(results[1]["full_name"], "Older Saudi Employee")
+
     def test_excel_import_raw_dates_saudi_foreign_and_manager_profile_linking(self):
         self.client.force_authenticate(user=self.hr_user)
         wb = Workbook()

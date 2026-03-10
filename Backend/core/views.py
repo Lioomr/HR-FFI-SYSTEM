@@ -100,10 +100,12 @@ class HrSummaryView(APIView):
         from audit.models import AuditLog
 
         recent_activity = []
-        # Get the latest 10 audit logs with actor and user information, filtered strictly for HR managers/Admins
-        latest_logs = AuditLog.objects.filter(
-            actor__groups__name__in=["HRManager", "SystemAdmin"]
-        ).select_related("actor").order_by("-created_at")[:10]
+        # HR dashboard should only show HR manager activity, not system admin activity.
+        latest_logs = (
+            AuditLog.objects.filter(actor__groups__name="HRManager")
+            .select_related("actor")
+            .order_by("-created_at")[:10]
+        )
         
         for log in latest_logs:
             # Determine the actor name

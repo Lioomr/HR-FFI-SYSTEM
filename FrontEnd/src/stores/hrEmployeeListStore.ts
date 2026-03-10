@@ -10,6 +10,8 @@ interface EmployeeListFilters {
   task_group?: string;
   sponsor?: string;
   status?: string;
+  nationality?: string;
+  joinDateOrder?: "asc" | "desc";
 }
 
 /**
