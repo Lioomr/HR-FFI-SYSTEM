@@ -147,6 +147,7 @@ export const routes = [
               { path: "hr/dashboard", element: <HRDashboardPage /> },
               { path: "hr/profile", element: <UserProfilePage /> },
               { path: "hr/attendance", element: <HRAttendancePage /> },
+              { path: "hr/invites", element: <AdminInvitesPage /> },
 
               // Employee Management
               { path: "hr/employees", element: <EmployeesListPage /> },

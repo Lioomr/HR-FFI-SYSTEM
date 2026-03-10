@@ -17,7 +17,7 @@ from rest_framework.views import APIView
 
 from admin_portal.models import SystemSettings  # ✅ uses /settings default_invite_expiry_hours
 from audit.utils import audit
-from core.permissions import IsSystemAdmin
+from core.permissions import IsHRManagerOrAdmin
 from core.responses import error, success
 from core.services import send_user_invite_email
 
@@ -78,7 +78,7 @@ def normalize_expired_invites():
 
 
 class InvitesListCreateView(APIView):
-    permission_classes = [IsAuthenticated, IsSystemAdmin]
+    permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
 
     def get(self, request):
         normalize_expired_invites()
@@ -101,7 +101,7 @@ class InvitesListCreateView(APIView):
 
     @transaction.atomic
     def post(self, request):
-        s = InviteCreateSerializer(data=request.data)
+        s = InviteCreateSerializer(data=request.data, context={"request": request})
         if not s.is_valid():
             return error("Validation error", errors=s.errors, status=422)
 
@@ -161,7 +161,7 @@ class InvitesListCreateView(APIView):
 
 
 class InviteResendView(APIView):
-    permission_classes = [IsAuthenticated, IsSystemAdmin]
+    permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
 
     @transaction.atomic
     def post(self, request, invite_id: int):
@@ -232,7 +232,7 @@ class InviteResendView(APIView):
 
 
 class InviteRevokeView(APIView):
-    permission_classes = [IsAuthenticated, IsSystemAdmin]
+    permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
 
     @transaction.atomic
     def delete(self, request, invite_id: int):

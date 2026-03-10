@@ -1,7 +1,7 @@
 
 import { useCallback, useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Card, Input, Select, Table, Dropdown, Typography, Tooltip } from "antd";
+import { Button, Card, Input, Select, Table, Dropdown, Typography, Tooltip, Popover } from "antd";
 import type { MenuProps } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
@@ -10,6 +10,7 @@ import {
     FilterOutlined,
     DownloadOutlined,
     EllipsisOutlined,
+    SortAscendingOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { getCountryCode } from "../../../utils/countries";
@@ -172,18 +173,31 @@ export default function EmployeesListPage() {
 
     // Filter options state
     const [departments, setDepartments] = useState<{ code: string; name: string }[]>([]);
+    const [nationalities, setNationalities] = useState<string[]>([]);
+    const [filtersOpen, setFiltersOpen] = useState(false);
 
     /**
      * Fetch filter options
      */
     const loadFilterOptions = useCallback(async () => {
         try {
-            const [deptRes] = await Promise.all([
+            const [deptRes, employeeRes] = await Promise.all([
                 listDepartments(),
+                listEmployees({ page: 1, page_size: 1000 }),
             ]);
 
             if (!isApiError(deptRes) && Array.isArray(deptRes.data)) {
                 setDepartments(deptRes.data.map((d: any) => ({ code: d.code, name: d.name })));
+            }
+            if (!isApiError(employeeRes)) {
+                const uniqueNationalities = Array.from(
+                    new Set(
+                        (employeeRes.data.results || [])
+                            .map((employee) => employee.nationality || employee.nationality_en || employee.nationality_ar)
+                            .filter((value): value is string => Boolean(value?.trim()))
+                    )
+                ).sort((a, b) => a.localeCompare(b));
+                setNationalities(uniqueNationalities);
             }
         } catch (err) {
             console.error("Failed to load filter options:", err);
@@ -206,6 +220,8 @@ export default function EmployeesListPage() {
                 department: filters.department || undefined,
                 position: filters.position || undefined,
                 status: filters.status || undefined,
+                nationality: filters.nationality || undefined,
+                join_date_order: filters.joinDateOrder || undefined,
             };
 
             const response = await listEmployees(params);
@@ -275,6 +291,56 @@ export default function EmployeesListPage() {
         },
     ];
 
+    const toggleJoinDateOrder = () => {
+        const nextOrder = filters.joinDateOrder === "desc" ? "asc" : "desc";
+        setFilters({ joinDateOrder: nextOrder });
+    };
+
+    const clearExtraFilters = () => {
+        setFilters({ nationality: undefined, joinDateOrder: undefined });
+    };
+
+    const joinDateSortLabel =
+        filters.joinDateOrder === "asc"
+            ? t("employees.list.joinDateOldestFirst", "Joining Date: Oldest First")
+            : filters.joinDateOrder === "desc"
+              ? t("employees.list.joinDateNewestFirst", "Joining Date: Newest First")
+              : t("employees.list.joinDateDefault", "Joining Date: Default");
+
+    const moreFiltersContent = (
+        <div style={{ width: 260, display: "flex", flexDirection: "column", gap: 12 }}>
+            <div>
+                <Text strong style={{ display: "block", marginBottom: 8 }}>
+                    {t("common.moreFilters")}
+                </Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                    {t("employees.list.moreFiltersHelp", "Filter by nationality or sort by joining date.")}
+                </Text>
+            </div>
+
+            <Select
+                placeholder={t("employees.list.nationalityPlaceholder", "Nationality")}
+                value={filters.nationality || undefined}
+                onChange={(value) => setFilters({ nationality: value })}
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                options={nationalities.map((nationality) => ({
+                    value: nationality,
+                    label: nationality,
+                }))}
+            />
+
+            <Button icon={<SortAscendingOutlined />} onClick={toggleJoinDateOrder}>
+                {joinDateSortLabel}
+            </Button>
+
+            <Button onClick={clearExtraFilters}>
+                {t("common.clear", "Clear")}
+            </Button>
+        </div>
+    );
+
     const columns: ColumnsType<Employee> = [
         {
             title: t("employees.list.colName"),
@@ -341,10 +407,12 @@ export default function EmployeesListPage() {
         },
         {
             title: t("employees.list.colJoiningDate"),
-            dataIndex: "hire_date",
             key: "hire_date",
             width: 140,
-            render: (text) => text ? dayjs(text).format("MMM DD, YYYY") : "-"
+            render: (_, record) => {
+                const joiningDate = record.hire_date;
+                return joiningDate ? dayjs(joiningDate).format("MMM DD, YYYY") : "-";
+            }
         },
         {
             title: t("employees.list.colStatus"),
@@ -446,14 +514,29 @@ export default function EmployeesListPage() {
                             className="custom-select-filter"
                         >
                             <Option value="ACTIVE">{t("status.active")}</Option>
-                            <Option value="ON_LEAVE">{t("status.onLeave")}</Option>
                             <Option value="SUSPENDED">{t("status.suspended")}</Option>
                             <Option value="TERMINATED">{t("status.terminated")}</Option>
                         </Select>
 
-                        <Tooltip title={t("common.moreFilters")}>
-                            <Button size="large" icon={<FilterOutlined />} style={{ borderRadius: 8 }} />
-                        </Tooltip>
+                        <Popover
+                            content={moreFiltersContent}
+                            trigger="click"
+                            open={filtersOpen}
+                            onOpenChange={setFiltersOpen}
+                            placement="bottomRight"
+                        >
+                            <Tooltip title={t("common.moreFilters")}>
+                                <Button
+                                    size="large"
+                                    icon={<FilterOutlined />}
+                                    style={{
+                                        borderRadius: 8,
+                                        borderColor: filters.nationality || filters.joinDateOrder ? "#fa8c16" : undefined,
+                                        color: filters.nationality || filters.joinDateOrder ? "#fa8c16" : undefined,
+                                    }}
+                                />
+                            </Tooltip>
+                        </Popover>
 
                         <Tooltip title={t("common.export")}>
                             <Button size="large" icon={<DownloadOutlined />} style={{ borderRadius: 8 }} />

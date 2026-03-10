@@ -1,6 +1,6 @@
 [project]
 name = "ffi-hr-system"
-version = "0.1.0"
+version = "0.1.1"
 description = "FFI HR System Backend"
 evaluate-lines = true
 
