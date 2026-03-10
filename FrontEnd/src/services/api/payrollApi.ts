@@ -186,7 +186,7 @@ export async function getPayrollRunSummary(
 
 /**
  * Export payroll report
- * GET /payroll-runs/{id}/export?format=csv|pdf
+ * GET /payroll-runs/{id}/export?file_format=csv|pdf|xlsx
  */
 export async function exportPayrollReport(
   runId: string | number,
@@ -195,7 +195,7 @@ export async function exportPayrollReport(
   const response = await api.get(
     `/payroll-runs/${runId}/export`,
     {
-      params: { format },
+      params: { file_format: format },
       responseType: "blob"
     }
   );
