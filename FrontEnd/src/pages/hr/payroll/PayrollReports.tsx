@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Card, Descriptions, Alert, Typography } from "antd";
+import { Button, Card, Descriptions, Alert, Typography, notification } from "antd";
 import { FilePdfOutlined, FileExcelOutlined, DownloadOutlined } from "@ant-design/icons";
 import { exportPayrollReport } from "../../../services/api/payrollApi";
 import { useI18n } from "../../../i18n/useI18n";
@@ -35,10 +35,17 @@ export default function PayrollReports({ runId }: PayrollReportsProps) {
             // Cleanup
             link.remove();
             window.URL.revokeObjectURL(url);
+            notification.success({
+                message: t("common.success"),
+                description: t("payroll.runDetails.exportReady"),
+            });
 
         } catch (err) {
             console.error("Export failed", err);
-            // Ideally show notification from antd
+            notification.error({
+                message: t("common.error"),
+                description: t("payroll.runDetails.exportFailed"),
+            });
         } finally {
             setDownloading(null);
         }

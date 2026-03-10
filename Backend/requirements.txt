@@ -8,5 +8,6 @@ pytest-django
 python-dotenv
 requests
 openpyxl
+reportlab
 psycopg2-binary
 gunicorn
