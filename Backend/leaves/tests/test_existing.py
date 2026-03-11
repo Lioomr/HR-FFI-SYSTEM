@@ -121,6 +121,32 @@ class LeaveManagementTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["data"]["status"], LeaveRequest.RequestStatus.PENDING_CEO)
 
+    def test_annual_leave_allowed_after_six_months_service(self):
+        from employees.models import EmployeeProfile
+
+        hire_date = date.today() - timedelta(days=200)
+        EmployeeProfile.objects.create(
+            user=self.emp1,
+            employee_id="EMP-SIX-MONTHS",
+            hire_date=hire_date,
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        )
+
+        self.client.force_authenticate(user=self.emp1)
+        start = date.today() + timedelta(days=1)
+        end = date.today() + timedelta(days=2)
+        response = self.client.post(
+            "/api/leaves/leave-requests/",
+            {
+                "leave_type": self.annual_leave.id,
+                "start_date": str(start),
+                "end_date": str(end),
+                "reason": "Eligible after six months",
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
     def test_cancel_leave_request(self):
         self.client.force_authenticate(user=self.emp1)
         start = date.today() + timedelta(days=10)
@@ -154,6 +180,23 @@ class LeaveManagementTests(TestCase):
         # 500 debug: likely get_role or something else.
         # But expecting 404.
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_employee_can_download_leave_request_pdf(self):
+        req = LeaveRequest.objects.create(
+            employee=self.emp1,
+            leave_type=self.annual_leave,
+            start_date=date.today() + timedelta(days=4),
+            end_date=date.today() + timedelta(days=6),
+            status=LeaveRequest.RequestStatus.PENDING_HR,
+            reason="Family event",
+        )
+
+        self.client.force_authenticate(user=self.emp1)
+        response = self.client.get(f"/api/leaves/leave-requests/{req.id}/pdf/?download=1")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertIn(f'leave_request_{req.id}.pdf', response["Content-Disposition"])
 
     def test_overlapping_requests_forbidden(self):
         self.client.force_authenticate(user=self.emp1)

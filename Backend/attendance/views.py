@@ -346,25 +346,9 @@ class ManagerAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         role = get_role(self.request.user)
-        if role == "CEO":
-            ceo_profile = getattr(self.request.user, "employee_profile", None)
-            direct_reports_q = Q(manager=self.request.user)
-            if ceo_profile:
-                direct_reports_q = direct_reports_q | Q(manager_profile=ceo_profile)
-
-            leadership_user_ids = User.objects.filter(groups__name__in=["Manager", "HRManager"]).values_list(
-                "id", flat=True
-            )
-            direct_report_user_ids = (
-                EmployeeProfile.objects.filter(direct_reports_q)
-                .exclude(user__isnull=True)
-                .values_list("user_id", flat=True)
-            )
-            scope_user_ids = set(leadership_user_ids).union(set(direct_report_user_ids))
-
-            return AttendanceRecord.objects.filter(employee_profile__user_id__in=scope_user_ids).select_related(
-                "employee_profile__user", "employee_profile__manager_profile"
-            )
+        base_qs = AttendanceRecord.objects.select_related("employee_profile__user", "employee_profile__manager_profile")
+        if role == "SystemAdmin":
+            return base_qs
 
         # Only records where the employee's manager maps to current user
         manager_profile = getattr(self.request.user, "employee_profile", None)
@@ -372,11 +356,11 @@ class ManagerAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
         if manager_profile:
             profile_match = Q(employee_profile__manager_profile=manager_profile)
 
-        return AttendanceRecord.objects.filter(
+        return base_qs.filter(
             Q(employee_profile__manager_profile__user=self.request.user)
             | Q(employee_profile__manager=self.request.user)
             | profile_match
-        ).select_related("employee_profile__user", "employee_profile__manager_profile")
+        )
 
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):

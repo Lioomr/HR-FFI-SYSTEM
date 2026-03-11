@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Card, Col, Row, Select, Table, Tag } from "antd";
+import { Button, Card, Col, Grid, Row, Select, Space, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined } from "@ant-design/icons";
 
@@ -17,10 +17,13 @@ import { isForbidden } from "../../../services/api/httpErrors";
 import AmountWithSAR from "../../../components/ui/AmountWithSAR";
 
 const { Option } = Select;
+const { useBreakpoint } = Grid;
 
 export default function PayrollDashboardPage() {
     const navigate = useNavigate();
     const { t } = useI18n();
+    const screens = useBreakpoint();
+    const isMobile = !screens.md;
 
     // State
     const [loading, setLoading] = useState(true);
@@ -137,27 +140,53 @@ export default function PayrollDashboardPage() {
                         type="primary"
                         icon={<PlusOutlined />}
                         onClick={() => navigate("/hr/payroll/create")}
+                        block={isMobile}
                     >
                         {t("payroll.createRun")}
                     </Button>
                 }
             />
 
-            {/* Filter Bar */}
             <Card style={{ borderRadius: 16, marginBottom: 16 }} bodyStyle={{ padding: 16 }}>
-                <Row gutter={16} align="middle">
-                    <Col>
-                        <span style={{ marginRight: 8 }}>{t("payroll.year")}:</span>
-                        <Select
-                            value={year}
-                            onChange={setYear}
-                            style={{ width: 100 }}
+                <Row gutter={[16, 16]} align="middle">
+                    <Col xs={24} sm={24} md="auto">
+                        <Space
+                            direction={isMobile ? "vertical" : "horizontal"}
+                            size={8}
+                            style={{ width: "100%", alignItems: isMobile ? "stretch" : "center" }}
                         >
-                            {[0, 1, 2, 3].map(offset => {
-                                const y = new Date().getFullYear() - offset;
-                                return <Option key={y} value={y}>{y}</Option>;
-                            })}
-                        </Select>
+                            <Typography.Text>{t("payroll.year")}:</Typography.Text>
+                            <Select
+                                value={year}
+                                onChange={setYear}
+                                style={{ width: isMobile ? "100%" : 120 }}
+                            >
+                                {[0, 1, 2, 3].map(offset => {
+                                    const y = new Date().getFullYear() - offset;
+                                    return <Option key={y} value={y}>{y}</Option>;
+                                })}
+                            </Select>
+                        </Space>
+                    </Col>
+                    <Col xs={24} md="auto" flex={isMobile ? undefined : "1 1 auto"}>
+                        <Typography.Text type="secondary">
+                            {total > 0 ? `${total} ${t("payroll.runs")}` : t("payroll.title")}
+                        </Typography.Text>
+                    </Col>
+                    <Col xs={24} md="auto">
+                        <Select
+                            value={pageSize}
+                            onChange={value => {
+                                setPage(1);
+                                setPageSize(value);
+                            }}
+                            style={{ width: isMobile ? "100%" : 150 }}
+                            options={[
+                                { value: 10, label: "10 / page" },
+                                { value: 20, label: "20 / page" },
+                                { value: 50, label: "50 / page" },
+                            ]}
+                        />
                     </Col>
                 </Row>
             </Card>
@@ -168,6 +197,8 @@ export default function PayrollDashboardPage() {
                     columns={columns}
                     rowKey="id"
                     loading={loading}
+                    scroll={{ x: 720 }}
+                    size={isMobile ? "small" : "middle"}
                     pagination={{
                         current: page,
                         pageSize,

@@ -163,3 +163,53 @@ export function getValidationErrors(apiError: ApiError): Record<string, string[]
 
   return result;
 }
+
+/**
+ * Extracts the first human-readable validation message from an API error payload.
+ */
+export function getFirstApiErrorMessage(error: unknown): string | undefined {
+  if (!error || typeof error !== "object") {
+    return undefined;
+  }
+
+  const apiError = error as any;
+  const responseData =
+    apiError.response?.data?.status === "error"
+      ? apiError.response.data
+      : apiError.apiData?.status === "error"
+        ? apiError.apiData
+        : apiError.response?.data || apiError.apiData || apiError;
+  const errors = responseData?.errors;
+
+  if (Array.isArray(errors)) {
+    for (const item of errors) {
+      if (typeof item === "string" && item.trim()) {
+        return item.replace(/^[a-z_]+\s*:\s*/i, "").trim();
+      }
+      if (typeof item === "object" && item !== null && typeof item.message === "string" && item.message.trim()) {
+        return item.message;
+      }
+    }
+  }
+
+  if (errors && typeof errors === "object") {
+    for (const value of Object.values(errors)) {
+      if (Array.isArray(value) && typeof value[0] === "string" && value[0].trim()) {
+        return value[0];
+      }
+      if (typeof value === "string" && value.trim()) {
+        return value;
+      }
+    }
+  }
+
+  if (typeof responseData?.detail === "string" && responseData.detail.trim()) {
+    return responseData.detail;
+  }
+
+  if (typeof responseData?.message === "string" && responseData.message.trim()) {
+    return responseData.message;
+  }
+
+  return undefined;
+}

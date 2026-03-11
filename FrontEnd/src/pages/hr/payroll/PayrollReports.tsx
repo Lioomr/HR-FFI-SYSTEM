@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Card, Descriptions, Alert, Typography, notification } from "antd";
+import { Button, Card, Descriptions, Alert, Typography, Grid, Space, notification } from "antd";
 import { FilePdfOutlined, FileExcelOutlined, DownloadOutlined } from "@ant-design/icons";
 import { exportPayrollReport } from "../../../services/api/payrollApi";
 import { useI18n } from "../../../i18n/useI18n";
@@ -9,8 +9,12 @@ interface PayrollReportsProps {
     status: string;
 }
 
+const { useBreakpoint } = Grid;
+
 export default function PayrollReports({ runId }: PayrollReportsProps) {
     const { t } = useI18n();
+    const screens = useBreakpoint();
+    const isMobile = !screens.md;
     const [downloading, setDownloading] = useState<"csv" | "pdf" | "xlsx" | null>(null);
 
     const handleExport = async (format: "csv" | "pdf" | "xlsx") => {
@@ -63,20 +67,29 @@ export default function PayrollReports({ runId }: PayrollReportsProps) {
 
             <Descriptions bordered column={1}>
                 <Descriptions.Item label={t("payroll.runDetails.csvReportName")}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                    <Space
+                        direction={isMobile ? "vertical" : "horizontal"}
+                        size={12}
+                        style={{ width: "100%", justifyContent: "space-between" }}
+                    >
                         <Typography.Text>{t("payroll.runDetails.csvReportDesc")}</Typography.Text>
                         <Button
                             icon={<DownloadOutlined />}
                             onClick={() => handleExport("csv")}
                             loading={downloading === "csv"}
+                            block={isMobile}
                         >
                             {t("payroll.runDetails.exportCsv")}
                         </Button>
-                    </div>
+                    </Space>
                 </Descriptions.Item>
 
                 <Descriptions.Item label={t("payroll.runDetails.excelReportName")}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                    <Space
+                        direction={isMobile ? "vertical" : "horizontal"}
+                        size={12}
+                        style={{ width: "100%", justifyContent: "space-between" }}
+                    >
                         <Typography.Text>{t("payroll.runDetails.excelReportDesc")}</Typography.Text>
                         <Button
                             icon={<FileExcelOutlined />}
@@ -84,23 +97,29 @@ export default function PayrollReports({ runId }: PayrollReportsProps) {
                             loading={downloading === "xlsx"}
                             type="primary"
                             ghost
+                            block={isMobile}
                         >
                             {t("payroll.runDetails.exportExcel")}
                         </Button>
-                    </div>
+                    </Space>
                 </Descriptions.Item>
 
                 <Descriptions.Item label={t("payroll.runDetails.pdfReportName")}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                    <Space
+                        direction={isMobile ? "vertical" : "horizontal"}
+                        size={12}
+                        style={{ width: "100%", justifyContent: "space-between" }}
+                    >
                         <Typography.Text>{t("payroll.runDetails.pdfReportDesc")}</Typography.Text>
                         <Button
                             icon={<FilePdfOutlined />}
                             onClick={() => handleExport("pdf")}
                             loading={downloading === "pdf"}
+                            block={isMobile}
                         >
                             {t("payroll.runDetails.exportPdf")}
                         </Button>
-                    </div>
+                    </Space>
                 </Descriptions.Item>
             </Descriptions>
         </Card>

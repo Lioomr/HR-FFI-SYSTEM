@@ -24,11 +24,14 @@ class AttendanceTests(TestCase):
         self.hr_group, _ = Group.objects.get_or_create(name="HRManager")
         self.employee_group, _ = Group.objects.get_or_create(name="Employee")
         self.admin_group, _ = Group.objects.get_or_create(name="SystemAdmin")
+        self.ceo_group, _ = Group.objects.get_or_create(name="CEO")
+        self.cfo_group, _ = Group.objects.get_or_create(name="CFO")
 
         # HR User
         self.hr = User.objects.create_user(email="hr@ffi.com", password="password")
         self.hr.groups.add(self.hr_group)
         self.ceo_approver = User.objects.create_user(email="ceo-approver@ffi.com", password="password")
+        self.ceo_approver.groups.add(self.ceo_group)
 
         self.ceo_dept = Department.objects.create(id=1, code="CEO", name="CEO Department")
         self.base_dept = Department.objects.create(id=11, code="ENG", name="Engineering Department")
@@ -67,6 +70,68 @@ class AttendanceTests(TestCase):
             employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
             hire_date=date.today(),
         )
+        self.cfo_user = User.objects.create_user(email="cfo-manager@ffi.com", password="password")
+        self.cfo_user.groups.add(self.cfo_group)
+        self.cfo_profile = EmployeeProfile.objects.create(
+            user=self.cfo_user,
+            employee_id="EMP004",
+            department_ref=self.base_dept,
+            position_ref=self.base_position,
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+            hire_date=date.today(),
+        )
+        self.ceo_direct_user = User.objects.create_user(email="ceo-direct@ffi.com", password="password")
+        self.ceo_direct_user.groups.add(self.employee_group)
+        self.ceo_direct_profile = EmployeeProfile.objects.create(
+            user=self.ceo_direct_user,
+            employee_id="EMP005",
+            department_ref=self.base_dept,
+            position_ref=self.base_position,
+            hire_date=date.today(),
+            manager_profile=self.ceo_profile,
+        )
+        self.cfo_direct_user = User.objects.create_user(email="cfo-direct@ffi.com", password="password")
+        self.cfo_direct_user.groups.add(self.employee_group)
+        self.cfo_direct_profile = EmployeeProfile.objects.create(
+            user=self.cfo_direct_user,
+            employee_id="EMP006",
+            department_ref=self.base_dept,
+            position_ref=self.base_position,
+            hire_date=date.today(),
+            manager_profile=self.cfo_profile,
+        )
+        self.employee_manager_user = User.objects.create_user(email="employee-manager@ffi.com", password="password")
+        self.employee_manager_user.groups.add(self.employee_group)
+        self.employee_manager_profile = EmployeeProfile.objects.create(
+            user=self.employee_manager_user,
+            employee_id="EMP007",
+            department_ref=self.base_dept,
+            position_ref=self.base_position,
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+            hire_date=date.today(),
+        )
+        self.employee_manager_direct_user = User.objects.create_user(
+            email="employee-manager-direct@ffi.com", password="password"
+        )
+        self.employee_manager_direct_user.groups.add(self.employee_group)
+        self.employee_manager_direct_profile = EmployeeProfile.objects.create(
+            user=self.employee_manager_direct_user,
+            employee_id="EMP008",
+            department_ref=self.base_dept,
+            position_ref=self.base_position,
+            hire_date=date.today(),
+            manager_profile=self.employee_manager_profile,
+        )
+        self.manager_group, _ = Group.objects.get_or_create(name="Manager")
+        self.manager_user = User.objects.create_user(email="manager-self@ffi.com", password="password")
+        self.manager_user.groups.add(self.manager_group)
+        self.manager_profile = EmployeeProfile.objects.create(
+            user=self.manager_user,
+            employee_id="EMP009",
+            department_ref=self.base_dept,
+            position_ref=self.base_position,
+            hire_date=date.today(),
+        )
 
     def test_employee_check_in_success(self):
         self.client.force_authenticate(user=self.emp1)
@@ -84,6 +149,26 @@ class AttendanceTests(TestCase):
         self.client.post("/api/attendance/me/check-in/")  # First
         response = self.client.post("/api/attendance/me/check-in/")  # Duplicate
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_manager_can_use_attendance_self_service(self):
+        self.client.force_authenticate(user=self.manager_user)
+        create_response = self.client.post("/api/attendance/me/check-in/")
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+
+        list_response = self.client.get("/api/attendance/me/")
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        data = list_response.data["data"]
+        if isinstance(data, dict) and "data" in data:
+            data = data["data"]
+        items = (
+            data["results"]
+            if isinstance(data, dict) and "results" in data
+            else data["items"]
+            if isinstance(data, dict) and "items" in data
+            else data
+        )
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["employee_profile"], self.manager_profile.id)
 
     def test_employee_check_out_fail_no_check_in(self):
         self.client.force_authenticate(user=self.emp1)
@@ -212,3 +297,62 @@ class AttendanceTests(TestCase):
         approve_response = self.client.post(f"/api/attendance/ceo/attendance/{record_id}/approve/", {"notes": "Approved"})
         self.assertEqual(approve_response.status_code, status.HTTP_200_OK)
         self.assertEqual(approve_response.data["data"]["status"], "PRESENT")
+
+    def test_ceo_manager_attendance_scope_is_direct_reports_only(self):
+        own_record = AttendanceRecord.objects.create(
+            employee_profile=self.ceo_direct_profile,
+            date=timezone.localdate(),
+            status=AttendanceRecord.Status.PENDING_MANAGER,
+        )
+        AttendanceRecord.objects.create(
+            employee_profile=self.profile1,
+            date=timezone.localdate() - timedelta(days=1),
+            status=AttendanceRecord.Status.PENDING_MANAGER,
+        )
+
+        self.client.force_authenticate(user=self.ceo_approver)
+        response = self.client.get("/api/manager/attendance/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        items = response.data["data"]["items"]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["id"], own_record.id)
+
+    def test_ceo_can_approve_direct_report_attendance(self):
+        record = AttendanceRecord.objects.create(
+            employee_profile=self.ceo_direct_profile,
+            date=timezone.localdate(),
+            status=AttendanceRecord.Status.PENDING_MANAGER,
+        )
+
+        self.client.force_authenticate(user=self.ceo_approver)
+        response = self.client.post(f"/api/manager/attendance/{record.id}/approve/", {"notes": "Approved"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"]["status"], AttendanceRecord.Status.PENDING_HR)
+
+    def test_cfo_can_approve_direct_report_attendance(self):
+        record = AttendanceRecord.objects.create(
+            employee_profile=self.cfo_direct_profile,
+            date=timezone.localdate(),
+            status=AttendanceRecord.Status.PENDING_MANAGER,
+        )
+
+        self.client.force_authenticate(user=self.cfo_user)
+        response = self.client.post(f"/api/manager/attendance/{record.id}/approve/", {"notes": "Approved"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"]["status"], AttendanceRecord.Status.PENDING_HR)
+
+    def test_employee_role_direct_manager_can_approve_attendance(self):
+        record = AttendanceRecord.objects.create(
+            employee_profile=self.employee_manager_direct_profile,
+            date=timezone.localdate(),
+            status=AttendanceRecord.Status.PENDING_MANAGER,
+        )
+
+        self.client.force_authenticate(user=self.employee_manager_user)
+        response = self.client.post(f"/api/manager/attendance/{record.id}/approve/", {"notes": "Approved"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"]["status"], AttendanceRecord.Status.PENDING_HR)

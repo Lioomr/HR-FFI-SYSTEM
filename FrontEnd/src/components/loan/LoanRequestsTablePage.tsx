@@ -10,6 +10,7 @@ import { isApiError } from "../../services/api/apiTypes";
 import type { LoanRequest, LoanStatus } from "../../services/api/loanApi";
 import { formatNumber } from "../../utils/currency";
 import { useI18n } from "../../i18n/useI18n";
+import LoanApprovalMap from "../loans/LoanApprovalMap";
 
 type Props = {
   title: string;
@@ -162,6 +163,9 @@ export default function LoanRequestsTablePage({
             loading={loading}
             columns={columns}
             dataSource={items}
+            expandable={{
+              expandedRowRender: (record) => <LoanApprovalMap request={record} t={t} />,
+            }}
             scroll={{ x: 800 }}
             pagination={{
               current: page,

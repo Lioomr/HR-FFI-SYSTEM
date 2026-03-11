@@ -9,6 +9,7 @@ import ErrorState from "../../components/ui/ErrorState";
 import { useI18n } from "../../i18n/useI18n";
 import { getCEOLeaveRequests, approveCEOLeaveRequest, rejectCEOLeaveRequest, getLeaveRequestDocumentBlob, type LeaveRequest } from "../../services/api/leaveApi";
 import { isApiError } from "../../services/api/apiTypes";
+import LeaveApprovalMap from "../../components/leaves/LeaveApprovalMap";
 
 const { TextArea } = Input;
 
@@ -224,6 +225,9 @@ export default function CEOLeaveInboxPage() {
                         columns={columns}
                         dataSource={requests}
                         rowKey="id"
+                        expandable={{
+                            expandedRowRender: (record) => <LeaveApprovalMap request={record} t={t} />,
+                        }}
                         pagination={{
                             current: page,
                             total,

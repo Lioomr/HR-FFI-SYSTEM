@@ -10,6 +10,7 @@ import { isApiError } from "../../../services/api/apiTypes";
 import { getMyLoanRequest, type LoanRequest, type LoanStatus } from "../../../services/api/loanApi";
 import AmountWithSAR from "../../../components/ui/AmountWithSAR";
 import { useI18n } from "../../../i18n/useI18n";
+import LoanApprovalMap from "../../../components/loans/LoanApprovalMap";
 
 function statusColor(status: LoanStatus) {
   switch (status) {
@@ -112,6 +113,10 @@ export default function EmployeeLoanRequestDetailsPage() {
       <Card loading={loading} style={{ borderRadius: 16 }}>
         {!item ? null : (
           <>
+            <div style={{ marginBottom: 24 }}>
+              <LoanApprovalMap request={item} t={t} />
+            </div>
+
             <Descriptions
               column={{ xs: 1, sm: 2 }}
               layout="vertical"

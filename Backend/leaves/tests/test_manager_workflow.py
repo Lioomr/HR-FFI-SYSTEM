@@ -22,6 +22,8 @@ class ManagerWorkflowTests(APITestCase):
 
         # Create HR Group
         self.hr_group = Group.objects.create(name="HRManager")
+        self.ceo_group = Group.objects.create(name="CEO")
+        self.cfo_group = Group.objects.create(name="CFO")
 
         # Create Manager
         self.manager_user = User.objects.create_user(email="manager@example.com", password="password")
@@ -58,6 +60,66 @@ class ManagerWorkflowTests(APITestCase):
         # Create HR User
         self.hr_user = User.objects.create_user(email="hr@example.com", password="password")
         self.hr_user.groups.add(self.hr_group)
+
+        self.ceo_user = User.objects.create_user(email="ceo@example.com", password="password")
+        self.ceo_user.groups.add(self.ceo_group)
+        self.ceo_profile = EmployeeProfile.objects.create(
+            user=self.ceo_user,
+            employee_id="EMP-CEO",
+            department="Executive",
+            job_title="CEO",
+            hire_date=date(2020, 1, 1),
+        )
+
+        self.ceo_report_user = User.objects.create_user(email="ceo-report@example.com", password="password")
+        self.ceo_report_profile = EmployeeProfile.objects.create(
+            user=self.ceo_report_user,
+            employee_id="EMP-CEO-REPORT",
+            department="Ops",
+            job_title="Lead",
+            hire_date=date(2021, 1, 1),
+            manager_profile=self.ceo_profile,
+        )
+
+        self.cfo_user = User.objects.create_user(email="cfo@example.com", password="password")
+        self.cfo_user.groups.add(self.cfo_group)
+        self.cfo_profile = EmployeeProfile.objects.create(
+            user=self.cfo_user,
+            employee_id="EMP-CFO",
+            department="Finance",
+            job_title="CFO",
+            hire_date=date(2020, 1, 1),
+        )
+
+        self.cfo_report_user = User.objects.create_user(email="cfo-report@example.com", password="password")
+        self.cfo_report_profile = EmployeeProfile.objects.create(
+            user=self.cfo_report_user,
+            employee_id="EMP-CFO-REPORT",
+            department="Finance",
+            job_title="Analyst",
+            hire_date=date(2021, 1, 1),
+            manager_profile=self.cfo_profile,
+        )
+
+        self.employee_manager_user = User.objects.create_user(email="employee-manager@example.com", password="password")
+        self.employee_manager_profile = EmployeeProfile.objects.create(
+            user=self.employee_manager_user,
+            employee_id="EMP-EMP-MGR",
+            department="Operations",
+            job_title="Supervisor",
+            hire_date=date(2020, 1, 1),
+        )
+        self.employee_manager_report_user = User.objects.create_user(
+            email="employee-manager-report@example.com", password="password"
+        )
+        self.employee_manager_report_profile = EmployeeProfile.objects.create(
+            user=self.employee_manager_report_user,
+            employee_id="EMP-EMP-REPORT",
+            department="Operations",
+            job_title="Coordinator",
+            hire_date=date(2021, 1, 1),
+            manager_profile=self.employee_manager_profile,
+        )
 
         # URLs
         self.requests_url = "/api/leaves/leave-requests/"
@@ -230,3 +292,74 @@ class ManagerWorkflowTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("attachment", response.get("Content-Disposition", "").lower())
+
+    def test_ceo_manager_scope_is_direct_reports_only(self):
+        direct_request = LeaveRequest.objects.create(
+            employee=self.ceo_report_user,
+            leave_type=self.leave_type,
+            start_date=date(2026, 9, 1),
+            end_date=date(2026, 9, 3),
+            status=LeaveRequest.RequestStatus.PENDING_MANAGER,
+        )
+        LeaveRequest.objects.create(
+            employee=self.employee_user,
+            leave_type=self.leave_type,
+            start_date=date(2026, 9, 10),
+            end_date=date(2026, 9, 12),
+            status=LeaveRequest.RequestStatus.PENDING_MANAGER,
+        )
+
+        self.client.force_authenticate(user=self.ceo_user)
+        response = self.client.get(self.manager_inbox_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        items = response.data["data"]["items"]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["id"], direct_request.id)
+
+    def test_ceo_can_approve_direct_report_leave_from_manager_endpoint(self):
+        request_obj = LeaveRequest.objects.create(
+            employee=self.ceo_report_user,
+            leave_type=self.leave_type,
+            start_date=date(2026, 10, 1),
+            end_date=date(2026, 10, 2),
+            status=LeaveRequest.RequestStatus.PENDING_MANAGER,
+        )
+
+        self.client.force_authenticate(user=self.ceo_user)
+        response = self.client.post(f"{self.manager_inbox_url}{request_obj.id}/approve/", {"comment": "Approved"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"]["status"], LeaveRequest.RequestStatus.PENDING_HR)
+
+    def test_cfo_can_approve_direct_report_leave_from_manager_endpoint(self):
+        request_obj = LeaveRequest.objects.create(
+            employee=self.cfo_report_user,
+            leave_type=self.leave_type,
+            start_date=date(2026, 10, 5),
+            end_date=date(2026, 10, 6),
+            status=LeaveRequest.RequestStatus.PENDING_MANAGER,
+        )
+
+        self.client.force_authenticate(user=self.cfo_user)
+        response = self.client.post(f"{self.manager_inbox_url}{request_obj.id}/approve/", {"comment": "Approved"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"]["status"], LeaveRequest.RequestStatus.PENDING_HR)
+
+    def test_employee_role_direct_manager_can_use_manager_leave_inbox(self):
+        request_obj = LeaveRequest.objects.create(
+            employee=self.employee_manager_report_user,
+            leave_type=self.leave_type,
+            start_date=date(2026, 11, 1),
+            end_date=date(2026, 11, 2),
+            status=LeaveRequest.RequestStatus.PENDING_MANAGER,
+        )
+
+        self.client.force_authenticate(user=self.employee_manager_user)
+        response = self.client.get(self.manager_inbox_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        items = response.data["data"]["items"]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["id"], request_obj.id)

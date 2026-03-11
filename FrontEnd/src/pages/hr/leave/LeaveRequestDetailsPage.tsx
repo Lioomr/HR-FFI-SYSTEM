@@ -9,6 +9,7 @@ import ErrorState from "../../../components/ui/ErrorState";
 import { getLeaveRequest, approveLeaveRequest, rejectLeaveRequest, sendLeaveRequestToCEO, getLeaveRequestDocumentBlob, type LeaveRequest } from "../../../services/api/leaveApi";
 import { isApiError } from "../../../services/api/apiTypes";
 import { useI18n } from "../../../i18n/useI18n";
+import LeaveApprovalMap from "../../../components/leaves/LeaveApprovalMap";
 
 const { confirm } = Modal;
 const { TextArea } = Input;
@@ -203,6 +204,9 @@ export default function LeaveRequestDetailsPage() {
                 tags={<Tag color={statusColor()}>{statusLabel}</Tag>}
             />
 
+            <div style={{ display: "grid", gap: 18 }}>
+            <LeaveApprovalMap request={request} t={t} />
+
             <Card style={{ borderRadius: 16 }} title={t("common.details")}>
                 <Descriptions bordered column={1}>
                     <Descriptions.Item label={t("common.employee")}>{request.employee?.full_name || `ID: ${request.employee?.id}`}</Descriptions.Item>
@@ -282,6 +286,7 @@ export default function LeaveRequestDetailsPage() {
                     </>
                 )}
             </Card>
+            </div>
 
             {/* Reject Modal */}
             <Modal

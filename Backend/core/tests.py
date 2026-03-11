@@ -1,10 +1,12 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.test import TestCase
+from django.utils.translation import override
 from rest_framework.test import APITestCase
 
 from audit.models import AuditLog
 from core.permissions import get_role
+from core.responses import error
 
 
 class RoleResolutionTests(TestCase):
@@ -60,3 +62,26 @@ class HrSummaryViewTests(APITestCase):
         self.assertEqual(len(recent_activity), 1)
         self.assertEqual(recent_activity[0]["employee"], "hr@test.com")
         self.assertEqual(recent_activity[0]["action"], "employee_imported")
+
+
+class ErrorResponseTests(TestCase):
+    def test_422_message_uses_first_validation_error(self):
+        response = error(
+            "Validation error",
+            errors=[{"field": "employee_id", "message": "Employee Profile not found."}],
+            status=422,
+        )
+
+        self.assertEqual(response.data["message"], "Employee Profile not found.")
+        self.assertEqual(response.data["errors"][0]["message"], "Employee Profile not found.")
+
+    def test_422_message_is_translated_for_arabic(self):
+        with override("ar"):
+            response = error(
+                "Validation error",
+                errors=[{"field": "employee_id", "message": "Employee Profile not found."}],
+                status=422,
+            )
+
+        self.assertEqual(response.data["message"], "لم يتم العثور على ملف تعريف الموظف.")
+        self.assertEqual(response.data["errors"][0]["message"], "لم يتم العثور على ملف تعريف الموظف.")

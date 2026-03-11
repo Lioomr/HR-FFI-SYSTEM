@@ -239,14 +239,52 @@ body.ltr textarea.ant-input {
 .modern-sidebar .ant-menu {
   background: transparent !important;
   border-right: none !important;
+  padding: 8px 0 16px !important;
+}
+
+.modern-sidebar .ant-menu-item-group {
+  margin: 0 8px 10px !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015)) !important;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px !important;
+  overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.modern-sidebar .ant-menu-item-group-title {
+  color: rgba(255, 255, 255, 0.92) !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+  padding: 14px 16px 10px !important;
+  margin: 0 !important;
+}
+
+.modern-sidebar .ant-menu-item-group-list {
+  margin: 0 !important;
+}
+
+.modern-sidebar.ant-layout-sider-collapsed .ant-menu-item-group {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  margin: 0 !important;
+}
+
+.modern-sidebar.ant-layout-sider-collapsed .ant-menu-item-group-title {
+  display: none !important;
 }
 
 .modern-sidebar .ant-menu-item {
   color: var(--sidebar-text) !important;
-  border-radius: 10px !important;
-  margin: 2px 8px !important;
-  width: calc(100% - 16px) !important;
+  border-radius: 12px !important;
+  margin: 3px 10px !important;
+  width: calc(100% - 20px) !important;
   transition: all var(--transition-fast) !important;
+  min-height: 42px;
+  display: flex !important;
+  align-items: center !important;
 }
 
 .modern-sidebar .ant-menu-item:hover {
@@ -259,6 +297,7 @@ body.ltr textarea.ant-input {
   color: #fb923c !important;
   font-weight: 600;
   position: relative;
+  box-shadow: 0 10px 24px rgba(249, 115, 22, 0.14);
 }
 
 .modern-sidebar .ant-menu-item-selected::before {

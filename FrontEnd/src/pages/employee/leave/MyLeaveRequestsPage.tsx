@@ -1,27 +1,32 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Card, Table, Tag, Tooltip, notification, Modal } from "antd";
+import { Button, Card, Grid, Table, Tag, Tooltip, notification, Modal } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { PlusOutlined, CloseCircleOutlined } from "@ant-design/icons";
+import { PlusOutlined, CloseCircleOutlined, EyeOutlined, FilePdfOutlined } from "@ant-design/icons";
 
 import PageHeader from "../../../components/ui/PageHeader";
 import { useI18n } from "../../../i18n/useI18n";
-import { getMyLeaveRequests, cancelLeaveRequest, type LeaveRequest } from "../../../services/api/leaveApi";
+import { getMyLeaveRequests, cancelLeaveRequest, getLeaveRequestPdfBlob, type LeaveRequest } from "../../../services/api/leaveApi";
+import LeaveApprovalMap from "../../../components/leaves/LeaveApprovalMap";
 import { isApiError } from "../../../services/api/apiTypes";
 import { getHttpStatus } from "../../../services/api/httpErrors";
 import { getDetailedApiMessage, getDetailedHttpErrorMessage } from "../../../services/api/userErrorMessages";
 
 const { confirm } = Modal;
+const { useBreakpoint } = Grid;
 
 export default function MyLeaveRequestsPage() {
     const navigate = useNavigate();
     const { t } = useI18n();
+    const screens = useBreakpoint();
+    const isMobile = !screens.md;
     const [loading, setLoading] = useState(false);
     const [data, setData] = useState<LeaveRequest[]>([]);
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
     const [cancellingId, setCancellingId] = useState<number | null>(null);
+    const [pdfLoadingId, setPdfLoadingId] = useState<number | null>(null);
     const [canCancel, setCanCancel] = useState(true);
 
     const loadData = useCallback(async () => {
@@ -77,6 +82,25 @@ export default function MyLeaveRequestsPage() {
         });
     };
 
+    const handlePdfDownload = async (record: LeaveRequest) => {
+        setPdfLoadingId(record.id);
+        try {
+            const blob = await getLeaveRequestPdfBlob(record.id, true);
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `leave_request_${record.id}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(() => window.URL.revokeObjectURL(url), 5000);
+        } catch (err: unknown) {
+            notification.error({ message: t("common.error"), description: getDetailedHttpErrorMessage(t, err) });
+        } finally {
+            setPdfLoadingId(null);
+        }
+    };
+
     const getStatusColor = (status: string) => {
         const s = status?.toLowerCase();
         switch (s) {
@@ -104,33 +128,42 @@ export default function MyLeaveRequestsPage() {
         {
             title: t("leave.type"),
             key: "leave_type",
+            width: 180,
             render: (_, record) => translateLeaveType(record.leave_type?.name)
         },
         {
             title: t("leave.startDate"),
             dataIndex: "start_date",
             key: "start_date",
+            width: 120,
         },
         {
             title: t("leave.endDate"),
             dataIndex: "end_date",
             key: "end_date",
+            width: 120,
         },
         {
             title: t("leave.days"),
             dataIndex: "days",
             key: "days",
-            align: 'center'
+            align: 'center',
+            width: 90,
+            responsive: ["md"],
         },
         {
             title: t("leave.reason"),
             dataIndex: "reason",
             key: "reason",
-            ellipsis: true
+            ellipsis: true,
+            width: 220,
+            responsive: ["lg"],
         },
         {
             title: t("leave.rejectionReason"),
             key: "rejection_reason",
+            width: 220,
+            responsive: ["xl"],
             render: (_, record) => {
                 const isRejected = (record.status || "").toLowerCase() === "rejected";
                 if (!isRejected) return "-";
@@ -142,6 +175,7 @@ export default function MyLeaveRequestsPage() {
             title: t("common.status"),
             dataIndex: "status",
             key: "status",
+            width: 150,
             render: (status, record) => {
                 const statusKey = `leave.status.${status?.toLowerCase()}`;
                 const translated = t(statusKey);
@@ -160,12 +194,35 @@ export default function MyLeaveRequestsPage() {
             title: t("common.actions"),
             key: "actions",
             align: 'center',
+            width: isMobile ? 140 : 170,
+            fixed: screens.lg ? "right" : undefined,
             render: (_, record) => {
                 const s = record.status?.toLowerCase();
                 const isPending = s === 'submitted' || s === 'pending_manager' || s === 'pending_hr' || s === 'pending';
 
                 return (
-                    <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+                    <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
+                        <Tooltip title={t("common.details")}>
+                            <Button
+                                icon={<EyeOutlined />}
+                                size="small"
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    navigate(`/employee/leave/requests/${record.id}`);
+                                }}
+                            />
+                        </Tooltip>
+                        <Tooltip title={t("leave.downloadRequestPdf")}>
+                            <Button
+                                icon={<FilePdfOutlined />}
+                                size="small"
+                                loading={pdfLoadingId === record.id}
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    handlePdfDownload(record);
+                                }}
+                            />
+                        </Tooltip>
                         {canCancel && isPending && (
                             <Tooltip title={t("leave.cancel")}>
                                 <Button
@@ -173,7 +230,10 @@ export default function MyLeaveRequestsPage() {
                                     icon={<CloseCircleOutlined />}
                                     size="small"
                                     loading={cancellingId === record.id}
-                                    onClick={() => handleCancel(record.id)}
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        handleCancel(record.id);
+                                    }}
                                 />
                             </Tooltip>
                         )}
@@ -193,6 +253,7 @@ export default function MyLeaveRequestsPage() {
                         type="primary"
                         icon={<PlusOutlined />}
                         onClick={() => navigate("/employee/leave/request")}
+                        block={isMobile}
                     >
                         {t("leave.newRequest")}
                     </Button>
@@ -205,6 +266,8 @@ export default function MyLeaveRequestsPage() {
                     columns={columns}
                     rowKey="id"
                     loading={loading}
+                    size={isMobile ? "small" : "middle"}
+                    scroll={{ x: 760 }}
                     pagination={{
                         current: page,
                         pageSize,
@@ -214,6 +277,14 @@ export default function MyLeaveRequestsPage() {
                             if (ps !== pageSize) setPageSize(ps);
                         },
                     }}
+                    expandable={{
+                        expandedRowRender: (record) => <LeaveApprovalMap request={record} t={t} />,
+                        rowExpandable: () => true,
+                    }}
+                    onRow={(record) => ({
+                        onClick: () => navigate(`/employee/leave/requests/${record.id}`),
+                        style: { cursor: "pointer" },
+                    })}
                 />
             </Card>
         </div>

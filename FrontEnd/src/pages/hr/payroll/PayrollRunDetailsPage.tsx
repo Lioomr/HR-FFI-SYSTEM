@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Button, Card, Col, Descriptions, Row, Table, Tag, Tabs, Modal, notification, Alert } from "antd";
+import { Button, Card, Col, Descriptions, Grid, Row, Space, Table, Tag, Tabs, Modal, notification, Alert } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { ArrowLeftOutlined, LockOutlined, CheckCircleOutlined, ArrowRightOutlined } from "@ant-design/icons";
 
@@ -19,12 +19,17 @@ import { isForbidden } from "../../../services/api/httpErrors";
 import AmountWithSAR from "../../../components/ui/AmountWithSAR";
 import { useI18n } from "../../../i18n/useI18n";
 
+const { useBreakpoint } = Grid;
+
 export default function PayrollRunDetailsPage() {
     const { run_id } = useParams<{ run_id: string }>();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const { t, language } = useI18n();
     const isRtl = language === 'ar';
+    const screens = useBreakpoint();
+    const isMobile = !screens.lg;
+    const summaryColumnSpan = isMobile ? 24 : screens.xl ? 8 : 12;
 
     // Tab state management from URL
     const activeTab = searchParams.get("tab") || "overview";
@@ -224,7 +229,11 @@ export default function PayrollRunDetailsPage() {
                 title={`${t("payroll.history.colRun")} ${run.month}/${run.year}`}
                 subtitle={t("payroll.runDetails.subtitle")}
                 actions={
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <Space
+                        direction={isMobile ? "vertical" : "horizontal"}
+                        size={12}
+                        style={{ width: isMobile ? "100%" : undefined, alignItems: isMobile ? "stretch" : "center" }}
+                    >
                         <Tag color={isFinalized ? 'green' : 'orange'}>
                             {isFinalized ? <><CheckCircleOutlined /> {run.status}</> : run.status}
                         </Tag>
@@ -235,28 +244,34 @@ export default function PayrollRunDetailsPage() {
                                 icon={<LockOutlined />}
                                 onClick={handleFinalize}
                                 loading={finalizing}
+                                block={isMobile}
                             >
                                 {t("payroll.runDetails.finalizeBtn")}
                             </Button>
                         )}
-                    </div>
+                    </Space>
                 }
             />
 
             <Tabs
                 activeKey={activeTab}
                 onChange={handleTabChange}
+                tabBarGutter={isMobile ? 16 : 32}
                 items={[
                     {
                         key: 'overview',
                         label: t("payroll.runDetails.tabOverview"),
                         children: (
                             <>
-                                {/* Summary Cards */}
-                                <Row gutter={16} style={{ marginBottom: 24 }}>
-                                    <Col span={8}>
+                                <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+                                    <Col span={summaryColumnSpan}>
                                         <Card>
-                                            <Descriptions title={t("payroll.runDetails.summary")} column={1}>
+                                            <Descriptions
+                                                title={t("payroll.runDetails.summary")}
+                                                column={1}
+                                                layout="vertical"
+                                                size={isMobile ? "small" : "default"}
+                                            >
                                                 <Descriptions.Item label={t("payslips.list.colPeriod")}>{run.month}/{run.year}</Descriptions.Item>
                                                 <Descriptions.Item label={t("payroll.runDetails.totalEmployees")}>{run.total_employees}</Descriptions.Item>
                                                 <Descriptions.Item label={t("payroll.runDetails.employeesWithDeductions")}>
@@ -265,9 +280,14 @@ export default function PayrollRunDetailsPage() {
                                             </Descriptions>
                                         </Card>
                                     </Col>
-                                    <Col span={8}>
+                                    <Col span={summaryColumnSpan}>
                                         <Card>
-                                            <Descriptions title={t("payroll.runDetails.financials")} column={1}>
+                                            <Descriptions
+                                                title={t("payroll.runDetails.financials")}
+                                                column={1}
+                                                layout="vertical"
+                                                size={isMobile ? "small" : "default"}
+                                            >
                                                 <Descriptions.Item label={t("payroll.details.colBasicSalary")}>
                                                     <AmountWithSAR amount={summary?.total_basic_salary ?? 0} size={14} />
                                                 </Descriptions.Item>
@@ -280,9 +300,14 @@ export default function PayrollRunDetailsPage() {
                                             </Descriptions>
                                         </Card>
                                     </Col>
-                                    <Col span={8}>
+                                    <Col span={summaryColumnSpan}>
                                         <Card>
-                                            <Descriptions title={t("payroll.runDetails.financials")} column={1}>
+                                            <Descriptions
+                                                title={t("payroll.runDetails.financials")}
+                                                column={1}
+                                                layout="vertical"
+                                                size={isMobile ? "small" : "default"}
+                                            >
                                                 <Descriptions.Item label={t("payroll.runDetails.colDeductions")}>
                                                     <AmountWithSAR amount={summary?.total_deductions ?? 0} size={14} color="red" />
                                                 </Descriptions.Item>
@@ -309,7 +334,8 @@ export default function PayrollRunDetailsPage() {
                                         columns={columns}
                                         rowKey="id"
                                         loading={loading}
-                                        scroll={{ x: 800 }}
+                                        scroll={{ x: 1100 }}
+                                        size={isMobile ? "small" : "middle"}
                                         pagination={{
                                             current: page,
                                             pageSize,
