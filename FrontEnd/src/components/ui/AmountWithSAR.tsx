@@ -27,8 +27,12 @@ export default function AmountWithSAR({
     suffix
 }: AmountWithSARProps) {
     return (
-        <Space size={4} className={className} style={{ alignItems: 'center', ...style }}>
-            <span style={{ fontWeight: fontWeight || 'inherit' }}>
+        <Space
+            size={4}
+            className={className}
+            style={{ alignItems: 'center', whiteSpace: 'nowrap', flexWrap: 'nowrap', ...style }}
+        >
+            <span style={{ fontWeight: fontWeight || 'inherit', whiteSpace: 'nowrap' }}>
                 {formatNumber(amount)}
                 {suffix}
             </span>

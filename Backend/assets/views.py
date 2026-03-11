@@ -308,7 +308,7 @@ class AssetViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="damage-report")
     def damage_report(self, request, pk=None):
-        if get_role(request.user) not in ["Employee", "HRManager"]:
+        if get_role(request.user) not in ["Employee", "Manager", "HRManager"]:
             return error("Forbidden", status=status.HTTP_403_FORBIDDEN)
 
         profile = self._get_request_profile()
@@ -376,7 +376,7 @@ class AssetViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="return-request")
     def return_request(self, request, pk=None):
-        if get_role(request.user) not in ["Employee", "HRManager"]:
+        if get_role(request.user) not in ["Employee", "Manager", "HRManager"]:
             return error("Forbidden", status=status.HTTP_403_FORBIDDEN)
 
         profile = self._get_request_profile()

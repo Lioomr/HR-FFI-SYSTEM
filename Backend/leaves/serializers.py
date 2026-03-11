@@ -220,13 +220,18 @@ class HRManualLeaveRequestSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         employee_id = attrs.get("employee_id")
-        employee_user = self._get_employee_user(employee_id)
+        if employee_id is None:
+            if self.instance is None:
+                raise serializers.ValidationError({"employee_id": "employee_id is required."})
+            employee_user = self.instance.employee
+        else:
+            employee_user = self._get_employee_user(employee_id)
 
-        start = attrs.get("start_date")
-        end = attrs.get("end_date")
-        leave_type = attrs.get("leave_type")
-        reason = attrs.get("reason", "")
-        document = attrs.get("document")
+        start = attrs.get("start_date", getattr(self.instance, "start_date", None))
+        end = attrs.get("end_date", getattr(self.instance, "end_date", None))
+        leave_type = attrs.get("leave_type", getattr(self.instance, "leave_type", None))
+        reason = attrs.get("reason", getattr(self.instance, "reason", ""))
+        document = attrs.get("document", getattr(self.instance, "document", None))
 
         if start and end and start > end:
             raise serializers.ValidationError({"end_date": "End date must be after start date."})
@@ -237,24 +242,6 @@ class HRManualLeaveRequestSerializer(serializers.ModelSerializer):
         leave_code = (leave_type.code or leave_type.name or "").strip().upper().replace(" ", "_")
         if leave_code in {"SICK", "SICK_LEAVE"} and not document and not getattr(self.instance, "document", None):
             raise serializers.ValidationError({"document": "Medical report document is required for sick leave."})
-
-        overlap_qs = LeaveRequest.objects.filter(
-            employee=employee_user,
-            is_active=True,
-            status__in=[
-                LeaveRequest.RequestStatus.APPROVED,
-                LeaveRequest.RequestStatus.SUBMITTED,
-                LeaveRequest.RequestStatus.PENDING_MANAGER,
-                LeaveRequest.RequestStatus.PENDING_HR,
-                LeaveRequest.RequestStatus.PENDING_CEO,
-            ],
-        ).filter(Q(start_date__lte=end) & Q(end_date__gte=start))
-
-        if self.instance is not None:
-            overlap_qs = overlap_qs.exclude(pk=self.instance.pk)
-
-        if overlap_qs.exists():
-            raise serializers.ValidationError("You already have a pending or approved leave request for this period.")
 
         policy_error = validate_leave_request_policy(employee_user, leave_type, start, end, reason, bool(document))
         self._policy_warnings = []

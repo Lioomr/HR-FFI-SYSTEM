@@ -1,18 +1,21 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Card, Form, Select, notification } from "antd";
+import { Button, Card, Col, Form, Grid, Row, Select, notification } from "antd";
 import PageHeader from "../../../components/ui/PageHeader";
 import { createPayrollRun, getPayrollRuns } from "../../../services/api/payrollApi";
 import { isApiError } from "../../../services/api/apiTypes";
 import { useI18n } from "../../../i18n/useI18n";
 
 const { Option } = Select;
+const { useBreakpoint } = Grid;
 
 export default function CreatePayrollRunPage() {
     const navigate = useNavigate();
     const [form] = Form.useForm();
     const { t } = useI18n();
     const [submitting, setSubmitting] = useState(false);
+    const screens = useBreakpoint();
+    const isMobile = !screens.md;
 
     const handleSubmit = async (values: { year: number; month: number }) => {
         setSubmitting(true);
@@ -131,7 +134,7 @@ export default function CreatePayrollRunPage() {
     const months = Array.from({ length: 12 }, (_, i) => i + 1);
 
     return (
-        <div style={{ maxWidth: 600, margin: "0 auto" }}>
+        <div style={{ maxWidth: 720, margin: "0 auto", width: "100%" }}>
             <PageHeader
                 title={t("payroll.createTitle")}
                 subtitle={t("payroll.createDesc")}
@@ -147,33 +150,49 @@ export default function CreatePayrollRunPage() {
                         month: new Date().getMonth() + 1
                     }}
                 >
-                    <Form.Item
-                        name="year"
-                        label={t("payroll.year")}
-                        rules={[{ required: true, message: t("payroll.yearReq") }]}
-                    >
-                        <Select>
-                            {years.map(y => <Option key={y} value={y}>{y}</Option>)}
-                        </Select>
-                    </Form.Item>
+                    <Row gutter={[16, 0]}>
+                        <Col xs={24} md={12}>
+                            <Form.Item
+                                name="year"
+                                label={t("payroll.year")}
+                                rules={[{ required: true, message: t("payroll.yearReq") }]}
+                            >
+                                <Select>
+                                    {years.map(y => <Option key={y} value={y}>{y}</Option>)}
+                                </Select>
+                            </Form.Item>
+                        </Col>
 
-                    <Form.Item
-                        name="month"
-                        label={t("payroll.month")}
-                        rules={[{ required: true, message: t("payroll.monthReq") }]}
-                    >
-                        <Select>
-                            {months.map(m => (
-                                <Option key={m} value={m}>
-                                    {new Date(0, m - 1).toLocaleString('default', { month: 'long' })}
-                                </Option>
-                            ))}
-                        </Select>
-                    </Form.Item>
+                        <Col xs={24} md={12}>
+                            <Form.Item
+                                name="month"
+                                label={t("payroll.month")}
+                                rules={[{ required: true, message: t("payroll.monthReq") }]}
+                            >
+                                <Select>
+                                    {months.map(m => (
+                                        <Option key={m} value={m}>
+                                            {new Date(0, m - 1).toLocaleString('default', { month: 'long' })}
+                                        </Option>
+                                    ))}
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                    </Row>
 
-                    <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 24 }}>
-                        <Button onClick={() => navigate("/hr/payroll")}>{t("common.cancel")}</Button>
-                        <Button type="primary" htmlType="submit" loading={submitting}>
+                    <div
+                        style={{
+                            display: "flex",
+                            justifyContent: "flex-end",
+                            flexDirection: isMobile ? "column-reverse" : "row",
+                            gap: 12,
+                            marginTop: 24,
+                        }}
+                    >
+                        <Button onClick={() => navigate("/hr/payroll")} block={isMobile}>
+                            {t("common.cancel")}
+                        </Button>
+                        <Button type="primary" htmlType="submit" loading={submitting} block={isMobile}>
                             {t("payroll.createTitle")}
                         </Button>
                     </div>

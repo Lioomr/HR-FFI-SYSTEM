@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Card, Alert, notification, Descriptions } from "antd";
+import { Button, Card, Alert, notification, Descriptions, Grid, Space } from "antd";
 import { FileTextOutlined } from "@ant-design/icons";
 import { generatePayslips } from "../../../services/api/payrollApi";
 import { isApiError } from "../../../services/api/apiTypes";
@@ -12,8 +12,12 @@ interface PayrollPayslipsProps {
     onGenerated?: () => void | Promise<void>;
 }
 
+const { useBreakpoint } = Grid;
+
 export default function PayrollPayslips({ runId, isFinalized, runStatus, onGenerated }: PayrollPayslipsProps) {
     const { t } = useI18n();
+    const screens = useBreakpoint();
+    const isMobile = !screens.md;
     const [generating, setGenerating] = useState(false);
     const [generated, setGenerated] = useState<{ generatedCount?: number; totalPayslips?: number } | null>(null);
 
@@ -66,7 +70,11 @@ export default function PayrollPayslips({ runId, isFinalized, runStatus, onGener
 
             <Descriptions title={t("common.actions")} bordered column={1}>
                 <Descriptions.Item label={t("payroll.runDetails.btnGeneratePayslips")}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                    <Space
+                        direction={isMobile ? "vertical" : "horizontal"}
+                        size={12}
+                        style={{ width: "100%", justifyContent: "space-between" }}
+                    >
                         <span>{t("payroll.runDetails.generatePayslipsDesc")}</span>
                         <Button
                             type="primary"
@@ -74,10 +82,11 @@ export default function PayrollPayslips({ runId, isFinalized, runStatus, onGener
                             onClick={handleGenerate}
                             disabled={!isFinalized || generating || runStatus === "PAID"}
                             loading={generating}
+                            block={isMobile}
                         >
                             {runStatus === "PAID" ? t("payroll.runDetails.payslipsGeneratedTitle") : t("payroll.runDetails.btnGeneratePayslips")}
                         </Button>
-                    </div>
+                    </Space>
                 </Descriptions.Item>
             </Descriptions>
         </Card>

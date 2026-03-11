@@ -10,6 +10,7 @@ import { isApiError } from "../../services/api/apiTypes";
 import type { LoanRequest } from "../../services/api/loanApi";
 import { formatNumber } from "../../utils/currency";
 import { useI18n } from "../../i18n/useI18n";
+import LoanApprovalMap from "../loans/LoanApprovalMap";
 
 type Props = {
   title: string;
@@ -197,6 +198,8 @@ export default function LoanRequestDetailsPage({
       <Card loading={loading} style={{ borderRadius: 16 }}>
         {!item ? null : (
           <Space direction="vertical" size={24} style={{ width: "100%" }}>
+            <LoanApprovalMap request={item} t={t} />
+
             <Descriptions
               column={2}
               layout="vertical"

@@ -21,6 +21,7 @@ import {
     rejectLeaveRequestManager,
     type ManagerLeaveRequest,
 } from "../../services/api/managerApi";
+import LeaveApprovalMap from "../../components/leaves/LeaveApprovalMap";
 
 const { confirm } = Modal;
 const { TextArea } = Input;
@@ -158,6 +159,9 @@ export default function ManagerLeaveRequestDetailsPage() {
                 }
             />
 
+            <div style={{ display: "grid", gap: 18 }}>
+            <LeaveApprovalMap request={request as any} t={t} />
+
             <Card style={{ borderRadius: 16 }} title={t("common.details")}>
                 <Descriptions bordered column={1}>
                     <Descriptions.Item label={t("common.employee")}>{request.employee?.full_name || request.employee?.email}</Descriptions.Item>
@@ -196,6 +200,7 @@ export default function ManagerLeaveRequestDetailsPage() {
                     </div>
                 )}
             </Card>
+            </div>
 
             <Modal
                 title={t("leave.rejectTitle")}

@@ -19,6 +19,7 @@ import {
 } from "../../services/api/managerApi";
 import { isApiError } from "../../services/api/apiTypes";
 import { useI18n } from "../../i18n/useI18n";
+import LeaveApprovalMap from "../../components/leaves/LeaveApprovalMap";
 
 export default function ManagerTeamRequestsPage() {
     const [searchParams, setSearchParams] = useSearchParams();
@@ -184,6 +185,9 @@ function LeaveRequestsTab() {
             columns={columns}
             rowKey="id"
             loading={loading}
+            expandable={{
+                expandedRowRender: (record) => <LeaveApprovalMap request={record as any} t={t} />,
+            }}
             scroll={{ x: 1100 }}
             pagination={{ pageSize: 8, showSizeChanger: false }}
             rowClassName={() => "manager-leave-row"}

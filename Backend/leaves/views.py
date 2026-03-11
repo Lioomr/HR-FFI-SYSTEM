@@ -1,12 +1,19 @@
 import mimetypes
+import os
+from io import BytesIO
 from datetime import date
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db.models import Q
-from django.http import FileResponse
+from django.http import FileResponse, HttpResponse
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.utils import ImageReader, simpleSplit
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfgen import canvas
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -54,6 +61,13 @@ from .utils import calculate_leave_balance, get_leave_days, get_payment_breakdow
 
 User = get_user_model()
 
+try:
+    import arabic_reshaper
+    from bidi.algorithm import get_display
+except Exception:  # pragma: no cover - fallback until container rebuild installs extras
+    arabic_reshaper = None
+    get_display = None
+
 
 def _flatten_errors(error_dict):
     errors = []
@@ -100,6 +114,449 @@ def _serve_leave_document(instance, request):
         )
     except FileNotFoundError:
         return error("Not found", errors=["Document file is missing from storage."], status=404)
+
+
+def _approval_path_rows(instance: LeaveRequest):
+    rows = [
+        ("Submitted", instance.created_at, "Request submitted"),
+    ]
+
+    if instance.source == LeaveRequest.RequestSource.HR_MANUAL:
+        rows.append(("HR Manual Entry", instance.decided_at, instance.manual_entry_reason or "Recorded by HR"))
+        return rows
+
+    needs_manager = bool(getattr(getattr(instance.employee, "employee_profile", None), "manager_id", None))
+    needs_ceo = bool(getattr(instance.leave_type, "requires_ceo_approval", False) or _is_hr_manager_origin_request(instance))
+
+    if needs_manager:
+        rows.append(("Manager Review", instance.manager_decision_at, instance.manager_decision_note or instance.status))
+    else:
+        rows.append(("Manager Review", None, "Not required"))
+
+    rows.append(("HR Review", instance.decided_at if instance.status != LeaveRequest.RequestStatus.PENDING_CEO else None, instance.hr_decision_note or instance.decision_reason or instance.status))
+
+    if needs_ceo or instance.status == LeaveRequest.RequestStatus.PENDING_CEO or instance.ceo_decision_at:
+        rows.append(("CEO Review", instance.ceo_decision_at, instance.ceo_decision_note or instance.status))
+
+    return rows
+
+
+def _build_leave_request_pdf_legacy(instance: LeaveRequest):
+    def _register_pdf_fonts():
+        regular_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+        bold_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+        if "DejaVuSans" not in pdfmetrics.getRegisteredFontNames() and os.path.exists(regular_path):
+            pdfmetrics.registerFont(TTFont("DejaVuSans", regular_path))
+        if "DejaVuSans-Bold" not in pdfmetrics.getRegisteredFontNames() and os.path.exists(bold_path):
+            pdfmetrics.registerFont(TTFont("DejaVuSans-Bold", bold_path))
+
+    def _shape_ar(text):
+        value = str(text or "")
+        if not value:
+            return "-"
+        if arabic_reshaper and get_display:
+            return get_display(arabic_reshaper.reshape(value))
+        return value
+
+    def _logo_path():
+        candidates = [
+            os.path.join(str(settings.BASE_DIR), "static", "email", "ffi-logo.png"),
+            os.path.join(str(settings.BASE_DIR.parent), "Logo FFI.png"),
+            os.path.join(str(settings.BASE_DIR.parent), "FrontEnd", "public", "ffi-logo.png"),
+            "/app/static/email/ffi-logo.png",
+            "/app/Logo FFI.png",
+        ]
+        return next((path for path in candidates if os.path.exists(path)), "")
+
+    def _draw_labeled_rows(pdf, x, y, width, rows, rtl=False):
+        current_y = y
+        label_font = "DejaVuSans-Bold"
+        value_font = "DejaVuSans"
+        for label, value in rows:
+            pdf.setFillColorRGB(0.07, 0.09, 0.15)
+            pdf.setFont(label_font, 10)
+            if rtl:
+                pdf.drawRightString(x + width, current_y, _shape_ar(label))
+                pdf.setFont(value_font, 10)
+                pdf.setFillColorRGB(0.28, 0.33, 0.41)
+                pdf.drawRightString(x + width - 120, current_y, _shape_ar(value))
+            else:
+                pdf.drawString(x, current_y, str(label))
+                pdf.setFont(value_font, 10)
+                pdf.setFillColorRGB(0.28, 0.33, 0.41)
+                pdf.drawString(x + 115, current_y, str(value))
+            current_y -= 18
+        return current_y
+
+    def _status_label(status_value):
+        mapping = {
+            LeaveRequest.RequestStatus.SUBMITTED: ("Submitted", "تم التقديم"),
+            LeaveRequest.RequestStatus.PENDING_MANAGER: ("Pending Manager", "بانتظار المدير"),
+            LeaveRequest.RequestStatus.PENDING_HR: ("Pending HR", "بانتظار الموارد البشرية"),
+            LeaveRequest.RequestStatus.PENDING_CEO: ("Pending CEO", "بانتظار المدير التنفيذي"),
+            LeaveRequest.RequestStatus.APPROVED: ("Approved", "معتمد"),
+            LeaveRequest.RequestStatus.REJECTED: ("Rejected", "مرفوض"),
+            LeaveRequest.RequestStatus.CANCELLED: ("Cancelled", "ملغي"),
+        }
+        return mapping.get(status_value, (str(status_value), str(status_value)))
+
+    _register_pdf_fonts()
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+
+    accent = (244 / 255, 121 / 255, 32 / 255)
+    accent_soft = (255 / 255, 244 / 255, 235 / 255)
+    border = (253 / 255, 186 / 255, 116 / 255)
+    generated_at = timezone.localtime(timezone.now()).strftime("%Y-%m-%d %H:%M")
+    days = str(get_leave_days(instance.start_date, instance.end_date))
+    status_en, status_ar = _status_label(instance.status)
+    source_en = "Manual HR Record" if instance.source == LeaveRequest.RequestSource.HR_MANUAL else "Employee Request"
+    source_ar = "سجل يدوي من الموارد البشرية" if instance.source == LeaveRequest.RequestSource.HR_MANUAL else "طلب موظف"
+    rejection_note = instance.ceo_decision_note or instance.hr_decision_note or instance.manager_decision_note or "-"
+    approval_rows = _approval_path_rows(instance)
+
+    pdf.setTitle(f"Leave Request {instance.id}")
+    pdf.setFillColorRGB(*accent)
+    pdf.roundRect(24, height - 105, width - 48, 68, 18, fill=1, stroke=0)
+
+    logo = _logo_path()
+    if logo:
+        pdf.drawImage(ImageReader(logo), 34, height - 92, width=54, height=42, preserveAspectRatio=True, mask="auto")
+
+    pdf.setFillColorRGB(1, 1, 1)
+    pdf.setFont("DejaVuSans-Bold", 18)
+    pdf.drawString(100, height - 62, f"Leave Request #{instance.id}")
+    pdf.setFont("DejaVuSans", 10)
+    pdf.drawString(100, height - 82, f"Generated | {generated_at}")
+
+    pdf.setFillColorRGB(*accent_soft)
+    pdf.roundRect(24, 36, width - 48, height - 160, 20, fill=1, stroke=0)
+
+    pdf.setFillColorRGB(1, 1, 1)
+    pdf.roundRect(36, height - 340, width - 72, 206, 18, fill=1, stroke=0)
+    pdf.roundRect(36, 56, width - 72, 260, 18, fill=1, stroke=0)
+
+    pdf.setStrokeColorRGB(*border)
+    pdf.setLineWidth(1)
+    pdf.roundRect(36, height - 340, width - 72, 206, 18, fill=0, stroke=1)
+    pdf.roundRect(36, 56, width - 72, 260, 18, fill=0, stroke=1)
+
+    pdf.setFillColorRGB(*accent)
+    pdf.setFont("DejaVuSans-Bold", 13)
+    pdf.drawString(48, height - 154, "Arabic / العربية")
+    pdf.drawRightString(width - 48, height - 154, _shape_ar("العربية / Arabic"))
+
+    arabic_rows = [
+        ("الموظف", instance.employee.full_name or instance.employee.email),
+        ("البريد الإلكتروني", instance.employee.email),
+        ("نوع الإجازة", instance.leave_type.name),
+        ("الحالة", status_ar),
+        ("الفترة", f"{instance.start_date} - {instance.end_date}"),
+        ("عدد الأيام", days),
+        ("المصدر", source_ar),
+        ("السبب", instance.reason or "-"),
+    ]
+    if instance.status == LeaveRequest.RequestStatus.REJECTED:
+        arabic_rows.append(("ملاحظة الرفض", rejection_note))
+
+    english_rows = [
+        ("Employee", instance.employee.full_name or instance.employee.email),
+        ("Email", instance.employee.email),
+        ("Leave Type", instance.leave_type.name),
+        ("Status", status_en),
+        ("Period", f"{instance.start_date} to {instance.end_date}"),
+        ("Days", days),
+        ("Source", source_en),
+        ("Reason", instance.reason or "-"),
+    ]
+    if instance.status == LeaveRequest.RequestStatus.REJECTED:
+        english_rows.append(("Rejection Note", rejection_note))
+
+    _draw_labeled_rows(pdf, 56, height - 184, 220, arabic_rows, rtl=True)
+    _draw_labeled_rows(pdf, 56, height - 184, 470, english_rows, rtl=False)
+
+    pdf.setFillColorRGB(*accent)
+    pdf.setFont("DejaVuSans-Bold", 13)
+    pdf.drawString(48, 294, "Approval Path")
+    pdf.drawRightString(width - 48, 294, _shape_ar("مسار الموافقة"))
+
+    timeline_y = 266
+    left_x = 56
+    right_x = width / 2 + 12
+
+    for index, (stage, at, note) in enumerate(approval_rows):
+        y = timeline_y - (index * 56)
+        pdf.setFillColorRGB(*accent)
+        pdf.circle(left_x + 8, y + 4, 4, fill=1, stroke=0)
+        if index < len(approval_rows) - 1:
+            pdf.setStrokeColorRGB(*border)
+            pdf.line(left_x + 8, y - 6, left_x + 8, y - 42)
+
+        pdf.setFillColorRGB(0.07, 0.09, 0.15)
+        pdf.setFont("DejaVuSans-Bold", 10)
+        pdf.drawString(left_x + 22, y + 2, str(stage))
+        pdf.setFont("DejaVuSans", 9)
+        pdf.setFillColorRGB(0.28, 0.33, 0.41)
+        pdf.drawString(left_x + 22, y - 12, timezone.localtime(at).strftime("%Y-%m-%d %H:%M") if at else "-")
+        pdf.drawString(left_x + 22, y - 26, str(note or "-")[:54])
+
+        stage_ar = {
+            "Submitted": "تم التقديم",
+            "HR Manual Entry": "إدخال يدوي من الموارد البشرية",
+            "Manager Review": "مراجعة المدير",
+            "HR Review": "مراجعة الموارد البشرية",
+            "CEO Review": "مراجعة المدير التنفيذي",
+        }.get(stage, stage)
+        pdf.setFillColorRGB(*accent)
+        pdf.circle(right_x + 180, y + 4, 4, fill=1, stroke=0)
+        if index < len(approval_rows) - 1:
+            pdf.setStrokeColorRGB(*border)
+            pdf.line(right_x + 180, y - 6, right_x + 180, y - 42)
+
+        pdf.setFillColorRGB(0.07, 0.09, 0.15)
+        pdf.setFont("DejaVuSans-Bold", 10)
+        pdf.drawRightString(right_x + 168, y + 2, _shape_ar(stage_ar))
+        pdf.setFont("DejaVuSans", 9)
+        pdf.setFillColorRGB(0.28, 0.33, 0.41)
+        pdf.drawRightString(right_x + 168, y - 12, _shape_ar(timezone.localtime(at).strftime("%Y-%m-%d %H:%M") if at else "-"))
+        pdf.drawRightString(right_x + 168, y - 26, _shape_ar(str(note or "-")[:36]))
+
+    pdf.showPage()
+    pdf.save()
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def _build_leave_request_pdf(instance: LeaveRequest):
+    def _register_pdf_fonts():
+        regular_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+        bold_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+        if "DejaVuSans" not in pdfmetrics.getRegisteredFontNames() and os.path.exists(regular_path):
+            pdfmetrics.registerFont(TTFont("DejaVuSans", regular_path))
+        if "DejaVuSans-Bold" not in pdfmetrics.getRegisteredFontNames() and os.path.exists(bold_path):
+            pdfmetrics.registerFont(TTFont("DejaVuSans-Bold", bold_path))
+
+    def _shape_ar(text):
+        value = str(text or "")
+        if not value:
+            return "-"
+        if arabic_reshaper and get_display:
+            return get_display(arabic_reshaper.reshape(value))
+        return value
+
+    def _logo_path():
+        candidates = [
+            os.path.join(str(settings.BASE_DIR), "static", "email", "ffi-logo.png"),
+            os.path.join(str(settings.BASE_DIR.parent), "Logo FFI.png"),
+            os.path.join(str(settings.BASE_DIR.parent), "FrontEnd", "public", "ffi-logo.png"),
+            "/app/static/email/ffi-logo.png",
+            "/app/Logo FFI.png",
+        ]
+        return next((path for path in candidates if os.path.exists(path)), "")
+
+    def _status_label(status_value):
+        mapping = {
+            LeaveRequest.RequestStatus.SUBMITTED: ("Submitted", "تم التقديم"),
+            LeaveRequest.RequestStatus.PENDING_MANAGER: ("Pending Manager", "بانتظار المدير"),
+            LeaveRequest.RequestStatus.PENDING_HR: ("Pending HR", "بانتظار الموارد البشرية"),
+            LeaveRequest.RequestStatus.PENDING_CEO: ("Pending CEO", "بانتظار المدير التنفيذي"),
+            LeaveRequest.RequestStatus.APPROVED: ("Approved", "معتمد"),
+            LeaveRequest.RequestStatus.REJECTED: ("Rejected", "مرفوض"),
+            LeaveRequest.RequestStatus.CANCELLED: ("Cancelled", "ملغي"),
+        }
+        return mapping.get(status_value, (str(status_value), str(status_value)))
+
+    stage_labels = {
+        "Submitted": ("Submitted", "تم التقديم"),
+        "HR Manual Entry": ("HR Manual Entry", "إدخال يدوي من الموارد البشرية"),
+        "Manager Review": ("Manager Review", "مراجعة المدير"),
+        "HR Review": ("HR Review", "مراجعة الموارد البشرية"),
+        "CEO Review": ("CEO Review", "مراجعة المدير التنفيذي"),
+    }
+    note_labels = {
+        "Request submitted": ("Request submitted", "تم تقديم الطلب"),
+        "Recorded by HR": ("Recorded by HR", "تم تسجيل الطلب من الموارد البشرية"),
+        "Not required": ("Not required", "غير مطلوب"),
+    }
+
+    def _localized_note(note):
+        if not note:
+            return "-", "-"
+        normalized = str(note).strip()
+        if normalized in note_labels:
+            return note_labels[normalized]
+        if normalized in {value for value, _ in LeaveRequest.RequestStatus.choices}:
+            return _status_label(normalized)
+        return normalized, normalized
+
+    def _draw_page_shell(pdf, width, height, accent, accent_soft, generated_at, page_title):
+        pdf.setFillColorRGB(*accent_soft)
+        pdf.roundRect(24, 24, width - 48, height - 48, 20, fill=1, stroke=0)
+        pdf.setFillColorRGB(*accent)
+        pdf.roundRect(24, height - 94, width - 48, 58, 18, fill=1, stroke=0)
+
+        logo = _logo_path()
+        if logo:
+            pdf.drawImage(ImageReader(logo), 36, height - 84, width=48, height=36, preserveAspectRatio=True, mask="auto")
+
+        pdf.setFillColorRGB(1, 1, 1)
+        pdf.setFont("DejaVuSans-Bold", 18)
+        pdf.drawString(94, height - 60, page_title)
+        pdf.setFont("DejaVuSans", 10)
+        pdf.drawString(94, height - 78, f"Generated | {generated_at}")
+
+    def _draw_section_card(pdf, x, y_top, width, height, accent, border, title_en, title_ar):
+        pdf.setFillColorRGB(1, 1, 1)
+        pdf.roundRect(x, y_top - height, width, height, 18, fill=1, stroke=0)
+        pdf.setStrokeColorRGB(*border)
+        pdf.setLineWidth(1)
+        pdf.roundRect(x, y_top - height, width, height, 18, fill=0, stroke=1)
+        pdf.setFillColorRGB(*accent)
+        pdf.setFont("DejaVuSans-Bold", 13)
+        pdf.drawString(x + 16, y_top - 22, str(title_en))
+        pdf.drawRightString(x + width - 16, y_top - 22, _shape_ar(title_ar))
+
+    def _draw_detail_rows(pdf, x, y_top, width, rows, rtl=False):
+        current_y = y_top
+        label_width = 120
+        value_width = width - label_width - 10
+        for label, value in rows:
+            label_text = _shape_ar(label) if rtl else str(label)
+            value_text = _shape_ar(value) if rtl else str(value)
+            wrapped = simpleSplit(value_text, "DejaVuSans", 10, value_width) or ["-"]
+            block_height = max(24, len(wrapped) * 12 + 8)
+
+            pdf.setFillColorRGB(0.07, 0.09, 0.15)
+            pdf.setFont("DejaVuSans-Bold", 10)
+            if rtl:
+                pdf.drawRightString(x + width, current_y, label_text)
+            else:
+                pdf.drawString(x, current_y, label_text)
+
+            pdf.setFillColorRGB(0.28, 0.33, 0.41)
+            pdf.setFont("DejaVuSans", 10)
+            for index, line in enumerate(wrapped):
+                line_y = current_y - (index * 12)
+                if rtl:
+                    pdf.drawRightString(x + width - label_width, line_y, _shape_ar(line))
+                else:
+                    pdf.drawString(x + label_width, line_y, line)
+            current_y -= block_height
+
+    def _draw_timeline(pdf, x, y_top, width, rows, accent, border, rtl=False):
+        dot_x = x + width - 8 if rtl else x + 8
+        text_x = x + 26
+        text_right = x + width - 22
+        row_gap = 58
+        note_width = width - 40
+
+        for index, (stage, at, note) in enumerate(rows):
+            stage_en, stage_ar = stage_labels.get(stage, (stage, stage))
+            note_en, note_ar = _localized_note(note)
+            stage_text = _shape_ar(stage_ar) if rtl else stage_en
+            note_text = _shape_ar(note_ar) if rtl else note_en
+            timestamp = timezone.localtime(at).strftime("%Y-%m-%d %H:%M") if at else "-"
+            if rtl:
+                timestamp = _shape_ar(timestamp)
+
+            row_top = y_top - (index * row_gap)
+            pdf.setFillColorRGB(*accent)
+            pdf.circle(dot_x, row_top - 2, 4, fill=1, stroke=0)
+            if index < len(rows) - 1:
+                pdf.setStrokeColorRGB(*border)
+                pdf.line(dot_x, row_top - 10, dot_x, row_top - 46)
+
+            pdf.setFillColorRGB(0.07, 0.09, 0.15)
+            pdf.setFont("DejaVuSans-Bold", 10)
+            if rtl:
+                pdf.drawRightString(text_right, row_top, stage_text)
+            else:
+                pdf.drawString(text_x, row_top, stage_text)
+
+            pdf.setFillColorRGB(0.28, 0.33, 0.41)
+            pdf.setFont("DejaVuSans", 9)
+            note_lines = simpleSplit(note_text, "DejaVuSans", 9, note_width)[:2] or ["-"]
+            if rtl:
+                pdf.drawRightString(text_right, row_top - 16, timestamp)
+                for line_index, line in enumerate(note_lines):
+                    pdf.drawRightString(text_right, row_top - 30 - (line_index * 12), line)
+            else:
+                pdf.drawString(text_x, row_top - 16, timestamp)
+                for line_index, line in enumerate(note_lines):
+                    pdf.drawString(text_x, row_top - 30 - (line_index * 12), line)
+
+    _register_pdf_fonts()
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+
+    accent = (244 / 255, 121 / 255, 32 / 255)
+    accent_soft = (255 / 255, 244 / 255, 235 / 255)
+    border = (253 / 255, 186 / 255, 116 / 255)
+    generated_at = timezone.localtime(timezone.now()).strftime("%Y-%m-%d %H:%M")
+    days = str(get_leave_days(instance.start_date, instance.end_date))
+    status_en, status_ar = _status_label(instance.status)
+    source_en = "Manual HR Record" if instance.source == LeaveRequest.RequestSource.HR_MANUAL else "Employee Request"
+    source_ar = "سجل يدوي من الموارد البشرية" if instance.source == LeaveRequest.RequestSource.HR_MANUAL else "طلب موظف"
+    rejection_note = instance.ceo_decision_note or instance.hr_decision_note or instance.manager_decision_note or "-"
+    approval_rows = _approval_path_rows(instance)
+
+    arabic_rows = [
+        ("الموظف", instance.employee.full_name or instance.employee.email),
+        ("البريد الإلكتروني", instance.employee.email),
+        ("نوع الإجازة", instance.leave_type.name),
+        ("الحالة", status_ar),
+        ("الفترة", f"{instance.start_date} - {instance.end_date}"),
+        ("عدد الأيام", days),
+        ("المصدر", source_ar),
+        ("السبب", instance.reason or "-"),
+    ]
+    if instance.status == LeaveRequest.RequestStatus.REJECTED:
+        arabic_rows.append(("ملاحظة الرفض", rejection_note))
+
+    english_rows = [
+        ("Employee", instance.employee.full_name or instance.employee.email),
+        ("Email", instance.employee.email),
+        ("Leave Type", instance.leave_type.name),
+        ("Status", status_en),
+        ("Period", f"{instance.start_date} to {instance.end_date}"),
+        ("Days", days),
+        ("Source", source_en),
+        ("Reason", instance.reason or "-"),
+    ]
+    if instance.status == LeaveRequest.RequestStatus.REJECTED:
+        english_rows.append(("Rejection Note", rejection_note))
+
+    pdf.setTitle(f"Leave Request {instance.id}")
+
+    details_card_height = 250
+    timeline_card_height = 258
+
+    _draw_page_shell(pdf, width, height, accent, accent_soft, generated_at, f"Leave Request #{instance.id} - Arabic")
+    _draw_section_card(pdf, 36, height - 118, width - 72, details_card_height, accent, border, "Arabic", "العربية")
+    _draw_detail_rows(pdf, 56, height - 166, width - 112, arabic_rows, rtl=True)
+    _draw_section_card(
+        pdf, 36, height - 388, width - 72, timeline_card_height, accent, border, "Approval Path", "مسار الموافقة"
+    )
+    _draw_timeline(pdf, 56, height - 438, width - 112, approval_rows, accent, border, rtl=True)
+
+    pdf.showPage()
+
+    _draw_page_shell(pdf, width, height, accent, accent_soft, generated_at, f"Leave Request #{instance.id} - English")
+    _draw_section_card(
+        pdf, 36, height - 118, width - 72, details_card_height, accent, border, "Request Summary", "Request Summary"
+    )
+    _draw_detail_rows(pdf, 56, height - 166, width - 112, english_rows, rtl=False)
+    _draw_section_card(
+        pdf, 36, height - 388, width - 72, timeline_card_height, accent, border, "Approval Path", "Approval Path"
+    )
+    _draw_timeline(pdf, 56, height - 438, width - 112, approval_rows, accent, border, rtl=False)
+
+    pdf.showPage()
+    pdf.save()
+    buffer.seek(0)
+    return buffer.getvalue()
 
 
 class LeaveTypeViewSet(viewsets.ModelViewSet):
@@ -191,7 +648,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         if self.action == "create":
             return [IsAuthenticated(), IsEmployeeOnly()]
 
-        if self.action in ["list", "retrieve"]:
+        if self.action in ["list", "retrieve", "document", "pdf"]:
             # HR/Admin OR Owner (retrieve), HR-only for list enforced in list()
             return [IsAuthenticated(), IsOwnerOrHR()]
 
@@ -598,6 +1055,20 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             return error("Not found", errors=["Not found."], status=404)
         return _serve_leave_document(instance, request)
 
+    @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated, IsOwnerOrHR])
+    def pdf(self, request, pk=None):
+        try:
+            instance = self.get_object()
+        except LeaveRequest.DoesNotExist:
+            return error("Not found", errors=["Not found."], status=404)
+
+        pdf_bytes = _build_leave_request_pdf(instance)
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        filename = f"leave_request_{instance.id}.pdf"
+        disposition = "attachment" if _to_bool(request.query_params.get("download", "1")) else "inline"
+        response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
+        return response
+
 
 class HRManualLeaveRequestViewSet(viewsets.ModelViewSet):
     """
@@ -730,43 +1201,22 @@ class ManagerLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         role = get_role(self.request.user)
-        if role == "CEO":
-            ceo_profile = getattr(self.request.user, "employee_profile", None)
-            direct_reports_q = Q(manager=self.request.user)
-            if ceo_profile:
-                direct_reports_q = direct_reports_q | Q(manager_profile=ceo_profile)
+        base_qs = LeaveRequest.objects.filter(is_active=True).select_related(
+            "employee", "leave_type", "employee__employee_profile", "employee__employee_profile__manager_profile"
+        )
+        if role == "SystemAdmin":
+            return base_qs
 
-            leadership_user_ids = User.objects.filter(groups__name__in=["Manager", "HRManager"]).values_list(
-                "id", flat=True
-            )
-            direct_report_user_ids = (
-                EmployeeProfile.objects.filter(direct_reports_q)
-                .exclude(user__isnull=True)
-                .values_list("user_id", flat=True)
-            )
-            scope_user_ids = set(leadership_user_ids).union(set(direct_report_user_ids))
-
-            return LeaveRequest.objects.filter(
-                employee_id__in=scope_user_ids,
-                is_active=True,
-            ).select_related(
-                "employee", "leave_type", "employee__employee_profile", "employee__employee_profile__manager_profile"
-            )
-
-        # Only requests where the employee's manager maps to the current user.
         manager_profile_match = Q()
         if hasattr(self.request.user, "employee_profile"):
             manager_profile_match = Q(employee__employee_profile__manager_profile=self.request.user.employee_profile)
 
-        return LeaveRequest.objects.filter(
+        return base_qs.filter(
             (
                 Q(employee__employee_profile__manager_profile__user=self.request.user)
                 | Q(employee__employee_profile__manager=self.request.user)
                 | manager_profile_match
-            ),
-            is_active=True,
-        ).select_related(
-            "employee", "leave_type", "employee__employee_profile", "employee__employee_profile__manager_profile"
+            )
         )
 
     def list(self, request, *args, **kwargs):

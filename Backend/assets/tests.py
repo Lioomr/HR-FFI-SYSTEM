@@ -235,6 +235,39 @@ class AssetsTests(TestCase):
         )
         self.assertEqual(return_request_response.status_code, status.HTTP_201_CREATED)
 
+    def test_manager_can_use_employee_asset_self_service_for_own_asset(self):
+        asset = Asset.objects.create(
+            name_en="Manager Laptop",
+            type=Asset.AssetType.LAPTOP,
+            cpu="i5",
+            ram="8GB",
+            storage="256GB",
+            mac_address="AA:BB:CC:DD:EE:07",
+            operating_system="Linux",
+            status=Asset.AssetStatus.ASSIGNED,
+        )
+        AssetAssignment.objects.create(
+            asset=asset,
+            employee=self.manager_profile,
+            assigned_by=self.hr_user,
+            is_active=True,
+        )
+
+        self.client.force_authenticate(user=self.manager_user)
+
+        my_assets_response = self.client.get("/api/assets/my-assets/")
+        self.assertEqual(my_assets_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(my_assets_response.data["data"]["count"], 1)
+
+        damage_response = self.client.post(f"/api/assets/{asset.id}/damage-report/", {"description": "Broken hinge"})
+        self.assertEqual(damage_response.status_code, status.HTTP_201_CREATED)
+
+        return_request_response = self.client.post(
+            f"/api/assets/{asset.id}/return-request/",
+            {"note": "Returning assigned device"},
+        )
+        self.assertEqual(return_request_response.status_code, status.HTTP_201_CREATED)
+
     def test_hr_manager_asset_requests_start_pending_ceo(self):
         asset = Asset.objects.create(
             name_en="Laptop HR",

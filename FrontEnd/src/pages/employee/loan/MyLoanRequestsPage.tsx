@@ -10,6 +10,7 @@ import { cancelLoanRequest, getMyLoanRequests, type LoanRequest, type LoanStatus
 import AmountWithSAR from "../../../components/ui/AmountWithSAR";
 import { useI18n } from "../../../i18n/useI18n";
 import { getDetailedApiMessage, getDetailedHttpErrorMessage } from "../../../services/api/userErrorMessages";
+import LoanApprovalMap from "../../../components/loans/LoanApprovalMap";
 
 const { confirm } = Modal;
 
@@ -187,6 +188,9 @@ export default function MyLoanRequestsPage() {
           loading={loading}
           columns={columns}
           dataSource={items}
+          expandable={{
+            expandedRowRender: (record) => <LoanApprovalMap request={record} t={t} />,
+          }}
           pagination={{
             current: page,
             pageSize,

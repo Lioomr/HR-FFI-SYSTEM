@@ -314,10 +314,10 @@ def validate_leave_request_policy(
 
     code = _normalized_leave_code(leave_type)
 
-    # Annual leave eligibility: can start after 9 months.
+    # Annual leave eligibility: can start after 6 months.
     if _is_annual(code):
-        if profile.hire_date and start < (profile.hire_date + timedelta(days=273)):
-            return "Annual leave can be used only after completing 9 months of service."
+        if profile.hire_date and start < (profile.hire_date + timedelta(days=182)):
+            return "Annual leave can be used only after completing 6 months of service."
 
         # Only enforce remaining balance when profile + hire date are available.
         if profile.hire_date:
