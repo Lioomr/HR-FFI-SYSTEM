@@ -30,6 +30,7 @@ import { useI18n } from "../i18n/useI18n";
 import type { AppLanguage } from "../i18n/types";
 import { getEmployee } from "../services/api/employeesApi";
 import { isApiError } from "../services/api/apiTypes";
+import { getManagerTeam } from "../services/api/managerApi";
 import { isFinanceApproverEmployee } from "../utils/financeApprover";
 import { isCFOApproverEmployee } from "../utils/cfoApprover";
 import { isCEOApproverEmployee } from "../utils/ceoApprover";
@@ -171,6 +172,17 @@ function roleColor(role?: string) {
   return map[role || ""] || "#94a3b8";
 }
 
+function sectionLabel(title: string, caption?: string) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <span>{title}</span>
+      {caption ? (
+        <span style={{ fontSize: 10, letterSpacing: "0.04em", textTransform: "none", opacity: 0.7 }}>{caption}</span>
+      ) : null}
+    </div>
+  );
+}
+
 // ─── Main Layout ────────────────────────────────────────────────────────────────
 export default function BaseLayout() {
   const location = useLocation();
@@ -187,6 +199,7 @@ export default function BaseLayout() {
   const [isFinanceApprover, setIsFinanceApprover] = useState(false);
   const [isCFOApprover, setIsCFOApprover] = useState(false);
   const [isCEOApprover, setIsCEOApprover] = useState(false);
+  const [hasManagerAccess, setHasManagerAccess] = useState(false);
 
   const role = user?.role;
 
@@ -198,26 +211,35 @@ export default function BaseLayout() {
           setIsFinanceApprover(false);
           setIsCFOApprover(false);
           setIsCEOApprover(false);
+          setHasManagerAccess(false);
         }
         return;
       }
       try {
-        const res = await getEmployee("me");
+        const [profileRes, managerRes] = await Promise.allSettled([getEmployee("me"), getManagerTeam()]);
         if (!mounted) return;
-        if (isApiError(res)) {
+        const resolvedProfile =
+          profileRes.status === "fulfilled" ? profileRes.value : null;
+        const resolvedManager =
+          managerRes.status === "fulfilled" ? managerRes.value : null;
+
+        if (!resolvedProfile || isApiError(resolvedProfile)) {
           setIsFinanceApprover(false);
           setIsCFOApprover(false);
           setIsCEOApprover(false);
+          setHasManagerAccess(Boolean(resolvedManager && !isApiError(resolvedManager)));
         } else {
-          setIsFinanceApprover(isFinanceApproverEmployee(res.data));
-          setIsCFOApprover(isCFOApproverEmployee(res.data));
-          setIsCEOApprover(isCEOApproverEmployee(res.data));
+          setIsFinanceApprover(isFinanceApproverEmployee(resolvedProfile.data));
+          setIsCFOApprover(isCFOApproverEmployee(resolvedProfile.data));
+          setIsCEOApprover(isCEOApproverEmployee(resolvedProfile.data));
+          setHasManagerAccess(Boolean(resolvedManager && !isApiError(resolvedManager)));
         }
       } catch {
         if (mounted) {
           setIsFinanceApprover(false);
           setIsCFOApprover(false);
           setIsCEOApprover(false);
+          setHasManagerAccess(false);
         }
       }
     }
@@ -227,13 +249,30 @@ export default function BaseLayout() {
 
   // ─── Menu definitions ──────────────────────────────────────────────────────
   const adminItems: MenuProps["items"] = [
-    { key: "/admin/dashboard", icon: <DashboardOutlined />, label: <Link to="/admin/dashboard">{t("layout.dashboard")}</Link> },
-    { key: "/admin/users", icon: <TeamOutlined />, label: <Link to="/admin/users">{t("layout.users")}</Link> },
-    { key: "/admin/users/create", icon: <UserAddOutlined />, label: <Link to="/admin/users/create">{t("layout.createUser")}</Link> },
-    { key: "/admin/invites", icon: <UserAddOutlined />, label: <Link to="/admin/invites">{t("layout.invites")}</Link> },
-    { key: "/admin/audit-logs", icon: <FileSearchOutlined />, label: <Link to="/admin/audit-logs">{t("layout.auditLogs")}</Link> },
-    { key: "/admin/settings", icon: <SettingOutlined />, label: <Link to="/admin/settings">{t("layout.settings")}</Link> },
-    { key: "/admin/profile", icon: <IdcardOutlined />, label: <Link to="/admin/profile">{t("layout.profile")}</Link> },
+    {
+      type: "group",
+      label: sectionLabel(t("layout.dashboard"), t("layout.menu.operations", "Operations")),
+      children: [
+        { key: "/admin/dashboard", icon: <DashboardOutlined />, label: <Link to="/admin/dashboard">{t("layout.dashboard")}</Link> },
+        { key: "/admin/announcements", icon: <BellOutlined />, label: <Link to="/admin/announcements">{t("layout.announcements", "Announcements")}</Link> },
+        { key: "/admin/audit-logs", icon: <FileSearchOutlined />, label: <Link to="/admin/audit-logs">{t("layout.auditLogs")}</Link> },
+        { key: "/admin/settings", icon: <SettingOutlined />, label: <Link to="/admin/settings">{t("layout.settings")}</Link> },
+      ],
+    },
+    {
+      type: "group",
+      label: sectionLabel(t("layout.users"), t("layout.menu.peopleOrg", "People & Organization")),
+      children: [
+        { key: "/admin/users", icon: <TeamOutlined />, label: <Link to="/admin/users">{t("layout.users")}</Link> },
+        { key: "/admin/users/create", icon: <UserAddOutlined />, label: <Link to="/admin/users/create">{t("layout.createUser")}</Link> },
+        { key: "/admin/invites", icon: <UserAddOutlined />, label: <Link to="/admin/invites">{t("layout.invites")}</Link> },
+      ],
+    },
+    {
+      type: "group",
+      label: sectionLabel(t("layout.profile"), t("layout.menu.account", "Account")),
+      children: [{ key: "/admin/profile", icon: <IdcardOutlined />, label: <Link to="/admin/profile">{t("layout.profile")}</Link> }],
+    },
   ];
 
   const hrItems: MenuProps["items"] = [
@@ -241,7 +280,7 @@ export default function BaseLayout() {
     { key: "/hr/invites", icon: <UserAddOutlined />, label: <Link to="/hr/invites">{t("layout.invites")}</Link> },
     {
       type: "group",
-      label: t("layout.menu.workInbox", "Work Inbox"),
+      label: sectionLabel(t("layout.menu.workInbox", "Work Inbox"), t("layout.attendanceApprovals", "Attendance Approvals")),
       children: [
         { key: "/hr/leave/requests", icon: <CalendarOutlined />, label: <Link to="/hr/leave/requests">{t("layout.leaveInbox")}</Link> },
         { key: "/hr/loan-requests", icon: <DollarOutlined />, label: <Link to="/hr/loan-requests">{t("layout.loanInbox", "Loan Inbox")}</Link> },
@@ -250,7 +289,7 @@ export default function BaseLayout() {
     },
     {
       type: "group",
-      label: t("layout.menu.myRequests", "My Requests"),
+      label: sectionLabel(t("layout.menu.myRequests", "My Requests"), t("layout.employeeSelfService")),
       children: [
         { key: "/employee/leave/request", icon: <CalendarOutlined />, label: <Link to="/employee/leave/request">{t("layout.requestLeave", "Request Leave")}</Link> },
         { key: "/employee/leave/requests", icon: <FileSearchOutlined />, label: <Link to="/employee/leave/requests">{t("layout.myRequests")}</Link> },
@@ -262,7 +301,7 @@ export default function BaseLayout() {
     },
     {
       type: "group",
-      label: t("layout.menu.peopleOrg", "People & Organization"),
+      label: sectionLabel(t("layout.menu.peopleOrg", "People & Organization"), t("layout.employees")),
       children: [
         { key: "/hr/employees", icon: <TeamOutlined />, label: <Link to="/hr/employees">{t("layout.employees")}</Link> },
         { key: "/hr/departments", icon: <ApartmentOutlined />, label: <Link to="/hr/departments">{t("layout.departments")}</Link> },
@@ -273,18 +312,20 @@ export default function BaseLayout() {
     },
     {
       type: "group",
-      label: t("layout.menu.operations", "Operations"),
+      label: sectionLabel(t("layout.menu.operations", "Operations"), t("layout.payroll")),
       children: [
         { key: "/hr/import/employees", icon: <UploadOutlined />, label: <Link to="/hr/import/employees">{t("layout.importEmployees")}</Link> },
         { key: "/hr/payroll", icon: <DollarOutlined />, label: <Link to="/hr/payroll">{t("layout.payroll")}</Link> },
         { key: "/hr/assets", icon: <AppstoreOutlined />, label: <Link to="/hr/assets">{t("layout.assets", "Assets")}</Link> },
         { key: "/hr/rents", icon: <BellOutlined />, label: <Link to="/hr/rents">{t("layout.rents", "Rents")}</Link> },
         { key: "/hr/rent-types", icon: <SettingOutlined />, label: <Link to="/hr/rent-types">{t("layout.rentTypes", "Rent Types")}</Link> },
+        { key: "/hr/announcements", icon: <BellOutlined />, label: <Link to="/hr/announcements">{t("layout.announcements", "Announcements")}</Link> },
+        { key: "/hr/announcements/create", icon: <UserAddOutlined />, label: <Link to="/hr/announcements/create">{t("layout.createAnnouncement", "Create Announcement")}</Link> },
       ],
     },
     {
       type: "group",
-      label: t("layout.menu.account", "Account"),
+      label: sectionLabel(t("layout.menu.account", "Account"), t("layout.profile")),
       children: [
         { key: "/hr/profile", icon: <IdcardOutlined />, label: <Link to="/hr/profile">{t("layout.profile")}</Link> },
       ],
@@ -292,49 +333,166 @@ export default function BaseLayout() {
   ];
 
   const employeeItems: MenuProps["items"] = [
-    { key: "/employee/home", icon: <DashboardOutlined />, label: <Link to="/employee/home">{t("layout.home")}</Link> },
-    { key: "/employee/attendance", icon: <CalendarOutlined />, label: <Link to="/employee/attendance">{t("layout.attendance")}</Link> },
-    { key: "/employee/leave/balance", icon: <FileSearchOutlined />, label: <Link to="/employee/leave/balance">{t("layout.leaveBalance")}</Link> },
-    { key: "/employee/leave/requests", icon: <CalendarOutlined />, label: <Link to="/employee/leave/requests">{t("layout.myRequests")}</Link> },
-    ...(isFinanceApprover
-      ? [{ key: "/finance/loan-requests", icon: <DollarOutlined />, label: <Link to="/finance/loan-requests">{t("layout.loanInbox", "Loan Inbox")}</Link> }]
+    {
+      type: "group",
+      label: sectionLabel(t("layout.employeeSelfService"), t("layout.home")),
+      children: [
+        { key: "/employee/home", icon: <DashboardOutlined />, label: <Link to="/employee/home">{t("layout.home")}</Link> },
+        { key: "/employee/attendance", icon: <CalendarOutlined />, label: <Link to="/employee/attendance">{t("layout.attendance")}</Link> },
+        { key: "/employee/leave/balance", icon: <FileSearchOutlined />, label: <Link to="/employee/leave/balance">{t("layout.leaveBalance")}</Link> },
+        { key: "/employee/leave/requests", icon: <CalendarOutlined />, label: <Link to="/employee/leave/requests">{t("layout.myRequests")}</Link> },
+        { key: "/employee/assets", icon: <AppstoreOutlined />, label: <Link to="/employee/assets">{t("layout.myAssets", "My Assets")}</Link> },
+        { key: "/employee/loans", icon: <DollarOutlined />, label: <Link to="/employee/loans">{t("layout.loanRequests", "Loan Requests")}</Link> },
+        { key: "/employee/payslips", icon: <DollarOutlined />, label: <Link to="/employee/payslips">{t("layout.myPayslips")}</Link> },
+      ],
+    },
+    ...(hasManagerAccess || isFinanceApprover || isCFOApprover || isCEOApprover
+      ? [
+        {
+          type: "group" as const,
+          label: sectionLabel(t("layout.menu.workInbox", "Work Inbox"), t("layout.teamRequests", "Team Requests")),
+          children: [
+            ...(hasManagerAccess
+              ? [
+                { key: "/manager/dashboard", icon: <DashboardOutlined />, label: <Link to="/manager/dashboard">{t("layout.managerDashboard", "Manager Dashboard")}</Link> },
+                { key: "/manager/team-requests", icon: <FileSearchOutlined />, label: <Link to="/manager/team-requests">{t("layout.teamRequests", "Team Requests")}</Link> },
+                { key: "/manager/loan-requests", icon: <DollarOutlined />, label: <Link to="/manager/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
+                { key: "/manager/team", icon: <TeamOutlined />, label: <Link to="/manager/team">{t("layout.myTeam", "My Team")}</Link> },
+              ]
+              : []),
+            ...(isFinanceApprover
+              ? [{ key: "/finance/loan-requests", icon: <DollarOutlined />, label: <Link to="/finance/loan-requests">{t("layout.loanInbox", "Loan Inbox")}</Link> }]
+              : []),
+            ...(isCFOApprover
+              ? [{ key: "/cfo/loan-requests", icon: <DollarOutlined />, label: <Link to="/cfo/loan-requests">{t("layout.cfoLoanInbox", "CFO Loan Inbox")}</Link> }]
+              : []),
+            ...(isCEOApprover
+              ? [
+                { key: "/ceo/loan-requests", icon: <DollarOutlined />, label: <Link to="/ceo/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
+                { key: "/ceo/attendance", icon: <ClockCircleOutlined />, label: <Link to="/ceo/attendance">{t("layout.attendance")}</Link> },
+                { key: "/ceo/assets/damage-reports", icon: <AppstoreOutlined />, label: <Link to="/ceo/assets/damage-reports">{t("assets.damageReports", "Damage Reports")}</Link> },
+                { key: "/ceo/assets/return-requests", icon: <AppstoreOutlined />, label: <Link to="/ceo/assets/return-requests">{t("assets.returnRequests", "Return Requests")}</Link> },
+              ]
+              : []),
+          ],
+        },
+      ]
       : []),
-    { key: "/employee/assets", icon: <AppstoreOutlined />, label: <Link to="/employee/assets">{t("layout.myAssets", "My Assets")}</Link> },
-    { key: "/employee/loans", icon: <DollarOutlined />, label: <Link to="/employee/loans">{t("layout.loanRequests", "Loan Requests")}</Link> },
-    { key: "/employee/payslips", icon: <DollarOutlined />, label: <Link to="/employee/payslips">{t("layout.myPayslips")}</Link> },
+    {
+      type: "group",
+      label: sectionLabel(t("layout.menu.account", "Account"), t("layout.profile")),
+      children: [
+        { key: "/employee/announcements", icon: <BellOutlined />, label: <Link to="/employee/announcements">{t("layout.announcements", "Announcements")}</Link> },
+        { key: "/employee/profile", icon: <IdcardOutlined />, label: <Link to="/employee/profile">{t("layout.profile")}</Link> },
+      ],
+    },
   ];
 
   const managerItems: MenuProps["items"] = [
-    { key: "/manager/dashboard", icon: <DashboardOutlined />, label: <Link to="/manager/dashboard">{t("layout.dashboard")}</Link> },
-    { key: "/manager/team-requests", icon: <FileSearchOutlined />, label: <Link to="/manager/team-requests">{t("layout.teamRequests", "Team Requests")}</Link> },
-    { key: "/manager/loan-requests", icon: <DollarOutlined />, label: <Link to="/manager/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
-    { key: "/manager/team", icon: <TeamOutlined />, label: <Link to="/manager/team">{t("layout.myTeam", "My Team")}</Link> },
-    { type: "divider" },
-    { key: "/employee/attendance", icon: <ClockCircleOutlined />, label: <Link to="/employee/attendance">{t("layout.attendance")}</Link> },
-    { key: "/employee/assets", icon: <AppstoreOutlined />, label: <Link to="/employee/assets">{t("layout.myAssets", "My Assets")}</Link> },
-    { key: "/employee/leave/request", icon: <CalendarOutlined />, label: <Link to="/employee/leave/request">{t("layout.requestLeave", "Request Leave")}</Link> },
-    { key: "/employee/leave/requests", icon: <FileSearchOutlined />, label: <Link to="/employee/leave/requests">{t("layout.myRequests")}</Link> },
-    { key: "/manager/announcements", icon: <BellOutlined />, label: <Link to="/manager/announcements">{t("layout.announcements", "Announcements")}</Link> },
-    { key: "/manager/announcements/create", icon: <UserAddOutlined />, label: <Link to="/manager/announcements/create">{t("layout.createAnnouncement", "Create Announcement")}</Link> },
-    { key: "/manager/profile", icon: <IdcardOutlined />, label: <Link to="/manager/profile">{t("layout.profile")}</Link> },
+    {
+      type: "group",
+      label: sectionLabel(t("layout.employeeSelfService"), t("layout.menu.myRequests", "My Requests")),
+      children: [
+        { key: "/employee/home", icon: <DashboardOutlined />, label: <Link to="/employee/home">{t("layout.home")}</Link> },
+        { key: "/employee/attendance", icon: <ClockCircleOutlined />, label: <Link to="/employee/attendance">{t("layout.attendance")}</Link> },
+        { key: "/employee/leave/balance", icon: <FileSearchOutlined />, label: <Link to="/employee/leave/balance">{t("layout.leaveBalance")}</Link> },
+        { key: "/employee/leave/request", icon: <CalendarOutlined />, label: <Link to="/employee/leave/request">{t("layout.requestLeave", "Request Leave")}</Link> },
+        { key: "/employee/leave/requests", icon: <FileSearchOutlined />, label: <Link to="/employee/leave/requests">{t("layout.myRequests")}</Link> },
+        { key: "/employee/assets", icon: <AppstoreOutlined />, label: <Link to="/employee/assets">{t("layout.myAssets", "My Assets")}</Link> },
+        { key: "/employee/loans/request", icon: <DollarOutlined />, label: <Link to="/employee/loans/request">{t("loans.myRequests.newRequest", "New Loan Request")}</Link> },
+        { key: "/employee/loans", icon: <DollarOutlined />, label: <Link to="/employee/loans">{t("layout.loanRequests", "Loan Requests")}</Link> },
+        { key: "/employee/payslips", icon: <DollarOutlined />, label: <Link to="/employee/payslips">{t("layout.myPayslips")}</Link> },
+      ],
+    },
+    {
+      type: "group",
+      label: sectionLabel(t("layout.managerDashboard", "Manager Dashboard"), t("layout.menu.workInbox", "Work Inbox")),
+      children: [
+        { key: "/manager/dashboard", icon: <DashboardOutlined />, label: <Link to="/manager/dashboard">{t("layout.dashboard")}</Link> },
+        { key: "/manager/team-requests", icon: <FileSearchOutlined />, label: <Link to="/manager/team-requests">{t("layout.teamRequests", "Team Requests")}</Link> },
+        { key: "/manager/loan-requests", icon: <DollarOutlined />, label: <Link to="/manager/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
+        { key: "/manager/team", icon: <TeamOutlined />, label: <Link to="/manager/team">{t("layout.myTeam", "My Team")}</Link> },
+      ],
+    },
+    {
+      type: "group",
+      label: sectionLabel(t("layout.announcements", "Announcements"), t("layout.menu.operations", "Operations")),
+      children: [
+        { key: "/employee/announcements", icon: <BellOutlined />, label: <Link to="/employee/announcements">{t("layout.announcements", "Announcements")}</Link> },
+        { key: "/manager/announcements", icon: <BellOutlined />, label: <Link to="/manager/announcements">{t("layout.announcements", "Announcements")}</Link> },
+        { key: "/manager/announcements/create", icon: <UserAddOutlined />, label: <Link to="/manager/announcements/create">{t("layout.createAnnouncement", "Create Announcement")}</Link> },
+      ],
+    },
+    {
+      type: "group",
+      label: sectionLabel(t("layout.profile"), t("layout.menu.account", "Account")),
+      children: [
+        { key: "/employee/profile", icon: <IdcardOutlined />, label: <Link to="/employee/profile">{t("layout.profile")}</Link> },
+        { key: "/manager/profile", icon: <IdcardOutlined />, label: <Link to="/manager/profile">{t("layout.profile")}</Link> },
+      ],
+    },
   ];
 
   const ceoItems: MenuProps["items"] = [
-    { key: "/ceo/leave/requests", icon: <CalendarOutlined />, label: <Link to="/ceo/leave/requests">{t("layout.ceoLeaveApprovals", "Leave Approvals")}</Link> },
-    { key: "/ceo/team-requests", icon: <FileSearchOutlined />, label: <Link to="/ceo/team-requests">{t("layout.teamRequests", "Team Requests")}</Link> },
-    { key: "/ceo/team", icon: <TeamOutlined />, label: <Link to="/ceo/team">{t("layout.ceoTeam", "Leadership Team")}</Link> },
-    { key: "/ceo/loan-requests", icon: <DollarOutlined />, label: <Link to="/ceo/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
-    { key: "/ceo/attendance", icon: <ClockCircleOutlined />, label: <Link to="/ceo/attendance">{t("layout.attendance")}</Link> },
-    { key: "/ceo/assets/damage-reports", icon: <AppstoreOutlined />, label: <Link to="/ceo/assets/damage-reports">{t("assets.damageReports", "Damage Reports")}</Link> },
-    { key: "/ceo/assets/return-requests", icon: <AppstoreOutlined />, label: <Link to="/ceo/assets/return-requests">{t("assets.returnRequests", "Return Requests")}</Link> },
-    { key: "/ceo/announcements", icon: <BellOutlined />, label: <Link to="/ceo/announcements">{t("layout.announcements", "Announcements")}</Link> },
-    { key: "/ceo/announcements/create", icon: <UserAddOutlined />, label: <Link to="/ceo/announcements/create">{t("layout.createAnnouncement", "Create Announcement")}</Link> },
-    { key: "/ceo/profile", icon: <IdcardOutlined />, label: <Link to="/ceo/profile">{t("layout.profile")}</Link> },
+    {
+      type: "group",
+      label: sectionLabel(t("layout.dashboard"), t("layout.menu.workInbox", "Work Inbox")),
+      children: [
+        { key: "/ceo/dashboard", icon: <DashboardOutlined />, label: <Link to="/ceo/dashboard">{t("layout.dashboard")}</Link> },
+        { key: "/ceo/leave/requests", icon: <CalendarOutlined />, label: <Link to="/ceo/leave/requests">{t("layout.ceoLeaveApprovals", "Leave Approvals")}</Link> },
+        { key: "/ceo/team-requests", icon: <FileSearchOutlined />, label: <Link to="/ceo/team-requests">{t("layout.teamRequests", "Team Requests")}</Link> },
+        { key: "/ceo/team", icon: <TeamOutlined />, label: <Link to="/ceo/team">{t("layout.ceoTeam", "Leadership Team")}</Link> },
+        { key: "/ceo/loan-requests", icon: <DollarOutlined />, label: <Link to="/ceo/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
+        { key: "/ceo/attendance", icon: <ClockCircleOutlined />, label: <Link to="/ceo/attendance">{t("layout.attendance")}</Link> },
+        { key: "/ceo/assets/damage-reports", icon: <AppstoreOutlined />, label: <Link to="/ceo/assets/damage-reports">{t("assets.damageReports", "Damage Reports")}</Link> },
+        { key: "/ceo/assets/return-requests", icon: <AppstoreOutlined />, label: <Link to="/ceo/assets/return-requests">{t("assets.returnRequests", "Return Requests")}</Link> },
+      ],
+    },
+    {
+      type: "group",
+      label: sectionLabel(t("layout.managerDashboard", "Manager Dashboard"), t("layout.myTeam", "My Team")),
+      children: [
+        { key: "/manager/dashboard", icon: <DashboardOutlined />, label: <Link to="/manager/dashboard">{t("layout.managerDashboard", "Manager Dashboard")}</Link> },
+        { key: "/manager/team-requests", icon: <FileSearchOutlined />, label: <Link to="/manager/team-requests">{t("layout.teamRequests", "Team Requests")}</Link> },
+        { key: "/manager/loan-requests", icon: <DollarOutlined />, label: <Link to="/manager/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
+        { key: "/manager/team", icon: <TeamOutlined />, label: <Link to="/manager/team">{t("layout.myTeam", "My Team")}</Link> },
+      ],
+    },
+    {
+      type: "group",
+      label: sectionLabel(t("layout.announcements", "Announcements"), t("layout.menu.account", "Account")),
+      children: [
+        { key: "/ceo/announcements", icon: <BellOutlined />, label: <Link to="/ceo/announcements">{t("layout.announcements", "Announcements")}</Link> },
+        { key: "/ceo/announcements/create", icon: <UserAddOutlined />, label: <Link to="/ceo/announcements/create">{t("layout.createAnnouncement", "Create Announcement")}</Link> },
+        { key: "/ceo/profile", icon: <IdcardOutlined />, label: <Link to="/ceo/profile">{t("layout.profile")}</Link> },
+      ],
+    },
   ];
 
   const cfoItems: MenuProps["items"] = [
-    { key: "/cfo/loan-requests", icon: <DollarOutlined />, label: <Link to="/cfo/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
-    { key: "/cfo/profile", icon: <IdcardOutlined />, label: <Link to="/cfo/profile">{t("layout.profile")}</Link> },
+    {
+      type: "group",
+      label: sectionLabel(t("layout.dashboard"), t("layout.menu.workInbox", "Work Inbox")),
+      children: [
+        { key: "/cfo/dashboard", icon: <DashboardOutlined />, label: <Link to="/cfo/dashboard">{t("layout.dashboard")}</Link> },
+        { key: "/cfo/loan-requests", icon: <DollarOutlined />, label: <Link to="/cfo/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
+      ],
+    },
+    {
+      type: "group",
+      label: sectionLabel(t("layout.managerDashboard", "Manager Dashboard"), t("layout.myTeam", "My Team")),
+      children: [
+        { key: "/manager/dashboard", icon: <DashboardOutlined />, label: <Link to="/manager/dashboard">{t("layout.managerDashboard", "Manager Dashboard")}</Link> },
+        { key: "/manager/team-requests", icon: <FileSearchOutlined />, label: <Link to="/manager/team-requests">{t("layout.teamRequests", "Team Requests")}</Link> },
+        { key: "/manager/loan-requests", icon: <DollarOutlined />, label: <Link to="/manager/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
+        { key: "/manager/team", icon: <TeamOutlined />, label: <Link to="/manager/team">{t("layout.myTeam", "My Team")}</Link> },
+      ],
+    },
+    {
+      type: "group",
+      label: sectionLabel(t("layout.profile"), t("layout.menu.account", "Account")),
+      children: [{ key: "/cfo/profile", icon: <IdcardOutlined />, label: <Link to="/cfo/profile">{t("layout.profile")}</Link> }],
+    },
   ];
 
   const menuItems =
@@ -344,16 +502,7 @@ export default function BaseLayout() {
           : role === "CEO" ? ceoItems
             : role === "CFO" ? cfoItems
               : role === "Employee"
-                ? [
-                  ...employeeItems,
-                  ...(isCFOApprover ? [{ key: "/cfo/loan-requests", icon: <DollarOutlined />, label: <Link to="/cfo/loan-requests">{t("layout.cfoLoanInbox", "CFO Loan Inbox")}</Link> }] : []),
-                  ...(isCEOApprover ? [
-                    { key: "/ceo/loan-requests", icon: <DollarOutlined />, label: <Link to="/ceo/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
-                    { key: "/ceo/attendance", icon: <ClockCircleOutlined />, label: <Link to="/ceo/attendance">{t("layout.attendance")}</Link> },
-                    { key: "/ceo/assets/damage-reports", icon: <AppstoreOutlined />, label: <Link to="/ceo/assets/damage-reports">{t("assets.damageReports", "Damage Reports")}</Link> },
-                    { key: "/ceo/assets/return-requests", icon: <AppstoreOutlined />, label: <Link to="/ceo/assets/return-requests">{t("assets.returnRequests", "Return Requests")}</Link> },
-                  ] : []),
-                ]
+                ? employeeItems
                 : [];
 
   // ─── User dropdown menu ────────────────────────────────────────────────────

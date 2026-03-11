@@ -1,6 +1,7 @@
 import axios from "axios";
 import { getToken, clearToken } from "./tokenStorage";
 import { useAuthStore } from "../../auth/authStore";
+import { getFirstApiErrorMessage } from "../../utils/formErrors";
 
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000",
@@ -39,7 +40,10 @@ api.interceptors.response.use(
 
     // Try to extract a user-friendly message
     let friendlyMessage = err.message;
-    if (data?.message) {
+    const extractedMessage = getFirstApiErrorMessage({ response: { data }, apiData: data });
+    if (extractedMessage) {
+      friendlyMessage = extractedMessage;
+    } else if (data?.message) {
       friendlyMessage = data.message;
     } else if (typeof data === "string") {
       friendlyMessage = data;

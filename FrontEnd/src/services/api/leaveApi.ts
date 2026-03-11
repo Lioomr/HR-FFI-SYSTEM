@@ -45,6 +45,10 @@ export interface LeaveRequest {
   hr_decision_note?: string;
   manager_decision_note?: string;
   ceo_decision_note?: string;
+  manager_decision_at?: string | null;
+  ceo_decision_at?: string | null;
+  decided_at?: string | null;
+  decision_reason?: string;
   created_at?: string;
 }
 
@@ -164,6 +168,20 @@ export async function getLeaveRequestDocumentBlob(
     `/api/leaves/leave-requests/${id}/document/`,
     {
       params: download ? { download: 1 } : undefined,
+      responseType: "blob",
+    }
+  );
+  return data;
+}
+
+export async function getLeaveRequestPdfBlob(
+  id: string | number,
+  download = true
+): Promise<Blob> {
+  const { data } = await api.get(
+    `/api/leaves/leave-requests/${id}/pdf/`,
+    {
+      params: download ? { download: 1 } : { download: 0 },
       responseType: "blob",
     }
   );

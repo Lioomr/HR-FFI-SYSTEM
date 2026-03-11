@@ -1,6 +1,6 @@
 from rest_framework.permissions import BasePermission
 
-from core.permissions import CEO_APPROVER_DEPARTMENT_ID, get_role
+from core.permissions import CEO_APPROVER_DEPARTMENT_ID, get_role, has_direct_reports
 from employees.models import EmployeeProfile
 from loans.models import LoanWorkflowConfig
 
@@ -63,7 +63,9 @@ class IsEmployeeOnly(BasePermission):
 
 class IsManagerOrAdmin(BasePermission):
     def has_permission(self, request, view):
-        return request.user.is_authenticated and get_role(request.user) in ["Manager", "SystemAdmin"]
+        return request.user.is_authenticated and (
+            get_role(request.user) in ["Manager", "CFO", "CEO", "SystemAdmin"] or has_direct_reports(request.user)
+        )
 
 
 class IsCFOOrAdmin(BasePermission):

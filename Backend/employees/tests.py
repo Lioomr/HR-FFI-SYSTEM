@@ -264,6 +264,37 @@ class EmployeeProfileTests(TestCase):
         self.assertEqual(results[0]["full_name"], "Newer Saudi Employee")
         self.assertEqual(results[1]["full_name"], "Older Saudi Employee")
 
+    def test_employee_role_direct_manager_can_access_manager_team(self):
+        manager_profile = EmployeeProfile.objects.create(
+            user=self.employee_user,
+            employee_id="EMP-MGR-EMP",
+            department_ref=self.dept,
+            department=self.dept.name,
+            position_ref=self.pos_senior,
+            job_title=self.pos_senior.name,
+            hire_date="2024-01-01",
+            full_name="Employee Manager",
+        )
+        EmployeeProfile.objects.create(
+            user=self.employee_user_2,
+            employee_id="EMP-REP-EMP",
+            department_ref=self.dept,
+            department=self.dept.name,
+            position_ref=self.pos,
+            job_title=self.pos.name,
+            hire_date="2024-02-01",
+            full_name="Direct Report",
+            manager_profile=manager_profile,
+        )
+
+        self.client.force_authenticate(user=self.employee_user)
+        response = self.client.get("/api/employees/manager/team/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data["data"]["results"]
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["employee_id"], "EMP-REP-EMP")
+
     def test_excel_import_raw_dates_saudi_foreign_and_manager_profile_linking(self):
         self.client.force_authenticate(user=self.hr_user)
         wb = Workbook()

@@ -29,7 +29,7 @@ export default function LoginPage() {
     if (isAuthenticated && user?.role) {
       if (user.role === "SystemAdmin") navigate("/admin/dashboard", { replace: true });
       else if (user.role === "HRManager") navigate("/hr/dashboard", { replace: true });
-      else if (user.role === "Manager") navigate("/manager/dashboard", { replace: true });
+      else if (user.role === "Manager") navigate("/employee/dashboard", { replace: true });
       else if (user.role === "CEO") navigate("/ceo/leave/requests", { replace: true });
       else navigate("/employee/home", { replace: true });
     }
@@ -48,7 +48,7 @@ export default function LoginPage() {
       const role = res.data.user.role;
       if (role === "SystemAdmin") navigate("/admin/dashboard", { replace: true });
       else if (role === "HRManager") navigate("/hr/dashboard", { replace: true });
-      else if (role === "Manager") navigate("/manager/dashboard", { replace: true });
+      else if (role === "Manager") navigate("/employee/dashboard", { replace: true });
       else if (role === "CEO") navigate("/ceo/leave/requests", { replace: true });
       else navigate("/employee/home", { replace: true });
     } catch (e: unknown) {

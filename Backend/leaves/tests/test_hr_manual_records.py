@@ -98,6 +98,31 @@ class HRManualLeaveRecordTests(APITestCase):
         response = self.client.post(self.url, payload, format="multipart")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
+    def test_manual_create_allows_overlap_with_existing_leave(self):
+        LeaveRequest.objects.create(
+            employee=self.employee_user,
+            leave_type=self.annual,
+            start_date=date(2026, 6, 2),
+            end_date=date(2026, 6, 4),
+            reason="Existing leave",
+            status=LeaveRequest.RequestStatus.APPROVED,
+        )
+
+        self.client.force_authenticate(user=self.hr_user)
+        payload = {
+            "employee_id": self.employee_profile.id,
+            "leave_type": self.annual.id,
+            "start_date": "2026-06-01",
+            "end_date": "2026-06-05",
+            "reason": "Historical overlap import",
+            "manual_entry_reason": "Added manually despite overlap.",
+            "source_document_ref": "overlap-ref-01",
+        }
+        response = self.client.post(self.url, payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["data"]["source"], LeaveRequest.RequestSource.HR_MANUAL)
+
     def test_hr_can_edit_and_soft_delete_manual_record(self):
         self.client.force_authenticate(user=self.hr_user)
         create_response = self.client.post(

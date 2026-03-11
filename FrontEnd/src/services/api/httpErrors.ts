@@ -1,4 +1,5 @@
 import type { AxiosError } from "axios";
+import { getFirstApiErrorMessage } from "../../utils/formErrors";
 
 /**
  * Extracts HTTP status code from various error formats
@@ -112,9 +113,8 @@ export function getHttpErrorMessage(err: unknown): string {
     return "An internal server error occurred. Please try again later.";
   }
 
-  // Generic safe message for validation errors instead of leaking backend model structures
   if (status === 422) {
-    return "Please check your input. Validation failed.";
+    return getFirstApiErrorMessage(err) || "Please check your input and try again.";
   }
 
   // Handle Axios errors cleanly

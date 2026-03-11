@@ -1,4 +1,5 @@
 import { getHttpStatus } from "./httpErrors";
+import { getFirstApiErrorMessage } from "../../utils/formErrors";
 
 type TranslateFn = (key: string, params?: Record<string, unknown> | string, fallback?: string) => string;
 
@@ -13,9 +14,10 @@ function mapKnownServerMessage(message: string): "server" | "network" | "timeout
 
 export function getDetailedHttpErrorMessage(t: TranslateFn, err: unknown, fallbackKey = "common.error.genericDetailed"): string {
   const status = getHttpStatus(err);
+  const validationMessage = getFirstApiErrorMessage(err);
   if (status === 401) return t("common.error.unauthorizedDetailed");
   if (status === 403) return t("common.error.forbiddenDetailed");
-  if (status === 400 || status === 422) return t("common.error.validationDetailed");
+  if (status === 400 || status === 422) return validationMessage || t("common.error.validationDetailed");
   if (status !== undefined && status >= 500) return t("common.error.serverDetailed");
 
   const errObj = err as { message?: unknown; code?: unknown } | undefined;

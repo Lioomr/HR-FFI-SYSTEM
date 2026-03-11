@@ -20,6 +20,8 @@ import {
 import { isApiError } from "../../../services/api/apiTypes";
 import { listEmployees, type Employee } from "../../../services/api/employeesApi";
 import { useI18n } from "../../../i18n/useI18n";
+import { apply422ToForm, getFirstApiErrorMessage } from "../../../utils/formErrors";
+import LeaveApprovalMap from "../../../components/leaves/LeaveApprovalMap";
 
 const { Option } = Select;
 const { RangePicker } = DatePicker;
@@ -291,7 +293,13 @@ export default function LeaveInboxPage() {
             setEditingRecord(null);
             loadData();
         } catch (err: any) {
-            notification.error({ message: t("common.error"), description: err?.message || t("common.tryAgain") });
+            if (!err?.errorFields) {
+                apply422ToForm(manualForm, err);
+                notification.error({
+                    message: t("common.error"),
+                    description: getFirstApiErrorMessage(err) || err?.message || t("common.tryAgain"),
+                });
+            }
         } finally {
             setManualModalLoading(false);
         }
@@ -340,6 +348,9 @@ export default function LeaveInboxPage() {
                     columns={columns}
                     rowKey="id"
                     loading={loading}
+                    expandable={{
+                        expandedRowRender: (record) => <LeaveApprovalMap request={record} t={t} />,
+                    }}
                     pagination={{
                         current: page,
                         pageSize,
@@ -372,7 +383,7 @@ export default function LeaveInboxPage() {
                         }))} />
                     </Form.Item>
                     <Form.Item label={t("leave.leaveType")} name="leave_type" rules={[{ required: true }]}>
-                        <Select options={leaveTypes.map((lt) => ({ value: lt.id, label: lt.name }))} />
+                        <Select options={leaveTypes.map((lt) => ({ value: lt.id, label: translateLeaveType(lt.name) }))} />
                     </Form.Item>
                     <Form.Item label={`${t("leave.startDate")} - ${t("leave.endDate")}`} name="dates" rules={[{ required: true }]}>
                         <RangePicker style={{ width: "100%" }} />

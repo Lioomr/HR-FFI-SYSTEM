@@ -18,7 +18,7 @@ from rest_framework.response import Response
 from announcements.models import Announcement
 from audit.utils import audit
 from core.pagination import EmployeePagination, StandardPagination
-from core.permissions import get_role
+from core.permissions import get_role, has_direct_reports
 from core.responses import error, success
 from core.services import send_document_expiry_reminder_email
 
@@ -330,7 +330,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
     )
     def manager_team(self, request):
         role = get_role(request.user)
-        if role not in ["Manager", "CEO", "SystemAdmin", "HRManager"]:
+        if role not in ["Manager", "CEO", "CFO", "SystemAdmin", "HRManager"] and not has_direct_reports(request.user):
             return error("Forbidden", status=status.HTTP_403_FORBIDDEN)
 
         base_qs = EmployeeProfile.objects.select_related(
@@ -343,13 +343,8 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             "task_group_ref",
             "sponsor_ref",
         )
-        if role == "CEO":
-            ceo_profile = getattr(request.user, "employee_profile", None)
-            direct_reports_q = Q(manager=request.user)
-            if ceo_profile:
-                direct_reports_q = direct_reports_q | Q(manager_profile=ceo_profile)
-
-            qs = base_qs.filter(Q(user__groups__name__in=["Manager", "HRManager"]) | direct_reports_q).distinct()
+        if role == "SystemAdmin":
+            qs = base_qs
         else:
             manager_profile = getattr(request.user, "employee_profile", None)
             qs = base_qs.filter(

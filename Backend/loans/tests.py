@@ -121,6 +121,57 @@ class LoanWorkflowTests(APITestCase):
         self.ceo_loan_requests_url = "/api/loans/ceo/loan-requests/"
         self.disbursement_url = "/api/loans/disbursements/"
 
+        self.ceo_direct_employee = User.objects.create_user(email="ceo-direct@ffi.test", password="password")
+        self.ceo_direct_employee.groups.add(self.employee_group)
+        self.ceo_direct_profile = EmployeeProfile.objects.create(
+            user=self.ceo_direct_employee,
+            employee_id="EMP-CEO-REPORT",
+            full_name="CEO Direct Report",
+            basic_salary=Decimal("4500.00"),
+            department_ref=self.it_dept,
+            position_ref=self.other_position,
+            hire_date=date(2025, 1, 1),
+            manager_profile=self.ceo_profile,
+        )
+
+        self.cfo_direct_employee = User.objects.create_user(email="cfo-direct@ffi.test", password="password")
+        self.cfo_direct_employee.groups.add(self.employee_group)
+        self.cfo_direct_profile = EmployeeProfile.objects.create(
+            user=self.cfo_direct_employee,
+            employee_id="EMP-CFO-REPORT",
+            full_name="CFO Direct Report",
+            basic_salary=Decimal("4300.00"),
+            department_ref=self.finance_dept,
+            position_ref=self.other_position,
+            hire_date=date(2025, 1, 1),
+            manager_profile=self.cfo_profile,
+        )
+        self.employee_manager = User.objects.create_user(email="employee-manager@ffi.test", password="password")
+        self.employee_manager.groups.add(self.employee_group)
+        self.employee_manager_profile = EmployeeProfile.objects.create(
+            user=self.employee_manager,
+            employee_id="EMP-EMP-MGR",
+            full_name="Employee Manager",
+            basic_salary=Decimal("5200.00"),
+            department_ref=self.it_dept,
+            position_ref=self.other_position,
+            hire_date=date(2024, 1, 1),
+        )
+        self.employee_manager_direct_employee = User.objects.create_user(
+            email="employee-manager-direct@ffi.test", password="password"
+        )
+        self.employee_manager_direct_employee.groups.add(self.employee_group)
+        self.employee_manager_direct_profile = EmployeeProfile.objects.create(
+            user=self.employee_manager_direct_employee,
+            employee_id="EMP-EMP-REPORT",
+            full_name="Employee Manager Report",
+            basic_salary=Decimal("4100.00"),
+            department_ref=self.it_dept,
+            position_ref=self.other_position,
+            hire_date=date(2025, 1, 1),
+            manager_profile=self.employee_manager_profile,
+        )
+
     def _create_pending_manager_request(self):
         return LoanRequest.objects.create(
             employee=self.employee,
@@ -162,6 +213,14 @@ class LoanWorkflowTests(APITestCase):
             status=LoanRequest.RequestStatus.PENDING_DISBURSEMENT,
         )
 
+    def _create_pending_manager_request_for(self, employee, profile):
+        return LoanRequest.objects.create(
+            employee=employee,
+            employee_profile=profile,
+            requested_amount=Decimal("1000.00"),
+            status=LoanRequest.RequestStatus.PENDING_MANAGER,
+        )
+
     def test_employee_submission_with_manager_sets_pending_manager(self):
         self.client.force_authenticate(user=self.employee)
         response = self.client.post(self.loan_requests_url, {"amount": "1200", "reason": "Medical"}, format="json")
@@ -183,6 +242,34 @@ class LoanWorkflowTests(APITestCase):
         response = self.client.post(self.loan_requests_url, {"amount": "800", "reason": "Travel"}, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["data"]["status"], LoanRequest.RequestStatus.PENDING_CEO)
+
+    def test_manager_can_submit_and_view_own_employee_loan_requests(self):
+        self.client.force_authenticate(user=self.manager)
+
+        create_response = self.client.post(self.loan_requests_url, {"amount": "900", "reason": "Personal"}, format="json")
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+
+        request_id = create_response.data["data"]["id"]
+        list_response = self.client.get("/api/loans/employee/loan-requests/")
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(list_response.data["data"]["count"], 1)
+        self.assertEqual(list_response.data["data"]["items"][0]["id"], request_id)
+
+        detail_response = self.client.get(f"/api/loans/employee/loan-requests/{request_id}/")
+        self.assertEqual(detail_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(detail_response.data["data"]["id"], request_id)
+
+    def test_manager_cannot_view_other_employee_loan_request_via_employee_endpoint(self):
+        request_obj = LoanRequest.objects.create(
+            employee=self.employee,
+            employee_profile=self.employee_profile,
+            requested_amount=Decimal("1400.00"),
+            status=LoanRequest.RequestStatus.PENDING_MANAGER,
+        )
+
+        self.client.force_authenticate(user=self.manager)
+        response = self.client.get(f"/api/loans/employee/loan-requests/{request_obj.id}/")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_manager_reject_forwards_to_hr_with_recommendation(self):
         request_obj = self._create_pending_manager_request()
@@ -317,6 +404,59 @@ class LoanWorkflowTests(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["data"]["status"], LoanRequest.RequestStatus.PENDING_CFO)
+
+    def test_ceo_manager_scope_is_direct_reports_only(self):
+        direct_request = self._create_pending_manager_request_for(self.ceo_direct_employee, self.ceo_direct_profile)
+        self._create_pending_manager_request()
+
+        self.client.force_authenticate(user=self.ceo)
+        response = self.client.get(self.manager_loan_requests_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        items = response.data["data"]["items"]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["id"], direct_request.id)
+
+    def test_ceo_can_approve_direct_report_loan_from_manager_endpoint(self):
+        request_obj = self._create_pending_manager_request_for(self.ceo_direct_employee, self.ceo_direct_profile)
+
+        self.client.force_authenticate(user=self.ceo)
+        response = self.client.post(
+            f"{self.manager_loan_requests_url}{request_obj.id}/approve/",
+            {"comment": "Approved"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"]["status"], LoanRequest.RequestStatus.PENDING_HR)
+
+    def test_cfo_can_approve_direct_report_loan_from_manager_endpoint(self):
+        request_obj = self._create_pending_manager_request_for(self.cfo_direct_employee, self.cfo_direct_profile)
+
+        self.client.force_authenticate(user=self.cfo)
+        response = self.client.post(
+            f"{self.manager_loan_requests_url}{request_obj.id}/approve/",
+            {"comment": "Approved"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"]["status"], LoanRequest.RequestStatus.PENDING_HR)
+
+    def test_employee_role_direct_manager_can_approve_loan_from_manager_endpoint(self):
+        request_obj = self._create_pending_manager_request_for(
+            self.employee_manager_direct_employee, self.employee_manager_direct_profile
+        )
+
+        self.client.force_authenticate(user=self.employee_manager)
+        response = self.client.post(
+            f"{self.manager_loan_requests_url}{request_obj.id}/approve/",
+            {"comment": "Approved"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"]["status"], LoanRequest.RequestStatus.PENDING_HR)
 
     def test_payroll_deducts_open_loan_when_target_month_is_due(self):
         from payroll.views import _generate_payroll_items

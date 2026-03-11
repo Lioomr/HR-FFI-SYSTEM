@@ -9,5 +9,7 @@ python-dotenv
 requests
 openpyxl
 reportlab
+arabic-reshaper
+python-bidi
 psycopg2-binary
 gunicorn
