@@ -38,7 +38,7 @@ except Exception:  # pragma: no cover - fallback for missing dependency
 
 def generate_employee_id():
     suffix = "".join(random.choices(string.digits, k=6))
-    return f"EMP-{suffix}"
+    return f"FFI-{suffix}"
 
 
 def _audit_snapshot(instance: EmployeeProfile) -> dict:
