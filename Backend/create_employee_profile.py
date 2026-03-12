@@ -25,7 +25,7 @@ try:
     profile, created = EmployeeProfile.objects.get_or_create(
         user=user,
         defaults={
-            "employee_id": "EMP-TEST-001",
+            "employee_id": "FFI-TEST-001",
             "job_title": "Software Engineer",
             "department": "Engineering",
             "hire_date": date(2023, 1, 1),  # Corrected field name

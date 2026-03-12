@@ -32,7 +32,7 @@ class EmployeeProfile(models.Model):
         max_length=20,
         unique=True,
         editable=False,
-        help_text=_("Unique employee identifier (e.g. EMP-00123). Generated automatically."),
+        help_text=_("Unique employee identifier (e.g. FFI-00123). Generated automatically."),
     )
 
     full_name = models.CharField(max_length=255, blank=True)

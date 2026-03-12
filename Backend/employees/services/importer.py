@@ -106,7 +106,7 @@ class EmployeeImporter:
 
     @staticmethod
     def _generate_employee_id():
-        return f"EMP-{''.join(random.choices(string.digits, k=6))}"
+        return f"FFI-{''.join(random.choices(string.digits, k=6))}"
 
     def _generate_unique_employee_id(self, existing_ids, max_attempts=20):
         for _ in range(max_attempts):
