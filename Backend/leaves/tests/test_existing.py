@@ -9,6 +9,8 @@ from rest_framework.test import APIClient
 
 from audit.models import AuditLog
 from leaves.models import LeaveRequest, LeaveType
+from leaves.views import _approval_path_rows
+from leaves.views import _leave_type_labels
 
 User = get_user_model()
 
@@ -197,6 +199,32 @@ class LeaveManagementTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response["Content-Type"], "application/pdf")
         self.assertIn(f'leave_request_{req.id}.pdf', response["Content-Disposition"])
+
+    def test_leave_type_labels_translate_known_arabic_policy_labels(self):
+        english, arabic = _leave_type_labels(LeaveType(name="Exceptional Leave", code="EXCEPTIONAL"))
+
+        self.assertEqual(english, "Exceptional Leave")
+        self.assertEqual(arabic, "إجازة استثنائية")
+
+    def test_approval_path_rows_include_stage_actor_names(self):
+        self.emp1.full_name = "Employee One"
+        self.emp1.save(update_fields=["full_name"])
+        self.hr.full_name = "HR User"
+        self.hr.save(update_fields=["full_name"])
+
+        req = LeaveRequest.objects.create(
+            employee=self.emp1,
+            leave_type=self.annual_leave,
+            start_date=date.today() + timedelta(days=4),
+            end_date=date.today() + timedelta(days=6),
+            status=LeaveRequest.RequestStatus.PENDING_HR,
+            decided_by=self.hr,
+        )
+
+        rows = _approval_path_rows(req)
+
+        self.assertEqual(rows[0][3], "Employee One")
+        self.assertEqual(rows[2][3], "HR User")
 
     def test_overlapping_requests_forbidden(self):
         self.client.force_authenticate(user=self.emp1)

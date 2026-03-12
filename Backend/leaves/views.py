@@ -117,28 +117,92 @@ def _serve_leave_document(instance, request):
 
 
 def _approval_path_rows(instance: LeaveRequest):
+    def _display_user(user):
+        if not user:
+            return "-"
+        return str(getattr(user, "full_name", "") or getattr(user, "email", "") or "-")
+
+    def _display_user_or_none(user):
+        if not user:
+            return None
+        return str(getattr(user, "full_name", "") or getattr(user, "email", "") or "-")
+
+    def _display_manager(employee):
+        profile = getattr(employee, "employee_profile", None)
+        manager_profile = getattr(profile, "manager_profile", None) if profile else None
+        manager_user = getattr(manager_profile, "user", None) if manager_profile else None
+        manager_name = getattr(manager_profile, "full_name_en", "") or getattr(manager_profile, "full_name", "")
+        return str(manager_name or getattr(manager_user, "full_name", "") or getattr(manager_user, "email", "") or "-")
+
     rows = [
-        ("Submitted", instance.created_at, "Request submitted"),
+        ("Submitted", instance.created_at, "Request submitted", _display_user(instance.employee)),
     ]
 
     if instance.source == LeaveRequest.RequestSource.HR_MANUAL:
-        rows.append(("HR Manual Entry", instance.decided_at, instance.manual_entry_reason or "Recorded by HR"))
+        rows.append(
+            ("HR Manual Entry", instance.decided_at, instance.manual_entry_reason or "Recorded by HR", _display_user(instance.entered_by or instance.decided_by))
+        )
         return rows
 
     needs_manager = bool(getattr(getattr(instance.employee, "employee_profile", None), "manager_id", None))
     needs_ceo = bool(getattr(instance.leave_type, "requires_ceo_approval", False) or _is_hr_manager_origin_request(instance))
 
     if needs_manager:
-        rows.append(("Manager Review", instance.manager_decision_at, instance.manager_decision_note or instance.status))
+        rows.append(
+            (
+                "Manager Review",
+                instance.manager_decision_at,
+                instance.manager_decision_note or instance.status,
+                _display_user_or_none(instance.manager_decision_by) or _display_manager(instance.employee),
+            )
+        )
     else:
-        rows.append(("Manager Review", None, "Not required"))
+        rows.append(("Manager Review", None, "Not required", "-"))
 
-    rows.append(("HR Review", instance.decided_at if instance.status != LeaveRequest.RequestStatus.PENDING_CEO else None, instance.hr_decision_note or instance.decision_reason or instance.status))
+    rows.append(
+        (
+            "HR Review",
+            instance.decided_at if instance.status != LeaveRequest.RequestStatus.PENDING_CEO else None,
+            instance.hr_decision_note or instance.decision_reason or instance.status,
+            _display_user(instance.decided_by),
+        )
+    )
 
     if needs_ceo or instance.status == LeaveRequest.RequestStatus.PENDING_CEO or instance.ceo_decision_at:
-        rows.append(("CEO Review", instance.ceo_decision_at, instance.ceo_decision_note or instance.status))
+        rows.append(("CEO Review", instance.ceo_decision_at, instance.ceo_decision_note or instance.status, _display_user(instance.ceo_decision_by)))
 
     return rows
+
+
+def _leave_type_labels(leave_type: LeaveType | None) -> tuple[str, str]:
+    if not leave_type:
+        return "-", "-"
+
+    english_name = str(leave_type.name or leave_type.code or "-")
+    normalized = str(leave_type.code or english_name).strip().upper().replace(" ", "_")
+    arabic_by_code = {
+        "ANNUAL": "الإجازة السنوية",
+        "ANNUAL_LEAVE": "الإجازة السنوية",
+        "SICK": "الإجازة المرضية",
+        "SICK_LEAVE": "الإجازة المرضية",
+        "EMERGENCY": "إجازة طارئة",
+        "EMERGENCY_LEAVE": "إجازة طارئة",
+        "EXCEPTIONAL": "إجازة استثنائية",
+        "EXCEPTIONAL_LEAVE": "إجازة استثنائية",
+        "MARRIAGE": "إجازة زواج",
+        "MARRIAGE_LEAVE": "إجازة زواج",
+        "DEATH": "إجازة وفاة قريب",
+        "DEATH_OF_RELATIVE": "إجازة وفاة قريب",
+        "BEREAVEMENT": "إجازة وفاة قريب",
+        "BEREAVEMENT_LEAVE": "إجازة وفاة قريب",
+        "BIRTH": "إجازة مولود",
+        "BIRTH_OF_CHILD": "إجازة مولود",
+        "PATERNITY": "إجازة مولود",
+        "PATERNITY_LEAVE": "إجازة مولود",
+        "MATERNITY": "إجازة أمومة",
+        "MATERNITY_LEAVE": "إجازة أمومة",
+    }
+    return english_name, arabic_by_code.get(normalized, english_name)
 
 
 def _build_leave_request_pdf_legacy(instance: LeaveRequest):
@@ -211,6 +275,7 @@ def _build_leave_request_pdf_legacy(instance: LeaveRequest):
     generated_at = timezone.localtime(timezone.now()).strftime("%Y-%m-%d %H:%M")
     days = str(get_leave_days(instance.start_date, instance.end_date))
     status_en, status_ar = _status_label(instance.status)
+    leave_type_en, leave_type_ar = _leave_type_labels(instance.leave_type)
     source_en = "Manual HR Record" if instance.source == LeaveRequest.RequestSource.HR_MANUAL else "Employee Request"
     source_ar = "سجل يدوي من الموارد البشرية" if instance.source == LeaveRequest.RequestSource.HR_MANUAL else "طلب موظف"
     rejection_note = instance.ceo_decision_note or instance.hr_decision_note or instance.manager_decision_note or "-"
@@ -250,7 +315,7 @@ def _build_leave_request_pdf_legacy(instance: LeaveRequest):
     arabic_rows = [
         ("الموظف", instance.employee.full_name or instance.employee.email),
         ("البريد الإلكتروني", instance.employee.email),
-        ("نوع الإجازة", instance.leave_type.name),
+        ("نوع الإجازة", leave_type_ar),
         ("الحالة", status_ar),
         ("الفترة", f"{instance.start_date} - {instance.end_date}"),
         ("عدد الأيام", days),
@@ -263,7 +328,7 @@ def _build_leave_request_pdf_legacy(instance: LeaveRequest):
     english_rows = [
         ("Employee", instance.employee.full_name or instance.employee.email),
         ("Email", instance.employee.email),
-        ("Leave Type", instance.leave_type.name),
+        ("Leave Type", leave_type_en),
         ("Status", status_en),
         ("Period", f"{instance.start_date} to {instance.end_date}"),
         ("Days", days),
@@ -285,7 +350,7 @@ def _build_leave_request_pdf_legacy(instance: LeaveRequest):
     left_x = 56
     right_x = width / 2 + 12
 
-    for index, (stage, at, note) in enumerate(approval_rows):
+    for index, (stage, at, note, actor) in enumerate(approval_rows):
         y = timeline_y - (index * 56)
         pdf.setFillColorRGB(*accent)
         pdf.circle(left_x + 8, y + 4, 4, fill=1, stroke=0)
@@ -299,7 +364,8 @@ def _build_leave_request_pdf_legacy(instance: LeaveRequest):
         pdf.setFont("DejaVuSans", 9)
         pdf.setFillColorRGB(0.28, 0.33, 0.41)
         pdf.drawString(left_x + 22, y - 12, timezone.localtime(at).strftime("%Y-%m-%d %H:%M") if at else "-")
-        pdf.drawString(left_x + 22, y - 26, str(note or "-")[:54])
+        pdf.drawString(left_x + 22, y - 26, str(actor or "-")[:54])
+        pdf.drawString(left_x + 22, y - 40, str(note or "-")[:54])
 
         stage_ar = {
             "Submitted": "تم التقديم",
@@ -320,7 +386,8 @@ def _build_leave_request_pdf_legacy(instance: LeaveRequest):
         pdf.setFont("DejaVuSans", 9)
         pdf.setFillColorRGB(0.28, 0.33, 0.41)
         pdf.drawRightString(right_x + 168, y - 12, _shape_ar(timezone.localtime(at).strftime("%Y-%m-%d %H:%M") if at else "-"))
-        pdf.drawRightString(right_x + 168, y - 26, _shape_ar(str(note or "-")[:36]))
+        pdf.drawRightString(right_x + 168, y - 26, _shape_ar(str(actor or "-")[:36]))
+        pdf.drawRightString(right_x + 168, y - 40, _shape_ar(str(note or "-")[:36]))
 
     pdf.showPage()
     pdf.save()
@@ -390,7 +457,7 @@ def _build_leave_request_pdf(instance: LeaveRequest):
             return _status_label(normalized)
         return normalized, normalized
 
-    def _draw_page_shell(pdf, width, height, accent, accent_soft, generated_at, page_title):
+    def _draw_page_shell(pdf, width, height, accent, accent_soft, generated_at, page_title, *, rtl=False, subtitle=None):
         pdf.setFillColorRGB(*accent_soft)
         pdf.roundRect(24, 24, width - 48, height - 48, 20, fill=1, stroke=0)
         pdf.setFillColorRGB(*accent)
@@ -402,11 +469,18 @@ def _build_leave_request_pdf(instance: LeaveRequest):
 
         pdf.setFillColorRGB(1, 1, 1)
         pdf.setFont("DejaVuSans-Bold", 18)
-        pdf.drawString(94, height - 60, page_title)
+        if rtl:
+            pdf.drawRightString(width - 36, height - 60, _shape_ar(page_title))
+        else:
+            pdf.drawString(94, height - 60, page_title)
         pdf.setFont("DejaVuSans", 10)
-        pdf.drawString(94, height - 78, f"Generated | {generated_at}")
+        subtitle_text = subtitle or f"Generated | {generated_at}"
+        if rtl:
+            pdf.drawRightString(width - 36, height - 78, _shape_ar(subtitle_text))
+        else:
+            pdf.drawString(94, height - 78, subtitle_text)
 
-    def _draw_section_card(pdf, x, y_top, width, height, accent, border, title_en, title_ar):
+    def _draw_section_card(pdf, x, y_top, width, height, accent, border, title_en, title_ar, *, rtl=False):
         pdf.setFillColorRGB(1, 1, 1)
         pdf.roundRect(x, y_top - height, width, height, 18, fill=1, stroke=0)
         pdf.setStrokeColorRGB(*border)
@@ -414,8 +488,10 @@ def _build_leave_request_pdf(instance: LeaveRequest):
         pdf.roundRect(x, y_top - height, width, height, 18, fill=0, stroke=1)
         pdf.setFillColorRGB(*accent)
         pdf.setFont("DejaVuSans-Bold", 13)
-        pdf.drawString(x + 16, y_top - 22, str(title_en))
-        pdf.drawRightString(x + width - 16, y_top - 22, _shape_ar(title_ar))
+        if rtl:
+            pdf.drawRightString(x + width - 16, y_top - 22, _shape_ar(title_ar))
+        else:
+            pdf.drawString(x + 16, y_top - 22, str(title_en))
 
     def _draw_detail_rows(pdf, x, y_top, width, rows, rtl=False):
         current_y = y_top
@@ -423,7 +499,7 @@ def _build_leave_request_pdf(instance: LeaveRequest):
         value_width = width - label_width - 10
         for label, value in rows:
             label_text = _shape_ar(label) if rtl else str(label)
-            value_text = _shape_ar(value) if rtl else str(value)
+            value_text = str(value) if rtl else str(value)
             wrapped = simpleSplit(value_text, "DejaVuSans", 10, value_width) or ["-"]
             block_height = max(24, len(wrapped) * 12 + 8)
 
@@ -448,14 +524,16 @@ def _build_leave_request_pdf(instance: LeaveRequest):
         dot_x = x + width - 8 if rtl else x + 8
         text_x = x + 26
         text_right = x + width - 22
-        row_gap = 58
+        row_gap = 70
         note_width = width - 40
 
-        for index, (stage, at, note) in enumerate(rows):
+        for index, (stage, at, note, actor) in enumerate(rows):
             stage_en, stage_ar = stage_labels.get(stage, (stage, stage))
             note_en, note_ar = _localized_note(note)
+            actor_en, actor_ar = actor or "-", actor or "-"
             stage_text = _shape_ar(stage_ar) if rtl else stage_en
             note_text = _shape_ar(note_ar) if rtl else note_en
+            actor_text = _shape_ar(actor_ar) if rtl else actor_en
             timestamp = timezone.localtime(at).strftime("%Y-%m-%d %H:%M") if at else "-"
             if rtl:
                 timestamp = _shape_ar(timestamp)
@@ -477,14 +555,19 @@ def _build_leave_request_pdf(instance: LeaveRequest):
             pdf.setFillColorRGB(0.28, 0.33, 0.41)
             pdf.setFont("DejaVuSans", 9)
             note_lines = simpleSplit(note_text, "DejaVuSans", 9, note_width)[:2] or ["-"]
+            actor_lines = simpleSplit(actor_text, "DejaVuSans", 9, note_width)[:1] or ["-"]
             if rtl:
                 pdf.drawRightString(text_right, row_top - 16, timestamp)
-                for line_index, line in enumerate(note_lines):
+                for line_index, line in enumerate(actor_lines):
                     pdf.drawRightString(text_right, row_top - 30 - (line_index * 12), line)
+                for line_index, line in enumerate(note_lines):
+                    pdf.drawRightString(text_right, row_top - 42 - (line_index * 12), line)
             else:
                 pdf.drawString(text_x, row_top - 16, timestamp)
-                for line_index, line in enumerate(note_lines):
+                for line_index, line in enumerate(actor_lines):
                     pdf.drawString(text_x, row_top - 30 - (line_index * 12), line)
+                for line_index, line in enumerate(note_lines):
+                    pdf.drawString(text_x, row_top - 42 - (line_index * 12), line)
 
     _register_pdf_fonts()
     buffer = BytesIO()
@@ -497,6 +580,7 @@ def _build_leave_request_pdf(instance: LeaveRequest):
     generated_at = timezone.localtime(timezone.now()).strftime("%Y-%m-%d %H:%M")
     days = str(get_leave_days(instance.start_date, instance.end_date))
     status_en, status_ar = _status_label(instance.status)
+    leave_type_en, leave_type_ar = _leave_type_labels(instance.leave_type)
     source_en = "Manual HR Record" if instance.source == LeaveRequest.RequestSource.HR_MANUAL else "Employee Request"
     source_ar = "سجل يدوي من الموارد البشرية" if instance.source == LeaveRequest.RequestSource.HR_MANUAL else "طلب موظف"
     rejection_note = instance.ceo_decision_note or instance.hr_decision_note or instance.manager_decision_note or "-"
@@ -505,7 +589,7 @@ def _build_leave_request_pdf(instance: LeaveRequest):
     arabic_rows = [
         ("الموظف", instance.employee.full_name or instance.employee.email),
         ("البريد الإلكتروني", instance.employee.email),
-        ("نوع الإجازة", instance.leave_type.name),
+        ("نوع الإجازة", leave_type_ar),
         ("الحالة", status_ar),
         ("الفترة", f"{instance.start_date} - {instance.end_date}"),
         ("عدد الأيام", days),
@@ -518,7 +602,7 @@ def _build_leave_request_pdf(instance: LeaveRequest):
     english_rows = [
         ("Employee", instance.employee.full_name or instance.employee.email),
         ("Email", instance.employee.email),
-        ("Leave Type", instance.leave_type.name),
+        ("Leave Type", leave_type_en),
         ("Status", status_en),
         ("Period", f"{instance.start_date} to {instance.end_date}"),
         ("Days", days),
@@ -531,13 +615,23 @@ def _build_leave_request_pdf(instance: LeaveRequest):
     pdf.setTitle(f"Leave Request {instance.id}")
 
     details_card_height = 250
-    timeline_card_height = 258
+    timeline_card_height = max(258, 118 + (len(approval_rows) * 70))
 
-    _draw_page_shell(pdf, width, height, accent, accent_soft, generated_at, f"Leave Request #{instance.id} - Arabic")
-    _draw_section_card(pdf, 36, height - 118, width - 72, details_card_height, accent, border, "Arabic", "العربية")
+    _draw_page_shell(
+        pdf,
+        width,
+        height,
+        accent,
+        accent_soft,
+        generated_at,
+        f"طلب إجازة رقم {instance.id}",
+        rtl=True,
+        subtitle=f"تاريخ الإنشاء | {generated_at}",
+    )
+    _draw_section_card(pdf, 36, height - 118, width - 72, details_card_height, accent, border, "Arabic", "العربية", rtl=True)
     _draw_detail_rows(pdf, 56, height - 166, width - 112, arabic_rows, rtl=True)
     _draw_section_card(
-        pdf, 36, height - 388, width - 72, timeline_card_height, accent, border, "Approval Path", "مسار الموافقة"
+        pdf, 36, height - 388, width - 72, timeline_card_height, accent, border, "Approval Path", "مسار الموافقة", rtl=True
     )
     _draw_timeline(pdf, 56, height - 438, width - 112, approval_rows, accent, border, rtl=True)
 

@@ -561,8 +561,11 @@ export default function EmployeesListPage() {
                             pageSize: pageSize,
                             total: total,
                             onChange: (newPage, newPageSize) => {
-                                setPage(newPage);
-                                setPageSize(newPageSize);
+                                if (newPageSize !== pageSize) {
+                                    setPageSize(newPageSize);
+                                } else {
+                                    setPage(newPage);
+                                }
                             },
                             showTotal: (total, range) => `${t("common.showing")} ${range[0]} ${t("common.to")} ${range[1]} ${t("common.of")} ${total} ${t("common.entries")}`,
                             style: { padding: '24px' }
