@@ -53,7 +53,17 @@ class LeaveRequest(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="leave_requests",
+        null=True,
+        blank=True,
         help_text=_("The employee requesting leave."),
+    )
+    employee_profile = models.ForeignKey(
+        "employees.EmployeeProfile",
+        on_delete=models.CASCADE,
+        related_name="leave_requests",
+        null=True,
+        blank=True,
+        help_text=_("Employee profile for requests recorded without a linked user account."),
     )
     leave_type = models.ForeignKey(LeaveType, on_delete=models.PROTECT, related_name="requests")
     start_date = models.DateField()
@@ -144,7 +154,12 @@ class LeaveRequest(models.Model):
         verbose_name_plural = _("Leave Requests")
 
     def __str__(self):
-        return f"{self.employee.email} - {self.leave_type.code} ({self.status})"
+        employee_label = "-"
+        if self.employee:
+            employee_label = self.employee.email
+        elif self.employee_profile:
+            employee_label = self.employee_profile.full_name or self.employee_profile.employee_id
+        return f"{employee_label} - {self.leave_type.code} ({self.status})"
 
 
 class LeaveBalanceSnapshot(models.Model):
