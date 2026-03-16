@@ -57,7 +57,7 @@ from .serializers import (
     LeaveRequestSerializer,
     LeaveTypeSerializer,
 )
-from .utils import calculate_leave_balance, get_leave_days, get_payment_breakdown, get_used_days_for_type
+from .utils import calculate_leave_balance, get_leave_days, get_payment_breakdown, get_used_days_for_type, resolve_employee_profile
 
 User = get_user_model()
 
@@ -91,6 +91,44 @@ def _is_hr_manager_user(user):
 def _is_hr_manager_origin_request(instance: LeaveRequest):
     employee = getattr(instance, "employee", None)
     return bool(employee and employee.groups.filter(name="HRManager").exists())
+
+
+def _leave_profile(instance: LeaveRequest):
+    return getattr(instance, "employee_profile", None) or resolve_employee_profile(getattr(instance, "employee", None))
+
+
+def _leave_employee_name(instance: LeaveRequest):
+    employee = getattr(instance, "employee", None)
+    profile = _leave_profile(instance)
+    return (
+        getattr(employee, "full_name", "")
+        or getattr(employee, "email", "")
+        or getattr(profile, "full_name", "")
+        or getattr(profile, "full_name_en", "")
+        or getattr(profile, "employee_id", "")
+        or "-"
+    )
+
+
+def _leave_employee_email(instance: LeaveRequest):
+    employee = getattr(instance, "employee", None)
+    profile = _leave_profile(instance)
+    profile_user = getattr(profile, "user", None) if profile else None
+    return getattr(employee, "email", "") or getattr(profile_user, "email", "") or "-"
+
+
+def _leave_manager_user(instance: LeaveRequest):
+    profile = _leave_profile(instance)
+    if not profile:
+        employee = getattr(instance, "employee", None)
+        return get_direct_manager_user(employee) if employee else None
+    manager_profile = getattr(profile, "manager_profile", None)
+    if manager_profile and manager_profile.user:
+        return manager_profile.user
+    if getattr(profile, "manager", None):
+        return profile.manager
+    employee = getattr(instance, "employee", None)
+    return get_direct_manager_user(employee) if employee else None
 
 
 def _serve_leave_document(instance, request):
@@ -128,14 +166,14 @@ def _approval_path_rows(instance: LeaveRequest):
         return str(getattr(user, "full_name", "") or getattr(user, "email", "") or "-")
 
     def _display_manager(employee):
-        profile = getattr(employee, "employee_profile", None)
+        profile = getattr(employee, "employee_profile", None) if employee else None
         manager_profile = getattr(profile, "manager_profile", None) if profile else None
         manager_user = getattr(manager_profile, "user", None) if manager_profile else None
         manager_name = getattr(manager_profile, "full_name_en", "") or getattr(manager_profile, "full_name", "")
         return str(manager_name or getattr(manager_user, "full_name", "") or getattr(manager_user, "email", "") or "-")
 
     rows = [
-        ("Submitted", instance.created_at, "Request submitted", _display_user(instance.employee)),
+        ("Submitted", instance.created_at, "Request submitted", _leave_employee_name(instance)),
     ]
 
     if instance.source == LeaveRequest.RequestSource.HR_MANUAL:
@@ -144,7 +182,8 @@ def _approval_path_rows(instance: LeaveRequest):
         )
         return rows
 
-    needs_manager = bool(getattr(getattr(instance.employee, "employee_profile", None), "manager_id", None))
+    profile = _leave_profile(instance)
+    needs_manager = bool(getattr(profile, "manager_id", None) or getattr(profile, "manager_profile_id", None))
     needs_ceo = bool(getattr(instance.leave_type, "requires_ceo_approval", False) or _is_hr_manager_origin_request(instance))
 
     if needs_manager:
@@ -153,7 +192,7 @@ def _approval_path_rows(instance: LeaveRequest):
                 "Manager Review",
                 instance.manager_decision_at,
                 instance.manager_decision_note or instance.status,
-                _display_user_or_none(instance.manager_decision_by) or _display_manager(instance.employee),
+                _display_user_or_none(instance.manager_decision_by) or _display_manager(getattr(instance, "employee", None)),
             )
         )
     else:
@@ -313,8 +352,8 @@ def _build_leave_request_pdf_legacy(instance: LeaveRequest):
     pdf.drawRightString(width - 48, height - 154, _shape_ar("العربية / Arabic"))
 
     arabic_rows = [
-        ("الموظف", instance.employee.full_name or instance.employee.email),
-        ("البريد الإلكتروني", instance.employee.email),
+        ("الموظف", _leave_employee_name(instance)),
+        ("البريد الإلكتروني", _leave_employee_email(instance)),
         ("نوع الإجازة", leave_type_ar),
         ("الحالة", status_ar),
         ("الفترة", f"{instance.start_date} - {instance.end_date}"),
@@ -326,8 +365,8 @@ def _build_leave_request_pdf_legacy(instance: LeaveRequest):
         arabic_rows.append(("ملاحظة الرفض", rejection_note))
 
     english_rows = [
-        ("Employee", instance.employee.full_name or instance.employee.email),
-        ("Email", instance.employee.email),
+        ("Employee", _leave_employee_name(instance)),
+        ("Email", _leave_employee_email(instance)),
         ("Leave Type", leave_type_en),
         ("Status", status_en),
         ("Period", f"{instance.start_date} to {instance.end_date}"),
@@ -587,8 +626,8 @@ def _build_leave_request_pdf(instance: LeaveRequest):
     approval_rows = _approval_path_rows(instance)
 
     arabic_rows = [
-        ("الموظف", instance.employee.full_name or instance.employee.email),
-        ("البريد الإلكتروني", instance.employee.email),
+        ("الموظف", _leave_employee_name(instance)),
+        ("البريد الإلكتروني", _leave_employee_email(instance)),
         ("نوع الإجازة", leave_type_ar),
         ("الحالة", status_ar),
         ("الفترة", f"{instance.start_date} - {instance.end_date}"),
@@ -600,8 +639,8 @@ def _build_leave_request_pdf(instance: LeaveRequest):
         arabic_rows.append(("ملاحظة الرفض", rejection_note))
 
     english_rows = [
-        ("Employee", instance.employee.full_name or instance.employee.email),
-        ("Email", instance.employee.email),
+        ("Employee", _leave_employee_name(instance)),
+        ("Email", _leave_employee_email(instance)),
         ("Leave Type", leave_type_en),
         ("Status", status_en),
         ("Period", f"{instance.start_date} to {instance.end_date}"),
@@ -1175,20 +1214,20 @@ class HRManualLeaveRequestViewSet(viewsets.ModelViewSet):
     queryset = LeaveRequest.objects.filter(
         is_active=True,
         source=LeaveRequest.RequestSource.HR_MANUAL,
-    ).select_related("employee", "leave_type", "employee__employee_profile")
+    ).select_related("employee", "leave_type", "employee__employee_profile", "employee_profile", "employee_profile__user")
     serializer_class = HRManualLeaveRequestSerializer
     http_method_names = ["post", "patch", "delete", "get", "head", "options"]
 
     def _notify_manager(self, instance: LeaveRequest, action_label: str):
         try:
-            manager = get_direct_manager_user(instance.employee)
+            manager = _leave_manager_user(instance)
             if not manager:
                 return
             notify_users_for_pending_status(
                 users=[manager],
                 request_type="Manual Leave Record",
                 request_id=instance.id,
-                requester_name=instance.employee.full_name or instance.employee.email,
+                requester_name=_leave_employee_name(instance),
                 status_label=action_label,
                 details=[
                     f"Leave Type: {instance.leave_type.name}",

@@ -98,6 +98,36 @@ def ensure_policy_leave_types():
         )
 
 
+def resolve_employee_profile(employee_subject):
+    if isinstance(employee_subject, EmployeeProfile):
+        return employee_subject
+    if not employee_subject:
+        return None
+    try:
+        return employee_subject.employee_profile
+    except (AttributeError, EmployeeProfile.DoesNotExist):
+        return None
+
+
+def leave_request_employee_filter(employee_subject):
+    profile = resolve_employee_profile(employee_subject)
+    request_filter = None
+
+    if isinstance(employee_subject, EmployeeProfile):
+        if profile and profile.user_id:
+            request_filter = LeaveRequest.objects.filter(employee=profile.user) | LeaveRequest.objects.filter(
+                employee_profile=profile
+            )
+        elif profile:
+            request_filter = LeaveRequest.objects.filter(employee_profile=profile)
+    elif employee_subject:
+        request_filter = LeaveRequest.objects.filter(employee=employee_subject)
+        if profile:
+            request_filter = request_filter | LeaveRequest.objects.filter(employee_profile=profile)
+
+    return request_filter
+
+
 def _normalized_leave_code(leave_type: LeaveType) -> str:
     if leave_type.code:
         return leave_type.code.strip().upper()
@@ -226,8 +256,10 @@ def get_annual_entitlement(profile: EmployeeProfile, year: int):
 def get_used_days_for_type(user, leave_type: LeaveType, year: int):
     year_start = date(year, 1, 1)
     year_end = date(year, 12, 31)
-    requests = LeaveRequest.objects.filter(
-        employee=user,
+    requests = leave_request_employee_filter(user)
+    if requests is None:
+        return 0.0
+    requests = requests.filter(
         leave_type=leave_type,
         status=LeaveRequest.RequestStatus.APPROVED,
         start_date__lte=year_end,
@@ -240,7 +272,13 @@ def get_used_days_for_type(user, leave_type: LeaveType, year: int):
 
 
 def get_adjustments_for_type(user, leave_type: LeaveType, year: int):
-    adjs = LeaveBalanceAdjustment.objects.filter(employee=user, leave_type=leave_type, created_at__year=year).aggregate(
+    profile = resolve_employee_profile(user)
+    adjustment_user = profile.user if isinstance(user, EmployeeProfile) and profile else user
+    if not adjustment_user:
+        return 0.0
+    adjs = LeaveBalanceAdjustment.objects.filter(
+        employee=adjustment_user, leave_type=leave_type, created_at__year=year
+    ).aggregate(
         Sum("adjustment_days")
     )["adjustment_days__sum"] or Decimal("0")
     return float(adjs)
@@ -301,9 +339,8 @@ def validate_leave_request_policy(
     if start > end:
         return "End date must be after start date."
 
-    try:
-        profile = user.employee_profile
-    except EmployeeProfile.DoesNotExist:
+    profile = resolve_employee_profile(user)
+    if not profile:
         # Backward-compatible fallback for accounts that are not yet linked to employee profiles.
         return None
 
@@ -354,11 +391,14 @@ def validate_leave_request_policy(
     if _is_marriage(code):
         if requested_days > MARRIAGE_MAX_DAYS:
             return "Marriage leave maximum is 5 days."
-        already_used = LeaveRequest.objects.filter(
-            employee=user,
-            leave_type=leave_type,
-            status=LeaveRequest.RequestStatus.APPROVED,
-        ).exists()
+        already_used_qs = leave_request_employee_filter(user)
+        already_used = bool(
+            already_used_qs
+            and already_used_qs.filter(
+                leave_type=leave_type,
+                status=LeaveRequest.RequestStatus.APPROVED,
+            ).exists()
+        )
         if already_used:
             return "Marriage leave is allowed once during service."
 
@@ -383,13 +423,8 @@ def calculate_leave_balance(user, year, profile=None):
     Returns a list of dicts.
     """
     # 1. Try to get hire date for recursion base case
-    if not profile and user:
-        try:
-            profile = user.employee_profile
-        except AttributeError:
-            profile = None
-        except EmployeeProfile.DoesNotExist:
-            profile = None
+    if not profile:
+        profile = resolve_employee_profile(user)
 
     if profile:
         hire_year = profile.hire_date.year if profile.hire_date else year
@@ -494,11 +529,14 @@ def calculate_leave_balance(user, year, profile=None):
 
         # Marriage leave is once during service.
         if _is_marriage(code):
-            approved_lifetime = LeaveRequest.objects.filter(
-                employee=user,
-                leave_type=lt,
-                status=LeaveRequest.RequestStatus.APPROVED,
-            ).exists()
+            approved_lifetime_qs = leave_request_employee_filter(user)
+            approved_lifetime = bool(
+                approved_lifetime_qs
+                and approved_lifetime_qs.filter(
+                    leave_type=lt,
+                    status=LeaveRequest.RequestStatus.APPROVED,
+                ).exists()
+            )
             if approved_lifetime:
                 quota = 0.0
 

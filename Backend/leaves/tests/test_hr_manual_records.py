@@ -98,6 +98,35 @@ class HRManualLeaveRecordTests(APITestCase):
         response = self.client.post(self.url, payload, format="multipart")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
+    def test_hr_can_create_manual_record_for_profile_without_user(self):
+        external_profile = EmployeeProfile.objects.create(
+            employee_id="EMP-EXTERNAL-MANUAL",
+            full_name="External Manual Employee",
+            hire_date=date(2021, 6, 1),
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+            manager_profile=self.manager_profile,
+            manager=self.manager_user,
+        )
+
+        self.client.force_authenticate(user=self.hr_user)
+        payload = {
+            "employee_id": external_profile.id,
+            "leave_type": self.annual.id,
+            "start_date": "2026-09-01",
+            "end_date": "2026-09-03",
+            "reason": "Legacy leave import for non-system employee",
+            "manual_entry_reason": "Added before account provisioning.",
+            "source_document_ref": "legacy-doc-009",
+        }
+        response = self.client.post(self.url, payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        record = LeaveRequest.objects.get(pk=response.data["data"]["id"])
+        self.assertIsNone(record.employee)
+        self.assertEqual(record.employee_profile_id, external_profile.id)
+        self.assertEqual(response.data["data"]["employee"]["full_name"], "External Manual Employee")
+        self.assertEqual(response.data["data"]["source"], LeaveRequest.RequestSource.HR_MANUAL)
+
     def test_manual_create_allows_overlap_with_existing_leave(self):
         LeaveRequest.objects.create(
             employee=self.employee_user,

@@ -13,6 +13,7 @@ from .utils import (
     get_leave_days,
     get_payment_breakdown,
     get_used_days_for_type,
+    resolve_employee_profile,
     validate_leave_request_policy,
 )
 
@@ -44,7 +45,7 @@ class LeaveBalanceSerializer(serializers.Serializer):
 
 
 class LeaveRequestSerializer(serializers.ModelSerializer):
-    employee = UserSummarySerializer(read_only=True)
+    employee = serializers.SerializerMethodField()
     leave_type = LeaveTypeSerializer(read_only=True)
     decided_by = UserSummarySerializer(read_only=True)
     days = serializers.SerializerMethodField()
@@ -68,11 +69,29 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
     def get_days(self, obj):
         return get_leave_days(obj.start_date, obj.end_date)
 
+    def get_employee(self, obj):
+        if obj.employee:
+            return UserSummarySerializer(obj.employee).data
+
+        profile = obj.employee_profile
+        if not profile:
+            profile = resolve_employee_profile(obj.employee)
+        if not profile:
+            return None
+
+        return {
+            "id": None,
+            "email": "",
+            "full_name": profile.full_name or profile.full_name_en or profile.employee_id,
+        }
+
     def get_payment_breakdown(self, obj):
         year = obj.start_date.year
+        employee_subject = obj.employee_profile or obj.employee
         used_before = max(
             0.0,
-            get_used_days_for_type(obj.employee, obj.leave_type, year) - get_leave_days(obj.start_date, obj.end_date),
+            get_used_days_for_type(employee_subject, obj.leave_type, year)
+            - get_leave_days(obj.start_date, obj.end_date),
         )
         return get_payment_breakdown(obj.leave_type, used_before, get_leave_days(obj.start_date, obj.end_date))
 
@@ -194,19 +213,16 @@ class HRManualLeaveRequestSerializer(serializers.ModelSerializer):
     def policy_warnings(self):
         return getattr(self, "_policy_warnings", [])
 
-    def _get_employee_user(self, employee_profile_id):
+    def _get_employee_profile(self, employee_profile_id):
         try:
             profile = EmployeeProfile.objects.select_related("user").get(id=employee_profile_id)
         except EmployeeProfile.DoesNotExist as exc:
             raise serializers.ValidationError({"employee_id": "Employee Profile not found."}) from exc
 
-        if not profile.user:
-            raise serializers.ValidationError({"employee_id": "Employee is not connected to a system user account."})
-
         if profile.employment_status != EmployeeProfile.EmploymentStatus.ACTIVE:
             raise serializers.ValidationError({"employee_id": "Only active employees are allowed."})
 
-        return profile.user
+        return profile
 
     def validate_manual_entry_reason(self, value):
         if not value or not value.strip():
@@ -223,9 +239,9 @@ class HRManualLeaveRequestSerializer(serializers.ModelSerializer):
         if employee_id is None:
             if self.instance is None:
                 raise serializers.ValidationError({"employee_id": "employee_id is required."})
-            employee_user = self.instance.employee
+            employee_profile = self.instance.employee_profile or resolve_employee_profile(self.instance.employee)
         else:
-            employee_user = self._get_employee_user(employee_id)
+            employee_profile = self._get_employee_profile(employee_id)
 
         start = attrs.get("start_date", getattr(self.instance, "start_date", None))
         end = attrs.get("end_date", getattr(self.instance, "end_date", None))
@@ -243,7 +259,7 @@ class HRManualLeaveRequestSerializer(serializers.ModelSerializer):
         if leave_code in {"SICK", "SICK_LEAVE"} and not document and not getattr(self.instance, "document", None):
             raise serializers.ValidationError({"document": "Medical report document is required for sick leave."})
 
-        policy_error = validate_leave_request_policy(employee_user, leave_type, start, end, reason, bool(document))
+        policy_error = validate_leave_request_policy(employee_profile, leave_type, start, end, reason, bool(document))
         self._policy_warnings = []
         if policy_error:
             normalized = str(policy_error).lower()
@@ -252,7 +268,7 @@ class HRManualLeaveRequestSerializer(serializers.ModelSerializer):
             else:
                 raise serializers.ValidationError(policy_error)
 
-        attrs["employee_user"] = employee_user
+        attrs["employee_profile_obj"] = employee_profile
         return attrs
 
     def validate_document(self, value):
@@ -266,11 +282,12 @@ class HRManualLeaveRequestSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
-        employee_user = validated_data.pop("employee_user")
+        employee_profile = validated_data.pop("employee_profile_obj")
         validated_data.pop("employee_id", None)
         request_user = self.context["request"].user
         return LeaveRequest.objects.create(
-            employee=employee_user,
+            employee=employee_profile.user,
+            employee_profile=employee_profile,
             status=LeaveRequest.RequestStatus.APPROVED,
             source=LeaveRequest.RequestSource.HR_MANUAL,
             entered_by=request_user,
@@ -281,13 +298,14 @@ class HRManualLeaveRequestSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         validated_data.pop("employee_id", None)
-        employee_user = validated_data.pop("employee_user", None)
+        employee_profile = validated_data.pop("employee_profile_obj", None)
         request_user = self.context["request"].user
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
-        if employee_user is not None:
-            instance.employee = employee_user
+        if employee_profile is not None:
+            instance.employee_profile = employee_profile
+            instance.employee = employee_profile.user
 
         instance.status = LeaveRequest.RequestStatus.APPROVED
         instance.source = LeaveRequest.RequestSource.HR_MANUAL
