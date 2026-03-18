@@ -13,7 +13,7 @@ SICK_HALF_PAY_DAYS = 60
 SICK_UNPAID_DAYS = 30
 
 EMERGENCY_MAX_DAYS_PER_YEAR = 10
-EXCEPTIONAL_MAX_DAYS_PER_YEAR = 60
+UNPAID_MAX_DAYS_PER_YEAR = 60
 
 MARRIAGE_MAX_DAYS = 5
 DEATH_MAX_DAYS = 5
@@ -43,11 +43,11 @@ POLICY_LEAVE_TYPE_DEFINITIONS = [
         "annual_quota": EMERGENCY_MAX_DAYS_PER_YEAR,
     },
     {
-        "code": "EXCEPTIONAL",
-        "name": "Exceptional Leave",
+        "code": "UNPAID",
+        "name": "Unpaid Leave",
         "is_paid": False,
         "requires_attachment": False,
-        "annual_quota": EXCEPTIONAL_MAX_DAYS_PER_YEAR,
+        "annual_quota": UNPAID_MAX_DAYS_PER_YEAR,
     },
     {
         "code": "MARRIAGE",
@@ -146,8 +146,8 @@ def _is_emergency(code: str) -> bool:
     return code in {"EMERGENCY", "EMERGENCY_LEAVE"}
 
 
-def _is_exceptional(code: str) -> bool:
-    return code in {"EXCEPTIONAL", "EXCEPTIONAL_LEAVE"}
+def _is_unpaid(code: str) -> bool:
+    return code in {"UNPAID", "UNPAID_LEAVE", "EXCEPTIONAL", "EXCEPTIONAL_LEAVE"}
 
 
 def _is_marriage(code: str) -> bool:
@@ -292,13 +292,60 @@ def get_adjustments_for_type(user, leave_type: LeaveType, year: int):
     return float(adjs)
 
 
-def get_payment_breakdown(leave_type: LeaveType, used_days_before: float, requested_days: int):
+def _find_balance_by_code(balances, *codes: str):
+    normalized_codes = {code.strip().upper().replace(" ", "_") for code in codes}
+    return next((balance for balance in balances if balance.get("leave_code") in normalized_codes), None)
+
+
+def get_payment_breakdown(
+    leave_type: LeaveType,
+    used_days_before: float,
+    requested_days: int,
+    employee_subject=None,
+    year: int | None = None,
+):
     """
     Returns payment segments for the request:
     [{days, pay_percent, label}]
     """
     code = _normalized_leave_code(leave_type)
     segments = []
+
+    if _is_annual(code):
+        paid_remaining = float(requested_days)
+        unpaid_remaining_before_request = 0.0
+
+        if employee_subject is not None and year is not None:
+            balances = calculate_leave_balance(employee_subject, year)
+            annual_balance = _find_balance_by_code(balances, "ANNUAL", "ANNUAL_LEAVE")
+            unpaid_balance = _find_balance_by_code(balances, "UNPAID", "UNPAID_LEAVE")
+
+            annual_total = float(annual_balance["total_days"]) if annual_balance else 0.0
+            annual_used_current = float(annual_balance["used_days"]) if annual_balance else float(used_days_before)
+            paid_remaining = max(0.0, annual_total - float(used_days_before))
+
+            annual_overflow_before = max(0.0, float(used_days_before) - annual_total)
+            annual_overflow_current = max(0.0, annual_used_current - annual_total)
+            overflow_already_applied = max(0.0, annual_overflow_current - annual_overflow_before)
+
+            unpaid_remaining_before_request = (
+                float(unpaid_balance["remaining_days"]) if unpaid_balance else 0.0
+            ) + overflow_already_applied
+
+        remaining = requested_days
+
+        if paid_remaining > 0 and remaining > 0:
+            chunk = min(float(remaining), float(paid_remaining))
+            segments.append({"days": chunk, "pay_percent": 100, "label": "Annual leave paid"})
+            remaining -= chunk
+
+        if unpaid_remaining_before_request > 0 and remaining > 0:
+            chunk = min(float(remaining), float(unpaid_remaining_before_request))
+            segments.append({"days": chunk, "pay_percent": 0, "label": "Annual leave unpaid fallback"})
+            remaining -= chunk
+
+        if segments:
+            return segments
 
     if _is_sick(code):
         remaining = requested_days
@@ -326,8 +373,8 @@ def get_payment_breakdown(leave_type: LeaveType, used_days_before: float, reques
 
         return segments
 
-    if _is_exceptional(code):
-        return [{"days": requested_days, "pay_percent": 0, "label": "Exceptional leave unpaid"}]
+    if _is_unpaid(code):
+        return [{"days": requested_days, "pay_percent": 0, "label": "Unpaid leave"}]
 
     if _is_maternity(code):
         return [{"days": requested_days, "pay_percent": 70, "label": "Maternity leave"}]
@@ -368,9 +415,14 @@ def validate_leave_request_policy(
         if profile.hire_date:
             balances = calculate_leave_balance(user, year)
             annual_balance = next((b for b in balances if b["leave_code"] == code), None)
+            unpaid_balance = _find_balance_by_code(balances, "UNPAID", "UNPAID_LEAVE")
             annual_remaining = annual_balance["remaining_days"] if annual_balance else 0
-            if requested_days > annual_remaining:
-                return f"Annual leave exceeds remaining balance ({annual_remaining:.2f} days)."
+            unpaid_remaining = unpaid_balance["remaining_days"] if unpaid_balance else 0
+            if requested_days > annual_remaining + unpaid_remaining:
+                return (
+                    "Annual leave exceeds available balance "
+                    f"(annual: {annual_remaining:.2f} days, unpaid fallback: {unpaid_remaining:.2f} days)."
+                )
 
     if _is_emergency(code):
         balances = calculate_leave_balance(user, year)
@@ -388,12 +440,12 @@ def validate_leave_request_policy(
         if used + requested_days > SICK_MAX_DAYS_PER_YEAR:
             return f"Sick leave exceeds annual maximum. Remaining: {max(0, SICK_MAX_DAYS_PER_YEAR - used):.0f} days."
 
-    if _is_exceptional(code):
+    if _is_unpaid(code):
         used = get_used_days_for_type(user, leave_type, year)
-        if used + requested_days > EXCEPTIONAL_MAX_DAYS_PER_YEAR:
+        if used + requested_days > UNPAID_MAX_DAYS_PER_YEAR:
             return (
-                f"Exceptional leave exceeds annual maximum. Remaining: "
-                f"{max(0, EXCEPTIONAL_MAX_DAYS_PER_YEAR - used):.0f} days."
+                f"Unpaid leave exceeds annual maximum. Remaining: "
+                f"{max(0, UNPAID_MAX_DAYS_PER_YEAR - used):.0f} days."
             )
 
     if _is_marriage(code):
@@ -492,8 +544,8 @@ def calculate_leave_balance(user, year, profile=None):
             quota = configured_quota if configured_quota > 0 else float(SICK_MAX_DAYS_PER_YEAR)
         elif _is_emergency(code):
             quota = configured_quota if configured_quota > 0 else float(EMERGENCY_MAX_DAYS_PER_YEAR)
-        elif _is_exceptional(code):
-            quota = configured_quota if configured_quota > 0 else float(EXCEPTIONAL_MAX_DAYS_PER_YEAR)
+        elif _is_unpaid(code):
+            quota = configured_quota if configured_quota > 0 else float(UNPAID_MAX_DAYS_PER_YEAR)
         elif _is_marriage(code):
             quota = configured_quota if configured_quota > 0 else float(MARRIAGE_MAX_DAYS)
         elif _is_death(code):
@@ -563,5 +615,13 @@ def calculate_leave_balance(user, year, profile=None):
                 "adjustments": adjustments,  # Useful for UI
             }
         )
+
+    annual_balance = _find_balance_by_code(balances, "ANNUAL", "ANNUAL_LEAVE")
+    unpaid_balance = _find_balance_by_code(balances, "UNPAID", "UNPAID_LEAVE")
+
+    if annual_balance and unpaid_balance:
+        annual_overflow = max(0.0, float(annual_balance["used_days"]) - float(annual_balance["total_days"]))
+        unpaid_balance["used_days"] = float(unpaid_balance["used_days"]) + annual_overflow
+        unpaid_balance["remaining_days"] = max(0.0, float(unpaid_balance["total_days"]) - float(unpaid_balance["used_days"]))
 
     return balances

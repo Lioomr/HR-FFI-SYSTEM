@@ -38,6 +38,25 @@ export default function RequestLeavePage() {
     const [isOtherSelected, setIsOtherSelected] = useState(false);
     const [isSickSelected, setIsSickSelected] = useState(false);
 
+    const getBalanceByCode = (code: string): LeaveBalance | undefined => {
+        const normalized = code.toUpperCase();
+        const leaveType = leaveTypes.find(t => (t.code || "").toUpperCase() === normalized);
+        return leaveType ? balances[leaveType.id] : undefined;
+    };
+
+    const getAvailableDaysForType = (typeObj: LeaveType): number => {
+        const ownBalance = balances[typeObj.id];
+        const ownRemaining = Number(ownBalance?.remaining_days || 0);
+        const code = (typeObj.code || "").toUpperCase();
+
+        if (["ANNUAL", "ANNUAL_LEAVE"].includes(code)) {
+            const unpaidRemaining = Number(getBalanceByCode("UNPAID")?.remaining_days || 0);
+            return ownRemaining + unpaidRemaining;
+        }
+
+        return ownRemaining;
+    };
+
     useEffect(() => {
         async function init() {
             setLoading(true);
@@ -89,7 +108,8 @@ export default function RequestLeavePage() {
                         } else {
                             const bal = balances[typeObj.id];
                             if (bal) {
-                                if (bal.remaining_days < diff) {
+                                const availableDays = getAvailableDaysForType(typeObj);
+                                if (availableDays < diff) {
                                     setBalanceError(t("leave.insufficientBalance"));
                                 } else {
                                     setBalanceError(null);
