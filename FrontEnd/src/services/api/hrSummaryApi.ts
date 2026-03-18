@@ -1,5 +1,5 @@
 import { api } from "./apiClient";
-import type { ApiResponse } from "./apiTypes";
+import type { ApiResponse, PaginatedResponse } from "./apiTypes";
 
 /**
  * HR Summary data structure
@@ -38,5 +38,28 @@ export interface HRSummary {
  */
 export async function getHrSummary(): Promise<ApiResponse<HRSummary>> {
   const { data } = await api.get<ApiResponse<HRSummary>>("/api/hr/summary/");
+  return data;
+}
+
+export interface HrRecentActivityItem {
+  key: string;
+  employee: string;
+  action: string;
+  date: string;
+  status: string;
+  statusColor: string;
+}
+
+export interface HrRecentActivityParams {
+  page?: number;
+  page_size?: number;
+  action?: string;
+  search?: string;
+  from?: string;
+  to?: string;
+}
+
+export async function getHrRecentActivity(params?: HrRecentActivityParams): Promise<ApiResponse<PaginatedResponse<HrRecentActivityItem>>> {
+  const { data } = await api.get<ApiResponse<PaginatedResponse<HrRecentActivityItem>>>("/api/hr/recent-activity/", { params });
   return data;
 }
