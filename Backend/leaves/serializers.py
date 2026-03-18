@@ -88,12 +88,19 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
     def get_payment_breakdown(self, obj):
         year = obj.start_date.year
         employee_subject = obj.employee_profile or obj.employee
-        used_before = max(
-            0.0,
-            get_used_days_for_type(employee_subject, obj.leave_type, year)
-            - get_leave_days(obj.start_date, obj.end_date),
+        current_days = get_leave_days(obj.start_date, obj.end_date)
+        used_total = get_used_days_for_type(employee_subject, obj.leave_type, year)
+        if obj.status == LeaveRequest.RequestStatus.APPROVED:
+            used_before = max(0.0, used_total - current_days)
+        else:
+            used_before = used_total
+        return get_payment_breakdown(
+            obj.leave_type,
+            used_before,
+            current_days,
+            employee_subject=employee_subject,
+            year=year,
         )
-        return get_payment_breakdown(obj.leave_type, used_before, get_leave_days(obj.start_date, obj.end_date))
 
     def get_payment_status(self, obj):
         breakdown = self.get_payment_breakdown(obj)

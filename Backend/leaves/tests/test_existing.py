@@ -201,10 +201,10 @@ class LeaveManagementTests(TestCase):
         self.assertIn(f'leave_request_{req.id}.pdf', response["Content-Disposition"])
 
     def test_leave_type_labels_translate_known_arabic_policy_labels(self):
-        english, arabic = _leave_type_labels(LeaveType(name="Exceptional Leave", code="EXCEPTIONAL"))
+        english, arabic = _leave_type_labels(LeaveType(name="Unpaid Leave", code="UNPAID"))
 
-        self.assertEqual(english, "Exceptional Leave")
-        self.assertEqual(arabic, "إجازة استثنائية")
+        self.assertEqual(english, "Unpaid Leave")
+        self.assertEqual(arabic, "اجازه بدون راتب")
 
     def test_approval_path_rows_include_stage_actor_names(self):
         self.emp1.full_name = "Employee One"
@@ -281,7 +281,7 @@ class LeaveManagementTests(TestCase):
         self.client.force_authenticate(user=self.emp1)
         start = date.today() + timedelta(days=6)
         end = date.today() + timedelta(days=7)
-        document = SimpleUploadedFile("medical_report.txt", b"approved report", content_type="text/plain")
+        document = SimpleUploadedFile("medical_report.pdf", b"approved report", content_type="application/pdf")
         data = {
             "leave_type": self.sick_leave.id,
             "start_date": str(start),
@@ -371,6 +371,52 @@ class LeaveBalanceTests(TestCase):
         # 21 - 2 = 19
         self.assertEqual(float(annual_bal["used_days"]), 2.0)
         self.assertEqual(float(annual_bal["remaining_days"]), 19.0)
+
+    def test_annual_overflow_consumes_unpaid_balance(self):
+        year = date.today().year
+        start = date(year, 3, 1)
+        end = date(year, 3, 30)
+        LeaveRequest.objects.create(
+            employee=self.emp1,
+            leave_type=self.annual,
+            start_date=start,
+            end_date=end,
+            status="approved",
+            decided_by=self.hr,
+        )
+
+        from leaves.utils import calculate_leave_balance
+
+        balances = calculate_leave_balance(self.emp1, year)
+        annual_bal = next(b for b in balances if b["leave_code"] == "ANNUAL")
+        unpaid_bal = next(b for b in balances if b["leave_code"] == "UNPAID")
+
+        self.assertEqual(float(annual_bal["remaining_days"]), 0.0)
+        self.assertEqual(float(unpaid_bal["used_days"]), 9.0)
+        self.assertEqual(float(unpaid_bal["remaining_days"]), 51.0)
+
+    def test_annual_leave_request_can_fall_back_to_unpaid_balance(self):
+        self.client.force_authenticate(user=self.emp1)
+        year = date.today().year
+
+        LeaveRequest.objects.create(
+            employee=self.emp1,
+            leave_type=self.annual,
+            start_date=date(year, 1, 1),
+            end_date=date(year, 1, 21),
+            status="approved",
+            decided_by=self.hr,
+        )
+
+        start = date(year, 3, 1)
+        end = date(year, 3, 5)
+        response = self.client.post(
+            "/api/leaves/leave-requests/",
+            {"leave_type": self.annual.id, "start_date": str(start), "end_date": str(end), "reason": "Annual overflow"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["data"]["payment_status"], "unpaid")
 
     def test_carry_over_logic(self):
         year = date.today().year

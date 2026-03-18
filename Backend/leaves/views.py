@@ -226,8 +226,10 @@ def _leave_type_labels(leave_type: LeaveType | None) -> tuple[str, str]:
         "SICK_LEAVE": "الإجازة المرضية",
         "EMERGENCY": "إجازة طارئة",
         "EMERGENCY_LEAVE": "إجازة طارئة",
-        "EXCEPTIONAL": "إجازة استثنائية",
-        "EXCEPTIONAL_LEAVE": "إجازة استثنائية",
+        "UNPAID": "اجازه بدون راتب",
+        "UNPAID_LEAVE": "اجازه بدون راتب",
+        "EXCEPTIONAL": "اجازه بدون راتب",
+        "EXCEPTIONAL_LEAVE": "اجازه بدون راتب",
         "MARRIAGE": "إجازة زواج",
         "MARRIAGE_LEAVE": "إجازة زواج",
         "DEATH": "إجازة وفاة قريب",
@@ -832,7 +834,13 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         instance = serializer.save(employee=self.request.user, status=initial_status)
         requested_days = get_leave_days(instance.start_date, instance.end_date)
         used_before = get_used_days_for_type(self.request.user, instance.leave_type, instance.start_date.year)
-        payment_breakdown = get_payment_breakdown(instance.leave_type, used_before, requested_days)
+        payment_breakdown = get_payment_breakdown(
+            instance.leave_type,
+            used_before,
+            requested_days,
+            employee_subject=self.request.user,
+            year=instance.start_date.year,
+        )
 
         # Audit
         audit(
@@ -1013,7 +1021,13 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             0.0,
             get_used_days_for_type(instance.employee, instance.leave_type, instance.start_date.year) - requested_days,
         )
-        payment_breakdown = get_payment_breakdown(instance.leave_type, used_before, requested_days)
+        payment_breakdown = get_payment_breakdown(
+            instance.leave_type,
+            used_before,
+            requested_days,
+            employee_subject=instance.employee_profile or instance.employee,
+            year=instance.start_date.year,
+        )
 
         audit(
             request,
