@@ -32,6 +32,7 @@ import ViewEmployeePage from "../pages/hr/employees/ViewEmployeePage";
 import EditEmployeePage from "../pages/hr/employees/EditEmployeePage";
 import ExpiringDocumentsPage from "../pages/hr/employees/ExpiringDocumentsPage";
 import HRDashboardPage from "../pages/hr/dashboard/HRDashboardPage";
+import RecentActivityPage from "../pages/hr/dashboard/RecentActivityPage";
 import ImportEmployeesEntryPage from "../pages/hr/import/ImportEmployeesEntryPage";
 import ImportResultPage from "../pages/hr/import/ImportResultPage";
 
@@ -146,6 +147,7 @@ export const routes = [
             children: [
               { path: "hr", element: <Navigate to="/hr/employees" replace /> },
               { path: "hr/dashboard", element: <HRDashboardPage /> },
+              { path: "hr/activity", element: <RecentActivityPage /> },
               { path: "hr/profile", element: <UserProfilePage /> },
               { path: "hr/attendance", element: <HRAttendancePage /> },
               { path: "hr/invites", element: <AdminInvitesPage /> },
