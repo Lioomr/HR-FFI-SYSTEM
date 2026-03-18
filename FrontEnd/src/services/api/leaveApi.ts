@@ -24,6 +24,7 @@ export interface LeaveRequest {
     email: string;
     full_name: string;
   };
+  employee_profile?: number | null;
   leave_type: LeaveType;
   start_date: string;
   end_date: string;

@@ -15,6 +15,9 @@ from core.responses import success
 from employees.models import EmployeeProfile
 from leaves.models import LeaveRequest
 from payroll.models import PayrollRun
+from audit.models import AuditLog
+from audit.views import apply_filters, AuditPagination
+
 
 
 class HrSummaryView(APIView):
@@ -189,6 +192,59 @@ class HrSummaryView(APIView):
             "latest_payroll": payroll_data,
         }
         return success(data)
+
+
+class HrRecentActivityView(APIView):
+    permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
+
+    def get(self, request):
+        qs = AuditLog.objects.filter(actor__groups__name="HRManager").select_related("actor").order_by("-created_at")
+        qs = apply_filters(qs, request.query_params)
+
+        paginator = AuditPagination()
+        page = paginator.paginate_queryset(qs, request)
+
+        items = []
+        for log in page:
+            actor_name = "System"
+            if log.actor:
+                profile = getattr(log.actor, "employee_profile", None)
+                actor_name = profile.full_name if profile and profile.full_name else log.actor.email
+
+            status_color = "default"
+            action_lower = log.action.lower()
+
+            if "create" in action_lower or "add" in action_lower or "new" in action_lower:
+                status_color = "blue"
+            elif "approv" in action_lower or "accept" in action_lower or "success" in action_lower:
+                status_color = "green"
+            elif "reject" in action_lower or "decline" in action_lower or "fail" in action_lower or "error" in action_lower:
+                status_color = "red"
+            elif "updat" in action_lower or "edit" in action_lower or "modify" in action_lower:
+                status_color = "orange"
+            elif "delet" in action_lower or "remove" in action_lower:
+                status_color = "volcano"
+            elif "login" in action_lower:
+                status_color = "cyan"
+
+            details_str = log.entity
+            if log.entity_id:
+                details_str += f" (#{log.entity_id})"
+            if not details_str:
+                details_str = "System Action"
+
+            items.append(
+                {
+                    "key": f"audit_{log.id}",
+                    "employee": actor_name,
+                    "action": log.action,
+                    "date": log.created_at.strftime("%b %d, %I:%M %p"),
+                    "status": details_str,
+                    "statusColor": status_color,
+                }
+            )
+
+        return paginator.get_paginated_response(items)
 
 
 class ReportErrorAPIView(APIView):

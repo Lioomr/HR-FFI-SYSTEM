@@ -191,7 +191,17 @@ class LeaveBalanceAdjustment(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="leave_adjustments",
+        null=True,
+        blank=True,
         help_text=_("The employee whose balance is adjusted."),
+    )
+    employee_profile = models.ForeignKey(
+        "employees.EmployeeProfile",
+        on_delete=models.CASCADE,
+        related_name="leave_adjustments",
+        null=True,
+        blank=True,
+        help_text=_("Employee profile for adjustments recorded without a linked user account."),
     )
     leave_type = models.ForeignKey(LeaveType, on_delete=models.CASCADE, related_name="adjustments")
     adjustment_days = models.DecimalField(
@@ -204,4 +214,5 @@ class LeaveBalanceAdjustment(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.employee} - {self.leave_type} ({self.adjustment_days})"
+        employee_label = self.employee or self.employee_profile or "-"
+        return f"{employee_label} - {self.leave_type} ({self.adjustment_days})"

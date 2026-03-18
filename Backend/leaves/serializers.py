@@ -319,13 +319,16 @@ class HRManualLeaveRequestSerializer(serializers.ModelSerializer):
 class LeaveBalanceAdjustmentSerializer(serializers.ModelSerializer):
     created_by_name = serializers.ReadOnlyField(source="created_by.full_name")
     employee_id = serializers.IntegerField(write_only=True)
+    employee_name = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = LeaveBalanceAdjustment
         fields = [
             "id",
             "employee",
+            "employee_profile",
             "employee_id",
+            "employee_name",
             "leave_type",
             "adjustment_days",
             "reason",
@@ -333,17 +336,23 @@ class LeaveBalanceAdjustmentSerializer(serializers.ModelSerializer):
             "created_by_name",
             "created_at",
         ]
-        read_only_fields = ["employee", "created_by", "created_at"]
+        read_only_fields = ["employee", "employee_profile", "employee_name", "created_by", "created_at"]
+
+    def get_employee_name(self, obj):
+        if obj.employee:
+            return getattr(obj.employee, "full_name", "") or getattr(obj.employee, "email", "") or ""
+        profile = obj.employee_profile
+        if profile:
+            return profile.full_name or profile.full_name_en or profile.employee_id
+        return ""
 
     def create(self, validated_data):
         emp_id = validated_data.pop("employee_id")
         try:
             profile = EmployeeProfile.objects.get(id=emp_id)
-            user = profile.user
-            if not user:
-                raise serializers.ValidationError({"employee_id": "Employee is not connected to a system user account."})
-            validated_data["employee"] = user
         except EmployeeProfile.DoesNotExist:
             raise serializers.ValidationError({"employee_id": "Employee Profile not found."})
 
+        validated_data["employee_profile"] = profile
+        validated_data["employee"] = profile.user
         return super().create(validated_data)

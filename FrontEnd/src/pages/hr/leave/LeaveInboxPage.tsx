@@ -132,7 +132,25 @@ export default function LeaveInboxPage() {
         {
             title: t("hr.dashboard.employee"),
             key: "employee",
-            render: (_, record) => record.employee?.full_name || `ID: ${record.employee?.id}`
+            render: (_, record) => {
+                const employeeName = record.employee?.full_name || `ID: ${record.employee?.id ?? record.employee_profile ?? "-"}`;
+                const employeeProfileId =
+                    record.employee_profile ?? employees.find((employee) => employee.user_id === record.employee?.id)?.id;
+
+                if (!employeeProfileId) {
+                    return employeeName;
+                }
+
+                return (
+                    <Button
+                        type="link"
+                        style={{ padding: 0, height: "auto", color: "#f97316", fontWeight: 500 }}
+                        onClick={() => navigate(`/hr/employees/${employeeProfileId}`)}
+                    >
+                        {employeeName}
+                    </Button>
+                );
+            },
         },
         {
             title: t("leave.leaveType"),
