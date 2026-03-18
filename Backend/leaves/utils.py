@@ -273,12 +273,20 @@ def get_used_days_for_type(user, leave_type: LeaveType, year: int):
 
 def get_adjustments_for_type(user, leave_type: LeaveType, year: int):
     profile = resolve_employee_profile(user)
-    adjustment_user = profile.user if isinstance(user, EmployeeProfile) and profile else user
-    if not adjustment_user:
+    adjustments = LeaveBalanceAdjustment.objects.none()
+    if profile:
+        if profile.user_id:
+            adjustments = LeaveBalanceAdjustment.objects.filter(employee=profile.user) | LeaveBalanceAdjustment.objects.filter(
+                employee_profile=profile
+            )
+        else:
+            adjustments = LeaveBalanceAdjustment.objects.filter(employee_profile=profile)
+    elif user:
+        adjustments = LeaveBalanceAdjustment.objects.filter(employee=user)
+    else:
         return 0.0
-    adjs = LeaveBalanceAdjustment.objects.filter(
-        employee=adjustment_user, leave_type=leave_type, created_at__year=year
-    ).aggregate(
+
+    adjs = adjustments.filter(leave_type=leave_type, created_at__year=year).aggregate(
         Sum("adjustment_days")
     )["adjustment_days__sum"] or Decimal("0")
     return float(adjs)
@@ -425,6 +433,7 @@ def calculate_leave_balance(user, year, profile=None):
     # 1. Try to get hire date for recursion base case
     if not profile:
         profile = resolve_employee_profile(user)
+    employee_subject = profile or user
 
     if profile:
         hire_year = profile.hire_date.year if profile.hire_date else year
@@ -440,7 +449,7 @@ def calculate_leave_balance(user, year, profile=None):
 
     for lt in leave_types:
         code = _normalized_leave_code(lt)
-        used = get_used_days_for_type(user, lt, year)
+        used = get_used_days_for_type(employee_subject, lt, year)
 
         # Opening Balance (Carry-over)
         opening = 0.0
@@ -454,7 +463,7 @@ def calculate_leave_balance(user, year, profile=None):
             if year > hire_year:
                 # Recurse for previous year
                 prev_year = year - 1
-                prev_balances = calculate_leave_balance(user, prev_year, profile=profile)
+                prev_balances = calculate_leave_balance(employee_subject, prev_year, profile=profile)
 
                 # Extract remaining from previous year's calculation
                 # prev_balances is a list of dicts, find the matching leave_type
@@ -508,7 +517,7 @@ def calculate_leave_balance(user, year, profile=None):
         # Filter adjustments created in this year? Or valid for this year?
         # Let's use created_at.year == year for now.
 
-        adjustments = get_adjustments_for_type(user, lt, year)
+        adjustments = get_adjustments_for_type(employee_subject, lt, year)
 
         # Emergency leave is deducted from annual leave.
         if _is_emergency(code):
@@ -518,9 +527,9 @@ def calculate_leave_balance(user, year, profile=None):
             )
             if annual_type:
                 annual_total = (get_annual_entitlement(profile, year) if profile else 0.0) + get_adjustments_for_type(
-                    user, annual_type, year
+                    employee_subject, annual_type, year
                 )
-                annual_used = get_used_days_for_type(user, annual_type, year)
+                annual_used = get_used_days_for_type(employee_subject, annual_type, year)
                 emergency_used = used
                 annual_remaining_after_annual = max(0.0, annual_total - annual_used)
                 quota = min(
@@ -529,7 +538,7 @@ def calculate_leave_balance(user, year, profile=None):
 
         # Marriage leave is once during service.
         if _is_marriage(code):
-            approved_lifetime_qs = leave_request_employee_filter(user)
+            approved_lifetime_qs = leave_request_employee_filter(employee_subject)
             approved_lifetime = bool(
                 approved_lifetime_qs
                 and approved_lifetime_qs.filter(

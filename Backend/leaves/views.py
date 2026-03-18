@@ -1566,7 +1566,11 @@ class LeaveBalanceAdjustmentViewSet(viewsets.ModelViewSet):
             "create_adjustment",
             entity="leave_balance_adjustment",
             entity_id=instance.id,
-            metadata={"employee_id": instance.employee.id, "days": float(instance.adjustment_days)},
+            metadata={
+                "employee_id": instance.employee_id,
+                "employee_profile_id": instance.employee_profile_id,
+                "days": float(instance.adjustment_days),
+            },
         )
 
 

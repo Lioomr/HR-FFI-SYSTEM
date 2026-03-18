@@ -78,6 +78,7 @@ export default function HRDashboardPage() {
                         icon={<TeamOutlined />}
                         color="#f97316"
                         trend="+5%"
+                        onClick={() => navigate("/hr/employees")}
                         animDelay={0}
                     />
                 </Col>
@@ -100,6 +101,7 @@ export default function HRDashboardPage() {
                                 ? `${summary.latest_payroll.trend_percentage > 0 ? "+" : ""}${summary.latest_payroll.trend_percentage}%`
                                 : null
                         }
+                        onClick={() => navigate("/hr/payroll")}
                         animDelay={80}
                     />
                 </Col>
@@ -202,34 +204,34 @@ export default function HRDashboardPage() {
                             <span style={{ fontWeight: 700, fontSize: 15, color: "#0f172a" }}>
                                 {t("hr.dashboard.recentActivity")}
                             </span>
-                            <Button type="link" style={{ color: "#f97316", padding: 0, fontWeight: 600 }}>
+                            <Button type="link" onClick={() => navigate("/hr/activity")} style={{ color: "#f97316", padding: 0, fontWeight: 600 }}>
                                 {t("common.viewAll")}
                             </Button>
                         </div>
                         <Table
-                            dataSource={summary?.recent_activity || []}
+                            dataSource={(summary?.recent_activity || []).slice(0, 5)}
                             pagination={false}
                             scroll={{ x: 600 }}
-                            size="middle"
+                            size="small"
                             columns={[
                                 {
                                     title: t("hr.dashboard.actor", "Actor"),
                                     dataIndex: "employee",
                                     key: "employee",
                                     render: (text: string) => (
-                                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                                             <Avatar
-                                                size={32}
+                                                size={28}
                                                 style={{
                                                     background: `hsl(${(text?.charCodeAt(0) || 0) * 13 % 360}, 65%, 55%)`,
                                                     fontWeight: 700,
-                                                    fontSize: 13,
+                                                    fontSize: 12,
                                                     flexShrink: 0,
                                                 }}
                                             >
                                                 {text?.[0]?.toUpperCase()}
                                             </Avatar>
-                                            <span style={{ fontWeight: 500, color: "#0f172a" }}>{text}</span>
+                                            <span style={{ fontWeight: 500, color: "#0f172a", fontSize: 13 }}>{text}</span>
                                         </div>
                                     ),
                                 },

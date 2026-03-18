@@ -7,7 +7,8 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from employees.models import EmployeeProfile
-from leaves.models import LeaveRequest, LeaveType
+from leaves.models import LeaveBalanceAdjustment, LeaveRequest, LeaveType
+from leaves.utils import calculate_leave_balance
 
 User = get_user_model()
 
@@ -189,3 +190,68 @@ class HRManualLeaveRecordTests(APITestCase):
         self.assertFalse(record.is_active)
         self.assertIsNotNone(record.deleted_at)
         self.assertEqual(record.deleted_by_id, self.hr_user.id)
+
+    def test_manual_profile_only_record_is_counted_in_hr_balance_view(self):
+        external_profile = EmployeeProfile.objects.create(
+            employee_id="EMP-EXTERNAL-BALANCE",
+            full_name="External Balance Employee",
+            hire_date=date(2021, 1, 1),
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+            manager_profile=self.manager_profile,
+            manager=self.manager_user,
+        )
+        LeaveRequest.objects.create(
+            employee=None,
+            employee_profile=external_profile,
+            leave_type=self.annual,
+            start_date=date(2026, 3, 16),
+            end_date=date(2026, 3, 24),
+            reason="Manual approved leave",
+            status=LeaveRequest.RequestStatus.APPROVED,
+            source=LeaveRequest.RequestSource.HR_MANUAL,
+            entered_by=self.hr_user,
+            decided_by=self.hr_user,
+        )
+
+        balances = calculate_leave_balance(None, 2026, profile=external_profile)
+        annual_balance = next(b for b in balances if b["leave_code"] == "ANNUAL")
+        self.assertEqual(float(annual_balance["used_days"]), 9.0)
+        self.assertEqual(float(annual_balance["remaining_days"]), 12.0)
+
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.get(f"/api/leaves/leave-balances/?employee_id={external_profile.id}&year=2026")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        annual_response = next(item for item in response.data["data"] if item["leave_code"] == "ANNUAL")
+        self.assertEqual(float(annual_response["used_days"]), 9.0)
+        self.assertEqual(float(annual_response["remaining_days"]), 12.0)
+
+    def test_hr_can_create_balance_adjustment_for_profile_without_user(self):
+        external_profile = EmployeeProfile.objects.create(
+            employee_id="EMP-EXTERNAL-ADJUST",
+            full_name="External Adjust Employee",
+            hire_date=date(2021, 1, 1),
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+            manager_profile=self.manager_profile,
+            manager=self.manager_user,
+        )
+
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.post(
+            "/api/leaves/adjustments/",
+            {
+                "employee_id": external_profile.id,
+                "leave_type": self.sick.id,
+                "adjustment_days": "-100",
+                "reason": "Too much",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        adjustment = LeaveBalanceAdjustment.objects.get(pk=response.data["data"]["id"])
+        self.assertIsNone(adjustment.employee)
+        self.assertEqual(adjustment.employee_profile_id, external_profile.id)
+
+        balances = calculate_leave_balance(None, date.today().year, profile=external_profile)
+        sick_balance = next(b for b in balances if b["leave_code"] == "SICK")
+        self.assertEqual(float(sick_balance["adjustments"]), -100.0)
