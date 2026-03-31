@@ -1,4 +1,5 @@
 import ApprovalFlowMap, { type ApprovalFlowStage } from "../requests/ApprovalFlowMap";
+import { buildStagesFromWorkflow } from "../requests/workflowPresentation";
 
 import type { LoanRequest } from "../../services/api/loanApi";
 
@@ -128,5 +129,13 @@ function buildStages(request: LoanRequest, t: TranslateFn): ApprovalFlowStage[] 
 }
 
 export default function LoanApprovalMap({ request, t }: { request: LoanRequest; t: TranslateFn }) {
-  return <ApprovalFlowMap eyebrow={t("loans.approvalMap.eyebrow")} title={t("loans.approvalMap.title")} stages={buildStages(request, t)} t={t} />;
+  const workflowStages = buildStagesFromWorkflow(request.workflow, ["manager", "hr", "cfo", "ceo", "disbursement"], t);
+  return (
+    <ApprovalFlowMap
+      eyebrow={t("loans.approvalMap.eyebrow")}
+      title={t("loans.approvalMap.title")}
+      stages={workflowStages || buildStages(request, t)}
+      t={t}
+    />
+  );
 }

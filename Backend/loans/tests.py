@@ -3,9 +3,11 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from core.models import DelegationRule
 from employees.models import EmployeeProfile
 from hr_reference.models import Department, Position
 from loans.models import LoanRequest, LoanWorkflowConfig
@@ -171,6 +173,16 @@ class LoanWorkflowTests(APITestCase):
             hire_date=date(2025, 1, 1),
             manager_profile=self.employee_manager_profile,
         )
+        self.delegate_user = User.objects.create_user(email="delegate-approver@ffi.test", password="password")
+        self.delegate_profile = EmployeeProfile.objects.create(
+            user=self.delegate_user,
+            employee_id="EMP-DEL-1",
+            full_name="Delegate Approver",
+            basic_salary=Decimal("4700.00"),
+            department_ref=self.it_dept,
+            position_ref=self.other_position,
+            hire_date=date(2025, 1, 1),
+        )
 
     def _create_pending_manager_request(self):
         return LoanRequest.objects.create(
@@ -295,6 +307,25 @@ class LoanWorkflowTests(APITestCase):
         self.assertEqual(response.data["data"]["status"], LoanRequest.RequestStatus.PENDING_CFO)
         self.assertEqual(response.data["data"]["hr_recommendation"], LoanRequest.Recommendation.REJECT)
 
+    def test_delegated_hr_can_approve_loan_request(self):
+        DelegationRule.objects.create(
+            from_user=self.hr_user,
+            to_user=self.delegate_user,
+            start_at=timezone.now(),
+            created_by=self.hr_user,
+        )
+        request_obj = self._create_pending_hr_request()
+
+        self.client.force_authenticate(user=self.delegate_user)
+        response = self.client.post(
+            f"{self.loan_requests_url}{request_obj.id}/approve/",
+            {"comment": "Delegated HR approval"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"]["status"], LoanRequest.RequestStatus.PENDING_CFO)
+
     def test_cfo_approve_moves_to_pending_disbursement(self):
         request_obj = self._create_pending_cfo_request()
         self.client.force_authenticate(user=self.cfo)
@@ -343,6 +374,25 @@ class LoanWorkflowTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["data"]["status"], LoanRequest.RequestStatus.PENDING_CEO)
 
+    def test_delegated_cfo_can_approve_loan_request(self):
+        DelegationRule.objects.create(
+            from_user=self.cfo,
+            to_user=self.delegate_user,
+            start_at=timezone.now(),
+            created_by=self.cfo,
+        )
+        request_obj = self._create_pending_cfo_request()
+
+        self.client.force_authenticate(user=self.delegate_user)
+        response = self.client.post(
+            f"{self.cfo_loan_requests_url}{request_obj.id}/approve/",
+            {"comment": "Delegated CFO approval"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"]["status"], LoanRequest.RequestStatus.PENDING_DISBURSEMENT)
+
     def test_ceo_reject_is_final(self):
         request_obj = self._create_pending_ceo_request()
         self.client.force_authenticate(user=self.ceo)
@@ -368,6 +418,25 @@ class LoanWorkflowTests(APITestCase):
         )
         self.assertEqual(mark_response.status_code, status.HTTP_200_OK)
         self.assertEqual(mark_response.data["data"]["status"], LoanRequest.RequestStatus.APPROVED)
+
+    def test_delegated_disbursement_user_can_mark_disbursed(self):
+        DelegationRule.objects.create(
+            from_user=self.accountant,
+            to_user=self.delegate_user,
+            start_at=timezone.now(),
+            created_by=self.accountant,
+        )
+        request_obj = self._create_pending_disbursement_request()
+
+        self.client.force_authenticate(user=self.delegate_user)
+        response = self.client.post(
+            f"{self.disbursement_url}{request_obj.id}/mark-disbursed/",
+            {"comment": "Delegated disbursement"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"]["status"], LoanRequest.RequestStatus.APPROVED)
 
     def test_accountant_cannot_access_hr_approval(self):
         request_obj = self._create_pending_hr_request()

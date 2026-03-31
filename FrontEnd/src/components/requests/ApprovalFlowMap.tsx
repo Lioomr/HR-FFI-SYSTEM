@@ -8,7 +8,7 @@ type TranslateFn = (key: string, params?: Record<string, unknown> | string, fall
 export type ApprovalFlowStage = {
   key: string;
   title: string;
-  state: "completed" | "current" | "rejected" | "upcoming" | "skipped";
+  state: "completed" | "current" | "rejected" | "upcoming" | "skipped" | "cancelled";
   note: string;
   at?: string | null;
 };
@@ -21,6 +21,8 @@ function getStageColor(state: ApprovalFlowStage["state"]) {
       return { accent: "#f97316", surface: "#fff7ed", border: "#fdba74" };
     case "rejected":
       return { accent: "#dc2626", surface: "#fef2f2", border: "#fecaca" };
+    case "cancelled":
+      return { accent: "#6b7280", surface: "#f8fafc", border: "#d1d5db" };
     case "skipped":
       return { accent: "#64748b", surface: "#f8fafc", border: "#cbd5e1" };
     default:
@@ -36,6 +38,8 @@ function getStageIcon(state: ApprovalFlowStage["state"]) {
       return <ClockCircleOutlined />;
     case "rejected":
       return <CloseCircleFilled />;
+    case "cancelled":
+      return <MinusCircleOutlined />;
     case "skipped":
       return <MinusCircleOutlined />;
     default:
@@ -54,6 +58,14 @@ export default function ApprovalFlowMap({
   stages: ApprovalFlowStage[];
   t: TranslateFn;
 }) {
+  const getStateLabel = (state: ApprovalFlowStage["state"]) => {
+    if (state === "cancelled") {
+      const translated = t("status.cancelled");
+      return translated === "status.cancelled" ? "Cancelled" : translated;
+    }
+    return t(`leave.approvalMap.${state}`);
+  };
+
   return (
     <Card
       style={{
@@ -120,8 +132,18 @@ export default function ApprovalFlowMap({
                   >
                     {getStageIcon(stage.state)}
                   </div>
-                  <Tag color={stage.state === "skipped" ? "default" : stage.state === "rejected" ? "red" : stage.state === "completed" ? "green" : "orange"}>
-                    {t(`leave.approvalMap.${stage.state}`)}
+                  <Tag
+                    color={
+                      stage.state === "skipped" || stage.state === "cancelled"
+                        ? "default"
+                        : stage.state === "rejected"
+                          ? "red"
+                          : stage.state === "completed"
+                            ? "green"
+                            : "orange"
+                    }
+                  >
+                    {getStateLabel(stage.state)}
                   </Tag>
                 </div>
                 <Text style={{ fontSize: 15, fontWeight: 700, color: "#0f172a" }}>{stage.title}</Text>

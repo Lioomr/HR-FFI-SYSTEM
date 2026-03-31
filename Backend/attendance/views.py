@@ -11,6 +11,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.throttling import UserRateThrottle
 
 from audit.utils import audit
+from core.delegation import get_delegated_manager_user_ids
 from core.permissions import IsManager, get_role
 from core.responses import error, success
 from core.services import (
@@ -18,6 +19,7 @@ from core.services import (
     get_direct_manager_user,
     get_hr_approver_users,
     notify_users_for_pending_status,
+    sync_workflow,
 )
 from employees.models import EmployeeProfile
 
@@ -178,6 +180,7 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         for attr, value in s.validated_data.items():
             setattr(instance, attr, value)
         instance.save()
+        sync_workflow(instance, actor=request.user)
 
         # Serialize metadata to ensure datetimes are strings
         import json
@@ -233,6 +236,7 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
             created_by=user,
             updated_by=user,
         )
+        sync_workflow(record, actor=user)
 
         audit(request, "attendance.check_in", entity="attendance_record", entity_id=record.id)
         try:
@@ -294,6 +298,7 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         record.check_out_at = timezone.now()
         record.updated_by = user
         record.save()
+        sync_workflow(record, actor=user)
 
         audit(request, "attendance.check_out", entity="attendance_record", entity_id=record.id)
         return success(CheckOutResponseSerializer(record).data)
@@ -355,11 +360,18 @@ class ManagerAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
         profile_match = Q()
         if manager_profile:
             profile_match = Q(employee_profile__manager_profile=manager_profile)
+        delegated_manager_ids = get_delegated_manager_user_ids(self.request.user)
+        delegated_match = Q()
+        if delegated_manager_ids:
+            delegated_match = Q(employee_profile__manager_id__in=delegated_manager_ids) | Q(
+                employee_profile__manager_profile__user_id__in=delegated_manager_ids
+            )
 
         return base_qs.filter(
             Q(employee_profile__manager_profile__user=self.request.user)
             | Q(employee_profile__manager=self.request.user)
             | profile_match
+            | delegated_match
         )
 
     @action(detail=True, methods=["post"])
@@ -379,6 +391,7 @@ class ManagerAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
         instance.manager_decision_at = timezone.now()
         instance.manager_decision_note = request.data.get("notes", "")  # Simple note
         instance.save()
+        sync_workflow(instance, actor=request.user)
 
         audit(request, "approve", entity="AttendanceRecord", entity_id=instance.id)
         try:
@@ -416,6 +429,7 @@ class ManagerAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
         instance.manager_decision_at = timezone.now()
         instance.manager_decision_note = note
         instance.save()
+        sync_workflow(instance, actor=request.user)
 
         audit(request, "reject", entity="AttendanceRecord", entity_id=instance.id)
         return success(AttendanceRecordSerializer(instance).data)
@@ -457,6 +471,7 @@ class CEOAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
                 "updated_at",
             ]
         )
+        sync_workflow(instance, actor=request.user)
         audit(request, "approve_ceo", entity="AttendanceRecord", entity_id=instance.id)
         return success(AttendanceRecordSerializer(instance).data)
 
@@ -485,5 +500,6 @@ class CEOAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
                 "updated_at",
             ]
         )
+        sync_workflow(instance, actor=request.user)
         audit(request, "reject_ceo", entity="AttendanceRecord", entity_id=instance.id)
         return success(AttendanceRecordSerializer(instance).data)

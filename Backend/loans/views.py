@@ -7,6 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from audit.utils import audit
+from core.delegation import get_delegated_manager_user_ids
 from core.pagination import StandardPagination
 from core.permissions import get_role
 from core.responses import error, success
@@ -18,6 +19,7 @@ from core.services import (
     get_hr_approver_users,
     notify_users_for_pending_status,
     send_request_submission_email,
+    sync_workflow,
 )
 
 from .models import LoanRequest
@@ -165,6 +167,7 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
             reason=serializer.validated_data.get("reason", ""),
             status=initial_status,
         )
+        sync_workflow(instance, actor=request.user)
 
         audit(
             request,
@@ -306,6 +309,7 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
                 "updated_at",
             ]
         )
+        sync_workflow(instance, actor=request.user)
         audit(request, "loan_request_recommended_hr_approve", entity="LoanRequest", entity_id=instance.id)
         try:
             notify_users_for_pending_status(
@@ -351,6 +355,7 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
                 "updated_at",
             ]
         )
+        sync_workflow(instance, actor=request.user)
         audit(request, "loan_request_recommended_hr_reject", entity="LoanRequest", entity_id=instance.id)
         try:
             notify_users_for_pending_status(
@@ -385,6 +390,7 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
 
         instance.status = LoanRequest.RequestStatus.CANCELLED
         instance.save(update_fields=["status", "updated_at"])
+        sync_workflow(instance, actor=request.user)
         audit(request, "loan_request_cancelled", entity="LoanRequest", entity_id=instance.id)
         return success(LoanRequestReadSerializer(instance).data)
 
@@ -433,6 +439,11 @@ class ManagerLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
         manager_match = Q(employee_profile__manager=self.request.user)
         if manager_profile:
             manager_match = manager_match | Q(employee_profile__manager_profile=manager_profile)
+        delegated_manager_ids = get_delegated_manager_user_ids(self.request.user)
+        if delegated_manager_ids:
+            manager_match = manager_match | Q(employee_profile__manager_id__in=delegated_manager_ids) | Q(
+                employee_profile__manager_profile__user_id__in=delegated_manager_ids
+            )
 
         return base_qs.filter(manager_match | Q(manager_decision_by=self.request.user)).distinct()
 
@@ -468,6 +479,7 @@ class ManagerLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
                 "updated_at",
             ]
         )
+        sync_workflow(instance, actor=request.user)
         audit(request, "loan_request_recommended_manager_approve", entity="LoanRequest", entity_id=instance.id)
         try:
             notify_users_for_pending_status(
@@ -511,6 +523,7 @@ class ManagerLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
                 "updated_at",
             ]
         )
+        sync_workflow(instance, actor=request.user)
         audit(request, "loan_request_recommended_manager_reject", entity="LoanRequest", entity_id=instance.id)
         try:
             notify_users_for_pending_status(
@@ -589,6 +602,7 @@ class CFOLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
                 "updated_at",
             ]
         )
+        sync_workflow(instance, actor=request.user)
         audit(request, "loan_request_approved_cfo", entity="LoanRequest", entity_id=instance.id)
         try:
             notify_users_for_pending_status(
@@ -633,6 +647,7 @@ class CFOLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
                 "updated_at",
             ]
         )
+        sync_workflow(instance, actor=request.user)
         audit(request, "loan_request_rejected_cfo", entity="LoanRequest", entity_id=instance.id)
         return success(LoanRequestReadSerializer(instance).data)
 
@@ -665,6 +680,7 @@ class CFOLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
                 "updated_at",
             ]
         )
+        sync_workflow(instance, actor=request.user)
         audit(request, "loan_request_referred_to_ceo", entity="LoanRequest", entity_id=instance.id)
         try:
             notify_users_for_pending_status(
@@ -743,6 +759,7 @@ class CEOLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
                 "updated_at",
             ]
         )
+        sync_workflow(instance, actor=request.user)
         audit(request, "loan_request_approved_ceo", entity="LoanRequest", entity_id=instance.id)
         try:
             notify_users_for_pending_status(
@@ -787,6 +804,7 @@ class CEOLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
                 "updated_at",
             ]
         )
+        sync_workflow(instance, actor=request.user)
         audit(request, "loan_request_rejected_ceo", entity="LoanRequest", entity_id=instance.id)
         return success(LoanRequestReadSerializer(instance).data)
 
@@ -831,5 +849,6 @@ class DisbursementLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
                 "updated_at",
             ]
         )
+        sync_workflow(instance, actor=request.user)
         audit(request, "loan_request_disbursed", entity="LoanRequest", entity_id=instance.id)
         return success(LoanRequestReadSerializer(instance).data)

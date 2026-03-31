@@ -7,6 +7,8 @@ import LeaveApprovalMap from "../../../components/leaves/LeaveApprovalMap";
 import ErrorState from "../../../components/ui/ErrorState";
 import LoadingState from "../../../components/ui/LoadingState";
 import PageHeader from "../../../components/ui/PageHeader";
+import ApprovalTimeline from "../../../components/requests/ApprovalTimeline";
+import PendingActionBanner from "../../../components/requests/PendingActionBanner";
 import { isApiError } from "../../../services/api/apiTypes";
 import {
   getLeaveRequest,
@@ -162,7 +164,9 @@ export default function EmployeeLeaveRequestDetailsPage() {
       />
 
       <div style={{ display: "grid", gap: 18 }}>
+        <PendingActionBanner workflow={request.workflow} />
         <LeaveApprovalMap request={request} t={t} />
+        <ApprovalTimeline workflow={request.workflow} />
 
         <Card style={{ borderRadius: 20, border: "1px solid #e5e7eb" }}>
           <Descriptions column={{ xs: 1, md: 2 }} layout="vertical" bordered>

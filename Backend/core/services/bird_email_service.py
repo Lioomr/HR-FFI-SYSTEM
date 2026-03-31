@@ -487,6 +487,64 @@ def send_user_invite_email(
     )
 
 
+def send_delegation_notification_email(
+    *,
+    to_email: str,
+    recipient_name: str,
+    from_user_name: str,
+    to_user_name: str,
+    start_at: str,
+    end_at: str | None = None,
+    reason: str | None = None,
+    recipient_role: str,
+    action_url: str | None = None,
+) -> dict[str, Any]:
+    service = BirdEmailService()
+    if recipient_role == "delegate":
+        title = "You have been delegated approval authority"
+        title_ar = "تم تفويضك بصلاحية الموافقة"
+        message = (
+            f"{from_user_name} has delegated approval responsibilities to you for the specified period."
+        )
+        message_ar = "قام المستخدم الأصلي بتفويض مسؤوليات الموافقة إليك خلال الفترة المحددة."
+    else:
+        title = "Your delegation rule is active"
+        title_ar = "تم تفعيل قاعدة التفويض الخاصة بك"
+        message = (
+            f"Your approval responsibilities have been delegated to {to_user_name} for the specified period."
+        )
+        message_ar = "تم تفويض مسؤوليات الموافقة الخاصة بك إلى المستخدم الآخر خلال الفترة المحددة."
+
+    context = _base_email_context(
+        title=title,
+        title_ar=title_ar,
+        employee_name=recipient_name,
+        message=message,
+        message_ar=message_ar,
+        action_url=action_url,
+        action_text="View Delegation",
+        action_text_ar="عرض التفويض",
+    )
+    context.update(
+        {
+            "subtitle": "Delegation details",
+            "subtitle_ar": "تفاصيل التفويض",
+            "from_user_name": from_user_name,
+            "to_user_name": to_user_name,
+            "start_at": start_at,
+            "end_at": end_at,
+            "reason": reason,
+        }
+    )
+    subject = f"Delegation rule active: {from_user_name} -> {to_user_name}"
+    return service.send_template_email(
+        to_email=to_email,
+        subject=subject,
+        template_name="delegation_notification.html",
+        context=context,
+    )
+
+
 def example_email_usage() -> dict[str, Any]:
     return {
         "leave_submitted": send_leave_request_submitted_email(

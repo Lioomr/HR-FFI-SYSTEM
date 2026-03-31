@@ -1,11 +1,14 @@
 from rest_framework import serializers
 
+from core.services import get_workflow_snapshot
+
 from .models import AttendanceRecord
 
 
 class AttendanceRecordSerializer(serializers.ModelSerializer):
     employee_name = serializers.CharField(source="employee_profile.user.get_full_name", read_only=True)
     employee_email = serializers.EmailField(source="employee_profile.user.email", read_only=True)
+    workflow = serializers.SerializerMethodField()
 
     class Meta:
         model = AttendanceRecord
@@ -28,6 +31,7 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
             "is_overridden",
             "override_reason",
             "notes",
+            "workflow",
             "created_at",
             "updated_at",
         ]
@@ -50,6 +54,11 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
             "updated_at",
             "is_overridden",
         ]
+
+    def get_workflow(self, obj):
+        request = self.context.get("request")
+        actor = getattr(request, "user", None) if request else None
+        return get_workflow_snapshot(obj, actor=actor)
 
 
 class AttendanceOverrideSerializer(serializers.ModelSerializer):
