@@ -5,6 +5,7 @@ from django.contrib.auth.models import Group
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from openpyxl import Workbook
+from openpyxl import load_workbook
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -294,6 +295,44 @@ class EmployeeProfileTests(TestCase):
         results = response.data["data"]["results"]
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["employee_id"], "EMP-REP-EMP")
+
+    def test_hr_can_export_filtered_employees_as_xlsx(self):
+        EmployeeProfile.objects.create(
+            user=self.employee_user,
+            employee_id="EMP-EXPORT-01",
+            department_ref=self.dept,
+            position_ref=self.pos,
+            department=self.dept.name,
+            job_title=self.pos.name,
+            full_name="Saudi Employee",
+            nationality="Saudi",
+            hire_date="2024-01-01",
+        )
+        EmployeeProfile.objects.create(
+            user=self.employee_user_2,
+            employee_id="EMP-EXPORT-02",
+            department_ref=self.dept,
+            position_ref=self.pos_senior,
+            department=self.dept.name,
+            job_title=self.pos_senior.name,
+            full_name="Egyptian Employee",
+            nationality="Egyptian",
+            hire_date="2024-02-01",
+        )
+
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.get("/api/employees/export/?nationality=saudi")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", response["Content-Type"])
+
+        workbook = load_workbook(filename=BytesIO(response.content))
+        worksheet = workbook.active
+        rows = list(worksheet.iter_rows(values_only=True))
+
+        self.assertEqual(rows[0][0], "Employee ID")
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[1][0], "EMP-EXPORT-01")
 
     def test_excel_import_raw_dates_saudi_foreign_and_manager_profile_linking(self):
         self.client.force_authenticate(user=self.hr_user)

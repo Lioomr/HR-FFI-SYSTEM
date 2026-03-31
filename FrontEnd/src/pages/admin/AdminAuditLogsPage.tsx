@@ -7,6 +7,7 @@ import LoadingState from "../../components/ui/LoadingState";
 import EmptyState from "../../components/ui/EmptyState";
 import ErrorState from "../../components/ui/ErrorState";
 import Unauthorized403Page from "../Unauthorized403Page";
+import { triggerBlobDownload } from "../../services/api/downloads";
 import { exportAuditLogs, listAuditLogs } from "../../services/api/auditApi";
 import { isApiError } from "../../services/api/apiTypes";
 import type { AuditLogDto } from "../../services/api/apiTypes";
@@ -171,12 +172,7 @@ export default function AdminAuditLogsPage() {
       }
 
       const blob = await exportAuditLogs(params);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `audit_logs_${new Date().toISOString().slice(0, 10)}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
+      triggerBlobDownload(blob, `audit_logs_${new Date().toISOString().slice(0, 10)}.csv`);
       message.success("Exported CSV.");
     } catch (err: any) {
       if (err?.response?.status === 403) {

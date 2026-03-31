@@ -171,3 +171,28 @@ class DelegationRule(models.Model):
 
     def __str__(self) -> str:
         return f"{self.from_user_id}->{self.to_user_id}"
+
+
+class UserPreference(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="preferences",
+    )
+    scope = models.CharField(max_length=100)
+    key = models.CharField(max_length=100)
+    value = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["scope", "key", "id"]
+        constraints = [
+            models.UniqueConstraint(fields=["user", "scope", "key"], name="core_userpref_unique_user_scope_key")
+        ]
+        indexes = [
+            models.Index(fields=["user", "scope"], name="core_userpref_user_scope_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user_id}:{self.scope}:{self.key}"

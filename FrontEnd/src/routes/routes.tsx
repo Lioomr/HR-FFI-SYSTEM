@@ -17,6 +17,7 @@ import AdminInvitesPage from "../pages/admin/AdminInvitesPage";
 import AdminAuditLogsPage from "../pages/admin/AdminAuditLogsPage";
 
 import AdminSettingsPage from "../pages/admin/AdminSettingsPage";
+import BioTimeSettingsPage from "../pages/admin/BioTimeSettingsPage";
 import DelegationRulesPage from "../pages/hr/DelegationRulesPage";
 import EmployeeAttendancePage from "../pages/employee/AttendancePage";
 import EmployeeLeavesPage from "../pages/employee/EmployeeLeavesPage";
@@ -138,6 +139,7 @@ export const routes = [
               { path: "admin/invites", element: <AdminInvitesPage /> },
               { path: "admin/audit-logs", element: <AdminAuditLogsPage /> },
               { path: "admin/settings", element: <AdminSettingsPage /> },
+              { path: "admin/biotime", element: <BioTimeSettingsPage /> },
               { path: "admin/workflow/delegations", element: <DelegationRulesPage /> },
               { path: "admin/profile", element: <UserProfilePage /> },
             ],

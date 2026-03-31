@@ -32,6 +32,7 @@ interface HrEmployeeListState {
   setFilters: (filters: Partial<EmployeeListFilters>) => void;
   setPage: (page: number) => void;
   setPageSize: (pageSize: number) => void;
+  hydrate: (payload: Partial<Pick<HrEmployeeListState, "search" | "filters" | "page" | "pageSize">>) => void;
   reset: () => void;
 }
 
@@ -65,6 +66,14 @@ export const useHrEmployeeListStore = create<HrEmployeeListState>()(
       setPage: (page: number) => set({ page }),
       
       setPageSize: (pageSize: number) => set({ pageSize, page: 1 }),
+
+      hydrate: (payload) =>
+        set((state) => ({
+          search: payload.search ?? state.search,
+          filters: payload.filters ?? state.filters,
+          page: payload.page ?? state.page,
+          pageSize: payload.pageSize ?? state.pageSize,
+        })),
       
       reset: () => set(initialState),
     }),

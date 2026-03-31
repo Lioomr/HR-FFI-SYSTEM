@@ -1,12 +1,10 @@
-import csv
-
 from django.db.models import Q
-from django.http import HttpResponse
 from django.utils.dateparse import parse_datetime
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
+from core.exporting import audit_export, csv_response, xlsx_response
 from core.permissions import IsSystemAdmin
 from core.responses import error, success
 
@@ -112,34 +110,33 @@ class AuditLogsExportView(APIView):
     def get(self, request):
         qs = AuditLog.objects.select_related("actor").all()
         qs = apply_filters(qs, request.query_params)
-
-        resp = HttpResponse(content_type="text/csv")
-        resp["Content-Disposition"] = 'attachment; filename="audit_logs.csv"'
-
-        writer = csv.writer(resp)
-        writer.writerow(
+        export_format = (request.query_params.get("file_format") or "csv").lower()
+        headers = [
+            "id",
+            "timestamp",
+            "actor_email",
+            "action",
+            "entity",
+            "entity_id",
+            "ip_address",
+        ]
+        rows = [
             [
-                "id",
-                "timestamp",
-                "actor_email",
-                "action",
-                "entity",
-                "entity_id",
-                "ip_address",
+                log.id,
+                log.created_at.isoformat(),
+                log.actor.email if log.actor else "",
+                log.action,
+                log.entity,
+                log.entity_id,
+                log.ip_address or "",
             ]
-        )
+            for log in qs.iterator(chunk_size=2000)
+        ]
 
-        for log in qs.iterator(chunk_size=2000):
-            writer.writerow(
-                [
-                    log.id,
-                    log.created_at.isoformat(),
-                    log.actor.email if log.actor else "",
-                    log.action,
-                    log.entity,
-                    log.entity_id,
-                    log.ip_address or "",
-                ]
-            )
-
-        return resp
+        if export_format == "xlsx":
+            audit_export(request, entity="AuditLog", export_format="xlsx")
+            return xlsx_response(headers=headers, rows=rows, filename="audit_logs.xlsx", sheet_name="Audit Logs")
+        if export_format == "csv":
+            audit_export(request, entity="AuditLog", export_format="csv")
+            return csv_response(headers=headers, rows=rows, filename="audit_logs.csv")
+        return error("Validation error", errors={"file_format": ["Must be csv or xlsx."]}, status=422)

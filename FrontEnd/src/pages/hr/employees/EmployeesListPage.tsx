@@ -1,7 +1,7 @@
 
-import { useCallback, useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Card, Input, Select, Table, Dropdown, Typography, Tooltip, Popover } from "antd";
+import { Button, Card, Checkbox, Input, Select, Table, Dropdown, Typography, Tooltip, Popover, message } from "antd";
 import type { MenuProps } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
@@ -11,6 +11,7 @@ import {
     DownloadOutlined,
     EllipsisOutlined,
     SortAscendingOutlined,
+    SettingOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { getCountryCode } from "../../../utils/countries";
@@ -44,15 +45,29 @@ import Unauthorized403Page from "../../Unauthorized403Page";
 
 import { useHrEmployeeListStore } from "../../../stores/hrEmployeeListStore";
 import type { Employee } from "../../../services/api/employeesApi";
-import { listEmployees } from "../../../services/api/employeesApi";
+import { exportEmployees, listEmployees } from "../../../services/api/employeesApi";
 import { listDepartments } from "../../../services/api/departmentsApi";
 import { isApiError } from "../../../services/api/apiTypes";
+import { triggerBlobDownload } from "../../../services/api/downloads";
 import { isForbidden } from "../../../services/api/httpErrors";
+import { getUserPreference, saveUserPreference } from "../../../services/api/preferencesApi";
 
 const { Option } = Select;
 const { Title, Text } = Typography;
 
 const AVATAR_BG_COLORS = ["#f56a00", "#1677ff", "#389e0d", "#722ed1", "#d46b08", "#08979c"];
+const PREFERENCE_SCOPE = "tables";
+const PREFERENCE_KEY = "hr-employees-list";
+const DEFAULT_VISIBLE_COLUMNS = [
+    "full_name",
+    "nationality",
+    "position",
+    "department",
+    "manager",
+    "hire_date",
+    "employment_status",
+    "action",
+];
 
 function getInitials(name?: string) {
     if (!name) return "U";
@@ -162,6 +177,7 @@ export default function EmployeesListPage() {
         setFilters,
         setPage,
         setPageSize,
+        hydrate,
     } = useHrEmployeeListStore();
 
     // Local state
@@ -170,11 +186,14 @@ export default function EmployeesListPage() {
     const [forbidden, setForbidden] = useState(false);
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [total, setTotal] = useState(0);
+    const [visibleColumnKeys, setVisibleColumnKeys] = useState<string[]>(DEFAULT_VISIBLE_COLUMNS);
 
     // Filter options state
     const [departments, setDepartments] = useState<{ code: string; name: string }[]>([]);
     const [nationalities, setNationalities] = useState<string[]>([]);
     const [filtersOpen, setFiltersOpen] = useState(false);
+    const [savingPreference, setSavingPreference] = useState(false);
+    const preferenceLoadedRef = useRef(false);
 
     /**
      * Fetch filter options
@@ -252,12 +271,72 @@ export default function EmployeesListPage() {
     }, [loadFilterOptions]);
 
     useEffect(() => {
+        let active = true;
+
+        async function loadPreference() {
+            try {
+                const response = await getUserPreference(PREFERENCE_SCOPE, PREFERENCE_KEY);
+                if (!active || isApiError(response)) {
+                    preferenceLoadedRef.current = true;
+                    return;
+                }
+
+                const value = response.data.value || {};
+                const nextVisibleColumns = Array.isArray(value.visibleColumns)
+                    ? value.visibleColumns.filter((item): item is string => typeof item === "string" && item.length > 0)
+                    : DEFAULT_VISIBLE_COLUMNS;
+
+                hydrate({
+                    search: typeof value.search === "string" ? value.search : undefined,
+                    filters: typeof value.filters === "object" && value.filters ? value.filters as any : undefined,
+                    pageSize: typeof value.pageSize === "number" ? value.pageSize : undefined,
+                });
+                setVisibleColumnKeys(nextVisibleColumns.length > 0 ? nextVisibleColumns : DEFAULT_VISIBLE_COLUMNS);
+            } catch {
+                // Local state remains usable even if the preference request fails.
+            } finally {
+                if (active) {
+                    preferenceLoadedRef.current = true;
+                }
+            }
+        }
+
+        loadPreference();
+        return () => {
+            active = false;
+        };
+    }, [hydrate]);
+
+    useEffect(() => {
         loadEmployees();
     }, [loadEmployees]);
 
     const debouncedSearch = useDebounce((value: string) => {
         setSearch(value);
     }, 300);
+
+    const persistPreference = useCallback(async (payload: Record<string, unknown>) => {
+        setSavingPreference(true);
+        try {
+            await saveUserPreference(PREFERENCE_SCOPE, PREFERENCE_KEY, payload);
+        } catch {
+            // Keep the page functional if preference sync fails.
+        } finally {
+            setSavingPreference(false);
+        }
+    }, []);
+
+    const debouncedSavePreference = useDebounce(persistPreference, 500);
+
+    useEffect(() => {
+        if (!preferenceLoadedRef.current) return;
+        debouncedSavePreference({
+            search,
+            filters,
+            pageSize,
+            visibleColumns: visibleColumnKeys,
+        });
+    }, [search, filters, pageSize, visibleColumnKeys, debouncedSavePreference]);
 
     const handleRowClick = (record: Employee) => {
         navigate(`/hr/employees/${record.id}`);
@@ -341,7 +420,7 @@ export default function EmployeesListPage() {
         </div>
     );
 
-    const columns: ColumnsType<Employee> = [
+    const allColumns: ColumnsType<Employee> = [
         {
             title: t("employees.list.colName"),
             key: "full_name",
@@ -436,6 +515,62 @@ export default function EmployeesListPage() {
         }
     ];
 
+    const columns = useMemo(
+        () => allColumns.filter((column) => visibleColumnKeys.includes(String(column.key))),
+        [allColumns, visibleColumnKeys]
+    );
+
+    const columnOptions = [
+        { label: t("employees.list.colName"), value: "full_name" },
+        { label: t("employees.list.colNationality"), value: "nationality" },
+        { label: t("employees.list.colPosition"), value: "position" },
+        { label: t("employees.list.colDepartment"), value: "department" },
+        { label: t("employees.list.colManager"), value: "manager" },
+        { label: t("employees.list.colJoiningDate"), value: "hire_date" },
+        { label: t("employees.list.colStatus"), value: "employment_status" },
+        { label: t("employees.list.colAction"), value: "action" },
+    ];
+
+    async function handleExport() {
+        try {
+            const blob = await exportEmployees({
+                search: search || undefined,
+                department: filters.department || undefined,
+                position: filters.position || undefined,
+                status: filters.status || undefined,
+                nationality: filters.nationality || undefined,
+                join_date_order: filters.joinDateOrder || undefined,
+            });
+            triggerBlobDownload(blob, `employees_${new Date().toISOString().slice(0, 10)}.xlsx`);
+            message.success(t("common.success"));
+        } catch (err: any) {
+            if (isForbidden(err)) {
+                setForbidden(true);
+                return;
+            }
+            message.error(t("common.error"));
+        }
+    }
+
+    const columnsPopoverContent = (
+        <div style={{ width: 240, display: "flex", flexDirection: "column", gap: 12 }}>
+            <Text strong>{t("common.columns", "Columns")}</Text>
+            <Checkbox.Group
+                options={columnOptions}
+                value={visibleColumnKeys}
+                onChange={(values) => {
+                    const selected = values.map(String);
+                    if (selected.length > 0) {
+                        setVisibleColumnKeys(selected);
+                    }
+                }}
+            />
+            <Text type="secondary" style={{ fontSize: 12 }}>
+                {savingPreference ? t("common.saving", "Saving...") : t("common.saved", "Saved automatically")}
+            </Text>
+        </div>
+    );
+
     if (forbidden) return <Unauthorized403Page />;
 
     return (
@@ -472,7 +607,7 @@ export default function EmployeesListPage() {
                         <Input
                             placeholder={t("employees.list.searchPlaceholder")}
                             prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
-                            defaultValue={search}
+                            value={search}
                             onChange={(e) => debouncedSearch(e.target.value)}
                             size="large"
                             style={{
@@ -519,6 +654,16 @@ export default function EmployeesListPage() {
                         </Select>
 
                         <Popover
+                            content={columnsPopoverContent}
+                            trigger="click"
+                            placement="bottomRight"
+                        >
+                            <Tooltip title={t("common.columns", "Columns")}>
+                                <Button size="large" icon={<SettingOutlined />} style={{ borderRadius: 8 }} />
+                            </Tooltip>
+                        </Popover>
+
+                        <Popover
                             content={moreFiltersContent}
                             trigger="click"
                             open={filtersOpen}
@@ -539,7 +684,7 @@ export default function EmployeesListPage() {
                         </Popover>
 
                         <Tooltip title={t("common.export")}>
-                            <Button size="large" icon={<DownloadOutlined />} style={{ borderRadius: 8 }} />
+                            <Button size="large" icon={<DownloadOutlined />} style={{ borderRadius: 8 }} onClick={handleExport} />
                         </Tooltip>
                     </div>
                 </div>
