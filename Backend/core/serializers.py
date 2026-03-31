@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
-from .models import DelegationRule
+from .models import DelegationRule, UserPreference
 
 
 User = get_user_model()
@@ -64,3 +64,27 @@ class DelegationRuleSerializer(serializers.ModelSerializer):
             if duplicate_qs.exists():
                 raise serializers.ValidationError("An identical delegation rule already exists.")
         return attrs
+
+
+class UserPreferenceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserPreference
+        fields = ["id", "scope", "key", "value", "created_at", "updated_at"]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+    def validate_scope(self, value):
+        value = (value or "").strip()
+        if not value:
+            raise serializers.ValidationError("Scope is required.")
+        return value
+
+    def validate_key(self, value):
+        value = (value or "").strip()
+        if not value:
+            raise serializers.ValidationError("Key is required.")
+        return value
+
+    def validate_value(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Value must be an object.")
+        return value

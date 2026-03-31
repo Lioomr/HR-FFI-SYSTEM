@@ -90,3 +90,28 @@ class CheckOutResponseSerializer(serializers.ModelSerializer):
     class Meta:
         model = AttendanceRecord
         fields = ["id", "date", "check_in_at", "check_out_at", "status"]
+
+from .models import BioTimeConfig, BioTimeEmployeeMap
+
+class BioTimeConfigSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BioTimeConfig
+        fields = ["server_ip", "server_port", "username", "password", "is_active", "last_sync_time"]
+        read_only_fields = ["last_sync_time"]
+        extra_kwargs = {'password': {'write_only': True}}
+        
+    def to_representation(self, instance):
+        # Always output password as empty to frontend or masked to avoid leaking
+        ret = super().to_representation(instance)
+        ret['password'] = "" 
+        return ret
+
+
+class BioTimeEmployeeMapSerializer(serializers.ModelSerializer):
+    employee_name = serializers.CharField(source="employee_profile.user.get_full_name", read_only=True)
+    department = serializers.CharField(source="employee_profile.department", read_only=True)
+    
+    class Meta:
+        model = BioTimeEmployeeMap
+        fields = ["id", "employee_profile", "employee_name", "department", "biotime_emp_code", "created_at"]
+        read_only_fields = ["id", "created_at", "employee_name", "department"]

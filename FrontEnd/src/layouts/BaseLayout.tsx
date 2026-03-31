@@ -130,6 +130,7 @@ function getTitle(pathname: string, t: (key: string, fallback?: string) => strin
   if (pathname.startsWith("/admin/audit-logs")) return t("layout.auditLogs");
   if (pathname.startsWith("/admin/workflow/delegations")) return t("layout.delegationRules", "Delegation Rules");
   if (pathname.startsWith("/admin/settings")) return t("layout.systemSettings");
+  if (pathname.startsWith("/admin/biotime")) return t("bioTime.pageTitle", "ZKTeco BioTime 8.5 Settings");
   if (pathname.startsWith("/hr/dashboard")) return t("layout.dashboardOverview");
   if (pathname.startsWith("/hr/invites")) return t("layout.invites");
   if (pathname.startsWith("/hr/workflow/delegations")) return t("layout.delegationRules", "Delegation Rules");
@@ -261,6 +262,7 @@ export default function BaseLayout() {
         { key: "/admin/audit-logs", icon: <FileSearchOutlined />, label: <Link to="/admin/audit-logs">{t("layout.auditLogs")}</Link> },
         { key: "/admin/workflow/delegations", icon: <UserSwitchOutlined />, label: <Link to="/admin/workflow/delegations">{t("layout.delegationRules", "Delegation Rules")}</Link> },
         { key: "/admin/settings", icon: <SettingOutlined />, label: <Link to="/admin/settings">{t("layout.settings")}</Link> },
+        { key: "/admin/biotime", icon: <SettingOutlined />, label: <Link to="/admin/biotime">{t("bioTime.pageTitle", "BioTime Settings")}</Link> },
       ],
     },
     {

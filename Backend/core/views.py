@@ -15,7 +15,7 @@ from attendance.models import AttendanceRecord
 from audit.utils import audit
 from core.permissions import IsHRManagerOrAdmin
 from core.responses import success
-from core.serializers import DelegationRuleSerializer
+from core.serializers import DelegationRuleSerializer, UserPreferenceSerializer
 from core.services import (
     build_pending_approval_item,
     get_pending_approvals_for_user,
@@ -28,7 +28,7 @@ from loans.models import LoanRequest
 from payroll.models import PayrollRun
 from audit.models import AuditLog
 from audit.views import apply_filters, AuditPagination
-from .models import DelegationRule
+from .models import DelegationRule, UserPreference
 from .permissions import get_role
 
 
@@ -431,3 +431,35 @@ class DelegationRuleDetailView(APIView):
             rule.delete()
             audit(request, "delegation_rule_deleted", entity="delegation_rule", entity_id=rule_id, metadata=metadata)
         return success(message="Delegation rule deleted.")
+
+
+class UserPreferenceDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, scope, key):
+        preference = UserPreference.objects.filter(user=request.user, scope=scope, key=key).first()
+        if preference is None:
+            return success(
+                {
+                    "scope": scope,
+                    "key": key,
+                    "value": {},
+                    "created_at": None,
+                    "updated_at": None,
+                }
+            )
+        return success(UserPreferenceSerializer(preference).data)
+
+    def put(self, request, scope, key):
+        preference = UserPreference.objects.filter(user=request.user, scope=scope, key=key).first()
+        serializer = UserPreferenceSerializer(preference, data={"scope": scope, "key": key, **request.data})
+        serializer.is_valid(raise_exception=True)
+        saved = serializer.save(user=request.user)
+        audit(
+            request,
+            "user_preference_saved",
+            entity="user_preference",
+            entity_id=saved.id,
+            metadata={"scope": saved.scope, "key": saved.key},
+        )
+        return success(UserPreferenceSerializer(saved).data)

@@ -20,7 +20,7 @@ from core.services import (
 )
 from employees.models import EmployeeProfile
 from hr_reference.models import Department, Position
-from core.models import DelegationRule
+from core.models import DelegationRule, UserPreference
 from leaves.models import LeaveRequest, LeaveType
 from loans.models import LoanRequest
 
@@ -350,3 +350,43 @@ class DelegationRuleApiTests(APITestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data["data"]["items"]), 1)
+
+
+class UserPreferenceApiTests(APITestCase):
+    def setUp(self):
+        self.user_model = get_user_model()
+        self.user = self.user_model.objects.create_user(
+            email="prefs@test.com",
+            password="StrongPass123!",
+            full_name="Prefs User",
+        )
+
+    def test_get_missing_preference_returns_empty_value(self):
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.get("/api/core/preferences/tables/hr-employees-list/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"]["scope"], "tables")
+        self.assertEqual(response.data["data"]["key"], "hr-employees-list")
+        self.assertEqual(response.data["data"]["value"], {})
+
+    def test_put_preference_upserts_and_audits(self):
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.put(
+            "/api/core/preferences/tables/hr-employees-list/",
+            {
+                "value": {
+                    "search": "saudi",
+                    "pageSize": 50,
+                    "visibleColumns": ["full_name", "department"],
+                }
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        preference = UserPreference.objects.get(user=self.user, scope="tables", key="hr-employees-list")
+        self.assertEqual(preference.value["pageSize"], 50)
+        self.assertTrue(AuditLog.objects.filter(action="user_preference_saved", entity_id=preference.id).exists())
