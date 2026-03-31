@@ -1,5 +1,6 @@
 import { api } from "./apiClient";
 import type { ApiResponse, PaginatedResponse } from "./apiTypes";
+import type { WorkflowSnapshot } from "../../types/workflow";
 
 export type LoanStatus =
   | "submitted"
@@ -56,6 +57,7 @@ export interface LoanRequest {
     note?: string;
   }>;
   created_at?: string;
+  workflow?: WorkflowSnapshot;
 }
 
 export async function getManagerLoanRequests(params?: { status?: LoanStatus; page?: number; page_size?: number }) {

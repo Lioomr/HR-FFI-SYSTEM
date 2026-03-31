@@ -1,6 +1,7 @@
 import { api } from "./apiClient";
 import type { ApiResponse } from "./apiTypes";
 import type { AttendanceFilters } from "../../types/attendance";
+import type { WorkflowSnapshot } from "../../types/workflow";
 
 // Attendance record type
 export interface AttendanceRecord {
@@ -16,6 +17,7 @@ export interface AttendanceRecord {
   is_overridden: boolean;
   notes?: string;
   override_reason?: string;
+  workflow?: WorkflowSnapshot;
   created_at: string;
   updated_at: string;
 }

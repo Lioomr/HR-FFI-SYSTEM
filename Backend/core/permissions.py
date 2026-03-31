@@ -32,7 +32,16 @@ def has_direct_reports(user):
     if manager_profile:
         manager_match = manager_match | Q(manager_profile=manager_profile)
 
-    return EmployeeProfile.objects.filter(manager_match).exists()
+    if EmployeeProfile.objects.filter(manager_match).exists():
+        return True
+
+    from core.delegation import get_delegated_manager_user_ids
+
+    delegated_manager_ids = get_delegated_manager_user_ids(user)
+    if not delegated_manager_ids:
+        return False
+
+    return EmployeeProfile.objects.filter(Q(manager_id__in=delegated_manager_ids) | Q(manager_profile__user_id__in=delegated_manager_ids)).exists()
 
 
 class IsSystemAdmin(BasePermission):
@@ -81,14 +90,31 @@ def is_department_ceo_approver_user(user):
 
     profile = getattr(user, "employee_profile", None)
     if not profile:
-        return False
+        return _is_delegated_role_user(user, "ceo")
 
     return (
         profile.employment_status == EmployeeProfile.EmploymentStatus.ACTIVE
         and profile.department_ref_id == CEO_APPROVER_DEPARTMENT_ID
-    )
+    ) or _is_delegated_role_user(user, "ceo")
+
+
+def is_hr_workflow_approver_user(user):
+    if not user or not user.is_authenticated:
+        return False
+    return get_role(user) in ["SystemAdmin", "HRManager"] or _is_delegated_role_user(user, "hr")
+
+
+def _is_delegated_role_user(user, role: str) -> bool:
+    from core.delegation import is_user_delegated_for_role
+
+    return is_user_delegated_for_role(user, role)
 
 
 class IsDepartmentCEOApprover(BasePermission):
     def has_permission(self, request, view):
         return is_department_ceo_approver_user(request.user)
+
+
+class IsHRWorkflowApprover(BasePermission):
+    def has_permission(self, request, view):
+        return is_hr_workflow_approver_user(request.user)

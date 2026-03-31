@@ -3,9 +3,11 @@ from datetime import date
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from core.models import DelegationRule
 from employees.models import EmployeeProfile
 from leaves.models import LeaveRequest, LeaveType
 
@@ -120,10 +122,19 @@ class ManagerWorkflowTests(APITestCase):
             hire_date=date(2021, 1, 1),
             manager_profile=self.employee_manager_profile,
         )
+        self.delegate_user = User.objects.create_user(email="delegate@example.com", password="password")
+        self.delegate_profile = EmployeeProfile.objects.create(
+            user=self.delegate_user,
+            employee_id="EMP-DEL",
+            department="Operations",
+            job_title="Delegate",
+            hire_date=date(2021, 1, 1),
+        )
 
         # URLs
         self.requests_url = "/api/leaves/leave-requests/"
         self.manager_inbox_url = "/api/leaves/manager/leave-requests/"
+        self.ceo_requests_url = "/api/leaves/ceo/leave-requests/"
 
     def test_submission_with_manager_sets_pending_manager(self):
         """
@@ -257,6 +268,33 @@ class ManagerWorkflowTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["data"]["status"], LeaveRequest.RequestStatus.APPROVED)
 
+    def test_delegated_hr_can_approve_leave_request(self):
+        DelegationRule.objects.create(
+            from_user=self.hr_user,
+            to_user=self.delegate_user,
+            start_at=timezone.now(),
+            created_by=self.hr_user,
+        )
+        lr = LeaveRequest.objects.create(
+            employee=self.employee_user,
+            leave_type=self.leave_type,
+            start_date=date(2026, 6, 10),
+            end_date=date(2026, 6, 11),
+            status=LeaveRequest.RequestStatus.PENDING_HR,
+        )
+
+        self.client.force_authenticate(user=self.delegate_user)
+        detail_response = self.client.get(f"{self.requests_url}{lr.id}/")
+        self.assertEqual(detail_response.status_code, status.HTTP_200_OK)
+
+        approve_response = self.client.post(
+            f"{self.requests_url}{lr.id}/approve/",
+            {"comment": "Delegated HR approval"},
+            format="json",
+        )
+        self.assertEqual(approve_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(approve_response.data["data"]["status"], LeaveRequest.RequestStatus.APPROVED)
+
     def test_manager_can_preview_leave_document(self):
         lr = LeaveRequest.objects.create(
             employee=self.employee_user,
@@ -331,6 +369,31 @@ class ManagerWorkflowTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["data"]["status"], LeaveRequest.RequestStatus.PENDING_HR)
+
+    def test_delegated_ceo_can_approve_leave_request(self):
+        DelegationRule.objects.create(
+            from_user=self.ceo_user,
+            to_user=self.delegate_user,
+            start_at=timezone.now(),
+            created_by=self.ceo_user,
+        )
+        request_obj = LeaveRequest.objects.create(
+            employee=self.employee_user,
+            leave_type=self.leave_type,
+            start_date=date(2026, 10, 8),
+            end_date=date(2026, 10, 9),
+            status=LeaveRequest.RequestStatus.PENDING_CEO,
+        )
+
+        self.client.force_authenticate(user=self.delegate_user)
+        response = self.client.post(
+            f"{self.ceo_requests_url}{request_obj.id}/approve/",
+            {"comment": "Delegated CEO approval"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"]["status"], LeaveRequest.RequestStatus.APPROVED)
 
     def test_cfo_can_approve_direct_report_leave_from_manager_endpoint(self):
         request_obj = LeaveRequest.objects.create(

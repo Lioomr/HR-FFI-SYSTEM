@@ -38,6 +38,8 @@ def is_accountant_user(user):
 
     if _is_group_member(user, "SystemAdmin"):
         return True
+    if _is_delegated_role_user(user, "disbursement"):
+        return True
 
     profile = getattr(user, "employee_profile", None)
     if not _is_active_profile(profile):
@@ -47,13 +49,15 @@ def is_accountant_user(user):
     return (
         profile.department_ref_id == config.finance_department_id
         and profile.position_ref_id == config.finance_position_id
-    )
+    ) or _is_delegated_role_user(user, "disbursement")
 
 
 def is_hr_approver_user(user):
     if not user or not user.is_authenticated:
         return False
-    return _is_group_member(user, "SystemAdmin") or _is_group_member(user, "HRManager")
+    return _is_group_member(user, "SystemAdmin") or _is_group_member(user, "HRManager") or _is_delegated_role_user(
+        user, "hr"
+    )
 
 
 class IsEmployeeOnly(BasePermission):
@@ -89,24 +93,34 @@ def is_cfo_approver_user(user):
 
     if _is_group_member(user, "SystemAdmin") or _is_group_member(user, "CFO"):
         return True
+    if _is_delegated_role_user(user, "cfo"):
+        return True
 
     profile = getattr(user, "employee_profile", None)
     if not _is_active_profile(profile):
         return False
 
     config = get_active_workflow_config()
-    return profile.position_ref_id == config.cfo_position_id
+    return profile.position_ref_id == config.cfo_position_id or _is_delegated_role_user(user, "cfo")
 
 
 def is_ceo_approver_user(user):
     if not user or not user.is_authenticated:
         return False
+    if _is_delegated_role_user(user, "ceo"):
+        return True
 
     profile = getattr(user, "employee_profile", None)
     if not _is_active_profile(profile):
         return False
 
-    return profile.department_ref_id == CEO_APPROVER_DEPARTMENT_ID
+    return profile.department_ref_id == CEO_APPROVER_DEPARTMENT_ID or _is_delegated_role_user(user, "ceo")
+
+
+def _is_delegated_role_user(user, role: str) -> bool:
+    from core.delegation import is_user_delegated_for_role
+
+    return is_user_delegated_for_role(user, role)
 
 
 def is_cfo_requester_profile(profile):

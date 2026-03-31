@@ -15,6 +15,7 @@ urlpatterns = [
     re_path(r"^payroll-runs/(?P<pk>\d+)/export$", PayrollRunExportView.as_view()),
     path("", include("payroll.urls")),
     path("api/", include("announcements.urls")),
+    path("api/core/", include("core.urls")),
     path("api/", include("employees.urls")),
     path("api/hr/summary/", HrSummaryView.as_view()),
     path("api/hr/recent-activity/", HrRecentActivityView.as_view()),

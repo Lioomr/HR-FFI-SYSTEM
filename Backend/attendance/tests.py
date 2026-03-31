@@ -8,6 +8,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from audit.models import AuditLog
+from core.models import DelegationRule
 from employees.models import EmployeeProfile
 from hr_reference.models import Department, Position
 
@@ -128,6 +129,14 @@ class AttendanceTests(TestCase):
         self.manager_profile = EmployeeProfile.objects.create(
             user=self.manager_user,
             employee_id="EMP009",
+            department_ref=self.base_dept,
+            position_ref=self.base_position,
+            hire_date=date.today(),
+        )
+        self.delegate_user = User.objects.create_user(email="attendance-delegate@ffi.com", password="password")
+        self.delegate_profile = EmployeeProfile.objects.create(
+            user=self.delegate_user,
+            employee_id="EMP010",
             department_ref=self.base_dept,
             position_ref=self.base_position,
             hire_date=date.today(),
@@ -297,6 +306,28 @@ class AttendanceTests(TestCase):
         approve_response = self.client.post(f"/api/attendance/ceo/attendance/{record_id}/approve/", {"notes": "Approved"})
         self.assertEqual(approve_response.status_code, status.HTTP_200_OK)
         self.assertEqual(approve_response.data["data"]["status"], "PRESENT")
+
+    def test_delegated_ceo_can_approve_attendance(self):
+        DelegationRule.objects.create(
+            from_user=self.ceo_approver,
+            to_user=self.delegate_user,
+            start_at=timezone.now(),
+            created_by=self.ceo_approver,
+        )
+        record = AttendanceRecord.objects.create(
+            employee_profile=self.profile1,
+            date=timezone.localdate(),
+            status=AttendanceRecord.Status.PENDING_CEO,
+        )
+
+        self.client.force_authenticate(user=self.delegate_user)
+        response = self.client.post(
+            f"/api/attendance/ceo/attendance/{record.id}/approve/",
+            {"notes": "Delegated CEO approval"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"]["status"], AttendanceRecord.Status.PRESENT)
 
     def test_ceo_manager_attendance_scope_is_direct_reports_only(self):
         own_record = AttendanceRecord.objects.create(

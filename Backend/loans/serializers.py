@@ -4,6 +4,7 @@ from decimal import Decimal
 from django.utils import timezone
 from rest_framework import serializers
 
+from core.services import get_workflow_snapshot
 from employees.models import EmployeeProfile
 
 from .models import LoanRequest
@@ -13,6 +14,7 @@ class LoanRequestReadSerializer(serializers.ModelSerializer):
     employee = serializers.SerializerMethodField()
     decision_history = serializers.SerializerMethodField()
     target_deduction_period = serializers.SerializerMethodField()
+    workflow = serializers.SerializerMethodField()
 
     class Meta:
         model = LoanRequest
@@ -46,6 +48,7 @@ class LoanRequestReadSerializer(serializers.ModelSerializer):
             "target_deduction_month",
             "target_deduction_period",
             "decision_history",
+            "workflow",
             "created_at",
             "updated_at",
         ]
@@ -138,6 +141,11 @@ class LoanRequestReadSerializer(serializers.ModelSerializer):
         if obj.target_deduction_year and obj.target_deduction_month:
             return f"{obj.target_deduction_year}-{obj.target_deduction_month:02d}"
         return None
+
+    def get_workflow(self, obj):
+        request = self.context.get("request")
+        actor = getattr(request, "user", None) if request else None
+        return get_workflow_snapshot(obj, actor=actor)
 
 
 class LoanRequestCreateSerializer(serializers.Serializer):
