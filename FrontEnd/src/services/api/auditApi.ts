@@ -12,6 +12,7 @@ export type AuditLogsParams = {
   to?: string;
   search?: string;
   limit?: number;
+  file_format?: "csv" | "xlsx";
 };
 
 export async function listAuditLogs(params: AuditLogsParams = {}) {

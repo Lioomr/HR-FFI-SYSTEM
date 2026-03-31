@@ -17,6 +17,7 @@ from rest_framework.response import Response
 
 from announcements.models import Announcement
 from audit.utils import audit
+from core.exporting import audit_export, xlsx_response
 from core.pagination import EmployeePagination, StandardPagination
 from core.permissions import get_role, has_direct_reports
 from core.responses import error, success
@@ -307,6 +308,51 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             return self.get_paginated_response(serializer.data)
 
         return success({"results": serializer.data, "count": qs.count()})
+
+    @action(detail=False, methods=["get"], url_path="export")
+    def export(self, request):
+        qs = self._apply_filters(self.get_queryset()).order_by("full_name", "employee_id", "id")
+        headers = [
+            "Employee ID",
+            "Full Name",
+            "Email",
+            "Department",
+            "Position",
+            "Manager",
+            "Nationality",
+            "Join Date",
+            "Status",
+        ]
+        rows = [
+            [
+                profile.employee_id,
+                profile.full_name,
+                profile.user.email if profile.user_id else "",
+                profile.department_ref.name if profile.department_ref_id else profile.department,
+                profile.position_ref.name if profile.position_ref_id else profile.job_title,
+                (
+                    profile.manager_profile.full_name
+                    if profile.manager_profile_id
+                    else (profile.manager.full_name if profile.manager_id else "")
+                ),
+                profile.nationality or profile.nationality_en or profile.nationality_ar or "",
+                profile.hire_date.isoformat() if profile.hire_date else "",
+                profile.employment_status,
+            ]
+            for profile in qs.iterator(chunk_size=2000)
+        ]
+        audit_export(
+            request,
+            entity="EmployeeProfile",
+            export_format="xlsx",
+            metadata={"count": len(rows)},
+        )
+        return xlsx_response(
+            headers=headers,
+            rows=rows,
+            filename="employees.xlsx",
+            sheet_name="Employees",
+        )
 
     def retrieve(self, request, *args, **kwargs):
         response = super().retrieve(request, *args, **kwargs)

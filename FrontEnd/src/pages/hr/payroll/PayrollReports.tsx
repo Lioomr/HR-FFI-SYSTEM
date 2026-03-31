@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button, Card, Descriptions, Alert, Typography, Grid, Space, notification } from "antd";
 import { FilePdfOutlined, FileExcelOutlined, DownloadOutlined } from "@ant-design/icons";
+import { triggerBlobDownload } from "../../../services/api/downloads";
 import { exportPayrollReport } from "../../../services/api/payrollApi";
 import { useI18n } from "../../../i18n/useI18n";
 
@@ -20,25 +21,9 @@ export default function PayrollReports({ runId }: PayrollReportsProps) {
     const handleExport = async (format: "csv" | "pdf" | "xlsx") => {
         setDownloading(format);
         try {
-            // Note: The API must return a Blob. If using axios, responseType: 'blob' is crucial.
             const blob = await exportPayrollReport(runId, format);
-
-            // Create a temporary URL
-            const url = window.URL.createObjectURL(blob);
-
-            // Temporary anchor for download
-            const link = document.createElement("a");
-            link.href = url;
-
             const ext = format === "xlsx" ? "xlsx" : format;
-            link.setAttribute("download", `payroll_run_${runId}_${format}.${ext}`);
-
-            document.body.appendChild(link);
-            link.click();
-
-            // Cleanup
-            link.remove();
-            window.URL.revokeObjectURL(url);
+            triggerBlobDownload(blob, `payroll_run_${runId}_${format}.${ext}`);
             notification.success({
                 message: t("common.success"),
                 description: t("payroll.runDetails.exportReady"),

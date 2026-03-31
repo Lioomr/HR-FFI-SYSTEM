@@ -105,6 +105,14 @@ export async function listEmployees(
   return data;
 }
 
+export async function exportEmployees(params?: ListEmployeesParams): Promise<Blob> {
+  const response = await api.get("/employees/export", {
+    params,
+    responseType: "blob",
+  });
+  return response.data;
+}
+
 /**
  * Get a single employee by ID
  */
