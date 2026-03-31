@@ -6,6 +6,7 @@ from django.db.models import Q
 from django.utils import timezone
 from rest_framework import serializers
 
+from core.services import get_workflow_snapshot
 from employees.models import EmployeeProfile
 
 from .models import LeaveBalanceAdjustment, LeaveRequest, LeaveType
@@ -52,6 +53,7 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
     payment_breakdown = serializers.SerializerMethodField()
     payment_status = serializers.SerializerMethodField()
     deducted_from_leave_type = serializers.SerializerMethodField()
+    workflow = serializers.SerializerMethodField()
 
     class Meta:
         model = LeaveRequest
@@ -122,6 +124,11 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
         if code in {"EMERGENCY", "EMERGENCY_LEAVE"}:
             return "ANNUAL"
         return code
+
+    def get_workflow(self, obj):
+        request = self.context.get("request")
+        actor = getattr(request, "user", None) if request else None
+        return get_workflow_snapshot(obj, actor=actor)
 
 
 class LeaveRequestCreateSerializer(serializers.ModelSerializer):

@@ -3,6 +3,7 @@ from .bird_email_service import (
     example_email_usage,
     send_announcement_notification_email,
     send_document_expiry_reminder_email,
+    send_delegation_notification_email,
     send_leave_approved_email,
     send_leave_rejected_email,
     send_leave_request_submitted_email,
@@ -19,6 +20,15 @@ from .pending_approval_email import (
     notify_users_for_pending_status,
 )
 from .request_submission_email import send_request_submission_email
+from .workflow_engine import (
+    build_pending_approval_item,
+    can_user_act_on_instance,
+    get_pending_approvals_for_role,
+    get_pending_approvals_for_user,
+    get_workflow_snapshot,
+    normalize_role_for_pending_approvals,
+    sync_workflow,
+)
 from .whatsapp_service import WHATSAPP_TEMPLATE_REGISTRY, BirdWhatsAppService, WhatsAppService, get_template_info
 
 __all__ = [
@@ -36,11 +46,19 @@ __all__ = [
     "get_disbursement_approver_users",
     "notify_users_for_pending_status",
     "send_request_submission_email",
+    "sync_workflow",
+    "get_workflow_snapshot",
+    "can_user_act_on_instance",
+    "get_pending_approvals_for_role",
+    "get_pending_approvals_for_user",
+    "normalize_role_for_pending_approvals",
+    "build_pending_approval_item",
     "BirdEmailService",
     "send_leave_request_submitted_email",
     "send_leave_approved_email",
     "send_leave_rejected_email",
     "send_document_expiry_reminder_email",
+    "send_delegation_notification_email",
     "send_announcement_notification_email",
     "send_user_invite_email",
     "example_email_usage",

@@ -12,7 +12,7 @@ export interface HRSummary {
   pending_approvals: Array<{
     id: number;
     name: string;
-    request_type: "LEAVE" | "ATTENDANCE";
+    request_type: "LEAVE" | "ATTENDANCE" | "LOAN";
     action: string;
     time: string;
     avatar: string;

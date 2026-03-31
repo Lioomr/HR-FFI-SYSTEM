@@ -21,6 +21,7 @@ import {
   BellOutlined,
   UserOutlined,
   AppstoreOutlined,
+  UserSwitchOutlined,
 } from "@ant-design/icons";
 import type { MenuProps } from "antd";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -127,9 +128,11 @@ function getTitle(pathname: string, t: (key: string, fallback?: string) => strin
   if (pathname.startsWith("/admin/users")) return t("layout.userManagement");
   if (pathname.startsWith("/admin/invites")) return t("layout.invites");
   if (pathname.startsWith("/admin/audit-logs")) return t("layout.auditLogs");
+  if (pathname.startsWith("/admin/workflow/delegations")) return t("layout.delegationRules", "Delegation Rules");
   if (pathname.startsWith("/admin/settings")) return t("layout.systemSettings");
   if (pathname.startsWith("/hr/dashboard")) return t("layout.dashboardOverview");
   if (pathname.startsWith("/hr/invites")) return t("layout.invites");
+  if (pathname.startsWith("/hr/workflow/delegations")) return t("layout.delegationRules", "Delegation Rules");
   if (pathname.startsWith("/hr")) return t("layout.hrManagement");
   if (pathname.startsWith("/manager/dashboard")) return t("layout.managerDashboard", "Manager Dashboard");
   if (pathname.startsWith("/manager/team-requests")) return t("layout.teamRequests", "Team Requests");
@@ -256,6 +259,7 @@ export default function BaseLayout() {
         { key: "/admin/dashboard", icon: <DashboardOutlined />, label: <Link to="/admin/dashboard">{t("layout.dashboard")}</Link> },
         { key: "/admin/announcements", icon: <BellOutlined />, label: <Link to="/admin/announcements">{t("layout.announcements", "Announcements")}</Link> },
         { key: "/admin/audit-logs", icon: <FileSearchOutlined />, label: <Link to="/admin/audit-logs">{t("layout.auditLogs")}</Link> },
+        { key: "/admin/workflow/delegations", icon: <UserSwitchOutlined />, label: <Link to="/admin/workflow/delegations">{t("layout.delegationRules", "Delegation Rules")}</Link> },
         { key: "/admin/settings", icon: <SettingOutlined />, label: <Link to="/admin/settings">{t("layout.settings")}</Link> },
       ],
     },
@@ -285,6 +289,7 @@ export default function BaseLayout() {
         { key: "/hr/leave/requests", icon: <CalendarOutlined />, label: <Link to="/hr/leave/requests">{t("layout.leaveInbox")}</Link> },
         { key: "/hr/loan-requests", icon: <DollarOutlined />, label: <Link to="/hr/loan-requests">{t("layout.loanInbox", "Loan Inbox")}</Link> },
         { key: "/hr/attendance", icon: <ClockCircleOutlined />, label: <Link to="/hr/attendance">{t("layout.attendanceApprovals", "Attendance Approvals")}</Link> },
+        { key: "/hr/workflow/delegations", icon: <UserSwitchOutlined />, label: <Link to="/hr/workflow/delegations">{t("layout.delegationRules", "Delegation Rules")}</Link> },
       ],
     },
     {

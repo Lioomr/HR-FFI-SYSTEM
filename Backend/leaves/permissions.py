@@ -65,7 +65,13 @@ class IsManagerOfEmployee(BasePermission):
             and manager_profile.id == request.user.employee_profile.id
         ):
             return True
-        return bool(profile.manager_id == request.user.id)
+        if profile.manager_id == request.user.id:
+            return True
+
+        from core.delegation import is_user_delegate_for_manager
+
+        manager_user = manager_profile.user if manager_profile and manager_profile.user_id else profile.manager
+        return bool(manager_user and is_user_delegate_for_manager(request.user, manager_user))
 
 
 class IsEmployeeOnly(BasePermission):

@@ -25,3 +25,13 @@ build/
 *.xls
 *.xlsx
 *.xlsm
+
+# Local tooling and scratch files
+.cursor/
+.cursorrules
+.playwright-cli/
+tmp/
+ai_evals/
+.github/copilot-instructions.md
+leave_request_4 (2).pdf
+*AutoRecovered*.pdf

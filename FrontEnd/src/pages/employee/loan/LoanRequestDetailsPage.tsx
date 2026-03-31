@@ -11,6 +11,8 @@ import { getMyLoanRequest, type LoanRequest, type LoanStatus } from "../../../se
 import AmountWithSAR from "../../../components/ui/AmountWithSAR";
 import { useI18n } from "../../../i18n/useI18n";
 import LoanApprovalMap from "../../../components/loans/LoanApprovalMap";
+import ApprovalTimeline from "../../../components/requests/ApprovalTimeline";
+import PendingActionBanner from "../../../components/requests/PendingActionBanner";
 
 function statusColor(status: LoanStatus) {
   switch (status) {
@@ -114,6 +116,10 @@ export default function EmployeeLoanRequestDetailsPage() {
         {!item ? null : (
           <>
             <div style={{ marginBottom: 24 }}>
+              <PendingActionBanner workflow={item.workflow} />
+            </div>
+
+            <div style={{ marginBottom: 24 }}>
               <LoanApprovalMap request={item} t={t} />
             </div>
 
@@ -169,6 +175,9 @@ export default function EmployeeLoanRequestDetailsPage() {
               </Title>
             </div>
 
+            {item.workflow?.history?.length ? (
+              <ApprovalTimeline workflow={item.workflow} />
+            ) : (
             <div style={{ position: 'relative', paddingLeft: 4 }}>
               {/* Vertical flow line */}
               <div style={{ position: 'absolute', left: 15, top: 8, bottom: 12, width: 2, background: 'linear-gradient(to bottom, #f97316 0%, #e2e8f0 25%)', opacity: 0.35, borderRadius: 2 }} />
@@ -222,6 +231,7 @@ export default function EmployeeLoanRequestDetailsPage() {
                 );
               })}
             </div>
+            )}
           </>
         )}
       </Card>

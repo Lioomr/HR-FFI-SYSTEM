@@ -2,6 +2,7 @@ import mimetypes
 import os
 from io import BytesIO
 from datetime import date
+from glob import glob
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -14,6 +15,7 @@ from reportlab.lib.utils import ImageReader, simpleSplit
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
+from pypdf import PdfReader, PdfWriter
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -22,16 +24,19 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from audit.utils import audit
+from core.delegation import get_delegated_manager_user_ids
 from core.pagination import StandardPagination
-from core.permissions import IsDepartmentCEOApprover, get_role
+from core.permissions import IsDepartmentCEOApprover, IsHRWorkflowApprover, get_role
 from core.responses import error, success
 from core.services import (
+    can_user_act_on_instance,
     get_ceo_approver_users,
     get_direct_manager_user,
     get_hr_approver_users,
     notify_users_for_pending_status,
     send_leave_rejected_email,
     send_request_submission_email,
+    sync_workflow,
 )
 from employees.models import EmployeeProfile
 from employees.permissions import IsHRManagerOrAdmin
@@ -436,7 +441,7 @@ def _build_leave_request_pdf_legacy(instance: LeaveRequest):
     return buffer.getvalue()
 
 
-def _build_leave_request_pdf(instance: LeaveRequest):
+def _build_leave_request_pdf_fallback(instance: LeaveRequest):
     def _register_pdf_fonts():
         regular_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
         bold_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
@@ -694,6 +699,270 @@ def _build_leave_request_pdf(instance: LeaveRequest):
     return buffer.getvalue()
 
 
+def _build_leave_request_pdf(instance: LeaveRequest):
+    def _register_pdf_fonts():
+        font_candidates = {
+            "DejaVuSans": [
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                "C:\\Windows\\Fonts\\DejaVuSans.ttf",
+                "C:\\Windows\\Fonts\\arial.ttf",
+            ],
+            "DejaVuSans-Bold": [
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                "C:\\Windows\\Fonts\\DejaVuSans-Bold.ttf",
+                "C:\\Windows\\Fonts\\arialbd.ttf",
+            ],
+        }
+        for font_name, candidates in font_candidates.items():
+            if font_name in pdfmetrics.getRegisteredFontNames():
+                continue
+            for path in candidates:
+                if os.path.exists(path):
+                    pdfmetrics.registerFont(TTFont(font_name, path))
+                    break
+
+    def _shape_ar(text):
+        value = str(text or "").strip()
+        if not value:
+            return ""
+        if arabic_reshaper and get_display and any("\u0600" <= ch <= "\u06FF" for ch in value):
+            return get_display(arabic_reshaper.reshape(value))
+        return value
+
+    def _font_pair():
+        regular = "DejaVuSans" if "DejaVuSans" in pdfmetrics.getRegisteredFontNames() else "Helvetica"
+        bold = "DejaVuSans-Bold" if "DejaVuSans-Bold" in pdfmetrics.getRegisteredFontNames() else "Helvetica-Bold"
+        return regular, bold
+
+    def _template_path():
+        search_roots = [str(settings.BASE_DIR.parent), str(settings.BASE_DIR)]
+        explicit_names = [
+            "طلب إجازة (AutoRecovered).pdf",
+            "طلب إجازة.pdf",
+            "leave-request-template.pdf",
+        ]
+        for root in search_roots:
+            for name in explicit_names:
+                candidate = os.path.join(root, name)
+                if os.path.exists(candidate):
+                    return candidate
+            for candidate in glob(os.path.join(root, "*.pdf")):
+                filename = os.path.basename(candidate)
+                if "AutoRecovered" in filename or "طلب إجازة" in filename or "leave request" in filename.lower():
+                    return candidate
+        return ""
+
+    def _profile_for(user):
+        try:
+            return user.employee_profile
+        except Exception:
+            return None
+
+    def _display_name(user):
+        return str(getattr(user, "full_name", "") or getattr(user, "email", "") or "-")
+
+    def _display_manager(profile):
+        if not profile:
+            return "-"
+        manager_profile = getattr(profile, "manager_profile", None)
+        manager_user = getattr(manager_profile, "user", None) if manager_profile else None
+        manager_name = (
+            getattr(manager_profile, "full_name_en", "")
+            or getattr(manager_profile, "full_name", "")
+            or getattr(manager_user, "full_name", "")
+            or getattr(manager_user, "email", "")
+        )
+        return str(manager_name or "-")
+
+    def _project_department(profile):
+        if not profile:
+            return "-"
+        department = getattr(profile, "department_name_en", "") or getattr(profile, "department", "")
+        task_group = getattr(getattr(profile, "task_group_ref", None), "name", "")
+        parts = [part for part in [department, task_group] if part]
+        return " / ".join(parts) if parts else "-"
+
+    def _find_balance(profile):
+        if not profile:
+            return "-"
+        try:
+            balances = calculate_leave_balance(instance.employee, instance.start_date.year, profile=profile)
+        except Exception:
+            return "-"
+        for balance in balances:
+            if balance["leave_type_id"] == instance.leave_type_id:
+                return str(balance["remaining_days"])
+        return "-"
+
+    def _leave_flags():
+        code = str(instance.leave_type.code or instance.leave_type.name or "").strip().upper().replace(" ", "_")
+        accrued = code in {"ANNUAL", "ANNUAL_LEAVE"}
+        unpaid = not bool(instance.leave_type.is_paid) or code in {"EXCEPTIONAL", "EXCEPTIONAL_LEAVE"}
+        return {
+            "accrued": accrued,
+            "unpaid": unpaid,
+            "other": not accrued and not unpaid,
+        }
+
+    def _request_summary():
+        summary_parts = [f"Status: {instance.get_status_display()}"]
+        if instance.reason:
+            summary_parts.append(f"Reason: {instance.reason}")
+        if instance.source == LeaveRequest.RequestSource.HR_MANUAL and instance.manual_entry_reason:
+            summary_parts.append(f"Manual note: {instance.manual_entry_reason}")
+        return " | ".join(summary_parts)
+
+    def _fit_single_line(text, font_name, size, max_width):
+        value = _shape_ar(text) or "-"
+        if pdfmetrics.stringWidth(value, font_name, size) <= max_width:
+            return value
+
+        ellipsis = "..."
+        trimmed = value
+        while trimmed and pdfmetrics.stringWidth(f"{trimmed}{ellipsis}", font_name, size) > max_width:
+            trimmed = trimmed[:-1]
+        return f"{trimmed}{ellipsis}" if trimmed else ellipsis
+
+    def _draw_text(pdf, x, y, text, *, size=8, font=None, max_width=110, align="left", max_lines=2):
+        value = _shape_ar(text) or "-"
+        chosen_font = font or regular_font
+        if max_lines == 1:
+            lines = [_fit_single_line(value, chosen_font, size, max_width)]
+        else:
+            lines = simpleSplit(value, chosen_font, size, max_width)[:max_lines] or ["-"]
+        pdf.setFont(chosen_font, size)
+        for index, line in enumerate(lines):
+            line_y = y - (index * (size + 1))
+            if align == "right":
+                pdf.drawRightString(x, line_y, line)
+            elif align == "center":
+                pdf.drawCentredString(x, line_y, line)
+            else:
+                pdf.drawString(x, line_y, line)
+
+    def _draw_checkbox(pdf, x, y, checked):
+        if not checked:
+            return
+        pdf.setFont(bold_font, 11)
+        pdf.drawCentredString(x, y, "X")
+
+    template_path = _template_path()
+    if not template_path:
+        return _build_leave_request_pdf_fallback(instance)
+
+    _register_pdf_fonts()
+    regular_font, bold_font = _font_pair()
+
+    reader = PdfReader(template_path)
+    base_page = reader.pages[0]
+    width = float(base_page.mediabox.width)
+    height = float(base_page.mediabox.height)
+
+    profile = _profile_for(instance.employee)
+    days = str(get_leave_days(instance.start_date, instance.end_date))
+    hr_name = _display_name(instance.decided_by or instance.entered_by) if (instance.decided_by or instance.entered_by) else "-"
+    flags = _leave_flags()
+    employee_name = (
+        getattr(profile, "full_name_en", "")
+        or getattr(profile, "full_name", "")
+        or getattr(instance.employee, "full_name", "")
+        or instance.employee.email
+    )
+    reference_no = str(instance.id)
+    created_date = timezone.localtime(instance.created_at).strftime("%Y-%m-%d")
+    department_project = _project_department(profile)
+
+    overlay_buffer = BytesIO()
+    pdf = canvas.Canvas(overlay_buffer, pagesize=(width, height))
+    pdf.setTitle(f"Leave Request {instance.id}")
+    pdf.setFillColorRGB(0.1, 0.1, 0.1)
+
+    # Header
+    _draw_text(pdf, 92, height - 69, reference_no, size=8, font=bold_font, max_width=115, max_lines=1)
+    _draw_text(pdf, 92, height - 85, created_date, size=8, max_width=115, max_lines=1)
+
+    # Employee info
+    _draw_text(pdf, 112, height - 118, employee_name, size=6.4, font=bold_font, max_width=152, max_lines=1)
+    _draw_text(
+        pdf,
+        418,
+        height - 118,
+        getattr(profile, "employee_number", "") or getattr(profile, "employee_id", "") or "-",
+        size=7.0,
+        max_width=72,
+        max_lines=1,
+    )
+    _draw_text(pdf, 112, height - 135, department_project, size=6.0, max_width=152, max_lines=1)
+    _draw_text(
+        pdf,
+        418,
+        height - 135,
+        getattr(profile, "job_title_en", "") or getattr(profile, "job_title", "") or "-",
+        size=6.8,
+        max_width=72,
+        max_lines=1,
+    )
+    _draw_text(pdf, 112, height - 152, getattr(profile, "national_id", "") or "-", size=6.6, max_width=152, max_lines=1)
+    _draw_text(
+        pdf,
+        418,
+        height - 152,
+        getattr(profile, "nationality_en", "") or getattr(profile, "nationality", "") or "-",
+        size=6.8,
+        max_width=72,
+        max_lines=1,
+    )
+    _draw_text(pdf, 112, height - 169, getattr(profile, "mobile", "") or "-", size=6.6, max_width=152, max_lines=1)
+    _draw_text(pdf, 418, height - 169, getattr(profile, "passport_no", "") or "-", size=6.6, max_width=72, max_lines=1)
+
+    # Request details
+    _draw_checkbox(pdf, 229, height - 191, flags["other"])
+    _draw_checkbox(pdf, 355, height - 191, flags["unpaid"])
+    _draw_checkbox(pdf, 510, height - 191, flags["accrued"])
+    
+    # First row: Duration & Substitute Employee
+    _draw_text(pdf, 72, height - 222, "-", size=6.2, max_width=98, max_lines=1)
+    _draw_text(pdf, 409, height - 222, days, size=6.7, font=bold_font, max_width=24, align="center", max_lines=1)
+    
+    # Second row: Leave starting day & Substitute Name
+    _draw_text(pdf, 72, height - 239, "-", size=5.9, max_width=98, max_lines=1)
+    _draw_text(pdf, 392, height - 239, instance.start_date.strftime("%Y-%m-%d"), size=5.9, max_width=52, align="center", max_lines=1)
+    
+    # Third row: Leave ending day & Substitute Emp No
+    _draw_text(pdf, 72, height - 256, "-", size=5.9, max_width=98, max_lines=1)
+    _draw_text(pdf, 392, height - 256, instance.end_date.strftime("%Y-%m-%d"), size=5.9, max_width=52, align="center", max_lines=1)
+    
+    # Fourth row: Destination
+    _draw_text(pdf, 392, height - 273, "-", size=5.9, max_width=52, align="center", max_lines=1)
+    
+    # Fifth row: Actual departure date
+    _draw_text(pdf, 392, height - 290, instance.start_date.strftime("%Y-%m-%d"), size=5.9, max_width=52, align="center", max_lines=1)
+    
+    # Sixth row: Actual return date
+    _draw_text(pdf, 392, height - 307, instance.end_date.strftime("%Y-%m-%d"), size=5.9, max_width=52, align="center", max_lines=1)
+
+    # Approval block intentionally left blank; signatures and manager names belong to the manual approval section.
+
+    # HR section
+    _draw_text(pdf, 170, height - 703, _request_summary(), size=5.9, max_width=330, max_lines=1)
+    _draw_text(pdf, 170, height - 733, instance.source_document_ref or "-", size=5.9, max_width=330, max_lines=1)
+    _draw_text(pdf, 475, height - 775, hr_name, size=6.1, max_width=78, align="center", max_lines=1)
+    _draw_text(pdf, 298, height - 775, "HR", size=6.1, max_width=60, align="center", max_lines=1)
+
+    pdf.save()
+    overlay_buffer.seek(0)
+
+    overlay_page = PdfReader(overlay_buffer).pages[0]
+    base_page.merge_page(overlay_page)
+
+    output = BytesIO()
+    writer = PdfWriter()
+    writer.add_page(base_page)
+    writer.write(output)
+    output.seek(0)
+    return output.getvalue()
+
+
 class LeaveTypeViewSet(viewsets.ModelViewSet):
     queryset = LeaveType.objects.all()
     serializer_class = LeaveTypeSerializer
@@ -779,17 +1048,26 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             return LeaveRequestCreateSerializer
         return LeaveRequestSerializer
 
+    def _unscoped_queryset(self):
+        return LeaveRequest.objects.filter(is_active=True).select_related(
+            "employee", "employee__employee_profile", "leave_type", "decided_by", "manager_decision_by"
+        )
+
     def get_permissions(self):
         if self.action == "create":
             return [IsAuthenticated(), IsEmployeeOnly()]
 
-        if self.action in ["list", "retrieve", "document", "pdf"]:
-            # HR/Admin OR Owner (retrieve), HR-only for list enforced in list()
+        if self.action == "list":
+            return [IsAuthenticated(), IsOwnerOrHR()]
+
+        if self.action == "retrieve":
+            return [IsAuthenticated()]
+
+        if self.action in ["document", "pdf"]:
             return [IsAuthenticated(), IsOwnerOrHR()]
 
         if self.action in ["approve", "reject"]:
-            # HR/Admin only
-            return [IsAuthenticated(), IsHRManagerOrAdmin()]
+            return [IsAuthenticated(), IsHRWorkflowApprover()]
 
         if self.action == "cancel":
             # Owner only
@@ -832,6 +1110,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             initial_status = LeaveRequest.RequestStatus.PENDING_HR
 
         instance = serializer.save(employee=self.request.user, status=initial_status)
+        sync_workflow(instance, actor=self.request.user)
         requested_days = get_leave_days(instance.start_date, instance.end_date)
         used_before = get_used_days_for_type(self.request.user, instance.leave_type, instance.start_date.year)
         payment_breakdown = get_payment_breakdown(
@@ -964,14 +1243,14 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         )
 
     def retrieve(self, request, *args, **kwargs):
-        role = get_role(request.user)
-        qs = self.get_queryset()
-        if role not in ["SystemAdmin", "HRManager"]:
-            qs = qs.filter(employee=request.user)
         try:
-            instance = qs.get(pk=kwargs.get("pk"))
+            instance = self._unscoped_queryset().get(pk=kwargs.get("pk"))
         except LeaveRequest.DoesNotExist:
             return error("Not found", errors=["Not found."], status=404)
+        role = get_role(request.user)
+        if role not in ["SystemAdmin", "HRManager"] and instance.employee_id != request.user.id:
+            if not can_user_act_on_instance(request.user, instance):
+                return error("Not found", errors=["Not found."], status=404)
         return success(LeaveRequestSerializer(instance).data)
 
     def destroy(self, request, *args, **kwargs):
@@ -984,7 +1263,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsHRManagerOrAdmin])
     def approve(self, request, pk=None):
         try:
-            instance = self.get_queryset().get(pk=pk)
+            instance = self._unscoped_queryset().get(pk=pk)
         except LeaveRequest.DoesNotExist:
             return error("Not found", errors=["Not found."], status=404)
         if _is_hr_manager_origin_request(instance):
@@ -1015,6 +1294,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             instance.status = LeaveRequest.RequestStatus.APPROVED
 
         instance.save()
+        sync_workflow(instance, actor=request.user)
 
         requested_days = get_leave_days(instance.start_date, instance.end_date)
         used_before = max(
@@ -1062,7 +1342,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsHRManagerOrAdmin])
     def reject(self, request, pk=None):
         try:
-            instance = self.get_queryset().get(pk=pk)
+            instance = self._unscoped_queryset().get(pk=pk)
         except LeaveRequest.DoesNotExist:
             return error("Not found", errors=["Not found."], status=404)
         if _is_hr_manager_origin_request(instance):
@@ -1095,6 +1375,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         instance.decided_at = timezone.now()
         instance.hr_decision_note = comment
         instance.save()
+        sync_workflow(instance, actor=request.user)
 
         audit(request, "reject", entity="LeaveRequest", entity_id=instance.id)
         try:
@@ -1115,12 +1396,10 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             pass
         return success(LeaveRequestSerializer(instance).data)
 
-    @action(
-        detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsHRManagerOrAdmin], url_path="send-to-ceo"
-    )
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsHRWorkflowApprover], url_path="send-to-ceo")
     def send_to_ceo(self, request, pk=None):
         try:
-            instance = self.get_queryset().get(pk=pk)
+            instance = self._unscoped_queryset().get(pk=pk)
         except LeaveRequest.DoesNotExist:
             return error("Not found", errors=["Not found."], status=404)
         if _is_hr_manager_origin_request(instance):
@@ -1150,6 +1429,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         instance.decided_by = request.user
         instance.decided_at = timezone.now()
         instance.save()
+        sync_workflow(instance, actor=request.user)
 
         audit(
             request,
@@ -1190,6 +1470,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
 
         instance.status = LeaveRequest.RequestStatus.CANCELLED
         instance.save()
+        sync_workflow(instance, actor=request.user)
 
         audit(request, "cancel", entity="LeaveRequest", entity_id=instance.id)
         return success(LeaveRequestSerializer(instance).data)
@@ -1259,6 +1540,7 @@ class HRManualLeaveRequestViewSet(viewsets.ModelViewSet):
             return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
 
         instance = serializer.save()
+        sync_workflow(instance, actor=request.user)
         warnings = serializer.policy_warnings
 
         audit(
@@ -1287,6 +1569,7 @@ class HRManualLeaveRequestViewSet(viewsets.ModelViewSet):
             return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
 
         updated = serializer.save()
+        sync_workflow(updated, actor=request.user)
         warnings = serializer.policy_warnings
 
         audit(
@@ -1317,6 +1600,7 @@ class HRManualLeaveRequestViewSet(viewsets.ModelViewSet):
         instance.deleted_by = request.user
         instance.deleted_at = timezone.now()
         instance.save(update_fields=["is_active", "deleted_by", "deleted_at", "updated_at"])
+        sync_workflow(instance, actor=request.user)
 
         audit(
             request,
@@ -1358,11 +1642,19 @@ class ManagerLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
         if hasattr(self.request.user, "employee_profile"):
             manager_profile_match = Q(employee__employee_profile__manager_profile=self.request.user.employee_profile)
 
+        delegated_manager_ids = get_delegated_manager_user_ids(self.request.user)
+        delegated_manager_match = Q()
+        if delegated_manager_ids:
+            delegated_manager_match = Q(employee__employee_profile__manager_id__in=delegated_manager_ids) | Q(
+                employee__employee_profile__manager_profile__user_id__in=delegated_manager_ids
+            )
+
         return base_qs.filter(
             (
                 Q(employee__employee_profile__manager_profile__user=self.request.user)
                 | Q(employee__employee_profile__manager=self.request.user)
                 | manager_profile_match
+                | delegated_manager_match
             )
         )
 
@@ -1393,6 +1685,7 @@ class ManagerLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
         instance.manager_decision_at = timezone.now()
         instance.manager_decision_note = s.validated_data.get("comment", "")
         instance.save()
+        sync_workflow(instance, actor=request.user)
 
         audit(request, "approve", entity="LeaveRequest", entity_id=instance.id)
         try:
@@ -1432,6 +1725,7 @@ class ManagerLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
         instance.manager_decision_at = timezone.now()
         instance.manager_decision_note = comment
         instance.save()
+        sync_workflow(instance, actor=request.user)
 
         audit(request, "reject", entity="LeaveRequest", entity_id=instance.id)
         try:
@@ -1625,6 +1919,7 @@ class CEOLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
         instance.ceo_decision_at = timezone.now()
         instance.ceo_decision_note = s.validated_data.get("comment", "")
         instance.save()
+        sync_workflow(instance, actor=request.user)
 
         audit(request, "approve_ceo", entity="LeaveRequest", entity_id=instance.id)
         try:
@@ -1654,6 +1949,7 @@ class CEOLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
         instance.ceo_decision_at = timezone.now()
         instance.ceo_decision_note = comment
         instance.save()
+        sync_workflow(instance, actor=request.user)
 
         audit(request, "reject_ceo", entity="LeaveRequest", entity_id=instance.id)
         try:

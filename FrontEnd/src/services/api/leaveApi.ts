@@ -1,5 +1,6 @@
 import { api } from "./apiClient";
 import type { ApiResponse, PaginatedResponse } from "./apiTypes";
+import type { WorkflowSnapshot } from "../../types/workflow";
 
 /**
  * Leave Type DTO
@@ -51,6 +52,8 @@ export interface LeaveRequest {
   decided_at?: string | null;
   decision_reason?: string;
   created_at?: string;
+  updated_at?: string;
+  workflow?: WorkflowSnapshot;
 }
 
 /**

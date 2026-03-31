@@ -8,6 +8,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from audit.models import AuditLog
+from core.services import get_workflow_snapshot
 from leaves.models import LeaveRequest, LeaveType
 from leaves.views import _approval_path_rows
 from leaves.views import _leave_type_labels
@@ -168,6 +169,9 @@ class LeaveManagementTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         req.refresh_from_db()
         self.assertEqual(req.status, "cancelled")
+        workflow = get_workflow_snapshot(req, actor=self.emp1)
+        self.assertEqual(workflow["status"], "cancelled")
+        self.assertTrue(any(item["action"] == "cancel" for item in workflow["history"]))
 
     def test_view_others_request_forbidden(self):
         # Emp1 creates request

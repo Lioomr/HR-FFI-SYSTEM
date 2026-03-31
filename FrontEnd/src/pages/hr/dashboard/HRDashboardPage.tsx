@@ -318,7 +318,7 @@ export default function HRDashboardPage() {
                                                             <span style={{ fontSize: 11, color: "#94a3b8" }}>{item.time}</span>
                                                         </div>
                                                         <div style={{ marginTop: 4 }}>
-                                                            <Tag color={item.request_type === "ATTENDANCE" ? "gold" : "purple"} style={{ borderRadius: 20, fontSize: 11 }}>
+                                                            <Tag color={item.request_type === "ATTENDANCE" ? "gold" : item.request_type === "LOAN" ? "geekblue" : "purple"} style={{ borderRadius: 20, fontSize: 11 }}>
                                                                 {item.request_type}
                                                             </Tag>
                                                         </div>

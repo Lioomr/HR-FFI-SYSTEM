@@ -1,4 +1,5 @@
 import ApprovalFlowMap, { type ApprovalFlowStage } from "../requests/ApprovalFlowMap";
+import { buildStagesFromWorkflow } from "../requests/workflowPresentation";
 
 import type { LeaveRequest } from "../../services/api/leaveApi";
 
@@ -17,6 +18,7 @@ function buildStages(request: LeaveRequest, t: TranslateFn): ApprovalFlowStage[]
     request.status === "pending_ceo" ||
     Boolean(request.ceo_decision_at || request.ceo_decision_note || request.leave_type?.requires_ceo_approval);
   const finalRejected = request.status === "rejected";
+  const finalCancelled = request.status === "cancelled";
   const decisionNote = inferDecisionNote(request);
 
   if (isManual) {
@@ -42,13 +44,21 @@ function buildStages(request: LeaveRequest, t: TranslateFn): ApprovalFlowStage[]
     ? "skipped"
     : finalRejected && !!request.manager_decision_note && !request.hr_decision_note && !request.ceo_decision_note
       ? "rejected"
+      : finalCancelled && Boolean(request.manager_decision_at)
+        ? "completed"
       : request.manager_decision_at
         ? "completed"
         : request.status === "pending_manager"
           ? "current"
           : "upcoming";
 
-  const hrState: ApprovalFlowStage["state"] = finalRejected && (!!request.hr_decision_note || !request.manager_decision_note)
+  const hrState: ApprovalFlowStage["state"] = finalCancelled
+    ? request.decided_at || request.hr_decision_note || request.decision_reason
+      ? "completed"
+      : needsManager && !request.manager_decision_at
+        ? "upcoming"
+        : "upcoming"
+    : finalRejected && (!!request.hr_decision_note || !request.manager_decision_note)
     ? "rejected"
     : request.status === "pending_hr"
       ? "current"
@@ -62,13 +72,15 @@ function buildStages(request: LeaveRequest, t: TranslateFn): ApprovalFlowStage[]
     ? "skipped"
     : finalRejected && !!request.ceo_decision_note
       ? "rejected"
+      : finalCancelled && Boolean(request.ceo_decision_at)
+        ? "completed"
       : request.status === "pending_ceo"
         ? "current"
         : request.ceo_decision_at || request.status === "approved"
           ? "completed"
           : "upcoming";
 
-  return [
+  const stages: ApprovalFlowStage[] = [
     {
       key: "submitted",
       title: t("leave.approvalMap.submitted"),
@@ -107,8 +119,28 @@ function buildStages(request: LeaveRequest, t: TranslateFn): ApprovalFlowStage[]
       at: request.ceo_decision_at,
     },
   ];
+
+  if (finalCancelled) {
+    stages.push({
+      key: "cancelled",
+      title: t("status.cancelled") === "status.cancelled" ? "Cancelled" : t("status.cancelled"),
+      state: "cancelled",
+      note: t("leave.cancelled") === "leave.cancelled" ? "Request cancelled by employee." : t("leave.cancelled"),
+      at: request.updated_at,
+    });
+  }
+
+  return stages;
 }
 
 export default function LeaveApprovalMap({ request, t }: { request: LeaveRequest; t: TranslateFn }) {
-  return <ApprovalFlowMap eyebrow={t("leave.approvalMap.eyebrow")} title={t("leave.approvalMap.title")} stages={buildStages(request, t)} t={t} />;
+  const workflowStages = buildStagesFromWorkflow(request.workflow, ["manager", "hr", "ceo"], t);
+  return (
+    <ApprovalFlowMap
+      eyebrow={t("leave.approvalMap.eyebrow")}
+      title={t("leave.approvalMap.title")}
+      stages={workflowStages || buildStages(request, t)}
+      t={t}
+    />
+  );
 }
