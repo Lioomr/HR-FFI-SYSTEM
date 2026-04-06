@@ -19,13 +19,13 @@ class BioTimeConfigViewSet(views.APIView):
 
     def put(self, request):
         config = BioTimeConfig.get_solo()
-        serializer = BioTimeConfigSerializer(config, data=request.data, partial=True)
+        payload = request.data.copy()
+        if "password" in payload and not payload["password"]:
+            payload.pop("password")
+
+        serializer = BioTimeConfigSerializer(config, data=payload, partial=True)
         if serializer.is_valid():
-            if 'password' in request.data and not request.data['password']:
-                # Do not overwrite with empty password if they just saved the form
-                pass
-            else:
-                serializer.save()
+            serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -50,7 +50,14 @@ class BioTimeActionsViewSet(views.APIView):
                 return Response({"status": "error", "message": "Connection failed"}, status=status.HTTP_400_BAD_REQUEST)
                 
         elif action == "sync-now":
-            success, message = SyncBioTimeService.execute(days_back=7) # Sync last 7 days manually
+            try:
+                days_back = max(int(request.data.get("days_back", 7)), 1)
+            except (TypeError, ValueError):
+                return Response(
+                    {"status": "error", "message": "days_back must be a positive integer."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            success, message = SyncBioTimeService.execute(days_back=days_back)
             if success:
                 return Response({"status": "success", "message": message})
             else:

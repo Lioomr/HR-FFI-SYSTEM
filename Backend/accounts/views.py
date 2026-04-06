@@ -1,13 +1,16 @@
-from django.contrib.auth.password_validation import validate_password
+from datetime import timedelta
+
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from admin_portal.models import SystemSettings
 from core.responses import error, success
 
 from .permissions import get_role
+from .password_policy import validate_password_against_policy
 from .serializers import ChangePasswordSerializer, LoginSerializer
 from .throttles import LoginRateThrottle
 
@@ -22,7 +25,10 @@ class LoginView(APIView):
 
         user = s.validated_data["user"]
         refresh = RefreshToken.for_user(user)
-        access = str(refresh.access_token)
+        access_token = refresh.access_token
+        session_timeout_minutes = SystemSettings.get_solo().session_timeout_minutes
+        access_token.set_exp(lifetime=timedelta(minutes=session_timeout_minutes))
+        access = str(access_token)
 
         from audit.utils import audit
 
@@ -55,7 +61,7 @@ class ChangePasswordView(APIView):
             return error("Invalid current password", status=422)
 
         try:
-            validate_password(s.validated_data["new_password"], user=user)
+            validate_password_against_policy(s.validated_data["new_password"], user=user)
         except DjangoValidationError as e:
             return error("Validation error", {"new_password": list(e.messages)}, status=422)
 

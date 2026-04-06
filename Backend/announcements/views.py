@@ -1,9 +1,15 @@
+import os
+
 from django.contrib.auth import get_user_model
+from django.core import signing
+from django.core.files.base import ContentFile
 from django.db.models import Min, Q
 from django.db.models.functions import TruncMinute
+from django.http import FileResponse
 from django.utils import timezone
 from rest_framework import status, viewsets
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.decorators import action
+from rest_framework.permissions import AllowAny, IsAuthenticated
 
 from audit.utils import audit
 from core.pagination import StandardPagination
@@ -14,6 +20,7 @@ from employees.permissions import IsHRManagerOrAdmin
 
 from .models import Announcement
 from .serializers import AnnouncementCreateSerializer, AnnouncementListSerializer, AnnouncementSerializer
+from .utils import ANNOUNCEMENT_ATTACHMENT_SALT
 from .utils import send_announcement_email, send_announcement_whatsapp
 
 User = get_user_model()
@@ -30,6 +37,8 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
     pagination_class = StandardPagination
 
     def get_permissions(self):
+        if self.action == "attachment_public":
+            return [AllowAny()]
         if self.action == "create":
             return [IsAuthenticated()]
         if self.action in ["update", "partial_update", "destroy"]:
@@ -165,6 +174,7 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
             return error("Validation error", errors=serializer.errors, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
         validated = serializer.validated_data
+        attachment = validated.get("attachment")
 
         if user_role not in ["SystemAdmin", "HRManager", "Manager", "CEO"]:
             return error(
@@ -195,11 +205,13 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
                 announcement = serializer.save(created_by=request.user, target_roles=[])
                 created_announcements = [announcement]
             else:
-                now = timezone.now()
-                payloads = []
-                for user_id in team_user_ids:
-                    payloads.append(
-                        Announcement(
+                if attachment:
+                    created_announcements = []
+                    attachment_name = attachment.name
+                    attachment_bytes = attachment.read()
+                    attachment.seek(0)
+                    for user_id in team_user_ids:
+                        announcement = Announcement.objects.create(
                             title=validated["title"],
                             content=validated["content"],
                             target_roles=[],
@@ -208,11 +220,28 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
                             publish_to_email=validated.get("publish_to_email", False),
                             publish_to_sms=validated.get("publish_to_sms", False),
                             created_by=request.user,
-                            created_at=now,
-                            updated_at=now,
                         )
-                    )
-                created_announcements = Announcement.objects.bulk_create(payloads)
+                        announcement.attachment.save(attachment_name, ContentFile(attachment_bytes), save=True)
+                        created_announcements.append(announcement)
+                else:
+                    now = timezone.now()
+                    payloads = []
+                    for user_id in team_user_ids:
+                        payloads.append(
+                            Announcement(
+                                title=validated["title"],
+                                content=validated["content"],
+                                target_roles=[],
+                                target_user_id=user_id,
+                                publish_to_dashboard=validated.get("publish_to_dashboard", True),
+                                publish_to_email=validated.get("publish_to_email", False),
+                                publish_to_sms=validated.get("publish_to_sms", False),
+                                created_by=request.user,
+                                created_at=now,
+                                updated_at=now,
+                            )
+                        )
+                    created_announcements = Announcement.objects.bulk_create(payloads)
         else:
             # Save announcement with current user as creator
             announcement = serializer.save(created_by=request.user)
@@ -253,6 +282,49 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         serializer = self.get_serializer(instance)
         return success({"announcement": serializer.data})
+
+    @action(detail=True, methods=["get"], url_path="attachment")
+    def attachment(self, request, *args, **kwargs):
+        announcement = self.get_object()
+        if not announcement.attachment:
+            return error("Attachment not found.", status=status.HTTP_404_NOT_FOUND)
+
+        filename = os.path.basename(announcement.attachment.name)
+        disposition = "attachment" if request.query_params.get("download") == "1" else "inline"
+        announcement.attachment.open("rb")
+        response = FileResponse(announcement.attachment, content_type="application/pdf")
+        response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
+        return response
+
+    @action(detail=True, methods=["get"], url_path="attachment-public")
+    def attachment_public(self, request, *args, **kwargs):
+        announcement = self.get_object()
+        if not announcement.attachment:
+            return error("Attachment not found.", status=status.HTTP_404_NOT_FOUND)
+
+        token = (request.query_params.get("token") or "").strip()
+        if not token:
+            return error("Unauthorized", status=status.HTTP_401_UNAUTHORIZED)
+
+        try:
+            payload = signing.loads(
+                token,
+                salt=ANNOUNCEMENT_ATTACHMENT_SALT,
+                max_age=7 * 24 * 60 * 60,
+            )
+        except signing.SignatureExpired:
+            return error("Link expired.", status=status.HTTP_401_UNAUTHORIZED)
+        except signing.BadSignature:
+            return error("Unauthorized", status=status.HTTP_401_UNAUTHORIZED)
+
+        if payload.get("announcement_id") != announcement.id:
+            return error("Unauthorized", status=status.HTTP_401_UNAUTHORIZED)
+
+        filename = os.path.basename(announcement.attachment.name)
+        announcement.attachment.open("rb")
+        response = FileResponse(announcement.attachment, content_type="application/pdf")
+        response["Content-Disposition"] = f'inline; filename="{filename}"'
+        return response
 
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop("partial", False)

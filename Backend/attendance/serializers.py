@@ -98,12 +98,12 @@ class BioTimeConfigSerializer(serializers.ModelSerializer):
         model = BioTimeConfig
         fields = ["server_ip", "server_port", "username", "password", "is_active", "last_sync_time"]
         read_only_fields = ["last_sync_time"]
-        extra_kwargs = {'password': {'write_only': True}}
-        
+        extra_kwargs = {"password": {"write_only": True, "required": False, "allow_blank": True}}
+
     def to_representation(self, instance):
         # Always output password as empty to frontend or masked to avoid leaking
         ret = super().to_representation(instance)
-        ret['password'] = "" 
+        ret["password"] = ""
         return ret
 
 

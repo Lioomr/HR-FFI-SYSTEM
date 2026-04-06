@@ -5,7 +5,13 @@ from .services.email_service import EmailService
 # Import WhatsApp service functions for public API
 
 
-def send_email_notification(recipient_email: str, subject: str, text_body: str, html_body: str | None = None) -> dict:
+def send_email_notification(
+    recipient_email: str,
+    subject: str,
+    text_body: str,
+    html_body: str | None = None,
+    attachments: list[dict] | None = None,
+) -> dict:
     service = EmailService()
     result = service.send_html_email(
         to_email=recipient_email,
@@ -13,6 +19,7 @@ def send_email_notification(recipient_email: str, subject: str, text_body: str, 
         html_content=html_body or text_body,
         fallback_text=text_body,
         from_email=settings.DEFAULT_FROM_EMAIL,
+        attachments=attachments,
     )
     if result.get("success"):
         return {"sent": True, "provider": "bird"}

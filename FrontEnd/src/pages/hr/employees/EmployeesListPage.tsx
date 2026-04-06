@@ -187,6 +187,7 @@ export default function EmployeesListPage() {
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [total, setTotal] = useState(0);
     const [visibleColumnKeys, setVisibleColumnKeys] = useState<string[]>(DEFAULT_VISIBLE_COLUMNS);
+    const [searchInput, setSearchInput] = useState("");
 
     // Filter options state
     const [departments, setDepartments] = useState<{ code: string; name: string }[]>([]);
@@ -314,6 +315,10 @@ export default function EmployeesListPage() {
     const debouncedSearch = useDebounce((value: string) => {
         setSearch(value);
     }, 300);
+
+    useEffect(() => {
+        setSearchInput(search);
+    }, [search]);
 
     const persistPreference = useCallback(async (payload: Record<string, unknown>) => {
         setSavingPreference(true);
@@ -607,8 +612,12 @@ export default function EmployeesListPage() {
                         <Input
                             placeholder={t("employees.list.searchPlaceholder")}
                             prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
-                            value={search}
-                            onChange={(e) => debouncedSearch(e.target.value)}
+                            value={searchInput}
+                            onChange={(e) => {
+                                const value = e.target.value;
+                                setSearchInput(value);
+                                debouncedSearch(value);
+                            }}
                             size="large"
                             style={{
                                 borderRadius: 8,

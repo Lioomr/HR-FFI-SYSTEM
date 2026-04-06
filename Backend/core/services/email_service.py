@@ -43,6 +43,60 @@ class EmailService:
             "Content-Type": "application/json",
         }
 
+    def _upload_media_endpoint(self) -> str:
+        return f"{self.base_url}/{self.workspace_id}/channel-media/presigned-upload"
+
+    def upload_media(
+        self,
+        *,
+        filename: str,
+        content: bytes,
+        content_type: str,
+    ) -> dict[str, Any]:
+        if not self.is_configured():
+            reason = "Bird email is not configured. Required: BIRD_API_KEY, BIRD_EMAIL_CHANNEL_ID, BIRD_WORKSPACE_ID."
+            logger.error("bird_email_not_configured")
+            return {"success": False, "media_url": None, "error": reason}
+
+        try:
+            presign_response = requests.post(
+                self._upload_media_endpoint(),
+                headers=self._headers(),
+                json={"contentType": content_type},
+                timeout=self.timeout_seconds,
+            )
+            presign_response.raise_for_status()
+            presign_payload = presign_response.json()
+        except requests.RequestException as exc:
+            logger.exception("bird_media_presign_failed", extra={"filename": filename})
+            return {"success": False, "media_url": None, "error": str(exc)}
+
+        upload_url = presign_payload.get("uploadUrl")
+        upload_method = str(presign_payload.get("uploadMethod") or "POST").upper()
+        upload_form_data = presign_payload.get("uploadFormData") or {}
+        media_url = presign_payload.get("mediaUrl")
+
+        if not upload_url or not media_url:
+            return {"success": False, "media_url": None, "error": "Bird media upload response was incomplete."}
+
+        files = {"file": (filename, content, content_type)}
+        data = upload_form_data
+
+        try:
+            upload_response = requests.request(
+                upload_method,
+                upload_url,
+                data=data,
+                files=files,
+                timeout=self.timeout_seconds,
+            )
+            upload_response.raise_for_status()
+        except requests.RequestException as exc:
+            logger.exception("bird_media_upload_failed", extra={"filename": filename})
+            return {"success": False, "media_url": None, "error": str(exc)}
+
+        return {"success": True, "media_url": media_url, "error": None}
+
     def send_html_email(
         self,
         *,
@@ -51,6 +105,7 @@ class EmailService:
         html_content: str,
         fallback_text: str = "",
         from_email: str | None = None,
+        attachments: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         if not self.is_configured():
             reason = "Bird email is not configured. Required: BIRD_API_KEY, BIRD_EMAIL_CHANNEL_ID, BIRD_WORKSPACE_ID."
@@ -81,6 +136,7 @@ class EmailService:
                 "html": {
                     "text": fallback_text or "This email contains HTML content.",
                     "html": html_content,
+                    "attachments": attachments or [],
                     "metadata": {
                         "subject": subject,
                         "emailFrom": {

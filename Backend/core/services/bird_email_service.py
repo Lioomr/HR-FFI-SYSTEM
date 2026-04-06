@@ -91,6 +91,59 @@ class BirdEmailService:
             "Content-Type": "application/json",
         }
 
+    def _upload_media_endpoint(self) -> str:
+        return f"{self.base_url}/{self.workspace_id}/channel-media/presigned-upload"
+
+    def upload_media(
+        self,
+        *,
+        filename: str,
+        content: bytes,
+        content_type: str,
+    ) -> dict[str, Any]:
+        if not self.is_configured():
+            reason = "Bird email is not configured. Required: BIRD_API_KEY, BIRD_CHANNEL_ID, BIRD_WORKSPACE_ID."
+            logger.error("bird_email_not_configured")
+            return {"success": False, "media_url": None, "error": reason}
+
+        try:
+            presign_response = requests.post(
+                self._upload_media_endpoint(),
+                headers=self._headers(),
+                json={"contentType": content_type},
+                timeout=self.timeout_seconds,
+            )
+            presign_response.raise_for_status()
+            presign_payload = presign_response.json()
+        except requests.RequestException as exc:
+            logger.exception("bird_media_presign_failed", extra={"filename": filename})
+            return {"success": False, "media_url": None, "error": str(exc)}
+
+        upload_url = presign_payload.get("uploadUrl")
+        upload_method = str(presign_payload.get("uploadMethod") or "POST").upper()
+        upload_form_data = presign_payload.get("uploadFormData") or {}
+        media_url = presign_payload.get("mediaUrl")
+
+        if not upload_url or not media_url:
+            return {"success": False, "media_url": None, "error": "Bird media upload response was incomplete."}
+
+        files = {"file": (filename, content, content_type)}
+
+        try:
+            upload_response = requests.request(
+                upload_method,
+                upload_url,
+                data=upload_form_data,
+                files=files,
+                timeout=self.timeout_seconds,
+            )
+            upload_response.raise_for_status()
+        except requests.RequestException as exc:
+            logger.exception("bird_media_upload_failed", extra={"filename": filename})
+            return {"success": False, "media_url": None, "error": str(exc)}
+
+        return {"success": True, "media_url": media_url, "error": None}
+
     @staticmethod
     def _username_from_email(email_address: str) -> str:
         return (email_address or "no-reply@fficontracting.com").split("@", 1)[0]
@@ -106,6 +159,7 @@ class BirdEmailService:
         template_name: str,
         context: dict[str, Any],
         from_email: str | None = None,
+        attachments: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         if not self.is_configured():
             reason = "Bird email is not configured. Required: BIRD_API_KEY, BIRD_CHANNEL_ID, BIRD_WORKSPACE_ID."
@@ -132,6 +186,7 @@ class BirdEmailService:
                     "html": {
                         "text": text_fallback,
                         "html": html_content,
+                        "attachments": attachments or [],
                         "metadata": {
                             "subject": subject,
                             "emailFrom": {
@@ -397,6 +452,9 @@ def send_announcement_notification_email(
     published_at: str | None = None,
     publisher_name: str | None = None,
     action_url: str | None = None,
+    attachment_name: str | None = None,
+    attachment_url: str | None = None,
+    attachments: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     service = BirdEmailService()
     context = _base_email_context(
@@ -414,6 +472,8 @@ def send_announcement_notification_email(
             "announcement_title": announcement_title,
             "published_at": published_at,
             "publisher_name": publisher_name,
+            "attachment_name": attachment_name,
+            "attachment_url": attachment_url,
         }
     )
     return service.send_template_email(
@@ -421,6 +481,7 @@ def send_announcement_notification_email(
         subject=f"Announcement: {announcement_title}",
         template_name="announcement_notification.html",
         context=context,
+        attachments=attachments,
     )
 
 

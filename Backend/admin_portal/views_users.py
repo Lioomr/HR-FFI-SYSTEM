@@ -19,6 +19,8 @@ from core.responses import error, success
 from core.services.bird_email_service import _load_logo_base64
 from core.services.email_service import EmailService
 
+from accounts.password_policy import get_password_policy
+
 from .serializers import (
     CreateUserSerializer,
     ResetPasswordSerializer,
@@ -45,8 +47,25 @@ def is_last_active_system_admin(user: User) -> bool:
 
 
 def generate_temp_password(length=12):
-    alphabet = string.ascii_letters + string.digits
-    return "".join(secrets.choice(alphabet) for _ in range(length))
+    policy = get_password_policy()
+    target_length = max(length, policy["min_length"])
+    password_chars: list[str] = []
+
+    if policy["require_upper"]:
+        password_chars.append(secrets.choice(string.ascii_uppercase))
+    if policy["require_lower"]:
+        password_chars.append(secrets.choice(string.ascii_lowercase))
+    if policy["require_number"]:
+        password_chars.append(secrets.choice(string.digits))
+    if policy["require_special"]:
+        password_chars.append(secrets.choice("!@#$%^&*()-_=+"))
+
+    base_alphabet = string.ascii_letters + string.digits + "!@#$%^&*()-_=+"
+    while len(password_chars) < target_length:
+        password_chars.append(secrets.choice(base_alphabet))
+
+    secrets.SystemRandom().shuffle(password_chars)
+    return "".join(password_chars)
 
 
 def _password_reset_cache_key(user_id: int) -> str:
