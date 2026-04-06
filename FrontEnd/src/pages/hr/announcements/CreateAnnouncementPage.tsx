@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { Form, Input, Button, Select, Switch, Card, message, Space, Typography, Row, Col } from 'antd';
+import { Form, Input, Button, Select, Switch, Card, message, Space, Typography, Row, Col, Upload } from 'antd';
+import type { UploadFile } from 'antd/es/upload/interface';
 import { useNavigate } from 'react-router-dom';
 import { createAnnouncement, type CreateAnnouncementData } from '../../../services/api/announcementApi';
 import { useI18n } from '../../../i18n/useI18n';
+import { UploadOutlined } from '@ant-design/icons';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -12,6 +14,8 @@ export default function CreateAnnouncementPage() {
     const { t } = useI18n();
     const [form] = Form.useForm();
     const [loading, setLoading] = useState(false);
+    const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+    const [attachmentList, setAttachmentList] = useState<UploadFile[]>([]);
 
     const onFinish = async (values: any) => {
         setLoading(true);
@@ -23,6 +27,7 @@ export default function CreateAnnouncementPage() {
                 publish_to_dashboard: values.publish_to_dashboard,
                 publish_to_email: values.publish_to_email,
                 publish_to_sms: values.publish_to_sms,
+                attachment: attachmentFile,
             };
 
             await createAnnouncement(data);
@@ -90,6 +95,35 @@ export default function CreateAnnouncementPage() {
                             <Option value="MANAGER">{t('auth.role.manager')}</Option>
                             <Option value="EMPLOYEE">{t('auth.role.employee')}</Option>
                         </Select>
+                    </Form.Item>
+
+                    <Form.Item
+                        label={t('hr.announcements.attachmentLabel', 'PDF Attachment (Optional)')}
+                        extra={t('hr.announcements.attachmentHelp', 'Upload one PDF file. It will be previewable in the dashboard and included in email notifications.')}
+                    >
+                        <Upload
+                            accept="application/pdf,.pdf"
+                            maxCount={1}
+                            beforeUpload={(file) => {
+                                const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+                                if (!isPdf) {
+                                    message.error(t('hr.announcements.attachmentPdfOnly', 'Only PDF files are allowed.'));
+                                    return Upload.LIST_IGNORE;
+                                }
+                                setAttachmentFile(file);
+                                setAttachmentList([file]);
+                                return false;
+                            }}
+                            onRemove={() => {
+                                setAttachmentFile(null);
+                                setAttachmentList([]);
+                            }}
+                            fileList={attachmentList}
+                        >
+                            <Button icon={<UploadOutlined />}>
+                                {t('hr.announcements.attachmentSelect', 'Select PDF')}
+                            </Button>
+                        </Upload>
                     </Form.Item>
 
                     <div style={{ background: '#fafafa', padding: 16, borderRadius: 8, marginBottom: 24 }}>

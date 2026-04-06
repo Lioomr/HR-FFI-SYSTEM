@@ -66,7 +66,12 @@ export default function AnnouncementsManagementPage() {
             title: t('hr.announcements.tableTitle'),
             dataIndex: 'title',
             key: 'title',
-            render: (text: string) => <strong>{text}</strong>,
+            render: (text: string, record: AnnouncementListItem) => (
+                <Space>
+                    <strong>{text}</strong>
+                    {record.has_attachment && <Tag color="red">PDF</Tag>}
+                </Space>
+            ),
         },
         {
             title: t('hr.announcements.tableTargetRoles'),

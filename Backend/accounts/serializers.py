@@ -4,7 +4,8 @@ from rest_framework.exceptions import AuthenticationFailed
 
 from audit.utils import audit
 
-from .security import clear_login_failures, get_client_ip, is_locked_out, record_login_failure
+from .password_policy import validate_password_against_policy
+from .security import clear_login_failures, get_client_ip, get_lockout_remaining_seconds, is_locked_out, record_login_failure
 
 User = get_user_model()
 
@@ -20,6 +21,8 @@ class LoginSerializer(serializers.Serializer):
         ip_address = get_client_ip(request) if request else ""
 
         if is_locked_out(email, ip_address):
+            remaining_seconds = get_lockout_remaining_seconds(email, ip_address)
+            remaining_minutes = max(1, (remaining_seconds + 59) // 60)
             if request:
                 audit(
                     request,
@@ -27,7 +30,9 @@ class LoginSerializer(serializers.Serializer):
                     entity="auth",
                     metadata={"email": email, "reason": "locked"},
                 )
-            raise AuthenticationFailed("User is locked out due to too many failed attempts.")
+            raise AuthenticationFailed(
+                f"Too many failed login attempts. Try again in about {remaining_minutes} minute(s)."
+            )
 
         # Resolve canonical stored email case first, then authenticate.
         # Django auth lookup for USERNAME_FIELD is case-sensitive by default.
@@ -52,4 +57,13 @@ class LoginSerializer(serializers.Serializer):
 
 class ChangePasswordSerializer(serializers.Serializer):
     current_password = serializers.CharField()
-    new_password = serializers.CharField(min_length=8)
+    new_password = serializers.CharField()
+
+    def validate_new_password(self, value):
+        try:
+            validate_password_against_policy(value)
+        except serializers.ValidationError:
+            raise
+        except Exception as exc:
+            raise serializers.ValidationError(list(getattr(exc, "messages", [str(exc)])))
+        return value

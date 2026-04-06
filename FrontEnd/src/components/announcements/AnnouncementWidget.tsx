@@ -1,7 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Card, List, Typography, Modal, Button, Tag, Empty, Spin, Space } from 'antd';
-import { getAnnouncements, getAnnouncement, type AnnouncementListItem, type Announcement } from '../../services/api/announcementApi';
-import { BellOutlined, ArrowRightOutlined } from '@ant-design/icons';
+import {
+    getAnnouncements,
+    getAnnouncement,
+    getAnnouncementAttachment,
+    type AnnouncementListItem,
+    type Announcement,
+} from '../../services/api/announcementApi';
+import { BellOutlined, ArrowRightOutlined, FilePdfOutlined, DownloadOutlined, EyeOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useI18n } from '../../i18n/useI18n';
 
@@ -13,10 +19,9 @@ export default function AnnouncementWidget({ role }: { role?: string }) {
     const [loading, setLoading] = useState(true);
     const [announcements, setAnnouncements] = useState<AnnouncementListItem[]>([]);
     const [modalVisible, setModalVisible] = useState(false);
-
-    // State for selected announcement full details
     const [detailLoading, setDetailLoading] = useState(false);
     const [detail, setDetail] = useState<Announcement | null>(null);
+    const [attachmentLoading, setAttachmentLoading] = useState(false);
 
     useEffect(() => {
         loadData();
@@ -25,11 +30,9 @@ export default function AnnouncementWidget({ role }: { role?: string }) {
     const loadData = async () => {
         try {
             setLoading(true);
-            // Fetch latest 5 announcements
             const response = await getAnnouncements(1, 5);
             if (response.status === 'success') {
-                const announcements = response.data.items || [];
-                setAnnouncements(announcements);
+                setAnnouncements(response.data.items || []);
             }
         } catch (error) {
             console.error("Failed to load announcements widget", error);
@@ -41,7 +44,8 @@ export default function AnnouncementWidget({ role }: { role?: string }) {
     const handleOpen = async (item: AnnouncementListItem) => {
         setModalVisible(true);
         setDetailLoading(true);
-        setDetail(null); // Reset previous detail
+        setDetail(null);
+        setAttachmentLoading(false);
 
         try {
             const response = await getAnnouncement(item.id);
@@ -58,6 +62,36 @@ export default function AnnouncementWidget({ role }: { role?: string }) {
     const handleClose = () => {
         setModalVisible(false);
         setDetail(null);
+        setAttachmentLoading(false);
+    };
+
+    const openAttachment = async (download: boolean) => {
+        if (!detail?.has_attachment) {
+            return;
+        }
+
+        try {
+            setAttachmentLoading(true);
+            const blob = await getAnnouncementAttachment(detail.id, download);
+            const objectUrl = URL.createObjectURL(blob);
+
+            if (download) {
+                const link = document.createElement('a');
+                link.href = objectUrl;
+                link.download = detail.attachment_name || 'announcement.pdf';
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+            } else {
+                window.open(objectUrl, '_blank', 'noopener,noreferrer');
+            }
+
+            setTimeout(() => URL.revokeObjectURL(objectUrl), 5000);
+        } catch (error) {
+            console.error("Failed to open announcement attachment", error);
+        } finally {
+            setAttachmentLoading(false);
+        }
     };
 
     const formatDate = (dateString: string) => {
@@ -155,6 +189,21 @@ export default function AnnouncementWidget({ role }: { role?: string }) {
                         <Paragraph style={{ whiteSpace: 'pre-wrap' }}>
                             {detail.content}
                         </Paragraph>
+                        {detail.has_attachment && (
+                            <div style={{ marginTop: 16 }}>
+                                <Space wrap size={10}>
+                                    <Tag icon={<FilePdfOutlined />} color="red">
+                                        {detail.attachment_name || t("hr.announcements.attachmentLabel", "PDF Attachment")}
+                                    </Tag>
+                                    <Button size="small" icon={<EyeOutlined />} loading={attachmentLoading} onClick={() => openAttachment(false)}>
+                                        {t("common.preview")}
+                                    </Button>
+                                    <Button size="small" icon={<DownloadOutlined />} loading={attachmentLoading} onClick={() => openAttachment(true)}>
+                                        {t("common.download")}
+                                    </Button>
+                                </Space>
+                            </div>
+                        )}
                     </div>
                 ) : (
                     <div style={{ padding: 24, textAlign: 'center' }}>{t("announcements.widget.failedLoad")}</div>

@@ -18,8 +18,11 @@ def get_client_ip(request):
 
 
 def _get_settings():
+    from admin_portal.models import SystemSettings
+
+    settings_obj = SystemSettings.get_solo()
     return {
-        "failure_limit": getattr(settings, "LOGIN_FAILURE_LIMIT", 5),
+        "failure_limit": settings_obj.max_login_attempts or getattr(settings, "LOGIN_FAILURE_LIMIT", 5),
         "failure_window_seconds": getattr(settings, "LOGIN_FAILURE_WINDOW_SECONDS", 900),
         "lockout_seconds": getattr(settings, "LOGIN_LOCKOUT_SECONDS", 900),
     }
@@ -35,6 +38,21 @@ def is_locked_out(email, ip_address):
     if attempt.locked_until and attempt.locked_until > timezone.now():
         return True
     return False
+
+
+def get_lockout_remaining_seconds(email, ip_address):
+    if not email:
+        return 0
+    try:
+        attempt = LoginAttempt.objects.get(email=email, ip_address=ip_address)
+    except LoginAttempt.DoesNotExist:
+        return 0
+
+    if not attempt.locked_until:
+        return 0
+
+    remaining = int((attempt.locked_until - timezone.now()).total_seconds())
+    return max(0, remaining)
 
 
 def record_login_failure(email, ip_address):

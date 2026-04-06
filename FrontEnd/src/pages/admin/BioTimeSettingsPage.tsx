@@ -24,6 +24,7 @@ const BioTimeSettingsPage: React.FC = () => {
     const [systemEmployees, setSystemEmployees] = useState<Employee[]>([]);
     const [loadingMappings, setLoadingMappings] = useState(false);
     const [mappingSubmits, setMappingSubmits] = useState<Record<string, boolean>>({});
+    const [selectedMappings, setSelectedMappings] = useState<Record<string, number | undefined>>({});
 
     useEffect(() => {
         loadConfig();
@@ -114,6 +115,7 @@ const BioTimeSettingsPage: React.FC = () => {
                 biotime_emp_code: empCode,
                 employee_profile: employeeProfileId
             });
+            setSelectedMappings(prev => ({ ...prev, [empCode]: undefined }));
             message.success(t("bioTime.success.map", "Employee mapped successfully."));
             await loadMappingsData();
         } catch (error) {
@@ -192,14 +194,16 @@ const BioTimeSettingsPage: React.FC = () => {
                 <Table.Column 
                     title={t("bioTime.actions.mapTo", "Map to HR Employee")} 
                     render={(_, record: UnmappedBioTimeUser) => {
-                        let selectedVal: number | undefined;
                         return (
                             <Space>
                                 <Select 
                                     showSearch 
                                     placeholder={t("bioTime.placeholders.selectEmployee", "Select Employee")} 
                                     style={{ width: 250 }}
-                                    onChange={(v) => selectedVal = v}
+                                    value={selectedMappings[record.emp_code]}
+                                    onChange={(value) =>
+                                        setSelectedMappings((prev) => ({ ...prev, [record.emp_code]: value }))
+                                    }
                                     filterOption={(input, option) =>
                                         (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase())
                                     }
@@ -210,7 +214,13 @@ const BioTimeSettingsPage: React.FC = () => {
                                 />
                                 <Button 
                                     type="primary" 
-                                    onClick={() => selectedVal && handleMapEmployee(record.emp_code, selectedVal)}
+                                    onClick={() => {
+                                        const employeeProfileId = selectedMappings[record.emp_code];
+                                        if (employeeProfileId) {
+                                            handleMapEmployee(record.emp_code, employeeProfileId);
+                                        }
+                                    }}
+                                    disabled={!selectedMappings[record.emp_code]}
                                     loading={mappingSubmits[record.emp_code]}
                                 >
                                     {t("common.link", "Link")}

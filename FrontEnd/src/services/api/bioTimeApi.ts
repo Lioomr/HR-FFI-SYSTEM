@@ -1,4 +1,5 @@
 import { api } from "./apiClient";
+import type { ApiResponse, PaginatedResponse } from "./apiTypes";
 
 export interface BioTimeConfig {
     server_ip: string;
@@ -35,7 +36,16 @@ export const bioTimeApi = {
     syncNow: () => api.post("/api/biotime/actions/sync-now/").then((res: any) => res.data),
     
     // Mappings
-    getMappings: () => api.get<any>("/api/biotime-mappings/").then((res: any) => res.data as any).then((res: any) => res.results || res),
+    getMappings: () =>
+        api
+            .get<ApiResponse<PaginatedResponse<BioTimeEmployeeMap>>>("/api/biotime-mappings/")
+            .then((res) => {
+                const payload = res.data;
+                if (payload.status === "success") {
+                    return payload.data.items ?? [];
+                }
+                return [];
+            }),
     createMapping: (data: Partial<BioTimeEmployeeMap>) => api.post<BioTimeEmployeeMap>("/api/biotime-mappings/", data).then((res: any) => res.data),
     deleteMapping: (id: number) => api.delete(`/api/biotime-mappings/${id}/`),
     getUnmappedUsers: () => api.get<UnmappedBioTimeUser[]>("/api/biotime-mappings/unmapped/").then((res: any) => res.data),

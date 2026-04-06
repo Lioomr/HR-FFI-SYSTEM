@@ -1,10 +1,11 @@
 from django.contrib.auth import get_user_model
-from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils import timezone
 from rest_framework import serializers
 
 from core.permissions import get_role
+
+from accounts.password_policy import validate_password_against_policy
 
 from .models import Invite
 
@@ -84,7 +85,7 @@ class InviteAcceptSerializer(serializers.Serializer):
 
     def validate_password(self, value):
         try:
-            validate_password(value)
+            validate_password_against_policy(value)
         except DjangoValidationError as exc:
             raise serializers.ValidationError(list(exc.messages))
         return value

@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -12,7 +13,8 @@ from core.models import DelegationRule
 from employees.models import EmployeeProfile
 from hr_reference.models import Department, Position
 
-from .models import AttendanceRecord
+from .models import AttendanceRecord, BioTimeConfig, BioTimeEmployeeMap
+from .services import SyncBioTimeService
 
 User = get_user_model()
 
@@ -387,3 +389,99 @@ class AttendanceTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["data"]["status"], AttendanceRecord.Status.PENDING_HR)
+
+
+class BioTimeSyncTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_user(email="admin@ffi.com", password="password", is_staff=True)
+        self.employee = User.objects.create_user(email="biotime-user@ffi.com", password="password")
+        self.profile = EmployeeProfile.objects.create(
+            user=self.employee,
+            employee_id="EMP100",
+            department="Operations",
+            job_title="Operator",
+            hire_date=date.today(),
+        )
+        self.config = BioTimeConfig.get_solo()
+        self.config.server_ip = "192.168.1.10"
+        self.config.server_port = "8090"
+        self.config.username = "admin"
+        self.config.password = "secret"
+        self.config.is_active = True
+        self.config.last_sync_time = None
+        self.config.save()
+
+    @patch("attendance.services.BioTimeClient")
+    def test_sync_creates_attendance_record_for_mapped_employee(self, client_cls):
+        BioTimeEmployeeMap.objects.create(employee_profile=self.profile, biotime_emp_code="100001")
+        client = client_cls.return_value
+        client.test_connection.return_value = True
+        client.get_transactions.return_value = [
+            {"emp_code": "100001", "punch_time": "2026-04-01 08:00:00", "is_attendance": 1},
+            {"emp_code": "100001", "punch_time": "2026-04-01 17:30:00", "is_attendance": 1},
+        ]
+
+        success, message = SyncBioTimeService.execute(days_back=3)
+
+        self.assertTrue(success)
+        self.assertIn("Synced 1 dates", message)
+        record = AttendanceRecord.objects.get(employee_profile=self.profile, date=date(2026, 4, 1))
+        self.assertEqual(record.source, AttendanceRecord.Source.SYSTEM)
+        self.assertEqual(record.status, AttendanceRecord.Status.PRESENT)
+        self.assertIsNotNone(record.check_in_at)
+        self.assertIsNotNone(record.check_out_at)
+        self.assertIsNotNone(BioTimeConfig.get_solo().last_sync_time)
+
+    @patch("attendance.services.BioTimeClient")
+    def test_sync_uses_last_sync_time_when_available(self, client_cls):
+        BioTimeEmployeeMap.objects.create(employee_profile=self.profile, biotime_emp_code="100001")
+        client = client_cls.return_value
+        client.test_connection.return_value = True
+        client.get_transactions.return_value = []
+        last_sync = timezone.now() - timedelta(hours=2)
+        self.config.last_sync_time = last_sync
+        self.config.save(update_fields=["last_sync_time"])
+
+        SyncBioTimeService.execute(days_back=30)
+
+        client.get_transactions.assert_called_once()
+        called_kwargs = client.get_transactions.call_args.kwargs
+        self.assertEqual(called_kwargs["start_time"], last_sync.strftime("%Y-%m-%d 00:00:00"))
+
+    @patch("attendance.services.BioTimeClient")
+    def test_get_unmapped_users_returns_device_users_not_linked_locally(self, client_cls):
+        BioTimeEmployeeMap.objects.create(employee_profile=self.profile, biotime_emp_code="100001")
+        client = client_cls.return_value
+        client.get_employees.return_value = [
+            {"emp_code": "100001", "first_name": "Mapped", "last_name": "User", "dept_name": "Ops"},
+            {"emp_code": "100002", "first_name": "New", "last_name": "Person", "dept_name": "Ops"},
+        ]
+
+        unmapped = SyncBioTimeService.get_unmapped_users()
+
+        self.assertEqual(
+            unmapped,
+            [{"emp_code": "100002", "first_name": "New", "last_name": "Person", "department": "Ops"}],
+        )
+
+    def test_config_put_preserves_password_when_blank(self):
+        self.client.force_authenticate(user=self.admin)
+
+        response = self.client.put(
+            "/api/biotime/config/",
+            {
+                "server_ip": "10.0.0.10",
+                "server_port": "8090",
+                "username": "updated-admin",
+                "password": "",
+                "is_active": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        config = BioTimeConfig.get_solo()
+        self.assertEqual(config.server_ip, "10.0.0.10")
+        self.assertEqual(config.username, "updated-admin")
+        self.assertEqual(config.password, "secret")

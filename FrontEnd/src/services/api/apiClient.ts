@@ -9,7 +9,16 @@ export const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+function shouldRedirectOnUnauthorized(err: any): boolean {
+  const status = err?.response?.status;
+  if (status !== 401) return false;
 
+  const token = getToken();
+  if (!token) return false;
+
+  const requestUrl = String(err?.config?.url || "");
+  return !requestUrl.includes("/auth/login");
+}
 
 // Attach token and language
 api.interceptors.request.use((config) => {
@@ -27,10 +36,9 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    const status = err?.response?.status;
     const data = err?.response?.data;
 
-    if (status === 401) {
+    if (shouldRedirectOnUnauthorized(err)) {
       clearToken();
       // Zustand store action without hook usage:
       useAuthStore.getState().logout();

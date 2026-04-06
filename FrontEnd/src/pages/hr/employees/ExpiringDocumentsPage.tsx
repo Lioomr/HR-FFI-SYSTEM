@@ -6,10 +6,27 @@ import { getExpiringEmployees, notifyExpiringEmployee, type ExpiringEmployee } f
 import { useI18n } from "../../../i18n/useI18n";
 
 const { Title, Text } = Typography;
+const DEFAULT_WINDOW_DAYS = 30;
+const EXPIRING_DOCS_DAYS_STORAGE_KEY = "hr-expiring-documents-window-days";
+
+function getStoredWindowDays(): number {
+  if (typeof window === "undefined") {
+    return DEFAULT_WINDOW_DAYS;
+  }
+
+  const raw = window.localStorage.getItem(EXPIRING_DOCS_DAYS_STORAGE_KEY);
+  const parsed = raw ? Number(raw) : NaN;
+
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 365) {
+    return DEFAULT_WINDOW_DAYS;
+  }
+
+  return parsed;
+}
 
 export default function ExpiringDocumentsPage() {
   const { t } = useI18n();
-  const [days, setDays] = useState<number | null>(30);
+  const [days, setDays] = useState<number | null>(() => getStoredWindowDays());
   const [loading, setLoading] = useState(false);
   const [notifyingId, setNotifyingId] = useState<number | null>(null);
   const [items, setItems] = useState<ExpiringEmployee[]>([]);
@@ -17,10 +34,25 @@ export default function ExpiringDocumentsPage() {
   const [pageSize, setPageSize] = useState(25);
   const [total, setTotal] = useState(0);
 
+  const updateDays = (value: number | null) => {
+    setDays(value);
+
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (value === null) {
+      window.localStorage.removeItem(EXPIRING_DOCS_DAYS_STORAGE_KEY);
+      return;
+    }
+
+    window.localStorage.setItem(EXPIRING_DOCS_DAYS_STORAGE_KEY, String(value));
+  };
+
   const loadData = async (nextPage = page, nextPageSize = pageSize, nextDays = days) => {
     setLoading(true);
     try {
-      const response = await getExpiringEmployees(nextDays || 30, nextPage, nextPageSize);
+      const response = await getExpiringEmployees(nextDays || DEFAULT_WINDOW_DAYS, nextPage, nextPageSize);
       if (response.status === "success") {
         setItems(response.data.items || []);
         setTotal(response.data.count || 0);
@@ -42,7 +74,7 @@ export default function ExpiringDocumentsPage() {
   const notifyOne = async (employeeId: number, channels: Array<"email" | "whatsapp" | "announcement">) => {
     setNotifyingId(employeeId);
     try {
-      const response = await notifyExpiringEmployee(employeeId, { channels, days: days || 30 });
+      const response = await notifyExpiringEmployee(employeeId, { channels, days: days || DEFAULT_WINDOW_DAYS });
       if (response.status === "success") {
         const delivery = response.data.delivery || {};
         const sentChannels = Object.entries(delivery)
@@ -168,7 +200,7 @@ export default function ExpiringDocumentsPage() {
         </Title>
         <Space>
           <Text>{t("hr.expiringDocs.windowDays")}</Text>
-          <InputNumber min={1} max={365} value={days} onChange={(v) => setDays(v)} />
+          <InputNumber min={1} max={365} value={days} onChange={updateDays} />
           <Button
             icon={<ReloadOutlined />}
             onClick={() => {
