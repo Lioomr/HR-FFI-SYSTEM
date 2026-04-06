@@ -1,5 +1,8 @@
 from django.conf import settings
+from django.core.validators import FileExtensionValidator
 from django.db import models
+
+from employees.storage import PrivateUploadStorage
 
 
 class Announcement(models.Model):
@@ -23,6 +26,14 @@ class Announcement(models.Model):
     publish_to_dashboard = models.BooleanField(default=True, help_text="Show announcement on user dashboards")
     publish_to_email = models.BooleanField(default=False, help_text="Send announcement via email")
     publish_to_sms = models.BooleanField(default=False, help_text="Send announcement via SMS (placeholder)")
+    attachment = models.FileField(
+        storage=PrivateUploadStorage(),
+        upload_to="announcement_attachments/",
+        null=True,
+        blank=True,
+        validators=[FileExtensionValidator(allowed_extensions=["pdf"])],
+        help_text="Optional PDF attachment for dashboard preview and email delivery.",
+    )
 
     # Metadata
     created_by = models.ForeignKey(

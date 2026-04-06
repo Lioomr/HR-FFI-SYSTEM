@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../auth/authStore";
 import { loginApi } from "../services/api/authApi";
 import { isApiError } from "../services/api/apiTypes";
+import { getFirstApiErrorMessage } from "../utils/formErrors";
 import { useI18n } from "../i18n/useI18n";
 import type { AppLanguage } from "../i18n/types";
 
@@ -17,13 +18,37 @@ type LoginFormValues = {
 export default function LoginPage() {
   const [form] = Form.useForm<LoginFormValues>();
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ title: string; description: string } | null>(null);
 
   const login = useAuthStore((s) => s.login);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
   const { t, language, setLanguage, direction } = useI18n();
+
+  function buildLoginError(message?: string | null) {
+    const description = message?.trim() || t("auth.loginFailed");
+    const normalized = description.toLowerCase();
+
+    if (normalized.includes("too many failed login attempts") || normalized.includes("locked out")) {
+      return {
+        title: t("auth.loginLockedTitle"),
+        description,
+      };
+    }
+
+    if (description === t("auth.backendNotConnected")) {
+      return {
+        title: t("auth.backendUnavailableTitle"),
+        description,
+      };
+    }
+
+    return {
+      title: t("auth.loginFailedTitle"),
+      description,
+    };
+  }
 
   useEffect(() => {
     if (isAuthenticated && user?.role) {
@@ -41,7 +66,7 @@ export default function LoginPage() {
     try {
       const res = await loginApi({ email: values.email, password: values.password });
       if (isApiError(res)) {
-        setError(res.message || t("auth.loginFailed"));
+        setError(buildLoginError(res.message || t("auth.loginFailed")));
         return;
       }
       login(res.data.user, res.data.token);
@@ -53,9 +78,9 @@ export default function LoginPage() {
       else navigate("/employee/home", { replace: true });
     } catch (e: unknown) {
       if (typeof e === "object" && e !== null && "response" in e) {
-        setError(t("auth.loginFailed"));
+        setError(buildLoginError(getFirstApiErrorMessage(e) || t("auth.loginFailed")));
       } else {
-        setError(t("auth.backendNotConnected"));
+        setError(buildLoginError(t("auth.backendNotConnected")));
       }
     } finally {
       setSubmitting(false);
@@ -253,7 +278,8 @@ export default function LoginPage() {
               <Alert
                 type="error"
                 showIcon
-                message={error}
+                message={error.title}
+                description={error.description}
                 style={{ marginBottom: 20, borderRadius: 10 }}
               />
             )}

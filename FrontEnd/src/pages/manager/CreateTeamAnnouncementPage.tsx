@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
-import { Form, Input, Button, Select, Switch, Card, message, Typography, Radio } from "antd";
+import { Form, Input, Button, Select, Switch, Card, message, Typography, Radio, Upload } from "antd";
+import type { UploadFile } from "antd/es/upload/interface";
 import { useNavigate } from "react-router-dom";
 import { createAnnouncement, type CreateAnnouncementData } from "../../services/api/announcementApi";
 import { getManagerTeam, type ManagerTeamMember } from "../../services/api/managerApi";
 import { isApiError } from "../../services/api/apiTypes";
 import { useAuthStore } from "../../auth/authStore";
 import { useI18n } from "../../i18n/useI18n";
+import { UploadOutlined } from "@ant-design/icons";
 
 const { Title } = Typography;
 
@@ -18,6 +20,8 @@ export default function CreateTeamAnnouncementPage() {
   const [loading, setLoading] = useState(false);
   const [team, setTeam] = useState<ManagerTeamMember[]>([]);
   const [targetMode, setTargetMode] = useState<"all" | "single">("all");
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+  const [attachmentList, setAttachmentList] = useState<UploadFile[]>([]);
 
   useEffect(() => {
     const loadTeam = async () => {
@@ -45,6 +49,7 @@ export default function CreateTeamAnnouncementPage() {
         publish_to_dashboard: true,
         publish_to_email: values.publish_to_email,
         publish_to_sms: values.publish_to_sms,
+        attachment: attachmentFile,
       };
 
       if (targetMode === "single") {
@@ -86,6 +91,35 @@ export default function CreateTeamAnnouncementPage() {
 
           <Form.Item name="content" label={t("hr.announcements.contentLabel")} rules={[{ required: true, message: t("hr.announcements.contentRequired") }]}>
             <Input.TextArea rows={6} placeholder={t("hr.announcements.contentPlaceholder")} showCount maxLength={2000} />
+          </Form.Item>
+
+          <Form.Item
+            label={t("hr.announcements.attachmentLabel", "PDF Attachment (Optional)")}
+            extra={t("hr.announcements.attachmentHelp", "Upload one PDF file. It will be previewable in the dashboard and included in email notifications.")}
+          >
+            <Upload
+              accept="application/pdf,.pdf"
+              maxCount={1}
+              beforeUpload={(file) => {
+                const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+                if (!isPdf) {
+                  message.error(t("hr.announcements.attachmentPdfOnly", "Only PDF files are allowed."));
+                  return Upload.LIST_IGNORE;
+                }
+                setAttachmentFile(file);
+                setAttachmentList([file]);
+                return false;
+              }}
+              onRemove={() => {
+                setAttachmentFile(null);
+                setAttachmentList([]);
+              }}
+              fileList={attachmentList}
+            >
+              <Button icon={<UploadOutlined />}>
+                {t("hr.announcements.attachmentSelect", "Select PDF")}
+              </Button>
+            </Upload>
           </Form.Item>
 
           <Form.Item label={t("announcements.audience")}>

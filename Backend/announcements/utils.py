@@ -1,10 +1,40 @@
+from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core import signing
 
-from core.notifications import send_email_notification
 from core.permissions import get_role
+from core.services.bird_email_service import send_announcement_notification_email
 from core.services.whatsapp_service import WhatsAppService
 
 User = get_user_model()
+ANNOUNCEMENT_ATTACHMENT_SALT = "announcement-email-attachment"
+
+
+def _announcement_action_url(user):
+    base_url = (getattr(settings, "FRONTEND_URL", "") or "").rstrip("/")
+    if not base_url:
+        return None
+
+    role_path_map = {
+        "SystemAdmin": "/admin/announcements",
+        "HRManager": "/hr/announcements",
+        "Manager": "/manager/announcements",
+        "CEO": "/ceo/announcements",
+        "Employee": "/employee/announcements",
+    }
+    return f"{base_url}{role_path_map.get(get_role(user), '/employee/announcements')}"
+
+
+def _announcement_attachment_url(announcement):
+    if not announcement.attachment:
+        return None
+
+    base_url = (getattr(settings, "FRONTEND_URL", "") or "").rstrip("/")
+    if not base_url:
+        return None
+
+    token = signing.dumps({"announcement_id": announcement.id}, salt=ANNOUNCEMENT_ATTACHMENT_SALT)
+    return f"{base_url}/api/announcements/{announcement.id}/attachment-public?token={token}"
 
 
 def send_announcement_email(announcement):
@@ -32,20 +62,30 @@ def send_announcement_email(announcement):
     if not recipient_emails:
         return
 
-    subject = f"New Announcement: {announcement.title}"
-    message = f"""
-{announcement.title}
+    publisher_name = announcement.created_by.full_name or announcement.created_by.email
+    attachment_name = announcement.attachment.name.rsplit("/", 1)[-1] if announcement.attachment else None
+    attachment_url = _announcement_attachment_url(announcement)
 
-{announcement.content}
+    for user in users:
+        recipient_email = getattr(user, "email", None)
+        if not recipient_email:
+            continue
 
----
-This announcement was sent by {announcement.created_by.full_name or announcement.created_by.email}
-"""
-
-    for recipient_email in recipient_emails:
-        result = send_email_notification(recipient_email, subject, message)
-        if not result.get("sent"):
-            print(f"Error sending announcement email to {recipient_email}: {result.get('reason', 'Unknown error')}")
+        profile = getattr(user, "employee_profile", None)
+        recipient_name = getattr(profile, "full_name", "") or getattr(user, "full_name", "") or recipient_email
+        result = send_announcement_notification_email(
+            to_email=recipient_email,
+            employee_name=recipient_name,
+            announcement_title=announcement.title,
+            message=announcement.content,
+            published_at=announcement.created_at.strftime("%Y-%m-%d %H:%M") if announcement.created_at else None,
+            publisher_name=publisher_name,
+            action_url=_announcement_action_url(user),
+            attachment_name=attachment_name,
+            attachment_url=attachment_url,
+        )
+        if not result.get("success"):
+            print(f"Error sending announcement email to {recipient_email}: {result.get('error', 'Unknown error')}")
 
 
 def send_announcement_whatsapp(announcement):

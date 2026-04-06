@@ -4,46 +4,72 @@
 <div class="status-badge-wrap" style="background:#f8f9fa;text-align:center;padding:20px 16px 0;">
   <span class="status-badge badge-info"
     style="display:inline-block;padding:8px 22px;border-radius:100px;font-size:13px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;background:#E3F2FD;color:#1565C0;border:1px solid #90CAF9;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
-    &#128226;&nbsp; New Announcement &nbsp;·&nbsp; إعلان جديد
+    &#128226;&nbsp; New Announcement &nbsp;&middot;&nbsp; إعلان جديد
   </span>
 </div>
 {% endblock %}
 
 {% block details %}
-{% if announcement_title or published_at or publisher_name %}
+{% if announcement_title or published_at or publisher_name or attachment_name %}
 <div class="details-card" style="margin:0 0 24px;border-radius:12px;border:1px solid #E5E7EB;overflow:hidden;">
   <div class="details-card-header"
     style="background:linear-gradient(90deg,#1565C0,#1E88E5);padding:10px 18px;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#fff;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
-    &#128226; Announcement Details — تفاصيل الإعلان</div>
+    &#128226; Announcement Details &mdash; تفاصيل الإعلان
+  </div>
   <table class="detail-row-table" style="width:100%;border-collapse:collapse;" role="presentation">
     {% if announcement_title %}
     <tr>
       <td class="detail-label"
         style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
-        Title / العنوان</td>
+        Title / العنوان
+      </td>
       <td class="detail-value"
         style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;color:#6B7280;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
-        <strong>{{ announcement_title }}</strong></td>
+        <strong>{{ announcement_title }}</strong>
+      </td>
     </tr>
     {% endif %}
     {% if publisher_name %}
     <tr>
       <td class="detail-label"
         style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
-        Posted By / نُشر بواسطة</td>
+        Posted By / نُشر بواسطة
+      </td>
       <td class="detail-value"
         style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;color:#6B7280;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
-        {{ publisher_name }}</td>
+        {{ publisher_name }}
+      </td>
     </tr>
     {% endif %}
     {% if published_at %}
     <tr>
       <td class="detail-label"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        Published / تاريخ النشر
+      </td>
+      <td class="detail-value"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;color:#6B7280;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        {{ published_at }}
+      </td>
+    </tr>
+    {% endif %}
+    {% if attachment_name %}
+    <tr>
+      <td class="detail-label"
         style="padding:11px 18px;font-size:14px;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
-        Published / تاريخ النشر</td>
+        Attachment / المرفق
+      </td>
       <td class="detail-value"
         style="padding:11px 18px;font-size:14px;color:#6B7280;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
-        {{ published_at }}</td>
+        <strong>{{ attachment_name }}</strong>
+        {% if attachment_url %}
+        <br>
+        <a href="{{ attachment_url }}" target="_blank" rel="noopener noreferrer"
+          style="color:#1565C0;text-decoration:none;font-weight:600;">
+          Download PDF
+        </a>
+        {% endif %}
+      </td>
     </tr>
     {% endif %}
   </table>
@@ -52,41 +78,67 @@
 {% endblock %}
 
 {% block details_ar %}
-{% if announcement_title or published_at or publisher_name %}
+{% if announcement_title or published_at or publisher_name or attachment_name %}
 <div class="details-card"
   style="margin:0 0 24px;border-radius:12px;border:1px solid #E5E7EB;overflow:hidden;direction:rtl;text-align:right;">
   <div class="details-card-header"
     style="background:linear-gradient(90deg,#1565C0,#1E88E5);padding:10px 18px;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#fff;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
-    &#128226; تفاصيل الإعلان — Announcement Details</div>
+    &#128226; تفاصيل الإعلان &mdash; Announcement Details
+  </div>
   <table class="detail-row-table" style="width:100%;border-collapse:collapse;direction:rtl;" role="presentation">
     {% if announcement_title %}
     <tr>
       <td class="ar-detail-label"
         style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
-        العنوان / Title</td>
+        العنوان / Title
+      </td>
       <td class="detail-value"
         style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;color:#6B7280;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
-        <strong>{{ announcement_title }}</strong></td>
+        <strong>{{ announcement_title }}</strong>
+      </td>
     </tr>
     {% endif %}
     {% if publisher_name %}
     <tr>
       <td class="ar-detail-label"
         style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
-        نُشر بواسطة / Posted By</td>
+        نُشر بواسطة / Posted By
+      </td>
       <td class="detail-value"
         style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;color:#6B7280;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
-        {{ publisher_name }}</td>
+        {{ publisher_name }}
+      </td>
     </tr>
     {% endif %}
     {% if published_at %}
     <tr>
       <td class="ar-detail-label"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        تاريخ النشر / Published
+      </td>
+      <td class="detail-value"
+        style="padding:11px 18px;font-size:14px;border-bottom:1px solid #F3F4F6;color:#6B7280;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
+        {{ published_at }}
+      </td>
+    </tr>
+    {% endif %}
+    {% if attachment_name %}
+    <tr>
+      <td class="ar-detail-label"
         style="padding:11px 18px;font-size:14px;font-weight:700;color:#374151;width:180px;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
-        تاريخ النشر / Published</td>
+        المرفق / Attachment
+      </td>
       <td class="detail-value"
         style="padding:11px 18px;font-size:14px;color:#6B7280;vertical-align:top;font-family:'Segoe UI',Tahoma,Arial,sans-serif;">
-        {{ published_at }}</td>
+        <strong>{{ attachment_name }}</strong>
+        {% if attachment_url %}
+        <br>
+        <a href="{{ attachment_url }}" target="_blank" rel="noopener noreferrer"
+          style="color:#1565C0;text-decoration:none;font-weight:600;">
+          تنزيل ملف PDF
+        </a>
+        {% endif %}
+      </td>
     </tr>
     {% endif %}
   </table>
