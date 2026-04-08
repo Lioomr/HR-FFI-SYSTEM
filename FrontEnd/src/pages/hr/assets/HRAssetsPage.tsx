@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Card, Col, DatePicker, Descriptions, Form, Input, InputNumber, Modal, Popconfirm, Row, Select, Space, Table, Tag, Typography, message } from "antd";
+import { Button, Card, Col, DatePicker, Descriptions, Form, Input, InputNumber, Modal, Popconfirm, Row, Select, Space, Table, Tabs, Tag, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { DeleteOutlined, PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
@@ -8,21 +8,28 @@ import ErrorState from "../../../components/ui/ErrorState";
 import LoadingState from "../../../components/ui/LoadingState";
 import PageHeader from "../../../components/ui/PageHeader";
 import {
+  approveHRAssetReturnRequest,
   assignAsset,
   createAsset,
   deleteAsset,
   getAssetsDashboardSummary,
+  rejectHRAssetReturnRequest,
+  listAssetDamageReports,
+  listAssetReturnRequests,
   listAssets,
   returnAsset,
   updateAsset,
   type Asset,
+  type AssetDamageReport,
   type AssetDashboardSummary,
+  type AssetReturnRequest,
   type CreateAssetPayload,
 } from "../../../services/api/assetsApi";
 import { isApiError } from "../../../services/api/apiTypes";
 import { listEmployees, type Employee } from "../../../services/api/employeesApi";
 
 import { useI18n } from "../../../i18n/useI18n";
+import AssetReturnApprovalMap from "../../../components/assets/AssetReturnApprovalMap";
 
 const statusColorMap: Record<string, string> = {
   AVAILABLE: "green",
@@ -33,9 +40,32 @@ const statusColorMap: Record<string, string> = {
   RETIRED: "default",
 };
 
-function StatCard({ title, value }: { title: string; value: number }) {
+function StatCard({
+  title,
+  value,
+  active = false,
+  onClick,
+}: {
+  title: string;
+  value: number;
+  active?: boolean;
+  onClick?: () => void;
+}) {
   return (
-    <Card>
+    <Card
+      hoverable={!!onClick}
+      onClick={onClick}
+      style={
+        onClick
+          ? {
+              cursor: "pointer",
+              borderColor: active ? "#fa8c16" : undefined,
+              boxShadow: active ? "0 0 0 2px rgba(250, 140, 22, 0.12)" : undefined,
+            }
+          : undefined
+      }
+      bodyStyle={{ paddingBlock: 20 }}
+    >
       <Typography.Text type="secondary">{title}</Typography.Text>
       <div style={{ fontSize: 28, fontWeight: 700, lineHeight: 1.1, marginTop: 6 }}>{value}</div>
     </Card>
@@ -48,6 +78,18 @@ export default function HRAssetsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [assetPage, setAssetPage] = useState(1);
+  const [assetPageSize, setAssetPageSize] = useState(10);
+  const [assetTotal, setAssetTotal] = useState(0);
+  const [searchText, setSearchText] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<string | undefined>();
+  const [statusFilter, setStatusFilter] = useState<string | undefined>();
+  const [ordering, setOrdering] = useState<string | undefined>();
+  const [warrantySoonOnly, setWarrantySoonOnly] = useState(false);
+  const [activeKpi, setActiveKpi] = useState<"total" | "assigned" | "available" | "damaged" | "lost" | "warrantySoon" | null>(
+    null
+  );
   const [summary, setSummary] = useState<AssetDashboardSummary | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
 
@@ -58,6 +100,9 @@ export default function HRAssetsPage() {
   const [activeAsset, setActiveAsset] = useState<Asset | null>(null);
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [requestHistoryLoading, setRequestHistoryLoading] = useState(false);
+  const [damageReports, setDamageReports] = useState<AssetDamageReport[]>([]);
+  const [returnRequests, setReturnRequests] = useState<AssetReturnRequest[]>([]);
 
   const [createForm] = Form.useForm();
   const [assignForm] = Form.useForm();
@@ -70,7 +115,15 @@ export default function HRAssetsPage() {
       setError(null);
 
       const [assetsRes, summaryRes] = await Promise.all([
-        listAssets({ page: 1, page_size: 25 }),
+        listAssets({
+          page: assetPage,
+          page_size: assetPageSize,
+          search: appliedSearch || undefined,
+          type: typeFilter,
+          status: statusFilter,
+          ordering,
+          warranty_expiring_soon: warrantySoonOnly || undefined,
+        }),
         getAssetsDashboardSummary(),
       ]);
 
@@ -84,6 +137,7 @@ export default function HRAssetsPage() {
       }
 
       setAssets(assetsRes.data.items || []);
+      setAssetTotal(assetsRes.data.count || 0);
       setSummary(summaryRes.data);
     } catch (err: any) {
       setError(err?.message || t("assets.loadFailed"));
@@ -105,6 +159,9 @@ export default function HRAssetsPage() {
 
   useEffect(() => {
     void loadData();
+  }, [assetPage, assetPageSize, appliedSearch, typeFilter, statusFilter, ordering, warrantySoonOnly]);
+
+  useEffect(() => {
     void loadEmployees();
   }, []);
 
@@ -131,6 +188,7 @@ export default function HRAssetsPage() {
           onClick={() => {
             setActiveAsset(record);
             setDetailsModalOpen(true);
+            void loadAssetRequestHistory(record.id);
           }}
         >
           {value}
@@ -181,6 +239,7 @@ export default function HRAssetsPage() {
               e.stopPropagation();
               setActiveAsset(record);
               setDetailsModalOpen(true);
+              void loadAssetRequestHistory(record.id);
             }}
           >
             {t("common.view")}
@@ -306,6 +365,195 @@ export default function HRAssetsPage() {
     }
     return undefined;
   };
+
+  const formatDateTime = (value?: string | null) => {
+    if (!value) return "-";
+    const parsed = dayjs(value);
+    return parsed.isValid() ? parsed.format("YYYY-MM-DD HH:mm") : value;
+  };
+
+  const loadAssetRequestHistory = async (assetId: number) => {
+    setRequestHistoryLoading(true);
+    try {
+      const [damageRes, returnRes] = await Promise.all([
+        listAssetDamageReports({ asset: assetId, page: 1, page_size: 20 }),
+        listAssetReturnRequests({ asset: assetId, page: 1, page_size: 20 }),
+      ]);
+
+      if (!isApiError(damageRes)) {
+        setDamageReports(damageRes.data.items || []);
+      } else {
+        setDamageReports([]);
+      }
+
+      if (!isApiError(returnRes)) {
+        setReturnRequests(returnRes.data.items || []);
+      } else {
+        setReturnRequests([]);
+      }
+    } catch {
+      setDamageReports([]);
+      setReturnRequests([]);
+    } finally {
+      setRequestHistoryLoading(false);
+    }
+  };
+
+  const resetFilters = () => {
+    setSearchText("");
+    setAppliedSearch("");
+    setTypeFilter(undefined);
+    setStatusFilter(undefined);
+    setOrdering(undefined);
+    setWarrantySoonOnly(false);
+    setActiveKpi(null);
+    setAssetPage(1);
+  };
+
+  const applyKpiFilter = (kpi: "total" | "assigned" | "available" | "damaged" | "lost" | "warrantySoon") => {
+    setAssetPage(1);
+    setActiveKpi(kpi);
+
+    if (kpi === "total") {
+      setStatusFilter(undefined);
+      setWarrantySoonOnly(false);
+      setOrdering(undefined);
+      return;
+    }
+
+    if (kpi === "warrantySoon") {
+      setStatusFilter(undefined);
+      setWarrantySoonOnly(true);
+      setOrdering("warranty_expiry");
+      return;
+    }
+
+    setWarrantySoonOnly(false);
+    setOrdering(undefined);
+    setStatusFilter(kpi.toUpperCase());
+  };
+
+  const requestStatusColorMap: Record<string, string> = {
+    PENDING_MANAGER: "orange",
+    PENDING: "gold",
+    PENDING_HR: "gold",
+    PENDING_CEO: "purple",
+    APPROVED: "green",
+    PROCESSED: "blue",
+    REJECTED: "red",
+  };
+
+  const handleHRReturnRequestAction = async (requestItem: AssetReturnRequest, action: "approve" | "reject") => {
+    try {
+      let comment = "";
+      if (action === "reject") {
+        comment = window.prompt(t("manager.requests.reasonPrompt")) || "";
+        if (!comment.trim()) return;
+      }
+
+      if (action === "approve") {
+        const response = await approveHRAssetReturnRequest(requestItem.id);
+        if (isApiError(response)) {
+          await apiMessage.error(response.message || t("common.error"));
+          return;
+        }
+      } else {
+        const response = await rejectHRAssetReturnRequest(requestItem.id, comment.trim());
+        if (isApiError(response)) {
+          await apiMessage.error(response.message || t("common.error"));
+          return;
+        }
+      }
+
+      await apiMessage.success(
+        action === "approve"
+          ? t("assets.approvalMap.approvedForReturn", "Return request approved")
+          : t("assets.returnRequestRejected", "Return request rejected")
+      );
+      if (activeAsset) {
+        await loadAssetRequestHistory(activeAsset.id);
+      }
+    } catch (err: any) {
+      await apiMessage.error(err?.message || t("common.error"));
+    }
+  };
+
+  const damageReportColumns: ColumnsType<AssetDamageReport> = [
+    {
+      title: t("hr.assets.employee"),
+      dataIndex: "employee_name",
+      key: "employee_name",
+      width: 220,
+    },
+    {
+      title: t("common.details"),
+      dataIndex: "description",
+      key: "description",
+    },
+    {
+      title: t("common.status"),
+      dataIndex: "status",
+      key: "status",
+      width: 140,
+      render: (value: string) => <Tag color={requestStatusColorMap[value] || "default"}>{value}</Tag>,
+    },
+    {
+      title: t("hr.assets.reportedAt", "Reported At"),
+      dataIndex: "reported_at",
+      key: "reported_at",
+      width: 170,
+      render: (value: string) => formatDateTime(value),
+    },
+  ];
+
+  const returnRequestColumns: ColumnsType<AssetReturnRequest> = [
+    {
+      title: t("hr.assets.employee"),
+      dataIndex: "employee_name",
+      key: "employee_name",
+      width: 220,
+    },
+    {
+      title: t("common.notes"),
+      dataIndex: "note",
+      key: "note",
+    },
+    {
+      title: t("common.status"),
+      dataIndex: "status",
+      key: "status",
+      width: 140,
+      render: (value: string) => <Tag color={requestStatusColorMap[value] || "default"}>{value}</Tag>,
+    },
+    {
+      title: t("hr.assets.requestedAt", "Requested At"),
+      dataIndex: "requested_at",
+      key: "requested_at",
+      width: 170,
+      render: (value: string) => formatDateTime(value),
+    },
+    {
+      title: t("common.actions"),
+      key: "actions",
+      width: 220,
+      render: (_, record) => (
+        <Space>
+          {record.status === "PENDING" ? (
+            <>
+              <Button size="small" type="primary" onClick={() => void handleHRReturnRequestAction(record, "approve")}>
+                {t("common.approve")}
+              </Button>
+              <Button size="small" danger onClick={() => void handleHRReturnRequestAction(record, "reject")}>
+                {t("common.reject")}
+              </Button>
+            </>
+          ) : (
+            <Tag color="default">{t("manager.requests.history")}</Tag>
+          )}
+        </Space>
+      ),
+    },
+  ];
 
   const handleCreateAsset = async () => {
     try {
@@ -483,25 +731,139 @@ export default function HRAssetsPage() {
 
       {summary && (
         <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-          <Col xs={24} sm={12} md={8} lg={4}><StatCard title={t("hr.assets.total")} value={summary.total} /></Col>
-          <Col xs={24} sm={12} md={8} lg={4}><StatCard title={t("hr.assets.assigned")} value={summary.assigned} /></Col>
-          <Col xs={24} sm={12} md={8} lg={4}><StatCard title={t("hr.assets.available")} value={summary.available} /></Col>
-          <Col xs={24} sm={12} md={8} lg={4}><StatCard title={t("hr.assets.damaged")} value={summary.damaged} /></Col>
-          <Col xs={24} sm={12} md={8} lg={4}><StatCard title={t("hr.assets.lost")} value={summary.lost} /></Col>
-          <Col xs={24} sm={12} md={8} lg={4}><StatCard title={t("hr.assets.warrantySoon")} value={summary.warranty_expiring_soon} /></Col>
+          <Col xs={24} sm={12} md={8} lg={4}>
+            <StatCard
+              title={t("hr.assets.total")}
+              value={summary.total}
+              active={activeKpi === "total"}
+              onClick={() => applyKpiFilter("total")}
+            />
+          </Col>
+          <Col xs={24} sm={12} md={8} lg={4}>
+            <StatCard
+              title={t("hr.assets.assigned")}
+              value={summary.assigned}
+              active={activeKpi === "assigned"}
+              onClick={() => applyKpiFilter("assigned")}
+            />
+          </Col>
+          <Col xs={24} sm={12} md={8} lg={4}>
+            <StatCard
+              title={t("hr.assets.available")}
+              value={summary.available}
+              active={activeKpi === "available"}
+              onClick={() => applyKpiFilter("available")}
+            />
+          </Col>
+          <Col xs={24} sm={12} md={8} lg={4}>
+            <StatCard
+              title={t("hr.assets.damaged")}
+              value={summary.damaged}
+              active={activeKpi === "damaged"}
+              onClick={() => applyKpiFilter("damaged")}
+            />
+          </Col>
+          <Col xs={24} sm={12} md={8} lg={4}>
+            <StatCard
+              title={t("hr.assets.lost")}
+              value={summary.lost}
+              active={activeKpi === "lost"}
+              onClick={() => applyKpiFilter("lost")}
+            />
+          </Col>
+          <Col xs={24} sm={12} md={8} lg={4}>
+            <StatCard
+              title={t("hr.assets.warrantySoon")}
+              value={summary.warranty_expiring_soon}
+              active={activeKpi === "warrantySoon"}
+              onClick={() => applyKpiFilter("warrantySoon")}
+            />
+          </Col>
         </Row>
       )}
+
+      <Card style={{ marginBottom: 16 }}>
+        <Row gutter={[12, 12]}>
+          <Col xs={24} md={10}>
+            <Input.Search
+              allowClear
+              value={searchText}
+              placeholder={t("assets.searchPlaceholder", "Search by asset code, serial number, or name")}
+              onChange={(e) => setSearchText(e.target.value)}
+              onSearch={(value) => {
+                setAppliedSearch(value.trim());
+                setAssetPage(1);
+              }}
+            />
+          </Col>
+          <Col xs={24} md={6}>
+            <Select
+              allowClear
+              value={typeFilter}
+              style={{ width: "100%" }}
+              placeholder={t("common.type")}
+              onChange={(value) => {
+                setTypeFilter(value);
+                setAssetPage(1);
+              }}
+              options={[
+                { label: t("hr.assets.vehicle"), value: "VEHICLE" },
+                { label: t("hr.assets.laptop"), value: "LAPTOP" },
+                { label: t("hr.assets.other"), value: "OTHER" },
+              ]}
+            />
+          </Col>
+          <Col xs={24} md={6}>
+            <Select
+              allowClear
+              value={statusFilter}
+              style={{ width: "100%" }}
+              placeholder={t("common.status")}
+              onChange={(value) => {
+                setStatusFilter(value);
+                setWarrantySoonOnly(false);
+                setOrdering(undefined);
+                setActiveKpi(null);
+                setAssetPage(1);
+              }}
+              options={[
+                { label: "AVAILABLE", value: "AVAILABLE" },
+                { label: "ASSIGNED", value: "ASSIGNED" },
+                { label: "UNDER_MAINTENANCE", value: "UNDER_MAINTENANCE" },
+                { label: "LOST", value: "LOST" },
+                { label: "DAMAGED", value: "DAMAGED" },
+                { label: "RETIRED", value: "RETIRED" },
+              ]}
+            />
+          </Col>
+          <Col xs={24} md={2}>
+            <Button block onClick={resetFilters}>
+              {t("common.reset")}
+            </Button>
+          </Col>
+        </Row>
+      </Card>
 
       <Card>
         <Table
           columns={columns}
           dataSource={dataSource}
-          pagination={false}
+          pagination={{
+            current: assetPage,
+            pageSize: assetPageSize,
+            total: assetTotal,
+            showSizeChanger: true,
+            onChange: (page, pageSize) => {
+              setAssetPage(page);
+              setAssetPageSize(pageSize);
+            },
+          }}
           scroll={{ x: 900 }}
           onRow={(record) => ({
             onClick: () => {
               setActiveAsset(record);
               setDetailsModalOpen(true);
+              void loadAssetRequestHistory(record.id);
             },
             style: { cursor: "pointer" },
           })}
@@ -514,6 +876,8 @@ export default function HRAssetsPage() {
         onCancel={() => {
           setDetailsModalOpen(false);
           setActiveAsset(null);
+          setDamageReports([]);
+          setReturnRequests([]);
         }}
         footer={[
           <Button
@@ -521,6 +885,8 @@ export default function HRAssetsPage() {
             onClick={() => {
               setDetailsModalOpen(false);
               setActiveAsset(null);
+              setDamageReports([]);
+              setReturnRequests([]);
             }}
           >
             {t("common.close")}
@@ -529,80 +895,118 @@ export default function HRAssetsPage() {
         width={900}
       >
         {activeAsset && (
-          <Descriptions bordered size="small" column={2}>
-            <Descriptions.Item label={t("assets.assetCode")}>{activeAsset.asset_code}</Descriptions.Item>
-            <Descriptions.Item label={t("common.name")}>{language === "ar" ? (activeAsset.name_ar || activeAsset.name_en || "-") : (activeAsset.name_en || "-")}</Descriptions.Item>
-            <Descriptions.Item label={t("common.type")}>{activeAsset.type || "-"}</Descriptions.Item>
-            <Descriptions.Item label={t("common.status")}>
-              <Tag color={statusColorMap[activeAsset.status] || "default"}>{activeAsset.status}</Tag>
-            </Descriptions.Item>
-            <Descriptions.Item label={t("assets.vendor")}>{activeAsset.vendor || "-"}</Descriptions.Item>
-            <Descriptions.Item label={t("hr.assets.assetValue")}>{activeAsset.asset_value ?? "-"}</Descriptions.Item>
-            <Descriptions.Item label={t("assets.serialNumber")}>{activeAsset.serial_number || "-"}</Descriptions.Item>
-            <Descriptions.Item label={t("assets.purchaseDate")}>{activeAsset.purchase_date || "-"}</Descriptions.Item>
-            <Descriptions.Item label={t("assets.warrantyExpiry")}>{activeAsset.warranty_expiry || "-"}</Descriptions.Item>
-            <Descriptions.Item label={t("common.notes")} span={2}>{activeAsset.notes || "-"}</Descriptions.Item>
+          <Space direction="vertical" size="large" style={{ width: "100%" }}>
+            <Descriptions bordered size="small" column={2}>
+              <Descriptions.Item label={t("assets.assetCode")}>{activeAsset.asset_code}</Descriptions.Item>
+              <Descriptions.Item label={t("common.name")}>{language === "ar" ? (activeAsset.name_ar || activeAsset.name_en || "-") : (activeAsset.name_en || "-")}</Descriptions.Item>
+              <Descriptions.Item label={t("common.type")}>{activeAsset.type || "-"}</Descriptions.Item>
+              <Descriptions.Item label={t("common.status")}>
+                <Tag color={statusColorMap[activeAsset.status] || "default"}>{activeAsset.status}</Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label={t("assets.vendor")}>{activeAsset.vendor || "-"}</Descriptions.Item>
+              <Descriptions.Item label={t("hr.assets.assetValue")}>{activeAsset.asset_value ?? "-"}</Descriptions.Item>
+              <Descriptions.Item label={t("assets.serialNumber")}>{activeAsset.serial_number || "-"}</Descriptions.Item>
+              <Descriptions.Item label={t("assets.purchaseDate")}>{activeAsset.purchase_date || "-"}</Descriptions.Item>
+              <Descriptions.Item label={t("assets.warrantyExpiry")}>{activeAsset.warranty_expiry || "-"}</Descriptions.Item>
+              <Descriptions.Item label={t("common.notes")} span={2}>{activeAsset.notes || "-"}</Descriptions.Item>
 
-            {activeAsset.active_assignment && (
-              <>
-                <Descriptions.Item label={t("hr.assets.assignedTo")}>
-                  {activeAsset.active_assignment.employee_name || "-"}
-                </Descriptions.Item>
-                <Descriptions.Item label={t("hr.assets.assignedEmployeeId")}>
-                  {activeAsset.active_assignment.employee_id || "-"}
-                </Descriptions.Item>
-                <Descriptions.Item label={t("hr.assets.assignedAt")}>
-                  {activeAsset.active_assignment.assigned_at || "-"}
-                </Descriptions.Item>
-                <Descriptions.Item label={t("hr.assets.assignmentActive")}>
-                  {activeAsset.active_assignment.is_active ? t("common.yes") : t("common.no")}
-                </Descriptions.Item>
-              </>
-            )}
-
-            {activeAsset.type === "VEHICLE" && (
-              <>
-                <Descriptions.Item label={t("assets.plateNumber")}>{activeAsset.plate_number || "-"}</Descriptions.Item>
-                <Descriptions.Item label={t("assets.chassisNumber")}>{activeAsset.chassis_number || "-"}</Descriptions.Item>
-                <Descriptions.Item label={t("assets.engineNumber")}>{activeAsset.engine_number || "-"}</Descriptions.Item>
-                <Descriptions.Item label={t("assets.fuelType")}>{activeAsset.fuel_type || "-"}</Descriptions.Item>
-                <Descriptions.Item label={t("hr.assets.insuranceExpiry")}>{activeAsset.insurance_expiry || "-"}</Descriptions.Item>
-                <Descriptions.Item label={t("hr.assets.registrationExpiry")}>{activeAsset.registration_expiry || "-"}</Descriptions.Item>
-              </>
-            )}
-
-            {activeAsset.type === "LAPTOP" && (
-              <>
-                <Descriptions.Item label={t("assets.cpu")}>{activeAsset.cpu || "-"}</Descriptions.Item>
-                <Descriptions.Item label={t("assets.ram")}>{activeAsset.ram || "-"}</Descriptions.Item>
-                <Descriptions.Item label={t("assets.storage")}>{activeAsset.storage || "-"}</Descriptions.Item>
-                <Descriptions.Item label={t("hr.assets.macAddress")}>{activeAsset.mac_address || "-"}</Descriptions.Item>
-                <Descriptions.Item label={t("assets.os")}>{activeAsset.operating_system || "-"}</Descriptions.Item>
-              </>
-            )}
-
-            {activeAsset.type === "OTHER" && (
-              <>
-                {activeAsset.flexible_attributes && Object.keys(activeAsset.flexible_attributes).length > 0 ? (
-                  Object.entries(activeAsset.flexible_attributes).map(([title, value]) => {
-                    const details = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
-                    const valueType = details.type === "date" ? "date" : "body";
-                    const dateValue = typeof details.date === "string" ? details.date : null;
-                    const bodyValue = typeof details.body === "string" ? details.body : null;
-                    return (
-                      <Descriptions.Item key={title} label={title} span={2}>
-                        {valueType === "date" ? (dateValue || "-") : (bodyValue || "-")}
-                      </Descriptions.Item>
-                    );
-                  })
-                ) : (
-                  <Descriptions.Item label={t("assets.customDetails")} span={2}>
-                    -
+              {activeAsset.active_assignment && (
+                <>
+                  <Descriptions.Item label={t("hr.assets.assignedTo")}>
+                    {activeAsset.active_assignment.employee_name || "-"}
                   </Descriptions.Item>
-                )}
-              </>
-            )}
-          </Descriptions>
+                  <Descriptions.Item label={t("hr.assets.assignedEmployeeId")}>
+                    {activeAsset.active_assignment.employee_id || "-"}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t("hr.assets.assignedAt")}>
+                    {formatDateTime(activeAsset.active_assignment.assigned_at)}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t("hr.assets.assignmentActive")}>
+                    {activeAsset.active_assignment.is_active ? t("common.yes") : t("common.no")}
+                  </Descriptions.Item>
+                </>
+              )}
+
+              {activeAsset.type === "VEHICLE" && (
+                <>
+                  <Descriptions.Item label={t("assets.plateNumber")}>{activeAsset.plate_number || "-"}</Descriptions.Item>
+                  <Descriptions.Item label={t("assets.chassisNumber")}>{activeAsset.chassis_number || "-"}</Descriptions.Item>
+                  <Descriptions.Item label={t("assets.engineNumber")}>{activeAsset.engine_number || "-"}</Descriptions.Item>
+                  <Descriptions.Item label={t("assets.fuelType")}>{activeAsset.fuel_type || "-"}</Descriptions.Item>
+                  <Descriptions.Item label={t("hr.assets.insuranceExpiry")}>{activeAsset.insurance_expiry || "-"}</Descriptions.Item>
+                  <Descriptions.Item label={t("hr.assets.registrationExpiry")}>{activeAsset.registration_expiry || "-"}</Descriptions.Item>
+                </>
+              )}
+
+              {activeAsset.type === "LAPTOP" && (
+                <>
+                  <Descriptions.Item label={t("assets.cpu")}>{activeAsset.cpu || "-"}</Descriptions.Item>
+                  <Descriptions.Item label={t("assets.ram")}>{activeAsset.ram || "-"}</Descriptions.Item>
+                  <Descriptions.Item label={t("assets.storage")}>{activeAsset.storage || "-"}</Descriptions.Item>
+                  <Descriptions.Item label={t("hr.assets.macAddress")}>{activeAsset.mac_address || "-"}</Descriptions.Item>
+                  <Descriptions.Item label={t("assets.os")}>{activeAsset.operating_system || "-"}</Descriptions.Item>
+                </>
+              )}
+
+              {activeAsset.type === "OTHER" && (
+                <>
+                  {activeAsset.flexible_attributes && Object.keys(activeAsset.flexible_attributes).length > 0 ? (
+                    Object.entries(activeAsset.flexible_attributes).map(([title, value]) => {
+                      const details = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+                      const valueType = details.type === "date" ? "date" : "body";
+                      const dateValue = typeof details.date === "string" ? details.date : null;
+                      const bodyValue = typeof details.body === "string" ? details.body : null;
+                      return (
+                        <Descriptions.Item key={title} label={title} span={2}>
+                          {valueType === "date" ? (dateValue || "-") : (bodyValue || "-")}
+                        </Descriptions.Item>
+                      );
+                    })
+                  ) : (
+                    <Descriptions.Item label={t("assets.customDetails")} span={2}>
+                      -
+                    </Descriptions.Item>
+                  )}
+                </>
+              )}
+            </Descriptions>
+
+            <Tabs
+              items={[
+                {
+                  key: "damage-reports",
+                  label: `${t("assets.damageReports", "Damage Reports")} (${damageReports.length})`,
+                  children: (
+                    <Table
+                      rowKey="id"
+                      columns={damageReportColumns}
+                      dataSource={damageReports}
+                      loading={requestHistoryLoading}
+                      pagination={false}
+                      locale={{ emptyText: t("hr.assets.noDamageReports", "No damage reports for this asset.") }}
+                    />
+                  ),
+                },
+                {
+                  key: "return-requests",
+                  label: `${t("assets.returnRequests", "Return Requests")} (${returnRequests.length})`,
+                  children: (
+                    <Table
+                      rowKey="id"
+                      columns={returnRequestColumns}
+                      dataSource={returnRequests}
+                      loading={requestHistoryLoading}
+                      pagination={false}
+                      expandable={{
+                        expandedRowRender: (record) => <AssetReturnApprovalMap request={record} t={t} />,
+                      }}
+                      locale={{ emptyText: t("hr.assets.noReturnRequests", "No return requests for this asset.") }}
+                    />
+                  ),
+                },
+              ]}
+            />
+          </Space>
         )}
       </Modal>
 

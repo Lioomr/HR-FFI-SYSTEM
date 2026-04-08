@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
 from django.db import IntegrityError, transaction
-from django.db.models import Q
+from django.db.models import Case, CharField, Exists, F, OuterRef, Q, Value, When
 from django.http import FileResponse
 from django.utils import timezone
 from rest_framework import mixins, status, viewsets
@@ -22,6 +22,7 @@ from core.pagination import EmployeePagination, StandardPagination
 from core.permissions import get_role, has_direct_reports
 from core.responses import error, success
 from core.services import send_document_expiry_reminder_email
+from leaves.models import LeaveRequest
 
 from .models import EmployeeImport, EmployeeProfile
 from .notifications import send_document_expiry_whatsapp
@@ -70,6 +71,28 @@ def _sync_legacy_fields(instance: EmployeeProfile) -> None:
         updates.append("job_title")
     if updates:
         instance.save(update_fields=updates)
+
+
+def _with_effective_status(queryset):
+    today = timezone.localdate()
+    active_leave_subquery = LeaveRequest.objects.filter(
+        status=LeaveRequest.RequestStatus.APPROVED,
+        start_date__lte=today,
+        end_date__gte=today,
+    ).filter(Q(employee_profile=OuterRef("pk")) | Q(employee=OuterRef("user_id")))
+
+    return queryset.annotate(
+        active_leave_today=Exists(active_leave_subquery),
+        effective_employment_status=Case(
+            When(
+                employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+                active_leave_today=True,
+                then=Value("ON_LEAVE"),
+            ),
+            default=F("employment_status"),
+            output_field=CharField(),
+        ),
+    )
 
 
 EXPECTED_IMPORT_HEADERS = [
@@ -237,6 +260,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             "task_group_ref",
             "sponsor_ref",
         )
+        base_qs = _with_effective_status(base_qs)
 
         if role in ["SystemAdmin", "HRManager"]:
             return base_qs.all()
@@ -281,7 +305,10 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
 
         status_value = params.get("status")
         if status_value:
-            qs = qs.filter(employment_status=status_value)
+            if status_value == "ON_LEAVE":
+                qs = qs.filter(effective_employment_status="ON_LEAVE")
+            else:
+                qs = qs.filter(effective_employment_status=status_value)
 
         nationality = params.get("nationality")
         if nationality:
@@ -337,7 +364,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
                 ),
                 profile.nationality or profile.nationality_en or profile.nationality_ar or "",
                 profile.hire_date.isoformat() if profile.hire_date else "",
-                profile.employment_status,
+                getattr(profile, "effective_employment_status", profile.employment_status),
             ]
             for profile in qs.iterator(chunk_size=2000)
         ]
@@ -389,6 +416,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             "task_group_ref",
             "sponsor_ref",
         )
+        base_qs = _with_effective_status(base_qs)
         if role == "SystemAdmin":
             qs = base_qs
         else:

@@ -1,6 +1,6 @@
-
 import { api } from "./apiClient";
 import type { ApiResponse } from "./apiTypes";
+import type { AssetReturnRequest } from "./assetsApi";
 
 // -- Leave Requests --
 
@@ -147,4 +147,29 @@ export async function getManagerTeam(search?: string) {
         return { status: "success", data: data as ManagerTeamMember[] } as ApiResponse<ManagerTeamMember[]>;
     }
     return data as ApiResponse<ManagerTeamMember[]>;
+}
+
+export async function getManagerAssetReturnRequests(status?: string) {
+    const params = status ? { status } : {};
+    const { data } = await api.get<ApiResponse<any>>("/api/assets/manager/return-requests/", { params });
+    if (data?.status === "success" && data?.data?.items) {
+        return { ...data, data: data.data.items as AssetReturnRequest[] } as ApiResponse<AssetReturnRequest[]>;
+    }
+    if (Array.isArray((data as any)?.results)) {
+        return { status: "success", data: (data as any).results as AssetReturnRequest[] } as ApiResponse<AssetReturnRequest[]>;
+    }
+    if (Array.isArray(data)) {
+        return { status: "success", data: data as AssetReturnRequest[] } as ApiResponse<AssetReturnRequest[]>;
+    }
+    return data as ApiResponse<AssetReturnRequest[]>;
+}
+
+export async function approveManagerAssetReturnRequest(id: number, comment?: string) {
+    const { data } = await api.post<ApiResponse<AssetReturnRequest>>(`/api/assets/manager/return-requests/${id}/approve/`, { comment });
+    return data;
+}
+
+export async function rejectManagerAssetReturnRequest(id: number, comment: string) {
+    const { data } = await api.post<ApiResponse<AssetReturnRequest>>(`/api/assets/manager/return-requests/${id}/reject/`, { comment });
+    return data;
 }

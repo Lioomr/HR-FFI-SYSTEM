@@ -4,6 +4,7 @@ from django.conf import settings
 from django.utils import timezone
 from rest_framework import serializers
 
+from core.services import get_workflow_snapshot
 from employees.models import EmployeeProfile
 
 from .models import Asset, AssetAssignment, AssetDamageReport, AssetReturnRequest
@@ -189,6 +190,7 @@ class AssetReturnRequestSerializer(serializers.ModelSerializer):
     employee_email = serializers.EmailField(source="employee.user.email", read_only=True)
     asset_code = serializers.CharField(source="asset.asset_code", read_only=True)
     asset_name = serializers.CharField(source="asset.name_en", read_only=True)
+    workflow = serializers.SerializerMethodField()
 
     class Meta:
         model = AssetReturnRequest
@@ -205,13 +207,21 @@ class AssetReturnRequestSerializer(serializers.ModelSerializer):
             "status",
             "processed_by",
             "processed_at",
+            "manager_decision_by",
+            "manager_decision_at",
+            "manager_decision_note",
             "hr_decision_by",
             "hr_decision_at",
             "hr_decision_note",
             "ceo_decision_by",
             "ceo_decision_at",
             "ceo_decision_note",
+            "workflow",
         ]
+
+    def get_workflow(self, obj):
+        actor = self.context.get("request").user if self.context.get("request") else None
+        return get_workflow_snapshot(obj, actor=actor)
 
 
 class AssetRequestActionSerializer(serializers.Serializer):

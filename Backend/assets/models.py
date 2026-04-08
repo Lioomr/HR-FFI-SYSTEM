@@ -192,6 +192,7 @@ class AssetDamageReport(models.Model):
 
 class AssetReturnRequest(models.Model):
     class RequestStatus(models.TextChoices):
+        PENDING_MANAGER = "PENDING_MANAGER", _("Pending Manager")
         PENDING = "PENDING", _("Pending")
         PENDING_CEO = "PENDING_CEO", _("Pending CEO")
         APPROVED = "APPROVED", _("Approved")
@@ -211,6 +212,15 @@ class AssetReturnRequest(models.Model):
         related_name="processed_asset_return_requests",
     )
     processed_at = models.DateTimeField(null=True, blank=True)
+    manager_decision_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="manager_decided_asset_return_requests",
+    )
+    manager_decision_at = models.DateTimeField(null=True, blank=True)
+    manager_decision_note = models.TextField(blank=True)
     hr_decision_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

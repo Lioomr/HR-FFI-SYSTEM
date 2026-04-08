@@ -1,12 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Card, Descriptions, Form, Input, Modal, Select, Space, Table, Tag, message } from "antd";
+import { Button, Card, Descriptions, Form, Input, Modal, Row, Col, Select, Space, Table, Tabs, Tag, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 
 import EmptyState from "../../../components/ui/EmptyState";
 import ErrorState from "../../../components/ui/ErrorState";
 import LoadingState from "../../../components/ui/LoadingState";
 import PageHeader from "../../../components/ui/PageHeader";
-import { listMyAssets, reportAssetIssue, requestAssetReturn, type Asset } from "../../../services/api/assetsApi";
+import {
+  listMyAssetDamageReports,
+  listMyAssetReturnRequests,
+  listMyAssets,
+  reportAssetIssue,
+  requestAssetReturn,
+  type Asset,
+  type AssetDamageReport,
+  type AssetReturnRequest,
+} from "../../../services/api/assetsApi";
 import { isApiError } from "../../../services/api/apiTypes";
 import { useI18n } from "../../../i18n/useI18n";
 import { getDetailedApiMessage, getDetailedHttpErrorMessage } from "../../../services/api/userErrorMessages";
@@ -20,12 +29,33 @@ const statusColorMap: Record<string, string> = {
   RETIRED: "default",
 };
 
+const requestStatusColorMap: Record<string, string> = {
+  PENDING_MANAGER: "orange",
+  PENDING: "gold",
+  PENDING_HR: "gold",
+  PENDING_CEO: "purple",
+  APPROVED: "green",
+  PROCESSED: "blue",
+  REJECTED: "red",
+};
+
 export default function MyAssetsPage() {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const [apiMessage, contextHolder] = message.useMessage();
-  const [loading, setLoading] = useState(true);
+  const [assetLoading, setAssetLoading] = useState(true);
+  const [requestLoading, setRequestLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [requestError, setRequestError] = useState<string | null>(null);
+
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [assetPage, setAssetPage] = useState(1);
+  const [assetPageSize, setAssetPageSize] = useState(10);
+  const [assetTotal, setAssetTotal] = useState(0);
+  const [searchText, setSearchText] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<string | undefined>();
+  const [statusFilter, setStatusFilter] = useState<string | undefined>();
+
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
@@ -35,32 +65,144 @@ export default function MyAssetsPage() {
   const [returnForm] = Form.useForm();
   const [returnOpen, setReturnOpen] = useState(false);
 
-  const loadData = async () => {
+  const [requestAssetFilter, setRequestAssetFilter] = useState<number | undefined>();
+  const [damageReports, setDamageReports] = useState<AssetDamageReport[]>([]);
+  const [damagePage, setDamagePage] = useState(1);
+  const [damagePageSize, setDamagePageSize] = useState(5);
+  const [damageTotal, setDamageTotal] = useState(0);
+  const [returnRequests, setReturnRequests] = useState<AssetReturnRequest[]>([]);
+  const [returnPage, setReturnPage] = useState(1);
+  const [returnPageSize, setReturnPageSize] = useState(5);
+  const [returnTotal, setReturnTotal] = useState(0);
+
+  const getAssetDisplayName = (asset: Asset) =>
+    language === "ar" ? (asset.name_ar || asset.name_en || "-") : (asset.name_en || asset.name_ar || "-");
+
+  const loadAssets = async () => {
+    setAssetLoading(true);
     try {
-      setLoading(true);
-      setError(null);
-      const res = await listMyAssets({ page: 1, page_size: 25 });
+      const res = await listMyAssets({
+        page: assetPage,
+        page_size: assetPageSize,
+        search: appliedSearch || undefined,
+        type: typeFilter,
+        status: statusFilter,
+      });
       if (isApiError(res)) {
         setError(res.message || t("assets.loadFailed"));
         return;
       }
       setAssets(res.data.items || []);
+      setAssetTotal(res.data.count || 0);
+      setError(null);
     } catch (err: any) {
       setError(err?.message || t("assets.loadFailed"));
     } finally {
-      setLoading(false);
+      setAssetLoading(false);
+    }
+  };
+
+  const loadRequestHistory = async () => {
+    setRequestLoading(true);
+    try {
+      const [damageRes, returnRes] = await Promise.all([
+        listMyAssetDamageReports({
+          page: damagePage,
+          page_size: damagePageSize,
+          asset: requestAssetFilter,
+        }),
+        listMyAssetReturnRequests({
+          page: returnPage,
+          page_size: returnPageSize,
+          asset: requestAssetFilter,
+        }),
+      ]);
+
+      if (isApiError(damageRes)) {
+        setRequestError(damageRes.message || t("common.error.generic", "Failed to load request history."));
+        return;
+      }
+      if (isApiError(returnRes)) {
+        setRequestError(returnRes.message || t("common.error.generic", "Failed to load request history."));
+        return;
+      }
+
+      setDamageReports(damageRes.data.items || []);
+      setDamageTotal(damageRes.data.count || 0);
+      setReturnRequests(returnRes.data.items || []);
+      setReturnTotal(returnRes.data.count || 0);
+      setRequestError(null);
+    } catch (err: any) {
+      setRequestError(err?.message || t("common.error.generic", "Failed to load request history."));
+    } finally {
+      setRequestLoading(false);
     }
   };
 
   useEffect(() => {
-    void loadData();
-  }, []);
+    void loadAssets();
+  }, [assetPage, assetPageSize, appliedSearch, typeFilter, statusFilter]);
+
+  useEffect(() => {
+    void loadRequestHistory();
+  }, [damagePage, damagePageSize, returnPage, returnPageSize, requestAssetFilter]);
 
   const dataSource = useMemo(() => assets.map((item) => ({ ...item, key: item.id })), [assets]);
+  const requestAssetOptions = useMemo(
+    () =>
+      assets.map((item) => ({
+        label: `${item.asset_code} - ${getAssetDisplayName(item)}`,
+        value: item.id,
+      })),
+    [assets, language]
+  );
+
   const openDetails = (asset: Asset) => {
     setSelectedAsset(asset);
     setDetailsOpen(true);
   };
+
+  const resetAssetFilters = () => {
+    setSearchText("");
+    setAppliedSearch("");
+    setTypeFilter(undefined);
+    setStatusFilter(undefined);
+    setAssetPage(1);
+  };
+
+  const damageColumns: ColumnsType<AssetDamageReport> = [
+    { title: t("assets.assetCode"), dataIndex: "asset_code", key: "asset_code", width: 140 },
+    { title: t("common.details"), dataIndex: "description", key: "description" },
+    {
+      title: t("common.status"),
+      dataIndex: "status",
+      key: "status",
+      width: 150,
+      render: (value: string) => <Tag color={requestStatusColorMap[value] || "default"}>{value}</Tag>,
+    },
+    {
+      title: t("assets.lastUpdated", "Decision"),
+      key: "decision",
+      render: (_, record) => record.ceo_decision_note || record.hr_decision_note || "-",
+    },
+  ];
+
+  const returnColumns: ColumnsType<AssetReturnRequest> = [
+    { title: t("assets.assetCode"), dataIndex: "asset_code", key: "asset_code", width: 140 },
+    { title: t("common.notes"), dataIndex: "note", key: "note" },
+    {
+      title: t("common.status"),
+      dataIndex: "status",
+      key: "status",
+      width: 150,
+      render: (value: string) => <Tag color={requestStatusColorMap[value] || "default"}>{value}</Tag>,
+    },
+    {
+      title: t("assets.lastUpdated", "Decision"),
+      key: "decision",
+      render: (_, record) => record.ceo_decision_note || record.hr_decision_note || record.manager_decision_note || "-",
+    },
+  ];
 
   const columns: ColumnsType<Asset> = [
     {
@@ -83,9 +225,8 @@ export default function MyAssetsPage() {
     },
     {
       title: t("common.name"),
-      dataIndex: "name",
       key: "name",
-      render: (value: string, record) => (
+      render: (_: unknown, record) => (
         <Button
           type="link"
           style={{ paddingInline: 0 }}
@@ -94,7 +235,7 @@ export default function MyAssetsPage() {
             openDetails(record);
           }}
         >
-          {value}
+          {getAssetDisplayName(record)}
         </Button>
       ),
     },
@@ -181,6 +322,8 @@ export default function MyAssetsPage() {
       await apiMessage.success(t("assets.submitIssueSuccess"));
       setReportOpen(false);
       reportForm.resetFields();
+      setDamagePage(1);
+      await Promise.all([loadAssets(), loadRequestHistory()]);
     } catch (err: any) {
       if (!err?.errorFields) {
         await apiMessage.error(getDetailedHttpErrorMessage(t, err, "assets.submitIssueFailed"));
@@ -203,6 +346,8 @@ export default function MyAssetsPage() {
       await apiMessage.success(t("assets.returnRequested", "Return request submitted"));
       setReturnOpen(false);
       returnForm.resetFields();
+      setReturnPage(1);
+      await Promise.all([loadAssets(), loadRequestHistory()]);
     } catch (err: any) {
       if (!err?.errorFields) {
         await apiMessage.error(getDetailedHttpErrorMessage(t, err, "assets.submitIssueFailed"));
@@ -212,22 +357,94 @@ export default function MyAssetsPage() {
     }
   };
 
-  if (loading) return <LoadingState title={t("assets.loadingMyAssets")} lines={5} />;
-  if (error) return <ErrorState title={t("assets.unableToLoad")} description={error} onRetry={() => void loadData()} />;
+  if (assetLoading && assets.length === 0 && !error) {
+    return <LoadingState title={t("assets.loadingMyAssets")} lines={5} />;
+  }
+  if (error) return <ErrorState title={t("assets.unableToLoad")} description={error} onRetry={() => void loadAssets()} />;
 
   return (
     <div>
       {contextHolder}
       <PageHeader title={t("assets.myAssets")} subtitle={t("assets.myAssetsDesc")} />
-      {assets.length === 0 ? (
+
+      <Card style={{ marginBottom: 16 }}>
+        <Row gutter={[12, 12]}>
+          <Col xs={24} md={10}>
+            <Input.Search
+              allowClear
+              value={searchText}
+              placeholder={t("assets.searchPlaceholder", "Search by asset code, serial number, or name")}
+              onChange={(e) => setSearchText(e.target.value)}
+              onSearch={(value) => {
+                setAppliedSearch(value.trim());
+                setAssetPage(1);
+              }}
+            />
+          </Col>
+          <Col xs={24} md={6}>
+            <Select
+              allowClear
+              value={typeFilter}
+              style={{ width: "100%" }}
+              placeholder={t("common.type")}
+              onChange={(value) => {
+                setTypeFilter(value);
+                setAssetPage(1);
+              }}
+              options={[
+                { label: t("hr.assets.vehicle", "Vehicle"), value: "VEHICLE" },
+                { label: t("hr.assets.laptop", "Laptop"), value: "LAPTOP" },
+                { label: t("hr.assets.other", "Other"), value: "OTHER" },
+              ]}
+            />
+          </Col>
+          <Col xs={24} md={6}>
+            <Select
+              allowClear
+              value={statusFilter}
+              style={{ width: "100%" }}
+              placeholder={t("common.status")}
+              onChange={(value) => {
+                setStatusFilter(value);
+                setAssetPage(1);
+              }}
+              options={[
+                { label: "AVAILABLE", value: "AVAILABLE" },
+                { label: "ASSIGNED", value: "ASSIGNED" },
+                { label: "UNDER_MAINTENANCE", value: "UNDER_MAINTENANCE" },
+                { label: "LOST", value: "LOST" },
+                { label: "DAMAGED", value: "DAMAGED" },
+                { label: "RETIRED", value: "RETIRED" },
+              ]}
+            />
+          </Col>
+          <Col xs={24} md={2}>
+            <Button block onClick={resetAssetFilters}>
+              {t("common.reset")}
+            </Button>
+          </Col>
+        </Row>
+      </Card>
+
+      {assetTotal === 0 ? (
         <EmptyState title={t("assets.noAssets")} description={t("assets.noAssetsDesc")} />
       ) : (
-        <Card>
+        <Card style={{ marginBottom: 16 }}>
           <Table
             columns={columns}
             dataSource={dataSource}
-            pagination={false}
+            loading={assetLoading}
             scroll={{ x: 1000 }}
+            pagination={{
+              current: assetPage,
+              pageSize: assetPageSize,
+              total: assetTotal,
+              showSizeChanger: true,
+              onChange: (page, pageSize) => {
+                setAssetPage(page);
+                setAssetPageSize(pageSize);
+              },
+            }}
             onRow={(record) => ({
               onClick: () => openDetails(record),
               style: { cursor: "pointer" },
@@ -235,6 +452,84 @@ export default function MyAssetsPage() {
           />
         </Card>
       )}
+
+      <Card
+        title={t("assets.requestsHistory", "Request History")}
+        extra={
+          <Space wrap>
+            <Typography.Text type="secondary">{t("assets.filterRequestsByAsset", "Filter by asset")}</Typography.Text>
+            <Select
+              allowClear
+              value={requestAssetFilter}
+              style={{ minWidth: 240 }}
+              placeholder={t("assets.allAssets", "All assets")}
+              onChange={(value) => {
+                setRequestAssetFilter(value);
+                setDamagePage(1);
+                setReturnPage(1);
+              }}
+              options={requestAssetOptions}
+            />
+          </Space>
+        }
+      >
+        {requestError ? (
+          <ErrorState
+            title={t("assets.requestHistoryUnavailable", "Unable to load request history")}
+            description={requestError}
+            onRetry={() => void loadRequestHistory()}
+          />
+        ) : (
+          <Tabs
+            items={[
+              {
+                key: "damage",
+                label: `${t("assets.damageReports", "Damage Reports")} (${damageTotal})`,
+                children: (
+                  <Table
+                    rowKey="id"
+                    columns={damageColumns}
+                    dataSource={damageReports}
+                    loading={requestLoading}
+                    pagination={{
+                      current: damagePage,
+                      pageSize: damagePageSize,
+                      total: damageTotal,
+                      showSizeChanger: true,
+                      onChange: (page, pageSize) => {
+                        setDamagePage(page);
+                        setDamagePageSize(pageSize);
+                      },
+                    }}
+                  />
+                ),
+              },
+              {
+                key: "return",
+                label: `${t("assets.returnRequests", "Return Requests")} (${returnTotal})`,
+                children: (
+                  <Table
+                    rowKey="id"
+                    columns={returnColumns}
+                    dataSource={returnRequests}
+                    loading={requestLoading}
+                    pagination={{
+                      current: returnPage,
+                      pageSize: returnPageSize,
+                      total: returnTotal,
+                      showSizeChanger: true,
+                      onChange: (page, pageSize) => {
+                        setReturnPage(page);
+                        setReturnPageSize(pageSize);
+                      },
+                    }}
+                  />
+                ),
+              },
+            ]}
+          />
+        )}
+      </Card>
 
       <Modal
         title={`${t("assets.details")}${selectedAsset ? `: ${selectedAsset.asset_code}` : ""}`}
@@ -259,7 +554,7 @@ export default function MyAssetsPage() {
         {selectedAsset && (
           <Descriptions bordered size="small" column={2}>
             <Descriptions.Item label={t("assets.assetCode")}>{selectedAsset.asset_code}</Descriptions.Item>
-            <Descriptions.Item label={t("common.name")}>{selectedAsset.name || "-"}</Descriptions.Item>
+            <Descriptions.Item label={t("common.name")}>{getAssetDisplayName(selectedAsset)}</Descriptions.Item>
             <Descriptions.Item label={t("common.type")}>{selectedAsset.type || "-"}</Descriptions.Item>
             <Descriptions.Item label={t("common.status")}>
               <Tag color={statusColorMap[selectedAsset.status] || "default"}>{selectedAsset.status}</Tag>
@@ -268,7 +563,9 @@ export default function MyAssetsPage() {
             <Descriptions.Item label={t("assets.vendor")}>{selectedAsset.vendor || "-"}</Descriptions.Item>
             <Descriptions.Item label={t("assets.purchaseDate")}>{selectedAsset.purchase_date || "-"}</Descriptions.Item>
             <Descriptions.Item label={t("assets.warrantyExpiry")}>{selectedAsset.warranty_expiry || "-"}</Descriptions.Item>
-            <Descriptions.Item label={t("common.notes")} span={2}>{selectedAsset.notes || "-"}</Descriptions.Item>
+            <Descriptions.Item label={t("common.notes")} span={2}>
+              {selectedAsset.notes || "-"}
+            </Descriptions.Item>
 
             {selectedAsset.type === "VEHICLE" && (
               <>
@@ -320,7 +617,7 @@ export default function MyAssetsPage() {
           setReportOpen(false);
           reportForm.resetFields();
         }}
-        onOk={handleSubmitIssue}
+        onOk={() => void handleSubmitIssue()}
         okText={t("assets.submitReport")}
         confirmLoading={reporting}
       >
@@ -356,7 +653,7 @@ export default function MyAssetsPage() {
           setReturnOpen(false);
           returnForm.resetFields();
         }}
-        onOk={handleReturnRequest}
+        onOk={() => void handleReturnRequest()}
         okText={t("assets.returnRequest", "Return Request")}
         confirmLoading={returning}
       >
