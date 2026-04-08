@@ -1,5 +1,6 @@
 import { api } from "./apiClient";
 import type { ApiResponse } from "./apiTypes";
+import type { WorkflowSnapshot } from "../../types/workflow";
 
 export interface AssetAssignmentSummary {
   id: number;
@@ -95,6 +96,7 @@ export interface AssetDamageReport {
   description: string;
   status: "PENDING_HR" | "PENDING_CEO" | "APPROVED" | "REJECTED";
   reported_at: string;
+  hr_decision_note?: string;
   ceo_decision_note?: string;
 }
 
@@ -107,9 +109,24 @@ export interface AssetReturnRequest {
   employee_name?: string;
   employee_email?: string;
   note: string;
-  status: "PENDING" | "PENDING_CEO" | "APPROVED" | "PROCESSED" | "REJECTED";
+  status: "PENDING_MANAGER" | "PENDING" | "PENDING_CEO" | "APPROVED" | "PROCESSED" | "REJECTED";
   requested_at: string;
+  manager_decision_at?: string | null;
+  manager_decision_note?: string;
+  hr_decision_note?: string;
+  hr_decision_at?: string | null;
   ceo_decision_note?: string;
+  ceo_decision_at?: string | null;
+  processed_at?: string | null;
+  workflow?: WorkflowSnapshot;
+}
+
+export interface AssetRequestHistoryResponse<TItem> {
+  items: TItem[];
+  page: number;
+  page_size: number;
+  count: number;
+  total_pages: number;
 }
 
 export async function listAssets(params?: {
@@ -119,6 +136,8 @@ export async function listAssets(params?: {
   type?: string;
   status?: string;
   vendor?: string;
+  ordering?: string;
+  warranty_expiring_soon?: boolean;
 }) {
   const { data } = await api.get<ApiResponse<AssetsPaginatedResponse>>("/api/assets/", { params });
   return data;
@@ -129,8 +148,66 @@ export async function getAssetsDashboardSummary() {
   return data;
 }
 
-export async function listMyAssets(params?: { page?: number; page_size?: number }) {
+export async function listMyAssets(params?: {
+  page?: number;
+  page_size?: number;
+  search?: string;
+  type?: string;
+  status?: string;
+}) {
   const { data } = await api.get<ApiResponse<AssetsPaginatedResponse>>("/api/assets/my-assets/", { params });
+  return data;
+}
+
+export async function listMyAssetDamageReports(params?: {
+  page?: number;
+  page_size?: number;
+  status?: string;
+  asset?: number | string;
+}) {
+  const { data } = await api.get<ApiResponse<AssetRequestHistoryResponse<AssetDamageReport>>>(
+    "/api/assets/my-damage-reports/",
+    { params }
+  );
+  return data;
+}
+
+export async function listMyAssetReturnRequests(params?: {
+  page?: number;
+  page_size?: number;
+  status?: string;
+  asset?: number | string;
+}) {
+  const { data } = await api.get<ApiResponse<AssetRequestHistoryResponse<AssetReturnRequest>>>(
+    "/api/assets/my-return-requests/",
+    { params }
+  );
+  return data;
+}
+
+export async function listAssetDamageReports(params?: {
+  page?: number;
+  page_size?: number;
+  status?: string;
+  asset?: number | string;
+}) {
+  const { data } = await api.get<ApiResponse<AssetRequestHistoryResponse<AssetDamageReport>>>(
+    "/api/assets/damage-reports/",
+    { params }
+  );
+  return data;
+}
+
+export async function listAssetReturnRequests(params?: {
+  page?: number;
+  page_size?: number;
+  status?: string;
+  asset?: number | string;
+}) {
+  const { data } = await api.get<ApiResponse<AssetRequestHistoryResponse<AssetReturnRequest>>>(
+    "/api/assets/return-requests/",
+    { params }
+  );
   return data;
 }
 
@@ -187,6 +264,22 @@ export async function requestAssetReturn(
   const { data } = await api.post<ApiResponse<{ id: number; requested_at: string; status: string }>>(
     `/api/assets/${assetId}/return-request/`,
     payload
+  );
+  return data;
+}
+
+export async function approveHRAssetReturnRequest(id: number | string, comment?: string) {
+  const { data } = await api.post<ApiResponse<AssetReturnRequest>>(
+    `/api/assets/return-requests/${id}/approve/`,
+    { comment }
+  );
+  return data;
+}
+
+export async function rejectHRAssetReturnRequest(id: number | string, comment: string) {
+  const { data } = await api.post<ApiResponse<AssetReturnRequest>>(
+    `/api/assets/return-requests/${id}/reject/`,
+    { comment }
   );
   return data;
 }

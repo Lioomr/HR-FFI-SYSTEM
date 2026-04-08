@@ -9,16 +9,20 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 
 from audit.utils import audit
+from core.delegation import get_delegated_manager_user_ids
 from core.pagination import StandardPagination
 from core.permissions import IsDepartmentCEOApprover, get_role
 from core.responses import error, success
 from core.services import (
     get_ceo_approver_users,
+    get_direct_manager_user,
     get_hr_approver_users,
     notify_users_for_pending_status,
     send_request_submission_email,
+    sync_workflow,
 )
 from employees.models import EmployeeProfile
+from loans.permissions import IsManagerOrAdmin, get_active_workflow_config
 
 from .models import Asset, AssetAssignment, AssetDamageReport, AssetReturnRequest
 from .permissions import IsEmployeeSelfAsset, IsHRManagerOrSystemAdmin
@@ -43,6 +47,34 @@ def _is_hr_manager_profile(profile):
     return bool(user and user.groups.filter(name="HRManager").exists())
 
 
+def _flatten_errors(error_dict):
+    errors = []
+    for field, messages in error_dict.items():
+        if isinstance(messages, (list, tuple)):
+            for msg in messages:
+                errors.append(f"{field}: {msg}")
+        else:
+            errors.append(f"{field}: {messages}")
+    return errors
+
+
+def _reject_self_approval(request, profile):
+    if _is_hr_manager_profile(profile) and getattr(profile, "user_id", None) == request.user.id:
+        return error("Validation error", errors=["Self approval is not allowed."], status=422)
+    return None
+
+
+def _resolve_manager_user(profile: EmployeeProfile | None):
+    if not profile:
+        return None
+    if getattr(profile, "manager_profile_id", None) and getattr(profile.manager_profile, "user_id", None):
+        return profile.manager_profile.user
+    if getattr(profile, "manager_id", None):
+        return profile.manager
+    user = getattr(profile, "user", None)
+    return get_direct_manager_user(user) if user else None
+
+
 class AssetViewSet(viewsets.ModelViewSet):
     serializer_class = AssetSerializer
     permission_classes = [IsAuthenticated]
@@ -64,9 +96,13 @@ class AssetViewSet(viewsets.ModelViewSet):
             "assign",
             "return_asset",
             "dashboard_summary",
+            "damage_reports",
+            "return_requests",
+            "approve_return_request",
+            "reject_return_request",
         ]:
             permission_classes = [IsAuthenticated, IsHRManagerOrSystemAdmin]
-        elif self.action in ["my_assets", "damage_report", "return_request"]:
+        elif self.action in ["my_assets", "my_damage_reports", "my_return_requests", "damage_report", "return_request"]:
             permission_classes = [IsAuthenticated, IsEmployeeSelfAsset]
         else:
             permission_classes = [IsAuthenticated]
@@ -104,6 +140,15 @@ class AssetViewSet(viewsets.ModelViewSet):
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
+        warranty_soon = str(request.query_params.get("warranty_expiring_soon", "")).lower()
+        if warranty_soon in {"1", "true", "yes"}:
+            today = timezone.localdate()
+            expiry_cutoff = today + timedelta(days=30)
+            queryset = queryset.filter(
+                warranty_expiry__isnull=False,
+                warranty_expiry__gte=today,
+                warranty_expiry__lte=expiry_cutoff,
+            )
         page = self.paginate_queryset(queryset)
         serializer = self.get_serializer(page if page is not None else queryset, many=True)
         if page is not None:
@@ -246,13 +291,19 @@ class AssetViewSet(viewsets.ModelViewSet):
             pending_requests = AssetReturnRequest.objects.select_for_update().filter(
                 asset=asset,
                 employee=assignment.employee,
-                status__in=[AssetReturnRequest.RequestStatus.PENDING, AssetReturnRequest.RequestStatus.APPROVED],
+                status__in=[
+                    AssetReturnRequest.RequestStatus.PENDING_MANAGER,
+                    AssetReturnRequest.RequestStatus.PENDING,
+                    AssetReturnRequest.RequestStatus.PENDING_CEO,
+                    AssetReturnRequest.RequestStatus.APPROVED,
+                ],
             )
             for request_obj in pending_requests:
                 request_obj.status = AssetReturnRequest.RequestStatus.PROCESSED
                 request_obj.processed_by = request.user
                 request_obj.processed_at = timezone.now()
                 request_obj.save(update_fields=["status", "processed_by", "processed_at"])
+                sync_workflow(request_obj, actor=request.user)
 
         audit(
             request,
@@ -302,6 +353,151 @@ class AssetViewSet(viewsets.ModelViewSet):
         page = self.paginate_queryset(queryset)
         serializer = self.get_serializer(page if page is not None else queryset, many=True)
 
+        if page is not None:
+            return self.get_paginated_response(serializer.data)
+        return success({"items": serializer.data, "count": queryset.count()})
+
+    @action(detail=False, methods=["get"], url_path="damage-reports")
+    def damage_reports(self, request):
+        queryset = AssetDamageReport.objects.select_related("asset", "employee", "employee__user")
+        status_param = request.query_params.get("status")
+        asset_id = request.query_params.get("asset")
+        if status_param:
+            queryset = queryset.filter(status=status_param)
+        if asset_id:
+            queryset = queryset.filter(asset_id=asset_id)
+
+        page = self.paginate_queryset(queryset.order_by("-reported_at"))
+        serializer = AssetDamageReportSerializer(page if page is not None else queryset, many=True)
+        if page is not None:
+            return self.get_paginated_response(serializer.data)
+        return success({"items": serializer.data, "count": queryset.count()})
+
+    @action(detail=False, methods=["get"], url_path="return-requests")
+    def return_requests(self, request):
+        queryset = AssetReturnRequest.objects.select_related("asset", "employee", "employee__user")
+        status_param = request.query_params.get("status")
+        asset_id = request.query_params.get("asset")
+        if status_param:
+            queryset = queryset.filter(status=status_param)
+        if asset_id:
+            queryset = queryset.filter(asset_id=asset_id)
+
+        page = self.paginate_queryset(queryset.order_by("-requested_at"))
+        serializer = AssetReturnRequestSerializer(page if page is not None else queryset, many=True)
+        if page is not None:
+            return self.get_paginated_response(serializer.data)
+        return success({"items": serializer.data, "count": queryset.count()})
+
+    @action(detail=False, methods=["post"], url_path=r"return-requests/(?P<request_id>[^/.]+)/approve")
+    def approve_return_request(self, request, request_id=None):
+        instance = (
+            AssetReturnRequest.objects.select_related("asset", "employee", "employee__user")
+            .filter(pk=request_id)
+            .first()
+        )
+        if not instance:
+            return error("Not found", status=status.HTTP_404_NOT_FOUND)
+
+        self_approval_error = _reject_self_approval(request, instance.employee)
+        if self_approval_error:
+            return self_approval_error
+        if instance.status != AssetReturnRequest.RequestStatus.PENDING:
+            return error("Validation error", errors=["Request is not pending HR approval."], status=422)
+
+        serializer = AssetRequestActionSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
+
+        instance.status = AssetReturnRequest.RequestStatus.APPROVED
+        instance.hr_decision_by = request.user
+        instance.hr_decision_at = timezone.now()
+        instance.hr_decision_note = serializer.validated_data.get("comment", "")
+        instance.save(
+            update_fields=["status", "hr_decision_by", "hr_decision_at", "hr_decision_note"]
+        )
+        sync_workflow(instance, actor=request.user)
+        audit(request, "asset_return_request_approved_hr", entity="AssetReturnRequest", entity_id=instance.id)
+        return success(AssetReturnRequestSerializer(instance, context={"request": request}).data)
+
+    @action(detail=False, methods=["post"], url_path=r"return-requests/(?P<request_id>[^/.]+)/reject")
+    def reject_return_request(self, request, request_id=None):
+        instance = (
+            AssetReturnRequest.objects.select_related("asset", "employee", "employee__user")
+            .filter(pk=request_id)
+            .first()
+        )
+        if not instance:
+            return error("Not found", status=status.HTTP_404_NOT_FOUND)
+
+        self_approval_error = _reject_self_approval(request, instance.employee)
+        if self_approval_error:
+            return self_approval_error
+        if instance.status != AssetReturnRequest.RequestStatus.PENDING:
+            return error("Validation error", errors=["Request is not pending HR approval."], status=422)
+
+        serializer = AssetRequestActionSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
+        comment = (serializer.validated_data.get("comment") or "").strip()
+        if not comment:
+            return error("Validation error", errors=["comment is required."], status=422)
+
+        instance.status = AssetReturnRequest.RequestStatus.REJECTED
+        instance.hr_decision_by = request.user
+        instance.hr_decision_at = timezone.now()
+        instance.hr_decision_note = comment
+        instance.save(
+            update_fields=["status", "hr_decision_by", "hr_decision_at", "hr_decision_note"]
+        )
+        sync_workflow(instance, actor=request.user)
+        audit(request, "asset_return_request_rejected_hr", entity="AssetReturnRequest", entity_id=instance.id)
+        return success(AssetReturnRequestSerializer(instance, context={"request": request}).data)
+
+    @action(detail=False, methods=["get"], url_path="my-damage-reports")
+    def my_damage_reports(self, request):
+        role = get_role(request.user)
+        if role not in ["Employee", "Manager", "HRManager"]:
+            return error("Forbidden", status=status.HTTP_403_FORBIDDEN)
+
+        profile = self._get_request_profile()
+        if not profile:
+            return error("Employee profile not found.", status=status.HTTP_404_NOT_FOUND)
+
+        queryset = AssetDamageReport.objects.select_related("asset", "employee", "employee__user").filter(employee=profile)
+        status_param = request.query_params.get("status")
+        asset_id = request.query_params.get("asset")
+        if status_param:
+            queryset = queryset.filter(status=status_param)
+        if asset_id:
+            queryset = queryset.filter(asset_id=asset_id)
+
+        page = self.paginate_queryset(queryset.order_by("-reported_at"))
+        serializer = AssetDamageReportSerializer(page if page is not None else queryset, many=True)
+        if page is not None:
+            return self.get_paginated_response(serializer.data)
+        return success({"items": serializer.data, "count": queryset.count()})
+
+    @action(detail=False, methods=["get"], url_path="my-return-requests")
+    def my_return_requests(self, request):
+        role = get_role(request.user)
+        if role not in ["Employee", "Manager", "HRManager"]:
+            return error("Forbidden", status=status.HTTP_403_FORBIDDEN)
+
+        profile = self._get_request_profile()
+        if not profile:
+            return error("Employee profile not found.", status=status.HTTP_404_NOT_FOUND)
+
+        queryset = AssetReturnRequest.objects.select_related("asset", "employee", "employee__user").filter(employee=profile)
+        status_param = request.query_params.get("status")
+        asset_id = request.query_params.get("asset")
+        if status_param:
+            queryset = queryset.filter(status=status_param)
+        if asset_id:
+            queryset = queryset.filter(asset_id=asset_id)
+
+        page = self.paginate_queryset(queryset.order_by("-requested_at"))
+        serializer = AssetReturnRequestSerializer(page if page is not None else queryset, many=True)
         if page is not None:
             return self.get_paginated_response(serializer.data)
         return success({"items": serializer.data, "count": queryset.count()})
@@ -389,12 +585,35 @@ class AssetViewSet(viewsets.ModelViewSet):
 
         serializer = AssetReturnRequestCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        if AssetReturnRequest.objects.filter(
+            asset=asset,
+            employee=profile,
+            status__in=[
+                AssetReturnRequest.RequestStatus.PENDING_MANAGER,
+                AssetReturnRequest.RequestStatus.PENDING,
+                AssetReturnRequest.RequestStatus.PENDING_CEO,
+                AssetReturnRequest.RequestStatus.APPROVED,
+            ],
+        ).exists():
+            return error(
+                "Validation error",
+                errors=["There is already an open return request for this asset."],
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
         is_hr_manager_request = _is_hr_manager_user(request.user)
-        initial_status = (
-            AssetReturnRequest.RequestStatus.PENDING_CEO
-            if is_hr_manager_request
-            else AssetReturnRequest.RequestStatus.PENDING
-        )
+        manager_user = _resolve_manager_user(profile)
+        workflow_config = get_active_workflow_config()
+        requester_role = get_role(request.user)
+        if is_hr_manager_request:
+            initial_status = AssetReturnRequest.RequestStatus.PENDING_CEO
+        elif (
+            workflow_config.require_manager_stage
+            and requester_role != "Manager"
+            and manager_user
+        ):
+            initial_status = AssetReturnRequest.RequestStatus.PENDING_MANAGER
+        else:
+            initial_status = AssetReturnRequest.RequestStatus.PENDING
 
         return_request = AssetReturnRequest.objects.create(
             asset=asset,
@@ -402,6 +621,7 @@ class AssetViewSet(viewsets.ModelViewSet):
             note=serializer.validated_data["note"],
             status=initial_status,
         )
+        sync_workflow(return_request, actor=request.user)
 
         audit(
             request,
@@ -425,16 +645,15 @@ class AssetViewSet(viewsets.ModelViewSet):
         except Exception:
             pass
         try:
-            approvers = (
-                get_ceo_approver_users()
-                if return_request.status == AssetReturnRequest.RequestStatus.PENDING_CEO
-                else get_hr_approver_users()
-            )
-            action_path = (
-                "/ceo/assets/return-requests"
-                if return_request.status == AssetReturnRequest.RequestStatus.PENDING_CEO
-                else "/hr/assets"
-            )
+            if return_request.status == AssetReturnRequest.RequestStatus.PENDING_CEO:
+                approvers = get_ceo_approver_users()
+                action_path = "/ceo/assets/return-requests"
+            elif return_request.status == AssetReturnRequest.RequestStatus.PENDING_MANAGER and manager_user:
+                approvers = [manager_user]
+                action_path = "/manager/team-requests?tab=asset-returns"
+            else:
+                approvers = get_hr_approver_users()
+                action_path = "/hr/assets"
             notify_users_for_pending_status(
                 users=approvers,
                 request_type="Asset Return Request",
@@ -522,6 +741,114 @@ class CEOAssetDamageReportViewSet(viewsets.ReadOnlyModelViewSet):
         return success(self.get_serializer(instance).data)
 
 
+class ManagerAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = AssetReturnRequestSerializer
+    permission_classes = [IsAuthenticated, IsManagerOrAdmin]
+    pagination_class = StandardPagination
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ["status"]
+    ordering_fields = ["requested_at", "id"]
+    ordering = ["-requested_at"]
+
+    def get_queryset(self):
+        role = get_role(self.request.user)
+        base_qs = AssetReturnRequest.objects.select_related("asset", "employee", "employee__user")
+        if role == "SystemAdmin":
+            return base_qs
+
+        manager_profile = getattr(self.request.user, "employee_profile", None)
+        manager_match = Q(employee__manager=self.request.user)
+        if manager_profile:
+            manager_match = manager_match | Q(employee__manager_profile=manager_profile)
+        delegated_manager_ids = get_delegated_manager_user_ids(self.request.user)
+        if delegated_manager_ids:
+            manager_match = manager_match | Q(employee__manager_id__in=delegated_manager_ids) | Q(
+                employee__manager_profile__user_id__in=delegated_manager_ids
+            )
+
+        return base_qs.filter(manager_match | Q(manager_decision_by=self.request.user)).distinct()
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        status_param = request.query_params.get("status")
+        if status_param:
+            queryset = queryset.filter(status=status_param)
+        else:
+            queryset = queryset.filter(status=AssetReturnRequest.RequestStatus.PENDING_MANAGER)
+
+        page = self.paginate_queryset(queryset.order_by("-requested_at"))
+        serializer = self.get_serializer(page if page is not None else queryset, many=True)
+        if page is not None:
+            return self.get_paginated_response(serializer.data)
+        return success({"items": serializer.data, "count": queryset.count()})
+
+    def retrieve(self, request, *args, **kwargs):
+        return success(self.get_serializer(self.get_object()).data)
+
+    @action(detail=True, methods=["post"])
+    def approve(self, request, pk=None):
+        instance = self.get_object()
+        self_approval_error = _reject_self_approval(request, instance.employee)
+        if self_approval_error:
+            return self_approval_error
+        if instance.status != AssetReturnRequest.RequestStatus.PENDING_MANAGER:
+            return error("Validation error", errors=["Request is not pending manager approval."], status=422)
+
+        serializer = AssetRequestActionSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
+
+        instance.status = AssetReturnRequest.RequestStatus.PENDING
+        instance.manager_decision_by = request.user
+        instance.manager_decision_at = timezone.now()
+        instance.manager_decision_note = serializer.validated_data.get("comment", "")
+        instance.save(
+            update_fields=["status", "manager_decision_by", "manager_decision_at", "manager_decision_note"]
+        )
+        sync_workflow(instance, actor=request.user)
+        audit(request, "asset_return_request_approved_manager", entity="AssetReturnRequest", entity_id=instance.id)
+        try:
+            notify_users_for_pending_status(
+                users=get_hr_approver_users(),
+                request_type="Asset Return Request",
+                request_id=instance.id,
+                requester_name=instance.employee.full_name or instance.employee.user.email,
+                status_label=instance.status,
+                details=[f"Asset: {instance.asset.name_en or instance.asset.asset_code} ({instance.asset.asset_code})"],
+                action_path="/hr/assets",
+            )
+        except Exception:
+            pass
+        return success(self.get_serializer(instance).data)
+
+    @action(detail=True, methods=["post"])
+    def reject(self, request, pk=None):
+        instance = self.get_object()
+        self_approval_error = _reject_self_approval(request, instance.employee)
+        if self_approval_error:
+            return self_approval_error
+        if instance.status != AssetReturnRequest.RequestStatus.PENDING_MANAGER:
+            return error("Validation error", errors=["Request is not pending manager approval."], status=422)
+
+        serializer = AssetRequestActionSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
+        comment = (serializer.validated_data.get("comment") or "").strip()
+        if not comment:
+            return error("Validation error", errors=["comment is required."], status=422)
+
+        instance.status = AssetReturnRequest.RequestStatus.REJECTED
+        instance.manager_decision_by = request.user
+        instance.manager_decision_at = timezone.now()
+        instance.manager_decision_note = comment
+        instance.save(
+            update_fields=["status", "manager_decision_by", "manager_decision_at", "manager_decision_note"]
+        )
+        sync_workflow(instance, actor=request.user)
+        audit(request, "asset_return_request_rejected_manager", entity="AssetReturnRequest", entity_id=instance.id)
+        return success(self.get_serializer(instance).data)
+
+
 class CEOAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = AssetReturnRequestSerializer
     permission_classes = [IsAuthenticated, IsDepartmentCEOApprover]
@@ -556,6 +883,7 @@ class CEOAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
         instance.save(
             update_fields=["status", "ceo_decision_by", "ceo_decision_at", "ceo_decision_note"]
         )
+        sync_workflow(instance, actor=request.user)
         audit(request, "asset_return_request_approved_ceo", entity="AssetReturnRequest", entity_id=instance.id)
         return success(self.get_serializer(instance).data)
 
@@ -581,5 +909,6 @@ class CEOAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
         instance.save(
             update_fields=["status", "ceo_decision_by", "ceo_decision_at", "ceo_decision_note"]
         )
+        sync_workflow(instance, actor=request.user)
         audit(request, "asset_return_request_rejected_ceo", entity="AssetReturnRequest", entity_id=instance.id)
         return success(self.get_serializer(instance).data)

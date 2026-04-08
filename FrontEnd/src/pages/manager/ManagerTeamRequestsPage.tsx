@@ -9,17 +9,19 @@ import {
     getManagerLeaveRequests,
     approveLeaveRequestManager,
     rejectLeaveRequestManager,
-    getManagerAttendance,
-    approveAttendanceManager,
-    rejectAttendanceManager,
+    getManagerAssetReturnRequests,
+    approveManagerAssetReturnRequest,
+    rejectManagerAssetReturnRequest,
     getManagerTeam,
     type ManagerLeaveRequest,
-    type ManagerAttendanceRecord,
     type ManagerTeamMember
 } from "../../services/api/managerApi";
+import type { AssetReturnRequest } from "../../services/api/assetsApi";
 import { isApiError } from "../../services/api/apiTypes";
 import { useI18n } from "../../i18n/useI18n";
 import LeaveApprovalMap from "../../components/leaves/LeaveApprovalMap";
+import AssetReturnApprovalMap from "../../components/assets/AssetReturnApprovalMap";
+import AttendanceMaintenanceNotice from "../../components/attendance/AttendanceMaintenanceNotice";
 
 export default function ManagerTeamRequestsPage() {
     const [searchParams, setSearchParams] = useSearchParams();
@@ -34,7 +36,8 @@ export default function ManagerTeamRequestsPage() {
                 onChange={(key) => setSearchParams({ tab: key })}
                 items={[
                     { key: "leave", label: t("manager.requests.leaveTab"), children: <LeaveRequestsTab /> },
-                    { key: "attendance", label: t("manager.requests.attendanceTab"), children: <AttendanceRequestsTab /> },
+                    { key: "attendance", label: t("manager.requests.attendanceTab"), children: <AttendanceMaintenanceTab /> },
+                    { key: "asset-returns", label: t("assets.returnRequests", "Asset Return Requests"), children: <AssetReturnRequestsTab /> },
                     { key: "team", label: t("manager.requests.teamTab"), children: <TeamTab /> },
                 ]}
             />
@@ -196,15 +199,28 @@ function LeaveRequestsTab() {
     );
 }
 
-function AttendanceRequestsTab() {
+function AttendanceMaintenanceTab() {
     const { t } = useI18n();
-    const [data, setData] = useState<ManagerAttendanceRecord[]>([]);
+    return (
+        <AttendanceMaintenanceNotice
+            title={t("attendance.maintenance.title", "Attendance is temporarily unavailable")}
+            description={t(
+                "attendance.maintenance.managerDescription",
+                "We are fixing this part right now for all users. Attendance requests and approvals will be back soon."
+            )}
+        />
+    );
+}
+
+function AssetReturnRequestsTab() {
+    const { t } = useI18n();
+    const [data, setData] = useState<AssetReturnRequest[]>([]);
     const [loading, setLoading] = useState(false);
 
-    const fetchIds = async () => {
+    const fetchRequests = async () => {
         setLoading(true);
         try {
-            const res = await getManagerAttendance();
+            const res = await getManagerAssetReturnRequests();
             if (!isApiError(res) && res.data) {
                 setData(res.data);
             } else {
@@ -216,87 +232,127 @@ function AttendanceRequestsTab() {
         setLoading(false);
     };
 
-    useEffect(() => { fetchIds(); }, []);
+    useEffect(() => { fetchRequests(); }, []);
 
-    const handleAction = async (id: number, action: 'approve' | 'reject') => {
-        let notes = "";
-        if (action === 'reject') {
-            notes = prompt(t("manager.requests.reasonPrompt")) || "";
-            if (!notes) return;
+    const handleAction = async (id: number, action: "approve" | "reject") => {
+        let comment = "";
+        if (action === "reject") {
+            comment = prompt(t("manager.requests.reasonPrompt")) || "";
+            if (!comment) return;
         }
 
         try {
-            if (action === 'approve') await approveAttendanceManager(id);
-            else await rejectAttendanceManager(id, notes);
+            if (action === "approve") await approveManagerAssetReturnRequest(id);
+            else await rejectManagerAssetReturnRequest(id, comment);
 
             notification.success({ message: t("common.success") });
-            fetchIds();
-        } catch (e) {
+            fetchRequests();
+        } catch {
             notification.error({ message: t("manager.requests.actionFailed") });
         }
+    };
+
+    const statusColorMap: Record<string, string> = {
+        PENDING_MANAGER: "gold",
+        PENDING: "blue",
+        PENDING_CEO: "purple",
+        APPROVED: "green",
+        PROCESSED: "cyan",
+        REJECTED: "red",
     };
 
     const columns = [
         {
             title: t("hr.dashboard.employee"),
-            dataIndex: ["employee_profile", "user", "email"],
             key: "employee",
+            render: (_: any, r: AssetReturnRequest) => {
+                const fullName = r.employee_name || r.employee_email || t("manager.requests.unknown");
+                const email = r.employee_email || "—";
+                return (
+                    <Space size={10}>
+                        <Avatar size={32} icon={<UserOutlined />} style={{ backgroundColor: "#fff2e8", color: "#fa8c16" }} />
+                        <div>
+                            <div style={{ fontWeight: 600, lineHeight: 1.2 }}>{fullName}</div>
+                            <div style={{ fontSize: 12, color: "#8c8c8c", lineHeight: 1.2 }}>{email}</div>
+                        </div>
+                    </Space>
+                );
+            },
         },
         {
-            title: t("common.date"),
-            dataIndex: "date",
-            key: "date",
+            title: t("assets.assetCode"),
+            dataIndex: "asset_code",
+            key: "asset_code",
+            width: 140,
         },
         {
-            title: t("attendance.checkIn"),
-            dataIndex: "check_in_at",
-            render: (v: string) => v ? dayjs(v).format("HH:mm") : "-"
+            title: t("common.name"),
+            dataIndex: "asset_name",
+            key: "asset_name",
+            render: (value: string) => <span style={{ fontWeight: 500 }}>{value || "—"}</span>,
+        },
+        {
+            title: t("common.notes"),
+            dataIndex: "note",
+            key: "note",
+            ellipsis: { showTitle: false },
+            render: (value: string) => (
+                <Tooltip title={value || "—"}>
+                    <Typography.Text>{value || "—"}</Typography.Text>
+                </Tooltip>
+            ),
         },
         {
             title: t("common.status"),
             dataIndex: "status",
-            render: (s: string) => {
-                const value = String(s || "").toUpperCase();
-                const color =
-                    value === "APPROVED" ? "green" :
-                        value === "REJECTED" ? "red" :
-                            value === "PENDING_HR" ? "purple" :
-                                value === "PENDING_MGR" || value === "PENDING_MANAGER" || value === "PENDING" ? "gold" :
-                                    "default";
-
-                const statusMap: Record<string, string> = {
-                    "APPROVED": t("status.approved"),
-                    "REJECTED": t("status.rejected"),
-                    "PENDING_HR": t("status.pendingHr"),
-                    "PENDING_MGR": t("status.pendingManager"),
-                    "PENDING_MANAGER": t("status.pendingManager"),
-                    "PENDING": t("status.pending")
-                };
-                const translatedLabel = statusMap[value] || value;
-
-                return <Tag color={color}>{translatedLabel}</Tag>;
-            }
+            key: "status",
+            width: 160,
+            render: (value: string) => <Tag color={statusColorMap[value] || "default"}>{value}</Tag>,
+        },
+        {
+            title: t("hr.assets.requestedAt", "Requested At"),
+            dataIndex: "requested_at",
+            key: "requested_at",
+            width: 180,
+            render: (value: string) => (value ? dayjs(value).format("YYYY-MM-DD HH:mm") : "—"),
         },
         {
             title: t("common.actions"),
             key: "actions",
             width: 220,
-            render: (_: any, r: ManagerAttendanceRecord) => (
+            render: (_: any, r: AssetReturnRequest) => (
                 <Space size={8} style={{ whiteSpace: "nowrap" }}>
-                    {["PENDING_MGR", "PENDING_MANAGER", "PENDING"].includes(String(r.status || "").toUpperCase()) ? (
+                    {r.status === "PENDING_MANAGER" ? (
                         <>
-                            <Button type="primary" size="small" icon={<CheckOutlined />} onClick={() => handleAction(r.id, 'approve')}>{t("common.approve")}</Button>
-                            <Button danger size="small" icon={<CloseOutlined />} onClick={() => handleAction(r.id, 'reject')}>{t("common.reject")}</Button>
+                            <Button type="primary" size="small" icon={<CheckOutlined />} onClick={() => handleAction(r.id, "approve")}>
+                                {t("common.approve")}
+                            </Button>
+                            <Button danger size="small" icon={<CloseOutlined />} onClick={() => handleAction(r.id, "reject")}>
+                                {t("common.reject")}
+                            </Button>
                         </>
                     ) : (
                         <Tag color="default">{t("manager.requests.history")}</Tag>
                     )}
                 </Space>
-            )
-        }
+            ),
+        },
     ];
 
-    return <Table dataSource={data} columns={columns} rowKey="id" loading={loading} scroll={{ x: 950 }} />;
+    return (
+        <Table
+            dataSource={data}
+            columns={columns}
+            rowKey="id"
+            loading={loading}
+            expandable={{
+                expandedRowRender: (record) => <AssetReturnApprovalMap request={record} t={t} />,
+            }}
+            scroll={{ x: 1100 }}
+            pagination={{ pageSize: 8, showSizeChanger: false }}
+            style={{ background: "white", borderRadius: 14, overflow: "hidden" }}
+        />
+    );
 }
 
 function TeamTab() {

@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
+from django.utils import timezone
 from openpyxl import Workbook
 from openpyxl import load_workbook
 from rest_framework import status
@@ -11,6 +12,7 @@ from rest_framework.test import APIClient
 
 from audit.models import AuditLog
 from hr_reference.models import Department, Position
+from leaves.models import LeaveRequest, LeaveType
 
 from .models import EmployeeProfile
 
@@ -43,6 +45,7 @@ class EmployeeProfileTests(TestCase):
         self.dept = Department.objects.create(name="Engineering", code="ENG")
         self.pos = Position.objects.create(name="Developer", code="DEV")
         self.pos_senior = Position.objects.create(name="Senior Dev", code="S-DEV")
+        self.annual_leave_type = LeaveType.objects.create(name="Annual Leave", code="ANNUAL")
 
     def test_admin_create_profile(self):
         self.client.force_authenticate(user=self.admin_user)
@@ -333,6 +336,76 @@ class EmployeeProfileTests(TestCase):
         self.assertEqual(rows[0][0], "Employee ID")
         self.assertEqual(len(rows), 2)
         self.assertEqual(rows[1][0], "EMP-EXPORT-01")
+
+    def test_list_marks_employee_on_leave_when_approved_leave_is_active_today(self):
+        profile = EmployeeProfile.objects.create(
+            user=self.employee_user,
+            employee_id="EMP-LEAVE-01",
+            department_ref=self.dept,
+            position_ref=self.pos,
+            department=self.dept.name,
+            job_title=self.pos.name,
+            full_name="Leave Employee",
+            hire_date="2024-01-01",
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        )
+        LeaveRequest.objects.create(
+            employee=self.employee_user,
+            employee_profile=profile,
+            leave_type=self.annual_leave_type,
+            start_date=timezone.localdate(),
+            end_date=timezone.localdate(),
+            status=LeaveRequest.RequestStatus.APPROVED,
+        )
+
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.get("/api/employees/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data["data"]["results"]
+        employee = next(item for item in results if item["employee_id"] == "EMP-LEAVE-01")
+        self.assertEqual(employee["employment_status"], "ON_LEAVE")
+
+    def test_status_filter_can_return_only_on_leave_employees(self):
+        on_leave_profile = EmployeeProfile.objects.create(
+            user=self.employee_user,
+            employee_id="EMP-LEAVE-FILTER-01",
+            department_ref=self.dept,
+            position_ref=self.pos,
+            department=self.dept.name,
+            job_title=self.pos.name,
+            full_name="On Leave Employee",
+            hire_date="2024-01-01",
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        )
+        active_profile = EmployeeProfile.objects.create(
+            user=self.employee_user_2,
+            employee_id="EMP-LEAVE-FILTER-02",
+            department_ref=self.dept,
+            position_ref=self.pos,
+            department=self.dept.name,
+            job_title=self.pos.name,
+            full_name="Still Active Employee",
+            hire_date="2024-01-01",
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        )
+        LeaveRequest.objects.create(
+            employee=self.employee_user,
+            employee_profile=on_leave_profile,
+            leave_type=self.annual_leave_type,
+            start_date=timezone.localdate(),
+            end_date=timezone.localdate(),
+            status=LeaveRequest.RequestStatus.APPROVED,
+        )
+
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.get("/api/employees/?status=ON_LEAVE")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data["data"]["results"]
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["employee_id"], on_leave_profile.employee_id)
+        self.assertNotEqual(results[0]["employee_id"], active_profile.employee_id)
 
     def test_excel_import_raw_dates_saudi_foreign_and_manager_profile_linking(self):
         self.client.force_authenticate(user=self.hr_user)

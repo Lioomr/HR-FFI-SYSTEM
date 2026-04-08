@@ -10,7 +10,7 @@ from rest_framework.test import APIClient
 from employees.models import EmployeeProfile
 from hr_reference.models import Department, Position
 
-from .models import Asset, AssetAssignment
+from .models import Asset, AssetAssignment, AssetReturnRequest
 
 User = get_user_model()
 
@@ -61,6 +61,9 @@ class AssetsTests(TestCase):
             department_ref=self.department_ops,
             position_ref=self.position,
         )
+        self.employee_profile.manager = self.manager_user
+        self.employee_profile.manager_profile = self.manager_profile
+        self.employee_profile.save(update_fields=["manager", "manager_profile", "updated_at"])
 
     def test_vehicle_validation_requires_vehicle_fields(self):
         self.client.force_authenticate(user=self.hr_user)
@@ -234,6 +237,7 @@ class AssetsTests(TestCase):
             {"note": "Leaving project"},
         )
         self.assertEqual(return_request_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(return_request_response.data["data"]["status"], AssetReturnRequest.RequestStatus.PENDING_MANAGER)
 
     def test_manager_can_use_employee_asset_self_service_for_own_asset(self):
         asset = Asset.objects.create(
@@ -267,6 +271,70 @@ class AssetsTests(TestCase):
             {"note": "Returning assigned device"},
         )
         self.assertEqual(return_request_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(return_request_response.data["data"]["status"], AssetReturnRequest.RequestStatus.PENDING)
+
+    def test_employee_can_view_own_asset_request_history(self):
+        asset = Asset.objects.create(
+            name_en="History Laptop",
+            type=Asset.AssetType.LAPTOP,
+            cpu="i5",
+            ram="8GB",
+            storage="256GB",
+            mac_address="AA:BB:CC:DD:EE:08",
+            operating_system="Linux",
+            status=Asset.AssetStatus.ASSIGNED,
+        )
+        AssetAssignment.objects.create(
+            asset=asset,
+            employee=self.employee_profile,
+            assigned_by=self.hr_user,
+            is_active=True,
+        )
+
+        self.client.force_authenticate(user=self.employee_user)
+        self.client.post(f"/api/assets/{asset.id}/damage-report/", {"description": "Battery issue"})
+        self.client.post(f"/api/assets/{asset.id}/return-request/", {"note": "Need replacement"})
+
+        damage_history_response = self.client.get("/api/assets/my-damage-reports/")
+        self.assertEqual(damage_history_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(damage_history_response.data["data"]["count"], 1)
+        self.assertEqual(damage_history_response.data["data"]["items"][0]["asset_code"], asset.asset_code)
+
+        return_history_response = self.client.get("/api/assets/my-return-requests/")
+        self.assertEqual(return_history_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(return_history_response.data["data"]["count"], 1)
+        self.assertEqual(return_history_response.data["data"]["items"][0]["asset_code"], asset.asset_code)
+
+    def test_hr_can_view_asset_request_history_for_asset(self):
+        asset = Asset.objects.create(
+            name_en="HR Request Laptop",
+            type=Asset.AssetType.LAPTOP,
+            cpu="i5",
+            ram="8GB",
+            storage="256GB",
+            mac_address="AA:BB:CC:DD:EE:09",
+            operating_system="Linux",
+            status=Asset.AssetStatus.ASSIGNED,
+        )
+        AssetAssignment.objects.create(
+            asset=asset,
+            employee=self.employee_profile,
+            assigned_by=self.hr_user,
+            is_active=True,
+        )
+
+        self.client.force_authenticate(user=self.employee_user)
+        self.client.post(f"/api/assets/{asset.id}/damage-report/", {"description": "Keyboard issue"})
+        self.client.post(f"/api/assets/{asset.id}/return-request/", {"note": "Assigned by mistake"})
+
+        self.client.force_authenticate(user=self.hr_user)
+        damage_history_response = self.client.get(f"/api/assets/damage-reports/?asset={asset.id}")
+        self.assertEqual(damage_history_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(damage_history_response.data["data"]["count"], 1)
+
+        return_history_response = self.client.get(f"/api/assets/return-requests/?asset={asset.id}")
+        self.assertEqual(return_history_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(return_history_response.data["data"]["count"], 1)
 
     def test_hr_manager_asset_requests_start_pending_ceo(self):
         asset = Asset.objects.create(
@@ -292,6 +360,106 @@ class AssetsTests(TestCase):
         self.assertEqual(return_response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(return_response.data["data"]["status"], "PENDING_CEO")
 
+    def test_employee_without_manager_goes_directly_to_hr_for_return_request(self):
+        self.employee_profile.manager = None
+        self.employee_profile.manager_profile = None
+        self.employee_profile.save(update_fields=["manager", "manager_profile", "updated_at"])
+
+        asset = Asset.objects.create(
+            name_en="Laptop No Manager",
+            type=Asset.AssetType.LAPTOP,
+            cpu="i5",
+            ram="8GB",
+            storage="256GB",
+            mac_address="AA:BB:CC:DD:EE:11",
+            operating_system="Linux",
+            status=Asset.AssetStatus.ASSIGNED,
+        )
+        AssetAssignment.objects.create(asset=asset, employee=self.employee_profile, assigned_by=self.hr_user, is_active=True)
+
+        self.client.force_authenticate(user=self.employee_user)
+        response = self.client.post(f"/api/assets/{asset.id}/return-request/", {"note": "No manager"})
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["data"]["status"], AssetReturnRequest.RequestStatus.PENDING)
+
+    def test_manager_can_approve_asset_return_request_and_move_it_to_hr(self):
+        asset = Asset.objects.create(
+            name_en="Laptop Manager Approval",
+            type=Asset.AssetType.LAPTOP,
+            cpu="i5",
+            ram="8GB",
+            storage="256GB",
+            mac_address="AA:BB:CC:DD:EE:12",
+            operating_system="Linux",
+            status=Asset.AssetStatus.ASSIGNED,
+        )
+        AssetAssignment.objects.create(asset=asset, employee=self.employee_profile, assigned_by=self.hr_user, is_active=True)
+
+        self.client.force_authenticate(user=self.employee_user)
+        create_response = self.client.post(f"/api/assets/{asset.id}/return-request/", {"note": "Project ended"})
+        request_id = create_response.data["data"]["id"]
+
+        self.client.force_authenticate(user=self.manager_user)
+        inbox_response = self.client.get("/api/assets/manager/return-requests/")
+        self.assertEqual(inbox_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(inbox_response.data["data"]["count"], 1)
+
+        approve_response = self.client.post(
+            f"/api/assets/manager/return-requests/{request_id}/approve/",
+            {"comment": "Approved by manager"},
+        )
+        self.assertEqual(approve_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(approve_response.data["data"]["status"], AssetReturnRequest.RequestStatus.PENDING)
+
+        return_request = AssetReturnRequest.objects.get(id=request_id)
+        self.assertEqual(return_request.manager_decision_by, self.manager_user)
+        self.assertIsNotNone(return_request.manager_decision_at)
+
+    def test_hr_can_approve_return_request_after_manager_stage(self):
+        asset = Asset.objects.create(
+            name_en="Laptop HR Approval",
+            type=Asset.AssetType.LAPTOP,
+            cpu="i5",
+            ram="8GB",
+            storage="256GB",
+            mac_address="AA:BB:CC:DD:EE:13",
+            operating_system="Linux",
+            status=Asset.AssetStatus.ASSIGNED,
+        )
+        AssetAssignment.objects.create(asset=asset, employee=self.employee_profile, assigned_by=self.hr_user, is_active=True)
+
+        self.client.force_authenticate(user=self.employee_user)
+        create_response = self.client.post(f"/api/assets/{asset.id}/return-request/", {"note": "Need return"})
+        request_id = create_response.data["data"]["id"]
+
+        self.client.force_authenticate(user=self.manager_user)
+        self.client.post(f"/api/assets/manager/return-requests/{request_id}/approve/", {"comment": "Forwarding to HR"})
+
+        self.client.force_authenticate(user=self.hr_user)
+        approve_response = self.client.post(f"/api/assets/return-requests/{request_id}/approve/", {"comment": "Approved by HR"})
+        self.assertEqual(approve_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(approve_response.data["data"]["status"], AssetReturnRequest.RequestStatus.APPROVED)
+
+    def test_duplicate_open_return_request_is_rejected(self):
+        asset = Asset.objects.create(
+            name_en="Laptop Duplicate Return",
+            type=Asset.AssetType.LAPTOP,
+            cpu="i5",
+            ram="8GB",
+            storage="256GB",
+            mac_address="AA:BB:CC:DD:EE:14",
+            operating_system="Linux",
+            status=Asset.AssetStatus.ASSIGNED,
+        )
+        AssetAssignment.objects.create(asset=asset, employee=self.employee_profile, assigned_by=self.hr_user, is_active=True)
+
+        self.client.force_authenticate(user=self.employee_user)
+        first_response = self.client.post(f"/api/assets/{asset.id}/return-request/", {"note": "First"})
+        self.assertEqual(first_response.status_code, status.HTTP_201_CREATED)
+
+        second_response = self.client.post(f"/api/assets/{asset.id}/return-request/", {"note": "Second"})
+        self.assertEqual(second_response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+
     def test_dashboard_summary_and_warranty_window(self):
         today = timezone.localdate()
         Asset.objects.create(
@@ -315,6 +483,27 @@ class AssetsTests(TestCase):
         self.assertEqual(response.data["data"]["total"], 2)
         self.assertEqual(response.data["data"]["lost"], 1)
         self.assertEqual(response.data["data"]["warranty_expiring_soon"], 1)
+
+    def test_list_can_filter_warranty_expiring_soon(self):
+        today = timezone.localdate()
+        soon_asset = Asset.objects.create(
+            name_en="Soon Warranty",
+            type=Asset.AssetType.OTHER,
+            flexible_attributes={"x": 1},
+            warranty_expiry=today + timedelta(days=5),
+        )
+        Asset.objects.create(
+            name_en="Later Warranty",
+            type=Asset.AssetType.OTHER,
+            flexible_attributes={"x": 2},
+            warranty_expiry=today + timedelta(days=45),
+        )
+
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.get("/api/assets/?warranty_expiring_soon=true&ordering=warranty_expiry")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"]["count"], 1)
+        self.assertEqual(response.data["data"]["items"][0]["id"], soon_asset.id)
 
     def test_termination_auto_closes_assignments(self):
         asset = Asset.objects.create(
