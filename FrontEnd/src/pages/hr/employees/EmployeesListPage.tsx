@@ -658,6 +658,7 @@ export default function EmployeesListPage() {
                             className="custom-select-filter"
                         >
                             <Option value="ACTIVE">{t("status.active")}</Option>
+                            <Option value="ON_LEAVE">{t("status.onLeave")}</Option>
                             <Option value="SUSPENDED">{t("status.suspended")}</Option>
                             <Option value="TERMINATED">{t("status.terminated")}</Option>
                         </Select>

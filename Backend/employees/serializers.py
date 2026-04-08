@@ -32,6 +32,7 @@ class EmployeeProfileReadSerializer(serializers.ModelSerializer):
     task_group = serializers.SerializerMethodField()
     sponsor = serializers.SerializerMethodField()
     passport = serializers.CharField(source="passport_no", read_only=True)
+    employment_status = serializers.SerializerMethodField()
 
     department_id = serializers.PrimaryKeyRelatedField(source="department_ref", read_only=True)
     position_id = serializers.PrimaryKeyRelatedField(source="position_ref", read_only=True)
@@ -146,6 +147,13 @@ class EmployeeProfileReadSerializer(serializers.ModelSerializer):
 
     def get_sponsor(self, obj):
         return self._display_name(obj.sponsor_ref, "")
+
+    def get_employment_status(self, obj):
+        if getattr(obj, "effective_employment_status", None):
+            return obj.effective_employment_status
+        if getattr(obj, "active_leave_today", False) and obj.employment_status == EmployeeProfile.EmploymentStatus.ACTIVE:
+            return "ON_LEAVE"
+        return obj.employment_status
 
 
 class EmployeeProfileWriteSerializer(serializers.ModelSerializer):

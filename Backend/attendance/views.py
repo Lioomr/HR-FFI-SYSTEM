@@ -34,6 +34,8 @@ from .serializers import (
 
 User = get_user_model()
 
+ATTENDANCE_MAINTENANCE_MESSAGE = "Attendance is temporarily unavailable while we fix this part."
+
 
 def _is_hr_manager_user(user):
     return bool(user and user.is_authenticated and user.groups.filter(name="HRManager").exists())
@@ -48,7 +50,18 @@ class AttendanceThrottle(UserRateThrottle):
     rate = "10/min"
 
 
-class AttendanceRecordViewSet(viewsets.ModelViewSet):
+class AttendanceMaintenanceMixin:
+    def dispatch(self, request, *args, **kwargs):
+        request = self.initialize_request(request, *args, **kwargs)
+        self.request = request
+        self.args = args
+        self.kwargs = kwargs
+        self.headers = self.default_response_headers
+        response = error(ATTENDANCE_MAINTENANCE_MESSAGE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return self.finalize_response(request, response, *args, **kwargs)
+
+
+class AttendanceRecordViewSet(AttendanceMaintenanceMixin, viewsets.ModelViewSet):
     serializer_class = AttendanceRecordSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
@@ -318,7 +331,7 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         return success(serializer.data)
 
 
-class ManagerAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
+class ManagerAttendanceViewSet(AttendanceMaintenanceMixin, viewsets.ReadOnlyModelViewSet):
     """
     Endpoints for managers to view and act on their direct reports' attendance.
     """
@@ -435,7 +448,7 @@ class ManagerAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
         return success(AttendanceRecordSerializer(instance).data)
 
 
-class CEOAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
+class CEOAttendanceViewSet(AttendanceMaintenanceMixin, viewsets.ReadOnlyModelViewSet):
     serializer_class = AttendanceRecordSerializer
     permission_classes = [IsAuthenticated, IsDepartmentCEOApprover]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]

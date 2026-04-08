@@ -56,6 +56,15 @@ WORKFLOW_TEMPLATES = {
             {"key": "ceo", "title": "CEO Review", "approver_role": "ceo", "order": 3, "is_optional": True},
         ],
     },
+    "asset_return_request": {
+        "name": "Asset Return Request Workflow",
+        "module_key": "assets",
+        "stages": [
+            {"key": "manager", "title": "Manager Review", "approver_role": "manager", "order": 1, "is_optional": True},
+            {"key": "hr", "title": "HR Review", "approver_role": "hr", "order": 2},
+            {"key": "ceo", "title": "CEO Review", "approver_role": "ceo", "order": 3, "is_optional": True},
+        ],
+    },
 }
 
 
@@ -87,6 +96,9 @@ def _build_action_url_path(workflow_key: str, role: str, object_id: int) -> str:
         ("attendance_request", "manager"): "/manager/team-requests?tab=attendance",
         ("attendance_request", "hr"): "/hr/attendance",
         ("attendance_request", "ceo"): "/ceo/attendance",
+        ("asset_return_request", "manager"): "/manager/team-requests?tab=asset-returns",
+        ("asset_return_request", "hr"): "/hr/assets",
+        ("asset_return_request", "ceo"): "/ceo/assets/return-requests",
     }
     return route_map.get((workflow_key, role), "")
 
@@ -617,6 +629,123 @@ def _legacy_events_for_attendance(instance) -> list[WorkflowEvent]:
     return events
 
 
+def _legacy_status_snapshot_for_asset_return(instance):
+    from assets.models import AssetReturnRequest
+
+    current_map = {
+        AssetReturnRequest.RequestStatus.PENDING_MANAGER: ("manager", "manager"),
+        AssetReturnRequest.RequestStatus.PENDING: ("hr", "hr"),
+        AssetReturnRequest.RequestStatus.PENDING_CEO: ("ceo", "ceo"),
+    }
+    status = WorkflowInstance.Status.IN_REVIEW
+    current_stage, current_role = current_map.get(instance.status, ("", ""))
+    terminal_at = None
+    if instance.status == AssetReturnRequest.RequestStatus.PENDING_MANAGER:
+        status = WorkflowInstance.Status.SUBMITTED
+    elif instance.status in {AssetReturnRequest.RequestStatus.APPROVED, AssetReturnRequest.RequestStatus.PROCESSED}:
+        status = WorkflowInstance.Status.APPROVED
+        terminal_at = (
+            instance.processed_at
+            or instance.ceo_decision_at
+            or instance.hr_decision_at
+            or instance.updated_at
+        )
+    elif instance.status == AssetReturnRequest.RequestStatus.REJECTED:
+        status = WorkflowInstance.Status.REJECTED
+        terminal_at = (
+            instance.ceo_decision_at
+            or instance.hr_decision_at
+            or instance.manager_decision_at
+            or instance.updated_at
+        )
+    current_actor_user = _resolve_current_actor(current_role, instance) if current_role else None
+    return {
+        "status": status,
+        "current_stage": current_stage,
+        "current_role": current_role,
+        "current_actor_user": current_actor_user,
+        "submitted_by": getattr(instance.employee, "user", None),
+        "submitted_at": instance.requested_at,
+        "decided_at": terminal_at if status in {WorkflowInstance.Status.APPROVED, WorkflowInstance.Status.REJECTED} else None,
+        "cancelled_at": None,
+    }
+
+
+def _legacy_events_for_asset_return(instance) -> list[WorkflowEvent]:
+    from assets.models import AssetReturnRequest
+
+    initial_stage = "hr"
+    if instance.status == AssetReturnRequest.RequestStatus.PENDING_MANAGER or instance.manager_decision_at:
+        initial_stage = "manager"
+    elif instance.status == AssetReturnRequest.RequestStatus.PENDING_CEO or instance.ceo_decision_at:
+        initial_stage = "ceo" if not instance.hr_decision_at else "manager"
+
+    events = [
+        WorkflowEvent(
+            signature=f"asset-return:submitted:{instance.id}:{instance.requested_at.isoformat()}",
+            action=WorkflowAction.Action.SUBMIT,
+            approver_role="",
+            from_status="draft",
+            to_status="submitted",
+            from_stage="",
+            to_stage=initial_stage,
+            actor=getattr(instance.employee, "user", None),
+            note=instance.note or "",
+            at=instance.requested_at,
+            metadata={"legacy_signature": "submitted", "workflow_key": "asset_return_request"},
+        )
+    ]
+    if instance.manager_decision_at:
+        events.append(
+            WorkflowEvent(
+                signature=f"asset-return:manager:{instance.id}:{instance.manager_decision_at.isoformat()}",
+                action=WorkflowAction.Action.REJECT if instance.status == AssetReturnRequest.RequestStatus.REJECTED and not instance.hr_decision_at and not instance.ceo_decision_at else WorkflowAction.Action.ADVANCE,
+                approver_role="manager",
+                from_status="in_review",
+                to_status="rejected" if instance.status == AssetReturnRequest.RequestStatus.REJECTED and not instance.hr_decision_at and not instance.ceo_decision_at else "in_review",
+                from_stage="manager",
+                to_stage="" if instance.status == AssetReturnRequest.RequestStatus.REJECTED and not instance.hr_decision_at and not instance.ceo_decision_at else "hr",
+                actor=instance.manager_decision_by,
+                note=instance.manager_decision_note or "",
+                at=instance.manager_decision_at,
+                metadata={"legacy_signature": "manager", "workflow_key": "asset_return_request"},
+            )
+        )
+    if instance.hr_decision_at:
+        events.append(
+            WorkflowEvent(
+                signature=f"asset-return:hr:{instance.id}:{instance.hr_decision_at.isoformat()}",
+                action=WorkflowAction.Action.REJECT if instance.status == AssetReturnRequest.RequestStatus.REJECTED and not instance.ceo_decision_at else WorkflowAction.Action.APPROVE,
+                approver_role="hr",
+                from_status="in_review",
+                to_status="rejected" if instance.status == AssetReturnRequest.RequestStatus.REJECTED and not instance.ceo_decision_at else "approved",
+                from_stage="hr",
+                to_stage="",
+                actor=instance.hr_decision_by,
+                note=instance.hr_decision_note or "",
+                at=instance.hr_decision_at,
+                metadata={"legacy_signature": "hr", "workflow_key": "asset_return_request"},
+            )
+        )
+    if instance.ceo_decision_at:
+        events.append(
+            WorkflowEvent(
+                signature=f"asset-return:ceo:{instance.id}:{instance.ceo_decision_at.isoformat()}",
+                action=WorkflowAction.Action.REJECT if instance.status == AssetReturnRequest.RequestStatus.REJECTED else WorkflowAction.Action.APPROVE,
+                approver_role="ceo",
+                from_status="in_review",
+                to_status="rejected" if instance.status == AssetReturnRequest.RequestStatus.REJECTED else "approved",
+                from_stage="ceo",
+                to_stage="",
+                actor=instance.ceo_decision_by,
+                note=instance.ceo_decision_note or "",
+                at=instance.ceo_decision_at,
+                metadata={"legacy_signature": "ceo", "workflow_key": "asset_return_request"},
+            )
+        )
+    return events
+
+
 def _adapter_for_instance(instance):
     class_name = instance.__class__.__name__
     if class_name == "LeaveRequest":
@@ -625,6 +754,8 @@ def _adapter_for_instance(instance):
         return "loan_request", _legacy_status_snapshot_for_loan, _legacy_events_for_loan
     if class_name == "AttendanceRecord":
         return "attendance_request", _legacy_status_snapshot_for_attendance, _legacy_events_for_attendance
+    if class_name == "AssetReturnRequest":
+        return "asset_return_request", _legacy_status_snapshot_for_asset_return, _legacy_events_for_asset_return
     raise ValueError(f"Unsupported workflow instance class: {class_name}")
 
 
@@ -812,6 +943,13 @@ def build_pending_approval_item(workflow: WorkflowInstance) -> dict[str, Any] | 
         name = getattr(profile, "full_name", "") or getattr(employee, "email", f"Request #{obj.pk}")
         action = f"Loan: {getattr(obj, 'requested_amount', '')}"
         request_type = "LOAN"
+    elif workflow_key == "asset_return_request":
+        employee = getattr(obj, "employee", None)
+        user = getattr(employee, "user", None)
+        name = getattr(employee, "full_name", "") or getattr(user, "email", f"Request #{obj.pk}")
+        asset = getattr(obj, "asset", None)
+        action = f"Asset Return: {getattr(asset, 'asset_code', obj.pk)}"
+        request_type = "ASSET"
     else:
         profile = getattr(obj, "employee_profile", None)
         user = getattr(profile, "user", None)

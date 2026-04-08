@@ -1,11 +1,12 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from .views import AssetViewSet, CEOAssetDamageReportViewSet, CEOAssetReturnRequestViewSet
+from .views import AssetViewSet, CEOAssetDamageReportViewSet, CEOAssetReturnRequestViewSet, ManagerAssetReturnRequestViewSet
 
 router = DefaultRouter()
 router.trailing_slash = "/?"
 router.register(r"assets", AssetViewSet, basename="assets")
+router.register(r"assets/manager/return-requests", ManagerAssetReturnRequestViewSet, basename="manager-asset-return-requests")
 router.register(r"ceo/assets/damage-reports", CEOAssetDamageReportViewSet, basename="ceo-asset-damage-reports")
 router.register(r"ceo/assets/return-requests", CEOAssetReturnRequestViewSet, basename="ceo-asset-return-requests")
 
