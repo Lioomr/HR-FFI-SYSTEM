@@ -1,16 +1,17 @@
 from rest_framework import views, viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAdminUser
+from rest_framework.permissions import IsAuthenticated
 
 from .models import BioTimeConfig, BioTimeEmployeeMap
 from .serializers import BioTimeConfigSerializer, BioTimeEmployeeMapSerializer
 from .biotime_client import BioTimeClient
 from .services import SyncBioTimeService
+from core.permissions import IsHRManagerOrAdmin
 
 
 class BioTimeConfigViewSet(views.APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
 
     def get(self, request):
         config = BioTimeConfig.get_solo()
@@ -31,7 +32,7 @@ class BioTimeConfigViewSet(views.APIView):
 
 
 class BioTimeActionsViewSet(views.APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
 
     def post(self, request, action):
         if action == "test-connection":
@@ -67,7 +68,7 @@ class BioTimeActionsViewSet(views.APIView):
 
 
 class BioTimeEmployeeMapViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
     queryset = BioTimeEmployeeMap.objects.all().select_related("employee_profile", "employee_profile__user")
     serializer_class = BioTimeEmployeeMapSerializer
 
