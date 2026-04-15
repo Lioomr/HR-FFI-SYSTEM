@@ -4,9 +4,12 @@ from .models import PayrollRun, PayrollRunItem, Payslip
 
 
 class PayrollRunSerializer(serializers.ModelSerializer):
+    company_id = serializers.PrimaryKeyRelatedField(source="company", read_only=True)
+    company_name = serializers.CharField(source="company.name", read_only=True)
+
     class Meta:
         model = PayrollRun
-        fields = ["id", "year", "month", "status", "total_net", "total_employees"]
+        fields = ["id", "year", "month", "status", "total_net", "total_employees", "company_id", "company_name"]
 
     def validate_month(self, value):
         if value < 1 or value > 12:

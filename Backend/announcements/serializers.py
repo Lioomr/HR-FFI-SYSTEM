@@ -13,6 +13,8 @@ class AnnouncementSerializer(serializers.ModelSerializer):
     attachment_name = serializers.SerializerMethodField()
     attachment_size = serializers.SerializerMethodField()
     has_attachment = serializers.SerializerMethodField()
+    company_id = serializers.PrimaryKeyRelatedField(source="company", read_only=True)
+    company_name = serializers.CharField(source="company.name", read_only=True)
 
     class Meta:
         model = Announcement
@@ -29,6 +31,8 @@ class AnnouncementSerializer(serializers.ModelSerializer):
             "attachment_name",
             "attachment_size",
             "has_attachment",
+            "company_id",
+            "company_name",
             "created_by",
             "created_by_name",
             "created_at",
@@ -71,6 +75,8 @@ class AnnouncementListSerializer(serializers.ModelSerializer):
     target_user_email = serializers.SerializerMethodField()
     attachment_name = serializers.SerializerMethodField()
     has_attachment = serializers.SerializerMethodField()
+    company_id = serializers.PrimaryKeyRelatedField(source="company", read_only=True)
+    company_name = serializers.CharField(source="company.name", read_only=True)
 
     class Meta:
         model = Announcement
@@ -84,6 +90,8 @@ class AnnouncementListSerializer(serializers.ModelSerializer):
             "created_by_name",
             "attachment_name",
             "has_attachment",
+            "company_id",
+            "company_name",
             "created_at",
             "is_active",
         ]

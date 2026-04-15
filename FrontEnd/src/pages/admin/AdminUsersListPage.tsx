@@ -18,6 +18,7 @@ import {
   KeyOutlined,
   UserSwitchOutlined,
   SearchOutlined,
+  ApartmentOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 
@@ -26,12 +27,13 @@ import LoadingState from "../../components/ui/LoadingState";
 import EmptyState from "../../components/ui/EmptyState";
 import ErrorState from "../../components/ui/ErrorState";
 import Unauthorized403Page from "../Unauthorized403Page";
-import type { Role, UserDto } from "../../services/api/apiTypes";
+import type { OrganizationNodeDto, Role, UserDto } from "../../services/api/apiTypes";
 import { isApiError } from "../../services/api/apiTypes";
 import {
   listUsers,
   resetUserPassword,
   updateUserRole,
+  updateUserOrganizations,
   updateUserStatus,
 } from "../../services/api/usersApi";
 import { useI18n } from "../../i18n/useI18n";
@@ -44,6 +46,8 @@ type UserRow = {
   role: Role;
   status: "Active" | "Disabled";
   createdAt: string;
+  accessibleOrganizations: OrganizationNodeDto[];
+  hasAllCompanyAccess: boolean;
 };
 
 type UiMode = "loading" | "empty" | "error" | "ok";
@@ -103,6 +107,8 @@ function toUserRow(user: UserDto): UserRow {
     role: user.role,
     status: user.is_active ? "Active" : "Disabled",
     createdAt: "-",
+    accessibleOrganizations: user.accessible_organizations || [],
+    hasAllCompanyAccess: Boolean(user.has_all_company_access),
   };
 }
 
@@ -110,6 +116,7 @@ export default function AdminUsersListPage() {
   const navigate = useNavigate();
   const { t } = useI18n();
   const currentUserRole = useAuthStore((state) => state.user?.role);
+  const availableOrganizations = useAuthStore((state) => state.user?.accessible_organizations ?? []);
   const activeRoleOptions = roleOptions.filter(r => r !== "SystemAdmin" || currentUserRole === "SystemAdmin");
 
   const [mode, setMode] = useState<UiMode>("loading");
@@ -121,6 +128,10 @@ export default function AdminUsersListPage() {
   const [status, setStatus] = useState<"All" | "Active" | "Disabled">("All");
 
   const [rows, setRows] = useState<UserRow[]>([]);
+  const [orgModalOpen, setOrgModalOpen] = useState(false);
+  const [orgUser, setOrgUser] = useState<UserRow | null>(null);
+  const [selectedOrganizationIds, setSelectedOrganizationIds] = useState<number[]>([]);
+  const [savingOrganizations, setSavingOrganizations] = useState(false);
 
   const [resetOpen, setResetOpen] = useState(false);
   const [resetUser, setResetUser] = useState<UserRow | null>(null);
@@ -219,6 +230,49 @@ export default function AdminUsersListPage() {
         onFilter: (value, record) => record.status === value,
       },
       {
+        title: t("admin.users.companyAccess", "Company Access"),
+        dataIndex: "accessibleOrganizations",
+        key: "accessibleOrganizations",
+        width: 260,
+        render: (_: OrganizationNodeDto[], record) => {
+          const names = record.accessibleOrganizations.map((organization) => organization.name);
+          const summary = record.hasAllCompanyAccess
+            ? t("admin.users.allCompanies", "All companies")
+            : names.length > 0
+              ? names.join(", ")
+              : t("admin.users.noCompanyAccess", "No company access");
+
+          return (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "space-between" }}>
+              <Typography.Text
+                style={{ fontSize: 12, color: "#475569" }}
+                ellipsis={{ tooltip: summary }}
+              >
+                {summary}
+              </Typography.Text>
+              {currentUserRole === "SystemAdmin" && record.role === "HRManager" ? (
+                <Button
+                  size="small"
+                  icon={<ApartmentOutlined />}
+                  style={{ borderRadius: 8 }}
+                  onClick={() => {
+                    setOrgUser(record);
+                    setSelectedOrganizationIds(
+                      record.accessibleOrganizations
+                        .map((organization) => Number(organization.id))
+                        .filter((organizationId) => Number.isFinite(organizationId))
+                    );
+                    setOrgModalOpen(true);
+                  }}
+                >
+                  {t("admin.users.manageCompanies", "Manage")}
+                </Button>
+              ) : null}
+            </div>
+          );
+        },
+      },
+      {
         title: t("common.actions"),
         key: "actions",
         width: 200,
@@ -278,7 +332,7 @@ export default function AdminUsersListPage() {
         ),
       },
     ],
-    [setUnauthorized, t]
+    [activeRoleOptions, currentUserRole, setUnauthorized, t]
   );
 
   if (unauthorized) return <Unauthorized403Page />;
@@ -373,6 +427,70 @@ export default function AdminUsersListPage() {
       </div>
 
       {/* Reset Password Modal */}
+      <Modal
+        title={<span style={{ fontWeight: 700 }}>{t("admin.users.manageCompanies", "Manage Companies")}</span>}
+        open={orgModalOpen}
+        onCancel={() => {
+          if (savingOrganizations) return;
+          setOrgModalOpen(false);
+          setOrgUser(null);
+        }}
+        onOk={async () => {
+          if (!orgUser) return;
+          setSavingOrganizations(true);
+          try {
+            const res = await updateUserOrganizations(orgUser.id, {
+              organization_ids: selectedOrganizationIds,
+            });
+            if (isApiError(res)) {
+              message.error(res.message || t("error.generic"));
+              return;
+            }
+            setRows((prev) => prev.map((user) => (user.id === orgUser.id ? toUserRow(res.data) : user)));
+            message.success(t("common.save"));
+            setOrgModalOpen(false);
+            setOrgUser(null);
+          } catch (err: any) {
+            if (err?.response?.status === 403) {
+              setUnauthorized(true);
+              return;
+            }
+            message.error(err?.response?.data?.message || t("error.generic"));
+          } finally {
+            setSavingOrganizations(false);
+          }
+        }}
+        okText={t("common.save")}
+        confirmLoading={savingOrganizations}
+      >
+        <Space direction="vertical" style={{ width: "100%" }} size={12}>
+          <Typography.Text>
+            {t("admin.users.manageCompaniesFor", "Manage company access for")}{" "}
+            <strong>{orgUser?.email}</strong>
+          </Typography.Text>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {t(
+              "admin.users.companyAccessHint",
+              "Select the companies and head office contexts this HR Manager can switch between."
+            )}
+          </Typography.Text>
+          <Select
+            mode="multiple"
+            value={selectedOrganizationIds}
+            onChange={(values) => setSelectedOrganizationIds(values.map((value) => Number(value)))}
+            style={{ width: "100%" }}
+            placeholder={t("admin.users.selectCompanies", "Select companies")}
+            options={availableOrganizations.map((organization) => ({
+              label:
+                organization.node_type === "head_office"
+                  ? `${organization.name} (${t("admin.users.readOnly", "Read-only")})`
+                  : organization.name,
+              value: Number(organization.id),
+            }))}
+          />
+        </Space>
+      </Modal>
+
       <Modal
         title={<span style={{ fontWeight: 700 }}>{t("admin.users.resetPassword")}</span>}
         open={resetOpen}

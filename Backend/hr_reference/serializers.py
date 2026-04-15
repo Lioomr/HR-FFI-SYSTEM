@@ -4,8 +4,11 @@ from .models import Department, Position, Sponsor, TaskGroup
 
 
 class BaseReferenceSerializer(serializers.ModelSerializer):
+    company_id = serializers.PrimaryKeyRelatedField(source="company", read_only=True)
+    company_name = serializers.CharField(source="company.name", read_only=True)
+
     class Meta:
-        fields = ["id", "code", "name", "description"]
+        fields = ["id", "code", "name", "description", "company_id", "company_name"]
 
 
 class DepartmentSerializer(BaseReferenceSerializer):
@@ -30,7 +33,11 @@ class SponsorSerializer(BaseReferenceSerializer):
         model = Sponsor
 
     def validate_code(self, value: str):
-        qs = Sponsor.objects.filter(code=value)
+        company = getattr(self.instance, "company", None)
+        request = self.context.get("request")
+        if request and hasattr(request, "_active_company") and request._active_company is not None:
+            company = request._active_company
+        qs = Sponsor.objects.filter(company=company, code=value)
         if self.instance:
             qs = qs.exclude(pk=self.instance.pk)
         if qs.exists():

@@ -38,6 +38,16 @@ export function isApiError<T>(res: ApiResponse<T>): res is ApiError {
 
 export type Role = "SystemAdmin" | "HRManager" | "Manager" | "Employee" | "CEO" | "CFO";
 
+export type OrganizationNodeDto = {
+  id: number | string;
+  code: string;
+  name: string;
+  node_type: "head_office" | "company";
+  parent_id: number | string | null;
+  employee_id_prefix?: string;
+  is_active: boolean;
+};
+
 export type EmailDeliveryStatus = {
   sent: boolean;
   provider: string;
@@ -83,6 +93,9 @@ export type UserDto = {
   email: string;
   is_active: boolean;
   role: Role;
+  accessible_organizations?: OrganizationNodeDto[];
+  default_organization_id?: number | string | null;
+  has_all_company_access?: boolean;
   is_staff?: boolean;
   is_superuser?: boolean;
 };

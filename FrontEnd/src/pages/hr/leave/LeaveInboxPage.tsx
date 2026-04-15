@@ -22,6 +22,8 @@ import { listEmployees, type Employee } from "../../../services/api/employeesApi
 import { useI18n } from "../../../i18n/useI18n";
 import { apply422ToForm, getFirstApiErrorMessage } from "../../../utils/formErrors";
 import LeaveApprovalMap from "../../../components/leaves/LeaveApprovalMap";
+import { useAuthStore } from "../../../auth/authStore";
+import { isHeadOfficeOrganization } from "../../../utils/organizationContext";
 
 const { Option } = Select;
 const { RangePicker } = DatePicker;
@@ -30,6 +32,8 @@ const { TextArea } = Input;
 export default function LeaveInboxPage() {
     const navigate = useNavigate();
     const { t } = useI18n();
+    const user = useAuthStore((state) => state.user);
+    const isHeadOffice = isHeadOfficeOrganization(user);
 
     // Translate leave type names from the API
     const translateLeaveType = (name?: string): string => {
@@ -157,6 +161,14 @@ export default function LeaveInboxPage() {
             key: "leave_type",
             render: (_, record) => translateLeaveType(record.leave_type?.name)
         },
+        ...(isHeadOffice
+            ? [{
+                title: t("common.company", "Company"),
+                key: "company_name",
+                dataIndex: "company_name",
+                render: (value?: string) => value ? <Tag color="blue">{value}</Tag> : "-",
+            }]
+            : []),
         {
             title: t("leave.startDate"),
             dataIndex: "start_date",
@@ -211,6 +223,8 @@ export default function LeaveInboxPage() {
                                 <Button
                                     icon={<EditOutlined />}
                                     size="small"
+                                    disabled={isHeadOffice}
+                                    title={isHeadOffice ? t("organization.headOffice.switchToEditRecords") : undefined}
                                     onClick={() => openEditModal(record)}
                                 />
                             </Tooltip>
@@ -220,7 +234,13 @@ export default function LeaveInboxPage() {
                                 cancelText={t("common.cancel")}
                                 onConfirm={() => handleDeleteManual(record.id)}
                             >
-                                <Button danger icon={<DeleteOutlined />} size="small" />
+                                <Button
+                                    danger
+                                    icon={<DeleteOutlined />}
+                                    size="small"
+                                    disabled={isHeadOffice}
+                                    title={isHeadOffice ? t("organization.headOffice.switchToEditRecords") : undefined}
+                                />
                             </Popconfirm>
                         </>
                     )}
@@ -329,7 +349,13 @@ export default function LeaveInboxPage() {
                 title={t("leave.title")}
                 subtitle={t("layout.leaveInbox")}
                 actions={
-                    <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
+                    <Button
+                        type="primary"
+                        icon={<PlusOutlined />}
+                        onClick={openCreateModal}
+                        disabled={isHeadOffice}
+                        title={isHeadOffice ? t("organization.headOffice.switchToCreateRecords") : undefined}
+                    >
                         {t("leave.manual.addButton")}
                     </Button>
                 }

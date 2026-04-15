@@ -3,6 +3,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
+from corsheaders.defaults import default_headers
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -98,6 +99,7 @@ INSTALLED_APPS = [
     "announcements",
     "loans",
     "rents",
+    "organization",
 ]
 
 MIDDLEWARE = [
@@ -146,6 +148,9 @@ CORS_ALLOWED_ORIGINS = _env_list(
     ["http://localhost:5173", "http://localhost:3000"] if DEBUG else [],
 )
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    "x-active-company-id",
+]
 TRUSTED_PROXY_IPS = _env_list("TRUSTED_PROXY_IPS", [])
 CSRF_TRUSTED_ORIGINS = _env_list(
     "CSRF_TRUSTED_ORIGINS",

@@ -17,6 +17,12 @@ from core.permissions import get_role
 from core.responses import error, success
 from employees.models import EmployeeProfile
 from employees.permissions import IsHRManagerOrAdmin
+from organization.models import OrganizationNode
+from organization.services import (
+    ensure_company_write_allowed,
+    filter_queryset_by_company_scope,
+    get_active_company_for_request,
+)
 
 from .models import Announcement
 from .serializers import AnnouncementCreateSerializer, AnnouncementListSerializer, AnnouncementSerializer
@@ -113,7 +119,8 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
 
         # HR Managers and Admins can see all announcements
         if user_role in ["ADMIN", "HR_MANAGER"]:
-            return self._collapse_broadcast_duplicates(Announcement.objects.filter(is_active=True))
+            qs = filter_queryset_by_company_scope(Announcement.objects.filter(is_active=True), self.request)
+            return self._collapse_broadcast_duplicates(qs)
 
         # Managers can also see what they created for their team.
         if user_role == "MANAGER":
@@ -163,6 +170,8 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         )
 
     def create(self, request, *args, **kwargs):
+        ensure_company_write_allowed(request)
+        active_company = get_active_company_for_request(request)
         user_role = get_role(request.user)
         serializer_context = self.get_serializer_context()
         if user_role in ["Manager", "CEO"]:
@@ -202,7 +211,7 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
             if target_user:
                 if target_user.id not in team_user_ids:
                     return error("Validation error", errors=["Selected user is not in your team."], status=422)
-                announcement = serializer.save(created_by=request.user, target_roles=[])
+                announcement = serializer.save(created_by=request.user, target_roles=[], company=active_company)
                 created_announcements = [announcement]
             else:
                 if attachment:
@@ -220,6 +229,7 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
                             publish_to_email=validated.get("publish_to_email", False),
                             publish_to_sms=validated.get("publish_to_sms", False),
                             created_by=request.user,
+                            company=active_company,
                         )
                         announcement.attachment.save(attachment_name, ContentFile(attachment_bytes), save=True)
                         created_announcements.append(announcement)
@@ -237,6 +247,7 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
                                 publish_to_email=validated.get("publish_to_email", False),
                                 publish_to_sms=validated.get("publish_to_sms", False),
                                 created_by=request.user,
+                                company=active_company,
                                 created_at=now,
                                 updated_at=now,
                             )
@@ -244,7 +255,7 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
                     created_announcements = Announcement.objects.bulk_create(payloads)
         else:
             # Save announcement with current user as creator
-            announcement = serializer.save(created_by=request.user)
+            announcement = serializer.save(created_by=request.user, company=active_company)
             created_announcements = [announcement]
 
         # Send notifications based on publishing options

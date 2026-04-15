@@ -15,6 +15,8 @@ class LoanRequestReadSerializer(serializers.ModelSerializer):
     decision_history = serializers.SerializerMethodField()
     target_deduction_period = serializers.SerializerMethodField()
     workflow = serializers.SerializerMethodField()
+    company_id = serializers.PrimaryKeyRelatedField(source="company", read_only=True)
+    company_name = serializers.CharField(source="company.name", read_only=True)
 
     class Meta:
         model = LoanRequest
@@ -49,6 +51,8 @@ class LoanRequestReadSerializer(serializers.ModelSerializer):
             "target_deduction_period",
             "decision_history",
             "workflow",
+            "company_id",
+            "company_name",
             "created_at",
             "updated_at",
         ]

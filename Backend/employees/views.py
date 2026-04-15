@@ -23,6 +23,11 @@ from core.permissions import get_role, has_direct_reports
 from core.responses import error, success
 from core.services import send_document_expiry_reminder_email
 from leaves.models import LeaveRequest
+from organization.services import (
+    ensure_company_write_allowed,
+    filter_queryset_by_company_scope,
+    get_active_company_for_request,
+)
 
 from .models import EmployeeImport, EmployeeProfile
 from .notifications import send_document_expiry_whatsapp
@@ -38,9 +43,9 @@ except Exception:  # pragma: no cover - fallback for missing dependency
     load_workbook = None
 
 
-def generate_employee_id():
+def generate_employee_id(prefix="FFI"):
     suffix = "".join(random.choices(string.digits, k=6))
-    return f"FFI-{suffix}"
+    return f"{prefix}-{suffix}"
 
 
 def _audit_snapshot(instance: EmployeeProfile) -> dict:
@@ -263,7 +268,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         base_qs = _with_effective_status(base_qs)
 
         if role in ["SystemAdmin", "HRManager"]:
-            return base_qs.all()
+            return filter_queryset_by_company_scope(base_qs.all(), self.request)
 
         return base_qs.filter(user=user)
 
@@ -271,6 +276,11 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         if self.action in ["list", "retrieve", "me"]:
             return EmployeeProfileReadSerializer
         return EmployeeProfileWriteSerializer
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["request"]._active_company = get_active_company_for_request(self.request)
+        return context
 
     def _apply_filters(self, qs):
         params = self.request.query_params
@@ -452,12 +462,20 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         return success(read_serializer.data, status=status.HTTP_201_CREATED)
 
     def perform_create(self, serializer):
+        ensure_company_write_allowed(self.request)
+        company = get_active_company_for_request(self.request)
+        if company is None:
+            raise IntegrityError("Active company is required.")
         max_retries = 5
         for _ in range(max_retries):
-            eid = generate_employee_id()
+            eid = generate_employee_id(company.employee_id_prefix or "EMP")
             try:
                 with transaction.atomic():
-                    instance = serializer.save(employee_id=eid, data_source=EmployeeProfile.DataSource.MANUAL)
+                    instance = serializer.save(
+                        employee_id=eid,
+                        data_source=EmployeeProfile.DataSource.MANUAL,
+                        company=company,
+                    )
                     if instance.manager_profile and instance.manager != instance.manager_profile.user:
                         instance.manager = instance.manager_profile.user
                         instance.save(update_fields=["manager", "updated_at"])
@@ -484,6 +502,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         return success(read_serializer.data)
 
     def perform_update(self, serializer):
+        ensure_company_write_allowed(self.request)
         before = _audit_snapshot(serializer.instance)
         instance = serializer.save()
         if instance.manager_profile and instance.manager != instance.manager_profile.user:
@@ -726,8 +745,10 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         throttle_classes=[EmployeeImportThrottle],
     )
     def import_excel(self, request):
+        ensure_company_write_allowed(request)
         upload = request.FILES.get("file")
-        result = EmployeeImporter().execute(upload=upload, uploader=request.user)
+        company = get_active_company_for_request(request)
+        result = EmployeeImporter().execute(upload=upload, uploader=request.user, company=company)
         _audit_import(request, result.file_hash, result.row_count, result.result)
         if not result.ok:
             return _error_response(result.errors, result.status_code)

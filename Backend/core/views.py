@@ -28,6 +28,12 @@ from loans.models import LoanRequest
 from payroll.models import PayrollRun
 from audit.models import AuditLog
 from audit.views import apply_filters, AuditPagination
+from organization.models import OrganizationNode
+from organization.services import (
+    filter_queryset_by_company_scope,
+    get_active_organization_for_request,
+    get_user_accessible_company_ids,
+)
 from .models import DelegationRule, UserPreference
 from .permissions import get_role
 
@@ -76,15 +82,27 @@ class HrSummaryView(APIView):
     def get(self, request):
         today = timezone.now().date()
         warning_date = today + timedelta(days=30)
+        active_org = get_active_organization_for_request(request)
+        accessible_company_ids = get_user_accessible_company_ids(request.user)
+
+        employee_qs = filter_queryset_by_company_scope(EmployeeProfile.objects.all(), request)
+        leave_qs = filter_queryset_by_company_scope(LeaveRequest.objects.all(), request)
+        payroll_qs = filter_queryset_by_company_scope(PayrollRun.objects.all(), request)
+
+        if active_org and active_org.node_type == OrganizationNode.NodeType.HEAD_OFFICE:
+            hr_activity_filter = Q(actor__groups__name="HRManager", actor__employee_profile__company_id__in=accessible_company_ids)
+        else:
+            company_id = getattr(active_org, "id", None)
+            hr_activity_filter = Q(actor__groups__name="HRManager", actor__employee_profile__company_id=company_id)
 
         # 1. Employee Stats
-        total_employees = EmployeeProfile.objects.count()
-        active_employees = EmployeeProfile.objects.filter(
+        total_employees = employee_qs.count()
+        active_employees = employee_qs.filter(
             employment_status=EmployeeProfile.EmploymentStatus.ACTIVE
         ).count()
 
         # 2. Expiring Documents (next 30 days)
-        expiring_docs = EmployeeProfile.objects.filter(
+        expiring_docs = employee_qs.filter(
             Q(passport_expiry__range=[today, warning_date])
             | Q(id_expiry__range=[today, warning_date])
             | Q(contract_expiry__range=[today, warning_date])
@@ -92,11 +110,11 @@ class HrSummaryView(APIView):
         ).count()
 
         # 3. Pending Leave (HR Action)
-        pending_leaves_count = LeaveRequest.objects.filter(status=LeaveRequest.RequestStatus.PENDING_HR).count()
+        pending_leaves_count = leave_qs.filter(status=LeaveRequest.RequestStatus.PENDING_HR).count()
 
         # 4. Pending Approvals List (workflow-backed)
         pending_approvals = []
-        for leave_req in LeaveRequest.objects.filter(
+        for leave_req in leave_qs.filter(
             status__in=[
                 LeaveRequest.RequestStatus.SUBMITTED,
                 LeaveRequest.RequestStatus.PENDING_MANAGER,
@@ -109,6 +127,7 @@ class HrSummaryView(APIView):
         )[:50]:
             sync_workflow(leave_req, actor=request.user)
         for record in AttendanceRecord.objects.filter(
+            employee_profile__in=employee_qs,
             status__in=[
                 AttendanceRecord.Status.PENDING,
                 AttendanceRecord.Status.PENDING_MANAGER,
@@ -119,7 +138,7 @@ class HrSummaryView(APIView):
             ]
         )[:50]:
             sync_workflow(record, actor=request.user)
-        for loan_req in LoanRequest.objects.filter(
+        for loan_req in filter_queryset_by_company_scope(LoanRequest.objects.all(), request).filter(
             status__in=[
                 LoanRequest.RequestStatus.SUBMITTED,
                 LoanRequest.RequestStatus.PENDING_MANAGER,
@@ -137,8 +156,20 @@ class HrSummaryView(APIView):
 
         pending_workflows = get_pending_approvals_for_user(request.user, limit=12)
         for workflow in pending_workflows:
+            content_object = workflow.content_object
+            if content_object is None:
+                continue
+            workflow_company_id = _get_company_id_for_dashboard_object(content_object)
+            if workflow_company_id is None:
+                continue
+            if active_org and active_org.node_type == OrganizationNode.NodeType.HEAD_OFFICE:
+                if workflow_company_id not in accessible_company_ids:
+                    continue
+            elif workflow_company_id != getattr(active_org, "id", None):
+                continue
             item = build_pending_approval_item(workflow)
             if item:
+                item["company_name"] = _get_company_name_for_dashboard_object(content_object)
                 pending_approvals.append(item)
 
         pending_approvals = pending_approvals[:5]
@@ -149,7 +180,7 @@ class HrSummaryView(APIView):
         recent_activity = []
         # HR dashboard should only show HR manager activity, not system admin activity.
         latest_logs = (
-            AuditLog.objects.filter(actor__groups__name="HRManager")
+            AuditLog.objects.filter(hr_activity_filter)
             .select_related("actor")
             .order_by("-created_at")[:10]
         )
@@ -157,6 +188,7 @@ class HrSummaryView(APIView):
         for log in latest_logs:
             # Determine the actor name
             actor_name = "System"
+            profile = None
             if log.actor:
                 profile = getattr(log.actor, "employee_profile", None)
                 actor_name = profile.full_name if profile else log.actor.email
@@ -196,11 +228,12 @@ class HrSummaryView(APIView):
                     "date": log.created_at.strftime("%b %d, %I:%M %p"),
                     "status": details_str,
                     "statusColor": status_color,
+                    "company_name": getattr(getattr(profile, "company", None), "name", None) if log.actor else None,
                 }
             )
 
         # 6. Latest Payroll Run
-        latest_payroll = PayrollRun.objects.order_by("-year", "-month").first()
+        latest_payroll = payroll_qs.order_by("-year", "-month").first()
         payroll_data = {
             "latest_total_net": None,
             "latest_period": None,
@@ -219,7 +252,7 @@ class HrSummaryView(APIView):
                 prev_month = latest_payroll.month - 1
                 prev_year = latest_payroll.year
 
-            prev_payroll = PayrollRun.objects.filter(year=prev_year, month=prev_month).first()
+            prev_payroll = payroll_qs.filter(year=prev_year, month=prev_month).first()
 
             if prev_payroll and prev_payroll.total_net > 0:
                 diff = latest_payroll.total_net - prev_payroll.total_net
@@ -242,7 +275,20 @@ class HrRecentActivityView(APIView):
     permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
 
     def get(self, request):
-        qs = AuditLog.objects.filter(actor__groups__name="HRManager").select_related("actor").order_by("-created_at")
+        active_org = get_active_organization_for_request(request)
+        accessible_company_ids = get_user_accessible_company_ids(request.user)
+
+        if active_org and active_org.node_type == OrganizationNode.NodeType.HEAD_OFFICE:
+            company_filter = Q(actor__employee_profile__company_id__in=accessible_company_ids)
+        else:
+            company_filter = Q(actor__employee_profile__company_id=getattr(active_org, "id", None))
+
+        qs = (
+            AuditLog.objects.filter(actor__groups__name="HRManager")
+            .filter(company_filter)
+            .select_related("actor")
+            .order_by("-created_at")
+        )
         qs = apply_filters(qs, request.query_params)
 
         paginator = AuditPagination()
@@ -251,6 +297,7 @@ class HrRecentActivityView(APIView):
         items = []
         for log in page:
             actor_name = "System"
+            profile = None
             if log.actor:
                 profile = getattr(log.actor, "employee_profile", None)
                 actor_name = profile.full_name if profile and profile.full_name else log.actor.email
@@ -285,10 +332,49 @@ class HrRecentActivityView(APIView):
                     "date": log.created_at.strftime("%b %d, %I:%M %p"),
                     "status": details_str,
                     "statusColor": status_color,
+                    "company_name": getattr(getattr(profile, "company", None), "name", None) if log.actor else None,
                 }
             )
 
         return paginator.get_paginated_response(items)
+
+
+def _get_company_id_for_dashboard_object(obj):
+    direct_company_id = getattr(obj, "company_id", None)
+    if direct_company_id:
+        return direct_company_id
+
+    employee_profile = getattr(obj, "employee_profile", None)
+    if employee_profile and getattr(employee_profile, "company_id", None):
+        return employee_profile.company_id
+
+    employee = getattr(obj, "employee", None)
+    employee_profile = getattr(employee, "employee_profile", None) if employee else None
+    if employee_profile and getattr(employee_profile, "company_id", None):
+        return employee_profile.company_id
+
+    return None
+
+
+def _get_company_name_for_dashboard_object(obj):
+    company = getattr(obj, "company", None)
+    if company and getattr(company, "name", None):
+        return company.name
+
+    employee_profile = getattr(obj, "employee_profile", None)
+    if employee_profile:
+        company = getattr(employee_profile, "company", None)
+        if company and getattr(company, "name", None):
+            return company.name
+
+    employee = getattr(obj, "employee", None)
+    employee_profile = getattr(employee, "employee_profile", None) if employee else None
+    if employee_profile:
+        company = getattr(employee_profile, "company", None)
+        if company and getattr(company, "name", None):
+            return company.name
+
+    return None
 
 
 class ReportErrorAPIView(APIView):

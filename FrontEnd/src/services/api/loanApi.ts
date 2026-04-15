@@ -19,6 +19,8 @@ export type LoanType = "open" | "installment";
 
 export interface LoanRequest {
   id: number;
+  company_id?: number;
+  company_name?: string;
   employee: {
     id: number;
     email: string;

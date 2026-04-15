@@ -37,6 +37,8 @@ import {
 import { listRentTypes, type RentType } from "../../../services/api/rentTypesApi";
 import { useI18n } from "../../../i18n/useI18n";
 import SARIcon from "../../../components/icons/SARIcon";
+import { useAuthStore } from "../../../auth/authStore";
+import { isHeadOfficeOrganization } from "../../../utils/organizationContext";
 
 const { Title, Text } = Typography;
 
@@ -78,6 +80,8 @@ function formatMoney(value: string | number | null): string {
 
 export default function HRRentsPage() {
   const { t, language } = useI18n();
+  const user = useAuthStore((state) => state.user);
+  const isHeadOffice = isHeadOfficeOrganization(user);
   const [forbidden, setForbidden] = useState(false);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -170,6 +174,7 @@ export default function HRRentsPage() {
   });
 
   const handleCreate = async () => {
+    if (isHeadOffice) return;
     try {
       const values = await createForm.validateFields();
       setSubmitting(true);
@@ -211,6 +216,7 @@ export default function HRRentsPage() {
   };
 
   const handleEdit = async () => {
+    if (isHeadOffice) return;
     if (!editing) return;
 
     try {
@@ -235,6 +241,7 @@ export default function HRRentsPage() {
   };
 
   const handleDelete = async (id: number) => {
+    if (isHeadOffice) return;
     const response = await deleteRent(id);
     if (isApiError(response)) {
       message.error(response.message || t("hr.rents.errorDelete", "Failed to delete rent"));
@@ -245,6 +252,7 @@ export default function HRRentsPage() {
   };
 
   const handleNotify = async (id: number) => {
+    if (isHeadOffice) return;
     setNotifyingId(id);
     try {
       const response = await notifyRent(id);
@@ -284,6 +292,14 @@ export default function HRRentsPage() {
         return language === "ar" ? (record.property_name_ar || record.property_name_en || "-") : (record.property_name_en || "-");
       }
     },
+    ...(isHeadOffice
+      ? [{
+          title: t("common.company", "Company"),
+          key: "company_name",
+          dataIndex: "company_name",
+          render: (value?: string) => value ? <Tag color="blue">{value}</Tag> : "-",
+        }]
+      : []),
     {
       title: t("hr.rents.colRecurrence", "Recurrence"),
       key: "recurrence",
@@ -359,12 +375,21 @@ export default function HRRentsPage() {
               type="text"
               shape="circle"
               icon={<EditOutlined style={{ color: "var(--brand-primary)" }} />}
+              disabled={isHeadOffice}
+              title={isHeadOffice ? t("organization.headOffice.switchToEditRecords") : undefined}
               onClick={() => openEdit(record)}
             />
           </Tooltip>
           <Tooltip title={t("common.delete", "Delete")}>
             <Popconfirm title={t("hr.rents.confirmDelete", "Delete this rent?")} onConfirm={() => handleDelete(record.id)}>
-              <Button type="text" danger shape="circle" icon={<DeleteOutlined />} />
+              <Button
+                type="text"
+                danger
+                shape="circle"
+                icon={<DeleteOutlined />}
+                disabled={isHeadOffice}
+                title={isHeadOffice ? t("organization.headOffice.switchToEditRecords") : undefined}
+              />
             </Popconfirm>
           </Tooltip>
           <Tooltip title={t("hr.rents.notify", "Notify")}>
@@ -373,6 +398,8 @@ export default function HRRentsPage() {
               shape="circle"
               icon={<BellOutlined style={{ color: "var(--brand-accent)" }} />}
               loading={notifyingId === record.id}
+              disabled={isHeadOffice}
+              title={isHeadOffice ? t("organization.headOffice.switchToUseAction") : undefined}
               onClick={() => handleNotify(record.id)}
             />
           </Tooltip>
@@ -412,7 +439,13 @@ export default function HRRentsPage() {
           <Button icon={<ReloadOutlined />} onClick={() => loadData(page, pageSize)}>
             {t("common.refresh", "Refresh")}
           </Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => setCreateOpen(true)}
+            disabled={isHeadOffice}
+            title={isHeadOffice ? t("organization.headOffice.switchToCreateRecords") : undefined}
+          >
             {t("hr.rents.createButton", "Create Rent")}
           </Button>
         </Space>

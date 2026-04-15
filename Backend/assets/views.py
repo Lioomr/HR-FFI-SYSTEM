@@ -23,6 +23,7 @@ from core.services import (
 )
 from employees.models import EmployeeProfile
 from loans.permissions import IsManagerOrAdmin, get_active_workflow_config
+from organization.services import ensure_company_write_allowed, filter_queryset_by_company_scope, get_active_company_for_request
 
 from .models import Asset, AssetAssignment, AssetDamageReport, AssetReturnRequest
 from .permissions import IsEmployeeSelfAsset, IsHRManagerOrSystemAdmin
@@ -109,7 +110,12 @@ class AssetViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
 
     def get_queryset(self):
-        return Asset.objects.all().prefetch_related("assignments")
+        return filter_queryset_by_company_scope(Asset.objects.all().prefetch_related("assignments"), self.request)
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["request"]._active_company = get_active_company_for_request(self.request)
+        return context
 
     @staticmethod
     def _asset_snapshot(asset: Asset):
@@ -159,9 +165,11 @@ class AssetViewSet(viewsets.ModelViewSet):
         return success(self.get_serializer(self.get_object()).data)
 
     def create(self, request, *args, **kwargs):
+        ensure_company_write_allowed(request)
+        company = get_active_company_for_request(request)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        instance = serializer.save()
+        instance = serializer.save(company=company)
         audit(
             request,
             "asset_created",
@@ -215,7 +223,7 @@ class AssetViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="assign")
     def assign(self, request, pk=None):
-        serializer = AssetAssignmentCreateSerializer(data=request.data)
+        serializer = AssetAssignmentCreateSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         employee = serializer.validated_data["employee"]
 
@@ -323,7 +331,7 @@ class AssetViewSet(viewsets.ModelViewSet):
     def dashboard_summary(self, request):
         today = timezone.localdate()
         expiry_cutoff = today + timedelta(days=30)
-        qs = Asset.objects.all()
+        qs = filter_queryset_by_company_scope(Asset.objects.all(), request)
 
         summary = qs.aggregate(
             total=Count("id"),
@@ -359,7 +367,11 @@ class AssetViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="damage-reports")
     def damage_reports(self, request):
-        queryset = AssetDamageReport.objects.select_related("asset", "employee", "employee__user")
+        queryset = filter_queryset_by_company_scope(
+            AssetDamageReport.objects.select_related("asset", "employee", "employee__user"),
+            request,
+            field_name="asset__company_id",
+        )
         status_param = request.query_params.get("status")
         asset_id = request.query_params.get("asset")
         if status_param:
@@ -375,7 +387,11 @@ class AssetViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="return-requests")
     def return_requests(self, request):
-        queryset = AssetReturnRequest.objects.select_related("asset", "employee", "employee__user")
+        queryset = filter_queryset_by_company_scope(
+            AssetReturnRequest.objects.select_related("asset", "employee", "employee__user"),
+            request,
+            field_name="asset__company_id",
+        )
         status_param = request.query_params.get("status")
         asset_id = request.query_params.get("asset")
         if status_param:
@@ -687,7 +703,11 @@ class CEOAssetDamageReportViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ["-reported_at"]
 
     def get_queryset(self):
-        qs = AssetDamageReport.objects.select_related("asset", "employee", "employee__user")
+        qs = filter_queryset_by_company_scope(
+            AssetDamageReport.objects.select_related("asset", "employee", "employee__user"),
+            self.request,
+            field_name="asset__company_id",
+        )
         status_param = self.request.query_params.get("status")
         if status_param:
             return qs.filter(status=status_param)
@@ -752,7 +772,11 @@ class ManagerAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         role = get_role(self.request.user)
-        base_qs = AssetReturnRequest.objects.select_related("asset", "employee", "employee__user")
+        base_qs = filter_queryset_by_company_scope(
+            AssetReturnRequest.objects.select_related("asset", "employee", "employee__user"),
+            self.request,
+            field_name="asset__company_id",
+        )
         if role == "SystemAdmin":
             return base_qs
 
@@ -858,7 +882,11 @@ class CEOAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ["-requested_at"]
 
     def get_queryset(self):
-        qs = AssetReturnRequest.objects.select_related("asset", "employee", "employee__user")
+        qs = filter_queryset_by_company_scope(
+            AssetReturnRequest.objects.select_related("asset", "employee", "employee__user"),
+            self.request,
+            field_name="asset__company_id",
+        )
         status_param = self.request.query_params.get("status")
         if status_param:
             return qs.filter(status=status_param)

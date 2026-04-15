@@ -30,6 +30,8 @@ import { listEmployees, type Employee } from "../../../services/api/employeesApi
 
 import { useI18n } from "../../../i18n/useI18n";
 import AssetReturnApprovalMap from "../../../components/assets/AssetReturnApprovalMap";
+import { useAuthStore } from "../../../auth/authStore";
+import { isHeadOfficeOrganization } from "../../../utils/organizationContext";
 
 const statusColorMap: Record<string, string> = {
   AVAILABLE: "green",
@@ -74,6 +76,8 @@ function StatCard({
 
 export default function HRAssetsPage() {
   const { t, language } = useI18n();
+  const user = useAuthStore((state) => state.user);
+  const isHeadOffice = isHeadOfficeOrganization(user);
   const [apiMessage, contextHolder] = message.useMessage();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -219,6 +223,15 @@ export default function HRAssetsPage() {
       width: 180,
       render: (status: string) => <Tag color={statusColorMap[status] || "default"}>{status}</Tag>,
     },
+    ...(isHeadOffice
+      ? [{
+          title: t("common.company", "Company"),
+          dataIndex: "company_name",
+          key: "company_name",
+          width: 170,
+          render: (value?: string) => value ? <Tag color="blue">{value}</Tag> : "-",
+        }]
+      : []),
     { title: t("assets.vendor"), dataIndex: "vendor", key: "vendor", width: 180, render: (value?: string) => value || "-" },
     {
       title: t("assets.warrantyExpiry"),
@@ -246,7 +259,10 @@ export default function HRAssetsPage() {
           </Button>
           <Button
             size="small"
+            disabled={isHeadOffice}
+            title={isHeadOffice ? t("organization.headOffice.switchToEditRecords") : undefined}
             onClick={(e) => {
+              if (isHeadOffice) return;
               e.stopPropagation();
               setEditingAsset(record);
 
@@ -296,8 +312,10 @@ export default function HRAssetsPage() {
           </Button>
           <Button
             size="small"
-            disabled={record.status !== "AVAILABLE"}
+            disabled={isHeadOffice || record.status !== "AVAILABLE"}
+            title={isHeadOffice ? t("organization.headOffice.switchToUseAction") : undefined}
             onClick={(e) => {
+              if (isHeadOffice) return;
               e.stopPropagation();
               setActiveAsset(record);
               assignForm.resetFields();
@@ -308,8 +326,10 @@ export default function HRAssetsPage() {
           </Button>
           <Button
             size="small"
-            disabled={record.status !== "ASSIGNED"}
+            disabled={isHeadOffice || record.status !== "ASSIGNED"}
+            title={isHeadOffice ? t("organization.headOffice.switchToUseAction") : undefined}
             onClick={(e) => {
+              if (isHeadOffice) return;
               e.stopPropagation();
               setActiveAsset(record);
               returnForm.resetFields();
@@ -337,6 +357,8 @@ export default function HRAssetsPage() {
             <Button
               danger
               size="small"
+              disabled={isHeadOffice}
+              title={isHeadOffice ? t("organization.headOffice.switchToEditRecords") : undefined}
               onClick={(e) => {
                 e.stopPropagation();
               }}
@@ -444,6 +466,7 @@ export default function HRAssetsPage() {
   };
 
   const handleHRReturnRequestAction = async (requestItem: AssetReturnRequest, action: "approve" | "reject") => {
+    if (isHeadOffice) return;
     try {
       let comment = "";
       if (action === "reject") {
@@ -504,6 +527,15 @@ export default function HRAssetsPage() {
       width: 170,
       render: (value: string) => formatDateTime(value),
     },
+    ...(isHeadOffice
+      ? [{
+          title: t("common.company", "Company"),
+          dataIndex: "company_name",
+          key: "company_name",
+          width: 170,
+          render: (value?: string) => value ? <Tag color="blue">{value}</Tag> : "-",
+        }]
+      : []),
   ];
 
   const returnRequestColumns: ColumnsType<AssetReturnRequest> = [
@@ -532,6 +564,15 @@ export default function HRAssetsPage() {
       width: 170,
       render: (value: string) => formatDateTime(value),
     },
+    ...(isHeadOffice
+      ? [{
+          title: t("common.company", "Company"),
+          dataIndex: "company_name",
+          key: "company_name",
+          width: 170,
+          render: (value?: string) => value ? <Tag color="blue">{value}</Tag> : "-",
+        }]
+      : []),
     {
       title: t("common.actions"),
       key: "actions",
@@ -540,10 +581,22 @@ export default function HRAssetsPage() {
         <Space>
           {record.status === "PENDING" ? (
             <>
-              <Button size="small" type="primary" onClick={() => void handleHRReturnRequestAction(record, "approve")}>
+              <Button
+                size="small"
+                type="primary"
+                disabled={isHeadOffice}
+                title={isHeadOffice ? t("organization.headOffice.switchToUseAction") : undefined}
+                onClick={() => void handleHRReturnRequestAction(record, "approve")}
+              >
                 {t("common.approve")}
               </Button>
-              <Button size="small" danger onClick={() => void handleHRReturnRequestAction(record, "reject")}>
+              <Button
+                size="small"
+                danger
+                disabled={isHeadOffice}
+                title={isHeadOffice ? t("organization.headOffice.switchToUseAction") : undefined}
+                onClick={() => void handleHRReturnRequestAction(record, "reject")}
+              >
                 {t("common.reject")}
               </Button>
             </>
@@ -556,6 +609,7 @@ export default function HRAssetsPage() {
   ];
 
   const handleCreateAsset = async () => {
+    if (isHeadOffice) return;
     try {
       const values = await createForm.validateFields();
       setSubmitting(true);
@@ -665,6 +719,7 @@ export default function HRAssetsPage() {
   };
 
   const handleAssignAsset = async () => {
+    if (isHeadOffice) return;
     if (!activeAsset) return;
     try {
       const values = await assignForm.validateFields();
@@ -684,6 +739,7 @@ export default function HRAssetsPage() {
   };
 
   const handleReturnAsset = async () => {
+    if (isHeadOffice) return;
     if (!activeAsset) return;
     try {
       const values = await returnForm.validateFields();
@@ -719,10 +775,13 @@ export default function HRAssetsPage() {
             type="primary"
             icon={<PlusOutlined />}
             onClick={() => {
+              if (isHeadOffice) return;
               setEditingAsset(null);
               createForm.resetFields();
               setCreateModalOpen(true);
             }}
+            disabled={isHeadOffice}
+            title={isHeadOffice ? t("organization.headOffice.switchToCreateRecords") : undefined}
           >
             {t("hr.assets.createAsset")}
           </Button>

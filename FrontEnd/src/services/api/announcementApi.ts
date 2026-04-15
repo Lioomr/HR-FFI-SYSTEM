@@ -2,6 +2,8 @@ import { api } from './apiClient';
 
 export interface Announcement {
     id: number;
+    company_id?: number;
+    company_name?: string;
     title: string;
     content: string;
     target_roles: string[];
@@ -23,6 +25,8 @@ export interface Announcement {
 
 export interface AnnouncementListItem {
     id: number;
+    company_id?: number;
+    company_name?: string;
     title: string;
     content_preview: string;
     target_roles: string[];

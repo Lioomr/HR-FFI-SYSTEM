@@ -15,6 +15,7 @@ export type CreateUserRequest = {
   email: string;
   role: Role;
   is_active: boolean;
+  organization_ids?: number[];
 };
 
 export type UpdateUserStatusRequest = {
@@ -27,6 +28,10 @@ export type UpdateUserRoleRequest = {
 
 export type ResetPasswordRequest = {
   mode: "temporary_password" | "reset_link";
+};
+
+export type UpdateUserOrganizationsRequest = {
+  organization_ids: number[];
 };
 
 export type ResetPasswordResponse = {
@@ -78,6 +83,18 @@ export async function resetUserPassword(
   );
   return data;
 }
+
+export async function updateUserOrganizations(
+  userId: number | string,
+  payload: UpdateUserOrganizationsRequest
+) {
+  const { data } = await api.patch<ApiResponse<UserDto>>(
+    `/users/${userId}/`,
+    payload
+  );
+  return data;
+}
+
 export async function getMe() {
   const { data } = await api.get<ApiResponse<UserDto>>("/auth/me");
   return data;

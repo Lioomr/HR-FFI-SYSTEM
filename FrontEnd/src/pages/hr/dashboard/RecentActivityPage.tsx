@@ -6,12 +6,16 @@ import { getHrRecentActivity } from "../../../services/api/hrSummaryApi";
 import type { HrRecentActivityItem } from "../../../services/api/hrSummaryApi";
 import ErrorState from "../../../components/ui/ErrorState";
 import dayjs from "dayjs";
+import { useAuthStore } from "../../../auth/authStore";
+import { isHeadOfficeOrganization } from "../../../utils/organizationContext";
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
 
 export default function RecentActivityPage() {
     const { t } = useI18n();
+    const user = useAuthStore((state) => state.user);
+    const isHeadOffice = isHeadOfficeOrganization(user);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -132,6 +136,14 @@ export default function RecentActivityPage() {
             key: "date",
             render: (text: string) => <span style={{ color: "#94a3b8" }}>{text}</span>,
         },
+        ...(isHeadOffice
+            ? [{
+                title: t("common.company", "Company"),
+                dataIndex: "company_name",
+                key: "company_name",
+                render: (value?: string | null) => value ? <Tag color="blue">{value}</Tag> : "-",
+            }]
+            : []),
         {
             title: t("common.details", "Details"),
             dataIndex: "status",

@@ -3,6 +3,7 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from employees.models import EmployeeProfile
+from organization.models import OrganizationNode
 from payroll.models import PayrollRun
 
 
@@ -32,6 +33,13 @@ class LoanRequest(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="loan_requests",
+    )
+    company = models.ForeignKey(
+        OrganizationNode,
+        on_delete=models.PROTECT,
+        related_name="loan_requests",
+        null=True,
+        blank=True,
     )
     employee_profile = models.ForeignKey(
         EmployeeProfile,

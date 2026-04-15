@@ -2,6 +2,8 @@ from django.conf import settings
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
+from organization.models import OrganizationNode
+
 
 class PayrollRun(models.Model):
     class Status(models.TextChoices):
@@ -12,6 +14,13 @@ class PayrollRun(models.Model):
 
     year = models.PositiveIntegerField()
     month = models.PositiveIntegerField()
+    company = models.ForeignKey(
+        OrganizationNode,
+        on_delete=models.PROTECT,
+        related_name="payroll_runs",
+        null=True,
+        blank=True,
+    )
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
@@ -24,7 +33,7 @@ class PayrollRun(models.Model):
 
     class Meta:
         ordering = ["-year", "-month", "-id"]
-        constraints = [models.UniqueConstraint(fields=["year", "month"], name="unique_payroll_run_period")]
+        constraints = [models.UniqueConstraint(fields=["company", "year", "month"], name="unique_payroll_run_period")]
 
     def __str__(self):
         return f"{self.year}-{self.month:02d}"

@@ -18,6 +18,7 @@ import { isApiError } from "../../../services/api/apiTypes";
 import { isForbidden } from "../../../services/api/httpErrors";
 import AmountWithSAR from "../../../components/ui/AmountWithSAR";
 import { useI18n } from "../../../i18n/useI18n";
+import { useAuthStore } from "../../../auth/authStore";
 
 /**
  * Format value for display (show "—" for missing values)
@@ -59,6 +60,7 @@ export default function ViewEmployeePage() {
     const { t } = useI18n();
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const activeOrganizationId = useAuthStore((state) => state.user?.active_organization_id ?? state.user?.default_organization_id ?? null);
 
 
     // State
@@ -66,6 +68,7 @@ export default function ViewEmployeePage() {
     const [error, setError] = useState<string | null>(null);
     const [forbidden, setForbidden] = useState(false);
     const [employee, setEmployee] = useState<Employee | null>(null);
+    const [notAvailableInSelectedCompany, setNotAvailableInSelectedCompany] = useState(false);
 
     // Linking User State
     const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
@@ -87,12 +90,18 @@ export default function ViewEmployeePage() {
         setLoading(true);
         setError(null);
         setForbidden(false);
+        setNotAvailableInSelectedCompany(false);
 
         try {
             const response = await getEmployee(id);
 
             if (isApiError(response)) {
-                setError(response.message || t("hr.employees.loadFailed"));
+                if ((response.message || "").toLowerCase().includes("not found")) {
+                    setNotAvailableInSelectedCompany(true);
+                    setEmployee(null);
+                } else {
+                    setError(response.message || t("hr.employees.loadFailed"));
+                }
                 setLoading(false);
                 return;
             }
@@ -106,6 +115,13 @@ export default function ViewEmployeePage() {
                 return;
             }
 
+            if (err?.response?.status === 404) {
+                setNotAvailableInSelectedCompany(true);
+                setEmployee(null);
+                setLoading(false);
+                return;
+            }
+
             setError(err.message || t("hr.employees.loadFailed"));
             setLoading(false);
         }
@@ -113,6 +129,20 @@ export default function ViewEmployeePage() {
     useEffect(() => {
         loadEmployee();
     }, [id]);
+
+    useEffect(() => {
+        if (!employee?.company_id || activeOrganizationId == null) return;
+
+        if (Number(employee.company_id) !== Number(activeOrganizationId)) {
+            message.info(
+                t(
+                    "hr.employees.changedCompanyRedirect",
+                    "This employee belongs to another company. You have been returned to the employee list."
+                )
+            );
+            navigate("/hr/employees", { replace: true });
+        }
+    }, [activeOrganizationId, employee, navigate, t]);
 
     /**
      * Load Users for Linking
@@ -199,7 +229,21 @@ export default function ViewEmployeePage() {
             <ErrorState
                 title={t("hr.employees.loadFailed")}
                 description={error}
-                onRetry={() => window.location.reload()}
+                onRetry={loadEmployee}
+            />
+        );
+    }
+
+    if (notAvailableInSelectedCompany) {
+        return (
+            <EmptyState
+                title={t("hr.employees.notFound", "Employee not found")}
+                description={t(
+                    "hr.employees.notAvailableInSelectedCompany",
+                    "This employee is not available in the currently selected company."
+                )}
+                actionText={t("hr.employees.backToList")}
+                onAction={handleBack}
             />
         );
     }

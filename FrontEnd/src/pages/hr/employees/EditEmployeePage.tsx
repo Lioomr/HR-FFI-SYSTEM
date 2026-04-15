@@ -23,18 +23,22 @@ import type { Sponsor } from "../../../services/api/sponsorsApi";
 import { toPayload, fromEmployeeToFormValues } from "./employeeFormMapper";
 import EmployeeForm from "./EmployeeForm";
 import { useI18n } from "../../../i18n/useI18n";
+import { useAuthStore } from "../../../auth/authStore";
 
 export default function EditEmployeePage() {
     const { t } = useI18n();
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const [form] = Form.useForm();
+    const activeOrganizationId = useAuthStore((state) => state.user?.active_organization_id ?? state.user?.default_organization_id ?? null);
 
     // State
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [forbidden, setForbidden] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [employeeCompanyId, setEmployeeCompanyId] = useState<number | null>(null);
+    const [notAvailableInSelectedCompany, setNotAvailableInSelectedCompany] = useState(false);
 
     // Reference data
     const [departments, setDepartments] = useState<Department[]>([]);
@@ -57,6 +61,7 @@ export default function EditEmployeePage() {
             setLoading(true);
             setError(null);
             setForbidden(false);
+            setNotAvailableInSelectedCompany(false);
 
             try {
                 // Fetch employee and reference data in parallel
@@ -71,7 +76,11 @@ export default function EditEmployeePage() {
 
                 // Check for errors
                 if (isApiError(employeeRes)) {
-                    setError(employeeRes.message || t("hr.employees.loadFailed"));
+                    if ((employeeRes.message || "").toLowerCase().includes("not found")) {
+                        setNotAvailableInSelectedCompany(true);
+                    } else {
+                        setError(employeeRes.message || t("hr.employees.loadFailed"));
+                    }
                     setLoading(false);
                     return;
                 }
@@ -100,6 +109,7 @@ export default function EditEmployeePage() {
                 setEmployees(Array.isArray(managerCandidates) ? managerCandidates : []);
 
                 // Prefill form with employee data
+                setEmployeeCompanyId(employeeRes.data.company_id ?? null);
                 const formValues = fromEmployeeToFormValues(employeeRes.data);
                 form.setFieldsValue(formValues);
 
@@ -111,6 +121,12 @@ export default function EditEmployeePage() {
                     return;
                 }
 
+                if (err?.response?.status === 404) {
+                    setNotAvailableInSelectedCompany(true);
+                    setLoading(false);
+                    return;
+                }
+
                 setError(err.message || t("hr.employees.loadFailed"));
                 setLoading(false);
             }
@@ -118,6 +134,20 @@ export default function EditEmployeePage() {
 
         loadData();
     }, [id, form]);
+
+    useEffect(() => {
+        if (employeeCompanyId == null || activeOrganizationId == null) return;
+
+        if (Number(employeeCompanyId) !== Number(activeOrganizationId)) {
+            notifyError(
+                t(
+                    "hr.employees.changedCompanyRedirect",
+                    "This employee belongs to another company. You have been returned to the employee list."
+                )
+            );
+            navigate("/hr/employees", { replace: true });
+        }
+    }, [activeOrganizationId, employeeCompanyId, navigate, t]);
 
     /**
      * Handle form submission
@@ -192,7 +222,20 @@ export default function EditEmployeePage() {
             <ErrorState
                 title={t("hr.employees.loadFailed")}
                 description={error}
-                onRetry={() => window.location.reload()}
+                onRetry={() => navigate(0)}
+            />
+        );
+    }
+
+    if (notAvailableInSelectedCompany) {
+        return (
+            <ErrorState
+                title={t("hr.employees.notFound", "Employee not found")}
+                description={t(
+                    "hr.employees.notAvailableInSelectedCompany",
+                    "This employee is not available in the currently selected company."
+                )}
+                onRetry={() => navigate("/hr/employees")}
             />
         );
     }

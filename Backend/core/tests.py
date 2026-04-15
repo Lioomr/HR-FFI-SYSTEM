@@ -23,6 +23,8 @@ from hr_reference.models import Department, Position
 from core.models import DelegationRule, UserPreference
 from leaves.models import LeaveRequest, LeaveType
 from loans.models import LoanRequest
+from organization.models import OrganizationNode
+from organization.services import get_default_company
 
 
 class RoleResolutionTests(TestCase):
@@ -40,6 +42,9 @@ class HrSummaryViewTests(APITestCase):
         self.user_model = get_user_model()
         self.hr_group, _ = Group.objects.get_or_create(name="HRManager")
         self.admin_group, _ = Group.objects.get_or_create(name="SystemAdmin")
+        self.company = get_default_company()
+        self.department = Department.objects.create(code="HRSUM", name="HR Summary Department", company=self.company)
+        self.position = Position.objects.create(code="HRSUMPOS", name="HR Summary Position", company=self.company)
 
         self.hr_user = self.user_model.objects.create_user(
             email="hr@test.com",
@@ -47,6 +52,16 @@ class HrSummaryViewTests(APITestCase):
             full_name="HR Manager",
         )
         self.hr_user.groups.add(self.hr_group)
+        EmployeeProfile.objects.create(
+            user=self.hr_user,
+            employee_id="EMP-HR-SUMMARY",
+            full_name="HR Manager",
+            basic_salary=Decimal("9000.00"),
+            department_ref=self.department,
+            position_ref=self.position,
+            hire_date=date(2024, 1, 1),
+            company=self.company,
+        )
 
         self.admin_user = self.user_model.objects.create_user(
             email="admin@test.com",
@@ -54,6 +69,16 @@ class HrSummaryViewTests(APITestCase):
             full_name="System Admin",
         )
         self.admin_user.groups.add(self.admin_group)
+        EmployeeProfile.objects.create(
+            user=self.admin_user,
+            employee_id="EMP-ADMIN-SUMMARY",
+            full_name="System Admin",
+            basic_salary=Decimal("9500.00"),
+            department_ref=self.department,
+            position_ref=self.position,
+            hire_date=date(2024, 1, 2),
+            company=self.company,
+        )
 
     def test_recent_activity_only_includes_hr_manager_activity(self):
         AuditLog.objects.create(
@@ -76,8 +101,44 @@ class HrSummaryViewTests(APITestCase):
         recent_activity = response.data["data"]["recent_activity"]
 
         self.assertEqual(len(recent_activity), 1)
-        self.assertEqual(recent_activity[0]["employee"], "hr@test.com")
+        self.assertEqual(recent_activity[0]["employee"], "HR Manager")
         self.assertEqual(recent_activity[0]["action"], "employee_imported")
+
+    def test_summary_counts_are_scoped_to_active_company(self):
+        other_company = (
+            OrganizationNode.objects.exclude(id=self.company.id)
+            .filter(node_type=OrganizationNode.NodeType.COMPANY)
+            .first()
+        )
+        other_department = Department.objects.create(code="OTH", name="Other Department", company=other_company)
+        other_position = Position.objects.create(code="OTHPOS", name="Other Position", company=other_company)
+
+        EmployeeProfile.objects.create(
+            employee_id="EMP-FFI-1",
+            full_name="FFI Employee",
+            basic_salary=Decimal("7000.00"),
+            department_ref=self.department,
+            position_ref=self.position,
+            hire_date=date(2024, 2, 1),
+            company=self.company,
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        )
+        EmployeeProfile.objects.create(
+            employee_id="EMP-ATH-1",
+            full_name="Athroya Employee",
+            basic_salary=Decimal("7100.00"),
+            department_ref=other_department,
+            position_ref=other_position,
+            hire_date=date(2024, 2, 2),
+            company=other_company,
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        )
+
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.get("/api/hr/summary/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"]["total_employees"], 3)
 
 
 class ErrorResponseTests(TestCase):

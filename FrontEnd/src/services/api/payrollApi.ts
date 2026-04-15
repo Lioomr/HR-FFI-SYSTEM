@@ -16,6 +16,8 @@ export interface PayrollRun {
   status: PayrollRunStatus;
   total_net: number;
   total_employees: number;
+  company_id?: number;
+  company_name?: string;
   created_at?: string;
   updated_at?: string;
   created_by?: number;

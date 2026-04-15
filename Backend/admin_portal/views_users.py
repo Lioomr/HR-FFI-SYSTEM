@@ -26,7 +26,9 @@ from .serializers import (
     ResetPasswordSerializer,
     UpdateRoleSerializer,
     UpdateStatusSerializer,
+    UpdateUserOrganizationsSerializer,
     UserListSerializer,
+    sync_user_organization_access,
 )
 
 User = get_user_model()
@@ -99,7 +101,12 @@ class UsersListCreateView(APIView):
         role = request.query_params.get("role", "").strip()
         status_param = request.query_params.get("status", "").strip()  # active/inactive optional
 
-        qs = User.objects.all().order_by("-id")
+        qs = (
+            User.objects.all()
+            .select_related("employee_profile")
+            .prefetch_related("groups", "organization_access_entries__organization")
+            .order_by("-id")
+        )
 
         if search:
             qs = qs.filter(Q(email__icontains=search) | Q(full_name__icontains=search))
@@ -158,8 +165,38 @@ class UserDetailView(APIView):
     permission_classes = [IsSystemAdmin]
 
     def get(self, request, user_id):
-        user = User.objects.get(pk=user_id)
+        user = (
+            User.objects.select_related("employee_profile")
+            .prefetch_related("groups", "organization_access_entries__organization")
+            .get(pk=user_id)
+        )
         return success(UserListSerializer(user).data)
+
+    def patch(self, request, user_id):
+        user = User.objects.get(pk=user_id)
+        serializer = UpdateUserOrganizationsSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        if not user.groups.filter(name="HRManager").exists():
+            return error("Organization access can only be managed for HR Manager users.", status=422)
+
+        organization_ids = serializer.validated_data["organization_ids"]
+        sync_user_organization_access(user, organization_ids)
+
+        audit(
+            request,
+            "user_organization_access_changed",
+            entity="user",
+            entity_id=user.id,
+            metadata={"organization_ids": organization_ids},
+        )
+
+        refreshed_user = (
+            User.objects.select_related("employee_profile")
+            .prefetch_related("groups", "organization_access_entries__organization")
+            .get(pk=user.pk)
+        )
+        return success(UserListSerializer(refreshed_user).data)
 
 
 class UserStatusView(APIView):

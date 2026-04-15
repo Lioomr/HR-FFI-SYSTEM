@@ -1,10 +1,12 @@
-import { useState } from 'react';
-import { Form, Input, Button, Select, Switch, Card, message, Space, Typography, Row, Col, Upload } from 'antd';
+import { useEffect, useState } from 'react';
+import { Form, Input, Button, Select, Switch, Card, message, Space, Typography, Row, Col, Upload, Alert } from 'antd';
 import type { UploadFile } from 'antd/es/upload/interface';
 import { useNavigate } from 'react-router-dom';
 import { createAnnouncement, type CreateAnnouncementData } from '../../../services/api/announcementApi';
 import { useI18n } from '../../../i18n/useI18n';
 import { UploadOutlined } from '@ant-design/icons';
+import { useAuthStore } from '../../../auth/authStore';
+import { isHeadOfficeOrganization } from '../../../utils/organizationContext';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -12,12 +14,21 @@ const { Option } = Select;
 export default function CreateAnnouncementPage() {
     const navigate = useNavigate();
     const { t } = useI18n();
+    const user = useAuthStore((state) => state.user);
+    const isHeadOffice = isHeadOfficeOrganization(user);
     const [form] = Form.useForm();
     const [loading, setLoading] = useState(false);
     const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
     const [attachmentList, setAttachmentList] = useState<UploadFile[]>([]);
 
+    useEffect(() => {
+        if (isHeadOffice) {
+            message.info(t('organization.headOffice.switchToCreateRecords'));
+        }
+    }, [isHeadOffice, t]);
+
     const onFinish = async (values: any) => {
+        if (isHeadOffice) return;
         setLoading(true);
         try {
             const data: CreateAnnouncementData = {
@@ -48,6 +59,15 @@ export default function CreateAnnouncementPage() {
             </div>
 
             <Card bordered={false} style={{ borderRadius: 16, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
+                {isHeadOffice ? (
+                    <Alert
+                        type="info"
+                        showIcon
+                        style={{ marginBottom: 16 }}
+                        message={t('organization.headOffice.readOnlyTitle')}
+                        description={t('organization.headOffice.switchToCreateRecords')}
+                    />
+                ) : null}
                 <Form
                     form={form}
                     layout="vertical"
@@ -167,6 +187,7 @@ export default function CreateAnnouncementPage() {
                             type="primary"
                             htmlType="submit"
                             loading={loading}
+                            disabled={isHeadOffice}
                             block
                             size="large"
                             style={{ background: '#FF7F3E', borderColor: '#FF7F3E', borderRadius: 12, height: 50, fontWeight: 600 }}
