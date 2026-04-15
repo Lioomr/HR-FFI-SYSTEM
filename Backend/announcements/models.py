@@ -3,6 +3,7 @@ from django.core.validators import FileExtensionValidator
 from django.db import models
 
 from employees.storage import PrivateUploadStorage
+from organization.models import OrganizationNode
 
 
 class Announcement(models.Model):
@@ -12,6 +13,13 @@ class Announcement(models.Model):
 
     title = models.CharField(max_length=200)
     content = models.TextField()
+    company = models.ForeignKey(
+        OrganizationNode,
+        on_delete=models.PROTECT,
+        related_name="announcements",
+        null=True,
+        blank=True,
+    )
     target_roles = models.JSONField(help_text="List of role names that should see this announcement")
     target_user = models.ForeignKey(
         settings.AUTH_USER_MODEL,

@@ -11,6 +11,8 @@ import type { LoanRequest, LoanStatus } from "../../services/api/loanApi";
 import { formatNumber } from "../../utils/currency";
 import { useI18n } from "../../i18n/useI18n";
 import LoanApprovalMap from "../loans/LoanApprovalMap";
+import { useAuthStore } from "../../auth/authStore";
+import { isHeadOfficeOrganization } from "../../utils/organizationContext";
 
 type Props = {
   title: string;
@@ -47,6 +49,8 @@ export default function LoanRequestsTablePage({
 }: Props) {
   const navigate = useNavigate();
   const { t } = useI18n();
+  const user = useAuthStore((state) => state.user);
+  const isHeadOffice = isHeadOfficeOrganization(user);
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<LoanStatus | undefined>(defaultStatus);
   const [page, setPage] = useState(1);
@@ -111,6 +115,14 @@ export default function LoanRequestsTablePage({
       dataIndex: "status",
       render: (status: LoanStatus) => <Tag color={statusColors[status as string] || "default"}>{getStatusLabel(status as string)}</Tag>,
     },
+    ...(isHeadOffice
+      ? [{
+          title: t("common.company", "Company"),
+          key: "company_name",
+          dataIndex: "company_name",
+          render: (value?: string) => value ? <Tag color="blue">{value}</Tag> : "-",
+        }]
+      : []),
     {
       title: t("loans.list.colCreated"),
       key: "created_at",

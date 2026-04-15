@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Layout, Menu, Dropdown, Typography, Avatar, Drawer, Grid, Button, Select, Badge } from "antd";
 import {
   DashboardOutlined,
@@ -22,6 +22,7 @@ import {
   UserOutlined,
   AppstoreOutlined,
   UserSwitchOutlined,
+  LockOutlined,
 } from "@ant-design/icons";
 import type { MenuProps } from "antd";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -35,14 +36,22 @@ import { getManagerTeam } from "../services/api/managerApi";
 import { isFinanceApproverEmployee } from "../utils/financeApprover";
 import { isCFOApproverEmployee } from "../utils/cfoApprover";
 import { isCEOApproverEmployee } from "../utils/ceoApprover";
+import { isHeadOfficeOrganization } from "../utils/organizationContext";
 
 const { Header, Sider, Content } = Layout;
 const { useBreakpoint } = Grid;
 
 // ─── Brand Logo ────────────────────────────────────────────────────────────────
-type BrandLogoProps = { collapsed?: boolean; subtitle: string };
+type BrandLogoProps = {
+  collapsed?: boolean;
+  title: string;
+  subtitle: string;
+  accent: string;
+  accentGlow: string;
+  titleColor?: string;
+};
 
-function BrandLogo({ collapsed, subtitle }: BrandLogoProps) {
+function BrandLogo({ collapsed, title, subtitle, accent, accentGlow, titleColor = "white" }: BrandLogoProps) {
   return (
     <div
       style={{
@@ -61,7 +70,7 @@ function BrandLogo({ collapsed, subtitle }: BrandLogoProps) {
         style={{
           width: 38,
           height: 38,
-          background: "linear-gradient(135deg, #f97316, #fb923c)",
+          background: `linear-gradient(135deg, ${accent}, ${accentGlow})`,
           borderRadius: 10,
           display: "flex",
           alignItems: "center",
@@ -70,7 +79,7 @@ function BrandLogo({ collapsed, subtitle }: BrandLogoProps) {
           fontWeight: 700,
           fontSize: 16,
           flexShrink: 0,
-          boxShadow: "0 4px 14px rgba(249,115,22,0.5)",
+          boxShadow: `0 4px 14px ${accentGlow}66`,
         }}
       >
         <ApartmentOutlined />
@@ -82,15 +91,15 @@ function BrandLogo({ collapsed, subtitle }: BrandLogoProps) {
             style={{
               fontWeight: 800,
               fontSize: 16,
-              color: "white",
+              color: titleColor,
               letterSpacing: "-0.02em",
               lineHeight: 1.2,
               fontFamily: "'Outfit', 'Inter', sans-serif",
             }}
           >
-            FFISYS
+            {title}
           </div>
-          <div style={{ fontSize: 11, color: "rgba(251,146,60,0.8)", marginTop: 1 }}>
+          <div style={{ fontSize: 11, color: accentGlow, marginTop: 1 }}>
             {subtitle}
           </div>
         </div>
@@ -176,6 +185,106 @@ function roleColor(role?: string) {
   return map[role || ""] || "#94a3b8";
 }
 
+function getOrganizationTheme(code?: string, nodeType?: string) {
+  if (nodeType === "head_office") {
+    return {
+      shellBg: "linear-gradient(135deg, rgba(255,255,255,0.98), rgba(245,247,250,0.96))",
+      shellBorder: "rgba(148, 163, 184, 0.22)",
+      shellShadow: "0 14px 34px rgba(15, 23, 42, 0.08)",
+      shellInset: "inset 0 1px 0 rgba(255,255,255,0.75)",
+      text: "#0f172a",
+      muted: "#64748b",
+      selectBg: "linear-gradient(135deg, #ffffff, #f8fafc)",
+      selectBorder: "rgba(148, 163, 184, 0.28)",
+      selectShadow: "0 8px 18px rgba(148, 163, 184, 0.14)",
+      accent: "#475569",
+      accentSoft: "rgba(71, 85, 105, 0.12)",
+      divider: "rgba(148, 163, 184, 0.22)",
+    };
+  }
+
+  switch (code) {
+    case "ASECO_PRO":
+      return {
+        shellBg: "linear-gradient(135deg, rgba(255,248,233,0.98), rgba(250,232,190,0.96))",
+        shellBorder: "rgba(194, 138, 27, 0.28)",
+        shellShadow: "0 16px 34px rgba(184, 134, 11, 0.18)",
+        shellInset: "inset 0 1px 0 rgba(255,255,255,0.68)",
+        text: "#5b3b00",
+        muted: "#8a670f",
+        selectBg: "linear-gradient(135deg, #fff8eb, #f2d27d)",
+        selectBorder: "rgba(168, 118, 14, 0.34)",
+        selectShadow: "0 10px 22px rgba(194, 138, 27, 0.18)",
+        accent: "#a16207",
+        accentSoft: "rgba(161, 98, 7, 0.14)",
+        divider: "rgba(194, 138, 27, 0.24)",
+      };
+    case "ATHROYA":
+      return {
+        shellBg: "linear-gradient(135deg, rgba(15,23,42,0.97), rgba(30,41,59,0.95))",
+        shellBorder: "rgba(148, 163, 184, 0.16)",
+        shellShadow: "0 18px 38px rgba(15, 23, 42, 0.28)",
+        shellInset: "inset 0 1px 0 rgba(255,255,255,0.08)",
+        text: "#f8fafc",
+        muted: "rgba(226,232,240,0.72)",
+        selectBg: "linear-gradient(135deg, rgba(30,41,59,0.98), rgba(15,23,42,0.98))",
+        selectBorder: "rgba(226, 232, 240, 0.14)",
+        selectShadow: "0 10px 22px rgba(2, 6, 23, 0.32)",
+        accent: "#f8fafc",
+        accentSoft: "rgba(248, 250, 252, 0.10)",
+        divider: "rgba(226, 232, 240, 0.12)",
+      };
+    case "FFI":
+    default:
+      return {
+        shellBg: "linear-gradient(135deg, rgba(255,255,255,0.98), rgba(248,250,252,0.98))",
+        shellBorder: "rgba(226, 232, 240, 0.92)",
+        shellShadow: "0 14px 32px rgba(15, 23, 42, 0.07)",
+        shellInset: "inset 0 1px 0 rgba(255,255,255,0.92)",
+        text: "#0f172a",
+        muted: "#64748b",
+        selectBg: "linear-gradient(135deg, #ffffff, #f8fafc)",
+        selectBorder: "rgba(226, 232, 240, 0.95)",
+        selectShadow: "0 8px 18px rgba(148, 163, 184, 0.14)",
+        accent: "#f97316",
+        accentSoft: "rgba(249, 115, 22, 0.10)",
+        divider: "rgba(226, 232, 240, 0.9)",
+      };
+  }
+}
+
+function getSidebarBrandTheme(code?: string, nodeType?: string) {
+  if (nodeType === "head_office") {
+    return {
+      accent: "#e2e8f0",
+      accentGlow: "#94a3b8",
+      titleColor: "#f8fafc",
+    };
+  }
+
+  switch (code) {
+    case "ASECO_PRO":
+      return {
+        accent: "#d4a017",
+        accentGlow: "#f6c453",
+        titleColor: "#fff7db",
+      };
+    case "ATHROYA":
+      return {
+        accent: "#0f172a",
+        accentGlow: "#94a3b8",
+        titleColor: "#f8fafc",
+      };
+    case "FFI":
+    default:
+      return {
+        accent: "#f97316",
+        accentGlow: "#fb923c",
+        titleColor: "#ffffff",
+      };
+  }
+}
+
 function sectionLabel(title: string, caption?: string) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -192,6 +301,7 @@ export default function BaseLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
+  const setActiveOrganization = useAuthStore((s) => s.setActiveOrganization);
   const logout = useAuthStore((s) => s.logout);
   const { t, language, setLanguage, direction } = useI18n();
 
@@ -204,8 +314,28 @@ export default function BaseLayout() {
   const [isCFOApprover, setIsCFOApprover] = useState(false);
   const [isCEOApprover, setIsCEOApprover] = useState(false);
   const [hasManagerAccess, setHasManagerAccess] = useState(false);
+  const [isSwitchingOrganization, setIsSwitchingOrganization] = useState(false);
 
   const role = user?.role;
+  const organizations = user?.accessible_organizations ?? [];
+  const activeOrganizationId = user?.active_organization_id ?? user?.default_organization_id ?? null;
+  const activeOrganization = organizations.find((organization) => String(organization.id) === String(activeOrganizationId));
+  const organizationTheme = getOrganizationTheme(activeOrganization?.code, activeOrganization?.node_type);
+  const sidebarBrandTheme = getSidebarBrandTheme(activeOrganization?.code, activeOrganization?.node_type);
+  const isHeadOffice = isHeadOfficeOrganization(user);
+  const brandTitle = useMemo(() => {
+    if (!activeOrganization?.name) return "FFISYS";
+    return activeOrganization.node_type === "head_office" ? "Main Head Office" : activeOrganization.name;
+  }, [activeOrganization]);
+
+  const handleOrganizationChange = (organizationId: string | number) => {
+    if (String(organizationId) === String(activeOrganizationId)) return;
+    setIsSwitchingOrganization(true);
+    setActiveOrganization(organizationId);
+    window.setTimeout(() => {
+      window.location.reload();
+    }, 120);
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -550,7 +680,14 @@ export default function BaseLayout() {
   // ─── Sidebar content ───────────────────────────────────────────────────────
   const sidebarContent = (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <BrandLogo collapsed={collapsed} subtitle={t("layout.hrPayroll")} />
+      <BrandLogo
+        collapsed={collapsed}
+        title={brandTitle}
+        subtitle={t("layout.hrPayroll")}
+        accent={sidebarBrandTheme.accent}
+        accentGlow={sidebarBrandTheme.accentGlow}
+        titleColor={sidebarBrandTheme.titleColor}
+      />
       <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", paddingBottom: 16 }}>
         <Menu
           mode="inline"
@@ -669,10 +806,60 @@ export default function BaseLayout() {
               gap: isMobile ? 8 : 16,
               padding: isMobile ? "6px 10px" : "8px 16px",
               borderRadius: 50,
-              boxShadow: "0 2px 20px rgba(0,0,0,0.06)",
+              background: organizationTheme.shellBg,
+              color: organizationTheme.text,
+              border: `1px solid ${organizationTheme.shellBorder}`,
+              boxShadow: `${organizationTheme.shellShadow}, ${organizationTheme.shellInset}`,
+              transition: "background 220ms cubic-bezier(0.22, 1, 0.36, 1), border-color 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1)",
             }}
           >
             {/* Language Selector */}
+            {organizations.length > 0 && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  minWidth: isMobile ? 138 : 220,
+                  padding: isMobile ? "4px 8px" : "6px 10px 6px 12px",
+                  borderRadius: 18,
+                  background: organizationTheme.selectBg,
+                  border: `1px solid ${organizationTheme.selectBorder}`,
+                  boxShadow: organizationTheme.selectShadow,
+                  transition: "all 220ms cubic-bezier(0.22, 1, 0.36, 1)",
+                }}
+              >
+                <div
+                  style={{
+                    width: 10,
+                    height: 10,
+                    minWidth: 10,
+                    borderRadius: "50%",
+                    background: organizationTheme.accent,
+                    boxShadow: `0 0 0 6px ${organizationTheme.accentSoft}`,
+                  }}
+                />
+                <Select
+                  size="small"
+                  value={activeOrganizationId ?? undefined}
+                  onChange={handleOrganizationChange}
+                  loading={isSwitchingOrganization}
+                  disabled={isSwitchingOrganization}
+                  variant="borderless"
+                  options={organizations.map((org) => ({
+                    value: org.id,
+                    label: org.node_type === "head_office" ? `${org.name} (Read only)` : org.name,
+                  }))}
+                  style={{
+                    minWidth: isMobile ? 110 : 172,
+                    fontWeight: 700,
+                    fontSize: 13,
+                    color: organizationTheme.text,
+                  }}
+                />
+              </div>
+            )}
+
             <Select
               size="small"
               value={language}
@@ -682,7 +869,7 @@ export default function BaseLayout() {
                 { value: "ar", label: isMobile ? "AR" : t("language.arabic") },
               ]}
               variant="borderless"
-              style={{ minWidth: isMobile ? 56 : 90, fontWeight: 500, fontSize: 13 }}
+              style={{ minWidth: isMobile ? 56 : 90, fontWeight: 600, fontSize: 13, color: organizationTheme.text }}
             />
 
             {/* Notification Bell */}
@@ -694,7 +881,8 @@ export default function BaseLayout() {
                   width: isMobile ? 30 : 36,
                   height: isMobile ? 30 : 36,
                   borderRadius: 10,
-                  color: "#64748b",
+                  color: organizationTheme.muted,
+                  background: organizationTheme.accentSoft,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -703,7 +891,7 @@ export default function BaseLayout() {
             </Badge>
 
             {/* Divider */}
-            {!isMobile && <div style={{ width: 1, height: 24, background: "rgba(0,0,0,0.08)" }} />}
+            {!isMobile && <div style={{ width: 1, height: 24, background: organizationTheme.divider }} />}
 
             {/* User Profile Dropdown */}
             <Dropdown menu={userMenu} placement="bottomRight" trigger={["click"]}>
@@ -731,13 +919,13 @@ export default function BaseLayout() {
                 </Avatar>
                 {!isMobile && (
                   <div style={{ lineHeight: 1.3 }}>
-                    <div style={{ fontWeight: 600, fontSize: 13, color: "#0f172a" }}>
+                    <div style={{ fontWeight: 600, fontSize: 13, color: organizationTheme.text }}>
                       {displayName}
                     </div>
-                    <div style={{ fontSize: 11, color: "#94a3b8" }}>{role}</div>
+                    <div style={{ fontSize: 11, color: organizationTheme.muted }}>{role}</div>
                   </div>
                 )}
-                <DownOutlined style={{ fontSize: 9, color: "#94a3b8" }} />
+                <DownOutlined style={{ fontSize: 9, color: organizationTheme.muted }} />
               </div>
             </Dropdown>
           </div>
@@ -750,6 +938,44 @@ export default function BaseLayout() {
             overflowX: "hidden",
           }}
         >
+          {isHeadOffice && (
+            <div
+              style={{
+                margin: "0 auto 20px",
+                maxWidth: 1600,
+                borderRadius: 18,
+                border: "1px solid rgba(148, 163, 184, 0.22)",
+                background: "linear-gradient(135deg, rgba(255,255,255,0.96), rgba(248,250,252,0.98))",
+                boxShadow: "0 12px 28px rgba(15, 23, 42, 0.06)",
+                padding: isMobile ? "12px 14px" : "14px 18px",
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+              }}
+            >
+              <div
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 12,
+                  background: "rgba(71, 85, 105, 0.10)",
+                  color: "#475569",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <LockOutlined />
+              </div>
+              <div>
+                <div style={{ fontWeight: 700, color: "#0f172a", fontSize: 14 }}>{t("organization.headOffice.bannerTitle")}</div>
+                <div style={{ color: "#64748b", fontSize: 13 }}>
+                  {t("organization.headOffice.bannerDescription")}
+                </div>
+              </div>
+            </div>
+          )}
           <Outlet />
         </Content>
       </Layout>

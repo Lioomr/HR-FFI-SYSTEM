@@ -23,6 +23,7 @@ from core.services import (
 )
 
 from .models import LoanRequest
+from organization.services import filter_queryset_by_company_scope
 from .permissions import (
     IsCEOApproverOrAdmin,
     IsCFOApproverOrAdmin,
@@ -131,7 +132,10 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        return LoanRequest.objects.filter(is_active=True).select_related("employee", "employee_profile")
+        return filter_queryset_by_company_scope(
+            LoanRequest.objects.filter(is_active=True).select_related("employee", "employee_profile", "company"),
+            self.request,
+        )
 
     def get_serializer_class(self):
         if self.action == "create":
@@ -161,6 +165,7 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
         instance = LoanRequest.objects.create(
             employee=request.user,
             employee_profile=profile,
+            company=profile.company,
             requested_amount=serializer.validated_data["amount"],
             loan_type=serializer.validated_data.get("loan_type", LoanRequest.LoanType.OPEN),
             installment_months=serializer.validated_data.get("installment_months"),
@@ -402,7 +407,7 @@ class EmployeeLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         return LoanRequest.objects.filter(employee=self.request.user, is_active=True).select_related(
-            "employee", "employee_profile"
+            "employee", "employee_profile", "company"
         )
 
     def list(self, request, *args, **kwargs):
@@ -431,7 +436,10 @@ class ManagerLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         role = get_role(self.request.user)
-        base_qs = LoanRequest.objects.filter(is_active=True).select_related("employee", "employee_profile")
+        base_qs = filter_queryset_by_company_scope(
+            LoanRequest.objects.filter(is_active=True).select_related("employee", "employee_profile", "company"),
+            self.request,
+        )
         if role == "SystemAdmin":
             return base_qs
 
@@ -550,7 +558,10 @@ class CFOLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ["-created_at"]
 
     def get_queryset(self):
-        qs = LoanRequest.objects.filter(is_active=True).select_related("employee", "employee_profile")
+        qs = filter_queryset_by_company_scope(
+            LoanRequest.objects.filter(is_active=True).select_related("employee", "employee_profile", "company"),
+            self.request,
+        )
         qs = _scope_cfo_queryset_for_user(self.request.user, qs)
         status_param = self.request.query_params.get("status")
         if status_param:
@@ -707,7 +718,10 @@ class CEOLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ["-created_at"]
 
     def get_queryset(self):
-        qs = LoanRequest.objects.filter(is_active=True).select_related("employee", "employee_profile")
+        qs = filter_queryset_by_company_scope(
+            LoanRequest.objects.filter(is_active=True).select_related("employee", "employee_profile", "company"),
+            self.request,
+        )
         qs = _scope_ceo_queryset_for_user(self.request.user, qs)
         status_param = self.request.query_params.get("status")
         if status_param:
@@ -819,7 +833,10 @@ class DisbursementLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ["-created_at"]
 
     def get_queryset(self):
-        qs = LoanRequest.objects.filter(is_active=True).select_related("employee", "employee_profile")
+        qs = filter_queryset_by_company_scope(
+            LoanRequest.objects.filter(is_active=True).select_related("employee", "employee_profile", "company"),
+            self.request,
+        )
         qs = _scope_disbursement_queryset_for_user(self.request.user, qs)
         status_param = self.request.query_params.get("status")
         if status_param:

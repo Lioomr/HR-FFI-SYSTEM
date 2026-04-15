@@ -6,6 +6,8 @@ export type RentStatus = "UPCOMING" | "OVERDUE" | "SCHEDULED";
 
 export interface RentItem {
   id: number;
+  company_id?: number;
+  company_name?: string;
   rent_type: {
     id: number;
     code: string;

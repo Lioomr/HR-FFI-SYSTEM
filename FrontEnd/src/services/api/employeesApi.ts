@@ -29,6 +29,8 @@ export interface Employee {
   position?: string;
   task_group?: string;
   sponsor?: string;
+  company_id?: number;
+  company_name?: string;
   employment_status?: "ACTIVE" | "ON_LEAVE" | "SUSPENDED" | "TERMINATED";
   hire_date?: string;
   department_id?: number;

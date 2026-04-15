@@ -4,10 +4,18 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from assets.models import Asset
+from organization.models import OrganizationNode
 
 
 class RentType(models.Model):
-    code = models.CharField(max_length=30, unique=True)
+    company = models.ForeignKey(
+        OrganizationNode,
+        on_delete=models.PROTECT,
+        related_name="rent_types",
+        null=True,
+        blank=True,
+    )
+    code = models.CharField(max_length=30)
     name_en = models.CharField(max_length=120)
     name_ar = models.CharField(max_length=120, blank=True)
     description = models.TextField(blank=True)
@@ -17,6 +25,9 @@ class RentType(models.Model):
 
     class Meta:
         ordering = ["code"]
+        constraints = [
+            models.UniqueConstraint(fields=["company", "code"], name="uniq_rent_type_company_code"),
+        ]
 
     def __str__(self):
         return f"{self.code} - {self.name_en}"
@@ -27,6 +38,13 @@ class Rent(models.Model):
         MONTHLY = "MONTHLY", _("Monthly")
 
     rent_type = models.ForeignKey(RentType, on_delete=models.PROTECT, related_name="rents")
+    company = models.ForeignKey(
+        OrganizationNode,
+        on_delete=models.PROTECT,
+        related_name="rents",
+        null=True,
+        blank=True,
+    )
     asset = models.ForeignKey(Asset, on_delete=models.SET_NULL, null=True, blank=True, related_name="rents")
     property_name_en = models.CharField(max_length=180, blank=True)
     property_name_ar = models.CharField(max_length=180, blank=True)

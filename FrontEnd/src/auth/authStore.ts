@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { clearToken, getToken, setToken, getStoredUser, setStoredUser } from "../services/api/tokenStorage";
+import type { OrganizationNodeDto } from "../services/api/apiTypes";
 
 export type Role = "SystemAdmin" | "HRManager" | "Manager" | "Employee" | "CEO" | "CFO";
 
@@ -7,6 +8,10 @@ export type AuthUser = {
   id: string;
   email: string;
   role: Role;
+  accessible_organizations?: OrganizationNodeDto[];
+  default_organization_id?: string | number | null;
+  has_all_company_access?: boolean;
+  active_organization_id?: string | number | null;
 };
 
 type AuthState = {
@@ -15,6 +20,7 @@ type AuthState = {
 
   login: (user: AuthUser, token?: string) => void;
   logout: () => void;
+  setActiveOrganization: (organizationId: string | number | null) => void;
 
   hydrateFromStorage: () => void;
 };
@@ -25,15 +31,26 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   login: (user, token) => {
     if (token) setToken(token);
-    // Persist user with new helper
-    setStoredUser(user);
-    set({ isAuthenticated: true, user });
+    const normalizedUser = {
+      ...user,
+      active_organization_id: user.active_organization_id ?? user.default_organization_id ?? null,
+    };
+    setStoredUser(normalizedUser);
+    set({ isAuthenticated: true, user: normalizedUser });
   },
 
   logout: () => {
     clearToken();
     set({ isAuthenticated: false, user: null });
   },
+
+  setActiveOrganization: (organizationId) =>
+    set((state) => {
+      if (!state.user) return state;
+      const user = { ...state.user, active_organization_id: organizationId };
+      setStoredUser(user);
+      return { user };
+    }),
 
   hydrateFromStorage: () => {
     const token = getToken();
@@ -47,6 +64,10 @@ export const useAuthStore = create<AuthState>((set) => ({
           id: storedUser.id,
           email: storedUser.email,
           role: storedUser.role as Role,
+          accessible_organizations: (storedUser.accessible_organizations as OrganizationNodeDto[] | undefined) ?? [],
+          default_organization_id: storedUser.default_organization_id ?? null,
+          has_all_company_access: storedUser.has_all_company_access ?? false,
+          active_organization_id: storedUser.active_organization_id ?? storedUser.default_organization_id ?? null,
         },
       });
     } else if (token) {

@@ -1,5 +1,5 @@
 import { api } from "./apiClient";
-import type { ApiResponse } from "./apiTypes";
+import type { ApiResponse, OrganizationNodeDto } from "./apiTypes";
 
 export type LoginRequest = { email: string; password: string };
 export type LoginResponse = {
@@ -8,6 +8,9 @@ export type LoginResponse = {
     id: string;
     email: string;
     role: "SystemAdmin" | "HRManager" | "Manager" | "Employee" | "CEO" | "CFO";
+    accessible_organizations?: OrganizationNodeDto[];
+    default_organization_id?: number | string | null;
+    has_all_company_access?: boolean;
   };
 };
 

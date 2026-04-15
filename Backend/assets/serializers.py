@@ -32,6 +32,8 @@ class AssetAssignmentSummarySerializer(serializers.ModelSerializer):
 
 class AssetSerializer(serializers.ModelSerializer):
     active_assignment = serializers.SerializerMethodField(read_only=True)
+    company_id = serializers.PrimaryKeyRelatedField(source="company", read_only=True)
+    company_name = serializers.CharField(source="company.name", read_only=True)
 
     class Meta:
         model = Asset
@@ -62,6 +64,8 @@ class AssetSerializer(serializers.ModelSerializer):
             "mac_address",
             "operating_system",
             "active_assignment",
+            "company_id",
+            "company_name",
             "created_at",
             "updated_at",
         ]
@@ -119,6 +123,13 @@ class AssetSerializer(serializers.ModelSerializer):
 class AssetAssignmentCreateSerializer(serializers.Serializer):
     employee_id = serializers.PrimaryKeyRelatedField(queryset=EmployeeProfile.objects.all(), source="employee")
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get("request")
+        company = getattr(request, "_active_company", None) if request else None
+        if company is not None:
+            self.fields["employee_id"].queryset = EmployeeProfile.objects.filter(company=company)
+
     def validate_employee(self, value):
         if value.employment_status != EmployeeProfile.EmploymentStatus.ACTIVE:
             raise serializers.ValidationError("Only active employees can be assigned assets.")
@@ -151,6 +162,8 @@ class AssetDamageReportSerializer(serializers.ModelSerializer):
     employee_email = serializers.EmailField(source="employee.user.email", read_only=True)
     asset_code = serializers.CharField(source="asset.asset_code", read_only=True)
     asset_name = serializers.CharField(source="asset.name_en", read_only=True)
+    company_id = serializers.PrimaryKeyRelatedField(source="company", read_only=True)
+    company_name = serializers.CharField(source="company.name", read_only=True)
 
     class Meta:
         model = AssetDamageReport
@@ -159,6 +172,8 @@ class AssetDamageReportSerializer(serializers.ModelSerializer):
             "asset",
             "asset_code",
             "asset_name",
+            "company_id",
+            "company_name",
             "employee",
             "employee_name",
             "employee_email",
@@ -191,6 +206,8 @@ class AssetReturnRequestSerializer(serializers.ModelSerializer):
     asset_code = serializers.CharField(source="asset.asset_code", read_only=True)
     asset_name = serializers.CharField(source="asset.name_en", read_only=True)
     workflow = serializers.SerializerMethodField()
+    company_id = serializers.PrimaryKeyRelatedField(source="company", read_only=True)
+    company_name = serializers.CharField(source="company.name", read_only=True)
 
     class Meta:
         model = AssetReturnRequest
@@ -199,6 +216,8 @@ class AssetReturnRequestSerializer(serializers.ModelSerializer):
             "asset",
             "asset_code",
             "asset_name",
+            "company_id",
+            "company_name",
             "employee",
             "employee_name",
             "employee_email",

@@ -16,6 +16,7 @@ from django.db import transaction
 from employees.models import EmployeeImport, EmployeeProfile
 from employees.storage import PrivateUploadStorage
 from hr_reference.models import Department, Position, Sponsor, TaskGroup
+from organization.models import OrganizationNode
 
 try:
     from openpyxl import load_workbook
@@ -105,12 +106,12 @@ class EmployeeImporter:
         self.storage = PrivateUploadStorage()
 
     @staticmethod
-    def _generate_employee_id():
-        return f"FFI-{''.join(random.choices(string.digits, k=6))}"
+    def _generate_employee_id(prefix="FFI"):
+        return f"{prefix}-{''.join(random.choices(string.digits, k=6))}"
 
-    def _generate_unique_employee_id(self, existing_ids, max_attempts=20):
+    def _generate_unique_employee_id(self, existing_ids, prefix="FFI", max_attempts=20):
         for _ in range(max_attempts):
-            candidate = self._generate_employee_id()
+            candidate = self._generate_employee_id(prefix)
             if candidate not in existing_ids:
                 existing_ids.add(candidate)
                 return candidate
@@ -234,55 +235,56 @@ class EmployeeImporter:
             return ""
         return self._normalize_cell(values[idx])
 
-    def _resolve_or_create_department(self, lookup, department_name):
+    def _resolve_or_create_department(self, lookup, department_name, company):
         if not department_name:
             return None
         key = department_name.lower()
         if key in lookup:
             return lookup[key]
-        department = Department.objects.filter(name=department_name).first()
+        department = Department.objects.filter(company=company, name=department_name).first()
         if not department:
             code = department_name[:10].upper().replace(" ", "_")
-            department = Department.objects.filter(code=code).first()
+            department = Department.objects.filter(company=company, code=code).first()
             if not department:
                 department = Department.objects.create(
-                    name=department_name, code=code, description="Auto-created from import"
+                    company=company, name=department_name, code=code, description="Auto-created from import"
                 )
         lookup[key] = department
         if department.code:
             lookup[department.code.lower()] = department
         return department
 
-    def _resolve_or_create_position(self, lookup, position_name):
+    def _resolve_or_create_position(self, lookup, position_name, company):
         if not position_name:
             return None
         key = position_name.lower()
         if key in lookup:
             return lookup[key]
-        position = Position.objects.filter(name=position_name).first()
+        position = Position.objects.filter(company=company, name=position_name).first()
         if not position:
             code = position_name[:10].upper().replace(" ", "_")
-            position = Position.objects.filter(code=code).first()
+            position = Position.objects.filter(company=company, code=code).first()
             if not position:
                 position = Position.objects.create(
-                    name=position_name, code=code, description="Auto-created from import"
+                    company=company, name=position_name, code=code, description="Auto-created from import"
                 )
         lookup[key] = position
         if position.code:
             lookup[position.code.lower()] = position
         return position
 
-    def _resolve_or_create_sponsor(self, lookup, sponsor_code):
+    def _resolve_or_create_sponsor(self, lookup, sponsor_code, company):
         if not sponsor_code:
             return None
         key = sponsor_code.lower()
         if key in lookup:
             return lookup[key]
-        sponsor = Sponsor.objects.filter(code__iexact=sponsor_code).first()
+        sponsor = Sponsor.objects.filter(company=company, code__iexact=sponsor_code).first()
         if not sponsor:
-            sponsor = Sponsor.objects.filter(name__iexact=sponsor_code).first()
+            sponsor = Sponsor.objects.filter(company=company, name__iexact=sponsor_code).first()
         if not sponsor:
             sponsor = Sponsor.objects.create(
+                company=company,
                 name=sponsor_code,
                 code=sponsor_code.upper().replace(" ", "_")[:20],
             )
@@ -293,7 +295,7 @@ class EmployeeImporter:
             lookup[sponsor.name.lower()] = sponsor
         return sponsor
 
-    def _resolve_or_create_task_group(self, lookup, project_name, location_name):
+    def _resolve_or_create_task_group(self, lookup, project_name, location_name, company):
         project_name = (project_name or "").strip()
         location_name = (location_name or "").strip()
         if not project_name and not location_name:
@@ -309,15 +311,16 @@ class EmployeeImporter:
         if key in lookup:
             return lookup[key]
 
-        task_group = TaskGroup.objects.filter(name__iexact=display_name).first()
+        task_group = TaskGroup.objects.filter(company=company, name__iexact=display_name).first()
         if not task_group and project_name:
             # Fallback for old rows where only project was stored as task group name.
-            task_group = TaskGroup.objects.filter(name__iexact=project_name).first()
+            task_group = TaskGroup.objects.filter(company=company, name__iexact=project_name).first()
 
         if not task_group:
             raw_code = f"{project_name}_{location_name}" if location_name else (project_name or location_name)
             code = raw_code.upper().replace(" ", "_")[:20] or "TASK_GROUP"
             task_group = TaskGroup.objects.create(
+                company=company,
                 name=display_name,
                 code=code,
                 description=f"Auto-created from import (Project: {project_name or '-'}, Location: {location_name or '-'})",
@@ -330,8 +333,10 @@ class EmployeeImporter:
             lookup[task_group.code.lower()] = task_group
         return task_group
 
-    def execute(self, upload, uploader):
+    def execute(self, upload, uploader, company: OrganizationNode | None = None):
         file_hash = ""
+        if company is None:
+            return ImportExecutionResult(ok=False, status_code=422, errors=["Active company is required."], result="failed")
         if upload is None:
             return ImportExecutionResult(ok=False, status_code=400, errors=["File is required."], result="failed")
         if upload.size > MAX_IMPORT_FILE_SIZE:
@@ -411,10 +416,10 @@ class EmployeeImporter:
                 ok=False, status_code=422, errors=errors, row_count=row_count, file_hash=file_hash, result="failed"
             )
 
-        department_lookup = self._build_reference_lookup(Department.objects.all())
-        position_lookup = self._build_reference_lookup(Position.objects.all())
-        task_group_lookup = self._build_reference_lookup(TaskGroup.objects.all())
-        sponsor_lookup = self._build_reference_lookup(Sponsor.objects.all())
+        department_lookup = self._build_reference_lookup(Department.objects.filter(company=company))
+        position_lookup = self._build_reference_lookup(Position.objects.filter(company=company))
+        task_group_lookup = self._build_reference_lookup(TaskGroup.objects.filter(company=company))
+        sponsor_lookup = self._build_reference_lookup(Sponsor.objects.filter(company=company))
 
         errors = []
         errors_detail = []
@@ -584,10 +589,10 @@ class EmployeeImporter:
                 passport_expiry = None
                 passport_expiry_raw = ""
 
-            department_ref = self._resolve_or_create_department(department_lookup, department_name_en)
-            position_ref = self._resolve_or_create_position(position_lookup, position_name_en)
-            task_group_ref = self._resolve_or_create_task_group(task_group_lookup, task_group_name, location_name)
-            sponsor_ref = self._resolve_or_create_sponsor(sponsor_lookup, sponsor_code)
+            department_ref = self._resolve_or_create_department(department_lookup, department_name_en, company)
+            position_ref = self._resolve_or_create_position(position_lookup, position_name_en, company)
+            task_group_ref = self._resolve_or_create_task_group(task_group_lookup, task_group_name, location_name, company)
+            sponsor_ref = self._resolve_or_create_sponsor(sponsor_lookup, sponsor_code, company)
 
             if not row_has_error:
                 prepared_rows.append(
@@ -639,6 +644,7 @@ class EmployeeImporter:
                         "job_title_ar": position_name_ar or "",
                         "manager_ref": manager_ref,
                         "data_source": EmployeeProfile.DataSource.IMPORT_EXCEL,
+                        "company": company,
                     }
                 )
 
@@ -660,23 +666,23 @@ class EmployeeImporter:
         passport_numbers = [row["passport_no"] for row in prepared_rows if row["passport_no"]]
         existing_profiles_by_number = {
             ep.employee_number: ep
-            for ep in EmployeeProfile.objects.filter(employee_number__in=employee_numbers).select_related(
+            for ep in EmployeeProfile.objects.filter(company=company, employee_number__in=employee_numbers).select_related(
                 "manager_profile"
             )
         }
         existing_profiles_by_national_id = {
             ep.national_id: ep
-            for ep in EmployeeProfile.objects.filter(national_id__in=national_ids).select_related("manager_profile")
+            for ep in EmployeeProfile.objects.filter(company=company, national_id__in=national_ids).select_related("manager_profile")
             if ep.national_id
         }
         existing_profiles_by_passport = {
             ep.passport_no: ep
-            for ep in EmployeeProfile.objects.filter(passport_no__in=passport_numbers).select_related("manager_profile")
+            for ep in EmployeeProfile.objects.filter(company=company, passport_no__in=passport_numbers).select_related("manager_profile")
             if ep.passport_no
         }
         all_profiles_by_emp_no = {
             ep.employee_number: ep
-            for ep in EmployeeProfile.objects.exclude(employee_number="").only("id", "employee_number")
+            for ep in EmployeeProfile.objects.filter(company=company).exclude(employee_number="").only("id", "employee_number")
         }
 
         created_or_updated = {}
@@ -695,7 +701,7 @@ class EmployeeImporter:
                     if profile is None and row["passport_no"]:
                         profile = existing_profiles_by_passport.get(row["passport_no"])
                     if profile is None:
-                        employee_id = self._generate_unique_employee_id(existing_ids)
+                        employee_id = self._generate_unique_employee_id(existing_ids, company.employee_id_prefix or "EMP")
                         if not employee_id:
                             raise ValueError("Failed to generate unique employee_id.")
                         profile = EmployeeProfile.objects.create(employee_id=employee_id, **row)
@@ -725,8 +731,10 @@ class EmployeeImporter:
                     manager_profile = created_or_updated.get(manager_ref) or all_profiles_by_emp_no.get(manager_ref)
                     if manager_profile is None:
                         manager_profile = (
-                            EmployeeProfile.objects.filter(full_name_en__iexact=manager_ref).only("id", "user").first()
-                            or EmployeeProfile.objects.filter(full_name__iexact=manager_ref).only("id", "user").first()
+                            EmployeeProfile.objects.filter(company=company, full_name_en__iexact=manager_ref)
+                            .only("id", "user")
+                            .first()
+                            or EmployeeProfile.objects.filter(company=company, full_name__iexact=manager_ref).only("id", "user").first()
                         )
                     if manager_profile and manager_profile.id != profile.id:
                         profile.manager_profile = manager_profile

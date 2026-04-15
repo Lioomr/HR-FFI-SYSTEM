@@ -8,6 +8,13 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from admin_portal.models import SystemSettings
 from core.responses import error, success
+from organization.services import (
+    get_active_organization_for_request,
+    get_default_organization_for_user,
+    get_user_accessible_organizations,
+    serialize_organizations,
+    user_has_all_company_access,
+)
 
 from .permissions import get_role
 from .password_policy import validate_password_against_policy
@@ -39,6 +46,9 @@ class LoginView(APIView):
             metadata={"email": user.email},
         )
 
+        accessible_orgs = get_user_accessible_organizations(user)
+        active_org = get_default_organization_for_user(user)
+
         return success(
             {
                 "token": access,
@@ -46,6 +56,9 @@ class LoginView(APIView):
                     "id": str(user.id),
                     "email": user.email,
                     "role": get_role(user),
+                    "accessible_organizations": serialize_organizations(accessible_orgs),
+                    "default_organization_id": active_org.id if active_org else None,
+                    "has_all_company_access": user_has_all_company_access(user),
                 },
             }
         )
@@ -90,6 +103,8 @@ class LogoutView(APIView):
 class UserMeView(APIView):
     def get(self, request):
         user = request.user
+        accessible_orgs = get_user_accessible_organizations(user)
+        active_org = get_active_organization_for_request(request) or get_default_organization_for_user(user)
         return success(
             {
                 "id": str(user.id),
@@ -98,5 +113,8 @@ class UserMeView(APIView):
                 "role": get_role(user),
                 "is_active": user.is_active,
                 "date_joined": user.date_joined,
+                "accessible_organizations": serialize_organizations(accessible_orgs),
+                "default_organization_id": active_org.id if active_org else (accessible_orgs[0].id if accessible_orgs else None),
+                "has_all_company_access": user_has_all_company_access(user),
             }
         )

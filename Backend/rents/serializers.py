@@ -8,9 +8,12 @@ from .services import compute_rent_state, get_last_reminder_sent_at
 
 
 class RentTypeSerializer(serializers.ModelSerializer):
+    company_id = serializers.PrimaryKeyRelatedField(source="company", read_only=True)
+    company_name = serializers.CharField(source="company.name", read_only=True)
+
     class Meta:
         model = RentType
-        fields = ["id", "code", "name_en", "name_ar", "description"]
+        fields = ["id", "code", "name_en", "name_ar", "description", "company_id", "company_name"]
 
 
 class RentTypeWriteSerializer(serializers.ModelSerializer):
@@ -32,6 +35,8 @@ class RentReadSerializer(serializers.ModelSerializer):
     days_remaining = serializers.SerializerMethodField()
     status = serializers.SerializerMethodField()
     last_reminder_sent_at = serializers.SerializerMethodField()
+    company_id = serializers.PrimaryKeyRelatedField(source="company", read_only=True)
+    company_name = serializers.CharField(source="company.name", read_only=True)
 
     class Meta:
         model = Rent
@@ -52,6 +57,8 @@ class RentReadSerializer(serializers.ModelSerializer):
             "reminder_days",
             "status",
             "last_reminder_sent_at",
+            "company_id",
+            "company_name",
         ]
 
     def _computed(self, obj: Rent):
@@ -92,6 +99,16 @@ class RentWriteSerializer(serializers.ModelSerializer):
             "reminder_days",
             "amount",
         ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get("request")
+        company = getattr(request, "_active_company", None) if request else None
+        if self.instance and getattr(self.instance, "company_id", None):
+            company = self.instance.company
+        if company is not None:
+            self.fields["rent_type_id"].queryset = RentType.objects.filter(company=company, is_active=True)
+            self.fields["asset_id"].queryset = Asset.objects.filter(company=company)
 
     def validate(self, attrs):
         instance = self.instance

@@ -6,6 +6,8 @@ import { useNavigate } from "react-router-dom";
 import { importEmployees, downloadImportTemplate } from "../../../services/api/employeesApi";
 import { unwrapEnvelope } from "../../../utils/dataUtils";
 import { useI18n } from "../../../i18n/useI18n";
+import { useAuthStore } from "../../../auth/authStore";
+import { isHeadOfficeOrganization } from "../../../utils/organizationContext";
 
 const { Title, Text } = Typography;
 const { Dragger } = Upload;
@@ -13,10 +15,16 @@ const { Dragger } = Upload;
 const ImportEmployeesEntryPage: React.FC = () => {
     const navigate = useNavigate();
     const { t } = useI18n();
+    const user = useAuthStore((state) => state.user);
     const [uploading, setUploading] = useState(false);
     const [fileList, setFileList] = useState<any[]>([]);
+    const isHeadOffice = isHeadOfficeOrganization(user);
 
     const handleUpload = async () => {
+        if (isHeadOffice) {
+            message.info(t("organization.headOffice.switchToImportEmployees"));
+            return;
+        }
         if (fileList.length === 0) {
             message.error(t("import.employees.selectFile"));
             return;
@@ -115,6 +123,16 @@ const ImportEmployeesEntryPage: React.FC = () => {
                 style={{ marginBottom: 24 }}
             />
 
+            {isHeadOffice && (
+                <Alert
+                    message={t("organization.headOffice.readOnlyTitle")}
+                    description={t("organization.headOffice.importEmployeesDescription")}
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 24 }}
+                />
+            )}
+
             {/* Instructions Card */}
             <Card title={t("import.employees.instructionsTitle")} style={{ marginBottom: 24 }}>
                 <div style={{ marginBottom: 16 }}>
@@ -139,6 +157,7 @@ const ImportEmployeesEntryPage: React.FC = () => {
                     type="primary"
                     icon={<DownloadOutlined />}
                     size="large"
+                    disabled={isHeadOffice}
                     onClick={async () => {
                         try {
                             const blob = await downloadImportTemplate();
@@ -162,7 +181,7 @@ const ImportEmployeesEntryPage: React.FC = () => {
 
             {/* Upload Card */}
             <Card title={t("import.employees.uploadTitle")}>
-                <Dragger {...uploadProps} disabled={uploading} style={{ padding: 20 }}>
+                <Dragger {...uploadProps} disabled={uploading || isHeadOffice} style={{ padding: 20 }}>
                     <p className="ant-upload-drag-icon">
                         <InboxOutlined style={{ fontSize: 48, color: "#1890ff" }} />
                     </p>
@@ -179,7 +198,7 @@ const ImportEmployeesEntryPage: React.FC = () => {
                         type="primary"
                         size="large"
                         onClick={handleUpload}
-                        disabled={fileList.length === 0}
+                        disabled={fileList.length === 0 || isHeadOffice}
                         loading={uploading}
                         icon={<UploadOutlined />}
                     >

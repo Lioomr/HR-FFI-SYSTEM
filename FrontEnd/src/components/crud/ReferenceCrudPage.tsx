@@ -16,6 +16,8 @@ import { apply422ToForm } from "../../utils/formErrors";
 import { isForbidden } from "../../services/api/httpErrors";
 import { notifySuccess, notifyError } from "../../utils/notify";
 import { useI18n } from "../../i18n/useI18n";
+import { useAuthStore } from "../../auth/authStore";
+import { isHeadOfficeOrganization } from "../../utils/organizationContext";
 
 /**
  * Generic props for ReferenceCrudPage component
@@ -77,6 +79,8 @@ export function ReferenceCrudPage<TItem = any, TCreate = any, TUpdate = any>({
     disableEdit,
 }: ReferenceCrudPageProps<TItem, TCreate, TUpdate>) {
     const { t } = useI18n();
+    const user = useAuthStore((state) => state.user);
+    const isHeadOffice = isHeadOfficeOrganization(user);
     // State management
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -152,6 +156,10 @@ export function ReferenceCrudPage<TItem = any, TCreate = any, TUpdate = any>({
      * Handle create submission
      */
     const handleCreate = async () => {
+        if (isHeadOffice) {
+            notifyError(t("organization.headOffice.switchToCreateRecords"));
+            return;
+        }
         try {
             const values = await createFormInstance.validateFields();
             const payload = transformCreateValues ? transformCreateValues(values) : values;
@@ -211,6 +219,10 @@ export function ReferenceCrudPage<TItem = any, TCreate = any, TUpdate = any>({
      */
     const handleEdit = async () => {
         if (!currentRow) return;
+        if (isHeadOffice) {
+            notifyError(t("organization.headOffice.switchToEditRecords"));
+            return;
+        }
 
         try {
             const values = await editFormInstance.validateFields();
@@ -299,7 +311,7 @@ export function ReferenceCrudPage<TItem = any, TCreate = any, TUpdate = any>({
                     <Button
                         icon={<EditOutlined />}
                         onClick={() => openEditModal(record)}
-                        disabled={disableEdit ? disableEdit(record) : false}
+                        disabled={isHeadOffice || (disableEdit ? disableEdit(record) : false)}
                     >
                         {t("common.edit")}
                     </Button>
@@ -335,8 +347,8 @@ export function ReferenceCrudPage<TItem = any, TCreate = any, TUpdate = any>({
             <EmptyState
                 title={t("common.noData")}
                 description={t("reference.noItemsFound", { entity: entityName }, `No ${entityName} found.`)}
-                actionText={createForm ? `${t("common.create")} ${entityName}` : undefined}
-                onAction={createForm ? () => setCreateModalOpen(true) : undefined}
+                actionText={createForm && !isHeadOffice ? `${t("common.create")} ${entityName}` : undefined}
+                onAction={createForm && !isHeadOffice ? () => setCreateModalOpen(true) : undefined}
             />
         );
     }
@@ -362,6 +374,7 @@ export function ReferenceCrudPage<TItem = any, TCreate = any, TUpdate = any>({
                             <Button
                                 type="primary"
                                 icon={<PlusOutlined />}
+                                disabled={isHeadOffice}
                                 onClick={() => {
                                     createFormInstance.resetFields();
                                     if (initialCreateValues) {
@@ -369,6 +382,7 @@ export function ReferenceCrudPage<TItem = any, TCreate = any, TUpdate = any>({
                                     }
                                     setCreateModalOpen(true);
                                 }}
+                                title={isHeadOffice ? t("organization.headOffice.switchToCreateRecords") : undefined}
                             >
                                 {`${t("common.create")} ${entityName}`}
                             </Button>

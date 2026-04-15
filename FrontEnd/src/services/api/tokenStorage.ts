@@ -15,6 +15,10 @@ type StoredUser = {
   id: string;
   email: string;
   role: string;
+  accessible_organizations?: unknown[];
+  default_organization_id?: string | number | null;
+  has_all_company_access?: boolean;
+  active_organization_id?: string | number | null;
 };
 
 export function getStoredUser(): StoredUser | null {
@@ -27,12 +31,24 @@ export function getStoredUser(): StoredUser | null {
   }
 }
 
-export function setStoredUser(user: { id: string; email: string; role: string }) {
+export function setStoredUser(user: {
+  id: string;
+  email: string;
+  role: string;
+  accessible_organizations?: unknown[];
+  default_organization_id?: string | number | null;
+  has_all_company_access?: boolean;
+  active_organization_id?: string | number | null;
+}) {
   const stored: StoredUser = {
     v: 1,
     id: user.id,
     email: user.email,
     role: user.role,
+    accessible_organizations: user.accessible_organizations,
+    default_organization_id: user.default_organization_id,
+    has_all_company_access: user.has_all_company_access,
+    active_organization_id: user.active_organization_id ?? user.default_organization_id ?? null,
   };
   sessionStorage.setItem(USER_KEY, JSON.stringify(stored));
 }

@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Card, Col, Form, Grid, Row, Select, notification } from "antd";
+import { Alert, Button, Card, Col, Form, Grid, Row, Select, notification } from "antd";
 import PageHeader from "../../../components/ui/PageHeader";
 import { createPayrollRun, getPayrollRuns } from "../../../services/api/payrollApi";
 import { isApiError } from "../../../services/api/apiTypes";
 import { useI18n } from "../../../i18n/useI18n";
+import { useAuthStore } from "../../../auth/authStore";
+import { isHeadOfficeOrganization } from "../../../utils/organizationContext";
 
 const { Option } = Select;
 const { useBreakpoint } = Grid;
@@ -13,11 +15,20 @@ export default function CreatePayrollRunPage() {
     const navigate = useNavigate();
     const [form] = Form.useForm();
     const { t } = useI18n();
+    const user = useAuthStore((state) => state.user);
     const [submitting, setSubmitting] = useState(false);
     const screens = useBreakpoint();
     const isMobile = !screens.md;
+    const isHeadOffice = isHeadOfficeOrganization(user);
 
     const handleSubmit = async (values: { year: number; month: number }) => {
+        if (isHeadOffice) {
+            notification.info({
+                message: t("organization.headOffice.readOnlyTitle"),
+                description: t("organization.headOffice.createPayrollDescription"),
+            });
+            return;
+        }
         setSubmitting(true);
 
         try {
@@ -140,6 +151,16 @@ export default function CreatePayrollRunPage() {
                 subtitle={t("payroll.createDesc")}
             />
 
+            {isHeadOffice && (
+                <Alert
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 16, borderRadius: 14 }}
+                    message={t("organization.headOffice.readOnlyTitle")}
+                    description={t("organization.headOffice.selectCompanyBeforePayroll")}
+                />
+            )}
+
             <Card style={{ borderRadius: 16 }}>
                 <Form
                     form={form}
@@ -192,7 +213,7 @@ export default function CreatePayrollRunPage() {
                         <Button onClick={() => navigate("/hr/payroll")} block={isMobile}>
                             {t("common.cancel")}
                         </Button>
-                        <Button type="primary" htmlType="submit" loading={submitting} block={isMobile}>
+                        <Button type="primary" htmlType="submit" loading={submitting} disabled={isHeadOffice} block={isMobile}>
                             {t("payroll.createTitle")}
                         </Button>
                     </div>

@@ -5,6 +5,7 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from hr_reference.models import Department, Position, Sponsor, TaskGroup
+from organization.models import OrganizationNode
 
 from .storage import PrivateUploadStorage
 
@@ -26,6 +27,14 @@ class EmployeeProfile(models.Model):
         null=True,
         blank=True,
         help_text=_("Linked user account. Optional."),
+    )
+    company = models.ForeignKey(
+        OrganizationNode,
+        on_delete=models.PROTECT,
+        related_name="employee_profiles",
+        null=True,
+        blank=True,
+        help_text=_("Owning company for this employee profile."),
     )
 
     employee_id = models.CharField(

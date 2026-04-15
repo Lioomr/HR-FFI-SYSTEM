@@ -4,10 +4,14 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined } from '@ant
 import { useNavigate } from 'react-router-dom';
 import { getAllAnnouncements, deleteAnnouncement, type AnnouncementListItem } from '../../../services/api/announcementApi';
 import { useI18n } from '../../../i18n/useI18n';
+import { useAuthStore } from '../../../auth/authStore';
+import { isHeadOfficeOrganization } from '../../../utils/organizationContext';
 
 export default function AnnouncementsManagementPage() {
     const navigate = useNavigate();
     const { t } = useI18n();
+    const user = useAuthStore((state) => state.user);
+    const isHeadOffice = isHeadOfficeOrganization(user);
     const [loading, setLoading] = useState(false);
     const [data, setData] = useState<AnnouncementListItem[]>([]);
     const [pagination, setPagination] = useState({
@@ -41,6 +45,7 @@ export default function AnnouncementsManagementPage() {
     }, []);
 
     const handleDelete = async (id: number) => {
+        if (isHeadOffice) return;
         try {
             await deleteAnnouncement(id);
             message.success(t('hr.announcements.successDeleted'));
@@ -101,6 +106,12 @@ export default function AnnouncementsManagementPage() {
             dataIndex: 'created_by_name',
             key: 'created_by',
         },
+        ...(isHeadOffice ? [{
+            title: t('common.company', 'Company'),
+            dataIndex: 'company_name',
+            key: 'company_name',
+            render: (value?: string) => value ? <Tag color="blue">{value}</Tag> : '-',
+        }] : []),
         {
             title: t('common.date'),
             dataIndex: 'created_at',
@@ -116,6 +127,8 @@ export default function AnnouncementsManagementPage() {
                         <Button
                             type="text"
                             icon={<EditOutlined style={{ color: '#faad14' }} />}
+                            disabled={isHeadOffice}
+                            title={isHeadOffice ? t('organization.headOffice.switchToEditRecords') : undefined}
                             onClick={() => navigate(`/hr/announcements/${record.id}/edit`)}
                         />
                     </Tooltip>
@@ -126,7 +139,13 @@ export default function AnnouncementsManagementPage() {
                         okText={t('common.yes')}
                         cancelText={t('common.no')}
                     >
-                        <Button type="text" danger icon={<DeleteOutlined />} />
+                        <Button
+                            type="text"
+                            danger
+                            icon={<DeleteOutlined />}
+                            disabled={isHeadOffice}
+                            title={isHeadOffice ? t('organization.headOffice.switchToEditRecords') : undefined}
+                        />
                     </Popconfirm>
                 </Space>
             ),
@@ -145,6 +164,8 @@ export default function AnnouncementsManagementPage() {
                         type="primary"
                         icon={<PlusOutlined />}
                         onClick={() => navigate('/hr/announcements/create')}
+                        disabled={isHeadOffice}
+                        title={isHeadOffice ? t('organization.headOffice.switchToCreateRecords') : undefined}
                         style={{ background: '#FF7F3E', borderColor: '#FF7F3E' }}
                     >
                         {t('hr.announcements.createButton')}

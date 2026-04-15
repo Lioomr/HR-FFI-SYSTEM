@@ -4,6 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from audit.utils import audit
 from core.permissions import IsHRManagerOrAdmin
 from core.responses import success
+from organization.services import ensure_company_write_allowed, filter_queryset_by_company_scope, get_active_company_for_request
 
 from .models import Department, Position, Sponsor, TaskGroup
 from .serializers import (
@@ -20,7 +21,7 @@ class BaseReferenceViewSet(viewsets.ModelViewSet):
     audit_entity = ""
 
     def get_queryset(self):
-        return self.queryset.filter(is_active=True)
+        return filter_queryset_by_company_scope(self.queryset.filter(is_active=True), self.request)
 
     def list(self, request, *args, **kwargs):
         response = super().list(request, *args, **kwargs)
@@ -62,7 +63,10 @@ class BaseReferenceViewSet(viewsets.ModelViewSet):
         return success({})
 
     def perform_create(self, serializer):
-        instance = serializer.save()
+        ensure_company_write_allowed(self.request)
+        company = get_active_company_for_request(self.request)
+        self.request._active_company = company
+        instance = serializer.save(company=company)
         audit(
             self.request,
             f"{self.audit_entity}.created",
@@ -72,6 +76,7 @@ class BaseReferenceViewSet(viewsets.ModelViewSet):
         )
 
     def perform_update(self, serializer):
+        ensure_company_write_allowed(self.request)
         instance = serializer.instance
         before = {
             "id": instance.id,

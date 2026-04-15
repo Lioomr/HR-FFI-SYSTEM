@@ -16,6 +16,8 @@ import {
 import dayjs from "dayjs";
 import { getCountryCode } from "../../../utils/countries";
 import { useI18n } from "../../../i18n/useI18n";
+import { useAuthStore } from "../../../auth/authStore";
+import { isHeadOfficeOrganization } from "../../../utils/organizationContext";
 
 /**
  * Custom debounce hook
@@ -166,6 +168,10 @@ const StatusBadge = ({ status, t }: { status?: string; t: (k: string, f?: string
 export default function EmployeesListPage() {
     const navigate = useNavigate();
     const { t } = useI18n();
+    const user = useAuthStore((state) => state.user);
+    const activeOrganizationId = useAuthStore((state) => state.user?.active_organization_id ?? state.user?.default_organization_id ?? null);
+    const isHeadOffice = isHeadOfficeOrganization(user);
+    const previousOrganizationIdRef = useRef<string | number | null>(null);
 
     // State from Zustand store (persisted)
     const {
@@ -247,6 +253,10 @@ export default function EmployeesListPage() {
             const response = await listEmployees(params);
 
             if (isApiError(response)) {
+                if ((response.message || "").toLowerCase().includes("invalid page") && page > 1) {
+                    setPage(1);
+                    return;
+                }
                 setError(response.message || t("error.generic"));
                 setLoading(false);
                 return;
@@ -258,6 +268,12 @@ export default function EmployeesListPage() {
         } catch (err: any) {
             if (isForbidden(err)) {
                 setForbidden(true);
+                setLoading(false);
+                return;
+            }
+
+            if ((err?.message || "").toLowerCase().includes("invalid page") && page > 1) {
+                setPage(1);
                 setLoading(false);
                 return;
             }
@@ -311,6 +327,18 @@ export default function EmployeesListPage() {
     useEffect(() => {
         loadEmployees();
     }, [loadEmployees]);
+
+    useEffect(() => {
+        if (previousOrganizationIdRef.current === null) {
+            previousOrganizationIdRef.current = activeOrganizationId;
+            return;
+        }
+
+        if (previousOrganizationIdRef.current !== activeOrganizationId) {
+            previousOrganizationIdRef.current = activeOrganizationId;
+            setPage(1);
+        }
+    }, [activeOrganizationId, setPage]);
 
     const debouncedSearch = useDebounce((value: string) => {
         setSearch(value);
@@ -470,6 +498,13 @@ export default function EmployeesListPage() {
             )
         },
         {
+            title: t("common.company", "Company"),
+            dataIndex: "company_name",
+            key: "company",
+            width: 170,
+            render: (text) => <Text strong>{text || "-"}</Text>
+        },
+        {
             title: t("employees.list.colPosition"),
             dataIndex: "position",
             key: "position",
@@ -520,13 +555,16 @@ export default function EmployeesListPage() {
         }
     ];
 
-    const columns = useMemo(
-        () => allColumns.filter((column) => visibleColumnKeys.includes(String(column.key))),
-        [allColumns, visibleColumnKeys]
-    );
+    const columns = useMemo(() => {
+        const keys = isHeadOffice && !visibleColumnKeys.includes("company")
+            ? ["company", ...visibleColumnKeys]
+            : visibleColumnKeys;
+        return allColumns.filter((column) => keys.includes(String(column.key)));
+    }, [allColumns, visibleColumnKeys, isHeadOffice]);
 
     const columnOptions = [
         { label: t("employees.list.colName"), value: "full_name" },
+        { label: t("common.company", "Company"), value: "company" },
         { label: t("employees.list.colNationality"), value: "nationality" },
         { label: t("employees.list.colPosition"), value: "position" },
         { label: t("employees.list.colDepartment"), value: "department" },
@@ -591,6 +629,8 @@ export default function EmployeesListPage() {
                     size="large"
                     icon={<PlusOutlined />}
                     onClick={() => navigate("/hr/employees/create")}
+                    disabled={isHeadOffice}
+                    title={isHeadOffice ? t("organization.headOffice.switchToCreateEmployees") : undefined}
                     style={{
                         backgroundColor: '#fa8c16',
                         borderColor: '#fa8c16',
@@ -598,7 +638,8 @@ export default function EmployeesListPage() {
                         height: 44,
                         paddingLeft: 24,
                         paddingRight: 24,
-                        boxShadow: '0 4px 10px rgba(250, 140, 22, 0.2)'
+                        boxShadow: '0 4px 10px rgba(250, 140, 22, 0.2)',
+                        opacity: isHeadOffice ? 0.65 : 1,
                     }}
                 >
                     {t("employees.list.createEmployee")}
