@@ -1,0 +1,37 @@
+# Python virtual environments
+.venv/
+venv/
+Backend/.venv/
+
+# Local environment files
+.env
+.env.*
+Backend/.env
+!Backend/.env.example
+!Backend/.env.production.example
+!Backend/.env.docker.example
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Node dependencies and build artifacts
+node_modules/
+FrontEnd/node_modules/
+dist/
+build/
+
+# Spreadsheet files
+*.xls
+*.xlsx
+*.xlsm
+
+# Local tooling and scratch files
+.cursor/
+.cursorrules
+.playwright-cli/
+tmp/
+ai_evals/
+.github/copilot-instructions.md
+leave_request_4 (2).pdf
+*AutoRecovered*.pdf
