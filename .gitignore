@@ -35,3 +35,10 @@ ai_evals/
 .github/copilot-instructions.md
 leave_request_4 (2).pdf
 *AutoRecovered*.pdf
+
+# Local transfer/docs/scripts artifacts
+BioTime 8.5 API User Manual.pdf
+biotime_manual.txt
+cols.json
+output/
+scripts/
