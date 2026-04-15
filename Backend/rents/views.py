@@ -8,6 +8,7 @@ from core.pagination import StandardPagination
 from core.permissions import get_role
 from core.responses import error, success
 from employees.permissions import IsHRManagerOnly
+from organization.services import ensure_company_write_allowed, filter_queryset_by_company_scope, get_active_company_for_request
 
 from .models import Rent, RentType
 from .serializers import RentReadSerializer, RentTypeSerializer, RentTypeWriteSerializer, RentWriteSerializer
@@ -18,10 +19,18 @@ class RentTypeViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsHRManagerOnly]
     queryset = RentType.objects.filter(is_active=True).order_by("code")
 
+    def get_queryset(self):
+        return filter_queryset_by_company_scope(super().get_queryset(), self.request)
+
     def get_serializer_class(self):
         if self.action in ["create", "update", "partial_update"]:
             return RentTypeWriteSerializer
         return RentTypeSerializer
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["request"]._active_company = get_active_company_for_request(self.request)
+        return context
 
     def list(self, request, *args, **kwargs):
         serializer = self.get_serializer(self.get_queryset(), many=True)
@@ -32,10 +41,12 @@ class RentTypeViewSet(viewsets.ModelViewSet):
         return success(serializer.data)
 
     def create(self, request, *args, **kwargs):
+        ensure_company_write_allowed(request)
+        company = get_active_company_for_request(request)
         serializer = self.get_serializer(data=request.data)
         if not serializer.is_valid():
             return error("Validation error", errors=serializer.errors, status=422)
-        instance = serializer.save()
+        instance = serializer.save(company=company)
         audit(request, "rent_type_created", entity="rent_type", entity_id=instance.id, metadata=serializer.data)
         return success(RentTypeSerializer(instance).data, status=status.HTTP_201_CREATED)
 
@@ -64,10 +75,18 @@ class RentViewSet(viewsets.ModelViewSet):
     pagination_class = StandardPagination
     queryset = Rent.objects.filter(is_active=True).select_related("rent_type", "asset", "created_by", "updated_by")
 
+    def get_queryset(self):
+        return filter_queryset_by_company_scope(super().get_queryset(), self.request)
+
     def get_serializer_class(self):
         if self.action in ["create", "update", "partial_update"]:
             return RentWriteSerializer
         return RentReadSerializer
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["request"]._active_company = get_active_company_for_request(self.request)
+        return context
 
     def _apply_query_filters(self, queryset):
         params = self.request.query_params
@@ -121,10 +140,12 @@ class RentViewSet(viewsets.ModelViewSet):
         return success(serializer.data)
 
     def create(self, request, *args, **kwargs):
+        ensure_company_write_allowed(request)
+        company = get_active_company_for_request(request)
         serializer = self.get_serializer(data=request.data)
         if not serializer.is_valid():
             return error("Validation error", errors=serializer.errors, status=422)
-        instance = serializer.save(created_by=request.user, updated_by=request.user)
+        instance = serializer.save(created_by=request.user, updated_by=request.user, company=company)
         audit(
             request,
             "rent_created",

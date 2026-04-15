@@ -1,5 +1,9 @@
-import { Space, Typography } from "antd";
+import { LockOutlined } from "@ant-design/icons";
+import { Space, Tag, Typography } from "antd";
 import type { ReactNode } from "react";
+import { useAuthStore } from "../../auth/authStore";
+import { useI18n } from "../../i18n/useI18n";
+import { isHeadOfficeOrganization } from "../../utils/organizationContext";
 
 export default function PageHeader({
   title,
@@ -16,6 +20,10 @@ export default function PageHeader({
   tags?: ReactNode;
   actions?: ReactNode;
 }) {
+  const user = useAuthStore((state) => state.user);
+  const { t } = useI18n();
+  const isHeadOffice = isHeadOfficeOrganization(user);
+
   return (
     <div style={{ marginBottom: 24 }}>
       {breadcrumb && (
@@ -71,6 +79,23 @@ export default function PageHeader({
                 {title}
               </Typography.Title>
               {tags}
+              {isHeadOffice && (
+                <Tag
+                  icon={<LockOutlined />}
+                  color="default"
+                  style={{
+                    marginInlineStart: 4,
+                    paddingInline: 10,
+                    borderRadius: 999,
+                    borderColor: "#cbd5e1",
+                    color: "#475569",
+                    background: "#f8fafc",
+                    fontWeight: 600,
+                  }}
+                >
+                  {t("organization.headOffice.badge")}
+                </Tag>
+              )}
             </Space>
             {(subtitle || secondarySubtitle) && (
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: -2 }}>

@@ -3,11 +3,19 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from employees.storage import PrivateUploadStorage
+from organization.models import OrganizationNode
 
 
 class LeaveType(models.Model):
-    name = models.CharField(max_length=50, unique=True)
-    code = models.CharField(max_length=20, unique=True, blank=True, help_text=_("Optional code (e.g. ANNUAL, SICK)"))
+    company = models.ForeignKey(
+        OrganizationNode,
+        on_delete=models.PROTECT,
+        related_name="leave_types",
+        null=True,
+        blank=True,
+    )
+    name = models.CharField(max_length=50)
+    code = models.CharField(max_length=20, blank=True, help_text=_("Optional code (e.g. ANNUAL, SICK)"))
     is_paid = models.BooleanField(default=True)
     requires_attachment = models.BooleanField(default=False)
     requires_ceo_approval = models.BooleanField(default=False, help_text=_("If true, requires CEO approval after HR."))
@@ -34,6 +42,12 @@ class LeaveType(models.Model):
     def __str__(self):
         return self.name
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["company", "name"], name="uniq_leave_type_company_name"),
+            models.UniqueConstraint(fields=["company", "code"], name="uniq_leave_type_company_code"),
+        ]
+
 
 class LeaveRequest(models.Model):
     class RequestSource(models.TextChoices):
@@ -56,6 +70,13 @@ class LeaveRequest(models.Model):
         null=True,
         blank=True,
         help_text=_("The employee requesting leave."),
+    )
+    company = models.ForeignKey(
+        OrganizationNode,
+        on_delete=models.PROTECT,
+        related_name="leave_requests",
+        null=True,
+        blank=True,
     )
     employee_profile = models.ForeignKey(
         "employees.EmployeeProfile",
@@ -194,6 +215,13 @@ class LeaveBalanceAdjustment(models.Model):
         null=True,
         blank=True,
         help_text=_("The employee whose balance is adjusted."),
+    )
+    company = models.ForeignKey(
+        OrganizationNode,
+        on_delete=models.PROTECT,
+        related_name="leave_balance_adjustments",
+        null=True,
+        blank=True,
     )
     employee_profile = models.ForeignKey(
         "employees.EmployeeProfile",

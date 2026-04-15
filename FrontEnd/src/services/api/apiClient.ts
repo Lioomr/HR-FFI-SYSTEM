@@ -24,6 +24,10 @@ function shouldRedirectOnUnauthorized(err: any): boolean {
 api.interceptors.request.use((config) => {
   const token = getToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
+  const activeOrganizationId = useAuthStore.getState().user?.active_organization_id;
+  if (activeOrganizationId) {
+    config.headers["X-Active-Company-Id"] = String(activeOrganizationId);
+  }
 
   // Attach current language for backend i18n
   const lang = localStorage.getItem("ffi_app_language") || "en";

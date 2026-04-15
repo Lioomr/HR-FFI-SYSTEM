@@ -7,6 +7,7 @@ from django.utils.translation import gettext_lazy as _
 
 from employees.models import EmployeeProfile
 from employees.storage import PrivateUploadStorage
+from organization.models import OrganizationNode
 
 
 class AssetCodeSequence(models.Model):
@@ -39,6 +40,13 @@ class Asset(models.Model):
     }
 
     asset_code = models.CharField(max_length=20, unique=True, editable=False, db_index=True)
+    company = models.ForeignKey(
+        OrganizationNode,
+        on_delete=models.PROTECT,
+        related_name="assets",
+        null=True,
+        blank=True,
+    )
     name_en = models.CharField(max_length=255)
     name_ar = models.CharField(max_length=255, blank=True)
     type = models.CharField(max_length=20, choices=AssetType.choices)

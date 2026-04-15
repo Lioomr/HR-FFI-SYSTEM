@@ -3,6 +3,7 @@ from rest_framework import serializers
 
 from core.permissions import get_role
 from hr_reference.models import Department, Position, Sponsor, TaskGroup
+from organization.models import OrganizationNode
 
 from .models import EmployeeImport, EmployeeProfile
 
@@ -38,6 +39,8 @@ class EmployeeProfileReadSerializer(serializers.ModelSerializer):
     position_id = serializers.PrimaryKeyRelatedField(source="position_ref", read_only=True)
     task_group_id = serializers.PrimaryKeyRelatedField(source="task_group_ref", read_only=True)
     sponsor_id = serializers.PrimaryKeyRelatedField(source="sponsor_ref", read_only=True)
+    company_id = serializers.PrimaryKeyRelatedField(source="company", read_only=True)
+    company_name = serializers.CharField(source="company.name", read_only=True)
 
     class Meta:
         model = EmployeeProfile
@@ -76,6 +79,8 @@ class EmployeeProfileReadSerializer(serializers.ModelSerializer):
             "task_group_id",
             "sponsor",
             "sponsor_id",
+            "company_id",
+            "company_name",
             "job_title",
             "job_offer",
             "hire_date",
@@ -157,28 +162,10 @@ class EmployeeProfileReadSerializer(serializers.ModelSerializer):
 
 
 class EmployeeProfileWriteSerializer(serializers.ModelSerializer):
-    department_id = serializers.PrimaryKeyRelatedField(
-        queryset=Department.objects.all(),
-        source="department_ref",
-        required=True,
-    )
-    position_id = serializers.PrimaryKeyRelatedField(
-        queryset=Position.objects.all(),
-        source="position_ref",
-        required=True,
-    )
-    task_group_id = serializers.PrimaryKeyRelatedField(
-        queryset=TaskGroup.objects.all(),
-        source="task_group_ref",
-        required=False,
-        allow_null=True,
-    )
-    sponsor_id = serializers.PrimaryKeyRelatedField(
-        queryset=Sponsor.objects.all(),
-        source="sponsor_ref",
-        required=False,
-        allow_null=True,
-    )
+    department_id = serializers.PrimaryKeyRelatedField(queryset=Department.objects.none(), source="department_ref", required=True)
+    position_id = serializers.PrimaryKeyRelatedField(queryset=Position.objects.none(), source="position_ref", required=True)
+    task_group_id = serializers.PrimaryKeyRelatedField(queryset=TaskGroup.objects.none(), source="task_group_ref", required=False, allow_null=True)
+    sponsor_id = serializers.PrimaryKeyRelatedField(queryset=Sponsor.objects.none(), source="sponsor_ref", required=False, allow_null=True)
     join_date = serializers.DateField(source="hire_date", required=True)
     user_id = serializers.PrimaryKeyRelatedField(
         queryset=User.objects.all(),
@@ -186,12 +173,7 @@ class EmployeeProfileWriteSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True,
     )
-    manager_profile_id = serializers.PrimaryKeyRelatedField(
-        queryset=EmployeeProfile.objects.all(),
-        source="manager_profile",
-        required=False,
-        allow_null=True,
-    )
+    manager_profile_id = serializers.PrimaryKeyRelatedField(queryset=EmployeeProfile.objects.none(), source="manager_profile", required=False, allow_null=True)
 
     class Meta:
         model = EmployeeProfile
@@ -246,6 +228,19 @@ class EmployeeProfileWriteSerializer(serializers.ModelSerializer):
             "manager_profile_id",
         ]
         read_only_fields = ["id", "employee_id"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get("request")
+        company = getattr(request, "_active_company", None) if request else None
+        if self.instance and getattr(self.instance, "company_id", None):
+            company = self.instance.company
+        if company is not None:
+            self.fields["department_id"].queryset = Department.objects.filter(company=company, is_active=True)
+            self.fields["position_id"].queryset = Position.objects.filter(company=company, is_active=True)
+            self.fields["task_group_id"].queryset = TaskGroup.objects.filter(company=company, is_active=True)
+            self.fields["sponsor_id"].queryset = Sponsor.objects.filter(company=company, is_active=True)
+            self.fields["manager_profile_id"].queryset = EmployeeProfile.objects.filter(company=company)
 
     def validate_full_name(self, value):
         if not value.strip():

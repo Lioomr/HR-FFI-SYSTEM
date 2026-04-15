@@ -14,6 +14,8 @@ export interface AssetAssignmentSummary {
 
 export interface Asset {
   id: number;
+  company_id?: number;
+  company_name?: string;
   asset_code: string;
   name?: string;
   name_en: string;
@@ -87,6 +89,8 @@ export interface AssetDashboardSummary {
 
 export interface AssetDamageReport {
   id: number;
+  company_id?: number;
+  company_name?: string;
   asset: number;
   asset_code: string;
   asset_name: string;
@@ -102,6 +106,8 @@ export interface AssetDamageReport {
 
 export interface AssetReturnRequest {
   id: number;
+  company_id?: number;
+  company_name?: string;
   asset: number;
   asset_code: string;
   asset_name: string;

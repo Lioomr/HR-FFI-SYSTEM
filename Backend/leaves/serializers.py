@@ -30,6 +30,9 @@ class UserSummarySerializer(serializers.ModelSerializer):
 
 
 class LeaveTypeSerializer(serializers.ModelSerializer):
+    company_id = serializers.PrimaryKeyRelatedField(source="company", read_only=True)
+    company_name = serializers.CharField(source="company.name", read_only=True)
+
     class Meta:
         model = LeaveType
         fields = "__all__"
@@ -54,6 +57,8 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
     payment_status = serializers.SerializerMethodField()
     deducted_from_leave_type = serializers.SerializerMethodField()
     workflow = serializers.SerializerMethodField()
+    company_id = serializers.PrimaryKeyRelatedField(source="company", read_only=True)
+    company_name = serializers.CharField(source="company.name", read_only=True)
 
     class Meta:
         model = LeaveRequest
@@ -169,6 +174,7 @@ class LeaveRequestCreateSerializer(serializers.ModelSerializer):
         # PENDING includes SUBMITTED, PENDING_MANAGER, PENDING_HR
         overlap_qs = LeaveRequest.objects.filter(
             employee=user,
+            company=getattr(getattr(user, "employee_profile", None), "company", None),
             status__in=[
                 LeaveRequest.RequestStatus.APPROVED,
                 LeaveRequest.RequestStatus.SUBMITTED,
@@ -302,6 +308,7 @@ class HRManualLeaveRequestSerializer(serializers.ModelSerializer):
         return LeaveRequest.objects.create(
             employee=employee_profile.user,
             employee_profile=employee_profile,
+            company=employee_profile.company,
             status=LeaveRequest.RequestStatus.APPROVED,
             source=LeaveRequest.RequestSource.HR_MANUAL,
             entered_by=request_user,
@@ -369,4 +376,5 @@ class LeaveBalanceAdjustmentSerializer(serializers.ModelSerializer):
 
         validated_data["employee_profile"] = profile
         validated_data["employee"] = profile.user
+        validated_data["company"] = profile.company
         return super().create(validated_data)

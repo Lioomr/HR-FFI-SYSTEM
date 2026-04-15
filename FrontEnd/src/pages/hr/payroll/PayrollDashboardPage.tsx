@@ -15,6 +15,8 @@ import { getPayrollRuns } from "../../../services/api/payrollApi";
 import { isApiError } from "../../../services/api/apiTypes";
 import { isForbidden } from "../../../services/api/httpErrors";
 import AmountWithSAR from "../../../components/ui/AmountWithSAR";
+import { useAuthStore } from "../../../auth/authStore";
+import { isHeadOfficeOrganization } from "../../../utils/organizationContext";
 
 const { Option } = Select;
 const { useBreakpoint } = Grid;
@@ -22,8 +24,10 @@ const { useBreakpoint } = Grid;
 export default function PayrollDashboardPage() {
     const navigate = useNavigate();
     const { t } = useI18n();
+    const user = useAuthStore((state) => state.user);
     const screens = useBreakpoint();
     const isMobile = !screens.md;
+    const isHeadOffice = isHeadOfficeOrganization(user);
 
     // State
     const [loading, setLoading] = useState(true);
@@ -66,6 +70,15 @@ export default function PayrollDashboardPage() {
             },
             width: 120,
         },
+        ...(isHeadOffice
+            ? [{
+                title: t("common.company", "Company"),
+                dataIndex: "company_name",
+                key: "company_name",
+                render: (value?: string) => value ? <Tag color="blue">{value}</Tag> : "-",
+                width: 170,
+            }]
+            : []),
         {
             title: t("payroll.employees"),
             dataIndex: "total_employees",
@@ -140,6 +153,8 @@ export default function PayrollDashboardPage() {
                         type="primary"
                         icon={<PlusOutlined />}
                         onClick={() => navigate("/hr/payroll/create")}
+                        disabled={isHeadOffice}
+                        title={isHeadOffice ? t("organization.headOffice.switchToCreatePayroll") : undefined}
                         block={isMobile}
                     >
                         {t("payroll.createRun")}
@@ -214,8 +229,8 @@ export default function PayrollDashboardPage() {
                             <EmptyState
                                 title={t("payroll.noRuns")}
                                 description={t("payroll.createRun")}
-                                actionText={t("payroll.createRun")}
-                                onAction={() => navigate("/hr/payroll/create")}
+                                actionText={isHeadOffice ? undefined : t("payroll.createRun")}
+                                onAction={isHeadOffice ? undefined : () => navigate("/hr/payroll/create")}
                             />
                         ) : undefined
                     }}

@@ -19,6 +19,8 @@ export interface LeaveType {
  */
 export interface LeaveRequest {
   id: number;
+  company_id?: number;
+  company_name?: string;
   // Backend returns nested objects
   employee: {
     id: number;

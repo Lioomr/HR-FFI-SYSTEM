@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Card, Form, Space } from "antd";
+import { Alert, Button, Card, Form, Space } from "antd";
 import PageHeader from "../../../components/ui/PageHeader";
 import LoadingState from "../../../components/ui/LoadingState";
 import Unauthorized403Page from "../../Unauthorized403Page";
@@ -22,11 +22,15 @@ import type { Sponsor } from "../../../services/api/sponsorsApi";
 import { toPayload } from "./employeeFormMapper";
 import EmployeeForm from "./EmployeeForm";
 import { useI18n } from "../../../i18n/useI18n";
+import { useAuthStore } from "../../../auth/authStore";
+import { isHeadOfficeOrganization } from "../../../utils/organizationContext";
 
 export default function CreateEmployeePage() {
     const { t } = useI18n();
     const navigate = useNavigate();
+    const user = useAuthStore((state) => state.user);
     const [form] = Form.useForm();
+    const isHeadOffice = isHeadOfficeOrganization(user);
 
     // State
     const [loading, setLoading] = useState(true);
@@ -102,6 +106,10 @@ export default function CreateEmployeePage() {
      * Handle form submission
      */
     const handleSubmit = async () => {
+        if (isHeadOffice) {
+            notifyError(t("organization.headOffice.switchToCreateEmployees"));
+            return;
+        }
         try {
             // Validate form
             const values = await form.validateFields();
@@ -180,6 +188,16 @@ export default function CreateEmployeePage() {
                     </Space>
                 }
             />
+
+            {isHeadOffice && (
+                <Alert
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 16, borderRadius: 14 }}
+                    message={t("organization.headOffice.readOnlyTitle")}
+                    description={t("organization.headOffice.createEmployeeDescription")}
+                />
+            )}
 
             <Card style={{ borderRadius: 16 }}>
                 <EmployeeForm

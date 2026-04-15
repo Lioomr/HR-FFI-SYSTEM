@@ -23,10 +23,14 @@ import { isForbidden } from "../../../services/api/httpErrors";
 import AnnouncementWidget from "../../../components/announcements/AnnouncementWidget";
 import AmountWithSAR from "../../../components/ui/AmountWithSAR";
 import { useI18n } from "../../../i18n/useI18n";
+import { useAuthStore } from "../../../auth/authStore";
+import { isHeadOfficeOrganization } from "../../../utils/organizationContext";
 
 export default function HRDashboardPage() {
     const navigate = useNavigate();
     const { t } = useI18n();
+    const user = useAuthStore((state) => state.user);
+    const isHeadOffice = isHeadOfficeOrganization(user);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [forbidden, setForbidden] = useState(false);
@@ -147,7 +151,8 @@ export default function HRDashboardPage() {
                     {quickActions.map((action, i) => (
                         <button
                             key={i}
-                            onClick={action.path ? () => navigate(action.path!) : undefined}
+                            onClick={action.path && !isHeadOffice ? () => navigate(action.path!) : undefined}
+                            disabled={isHeadOffice && Boolean(action.path)}
                             style={{
                                 display: "inline-flex",
                                 alignItems: "center",
@@ -159,11 +164,13 @@ export default function HRDashboardPage() {
                                 padding: "10px 20px",
                                 fontWeight: 600,
                                 fontSize: 14,
-                                cursor: action.path ? "pointer" : "default",
+                                cursor: action.path && !isHeadOffice ? "pointer" : "not-allowed",
                                 transition: "all 0.2s ease",
                                 fontFamily: "inherit",
+                                opacity: isHeadOffice && action.path ? 0.58 : 1,
                             }}
                             onMouseEnter={(e) => {
+                                if (isHeadOffice && action.path) return;
                                 (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-2px)";
                                 (e.currentTarget as HTMLButtonElement).style.filter = "brightness(0.95)";
                             }}
@@ -171,6 +178,7 @@ export default function HRDashboardPage() {
                                 (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
                                 (e.currentTarget as HTMLButtonElement).style.filter = "none";
                             }}
+                            title={isHeadOffice && action.path ? t("organization.headOffice.switchToUseAction") : undefined}
                         >
                             <span style={{ fontSize: 16 }}>{action.icon}</span>
                             {action.label}
@@ -247,6 +255,23 @@ export default function HRDashboardPage() {
                                     key: "date",
                                     render: (text: string) => <span style={{ color: "#94a3b8", fontSize: 13 }}>{text}</span>,
                                 },
+                                ...(isHeadOffice
+                                    ? [
+                                        {
+                                            title: t("common.company", "Company"),
+                                            dataIndex: "company_name",
+                                            key: "company_name",
+                                            render: (value?: string | null) =>
+                                                value ? (
+                                                    <Tag color="blue" style={{ borderRadius: 20, fontWeight: 600, fontSize: 11 }}>
+                                                        {value}
+                                                    </Tag>
+                                                ) : (
+                                                    "-"
+                                                ),
+                                        },
+                                    ]
+                                    : []),
                                 {
                                     title: t("common.details", "Details"),
                                     dataIndex: "status",
@@ -321,6 +346,11 @@ export default function HRDashboardPage() {
                                                             <Tag color={item.request_type === "ATTENDANCE" ? "gold" : item.request_type === "LOAN" ? "geekblue" : "purple"} style={{ borderRadius: 20, fontSize: 11 }}>
                                                                 {item.request_type}
                                                             </Tag>
+                                                            {isHeadOffice && item.company_name ? (
+                                                                <Tag color="blue" style={{ borderRadius: 20, fontSize: 11, marginInlineStart: 6 }}>
+                                                                    {item.company_name}
+                                                                </Tag>
+                                                            ) : null}
                                                         </div>
                                                         <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>{item.action}</div>
                                                     </div>

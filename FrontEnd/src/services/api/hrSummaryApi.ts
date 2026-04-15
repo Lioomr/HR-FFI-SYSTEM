@@ -12,11 +12,12 @@ export interface HRSummary {
   pending_approvals: Array<{
     id: number;
     name: string;
-    request_type: "LEAVE" | "ATTENDANCE" | "LOAN";
+    request_type: "LEAVE" | "ATTENDANCE" | "LOAN" | "ASSET";
     action: string;
     time: string;
     avatar: string;
     review_path: string;
+    company_name?: string | null;
   }>;
   recent_activity: Array<{
     key: string;
@@ -25,6 +26,7 @@ export interface HRSummary {
     date: string;
     status: string;
     statusColor: string;
+    company_name?: string | null;
   }>;
   latest_payroll: {
     latest_total_net: number | null;
@@ -48,6 +50,7 @@ export interface HrRecentActivityItem {
   date: string;
   status: string;
   statusColor: string;
+  company_name?: string | null;
 }
 
 export interface HrRecentActivityParams {

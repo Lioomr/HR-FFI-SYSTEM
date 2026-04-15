@@ -26,6 +26,7 @@ from audit.utils import audit
 from core.pagination import StandardPagination
 from core.responses import error, success
 from employees.permissions import IsHRManagerOrAdmin
+from organization.services import ensure_company_write_allowed, filter_queryset_by_company_scope, get_active_company_for_request
 
 from .models import PayrollRun, PayrollRunItem, Payslip
 from .permissions import IsEmployeeOnly
@@ -669,7 +670,10 @@ def _generate_payroll_items(run, request=None):
     from employees.models import EmployeeProfile
 
     # 1. Fetch active employees
-    employees = EmployeeProfile.objects.filter(employment_status=EmployeeProfile.EmploymentStatus.ACTIVE)
+    employees = EmployeeProfile.objects.filter(
+        employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        company=run.company,
+    )
 
     items_to_create = []
     payslips_to_create = []
@@ -803,7 +807,7 @@ class PayrollRunViewSet(
     pagination_class = StandardPagination
 
     def get_queryset(self):
-        qs = PayrollRun.objects.all()
+        qs = filter_queryset_by_company_scope(PayrollRun.objects.all(), self.request)
         year = self.request.query_params.get("year")
         if year:
             try:
@@ -821,6 +825,8 @@ class PayrollRunViewSet(
         return super().list(request, *args, **kwargs)
 
     def create(self, request, *args, **kwargs):
+        ensure_company_write_allowed(request)
+        company = get_active_company_for_request(request)
         serializer = self.get_serializer(data=request.data)
         if not serializer.is_valid():
             if _is_duplicate_period_error(serializer.errors):
@@ -836,7 +842,7 @@ class PayrollRunViewSet(
             )
         try:
             with transaction.atomic():
-                run = PayrollRun.objects.create(**serializer.validated_data)
+                run = PayrollRun.objects.create(company=company, **serializer.validated_data)
                 # Keep generation in the same DB transaction because it uses row locking
                 # for loan deductions (select_for_update).
                 _generate_payroll_items(run, request=request)
