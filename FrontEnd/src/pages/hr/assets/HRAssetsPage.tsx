@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Card, Col, DatePicker, Descriptions, Form, Input, InputNumber, Modal, Popconfirm, Row, Select, Space, Table, Tabs, Tag, Typography, message } from "antd";
+import { Button, Card, Checkbox, Col, DatePicker, Descriptions, Form, Input, InputNumber, Modal, Popconfirm, Row, Select, Space, Table, Tabs, Tag, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { DeleteOutlined, PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
@@ -275,6 +275,7 @@ export default function HRAssetsPage() {
                 purchase_date: record.purchase_date ? dayjs(record.purchase_date) : undefined,
                 warranty_expiry: record.warranty_expiry ? dayjs(record.warranty_expiry) : undefined,
                 serial_number: record.serial_number || undefined,
+                must_return_before_travel: record.must_return_before_travel || false,
                 notes: record.notes || undefined,
                 plate_number: record.plate_number || undefined,
                 chassis_number: record.chassis_number || undefined,
@@ -685,6 +686,7 @@ export default function HRAssetsPage() {
         asset_value: values.asset_value,
         vendor: normalizeOptional(values.vendor),
         notes: normalizeOptional(values.notes),
+        must_return_before_travel: Boolean(values.must_return_before_travel),
         flexible_attributes: flexibleAttributes,
         plate_number: normalizeOptional(values.plate_number),
         chassis_number: normalizeOptional(values.chassis_number),
@@ -967,6 +969,9 @@ export default function HRAssetsPage() {
               <Descriptions.Item label={t("assets.serialNumber")}>{activeAsset.serial_number || "-"}</Descriptions.Item>
               <Descriptions.Item label={t("assets.purchaseDate")}>{activeAsset.purchase_date || "-"}</Descriptions.Item>
               <Descriptions.Item label={t("assets.warrantyExpiry")}>{activeAsset.warranty_expiry || "-"}</Descriptions.Item>
+              <Descriptions.Item label={t("hr.assets.mustReturnBeforeTravel", "Must return before Business Trip")}>
+                {activeAsset.must_return_before_travel ? t("common.yes") : t("common.no")}
+              </Descriptions.Item>
               <Descriptions.Item label={t("common.notes")} span={2}>{activeAsset.notes || "-"}</Descriptions.Item>
 
               {activeAsset.active_assignment && (
@@ -1140,6 +1145,9 @@ export default function HRAssetsPage() {
           </Form.Item>
           <Form.Item name="notes" label={t("common.notes")}>
             <Input.TextArea rows={2} />
+          </Form.Item>
+          <Form.Item name="must_return_before_travel" valuePropName="checked">
+            <Checkbox>{t("hr.assets.mustReturnBeforeTravel", "Must return before Business Trip")}</Checkbox>
           </Form.Item>
 
           {selectedType === "VEHICLE" && (

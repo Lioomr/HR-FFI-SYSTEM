@@ -1,6 +1,6 @@
 import calendar
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError
@@ -19,6 +19,8 @@ class RentComputed:
     next_due_date: date | None
     days_remaining: int | None
     status: str
+    remaining_lease_duration: int | None
+    notification_date: date | None
 
 
 def compute_next_due_date(rent: Rent, today: date | None = None) -> date | None:
@@ -50,9 +52,32 @@ def compute_next_due_date(rent: Rent, today: date | None = None) -> date | None:
 
 def compute_rent_state(rent: Rent, today: date | None = None) -> RentComputed:
     ref_date = today or timezone.localdate()
+    if rent.lease_end_date:
+        days_remaining = (rent.lease_end_date - ref_date).days
+        if days_remaining < 0:
+            status = "OVERDUE"
+        elif days_remaining <= rent.reminder_days:
+            status = "UPCOMING"
+        else:
+            status = "SCHEDULED"
+
+        return RentComputed(
+            next_due_date=rent.lease_end_date,
+            days_remaining=days_remaining,
+            status=status,
+            remaining_lease_duration=days_remaining,
+            notification_date=rent.lease_end_date - timedelta(days=rent.reminder_days),
+        )
+
     due_date = compute_next_due_date(rent, today=ref_date)
     if due_date is None:
-        return RentComputed(next_due_date=None, days_remaining=None, status="SCHEDULED")
+        return RentComputed(
+            next_due_date=None,
+            days_remaining=None,
+            status="SCHEDULED",
+            remaining_lease_duration=None,
+            notification_date=None,
+        )
 
     days_remaining = (due_date - ref_date).days
     if days_remaining < 0:
@@ -62,7 +87,13 @@ def compute_rent_state(rent: Rent, today: date | None = None) -> RentComputed:
     else:
         status = "SCHEDULED"
 
-    return RentComputed(next_due_date=due_date, days_remaining=days_remaining, status=status)
+    return RentComputed(
+        next_due_date=due_date,
+        days_remaining=days_remaining,
+        status=status,
+        remaining_lease_duration=None,
+        notification_date=due_date - timedelta(days=rent.reminder_days),
+    )
 
 
 def get_last_reminder_sent_at(rent: Rent):

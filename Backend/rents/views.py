@@ -1,4 +1,7 @@
 from django.db.models import Q
+from django.db import IntegrityError
+from django.http import HttpResponse
+from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -11,8 +14,129 @@ from employees.permissions import IsHRManagerOnly
 from organization.services import ensure_company_write_allowed, filter_queryset_by_company_scope, get_active_company_for_request
 
 from .models import Rent, RentType
-from .serializers import RentReadSerializer, RentTypeSerializer, RentTypeWriteSerializer, RentWriteSerializer
+from .serializers import (
+    RentPaymentSerializer,
+    RentPaymentWriteSerializer,
+    RentReadSerializer,
+    RentTypeSerializer,
+    RentTypeWriteSerializer,
+    RentWriteSerializer,
+)
 from .services import compute_rent_state, send_rent_notifications
+
+
+def _to_bool_rent(value):
+    return str(value).strip().lower() in {"1", "true", "yes", "y"}
+
+
+def _fmt_date_rent(value):
+    if not value:
+        return "-"
+    try:
+        return value.strftime("%Y-%m-%d")
+    except Exception:
+        return str(value)
+
+
+def _build_rent_pdf(rent: Rent) -> bytes:
+    from core.pdf import (
+        ApprovalStage,
+        DetailRow,
+        EmployeeBlock,
+        ExtraSection,
+        RequestDocument,
+        render_request_pdf,
+    )
+
+    rent_type = rent.rent_type
+    asset = rent.asset
+    property_name = (
+        rent.property_name_en
+        or rent.property_name_ar
+        or (asset.name_en if asset else "")
+        or (asset.name_ar if asset else "")
+        or "-"
+    )
+
+    details = [
+        DetailRow(
+            "Rent Type",
+            "نوع الإيجار",
+            f"{rent_type.name_en or rent_type.code} / {rent_type.name_ar or rent_type.code}",
+        ),
+        DetailRow("Property", "العقار", str(property_name)),
+        DetailRow("Address", "العنوان", str(rent.property_address or "-")),
+        DetailRow("Recurrence", "التكرار", str(rent.recurrence or "-")),
+        DetailRow("Lease Start", "بداية العقد", _fmt_date_rent(rent.lease_start_date)),
+        DetailRow("Lease End", "نهاية العقد", _fmt_date_rent(rent.lease_end_date)),
+        DetailRow(
+            "Annual Rent",
+            "الإيجار السنوي",
+            str(rent.annual_rent_value) if rent.annual_rent_value is not None else "-",
+        ),
+        DetailRow(
+            "Security Deposit",
+            "التأمين",
+            str(rent.security_deposit) if rent.security_deposit is not None else "-",
+        ),
+        DetailRow("Amount", "المبلغ", str(rent.amount) if rent.amount is not None else "-"),
+        DetailRow("Auto Renewal", "تجديد تلقائي", "Yes" if rent.auto_renewal else "No"),
+    ]
+
+    if rent.recurrence == Rent.Recurrence.ONE_TIME:
+        details.append(DetailRow("Due Date", "تاريخ الاستحقاق", _fmt_date_rent(rent.one_time_due_date)))
+    else:
+        details.append(DetailRow("Start Date", "تاريخ البدء", _fmt_date_rent(rent.start_date)))
+        details.append(
+            DetailRow("Due Day", "يوم الاستحقاق", str(rent.due_day) if rent.due_day else "-")
+        )
+
+    approvals = [
+        ApprovalStage(
+            stage_en="Created",
+            stage_ar="إنشاء السجل",
+            actor=str(
+                getattr(rent.created_by, "full_name", None)
+                or getattr(rent.created_by, "email", None)
+                or "-"
+            ),
+            at=_fmt_date_rent(rent.created_at),
+            note="Rent record created",
+        ),
+        ApprovalStage(
+            stage_en="Last Updated",
+            stage_ar="آخر تحديث",
+            actor=str(
+                getattr(rent.updated_by, "full_name", None)
+                or getattr(rent.updated_by, "email", None)
+                or "-"
+            ),
+            at=_fmt_date_rent(rent.updated_at),
+            note="-",
+        ),
+    ]
+
+    extra = []
+    if rent.payment_schedule:
+        extra.append(
+            ExtraSection(
+                title_en="Payment Schedule", title_ar="جدول الدفعات", body=str(rent.payment_schedule)
+            )
+        )
+    if rent.notice:
+        extra.append(ExtraSection(title_en="Notice", title_ar="إشعار", body=str(rent.notice)))
+
+    doc = RequestDocument(
+        title_en="Rent Agreement",
+        title_ar="اتفاقية إيجار",
+        reference_no=str(rent.id),
+        employee=EmployeeBlock(),
+        details=details,
+        approvals=approvals,
+        extra=extra,
+        status_label=str(rent.recurrence or ""),
+    )
+    return render_request_pdf(doc)
 
 
 class RentTypeViewSet(viewsets.ModelViewSet):
@@ -100,6 +224,10 @@ class RentViewSet(viewsets.ModelViewSet):
                 | Q(asset__name_ar__icontains=search)
                 | Q(property_name_en__icontains=search)
                 | Q(property_name_ar__icontains=search)
+                | Q(property_address__icontains=search)
+                | Q(payment_schedule__icontains=search)
+                | Q(notice__icontains=search)
+                | Q(payments__icontains=search)
             )
 
         rent_type_id = params.get("rent_type")
@@ -187,6 +315,17 @@ class RentViewSet(viewsets.ModelViewSet):
         )
         return success({})
 
+    @action(detail=True, methods=["get"], url_path="pdf")
+    def pdf(self, request, pk=None):
+        rent = self.get_object()
+        pdf_bytes = _build_rent_pdf(rent)
+        audit(request, "rent_exported_pdf", entity="rent", entity_id=rent.id)
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        filename = f"rent_{rent.id}.pdf"
+        disposition = "attachment" if _to_bool_rent(request.query_params.get("download", "1")) else "inline"
+        response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
+        return response
+
     @action(detail=True, methods=["post"], url_path="notify")
     def notify(self, request, pk=None):
         if get_role(request.user) != "HRManager":
@@ -196,3 +335,29 @@ class RentViewSet(viewsets.ModelViewSet):
         delivery = send_rent_notifications(rent, manual=True)
         audit(request, "rent_manual_notified", entity="rent", entity_id=rent.id, metadata={"delivery": delivery})
         return success({"delivery": delivery})
+
+    @action(detail=True, methods=["post"], url_path="payments")
+    def add_payment(self, request, pk=None):
+        ensure_company_write_allowed(request)
+        rent = self.get_object()
+        serializer = RentPaymentWriteSerializer(data=request.data, context={"request": request, "rent": rent})
+        if not serializer.is_valid():
+            return error("Validation error", errors=serializer.errors, status=422)
+
+        try:
+            payment = serializer.save(rent=rent, created_by=request.user, updated_by=request.user)
+        except IntegrityError:
+            return error(
+                "Validation error",
+                errors={"payment_number": ["A payment record with this number already exists for this rent."]},
+                status=422,
+            )
+
+        audit(
+            request,
+            "rent_payment_created",
+            entity="rent_payment",
+            entity_id=payment.id,
+            metadata={"rent_id": rent.id, "payment_number": payment.payment_number, "category": payment.category},
+        )
+        return success(RentPaymentSerializer(payment).data, status=status.HTTP_201_CREATED)

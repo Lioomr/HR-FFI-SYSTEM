@@ -28,6 +28,7 @@ export interface Asset {
   asset_value?: string | number | null;
   vendor?: string;
   notes?: string;
+  must_return_before_travel?: boolean;
   flexible_attributes?: Record<string, { type?: "body" | "date"; body?: string; date?: string | null } | unknown> | null;
   plate_number?: string;
   chassis_number?: string;
@@ -56,6 +57,7 @@ export interface CreateAssetPayload {
   asset_value?: string | number;
   vendor?: string;
   notes?: string;
+  must_return_before_travel?: boolean;
   flexible_attributes?: Record<string, { type?: "body" | "date"; body?: string; date?: string | null } | unknown>;
   plate_number?: string;
   chassis_number?: string;

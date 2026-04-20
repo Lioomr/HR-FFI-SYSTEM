@@ -140,8 +140,9 @@ function LeaveRequestsTab() {
                 const color =
                     value === "approved" ? "green" :
                         value === "rejected" ? "red" :
-                            value === "cancelled" ? "default" :
-                                value === "pending_hr" ? "purple" :
+                                value === "cancelled" ? "default" :
+                                    value === "pending_hr" ? "purple" :
+                                        value === "pending_delegate" ? "gold" :
                                     value === "pending_manager" || value === "submitted" ? "gold" :
                                         "blue";
 
@@ -151,6 +152,7 @@ function LeaveRequestsTab() {
                     "approved": t("status.approved"),
                     "rejected": t("status.rejected"),
                     "cancelled": t("status.cancelled"),
+                    "pending_delegate": t("leave.status.pending_delegate"),
                     "pending_hr": t("status.pendingHr"),
                     "pending_manager": t("status.pendingManager"),
                     "submitted": t("status.pendingManager") // treat submitted as pending manager here

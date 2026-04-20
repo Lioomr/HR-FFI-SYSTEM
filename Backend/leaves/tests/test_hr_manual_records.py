@@ -1,4 +1,5 @@
 from datetime import date
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -63,6 +64,29 @@ class HRManualLeaveRecordTests(APITestCase):
         self.assertEqual(response.data["data"]["status"], LeaveRequest.RequestStatus.APPROVED)
         self.assertEqual(response.data["data"]["source"], LeaveRequest.RequestSource.HR_MANUAL)
         self.assertTrue(isinstance(response.data["data"].get("warning_messages", []), list))
+
+    def test_hr_manual_record_notifies_delegate_when_selected(self):
+        self.client.force_authenticate(user=self.hr_user)
+        payload = {
+            "employee_id": self.employee_profile.id,
+            "leave_type": self.annual.id,
+            "start_date": "2026-06-01",
+            "end_date": "2026-06-05",
+            "reason": "Manual delegation coverage",
+            "manual_entry_reason": "Added by HR with delegation.",
+            "source_document_ref": "paper-file-2026-002",
+            "delegated_to": self.manager_user.id,
+            "delegation_note": "Please cover the employee's urgent duties.",
+        }
+
+        with patch("leaves.views.notify_delegation_assigned") as notify_delegate:
+            response = self.client.post(self.url, payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        notify_delegate.assert_called_once()
+        record = LeaveRequest.objects.get(pk=response.data["data"]["id"])
+        self.assertEqual(record.delegated_to, self.manager_user)
+        self.assertEqual(record.delegation_note, "Please cover the employee's urgent duties.")
 
     def test_manual_create_blocks_non_active_employee(self):
         self.employee_profile.employment_status = EmployeeProfile.EmploymentStatus.TERMINATED

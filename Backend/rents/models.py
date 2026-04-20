@@ -49,6 +49,14 @@ class Rent(models.Model):
     property_name_en = models.CharField(max_length=180, blank=True)
     property_name_ar = models.CharField(max_length=180, blank=True)
     property_address = models.CharField(max_length=255, blank=True)
+    lease_start_date = models.DateField(null=True, blank=True)
+    lease_end_date = models.DateField(null=True, blank=True)
+    annual_rent_value = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    security_deposit = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    payment_schedule = models.CharField(max_length=180, blank=True)
+    auto_renewal = models.BooleanField(default=False)
+    notice = models.TextField(blank=True)
+    payments = models.TextField(blank=True)
 
     recurrence = models.CharField(max_length=20, choices=Recurrence.choices)
     one_time_due_date = models.DateField(null=True, blank=True)
@@ -138,3 +146,75 @@ class RentReminderLog(models.Model):
 
     def __str__(self):
         return f"Rent {self.rent_id} | {self.channel} | {self.due_date}"
+
+
+class RentPayment(models.Model):
+    class Category(models.TextChoices):
+        RENT = "rent", _("Rent")
+        SECURITY_DEPOSIT = "security_deposit", _("Security Deposit")
+        OTHER = "other", _("Other")
+
+    class Status(models.TextChoices):
+        PENDING = "pending", _("Pending")
+        PAID = "paid", _("Paid")
+        CANCELLED = "cancelled", _("Cancelled")
+
+    rent = models.ForeignKey(Rent, on_delete=models.CASCADE, related_name="payment_records")
+    payment_number = models.PositiveSmallIntegerField()
+    category = models.CharField(max_length=32, choices=Category.choices, default=Category.RENT)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    due_date = models.DateField(null=True, blank=True)
+    paid_date = models.DateField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="rent_payments_created",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="rent_payments_updated",
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["payment_number", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["rent", "payment_number"],
+                condition=models.Q(is_active=True),
+                name="uniq_active_rent_payment_number",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["rent", "is_active"], name="rents_payment_rent_active_idx"),
+            models.Index(fields=["status", "category"], name="rents_payment_status_cat_idx"),
+        ]
+
+    def clean(self):
+        errors = {}
+        if self.payment_number < 1:
+            errors["payment_number"] = "Payment number must be greater than zero."
+        if self.amount < 0:
+            errors["amount"] = "Amount cannot be negative."
+        if self.status == self.Status.PAID and not self.paid_date:
+            errors["paid_date"] = "Paid date is required when status is paid."
+        if self.status != self.Status.PAID and self.paid_date:
+            errors["paid_date"] = "Paid date must be empty unless status is paid."
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Rent {self.rent_id} | Payment {self.payment_number}"

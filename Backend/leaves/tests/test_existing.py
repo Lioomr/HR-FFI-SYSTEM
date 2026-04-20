@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -12,6 +13,7 @@ from core.services import get_workflow_snapshot
 from leaves.models import LeaveRequest, LeaveType
 from leaves.views import _approval_path_rows
 from leaves.views import _leave_type_labels
+from organization.models import OrganizationNode
 
 User = get_user_model()
 
@@ -295,6 +297,110 @@ class LeaveManagementTests(TestCase):
         }
         response = self.client.post("/api/leaves/leave-requests/", data, format="multipart")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_create_leave_request_notifies_delegate_when_selected(self):
+        from employees.models import EmployeeProfile
+
+        company = OrganizationNode.objects.create(
+            code="LEAVE_DELEGATION_CO",
+            name="Leave Delegation Co",
+            node_type=OrganizationNode.NodeType.COMPANY,
+        )
+        EmployeeProfile.objects.create(
+            user=self.emp1,
+            company=company,
+            employee_id="EMP-DEL-SEND",
+            full_name="Delegation Sender",
+            hire_date=date.today() - timedelta(days=700),
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        )
+        EmployeeProfile.objects.create(
+            user=self.emp2,
+            company=company,
+            employee_id="EMP-DEL-RECV",
+            full_name="Delegation Receiver",
+            hire_date=date.today() - timedelta(days=700),
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        )
+
+        self.client.force_authenticate(user=self.emp1)
+        with patch("leaves.views.notify_delegation_assigned") as notify_delegate:
+            response = self.client.post(
+                "/api/leaves/leave-requests/",
+                {
+                    "leave_type": self.annual_leave.id,
+                    "start_date": str(date.today() + timedelta(days=40)),
+                    "end_date": str(date.today() + timedelta(days=41)),
+                    "reason": "Delegation notification test",
+                    "delegated_to": self.emp2.id,
+                    "delegation_note": "Please cover urgent work.",
+                },
+                HTTP_X_ACTIVE_COMPANY_ID=str(company.id),
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        notify_delegate.assert_called_once()
+        request_obj = LeaveRequest.objects.get(pk=response.data["data"]["id"])
+        self.assertEqual(request_obj.delegated_to, self.emp2)
+        self.assertEqual(request_obj.status, LeaveRequest.RequestStatus.PENDING_DELEGATE)
+        workflow = get_workflow_snapshot(request_obj, actor=self.emp2)
+        self.assertEqual(workflow["current_stage"], "delegate")
+        self.assertTrue(workflow["can_approve"])
+
+    def test_delegate_approval_moves_leave_request_to_hr(self):
+        from employees.models import EmployeeProfile
+
+        company = OrganizationNode.objects.create(
+            code="LEAVE_DELEGATE_APPROVAL_CO",
+            name="Leave Delegate Approval Co",
+            node_type=OrganizationNode.NodeType.COMPANY,
+        )
+        EmployeeProfile.objects.create(
+            user=self.emp1,
+            company=company,
+            employee_id="EMP-DEL-APP-SEND",
+            full_name="Delegation Sender",
+            hire_date=date.today() - timedelta(days=700),
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        )
+        EmployeeProfile.objects.create(
+            user=self.emp2,
+            company=company,
+            employee_id="EMP-DEL-APP-RECV",
+            full_name="Delegation Receiver",
+            hire_date=date.today() - timedelta(days=700),
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        )
+
+        request_obj = LeaveRequest.objects.create(
+            employee=self.emp1,
+            employee_profile=self.emp1.employee_profile,
+            company=company,
+            leave_type=self.annual_leave,
+            start_date=date.today() + timedelta(days=50),
+            end_date=date.today() + timedelta(days=51),
+            status=LeaveRequest.RequestStatus.PENDING_DELEGATE,
+            delegated_to=self.emp2,
+            delegation_note="Cover urgent items.",
+        )
+        sync = get_workflow_snapshot(request_obj, actor=self.emp2)
+        self.assertEqual(sync["current_stage"], "delegate")
+
+        self.client.force_authenticate(user=self.emp2)
+        response = self.client.post(
+            f"/api/leaves/leave-requests/{request_obj.id}/delegate-approve/",
+            {"comment": "I can cover this."},
+            HTTP_X_ACTIVE_COMPANY_ID=str(company.id),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        request_obj.refresh_from_db()
+        self.assertEqual(request_obj.status, LeaveRequest.RequestStatus.PENDING_HR)
+        self.assertEqual(request_obj.delegate_decision_by, self.emp2)
+        self.assertEqual(request_obj.delegate_decision_note, "I can cover this.")
+        workflow = get_workflow_snapshot(request_obj, actor=self.hr)
+        self.assertEqual(workflow["current_stage"], "hr")
+        self.assertTrue(any(item["stage"] == "delegate" and item["action"] == "approve" for item in workflow["history"]))
 
     def test_delete_leave_request_forbidden(self):
         self.client.force_authenticate(user=self.admin)

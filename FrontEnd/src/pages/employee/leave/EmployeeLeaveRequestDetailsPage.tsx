@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeftOutlined, DownloadOutlined, EyeOutlined, FilePdfOutlined } from "@ant-design/icons";
-import { Button, Card, Descriptions, Space, Tag, Typography, notification } from "antd";
+import { ArrowLeftOutlined, CheckCircleOutlined, CloseCircleOutlined, DownloadOutlined, EyeOutlined, FilePdfOutlined } from "@ant-design/icons";
+import { Button, Card, Descriptions, Divider, Input, Modal, Space, Tag, Typography, notification } from "antd";
 
 import LeaveApprovalMap from "../../../components/leaves/LeaveApprovalMap";
 import ErrorState from "../../../components/ui/ErrorState";
@@ -9,16 +9,20 @@ import LoadingState from "../../../components/ui/LoadingState";
 import PageHeader from "../../../components/ui/PageHeader";
 import ApprovalTimeline from "../../../components/requests/ApprovalTimeline";
 import PendingActionBanner from "../../../components/requests/PendingActionBanner";
+import RequestObligationsPanel from "../../../components/requests/RequestObligationsPanel";
 import { isApiError } from "../../../services/api/apiTypes";
 import {
   getLeaveRequest,
   getLeaveRequestDocumentBlob,
   getLeaveRequestPdfBlob,
+  approveDelegatedLeaveRequest,
+  rejectDelegatedLeaveRequest,
   type LeaveRequest,
 } from "../../../services/api/leaveApi";
 import { useI18n } from "../../../i18n/useI18n";
 
 const { Text } = Typography;
+const { TextArea } = Input;
 
 export default function EmployeeLeaveRequestDetailsPage() {
   const navigate = useNavigate();
@@ -29,6 +33,9 @@ export default function EmployeeLeaveRequestDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [documentLoading, setDocumentLoading] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [rejectModalVisible, setRejectModalVisible] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState("");
 
   const translateLeaveType = (name?: string): string => {
     if (!name) return "-";
@@ -67,6 +74,8 @@ export default function EmployeeLeaveRequestDetailsPage() {
         return "red";
       case "pending_manager":
         return "orange";
+      case "pending_delegate":
+        return "gold";
       case "pending_hr":
         return "purple";
       case "pending_ceo":
@@ -128,11 +137,56 @@ export default function EmployeeLeaveRequestDetailsPage() {
     }
   };
 
+  const handleDelegateApprove = async () => {
+    if (!request) return;
+    setProcessing(true);
+    try {
+      const res = await approveDelegatedLeaveRequest(request.id);
+      if (isApiError(res)) {
+        notification.error({ message: t("leave.approveFail"), description: res.message });
+        return;
+      }
+      notification.success({ message: t("leave.approveSuccess") });
+      setRequest(res.data);
+    } catch {
+      notification.error({ message: t("common.error"), description: t("leave.approveError") });
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleDelegateReject = async () => {
+    if (!request || !rejectionReason.trim()) {
+      notification.error({ message: t("leave.reasonReqTitle"), description: t("leave.reasonReqDesc") });
+      return;
+    }
+    setProcessing(true);
+    try {
+      const res = await rejectDelegatedLeaveRequest(request.id, rejectionReason);
+      if (isApiError(res)) {
+        notification.error({ message: t("leave.rejectFail"), description: res.message });
+        return;
+      }
+      notification.success({ message: t("leave.rejectSuccess") });
+      setRejectModalVisible(false);
+      setRejectionReason("");
+      setRequest(res.data);
+    } catch {
+      notification.error({ message: t("common.error"), description: t("leave.rejectError") });
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   if (loading) return <LoadingState title={t("leave.requestDetailsTitle", { id })} />;
   if (error) return <ErrorState title={t("common.error")} description={error} onRetry={loadRequest} />;
   if (!request) return <ErrorState title={t("common.error")} description={t("leave.loadFail")} />;
 
-  const rejectionNote = request.ceo_decision_note || request.hr_decision_note || request.manager_decision_note || request.rejection_reason || "-";
+  const rejectionNote = request.ceo_decision_note || request.hr_decision_note || request.manager_decision_note || request.delegate_decision_note || request.rejection_reason || "-";
+  const canDelegateAction =
+    request.status === "pending_delegate" &&
+    request.workflow?.current_stage === "delegate" &&
+    request.workflow?.can_approve;
 
   return (
     <div style={{ maxWidth: 1080, margin: "0 auto" }}>
@@ -167,6 +221,13 @@ export default function EmployeeLeaveRequestDetailsPage() {
         <PendingActionBanner workflow={request.workflow} />
         <LeaveApprovalMap request={request} t={t} />
         <ApprovalTimeline workflow={request.workflow} />
+        <RequestObligationsPanel
+          parentType="leave_request"
+          parentId={request.id}
+          leaveRequest={request}
+          showEmployeeActions
+          onChanged={loadRequest}
+        />
 
         <Card style={{ borderRadius: 20, border: "1px solid #e5e7eb" }}>
           <Descriptions column={{ xs: 1, md: 2 }} layout="vertical" bordered>
@@ -200,8 +261,49 @@ export default function EmployeeLeaveRequestDetailsPage() {
               </Descriptions.Item>
             ) : null}
           </Descriptions>
+
+          {canDelegateAction ? (
+            <>
+              <Divider />
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, flexWrap: "wrap" }}>
+                <Button
+                  danger
+                  icon={<CloseCircleOutlined />}
+                  onClick={() => setRejectModalVisible(true)}
+                  disabled={processing}
+                >
+                  {t("common.reject")}
+                </Button>
+                <Button
+                  type="primary"
+                  icon={<CheckCircleOutlined />}
+                  onClick={handleDelegateApprove}
+                  loading={processing}
+                >
+                  {t("common.approve")}
+                </Button>
+              </div>
+            </>
+          ) : null}
         </Card>
       </div>
+
+      <Modal
+        title={t("leave.rejectTitle")}
+        open={rejectModalVisible}
+        onOk={handleDelegateReject}
+        onCancel={() => setRejectModalVisible(false)}
+        okText={t("leave.rejectBtn")}
+        okType="danger"
+        confirmLoading={processing}
+      >
+        <TextArea
+          rows={4}
+          placeholder={t("leave.rejectPlaceholder")}
+          value={rejectionReason}
+          onChange={(e) => setRejectionReason(e.target.value)}
+        />
+      </Modal>
     </div>
   );
 }

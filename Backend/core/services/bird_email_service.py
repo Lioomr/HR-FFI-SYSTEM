@@ -485,6 +485,56 @@ def send_announcement_notification_email(
     )
 
 
+def send_meeting_notification_email(
+    *,
+    to_email: str,
+    employee_name: str,
+    meeting_title: str,
+    meeting_message: str,
+    meeting_date: str,
+    meeting_time: str,
+    organizer_name: str,
+    duration_minutes: int | None = None,
+    location: str | None = None,
+    agenda: str | None = None,
+    google_meet_url: str | None = None,
+    microsoft_teams_url: str | None = None,
+    zoom_url: str | None = None,
+    action_url: str | None = None,
+) -> dict[str, Any]:
+    service = BirdEmailService()
+    context = _base_email_context(
+        title="Meeting Invitation",
+        title_ar="دعوة اجتماع",
+        employee_name=employee_name,
+        message=meeting_message,
+        message_ar=meeting_message,
+        action_url=action_url or google_meet_url or microsoft_teams_url or zoom_url,
+        action_text="Open Meeting",
+        action_text_ar="فتح الاجتماع",
+    )
+    context.update(
+        {
+            "meeting_title": meeting_title,
+            "meeting_date": meeting_date,
+            "meeting_time": meeting_time,
+            "organizer_name": organizer_name,
+            "duration_minutes": duration_minutes,
+            "location": location,
+            "agenda": agenda,
+            "google_meet_url": google_meet_url,
+            "microsoft_teams_url": microsoft_teams_url,
+            "zoom_url": zoom_url,
+        }
+    )
+    return service.send_template_email(
+        to_email=to_email,
+        subject=f"Meeting Invitation: {meeting_title}",
+        template_name="meeting_notification.html",
+        context=context,
+    )
+
+
 def send_user_invite_email(
     *,
     to_email: str,

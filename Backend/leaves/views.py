@@ -26,6 +26,7 @@ from rest_framework.views import APIView
 from audit.utils import audit
 from core.delegation import get_delegated_manager_user_ids
 from core.pagination import StandardPagination
+from core.pdf import merge_pdfs
 from core.permissions import IsDepartmentCEOApprover, IsHRWorkflowApprover, get_role
 from core.responses import error, success
 from core.services import (
@@ -34,19 +35,21 @@ from core.services import (
     get_direct_manager_user,
     get_hr_approver_users,
     notify_users_for_pending_status,
-    send_leave_rejected_email,
-    send_request_submission_email,
+    sync_leave_obligations,
     sync_workflow,
+    waive_open_blocking_obligations,
 )
+from core.services.request_obligations import is_business_trip_leave
 from employees.models import EmployeeProfile
 from employees.permissions import IsHRManagerOrAdmin
 from organization.services import filter_queryset_by_company_scope
 
 from .models import LeaveBalanceAdjustment, LeaveRequest, LeaveType
 from .notifications import (
-    send_leave_request_approved_whatsapp,
-    send_leave_request_rejected_whatsapp,
-    send_leave_request_submitted_whatsapp,
+    notify_delegation_assigned,
+    notify_leave_approved,
+    notify_leave_rejected,
+    notify_leave_submitted,
 )
 from .permissions import (
     IsEmployeeOnly,
@@ -58,6 +61,7 @@ from .serializers import (
     HRManualLeaveRequestSerializer,
     LeaveBalanceAdjustmentSerializer,
     LeaveBalanceSerializer,
+    LeaveRequestDelegationSerializer,
     LeaveRequestActionSerializer,
     LeaveRequestCreateSerializer,
     LeaveRequestSerializer,
@@ -192,6 +196,16 @@ def _approval_path_rows(instance: LeaveRequest):
     needs_manager = bool(getattr(profile, "manager_id", None) or getattr(profile, "manager_profile_id", None))
     needs_ceo = bool(getattr(instance.leave_type, "requires_ceo_approval", False) or _is_hr_manager_origin_request(instance))
 
+    if instance.delegated_to_id or instance.delegate_decision_at:
+        rows.append(
+            (
+                "Delegate Review",
+                instance.delegate_decision_at,
+                instance.delegate_decision_note or instance.status,
+                _display_user(instance.delegate_decision_by or instance.delegated_to),
+            )
+        )
+
     if needs_manager:
         rows.append(
             (
@@ -252,452 +266,112 @@ def _leave_type_labels(leave_type: LeaveType | None) -> tuple[str, str]:
     return english_name, arabic_by_code.get(normalized, english_name)
 
 
-def _build_leave_request_pdf_legacy(instance: LeaveRequest):
-    def _register_pdf_fonts():
-        regular_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-        bold_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-        if "DejaVuSans" not in pdfmetrics.getRegisteredFontNames() and os.path.exists(regular_path):
-            pdfmetrics.registerFont(TTFont("DejaVuSans", regular_path))
-        if "DejaVuSans-Bold" not in pdfmetrics.getRegisteredFontNames() and os.path.exists(bold_path):
-            pdfmetrics.registerFont(TTFont("DejaVuSans-Bold", bold_path))
+_LEAVE_STATUS_LABELS = {
+    LeaveRequest.RequestStatus.SUBMITTED: ("Submitted", "تم التقديم"),
+    LeaveRequest.RequestStatus.PENDING_DELEGATE: ("Pending Delegate", "بانتظار المفوض"),
+    LeaveRequest.RequestStatus.PENDING_MANAGER: ("Pending Manager", "بانتظار المدير"),
+    LeaveRequest.RequestStatus.PENDING_HR: ("Pending HR", "بانتظار الموارد البشرية"),
+    LeaveRequest.RequestStatus.PENDING_CEO: ("Pending CEO", "بانتظار المدير التنفيذي"),
+    LeaveRequest.RequestStatus.APPROVED: ("Approved", "معتمد"),
+    LeaveRequest.RequestStatus.REJECTED: ("Rejected", "مرفوض"),
+    LeaveRequest.RequestStatus.CANCELLED: ("Cancelled", "ملغي"),
+}
 
-    def _shape_ar(text):
-        value = str(text or "")
-        if not value:
-            return "-"
-        if arabic_reshaper and get_display:
-            return get_display(arabic_reshaper.reshape(value))
-        return value
+_LEAVE_STAGE_LABELS = {
+    "Submitted": ("Submitted", "تم التقديم"),
+    "HR Manual Entry": ("HR Manual Entry", "إدخال يدوي من الموارد البشرية"),
+    "Delegate Review": ("Delegate Review", "مراجعة المفوض"),
+    "Manager Review": ("Manager Review", "مراجعة المدير"),
+    "HR Review": ("HR Review", "مراجعة الموارد البشرية"),
+    "CEO Review": ("CEO Review", "مراجعة المدير التنفيذي"),
+}
 
-    def _logo_path():
-        candidates = [
-            os.path.join(str(settings.BASE_DIR), "static", "email", "ffi-logo.png"),
-            os.path.join(str(settings.BASE_DIR.parent), "Logo FFI.png"),
-            os.path.join(str(settings.BASE_DIR.parent), "FrontEnd", "public", "ffi-logo.png"),
-            "/app/static/email/ffi-logo.png",
-            "/app/Logo FFI.png",
-        ]
-        return next((path for path in candidates if os.path.exists(path)), "")
 
-    def _draw_labeled_rows(pdf, x, y, width, rows, rtl=False):
-        current_y = y
-        label_font = "DejaVuSans-Bold"
-        value_font = "DejaVuSans"
-        for label, value in rows:
-            pdf.setFillColorRGB(0.07, 0.09, 0.15)
-            pdf.setFont(label_font, 10)
-            if rtl:
-                pdf.drawRightString(x + width, current_y, _shape_ar(label))
-                pdf.setFont(value_font, 10)
-                pdf.setFillColorRGB(0.28, 0.33, 0.41)
-                pdf.drawRightString(x + width - 120, current_y, _shape_ar(value))
-            else:
-                pdf.drawString(x, current_y, str(label))
-                pdf.setFont(value_font, 10)
-                pdf.setFillColorRGB(0.28, 0.33, 0.41)
-                pdf.drawString(x + 115, current_y, str(value))
-            current_y -= 18
-        return current_y
+def _leave_document_pdf_bytes(instance: LeaveRequest) -> bytes | None:
+    """Return the leave supporting document bytes when it's a PDF."""
 
-    def _status_label(status_value):
-        mapping = {
-            LeaveRequest.RequestStatus.SUBMITTED: ("Submitted", "تم التقديم"),
-            LeaveRequest.RequestStatus.PENDING_MANAGER: ("Pending Manager", "بانتظار المدير"),
-            LeaveRequest.RequestStatus.PENDING_HR: ("Pending HR", "بانتظار الموارد البشرية"),
-            LeaveRequest.RequestStatus.PENDING_CEO: ("Pending CEO", "بانتظار المدير التنفيذي"),
-            LeaveRequest.RequestStatus.APPROVED: ("Approved", "معتمد"),
-            LeaveRequest.RequestStatus.REJECTED: ("Rejected", "مرفوض"),
-            LeaveRequest.RequestStatus.CANCELLED: ("Cancelled", "ملغي"),
-        }
-        return mapping.get(status_value, (str(status_value), str(status_value)))
-
-    _register_pdf_fonts()
-    buffer = BytesIO()
-    pdf = canvas.Canvas(buffer, pagesize=A4)
-    width, height = A4
-
-    accent = (244 / 255, 121 / 255, 32 / 255)
-    accent_soft = (255 / 255, 244 / 255, 235 / 255)
-    border = (253 / 255, 186 / 255, 116 / 255)
-    generated_at = timezone.localtime(timezone.now()).strftime("%Y-%m-%d %H:%M")
-    days = str(get_leave_days(instance.start_date, instance.end_date))
-    status_en, status_ar = _status_label(instance.status)
-    leave_type_en, leave_type_ar = _leave_type_labels(instance.leave_type)
-    source_en = "Manual HR Record" if instance.source == LeaveRequest.RequestSource.HR_MANUAL else "Employee Request"
-    source_ar = "سجل يدوي من الموارد البشرية" if instance.source == LeaveRequest.RequestSource.HR_MANUAL else "طلب موظف"
-    rejection_note = instance.ceo_decision_note or instance.hr_decision_note or instance.manager_decision_note or "-"
-    approval_rows = _approval_path_rows(instance)
-
-    pdf.setTitle(f"Leave Request {instance.id}")
-    pdf.setFillColorRGB(*accent)
-    pdf.roundRect(24, height - 105, width - 48, 68, 18, fill=1, stroke=0)
-
-    logo = _logo_path()
-    if logo:
-        pdf.drawImage(ImageReader(logo), 34, height - 92, width=54, height=42, preserveAspectRatio=True, mask="auto")
-
-    pdf.setFillColorRGB(1, 1, 1)
-    pdf.setFont("DejaVuSans-Bold", 18)
-    pdf.drawString(100, height - 62, f"Leave Request #{instance.id}")
-    pdf.setFont("DejaVuSans", 10)
-    pdf.drawString(100, height - 82, f"Generated | {generated_at}")
-
-    pdf.setFillColorRGB(*accent_soft)
-    pdf.roundRect(24, 36, width - 48, height - 160, 20, fill=1, stroke=0)
-
-    pdf.setFillColorRGB(1, 1, 1)
-    pdf.roundRect(36, height - 340, width - 72, 206, 18, fill=1, stroke=0)
-    pdf.roundRect(36, 56, width - 72, 260, 18, fill=1, stroke=0)
-
-    pdf.setStrokeColorRGB(*border)
-    pdf.setLineWidth(1)
-    pdf.roundRect(36, height - 340, width - 72, 206, 18, fill=0, stroke=1)
-    pdf.roundRect(36, 56, width - 72, 260, 18, fill=0, stroke=1)
-
-    pdf.setFillColorRGB(*accent)
-    pdf.setFont("DejaVuSans-Bold", 13)
-    pdf.drawString(48, height - 154, "Arabic / العربية")
-    pdf.drawRightString(width - 48, height - 154, _shape_ar("العربية / Arabic"))
-
-    arabic_rows = [
-        ("الموظف", _leave_employee_name(instance)),
-        ("البريد الإلكتروني", _leave_employee_email(instance)),
-        ("نوع الإجازة", leave_type_ar),
-        ("الحالة", status_ar),
-        ("الفترة", f"{instance.start_date} - {instance.end_date}"),
-        ("عدد الأيام", days),
-        ("المصدر", source_ar),
-        ("السبب", instance.reason or "-"),
-    ]
-    if instance.status == LeaveRequest.RequestStatus.REJECTED:
-        arabic_rows.append(("ملاحظة الرفض", rejection_note))
-
-    english_rows = [
-        ("Employee", _leave_employee_name(instance)),
-        ("Email", _leave_employee_email(instance)),
-        ("Leave Type", leave_type_en),
-        ("Status", status_en),
-        ("Period", f"{instance.start_date} to {instance.end_date}"),
-        ("Days", days),
-        ("Source", source_en),
-        ("Reason", instance.reason or "-"),
-    ]
-    if instance.status == LeaveRequest.RequestStatus.REJECTED:
-        english_rows.append(("Rejection Note", rejection_note))
-
-    _draw_labeled_rows(pdf, 56, height - 184, 220, arabic_rows, rtl=True)
-    _draw_labeled_rows(pdf, 56, height - 184, 470, english_rows, rtl=False)
-
-    pdf.setFillColorRGB(*accent)
-    pdf.setFont("DejaVuSans-Bold", 13)
-    pdf.drawString(48, 294, "Approval Path")
-    pdf.drawRightString(width - 48, 294, _shape_ar("مسار الموافقة"))
-
-    timeline_y = 266
-    left_x = 56
-    right_x = width / 2 + 12
-
-    for index, (stage, at, note, actor) in enumerate(approval_rows):
-        y = timeline_y - (index * 56)
-        pdf.setFillColorRGB(*accent)
-        pdf.circle(left_x + 8, y + 4, 4, fill=1, stroke=0)
-        if index < len(approval_rows) - 1:
-            pdf.setStrokeColorRGB(*border)
-            pdf.line(left_x + 8, y - 6, left_x + 8, y - 42)
-
-        pdf.setFillColorRGB(0.07, 0.09, 0.15)
-        pdf.setFont("DejaVuSans-Bold", 10)
-        pdf.drawString(left_x + 22, y + 2, str(stage))
-        pdf.setFont("DejaVuSans", 9)
-        pdf.setFillColorRGB(0.28, 0.33, 0.41)
-        pdf.drawString(left_x + 22, y - 12, timezone.localtime(at).strftime("%Y-%m-%d %H:%M") if at else "-")
-        pdf.drawString(left_x + 22, y - 26, str(actor or "-")[:54])
-        pdf.drawString(left_x + 22, y - 40, str(note or "-")[:54])
-
-        stage_ar = {
-            "Submitted": "تم التقديم",
-            "HR Manual Entry": "إدخال يدوي من الموارد البشرية",
-            "Manager Review": "مراجعة المدير",
-            "HR Review": "مراجعة الموارد البشرية",
-            "CEO Review": "مراجعة المدير التنفيذي",
-        }.get(stage, stage)
-        pdf.setFillColorRGB(*accent)
-        pdf.circle(right_x + 180, y + 4, 4, fill=1, stroke=0)
-        if index < len(approval_rows) - 1:
-            pdf.setStrokeColorRGB(*border)
-            pdf.line(right_x + 180, y - 6, right_x + 180, y - 42)
-
-        pdf.setFillColorRGB(0.07, 0.09, 0.15)
-        pdf.setFont("DejaVuSans-Bold", 10)
-        pdf.drawRightString(right_x + 168, y + 2, _shape_ar(stage_ar))
-        pdf.setFont("DejaVuSans", 9)
-        pdf.setFillColorRGB(0.28, 0.33, 0.41)
-        pdf.drawRightString(right_x + 168, y - 12, _shape_ar(timezone.localtime(at).strftime("%Y-%m-%d %H:%M") if at else "-"))
-        pdf.drawRightString(right_x + 168, y - 26, _shape_ar(str(actor or "-")[:36]))
-        pdf.drawRightString(right_x + 168, y - 40, _shape_ar(str(note or "-")[:36]))
-
-    pdf.showPage()
-    pdf.save()
-    buffer.seek(0)
-    return buffer.getvalue()
+    document = getattr(instance, "document", None)
+    if not document:
+        return None
+    name = str(getattr(document, "name", "") or "").lower()
+    if not name.endswith(".pdf"):
+        return None
+    try:
+        document.open("rb")
+        try:
+            return document.read()
+        finally:
+            document.close()
+    except Exception:
+        return None
 
 
 def _build_leave_request_pdf_fallback(instance: LeaveRequest):
-    def _register_pdf_fonts():
-        regular_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-        bold_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-        if "DejaVuSans" not in pdfmetrics.getRegisteredFontNames() and os.path.exists(regular_path):
-            pdfmetrics.registerFont(TTFont("DejaVuSans", regular_path))
-        if "DejaVuSans-Bold" not in pdfmetrics.getRegisteredFontNames() and os.path.exists(bold_path):
-            pdfmetrics.registerFont(TTFont("DejaVuSans-Bold", bold_path))
+    """Render the leave request PDF using the unified core.pdf design."""
 
-    def _shape_ar(text):
-        value = str(text or "")
-        if not value:
-            return "-"
-        if arabic_reshaper and get_display:
-            return get_display(arabic_reshaper.reshape(value))
-        return value
+    from core.pdf import (
+        ApprovalStage,
+        DetailRow,
+        EmployeeBlock,
+        ExtraSection,
+        RequestDocument,
+        render_request_pdf,
+    )
 
-    def _logo_path():
-        candidates = [
-            os.path.join(str(settings.BASE_DIR), "static", "email", "ffi-logo.png"),
-            os.path.join(str(settings.BASE_DIR.parent), "Logo FFI.png"),
-            os.path.join(str(settings.BASE_DIR.parent), "FrontEnd", "public", "ffi-logo.png"),
-            "/app/static/email/ffi-logo.png",
-            "/app/Logo FFI.png",
-        ]
-        return next((path for path in candidates if os.path.exists(path)), "")
-
-    def _status_label(status_value):
-        mapping = {
-            LeaveRequest.RequestStatus.SUBMITTED: ("Submitted", "تم التقديم"),
-            LeaveRequest.RequestStatus.PENDING_MANAGER: ("Pending Manager", "بانتظار المدير"),
-            LeaveRequest.RequestStatus.PENDING_HR: ("Pending HR", "بانتظار الموارد البشرية"),
-            LeaveRequest.RequestStatus.PENDING_CEO: ("Pending CEO", "بانتظار المدير التنفيذي"),
-            LeaveRequest.RequestStatus.APPROVED: ("Approved", "معتمد"),
-            LeaveRequest.RequestStatus.REJECTED: ("Rejected", "مرفوض"),
-            LeaveRequest.RequestStatus.CANCELLED: ("Cancelled", "ملغي"),
-        }
-        return mapping.get(status_value, (str(status_value), str(status_value)))
-
-    stage_labels = {
-        "Submitted": ("Submitted", "تم التقديم"),
-        "HR Manual Entry": ("HR Manual Entry", "إدخال يدوي من الموارد البشرية"),
-        "Manager Review": ("Manager Review", "مراجعة المدير"),
-        "HR Review": ("HR Review", "مراجعة الموارد البشرية"),
-        "CEO Review": ("CEO Review", "مراجعة المدير التنفيذي"),
-    }
-    note_labels = {
-        "Request submitted": ("Request submitted", "تم تقديم الطلب"),
-        "Recorded by HR": ("Recorded by HR", "تم تسجيل الطلب من الموارد البشرية"),
-        "Not required": ("Not required", "غير مطلوب"),
-    }
-
-    def _localized_note(note):
-        if not note:
-            return "-", "-"
-        normalized = str(note).strip()
-        if normalized in note_labels:
-            return note_labels[normalized]
-        if normalized in {value for value, _ in LeaveRequest.RequestStatus.choices}:
-            return _status_label(normalized)
-        return normalized, normalized
-
-    def _draw_page_shell(pdf, width, height, accent, accent_soft, generated_at, page_title, *, rtl=False, subtitle=None):
-        pdf.setFillColorRGB(*accent_soft)
-        pdf.roundRect(24, 24, width - 48, height - 48, 20, fill=1, stroke=0)
-        pdf.setFillColorRGB(*accent)
-        pdf.roundRect(24, height - 94, width - 48, 58, 18, fill=1, stroke=0)
-
-        logo = _logo_path()
-        if logo:
-            pdf.drawImage(ImageReader(logo), 36, height - 84, width=48, height=36, preserveAspectRatio=True, mask="auto")
-
-        pdf.setFillColorRGB(1, 1, 1)
-        pdf.setFont("DejaVuSans-Bold", 18)
-        if rtl:
-            pdf.drawRightString(width - 36, height - 60, _shape_ar(page_title))
-        else:
-            pdf.drawString(94, height - 60, page_title)
-        pdf.setFont("DejaVuSans", 10)
-        subtitle_text = subtitle or f"Generated | {generated_at}"
-        if rtl:
-            pdf.drawRightString(width - 36, height - 78, _shape_ar(subtitle_text))
-        else:
-            pdf.drawString(94, height - 78, subtitle_text)
-
-    def _draw_section_card(pdf, x, y_top, width, height, accent, border, title_en, title_ar, *, rtl=False):
-        pdf.setFillColorRGB(1, 1, 1)
-        pdf.roundRect(x, y_top - height, width, height, 18, fill=1, stroke=0)
-        pdf.setStrokeColorRGB(*border)
-        pdf.setLineWidth(1)
-        pdf.roundRect(x, y_top - height, width, height, 18, fill=0, stroke=1)
-        pdf.setFillColorRGB(*accent)
-        pdf.setFont("DejaVuSans-Bold", 13)
-        if rtl:
-            pdf.drawRightString(x + width - 16, y_top - 22, _shape_ar(title_ar))
-        else:
-            pdf.drawString(x + 16, y_top - 22, str(title_en))
-
-    def _draw_detail_rows(pdf, x, y_top, width, rows, rtl=False):
-        current_y = y_top
-        label_width = 120
-        value_width = width - label_width - 10
-        for label, value in rows:
-            label_text = _shape_ar(label) if rtl else str(label)
-            value_text = str(value) if rtl else str(value)
-            wrapped = simpleSplit(value_text, "DejaVuSans", 10, value_width) or ["-"]
-            block_height = max(24, len(wrapped) * 12 + 8)
-
-            pdf.setFillColorRGB(0.07, 0.09, 0.15)
-            pdf.setFont("DejaVuSans-Bold", 10)
-            if rtl:
-                pdf.drawRightString(x + width, current_y, label_text)
-            else:
-                pdf.drawString(x, current_y, label_text)
-
-            pdf.setFillColorRGB(0.28, 0.33, 0.41)
-            pdf.setFont("DejaVuSans", 10)
-            for index, line in enumerate(wrapped):
-                line_y = current_y - (index * 12)
-                if rtl:
-                    pdf.drawRightString(x + width - label_width, line_y, _shape_ar(line))
-                else:
-                    pdf.drawString(x + label_width, line_y, line)
-            current_y -= block_height
-
-    def _draw_timeline(pdf, x, y_top, width, rows, accent, border, rtl=False):
-        dot_x = x + width - 8 if rtl else x + 8
-        text_x = x + 26
-        text_right = x + width - 22
-        row_gap = 70
-        note_width = width - 40
-
-        for index, (stage, at, note, actor) in enumerate(rows):
-            stage_en, stage_ar = stage_labels.get(stage, (stage, stage))
-            note_en, note_ar = _localized_note(note)
-            actor_en, actor_ar = actor or "-", actor or "-"
-            stage_text = _shape_ar(stage_ar) if rtl else stage_en
-            note_text = _shape_ar(note_ar) if rtl else note_en
-            actor_text = _shape_ar(actor_ar) if rtl else actor_en
-            timestamp = timezone.localtime(at).strftime("%Y-%m-%d %H:%M") if at else "-"
-            if rtl:
-                timestamp = _shape_ar(timestamp)
-
-            row_top = y_top - (index * row_gap)
-            pdf.setFillColorRGB(*accent)
-            pdf.circle(dot_x, row_top - 2, 4, fill=1, stroke=0)
-            if index < len(rows) - 1:
-                pdf.setStrokeColorRGB(*border)
-                pdf.line(dot_x, row_top - 10, dot_x, row_top - 46)
-
-            pdf.setFillColorRGB(0.07, 0.09, 0.15)
-            pdf.setFont("DejaVuSans-Bold", 10)
-            if rtl:
-                pdf.drawRightString(text_right, row_top, stage_text)
-            else:
-                pdf.drawString(text_x, row_top, stage_text)
-
-            pdf.setFillColorRGB(0.28, 0.33, 0.41)
-            pdf.setFont("DejaVuSans", 9)
-            note_lines = simpleSplit(note_text, "DejaVuSans", 9, note_width)[:2] or ["-"]
-            actor_lines = simpleSplit(actor_text, "DejaVuSans", 9, note_width)[:1] or ["-"]
-            if rtl:
-                pdf.drawRightString(text_right, row_top - 16, timestamp)
-                for line_index, line in enumerate(actor_lines):
-                    pdf.drawRightString(text_right, row_top - 30 - (line_index * 12), line)
-                for line_index, line in enumerate(note_lines):
-                    pdf.drawRightString(text_right, row_top - 42 - (line_index * 12), line)
-            else:
-                pdf.drawString(text_x, row_top - 16, timestamp)
-                for line_index, line in enumerate(actor_lines):
-                    pdf.drawString(text_x, row_top - 30 - (line_index * 12), line)
-                for line_index, line in enumerate(note_lines):
-                    pdf.drawString(text_x, row_top - 42 - (line_index * 12), line)
-
-    _register_pdf_fonts()
-    buffer = BytesIO()
-    pdf = canvas.Canvas(buffer, pagesize=A4)
-    width, height = A4
-
-    accent = (244 / 255, 121 / 255, 32 / 255)
-    accent_soft = (255 / 255, 244 / 255, 235 / 255)
-    border = (253 / 255, 186 / 255, 116 / 255)
-    generated_at = timezone.localtime(timezone.now()).strftime("%Y-%m-%d %H:%M")
-    days = str(get_leave_days(instance.start_date, instance.end_date))
-    status_en, status_ar = _status_label(instance.status)
+    profile = _leave_profile(instance)
+    status_en, _ = _LEAVE_STATUS_LABELS.get(instance.status, (str(instance.status), str(instance.status)))
     leave_type_en, leave_type_ar = _leave_type_labels(instance.leave_type)
+    days = str(get_leave_days(instance.start_date, instance.end_date))
     source_en = "Manual HR Record" if instance.source == LeaveRequest.RequestSource.HR_MANUAL else "Employee Request"
-    source_ar = "سجل يدوي من الموارد البشرية" if instance.source == LeaveRequest.RequestSource.HR_MANUAL else "طلب موظف"
-    rejection_note = instance.ceo_decision_note or instance.hr_decision_note or instance.manager_decision_note or "-"
-    approval_rows = _approval_path_rows(instance)
 
-    arabic_rows = [
-        ("الموظف", _leave_employee_name(instance)),
-        ("البريد الإلكتروني", _leave_employee_email(instance)),
-        ("نوع الإجازة", leave_type_ar),
-        ("الحالة", status_ar),
-        ("الفترة", f"{instance.start_date} - {instance.end_date}"),
-        ("عدد الأيام", days),
-        ("المصدر", source_ar),
-        ("السبب", instance.reason or "-"),
+    employee = EmployeeBlock(
+        name=_leave_employee_name(instance),
+        employee_number=getattr(profile, "employee_number", "") or getattr(profile, "employee_id", "") or "-",
+        department=getattr(profile, "department_name_en", "") or getattr(profile, "department", "") or "-",
+        job_title=getattr(profile, "job_title_en", "") or getattr(profile, "job_title", "") or "-",
+        national_id=getattr(profile, "national_id", "") or "-",
+        mobile=getattr(profile, "mobile", "") or "-",
+    )
+
+    details = [
+        DetailRow("Leave Type", "نوع الإجازة", f"{leave_type_en} / {leave_type_ar}"),
+        DetailRow("Period", "الفترة", f"{instance.start_date} → {instance.end_date}"),
+        DetailRow("Days", "عدد الأيام", days),
+        DetailRow("Source", "المصدر", source_en),
     ]
-    if instance.status == LeaveRequest.RequestStatus.REJECTED:
-        arabic_rows.append(("ملاحظة الرفض", rejection_note))
 
-    english_rows = [
-        ("Employee", _leave_employee_name(instance)),
-        ("Email", _leave_employee_email(instance)),
-        ("Leave Type", leave_type_en),
-        ("Status", status_en),
-        ("Period", f"{instance.start_date} to {instance.end_date}"),
-        ("Days", days),
-        ("Source", source_en),
-        ("Reason", instance.reason or "-"),
-    ]
-    if instance.status == LeaveRequest.RequestStatus.REJECTED:
-        english_rows.append(("Rejection Note", rejection_note))
+    approvals = []
+    for stage, at, note, actor in _approval_path_rows(instance):
+        stage_en, stage_ar = _LEAVE_STAGE_LABELS.get(stage, (stage, stage))
+        approvals.append(
+            ApprovalStage(
+                stage_en=stage_en,
+                stage_ar=stage_ar,
+                actor=str(actor or "-"),
+                at=timezone.localtime(at).strftime("%Y-%m-%d %H:%M") if at else "-",
+                note=str(note or "-"),
+            )
+        )
 
-    pdf.setTitle(f"Leave Request {instance.id}")
+    extra = []
+    if instance.reason:
+        extra.append(ExtraSection("Reason", "السبب", instance.reason))
+    rejection_note = instance.ceo_decision_note or instance.hr_decision_note or instance.manager_decision_note
+    if instance.status == LeaveRequest.RequestStatus.REJECTED and rejection_note:
+        extra.append(ExtraSection("Rejection Note", "ملاحظة الرفض", rejection_note))
 
-    details_card_height = 250
-    timeline_card_height = max(258, 118 + (len(approval_rows) * 70))
-
-    _draw_page_shell(
-        pdf,
-        width,
-        height,
-        accent,
-        accent_soft,
-        generated_at,
-        f"طلب إجازة رقم {instance.id}",
-        rtl=True,
-        subtitle=f"تاريخ الإنشاء | {generated_at}",
+    doc = RequestDocument(
+        title_en="Leave Request",
+        title_ar="طلب إجازة",
+        reference_no=str(instance.id),
+        generated_at=timezone.localtime().strftime("%Y-%m-%d %H:%M"),
+        employee=employee,
+        details=details,
+        approvals=approvals,
+        extra=extra,
+        status_label=status_en,
     )
-    _draw_section_card(pdf, 36, height - 118, width - 72, details_card_height, accent, border, "Arabic", "العربية", rtl=True)
-    _draw_detail_rows(pdf, 56, height - 166, width - 112, arabic_rows, rtl=True)
-    _draw_section_card(
-        pdf, 36, height - 388, width - 72, timeline_card_height, accent, border, "Approval Path", "مسار الموافقة", rtl=True
-    )
-    _draw_timeline(pdf, 56, height - 438, width - 112, approval_rows, accent, border, rtl=True)
-
-    pdf.showPage()
-
-    _draw_page_shell(pdf, width, height, accent, accent_soft, generated_at, f"Leave Request #{instance.id} - English")
-    _draw_section_card(
-        pdf, 36, height - 118, width - 72, details_card_height, accent, border, "Request Summary", "Request Summary"
-    )
-    _draw_detail_rows(pdf, 56, height - 166, width - 112, english_rows, rtl=False)
-    _draw_section_card(
-        pdf, 36, height - 388, width - 72, timeline_card_height, accent, border, "Approval Path", "Approval Path"
-    )
-    _draw_timeline(pdf, 56, height - 438, width - 112, approval_rows, accent, border, rtl=False)
-
-    pdf.showPage()
-    pdf.save()
-    buffer.seek(0)
-    return buffer.getvalue()
+    return render_request_pdf(doc)
 
 
 def _build_leave_request_pdf(instance: LeaveRequest):
@@ -1042,7 +716,14 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         role = get_role(user)
         base_qs = filter_queryset_by_company_scope(
             LeaveRequest.objects.filter(is_active=True).select_related(
-                "employee", "employee__employee_profile", "leave_type", "decided_by", "manager_decision_by", "company"
+                "employee",
+                "employee__employee_profile",
+                "leave_type",
+                "decided_by",
+                "manager_decision_by",
+                "delegated_to",
+                "delegate_decision_by",
+                "company",
             ),
             self.request,
         )
@@ -1058,7 +739,14 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
     def _unscoped_queryset(self):
         return filter_queryset_by_company_scope(
             LeaveRequest.objects.filter(is_active=True).select_related(
-                "employee", "employee__employee_profile", "leave_type", "decided_by", "manager_decision_by", "company"
+                "employee",
+                "employee__employee_profile",
+                "leave_type",
+                "decided_by",
+                "manager_decision_by",
+                "delegated_to",
+                "delegate_decision_by",
+                "company",
             ),
             self.request,
         )
@@ -1079,9 +767,12 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         if self.action in ["approve", "reject"]:
             return [IsAuthenticated(), IsHRWorkflowApprover()]
 
-        if self.action == "cancel":
+        if self.action in ["delegate_approve", "delegate_reject"]:
+            return [IsAuthenticated()]
+
+        if self.action in ["cancel", "set_delegate"]:
             # Owner only
-            return [IsAuthenticated(), IsLeaveRequestOwner()]
+            return [IsAuthenticated()]
 
         # For update/partial_update/destroy (standard CRUD)
         # Default restricted to HR/Admin
@@ -1097,7 +788,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
 
         # Return read-serializer
         instance = serializer.instance
-        read_serializer = LeaveRequestSerializer(instance)
+        read_serializer = LeaveRequestSerializer(instance, context={"request": request})
         return success(read_serializer.data, status=status.HTTP_201_CREATED)
 
     def perform_create(self, serializer):
@@ -1112,7 +803,9 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
                 manager_user_id = profile.manager_profile.user_id
             has_manager = bool(manager_user_id)
 
-        if _is_hr_manager_user(user):
+        if serializer.validated_data.get("delegated_to"):
+            initial_status = LeaveRequest.RequestStatus.PENDING_DELEGATE
+        elif _is_hr_manager_user(user):
             initial_status = LeaveRequest.RequestStatus.PENDING_CEO
         elif has_manager:
             initial_status = LeaveRequest.RequestStatus.PENDING_MANAGER
@@ -1126,6 +819,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             status=initial_status,
         )
         sync_workflow(instance, actor=self.request.user)
+        sync_leave_obligations(instance, actor=self.request.user)
         requested_days = get_leave_days(instance.start_date, instance.end_date)
         used_before = get_used_days_for_type(self.request.user, instance.leave_type, instance.start_date.year)
         payment_breakdown = get_payment_breakdown(
@@ -1151,68 +845,139 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
                 "approval_status": instance.status,
             },
         )
-        # Fire-and-log pattern: leave workflow should not fail on notification issues.
+        # Fire-and-log: notifications must never fail the main workflow.
         try:
-            send_leave_request_submitted_whatsapp(instance)
+            if not instance.delegated_to:
+                notify_leave_submitted(instance)
         except Exception:
             pass
         try:
-            send_request_submission_email(
-                to_email=getattr(instance.employee, "email", None),
-                employee_name=instance.employee.full_name or instance.employee.email,
+            if instance.delegated_to:
+                notify_delegation_assigned(instance)
+        except Exception:
+            pass
+
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated], url_path="set-delegate")
+    def set_delegate(self, request, pk=None):
+        try:
+            instance = self._unscoped_queryset().get(pk=pk)
+        except LeaveRequest.DoesNotExist:
+            return error("Not found", errors=["Not found."], status=404)
+
+        role = get_role(request.user)
+        if role not in ["SystemAdmin", "HRManager"] and instance.employee_id != request.user.id:
+            return error("Not found", errors=["Not found."], status=404)
+        if instance.status not in [
+            LeaveRequest.RequestStatus.SUBMITTED,
+            LeaveRequest.RequestStatus.PENDING_MANAGER,
+            LeaveRequest.RequestStatus.PENDING_HR,
+            LeaveRequest.RequestStatus.PENDING_CEO,
+        ]:
+            return error("Validation error", errors=["Delegate can only be updated while the request is pending."], status=422)
+
+        serializer = LeaveRequestDelegationSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
+        delegated_to = serializer.validated_data["delegated_to"]
+        if delegated_to.id == instance.employee_id:
+            return error("Validation error", errors=["You cannot delegate the request to the same employee."], status=422)
+
+        instance.delegated_to = delegated_to
+        instance.delegation_note = serializer.validated_data.get("delegation_note", instance.delegation_note)
+        instance.save(update_fields=["delegated_to", "delegation_note", "updated_at"])
+        sync_workflow(instance, actor=request.user)
+        sync_leave_obligations(instance, actor=request.user)
+        audit(
+            request,
+            "leave_delegate_updated",
+            entity="LeaveRequest",
+            entity_id=instance.id,
+            metadata={"delegated_to": delegated_to.id},
+        )
+        try:
+            notify_delegation_assigned(instance)
+        except Exception:
+            pass
+        return success(LeaveRequestSerializer(instance, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated], url_path="delegate-approve")
+    def delegate_approve(self, request, pk=None):
+        try:
+            instance = self._unscoped_queryset().get(pk=pk)
+        except LeaveRequest.DoesNotExist:
+            return error("Not found", errors=["Not found."], status=404)
+
+        if instance.delegated_to_id != request.user.id:
+            return error("Forbidden", errors=["Only the delegated user can approve this step."], status=403)
+        if instance.status != LeaveRequest.RequestStatus.PENDING_DELEGATE:
+            return error(
+                "Validation error",
+                errors=["Request is not waiting for delegated user approval."],
+                status=422,
+            )
+
+        s = LeaveRequestActionSerializer(data=request.data)
+        if not s.is_valid():
+            return error("Validation error", errors=_flatten_errors(s.errors), status=422)
+
+        instance.status = LeaveRequest.RequestStatus.PENDING_HR
+        instance.delegate_decision_by = request.user
+        instance.delegate_decision_at = timezone.now()
+        instance.delegate_decision_note = s.validated_data.get("comment", "")
+        instance.save()
+        sync_workflow(instance, actor=request.user)
+
+        audit(request, "approve_delegate", entity="LeaveRequest", entity_id=instance.id)
+        try:
+            notify_users_for_pending_status(
+                users=get_hr_approver_users(),
                 request_type="Leave Request",
                 request_id=instance.id,
+                requester_name=_leave_employee_name(instance),
                 status_label=instance.status,
-                details=[
-                    f"Leave Type: {instance.leave_type.name}",
-                    f"From: {instance.start_date}",
-                    f"To: {instance.end_date}",
-                ],
-                action_path="/employee/leave/requests",
+                details=[f"Leave Type: {instance.leave_type.name}", f"Employee: {_leave_employee_email(instance)}"],
+                action_path=f"/hr/leave/requests/{instance.id}",
             )
         except Exception:
             pass
+        return success(LeaveRequestSerializer(instance, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated], url_path="delegate-reject")
+    def delegate_reject(self, request, pk=None):
         try:
-            requester_name = instance.employee.full_name or instance.employee.email
-            details = [
-                f"Leave Type: {instance.leave_type.name}",
-                f"From: {instance.start_date}",
-                f"To: {instance.end_date}",
-            ]
-            if instance.status == LeaveRequest.RequestStatus.PENDING_MANAGER:
-                manager = get_direct_manager_user(instance.employee)
-                if manager:
-                    notify_users_for_pending_status(
-                        users=[manager],
-                        request_type="Leave Request",
-                        request_id=instance.id,
-                        requester_name=requester_name,
-                        status_label=instance.status,
-                        details=details,
-                        action_path=f"/manager/leave/requests/{instance.id}",
-                    )
-            elif instance.status == LeaveRequest.RequestStatus.PENDING_HR:
-                notify_users_for_pending_status(
-                    users=get_hr_approver_users(),
-                    request_type="Leave Request",
-                    request_id=instance.id,
-                    requester_name=requester_name,
-                    status_label=instance.status,
-                    details=details,
-                    action_path=f"/hr/leave/requests/{instance.id}",
-                )
-            elif instance.status == LeaveRequest.RequestStatus.PENDING_CEO:
-                notify_users_for_pending_status(
-                    users=get_ceo_approver_users(),
-                    request_type="Leave Request",
-                    request_id=instance.id,
-                    requester_name=requester_name,
-                    status_label=instance.status,
-                    details=details,
-                    action_path=f"/ceo/leave/requests/{instance.id}",
-                )
+            instance = self._unscoped_queryset().get(pk=pk)
+        except LeaveRequest.DoesNotExist:
+            return error("Not found", errors=["Not found."], status=404)
+
+        if instance.delegated_to_id != request.user.id:
+            return error("Forbidden", errors=["Only the delegated user can reject this step."], status=403)
+        if instance.status != LeaveRequest.RequestStatus.PENDING_DELEGATE:
+            return error(
+                "Validation error",
+                errors=["Request is not waiting for delegated user approval."],
+                status=422,
+            )
+
+        s = LeaveRequestActionSerializer(data=request.data)
+        if not s.is_valid():
+            return error("Validation error", errors=_flatten_errors(s.errors), status=422)
+        comment = (s.validated_data.get("comment") or "").strip()
+        if not comment:
+            return error("Validation error", errors=["comment is required."], status=422)
+
+        instance.status = LeaveRequest.RequestStatus.REJECTED
+        instance.delegate_decision_by = request.user
+        instance.delegate_decision_at = timezone.now()
+        instance.delegate_decision_note = comment
+        instance.save()
+        sync_workflow(instance, actor=request.user)
+
+        audit(request, "reject_delegate", entity="LeaveRequest", entity_id=instance.id)
+        try:
+            notify_leave_rejected(instance, comment)
         except Exception:
             pass
+        return success(LeaveRequestSerializer(instance, context={"request": request}).data)
 
     def list(self, request, *args, **kwargs):
         role = get_role(request.user)
@@ -1266,7 +1031,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         if role not in ["SystemAdmin", "HRManager"] and instance.employee_id != request.user.id:
             if not can_user_act_on_instance(request.user, instance):
                 return error("Not found", errors=["Not found."], status=404)
-        return success(LeaveRequestSerializer(instance).data)
+        return success(LeaveRequestSerializer(instance, context={"request": request}).data)
 
     def destroy(self, request, *args, **kwargs):
         return error(
@@ -1336,7 +1101,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             },
         )
         try:
-            send_leave_request_approved_whatsapp(instance)
+            notify_leave_approved(instance)
         except Exception:
             pass
         if instance.status == LeaveRequest.RequestStatus.PENDING_CEO:
@@ -1352,7 +1117,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
                 )
             except Exception:
                 pass
-        return success(LeaveRequestSerializer(instance).data)
+        return success(LeaveRequestSerializer(instance, context={"request": request}).data)
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsHRManagerOrAdmin])
     def reject(self, request, pk=None):
@@ -1394,22 +1159,10 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
 
         audit(request, "reject", entity="LeaveRequest", entity_id=instance.id)
         try:
-            send_leave_request_rejected_whatsapp(instance, comment)
+            notify_leave_rejected(instance, comment)
         except Exception:
             pass
-        try:
-            send_leave_rejected_email(
-                to_email=instance.employee.email,
-                employee_name=instance.employee.full_name or instance.employee.email,
-                leave_type=instance.leave_type.name,
-                start_date=str(instance.start_date),
-                end_date=str(instance.end_date),
-                rejection_reason=comment,
-                action_url=f"{settings.FRONTEND_URL.rstrip('/')}/employee/leave/requests",
-            )
-        except Exception:
-            pass
-        return success(LeaveRequestSerializer(instance).data)
+        return success(LeaveRequestSerializer(instance, context={"request": request}).data)
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsHRWorkflowApprover], url_path="send-to-ceo")
     def send_to_ceo(self, request, pk=None):
@@ -1465,7 +1218,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             )
         except Exception:
             pass
-        return success(LeaveRequestSerializer(instance).data)
+        return success(LeaveRequestSerializer(instance, context={"request": request}).data)
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsLeaveRequestOwner])
     def cancel(self, request, pk=None):
@@ -1488,7 +1241,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         sync_workflow(instance, actor=request.user)
 
         audit(request, "cancel", entity="LeaveRequest", entity_id=instance.id)
-        return success(LeaveRequestSerializer(instance).data)
+        return success(LeaveRequestSerializer(instance, context={"request": request}).data)
 
     @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated, IsOwnerOrHR])
     def document(self, request, pk=None):
@@ -1506,8 +1259,14 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             return error("Not found", errors=["Not found."], status=404)
 
         pdf_bytes = _build_leave_request_pdf(instance)
-        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        packet = _to_bool(request.query_params.get("packet", "0"))
         filename = f"leave_request_{instance.id}.pdf"
+        if packet:
+            doc_bytes = _leave_document_pdf_bytes(instance)
+            if doc_bytes:
+                pdf_bytes = merge_pdfs([pdf_bytes, doc_bytes])
+                filename = f"leave_request_{instance.id}_packet.pdf"
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
         disposition = "attachment" if _to_bool(request.query_params.get("download", "1")) else "inline"
         response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
         return response
@@ -1575,8 +1334,13 @@ class HRManualLeaveRequestViewSet(viewsets.ModelViewSet):
             },
         )
         self._notify_manager(instance, "manual_record_created")
+        if instance.delegated_to:
+            try:
+                notify_delegation_assigned(instance)
+            except Exception:
+                pass
 
-        data = LeaveRequestSerializer(instance).data
+        data = LeaveRequestSerializer(instance, context={"request": request}).data
         data["warning_messages"] = warnings
         return success(data, status=status.HTTP_201_CREATED)
 
@@ -1604,8 +1368,13 @@ class HRManualLeaveRequestViewSet(viewsets.ModelViewSet):
             },
         )
         self._notify_manager(updated, "manual_record_updated")
+        if updated.delegated_to:
+            try:
+                notify_delegation_assigned(updated)
+            except Exception:
+                pass
 
-        data = LeaveRequestSerializer(updated).data
+        data = LeaveRequestSerializer(updated, context={"request": request}).data
         data["warning_messages"] = warnings
         return success(data)
 
@@ -1721,7 +1490,7 @@ class ManagerLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
             )
         except Exception:
             pass
-        return success(LeaveRequestSerializer(instance).data)
+        return success(LeaveRequestSerializer(instance, context={"request": request}).data)
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsManagerOfEmployee])
     def reject(self, request, pk=None):
@@ -1750,22 +1519,10 @@ class ManagerLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
         audit(request, "reject", entity="LeaveRequest", entity_id=instance.id)
         try:
-            send_leave_request_rejected_whatsapp(instance, comment)
+            notify_leave_rejected(instance, comment)
         except Exception:
             pass
-        try:
-            send_leave_rejected_email(
-                to_email=instance.employee.email,
-                employee_name=instance.employee.full_name or instance.employee.email,
-                leave_type=instance.leave_type.name,
-                start_date=str(instance.start_date),
-                end_date=str(instance.end_date),
-                rejection_reason=comment,
-                action_url=f"{settings.FRONTEND_URL.rstrip('/')}/employee/leave/requests",
-            )
-        except Exception:
-            pass
-        return success(LeaveRequestSerializer(instance).data)
+        return success(LeaveRequestSerializer(instance, context={"request": request}).data)
 
     @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated, IsManagerOfEmployee])
     def document(self, request, pk=None):
@@ -1940,6 +1697,24 @@ class CEOLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
         s = LeaveRequestActionSerializer(data=request.data)
         if not s.is_valid():
             return error("Validation error", errors=_flatten_errors(s.errors), status=422)
+        waiver_reason = (s.validated_data.get("waiver_reason") or "").strip()
+        obligations_summary = sync_leave_obligations(instance, actor=request.user)
+        if is_business_trip_leave(instance) and obligations_summary.get("blocking_open", 0) > 0:
+            if not waiver_reason:
+                return Response(
+                    {
+                        "status": "error",
+                        "message": "Business Trip obligations must be resolved or waived by CEO before approval.",
+                        "errors": [
+                            {
+                                "message": "Business Trip obligations must be resolved or waived by CEO before approval.",
+                            }
+                        ],
+                        "data": {"obligations_summary": obligations_summary},
+                    },
+                    status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                )
+            waive_open_blocking_obligations(instance, actor=request.user, reason=waiver_reason, request=request)
 
         instance.status = LeaveRequest.RequestStatus.APPROVED
         instance.ceo_decision_by = request.user
@@ -1947,13 +1722,14 @@ class CEOLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
         instance.ceo_decision_note = s.validated_data.get("comment", "")
         instance.save()
         sync_workflow(instance, actor=request.user)
+        sync_leave_obligations(instance, actor=request.user)
 
         audit(request, "approve_ceo", entity="LeaveRequest", entity_id=instance.id)
         try:
-            send_leave_request_approved_whatsapp(instance)
+            notify_leave_approved(instance)
         except Exception:
             pass
-        return success(LeaveRequestSerializer(instance).data)
+        return success(LeaveRequestSerializer(instance, context={"request": request}).data)
 
     @action(detail=True, methods=["post"])
     def reject(self, request, pk=None):
@@ -1980,22 +1756,10 @@ class CEOLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
         audit(request, "reject_ceo", entity="LeaveRequest", entity_id=instance.id)
         try:
-            send_leave_request_rejected_whatsapp(instance, comment)
+            notify_leave_rejected(instance, comment)
         except Exception:
             pass
-        try:
-            send_leave_rejected_email(
-                to_email=instance.employee.email,
-                employee_name=instance.employee.full_name or instance.employee.email,
-                leave_type=instance.leave_type.name,
-                start_date=str(instance.start_date),
-                end_date=str(instance.end_date),
-                rejection_reason=comment,
-                action_url=f"{settings.FRONTEND_URL.rstrip('/')}/employee/leave/requests",
-            )
-        except Exception:
-            pass
-        return success(LeaveRequestSerializer(instance).data)
+        return success(LeaveRequestSerializer(instance, context={"request": request}).data)
 
     @action(detail=True, methods=["get"])
     def document(self, request, pk=None):

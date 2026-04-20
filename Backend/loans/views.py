@@ -1,4 +1,5 @@
 from django.db.models import Q
+from django.http import HttpResponse
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
@@ -21,6 +22,7 @@ from core.services import (
     send_request_submission_email,
     sync_workflow,
 )
+from leaves.permissions import IsOwnerOrHR
 
 from .models import LoanRequest
 from organization.services import filter_queryset_by_company_scope
@@ -111,6 +113,168 @@ def _resolve_open_loan_target_period():
     if current_run and current_run.status in [PayrollRun.Status.COMPLETED, PayrollRun.Status.PAID]:
         return _next_year_month(year, month)
     return year, month
+
+
+_LOAN_STATUS_LABELS = {
+    LoanRequest.RequestStatus.SUBMITTED: ("Submitted", "مُقدّم"),
+    LoanRequest.RequestStatus.PENDING_MANAGER: ("Pending Manager", "بانتظار المدير"),
+    LoanRequest.RequestStatus.PENDING_HR: ("Pending HR", "بانتظار الموارد البشرية"),
+    LoanRequest.RequestStatus.PENDING_FINANCE: ("Pending Finance", "بانتظار المالية"),
+    LoanRequest.RequestStatus.PENDING_CFO: ("Pending CFO", "بانتظار المدير المالي"),
+    LoanRequest.RequestStatus.PENDING_CEO: ("Pending CEO", "بانتظار الرئيس التنفيذي"),
+    LoanRequest.RequestStatus.PENDING_DISBURSEMENT: ("Pending Disbursement", "بانتظار الصرف"),
+    LoanRequest.RequestStatus.APPROVED: ("Approved", "معتمد"),
+    LoanRequest.RequestStatus.REJECTED: ("Rejected", "مرفوض"),
+    LoanRequest.RequestStatus.CANCELLED: ("Cancelled", "ملغي"),
+    LoanRequest.RequestStatus.DEDUCTED: ("Deducted", "مخصوم"),
+}
+
+_LOAN_TYPE_LABELS = {
+    LoanRequest.LoanType.OPEN: ("Open Loan", "سلفة مفتوحة"),
+    LoanRequest.LoanType.INSTALLMENT: ("Installment Loan", "سلفة بالتقسيط"),
+}
+
+
+def _to_bool(value):
+    return str(value).strip().lower() in {"1", "true", "yes", "y"}
+
+
+def _display_user(user):
+    if not user:
+        return "-"
+    return str(getattr(user, "full_name", "") or getattr(user, "email", "") or "-")
+
+
+def _fmt_dt(value):
+    if not value:
+        return "-"
+    try:
+        return timezone.localtime(value).strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        return str(value)
+
+
+def _build_loan_request_pdf(instance: LoanRequest) -> bytes:
+    from core.pdf import (
+        ApprovalStage,
+        DetailRow,
+        EmployeeBlock,
+        ExtraSection,
+        RequestDocument,
+        render_request_pdf,
+    )
+
+    profile = instance.employee_profile
+    employee = instance.employee
+    status_en, _ = _LOAN_STATUS_LABELS.get(instance.status, (str(instance.status), str(instance.status)))
+    loan_type_en, loan_type_ar = _LOAN_TYPE_LABELS.get(
+        instance.loan_type, (str(instance.loan_type), str(instance.loan_type))
+    )
+
+    name = (
+        getattr(profile, "full_name_en", None)
+        or getattr(profile, "full_name", None)
+        or getattr(employee, "full_name", None)
+        or getattr(employee, "email", None)
+        or "-"
+    )
+    department = (
+        getattr(profile, "department_name_en", None) or getattr(profile, "department", None) or "-"
+    )
+    job_title = getattr(profile, "job_title_en", None) or getattr(profile, "job_title", None) or "-"
+
+    employee_block = EmployeeBlock(
+        name=str(name),
+        employee_number=str(getattr(profile, "employee_id", "-") or "-"),
+        department=str(department),
+        job_title=str(job_title),
+        national_id=str(getattr(profile, "national_id", "-") or "-"),
+        mobile=str(getattr(profile, "mobile", "-") or "-"),
+    )
+
+    details = [
+        DetailRow("Loan Type", "نوع السلفة", f"{loan_type_en} / {loan_type_ar}"),
+        DetailRow("Requested Amount", "المبلغ المطلوب", f"{instance.requested_amount}"),
+        DetailRow(
+            "Approved Amount",
+            "المبلغ المعتمد",
+            f"{instance.approved_amount}" if instance.approved_amount is not None else "-",
+        ),
+        DetailRow(
+            "Installment Months",
+            "عدد الأشهر",
+            str(instance.installment_months) if instance.installment_months else "-",
+        ),
+        DetailRow(
+            "Target Deduction",
+            "شهر الخصم",
+            f"{instance.target_deduction_year}-{instance.target_deduction_month:02d}"
+            if instance.target_deduction_year and instance.target_deduction_month
+            else "-",
+        ),
+        DetailRow("Current Status", "الحالة الحالية", status_en),
+    ]
+
+    approvals = [
+        ApprovalStage(
+            stage_en="Submitted",
+            stage_ar="تقديم الطلب",
+            actor=_display_user(employee),
+            at=_fmt_dt(instance.created_at),
+            note="Loan request created",
+        ),
+        ApprovalStage(
+            stage_en="Manager Review",
+            stage_ar="مراجعة المدير",
+            actor=_display_user(instance.manager_decision_by),
+            at=_fmt_dt(instance.manager_decision_at),
+            note=instance.manager_decision_note or (instance.manager_recommendation or "-"),
+        ),
+        ApprovalStage(
+            stage_en="HR Review",
+            stage_ar="مراجعة الموارد البشرية",
+            actor=_display_user(instance.finance_decision_by),
+            at=_fmt_dt(instance.finance_decision_at),
+            note=instance.finance_decision_note or (instance.hr_recommendation or "-"),
+        ),
+        ApprovalStage(
+            stage_en="CFO Review",
+            stage_ar="مراجعة المدير المالي",
+            actor=_display_user(instance.cfo_decision_by),
+            at=_fmt_dt(instance.cfo_decision_at),
+            note=instance.cfo_decision_note or "-",
+        ),
+        ApprovalStage(
+            stage_en="CEO Review",
+            stage_ar="مراجعة الرئيس التنفيذي",
+            actor=_display_user(instance.ceo_decision_by),
+            at=_fmt_dt(instance.ceo_decision_at),
+            note=instance.ceo_decision_note or "-",
+        ),
+        ApprovalStage(
+            stage_en="Disbursement",
+            stage_ar="الصرف",
+            actor=_display_user(instance.disbursed_by),
+            at=_fmt_dt(instance.disbursed_at),
+            note=instance.disbursement_note or "-",
+        ),
+    ]
+
+    extra = []
+    if instance.reason:
+        extra.append(ExtraSection(title_en="Reason", title_ar="السبب", body=str(instance.reason)))
+
+    doc = RequestDocument(
+        title_en="Loan Request",
+        title_ar="طلب سلفة",
+        reference_no=str(instance.id),
+        employee=employee_block,
+        details=details,
+        approvals=approvals,
+        extra=extra,
+        status_label=status_en,
+    )
+    return render_request_pdf(doc)
 
 
 class LoanRequestViewSet(viewsets.ModelViewSet):
@@ -398,6 +562,26 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
         sync_workflow(instance, actor=request.user)
         audit(request, "loan_request_cancelled", entity="LoanRequest", entity_id=instance.id)
         return success(LoanRequestReadSerializer(instance).data)
+
+    @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated, IsOwnerOrHR])
+    def pdf(self, request, pk=None):
+        instance = self.get_queryset().filter(pk=pk).first()
+        if not instance:
+            return error("Not found", errors=["Not found."], status=404)
+        self.check_object_permissions(request, instance)
+
+        pdf_bytes = _build_loan_request_pdf(instance)
+        audit(
+            request,
+            "loan_request_exported_pdf",
+            entity="LoanRequest",
+            entity_id=instance.id,
+        )
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        filename = f"loan_request_{instance.id}.pdf"
+        disposition = "attachment" if _to_bool(request.query_params.get("download", "1")) else "inline"
+        response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
+        return response
 
 
 class EmployeeLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):

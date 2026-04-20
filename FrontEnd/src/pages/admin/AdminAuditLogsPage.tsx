@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, Card, DatePicker, Input, Select, Space, Table, Tag, Typography, message } from "antd";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Button, Card, Checkbox, DatePicker, Input, Popover, Select, Space, Table, Tag, Typography, message } from "antd";
 import type { ColumnsType, TablePaginationConfig } from "antd/es/table";
-import { DownloadOutlined, ReloadOutlined } from "@ant-design/icons";
+import { DownloadOutlined, ReloadOutlined, SettingOutlined } from "@ant-design/icons";
+import dayjs from "dayjs";
+import type { Dayjs } from "dayjs";
 import PageHeader from "../../components/ui/PageHeader";
 import LoadingState from "../../components/ui/LoadingState";
 import EmptyState from "../../components/ui/EmptyState";
@@ -12,8 +14,12 @@ import { exportAuditLogs, listAuditLogs } from "../../services/api/auditApi";
 import { isApiError } from "../../services/api/apiTypes";
 import type { AuditLogDto } from "../../services/api/apiTypes";
 import { useI18n } from "../../i18n/useI18n";
+import { getUserPreference, saveUserPreference } from "../../services/api/preferencesApi";
 
 const { RangePicker } = DatePicker;
+const PREFERENCE_SCOPE = "tables";
+const PREFERENCE_KEY = "admin-audit-logs";
+const DEFAULT_VISIBLE_COLUMNS = ["timestamp", "actorEmail", "action", "target", "severity", "ip"];
 
 type UiMode = "loading" | "empty" | "error" | "ok";
 
@@ -28,6 +34,8 @@ type AuditRow = {
   severity: AuditSeverity;
   ip?: string;
 };
+
+type AuditDateRange = [Dayjs, Dayjs] | null;
 
 function severityTag(s: AuditSeverity) {
   if (s === "Critical") return <Tag color="red">Critical</Tag>;
@@ -82,12 +90,18 @@ export default function AdminAuditLogsPage() {
   const [q, setQ] = useState("");
   const [severity, setSeverity] = useState<"All" | AuditSeverity>("All");
   const [actionType, setActionType] = useState<"All" | string>("All");
-  const [dateRange, setDateRange] = useState<any>(null);
+  const [dateRange, setDateRange] = useState<AuditDateRange>(null);
+  const [visibleColumnKeys, setVisibleColumnKeys] = useState<string[]>(DEFAULT_VISIBLE_COLUMNS);
+  const [exportFormat, setExportFormat] = useState<"csv" | "xlsx">("csv");
+  const [savingPreference, setSavingPreference] = useState(false);
+  const [preferencesReady, setPreferencesReady] = useState(false);
   const [pagination, setPagination] = useState<TablePaginationConfig>({
     current: 1,
     pageSize: 10,
     total: 0,
   });
+  const preferenceLoadedRef = useRef(false);
+  const preferenceSaveTimeoutRef = useRef<number | null>(null);
 
   const filtered = useMemo(() => {
     if (severity === "All") return rows;
@@ -98,6 +112,55 @@ export default function AdminAuditLogsPage() {
     const unique = Array.from(new Set(rows.map((r) => r.action))).sort();
     return unique;
   }, [rows]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadPreference() {
+      try {
+        const response = await getUserPreference(PREFERENCE_SCOPE, PREFERENCE_KEY);
+        if (!active || isApiError(response)) {
+          return;
+        }
+
+        const value = response.data.value || {};
+        setQ(typeof value.search === "string" ? value.search : "");
+        setSeverity(value.severity === "Info" || value.severity === "Warning" || value.severity === "Critical" ? value.severity : "All");
+        setActionType(typeof value.actionType === "string" && value.actionType.length > 0 ? value.actionType : "All");
+        setVisibleColumnKeys(
+          Array.isArray(value.visibleColumns)
+            ? value.visibleColumns.filter((item): item is string => typeof item === "string" && item.length > 0)
+            : DEFAULT_VISIBLE_COLUMNS
+        );
+        setExportFormat(value.exportFormat === "xlsx" ? "xlsx" : "csv");
+        setPagination((prev) => ({
+          ...prev,
+          current: 1,
+          pageSize: typeof value.pageSize === "number" ? value.pageSize : prev.pageSize,
+        }));
+
+        if (typeof value.dateFrom === "string" && typeof value.dateTo === "string") {
+          const nextFrom = dayjs(value.dateFrom);
+          const nextTo = dayjs(value.dateTo);
+          if (nextFrom.isValid() && nextTo.isValid()) {
+            setDateRange([nextFrom, nextTo]);
+          }
+        }
+      } catch {
+        // Keep the page usable even if preference loading fails.
+      } finally {
+        if (active) {
+          preferenceLoadedRef.current = true;
+          setPreferencesReady(true);
+        }
+      }
+    }
+
+    loadPreference();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const loadAuditLogs = useCallback(
     async (page = 1, pageSize = 10) => {
@@ -150,18 +213,54 @@ export default function AdminAuditLogsPage() {
   );
 
   useEffect(() => {
+    if (!preferencesReady) return;
     loadAuditLogs(pagination.current || 1, pagination.pageSize || 10);
-  }, [loadAuditLogs, pagination.current, pagination.pageSize]);
+  }, [preferencesReady, loadAuditLogs, pagination.current, pagination.pageSize]);
 
   useEffect(() => {
     setPagination((prev) => ({ ...prev, current: 1 }));
-  }, [q, actionType, dateRange]);
+  }, [q, actionType, dateRange, severity]);
 
-  async function exportCsv() {
+  useEffect(() => {
+    if (!preferenceLoadedRef.current) return;
+
+    if (preferenceSaveTimeoutRef.current) {
+      window.clearTimeout(preferenceSaveTimeoutRef.current);
+    }
+
+    preferenceSaveTimeoutRef.current = window.setTimeout(async () => {
+      setSavingPreference(true);
+      try {
+        await saveUserPreference(PREFERENCE_SCOPE, PREFERENCE_KEY, {
+          search: q,
+          severity,
+          actionType,
+          pageSize: pagination.pageSize || 10,
+          visibleColumns: visibleColumnKeys,
+          exportFormat,
+          dateFrom: dateRange?.[0]?.toISOString() || null,
+          dateTo: dateRange?.[1]?.toISOString() || null,
+        });
+      } catch {
+        // Preference persistence should not block the page.
+      } finally {
+        setSavingPreference(false);
+      }
+    }, 400);
+
+    return () => {
+      if (preferenceSaveTimeoutRef.current) {
+        window.clearTimeout(preferenceSaveTimeoutRef.current);
+      }
+    };
+  }, [q, severity, actionType, dateRange, visibleColumnKeys, exportFormat, pagination.pageSize]);
+
+  async function exportLogs() {
     try {
       const params: Record<string, string | number | undefined> = {
         search: q.trim() || undefined,
         action: actionType === "All" ? undefined : actionType,
+        file_format: exportFormat,
       };
 
       if (dateRange?.[0]) {
@@ -172,18 +271,18 @@ export default function AdminAuditLogsPage() {
       }
 
       const blob = await exportAuditLogs(params);
-      triggerBlobDownload(blob, `audit_logs_${new Date().toISOString().slice(0, 10)}.csv`);
-      message.success("Exported CSV.");
+      triggerBlobDownload(blob, `audit_logs_${new Date().toISOString().slice(0, 10)}.${exportFormat}`);
+      message.success(`Exported ${exportFormat.toUpperCase()}.`);
     } catch (err: any) {
       if (err?.response?.status === 403) {
         setUnauthorized(true);
         return;
       }
-      message.error("Failed to export CSV.");
+      message.error(`Failed to export ${exportFormat.toUpperCase()}.`);
     }
   }
 
-  const columns: ColumnsType<AuditRow> = [
+  const allColumns: ColumnsType<AuditRow> = [
     {
       title: t("admin.dashboard.time"),
       dataIndex: "timestamp",
@@ -201,6 +300,36 @@ export default function AdminAuditLogsPage() {
     { title: t("admin.dashboard.severity"), dataIndex: "severity", key: "severity", render: (v: AuditSeverity) => severityTag(v), width: 120 },
     { title: "IP", dataIndex: "ip", key: "ip", width: 140 },
   ];
+  const columns = useMemo(
+    () => allColumns.filter((column) => visibleColumnKeys.includes(String(column.key))),
+    [allColumns, visibleColumnKeys]
+  );
+  const columnOptions = [
+    { label: t("admin.dashboard.time"), value: "timestamp" },
+    { label: t("admin.dashboard.actor"), value: "actorEmail" },
+    { label: t("admin.dashboard.action"), value: "action" },
+    { label: "Target", value: "target" },
+    { label: t("admin.dashboard.severity"), value: "severity" },
+    { label: "IP", value: "ip" },
+  ];
+  const columnsPopoverContent = (
+    <div style={{ width: 240, display: "flex", flexDirection: "column", gap: 12 }}>
+      <Typography.Text strong>{t("common.columns", "Columns")}</Typography.Text>
+      <Checkbox.Group
+        options={columnOptions}
+        value={visibleColumnKeys}
+        onChange={(values) => {
+          const selected = values.map(String);
+          if (selected.length > 0) {
+            setVisibleColumnKeys(selected);
+          }
+        }}
+      />
+      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        {savingPreference ? t("common.saving", "Saving...") : t("common.saved", "Saved automatically")}
+      </Typography.Text>
+    </div>
+  );
 
   if (unauthorized) return <Unauthorized403Page />;
   if (mode === "loading") return <LoadingState title={t("loading.generic")} />;
@@ -215,7 +344,19 @@ export default function AdminAuditLogsPage() {
         actions={
           <Space>
             <Button icon={<ReloadOutlined />} onClick={() => loadAuditLogs(1, pagination.pageSize || 10)}>{t("common.refresh")}</Button>
-            <Button icon={<DownloadOutlined />} onClick={exportCsv}>{t("common.export")} CSV</Button>
+            <Popover content={columnsPopoverContent} trigger="click" placement="bottomRight">
+              <Button icon={<SettingOutlined />}>{t("common.columns", "Columns")}</Button>
+            </Popover>
+            <Select
+              value={exportFormat}
+              onChange={setExportFormat}
+              style={{ width: 110 }}
+              options={[
+                { label: "CSV", value: "csv" },
+                { label: "XLSX", value: "xlsx" },
+              ]}
+            />
+            <Button icon={<DownloadOutlined />} onClick={exportLogs}>{t("common.export")} {exportFormat.toUpperCase()}</Button>
           </Space>
         }
       />
@@ -233,7 +374,7 @@ export default function AdminAuditLogsPage() {
             { label: t("common.filter"), value: "All" },
             ...actionOptions.map((a) => ({ label: t(`audit.action.${a}`, a), value: a })),
           ]} />
-          <RangePicker onChange={(v) => setDateRange(v)} placeholder={[t("leave.startDate"), t("leave.endDate")]} style={{ flex: "0 1 280px" }} />
+          <RangePicker value={dateRange} onChange={(v) => setDateRange(v as AuditDateRange)} placeholder={[t("leave.startDate"), t("leave.endDate")]} style={{ flex: "0 1 280px" }} />
         </div>
         <div style={{ marginTop: 16 }}>
           <Table<AuditRow>

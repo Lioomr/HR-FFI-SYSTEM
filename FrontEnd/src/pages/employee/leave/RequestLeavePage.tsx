@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Card, Form, Select, DatePicker, Input, Alert, notification, Upload } from "antd";
+import { Button, Card, Form, Select, DatePicker, Input, Alert, notification, Upload, Row, Col } from "antd";
 import { ArrowLeftOutlined, SendOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import type { UploadFile } from "antd/es/upload/interface";
@@ -8,6 +8,7 @@ import type { UploadFile } from "antd/es/upload/interface";
 import PageHeader from "../../../components/ui/PageHeader";
 import { useI18n } from "../../../i18n/useI18n";
 import { getLeaveTypes, createLeaveRequest, getMyLeaveBalance, type LeaveType, type LeaveBalance } from "../../../services/api/leaveApi";
+import { listDelegationCandidates, type DelegationCandidate } from "../../../services/api/employeesApi";
 import { isApiError } from "../../../services/api/apiTypes";
 import { getDetailedHttpErrorMessage } from "../../../services/api/userErrorMessages";
 
@@ -37,6 +38,7 @@ export default function RequestLeavePage() {
     const [balanceError, setBalanceError] = useState<string | null>(null);
     const [isOtherSelected, setIsOtherSelected] = useState(false);
     const [isSickSelected, setIsSickSelected] = useState(false);
+    const [delegationCandidates, setDelegationCandidates] = useState<DelegationCandidate[]>([]);
 
     const getBalanceByCode = (code: string): LeaveBalance | undefined => {
         const normalized = code.toUpperCase();
@@ -74,6 +76,11 @@ export default function RequestLeavePage() {
                     });
                     setBalances(map);
                 }
+
+                const employeesRes = await listDelegationCandidates();
+                if (!isApiError(employeesRes)) {
+                    setDelegationCandidates(employeesRes.data || []);
+                }
             } catch (e) {
                 console.error(e);
                 notification.error({ message: t("common.error"), description: t("common.tryAgain") });
@@ -88,7 +95,11 @@ export default function RequestLeavePage() {
         if (changedValues.leave_type) {
             const typeObj = leaveTypes.find(t => t.id === changedValues.leave_type);
             setIsOtherSelected(typeObj?.code === 'OTHER');
-            setIsSickSelected(["SICK", "SICK_LEAVE"].includes((typeObj?.code || "").toUpperCase()));
+            const nextIsSickSelected = ["SICK", "SICK_LEAVE"].includes((typeObj?.code || "").toUpperCase());
+            setIsSickSelected(nextIsSickSelected);
+            if (!nextIsSickSelected) {
+                form.setFields([{ name: "document", errors: [] }]);
+            }
         }
 
         if (changedValues.dates || changedValues.leave_type) {
@@ -146,6 +157,15 @@ export default function RequestLeavePage() {
             if (file) {
                 payload.append("document", file);
             }
+
+            payload.append("other_leave_description", values.other_leave_description || "");
+            if (values.date_of_rejoin) payload.append("date_of_rejoin", values.date_of_rejoin.format("YYYY-MM-DD"));
+            payload.append("po_box", values.po_box || "");
+            payload.append("full_address", values.full_address || "");
+            payload.append("airplane_ticket_payer", values.airplane_ticket_payer || "");
+            payload.append("airplane_ticket_address", values.airplane_ticket_address || "");
+            if (values.delegated_to != null) payload.append("delegated_to", String(values.delegated_to));
+            payload.append("delegation_note", values.delegation_note || "");
 
             await createLeaveRequest(payload);
 
@@ -270,6 +290,62 @@ export default function RequestLeavePage() {
                         <Upload beforeUpload={() => false} maxCount={1} accept=".pdf,.png,.jpg,.jpeg,.doc,.docx">
                             <Button>{t("leave.chooseFile")}</Button>
                         </Upload>
+                    </Form.Item>
+
+                    {isOtherSelected && (
+                        <Form.Item label={t("leave.otherLeaveDescription")} name="other_leave_description">
+                            <Input />
+                        </Form.Item>
+                    )}
+
+                    <Row gutter={16}>
+                        <Col span={12}>
+                            <Form.Item label={t("leave.dateOfRejoin")} name="date_of_rejoin">
+                                <DatePicker style={{ width: "100%" }} />
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item label={t("leave.poBox")} name="po_box">
+                                <Input />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+
+                    <Form.Item label={t("leave.fullAddress")} name="full_address">
+                        <Input />
+                    </Form.Item>
+
+                    <Row gutter={16}>
+                        <Col span={12}>
+                            <Form.Item label={t("leave.airplaneTicketPayer")} name="airplane_ticket_payer">
+                                <Select allowClear placeholder="-">
+                                    <Option value="company">{t("leave.ticketPayer.company")}</Option>
+                                    <Option value="employee">{t("leave.ticketPayer.employee")}</Option>
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item label={t("leave.airplaneTicketAddress")} name="airplane_ticket_address">
+                                <Input />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+
+                    <Form.Item label={t("leave.delegatedTo")} name="delegated_to">
+                        <Select
+                            showSearch
+                            allowClear
+                            optionFilterProp="label"
+                            placeholder="-"
+                            options={delegationCandidates.map((e) => ({
+                                value: e.id,
+                                label: `${e.full_name_en || e.full_name || e.employee_id} (${e.employee_id})`,
+                            }))}
+                        />
+                    </Form.Item>
+
+                    <Form.Item label={t("leave.delegationNote")} name="delegation_note">
+                        <TextArea rows={3} />
                     </Form.Item>
 
                     <Button

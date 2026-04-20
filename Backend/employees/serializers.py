@@ -161,6 +161,28 @@ class EmployeeProfileReadSerializer(serializers.ModelSerializer):
         return obj.employment_status
 
 
+class DelegationCandidateSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(source="user.id", read_only=True)
+    employee_profile_id = serializers.IntegerField(source="pk", read_only=True)
+    email = serializers.EmailField(source="user.email", read_only=True)
+    company_id = serializers.IntegerField(read_only=True)
+    company_name = serializers.CharField(source="company.name", read_only=True)
+
+    class Meta:
+        model = EmployeeProfile
+        fields = [
+            "id",
+            "employee_profile_id",
+            "employee_id",
+            "full_name",
+            "full_name_en",
+            "full_name_ar",
+            "email",
+            "company_id",
+            "company_name",
+        ]
+
+
 class EmployeeProfileWriteSerializer(serializers.ModelSerializer):
     department_id = serializers.PrimaryKeyRelatedField(queryset=Department.objects.none(), source="department_ref", required=True)
     position_id = serializers.PrimaryKeyRelatedField(queryset=Position.objects.none(), source="position_ref", required=True)
