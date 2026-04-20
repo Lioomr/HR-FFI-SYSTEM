@@ -183,6 +183,7 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
             return error("Validation error", errors=serializer.errors, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
         validated = serializer.validated_data
+        target_user_ids = validated.pop("target_user_ids", [])
         attachment = validated.get("attachment")
 
         if user_role not in ["SystemAdmin", "HRManager", "Manager", "CEO"]:
@@ -190,8 +191,40 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
                 "Forbidden", errors=["You are not allowed to create announcements."], status=status.HTTP_403_FORBIDDEN
             )
 
+        if target_user_ids and user_role not in ["SystemAdmin", "HRManager"]:
+            return error(
+                "Forbidden",
+                errors=["Only HR managers can create selected-employee notifications."],
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if target_user_ids:
+            attachment_name = None
+            attachment_bytes = None
+            if attachment:
+                attachment_name = attachment.name
+                attachment_bytes = attachment.read()
+                attachment.seek(0)
+
+            created_announcements = []
+            for user_id in target_user_ids:
+                announcement_data = {
+                    key: value
+                    for key, value in validated.items()
+                    if key not in {"target_roles", "target_user", "attachment"}
+                }
+                announcement = Announcement.objects.create(
+                    **announcement_data,
+                    target_roles=[],
+                    target_user_id=user_id,
+                    created_by=request.user,
+                    company=active_company,
+                )
+                if attachment_name and attachment_bytes is not None:
+                    announcement.attachment.save(attachment_name, ContentFile(attachment_bytes), save=True)
+                created_announcements.append(announcement)
         # Manager can only target own team (direct reports), never global roles.
-        if user_role in ["Manager", "CEO"]:
+        elif user_role in ["Manager", "CEO"]:
             if validated.get("target_roles"):
                 return error(
                     "Validation error",

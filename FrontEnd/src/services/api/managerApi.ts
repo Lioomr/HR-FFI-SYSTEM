@@ -106,6 +106,10 @@ export type ManagerTeamMember = {
     manager_name?: string;
 };
 
+export type ManagerAccess = {
+    has_access: boolean;
+};
+
 export async function getManagerAttendance(status?: string) {
     const params = status ? { status } : {};
     const { data } = await api.get<ApiResponse<any>>("/api/manager/attendance/", { params });
@@ -147,6 +151,11 @@ export async function getManagerTeam(search?: string) {
         return { status: "success", data: data as ManagerTeamMember[] } as ApiResponse<ManagerTeamMember[]>;
     }
     return data as ApiResponse<ManagerTeamMember[]>;
+}
+
+export async function getManagerAccess() {
+    const { data } = await api.get<ApiResponse<ManagerAccess>>("/employees/manager/access");
+    return data;
 }
 
 export async function getManagerAssetReturnRequests(status?: string) {

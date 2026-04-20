@@ -63,6 +63,7 @@ class Asset(models.Model):
         blank=True,
     )
     notes = models.TextField(blank=True)
+    must_return_before_travel = models.BooleanField(default=False)
     flexible_attributes = models.JSONField(null=True, blank=True)
 
     plate_number = models.CharField(max_length=50, blank=True)

@@ -6,7 +6,7 @@ from django.db.models import Q
 from django.utils import timezone
 from rest_framework import serializers
 
-from core.services import get_workflow_snapshot
+from core.services import get_obligations_summary, get_workflow_snapshot, sync_leave_obligations
 from employees.models import EmployeeProfile
 
 from .models import LeaveBalanceAdjustment, LeaveRequest, LeaveType
@@ -52,11 +52,13 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
     employee = serializers.SerializerMethodField()
     leave_type = LeaveTypeSerializer(read_only=True)
     decided_by = UserSummarySerializer(read_only=True)
+    delegated_to = UserSummarySerializer(read_only=True)
     days = serializers.SerializerMethodField()
     payment_breakdown = serializers.SerializerMethodField()
     payment_status = serializers.SerializerMethodField()
     deducted_from_leave_type = serializers.SerializerMethodField()
     workflow = serializers.SerializerMethodField()
+    obligations_summary = serializers.SerializerMethodField()
     company_id = serializers.PrimaryKeyRelatedField(source="company", read_only=True)
     company_name = serializers.CharField(source="company.name", read_only=True)
 
@@ -135,11 +137,47 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
         actor = getattr(request, "user", None) if request else None
         return get_workflow_snapshot(obj, actor=actor)
 
+    def get_obligations_summary(self, obj):
+        request = self.context.get("request")
+        actor = getattr(request, "user", None) if request else None
+        try:
+            return sync_leave_obligations(obj, actor=actor)
+        except Exception:
+            return get_obligations_summary(obj)
+
 
 class LeaveRequestCreateSerializer(serializers.ModelSerializer):
+    delegated_to = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(), allow_null=True, required=False
+    )
+
     class Meta:
         model = LeaveRequest
-        fields = ["leave_type", "start_date", "end_date", "reason", "document"]
+        fields = [
+            "leave_type",
+            "start_date",
+            "end_date",
+            "reason",
+            "document",
+            "other_leave_description",
+            "date_of_rejoin",
+            "po_box",
+            "full_address",
+            "airplane_ticket_payer",
+            "airplane_ticket_address",
+            "delegated_to",
+            "delegation_note",
+        ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get("request")
+        profile = getattr(getattr(request, "user", None), "employee_profile", None) if request else None
+        if profile and profile.company_id:
+            self.fields["delegated_to"].queryset = User.objects.filter(
+                is_active=True,
+                employee_profile__company_id=profile.company_id,
+            ).exclude(id=request.user.id)
 
     def validate(self, attrs):
         start = attrs.get("start_date")
@@ -147,6 +185,11 @@ class LeaveRequestCreateSerializer(serializers.ModelSerializer):
         leave_type = attrs.get("leave_type")
         reason = attrs.get("reason", "")
         document = attrs.get("document")
+        delegated_to = attrs.get("delegated_to")
+        user = self.context["request"].user
+
+        if delegated_to and delegated_to.id == user.id:
+            raise serializers.ValidationError({"delegated_to": "You cannot delegate your own leave request to yourself."})
 
         if start and end:
             if start > end:
@@ -168,8 +211,6 @@ class LeaveRequestCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"document": "Medical report document is required for sick leave."})
 
         # Overlap Check
-        user = self.context["request"].user
-
         # Check against APPROVED or PENDING requests
         # PENDING includes SUBMITTED, PENDING_MANAGER, PENDING_HR
         overlap_qs = LeaveRequest.objects.filter(
@@ -178,6 +219,7 @@ class LeaveRequestCreateSerializer(serializers.ModelSerializer):
             status__in=[
                 LeaveRequest.RequestStatus.APPROVED,
                 LeaveRequest.RequestStatus.SUBMITTED,
+                LeaveRequest.RequestStatus.PENDING_DELEGATE,
                 LeaveRequest.RequestStatus.PENDING_MANAGER,
                 LeaveRequest.RequestStatus.PENDING_HR,
             ],
@@ -208,11 +250,20 @@ class LeaveRequestCreateSerializer(serializers.ModelSerializer):
 
 class LeaveRequestActionSerializer(serializers.Serializer):
     comment = serializers.CharField(required=False, allow_blank=True)
+    waiver_reason = serializers.CharField(required=False, allow_blank=True)
+
+
+class LeaveRequestDelegationSerializer(serializers.Serializer):
+    delegated_to = serializers.PrimaryKeyRelatedField(queryset=User.objects.filter(is_active=True))
+    delegation_note = serializers.CharField(required=False, allow_blank=True)
 
 
 class HRManualLeaveRequestSerializer(serializers.ModelSerializer):
     employee_id = serializers.IntegerField(write_only=True)
     warning_messages = serializers.ListField(child=serializers.CharField(), read_only=True)
+    delegated_to = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(), allow_null=True, required=False
+    )
 
     class Meta:
         model = LeaveRequest
@@ -227,7 +278,27 @@ class HRManualLeaveRequestSerializer(serializers.ModelSerializer):
             "manual_entry_reason",
             "source_document_ref",
             "warning_messages",
+            "other_leave_description",
+            "date_of_rejoin",
+            "po_box",
+            "full_address",
+            "airplane_ticket_payer",
+            "airplane_ticket_address",
+            "delegated_to",
+            "delegation_note",
         ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get("request")
+        company = getattr(request, "_active_company", None) if request else None
+        if self.instance and getattr(self.instance, "company_id", None):
+            company = self.instance.company
+        if company is not None:
+            self.fields["delegated_to"].queryset = User.objects.filter(
+                is_active=True,
+                employee_profile__company=company,
+            )
 
     @property
     def policy_warnings(self):
@@ -268,6 +339,10 @@ class HRManualLeaveRequestSerializer(serializers.ModelSerializer):
         leave_type = attrs.get("leave_type", getattr(self.instance, "leave_type", None))
         reason = attrs.get("reason", getattr(self.instance, "reason", ""))
         document = attrs.get("document", getattr(self.instance, "document", None))
+        delegated_to = attrs.get("delegated_to", getattr(self.instance, "delegated_to", None))
+
+        if delegated_to and employee_profile.user_id and delegated_to.id == employee_profile.user_id:
+            raise serializers.ValidationError({"delegated_to": "You cannot delegate a leave request to the same employee."})
 
         if start and end and start > end:
             raise serializers.ValidationError({"end_date": "End date must be after start date."})

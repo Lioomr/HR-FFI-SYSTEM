@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Spin } from "antd";
 import { Navigate, Outlet } from "react-router-dom";
 import { useAuthStore, type Role } from "../auth/authStore";
-import { getManagerTeam } from "../services/api/managerApi";
+import { getManagerAccess } from "../services/api/managerApi";
 import { isApiError } from "../services/api/apiTypes";
 
 export default function RequireRole({ roles }: { roles: Role[] }) {
@@ -25,10 +25,10 @@ export default function RequireRole({ roles }: { roles: Role[] }) {
     }
 
     setManagerEligible(null);
-    getManagerTeam()
+    getManagerAccess()
       .then((res) => {
         if (!mounted) return;
-        setManagerEligible(!isApiError(res));
+        setManagerEligible(!isApiError(res) && res.data.has_access);
       })
       .catch(() => {
         if (!mounted) return;

@@ -20,6 +20,13 @@ from .pending_approval_email import (
     notify_users_for_pending_status,
 )
 from .request_submission_email import send_request_submission_email
+from .request_obligations import (
+    BUSINESS_TRIP_CODE,
+    ensure_leave_delegation_rule,
+    get_obligations_summary,
+    sync_leave_obligations,
+    waive_open_blocking_obligations,
+)
 from .workflow_engine import (
     build_pending_approval_item,
     can_user_act_on_instance,
@@ -46,6 +53,11 @@ __all__ = [
     "get_disbursement_approver_users",
     "notify_users_for_pending_status",
     "send_request_submission_email",
+    "BUSINESS_TRIP_CODE",
+    "ensure_leave_delegation_rule",
+    "get_obligations_summary",
+    "sync_leave_obligations",
+    "waive_open_blocking_obligations",
     "sync_workflow",
     "get_workflow_snapshot",
     "can_user_act_on_instance",

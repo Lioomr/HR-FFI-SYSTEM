@@ -10,6 +10,7 @@ import { useI18n } from "../../i18n/useI18n";
 import { getCEOLeaveRequests, approveCEOLeaveRequest, rejectCEOLeaveRequest, getLeaveRequestDocumentBlob, type LeaveRequest } from "../../services/api/leaveApi";
 import { isApiError } from "../../services/api/apiTypes";
 import LeaveApprovalMap from "../../components/leaves/LeaveApprovalMap";
+import RequestObligationsPanel from "../../components/requests/RequestObligationsPanel";
 
 const { TextArea } = Input;
 
@@ -49,16 +50,42 @@ export default function CEOLeaveInboxPage() {
     }, [loadData, page]);
 
     const handleApprove = (record: LeaveRequest) => {
+        const blockerCount = record.obligations_summary?.blocking_open || 0;
+        let waiverReason = "";
         Modal.confirm({
             title: t("ceo.leaveApprovals.approveTitle"),
-            content: `${record.employee?.full_name} (${record.days} ${t("leave.days")})`,
+            content: (
+                <Space direction="vertical" style={{ width: "100%" }}>
+                    <span>{record.employee?.full_name} ({record.days} {t("leave.days")})</span>
+                    {blockerCount > 0 ? (
+                        <>
+                            <Alert
+                                type="warning"
+                                showIcon
+                                message={t("obligations.ceoWaiverRequired", { count: blockerCount }, "{count} blocking obligation(s) remain. Enter a CEO waiver reason to approve.")}
+                            />
+                            <TextArea
+                                rows={3}
+                                placeholder={t("obligations.waiverReason", "Waiver reason")}
+                                onChange={(event) => {
+                                    waiverReason = event.target.value;
+                                }}
+                            />
+                        </>
+                    ) : null}
+                </Space>
+            ),
             okText: t("common.approve"),
             okType: "primary",
             cancelText: t("common.cancel"),
             onOk: async () => {
+                if (blockerCount > 0 && !waiverReason.trim()) {
+                    notification.error({ message: t("common.error"), description: t("obligations.waiverRequired", "Waiver reason is required.") });
+                    return Promise.reject();
+                }
                 setProcessing(true);
                 try {
-                    const res = await approveCEOLeaveRequest(record.id);
+                    const res = await approveCEOLeaveRequest(record.id, undefined, waiverReason.trim() || undefined);
                     if (isApiError(res)) {
                         notification.error({ message: t("common.error"), description: res.message });
                     } else {
@@ -226,7 +253,12 @@ export default function CEOLeaveInboxPage() {
                         dataSource={requests}
                         rowKey="id"
                         expandable={{
-                            expandedRowRender: (record) => <LeaveApprovalMap request={record} t={t} />,
+                            expandedRowRender: (record) => (
+                                <Space direction="vertical" style={{ width: "100%" }}>
+                                    <LeaveApprovalMap request={record} t={t} />
+                                    <RequestObligationsPanel parentType="leave_request" parentId={record.id} leaveRequest={record} onChanged={() => loadData(page)} />
+                                </Space>
+                            ),
                         }}
                         pagination={{
                             current: page,

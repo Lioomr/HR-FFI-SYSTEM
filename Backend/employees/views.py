@@ -32,7 +32,12 @@ from organization.services import (
 from .models import EmployeeImport, EmployeeProfile
 from .notifications import send_document_expiry_whatsapp
 from .permissions import IsEmployeeOwner, IsHRManagerOnly, IsHRManagerOrAdmin
-from .serializers import EmployeeImportSerializer, EmployeeProfileReadSerializer, EmployeeProfileWriteSerializer
+from .serializers import (
+    DelegationCandidateSerializer,
+    EmployeeImportSerializer,
+    EmployeeProfileReadSerializer,
+    EmployeeProfileWriteSerializer,
+)
 from .services import EmployeeImporter
 from .storage import PrivateUploadStorage
 from .throttles import EmployeeImportThrottle
@@ -243,7 +248,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action == "import_excel":
             permission_classes = [IsAuthenticated, IsHRManagerOnly]
-        elif self.action == "manager_team":
+        elif self.action in ["manager_team", "delegation_candidates"]:
             permission_classes = [IsAuthenticated]
         elif self.action in ["retrieve", "me"]:
             permission_classes = [IsAuthenticated, IsHRManagerOrAdmin | IsEmployeeOwner]
@@ -273,6 +278,8 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         return base_qs.filter(user=user)
 
     def get_serializer_class(self):
+        if self.action == "delegation_candidates":
+            return DelegationCandidateSerializer
         if self.action in ["list", "retrieve", "me"]:
             return EmployeeProfileReadSerializer
         return EmployeeProfileWriteSerializer
@@ -404,6 +411,34 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(profile)
         return success(serializer.data)
+
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="delegation-candidates",
+        permission_classes=[IsAuthenticated],
+    )
+    def delegation_candidates(self, request):
+        qs = EmployeeProfile.objects.select_related("user", "company").filter(
+            user__isnull=False,
+            user__is_active=True,
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        )
+        qs = filter_queryset_by_company_scope(qs, request)
+        qs = qs.exclude(user=request.user).order_by("full_name_en", "full_name", "employee_id")
+        serializer = self.get_serializer(qs, many=True)
+        return success(serializer.data)
+
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="manager/access",
+        permission_classes=[IsAuthenticated],
+    )
+    def manager_access(self, request):
+        role = get_role(request.user)
+        has_role_access = role in ["Manager", "CEO", "CFO", "SystemAdmin", "HRManager"]
+        return success({"has_access": bool(has_role_access or has_direct_reports(request.user))})
 
     @action(
         detail=False,

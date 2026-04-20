@@ -10,6 +10,7 @@ import { getLeaveRequest, approveLeaveRequest, rejectLeaveRequest, sendLeaveRequ
 import { isApiError } from "../../../services/api/apiTypes";
 import { useI18n } from "../../../i18n/useI18n";
 import LeaveApprovalMap from "../../../components/leaves/LeaveApprovalMap";
+import RequestObligationsPanel from "../../../components/requests/RequestObligationsPanel";
 
 const { confirm } = Modal;
 const { TextArea } = Input;
@@ -184,6 +185,7 @@ export default function LeaveRequestDetailsPage() {
         if (s === 'rejected') return 'red';
         if (s === 'pending_ceo') return 'volcano';
         if (s === 'pending_hr') return 'purple';
+        if (s === 'pending_delegate') return 'gold';
         if (s === 'pending_manager') return 'orange';
         return 'blue';
     };
@@ -206,6 +208,7 @@ export default function LeaveRequestDetailsPage() {
 
             <div style={{ display: "grid", gap: 18 }}>
             <LeaveApprovalMap request={request} t={t} />
+            <RequestObligationsPanel parentType="leave_request" parentId={request.id} leaveRequest={request} onChanged={loadData} />
 
             <Card style={{ borderRadius: 16 }} title={t("common.details")}>
                 <Descriptions bordered column={1}>
@@ -243,7 +246,7 @@ export default function LeaveRequestDetailsPage() {
 
                     {request.status === 'rejected' && (
                         <Descriptions.Item label={t("leave.rejectionReason")} contentStyle={{ color: 'red' }}>
-                            {request.ceo_decision_note || request.hr_decision_note || request.manager_decision_note || request.rejection_reason || '-'}
+                            {request.ceo_decision_note || request.hr_decision_note || request.manager_decision_note || request.delegate_decision_note || request.rejection_reason || '-'}
                         </Descriptions.Item>
                     )}
                     {request.status === 'pending_ceo' && (

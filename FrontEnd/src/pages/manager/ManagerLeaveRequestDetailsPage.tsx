@@ -22,6 +22,7 @@ import {
     type ManagerLeaveRequest,
 } from "../../services/api/managerApi";
 import LeaveApprovalMap from "../../components/leaves/LeaveApprovalMap";
+import RequestObligationsPanel from "../../components/requests/RequestObligationsPanel";
 
 const { confirm } = Modal;
 const { TextArea } = Input;
@@ -161,6 +162,7 @@ export default function ManagerLeaveRequestDetailsPage() {
 
             <div style={{ display: "grid", gap: 18 }}>
             <LeaveApprovalMap request={request as any} t={t} />
+            <RequestObligationsPanel parentType="leave_request" parentId={request.id} leaveRequest={request as any} onChanged={loadData} />
 
             <Card style={{ borderRadius: 16 }} title={t("common.details")}>
                 <Descriptions bordered column={1}>

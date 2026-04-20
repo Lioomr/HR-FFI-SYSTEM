@@ -3,6 +3,8 @@ from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
 
+from organization.models import OrganizationNode
+
 
 class WorkflowDefinition(models.Model):
     key = models.CharField(max_length=100, unique=True)
@@ -171,6 +173,92 @@ class DelegationRule(models.Model):
 
     def __str__(self) -> str:
         return f"{self.from_user_id}->{self.to_user_id}"
+
+
+class RequestObligation(models.Model):
+    class ObligationType(models.TextChoices):
+        ASSET_RETURN = "asset_return", "Asset Return"
+        PENDING_APPROVALS = "pending_approvals", "Pending Approvals"
+
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        RESOLVED = "resolved", "Resolved"
+        WAIVED = "waived", "Waived"
+
+    class Severity(models.TextChoices):
+        BLOCKING = "blocking", "Blocking"
+        WARNING = "warning", "Warning"
+
+    parent_content_type = models.ForeignKey(
+        ContentType,
+        on_delete=models.CASCADE,
+        related_name="request_obligation_parents",
+    )
+    parent_object_id = models.PositiveIntegerField()
+    parent = GenericForeignKey("parent_content_type", "parent_object_id")
+
+    target_content_type = models.ForeignKey(
+        ContentType,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="request_obligation_targets",
+    )
+    target_object_id = models.PositiveIntegerField(null=True, blank=True)
+    target = GenericForeignKey("target_content_type", "target_object_id")
+
+    company = models.ForeignKey(
+        OrganizationNode,
+        on_delete=models.PROTECT,
+        related_name="request_obligations",
+        null=True,
+        blank=True,
+    )
+    employee = models.ForeignKey(
+        "employees.EmployeeProfile",
+        on_delete=models.CASCADE,
+        related_name="request_obligations",
+        null=True,
+        blank=True,
+    )
+    type = models.CharField(max_length=50, choices=ObligationType.choices)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.OPEN)
+    severity = models.CharField(max_length=20, choices=Severity.choices, default=Severity.BLOCKING)
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="resolved_request_obligations",
+    )
+    resolution_note = models.TextField(blank=True)
+    waived_at = models.DateTimeField(null=True, blank=True)
+    waived_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="waived_request_obligations",
+    )
+    waiver_reason = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["status", "type", "id"]
+        indexes = [
+            models.Index(fields=["parent_content_type", "parent_object_id"], name="core_reqobl_parent_idx"),
+            models.Index(fields=["target_content_type", "target_object_id"], name="core_reqobl_target_idx"),
+            models.Index(fields=["company", "status"], name="core_reqobl_company_status_idx"),
+            models.Index(fields=["employee", "status"], name="core_reqobl_emp_status_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.type}:{self.status}:{self.parent_content_type_id}:{self.parent_object_id}"
 
 
 class UserPreference(models.Model):

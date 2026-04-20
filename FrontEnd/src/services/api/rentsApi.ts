@@ -3,6 +3,22 @@ import type { ApiResponse, PaginatedResponse } from "./apiTypes";
 
 export type RentRecurrence = "ONE_TIME" | "MONTHLY";
 export type RentStatus = "UPCOMING" | "OVERDUE" | "SCHEDULED";
+export type RentPaymentCategory = "rent" | "security_deposit" | "other";
+export type RentPaymentStatus = "pending" | "paid" | "cancelled";
+
+export interface RentPaymentRecord {
+  id: number;
+  payment_number: number;
+  category: RentPaymentCategory;
+  status: RentPaymentStatus;
+  amount: string | number;
+  due_date?: string | null;
+  paid_date?: string | null;
+  notes: string;
+  created_by_name?: string;
+  created_at: string;
+  updated_at: string;
+}
 
 export interface RentItem {
   id: number;
@@ -19,6 +35,17 @@ export interface RentItem {
   property_name_en: string;
   property_name_ar: string;
   property_address?: string;
+  lease_start_date?: string | null;
+  lease_end_date?: string | null;
+  remaining_lease_duration: number | null;
+  annual_rent_value: string | number | null;
+  security_deposit: string | number | null;
+  payment_schedule: string;
+  auto_renewal: boolean;
+  notification_date: string | null;
+  notice: string;
+  payments: string;
+  payment_records: RentPaymentRecord[];
   recurrence: RentRecurrence;
   one_time_due_date?: string | null;
   start_date?: string | null;
@@ -45,6 +72,14 @@ export interface CreateRentDto {
   property_name_en?: string;
   property_name_ar?: string;
   property_address?: string;
+  lease_start_date?: string | null;
+  lease_end_date?: string | null;
+  annual_rent_value?: number | null;
+  security_deposit?: number | null;
+  payment_schedule?: string;
+  auto_renewal?: boolean;
+  notice?: string;
+  payments?: string;
   recurrence: RentRecurrence;
   one_time_due_date?: string | null;
   start_date?: string | null;
@@ -54,6 +89,16 @@ export interface CreateRentDto {
 }
 
 export interface UpdateRentDto extends Partial<CreateRentDto> { }
+
+export interface CreateRentPaymentDto {
+  payment_number: number;
+  category: RentPaymentCategory;
+  status: RentPaymentStatus;
+  amount: number;
+  due_date?: string | null;
+  paid_date?: string | null;
+  notes?: string;
+}
 
 export async function listRents(params?: ListRentsParams): Promise<ApiResponse<PaginatedResponse<RentItem>>> {
   const { data } = await api.get<ApiResponse<PaginatedResponse<RentItem>>>("/api/hr/rents/", { params });
@@ -77,5 +122,13 @@ export async function deleteRent(id: string | number): Promise<ApiResponse<Recor
 
 export async function notifyRent(id: string | number): Promise<ApiResponse<{ delivery: Record<string, any> }>> {
   const { data } = await api.post<ApiResponse<{ delivery: Record<string, any> }>>(`/api/hr/rents/${id}/notify/`, {});
+  return data;
+}
+
+export async function createRentPayment(
+  rentId: string | number,
+  payload: CreateRentPaymentDto
+): Promise<ApiResponse<RentPaymentRecord>> {
+  const { data } = await api.post<ApiResponse<RentPaymentRecord>>(`/api/hr/rents/${rentId}/payments/`, payload);
   return data;
 }

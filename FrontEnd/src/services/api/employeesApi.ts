@@ -84,6 +84,18 @@ export interface ListEmployeesParams {
   join_date_order?: "asc" | "desc";
 }
 
+export interface DelegationCandidate {
+  id: number;
+  employee_profile_id: number;
+  employee_id: string;
+  full_name: string;
+  full_name_en?: string;
+  full_name_ar?: string;
+  email: string;
+  company_id?: number;
+  company_name?: string;
+}
+
 /**
  * Paginated employee list response
  */
@@ -104,6 +116,11 @@ export async function listEmployees(
     "/employees",
     { params }
   );
+  return data;
+}
+
+export async function listDelegationCandidates(): Promise<ApiResponse<DelegationCandidate[]>> {
+  const { data } = await api.get<ApiResponse<DelegationCandidate[]>>("/api/employees/delegation-candidates/");
   return data;
 }
 

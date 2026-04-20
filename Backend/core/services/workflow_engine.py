@@ -31,6 +31,7 @@ WORKFLOW_TEMPLATES = {
         "name": "Leave Request Workflow",
         "module_key": "leaves",
         "stages": [
+            {"key": "delegate", "title": "Delegate Review", "approver_role": "delegate", "order": 0, "is_optional": True},
             {"key": "manager", "title": "Manager Review", "approver_role": "manager", "order": 1},
             {"key": "hr", "title": "HR Review", "approver_role": "hr", "order": 2},
             {"key": "ceo", "title": "CEO Review", "approver_role": "ceo", "order": 3, "is_optional": True},
@@ -85,6 +86,7 @@ class WorkflowEvent:
 
 def _build_action_url_path(workflow_key: str, role: str, object_id: int) -> str:
     route_map = {
+        ("leave_request", "delegate"): f"/employee/leave/requests/{object_id}",
         ("leave_request", "manager"): f"/manager/leave/requests/{object_id}",
         ("leave_request", "hr"): f"/hr/leave/requests/{object_id}",
         ("leave_request", "ceo"): f"/ceo/leave/requests/{object_id}",
@@ -152,6 +154,8 @@ def _get_subject_user(instance):
 def _resolve_current_actor(role: str, instance):
     subject_user = _get_subject_user(instance)
     candidate = None
+    if role == "delegate":
+        return getattr(instance, "delegated_to", None)
     if role == "manager":
         candidate = get_direct_manager_user(subject_user) if subject_user else None
     if candidate:
@@ -177,6 +181,8 @@ def can_user_act_on_instance(user, instance, workflow: WorkflowInstance | None =
         return True
 
     role = workflow.current_approver_role
+    if role == "delegate":
+        return bool(getattr(instance, "delegated_to_id", None) == user.id)
     if role == "manager":
         subject_user = _get_subject_user(instance)
         direct_manager = get_direct_manager_user(subject_user) if subject_user else None
@@ -206,6 +212,9 @@ def _legacy_status_snapshot_for_leave(instance):
     elif instance.status == LeaveRequest.RequestStatus.CANCELLED:
         status = WorkflowInstance.Status.CANCELLED
         terminal_at = instance.updated_at
+    elif instance.status == LeaveRequest.RequestStatus.PENDING_DELEGATE:
+        current_stage = "delegate"
+        current_role = "delegate"
     elif instance.status == LeaveRequest.RequestStatus.PENDING_MANAGER:
         current_stage = "manager"
         current_role = "manager"
@@ -240,13 +249,41 @@ def _legacy_events_for_leave(instance) -> list[WorkflowEvent]:
             from_status="draft",
             to_status="submitted",
             from_stage="",
-            to_stage="manager" if instance.status == LeaveRequest.RequestStatus.PENDING_MANAGER else "hr",
+            to_stage=(
+                "delegate"
+                if instance.status == LeaveRequest.RequestStatus.PENDING_DELEGATE or instance.delegate_decision_at
+                else "manager"
+                if instance.status == LeaveRequest.RequestStatus.PENDING_MANAGER or instance.manager_decision_at
+                else "hr"
+            ),
             actor=instance.employee,
             note=instance.reason or "",
             at=instance.created_at,
             metadata={"legacy_signature": "submitted", "workflow_key": "leave_request"},
         )
     ]
+    if instance.delegate_decision_at:
+        events.append(
+            WorkflowEvent(
+                signature=f"leave:delegate:{instance.id}:{instance.delegate_decision_at.isoformat()}",
+                action=WorkflowAction.Action.REJECT
+                if instance.status == LeaveRequest.RequestStatus.REJECTED and not instance.decided_at and not instance.ceo_decision_at
+                else WorkflowAction.Action.APPROVE,
+                approver_role="delegate",
+                from_status="in_review",
+                to_status="rejected"
+                if instance.status == LeaveRequest.RequestStatus.REJECTED and not instance.decided_at and not instance.ceo_decision_at
+                else "in_review",
+                from_stage="delegate",
+                to_stage=""
+                if instance.status == LeaveRequest.RequestStatus.REJECTED and not instance.decided_at and not instance.ceo_decision_at
+                else "hr",
+                actor=instance.delegate_decision_by,
+                note=instance.delegate_decision_note or "",
+                at=instance.delegate_decision_at,
+                metadata={"legacy_signature": "delegate", "workflow_key": "leave_request"},
+            )
+        )
     if instance.manager_decision_at:
         next_stage = "hr" if instance.status != LeaveRequest.RequestStatus.REJECTED else ""
         events.append(

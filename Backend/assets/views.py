@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from django.db import transaction
 from django.db.models import Count, Q
+from django.http import HttpResponse
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
@@ -11,6 +12,7 @@ from rest_framework.permissions import IsAuthenticated
 from audit.utils import audit
 from core.delegation import get_delegated_manager_user_ids
 from core.pagination import StandardPagination
+from core.pdf import merge_pdfs
 from core.permissions import IsDepartmentCEOApprover, get_role
 from core.responses import error, success
 from core.services import (
@@ -19,9 +21,11 @@ from core.services import (
     get_hr_approver_users,
     notify_users_for_pending_status,
     send_request_submission_email,
+    sync_leave_obligations,
     sync_workflow,
 )
 from employees.models import EmployeeProfile
+from leaves.models import LeaveRequest
 from loans.permissions import IsManagerOrAdmin, get_active_workflow_config
 from organization.services import ensure_company_write_allowed, filter_queryset_by_company_scope, get_active_company_for_request
 
@@ -59,6 +63,25 @@ def _flatten_errors(error_dict):
     return errors
 
 
+def _asset_invoice_pdf_bytes(asset) -> bytes | None:
+    """Read the asset's invoice file bytes when it's a PDF attachment."""
+
+    invoice = getattr(asset, "invoice_file", None)
+    if not invoice:
+        return None
+    name = str(getattr(invoice, "name", "") or "").lower()
+    if not name.endswith(".pdf"):
+        return None
+    try:
+        invoice.open("rb")
+        try:
+            return invoice.read()
+        finally:
+            invoice.close()
+    except Exception:
+        return None
+
+
 def _reject_self_approval(request, profile):
     if _is_hr_manager_profile(profile) and getattr(profile, "user_id", None) == request.user.id:
         return error("Validation error", errors=["Self approval is not allowed."], status=422)
@@ -74,6 +97,209 @@ def _resolve_manager_user(profile: EmployeeProfile | None):
         return profile.manager
     user = getattr(profile, "user", None)
     return get_direct_manager_user(user) if user else None
+
+
+_DAMAGE_STATUS_LABELS = {
+    AssetDamageReport.RequestStatus.PENDING_HR: ("Pending HR", "بانتظار الموارد البشرية"),
+    AssetDamageReport.RequestStatus.PENDING_CEO: ("Pending CEO", "بانتظار الرئيس التنفيذي"),
+    AssetDamageReport.RequestStatus.APPROVED: ("Approved", "معتمد"),
+    AssetDamageReport.RequestStatus.REJECTED: ("Rejected", "مرفوض"),
+}
+
+_RETURN_STATUS_LABELS = {
+    AssetReturnRequest.RequestStatus.PENDING_MANAGER: ("Pending Manager", "بانتظار المدير"),
+    AssetReturnRequest.RequestStatus.PENDING: ("Pending", "قيد الانتظار"),
+    AssetReturnRequest.RequestStatus.PENDING_CEO: ("Pending CEO", "بانتظار الرئيس التنفيذي"),
+    AssetReturnRequest.RequestStatus.APPROVED: ("Approved", "معتمد"),
+    AssetReturnRequest.RequestStatus.PROCESSED: ("Processed", "تم التنفيذ"),
+    AssetReturnRequest.RequestStatus.REJECTED: ("Rejected", "مرفوض"),
+}
+
+
+def _to_bool(value):
+    return str(value).strip().lower() in {"1", "true", "yes", "y"}
+
+
+def _display_user_asset(user):
+    if not user:
+        return "-"
+    return str(getattr(user, "full_name", "") or getattr(user, "email", "") or "-")
+
+
+def _fmt_dt_asset(value):
+    if not value:
+        return "-"
+    try:
+        return timezone.localtime(value).strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        return str(value)
+
+
+def _asset_employee_block(profile: EmployeeProfile | None):
+    from core.pdf import EmployeeBlock
+
+    if not profile:
+        return EmployeeBlock()
+    user = getattr(profile, "user", None)
+    name = (
+        getattr(profile, "full_name_en", None)
+        or getattr(profile, "full_name", None)
+        or getattr(user, "full_name", None)
+        or getattr(user, "email", None)
+        or "-"
+    )
+    department = (
+        getattr(profile, "department_name_en", None) or getattr(profile, "department", None) or "-"
+    )
+    job_title = getattr(profile, "job_title_en", None) or getattr(profile, "job_title", None) or "-"
+    return EmployeeBlock(
+        name=str(name),
+        employee_number=str(getattr(profile, "employee_id", "-") or "-"),
+        department=str(department),
+        job_title=str(job_title),
+        national_id=str(getattr(profile, "national_id", "-") or "-"),
+        mobile=str(getattr(profile, "mobile", "-") or "-"),
+    )
+
+
+def _build_damage_report_pdf(report: AssetDamageReport) -> bytes:
+    from core.pdf import (
+        ApprovalStage,
+        DetailRow,
+        ExtraSection,
+        RequestDocument,
+        render_request_pdf,
+    )
+
+    status_en, _ = _DAMAGE_STATUS_LABELS.get(report.status, (str(report.status), str(report.status)))
+    asset = report.asset
+
+    details = [
+        DetailRow("Asset Code", "رمز الأصل", str(asset.asset_code or "-")),
+        DetailRow("Asset Name", "اسم الأصل", str(asset.name_en or asset.name_ar or "-")),
+        DetailRow("Asset Type", "نوع الأصل", str(asset.type or "-")),
+        DetailRow("Serial Number", "الرقم التسلسلي", str(asset.serial_number or "-")),
+        DetailRow("Reported At", "تاريخ البلاغ", _fmt_dt_asset(report.reported_at)),
+        DetailRow("Current Status", "الحالة الحالية", status_en),
+    ]
+
+    approvals = [
+        ApprovalStage(
+            stage_en="Reported",
+            stage_ar="التبليغ",
+            actor=_display_user_asset(getattr(report.employee, "user", None)),
+            at=_fmt_dt_asset(report.reported_at),
+            note="Damage reported",
+        ),
+        ApprovalStage(
+            stage_en="HR Review",
+            stage_ar="مراجعة الموارد البشرية",
+            actor=_display_user_asset(report.hr_decision_by),
+            at=_fmt_dt_asset(report.hr_decision_at),
+            note=report.hr_decision_note or "-",
+        ),
+        ApprovalStage(
+            stage_en="CEO Review",
+            stage_ar="مراجعة الرئيس التنفيذي",
+            actor=_display_user_asset(report.ceo_decision_by),
+            at=_fmt_dt_asset(report.ceo_decision_at),
+            note=report.ceo_decision_note or "-",
+        ),
+    ]
+
+    extra = []
+    if report.description:
+        extra.append(
+            ExtraSection(title_en="Damage Description", title_ar="وصف الضرر", body=str(report.description))
+        )
+
+    doc = RequestDocument(
+        title_en="Asset Damage Report",
+        title_ar="تقرير ضرر أصل",
+        reference_no=str(report.id),
+        employee=_asset_employee_block(report.employee),
+        details=details,
+        approvals=approvals,
+        extra=extra,
+        status_label=status_en,
+    )
+    return render_request_pdf(doc)
+
+
+def _build_return_request_pdf(req: AssetReturnRequest) -> bytes:
+    from core.pdf import (
+        ApprovalStage,
+        DetailRow,
+        ExtraSection,
+        RequestDocument,
+        render_request_pdf,
+    )
+
+    status_en, _ = _RETURN_STATUS_LABELS.get(req.status, (str(req.status), str(req.status)))
+    asset = req.asset
+
+    details = [
+        DetailRow("Asset Code", "رمز الأصل", str(asset.asset_code or "-")),
+        DetailRow("Asset Name", "اسم الأصل", str(asset.name_en or asset.name_ar or "-")),
+        DetailRow("Asset Type", "نوع الأصل", str(asset.type or "-")),
+        DetailRow("Serial Number", "الرقم التسلسلي", str(asset.serial_number or "-")),
+        DetailRow("Requested At", "تاريخ الطلب", _fmt_dt_asset(req.requested_at)),
+        DetailRow("Current Status", "الحالة الحالية", status_en),
+    ]
+
+    approvals = [
+        ApprovalStage(
+            stage_en="Requested",
+            stage_ar="تقديم الطلب",
+            actor=_display_user_asset(getattr(req.employee, "user", None)),
+            at=_fmt_dt_asset(req.requested_at),
+            note="Return requested",
+        ),
+        ApprovalStage(
+            stage_en="Manager Review",
+            stage_ar="مراجعة المدير",
+            actor=_display_user_asset(req.manager_decision_by),
+            at=_fmt_dt_asset(req.manager_decision_at),
+            note=req.manager_decision_note or "-",
+        ),
+        ApprovalStage(
+            stage_en="HR Review",
+            stage_ar="مراجعة الموارد البشرية",
+            actor=_display_user_asset(req.hr_decision_by),
+            at=_fmt_dt_asset(req.hr_decision_at),
+            note=req.hr_decision_note or "-",
+        ),
+        ApprovalStage(
+            stage_en="CEO Review",
+            stage_ar="مراجعة الرئيس التنفيذي",
+            actor=_display_user_asset(req.ceo_decision_by),
+            at=_fmt_dt_asset(req.ceo_decision_at),
+            note=req.ceo_decision_note or "-",
+        ),
+        ApprovalStage(
+            stage_en="Processed",
+            stage_ar="التنفيذ",
+            actor=_display_user_asset(req.processed_by),
+            at=_fmt_dt_asset(req.processed_at),
+            note="-",
+        ),
+    ]
+
+    extra = []
+    if req.note:
+        extra.append(ExtraSection(title_en="Reason / Notes", title_ar="السبب / ملاحظات", body=str(req.note)))
+
+    doc = RequestDocument(
+        title_en="Asset Return Request",
+        title_ar="طلب إعادة أصل",
+        reference_no=str(req.id),
+        employee=_asset_employee_block(req.employee),
+        details=details,
+        approvals=approvals,
+        extra=extra,
+        status_label=status_en,
+    )
+    return render_request_pdf(doc)
 
 
 class AssetViewSet(viewsets.ModelViewSet):
@@ -129,6 +355,7 @@ class AssetViewSet(viewsets.ModelViewSet):
             "serial_number": asset.serial_number,
             "vendor": asset.vendor,
             "warranty_expiry": str(asset.warranty_expiry) if asset.warranty_expiry else None,
+            "must_return_before_travel": asset.must_return_before_travel,
         }
 
     @staticmethod
@@ -312,6 +539,12 @@ class AssetViewSet(viewsets.ModelViewSet):
                 request_obj.processed_at = timezone.now()
                 request_obj.save(update_fields=["status", "processed_by", "processed_at"])
                 sync_workflow(request_obj, actor=request.user)
+            for leave_request in LeaveRequest.objects.filter(
+                employee_profile=assignment.employee,
+                status=LeaveRequest.RequestStatus.PENDING_CEO,
+                is_active=True,
+            ).select_related("employee", "employee_profile", "leave_type", "company"):
+                sync_leave_obligations(leave_request, actor=request.user)
 
         audit(
             request,
@@ -692,6 +925,102 @@ class AssetViewSet(viewsets.ModelViewSet):
             },
             status=status.HTTP_201_CREATED,
         )
+
+    def _resolve_damage_report_for_pdf(self, request, report_id):
+        qs = filter_queryset_by_company_scope(
+            AssetDamageReport.objects.select_related("asset", "employee", "employee__user"),
+            request,
+            field_name="asset__company_id",
+        )
+        report = qs.filter(pk=report_id).first()
+        if not report:
+            return None
+        if get_role(request.user) in ["SystemAdmin", "HRManager"]:
+            return report
+        employee_user_id = getattr(report.employee, "user_id", None)
+        if employee_user_id and employee_user_id == request.user.id:
+            return report
+        return None
+
+    def _resolve_return_request_for_pdf(self, request, request_id):
+        qs = filter_queryset_by_company_scope(
+            AssetReturnRequest.objects.select_related("asset", "employee", "employee__user"),
+            request,
+            field_name="asset__company_id",
+        )
+        req = qs.filter(pk=request_id).first()
+        if not req:
+            return None
+        if get_role(request.user) in ["SystemAdmin", "HRManager"]:
+            return req
+        employee_user_id = getattr(req.employee, "user_id", None)
+        if employee_user_id and employee_user_id == request.user.id:
+            return req
+        return None
+
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path=r"damage-reports/(?P<report_id>[^/.]+)/pdf",
+        permission_classes=[IsAuthenticated],
+    )
+    def damage_report_pdf(self, request, report_id=None):
+        report = self._resolve_damage_report_for_pdf(request, report_id)
+        if not report:
+            return error("Not found", errors=["Not found."], status=404)
+        pdf_bytes = _build_damage_report_pdf(report)
+        packet = _to_bool(request.query_params.get("packet", "0"))
+        audit_action = "asset_damage_report_exported_pdf"
+        if packet:
+            invoice_bytes = _asset_invoice_pdf_bytes(report.asset)
+            if invoice_bytes:
+                pdf_bytes = merge_pdfs([pdf_bytes, invoice_bytes])
+                audit_action = "asset_damage_report_exported_packet"
+        audit(
+            request,
+            audit_action,
+            entity="AssetDamageReport",
+            entity_id=report.id,
+        )
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        filename = (
+            f"asset_damage_report_{report.id}_packet.pdf" if packet else f"asset_damage_report_{report.id}.pdf"
+        )
+        disposition = "attachment" if _to_bool(request.query_params.get("download", "1")) else "inline"
+        response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
+        return response
+
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path=r"return-requests/(?P<request_id>[^/.]+)/pdf",
+        permission_classes=[IsAuthenticated],
+    )
+    def return_request_pdf(self, request, request_id=None):
+        req = self._resolve_return_request_for_pdf(request, request_id)
+        if not req:
+            return error("Not found", errors=["Not found."], status=404)
+        pdf_bytes = _build_return_request_pdf(req)
+        packet = _to_bool(request.query_params.get("packet", "0"))
+        audit_action = "asset_return_request_exported_pdf"
+        if packet:
+            invoice_bytes = _asset_invoice_pdf_bytes(req.asset)
+            if invoice_bytes:
+                pdf_bytes = merge_pdfs([pdf_bytes, invoice_bytes])
+                audit_action = "asset_return_request_exported_packet"
+        audit(
+            request,
+            audit_action,
+            entity="AssetReturnRequest",
+            entity_id=req.id,
+        )
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        filename = (
+            f"asset_return_request_{req.id}_packet.pdf" if packet else f"asset_return_request_{req.id}.pdf"
+        )
+        disposition = "attachment" if _to_bool(request.query_params.get("download", "1")) else "inline"
+        response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
+        return response
 
 
 class CEOAssetDamageReportViewSet(viewsets.ReadOnlyModelViewSet):

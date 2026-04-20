@@ -56,6 +56,7 @@ class LeaveRequest(models.Model):
 
     class RequestStatus(models.TextChoices):
         SUBMITTED = "submitted", _("Submitted")
+        PENDING_DELEGATE = "pending_delegate", _("Pending Delegate")
         PENDING_MANAGER = "pending_manager", _("Pending Manager")
         PENDING_HR = "pending_hr", _("Pending HR")
         PENDING_CEO = "pending_ceo", _("Pending CEO")
@@ -155,6 +156,39 @@ class LeaveRequest(models.Model):
 
     # Existing generic field, assume it maps to HR reason for now unless we migrate it.
     decision_reason = models.TextField(blank=True, help_text=_("Reason for rejection or approval note (Legacy/HR)."))
+
+    # Travel & leave details
+    other_leave_description = models.CharField(max_length=255, blank=True)
+    date_of_rejoin = models.DateField(null=True, blank=True)
+    po_box = models.CharField(max_length=100, blank=True)
+    full_address = models.TextField(blank=True)
+    airplane_ticket_payer = models.CharField(
+        max_length=20,
+        blank=True,
+        choices=[("company", _("Company")), ("employee", _("Employee"))],
+        help_text=_("Who pays for the airplane ticket."),
+    )
+    airplane_ticket_address = models.CharField(max_length=255, blank=True)
+
+    # Work delegation
+    delegated_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="delegated_leave_requests",
+        help_text=_("Employee delegated to handle duties during leave."),
+    )
+    delegation_note = models.TextField(blank=True)
+    delegate_decision_at = models.DateTimeField(null=True, blank=True)
+    delegate_decision_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="delegate_decided_leaves",
+    )
+    delegate_decision_note = models.TextField(blank=True, help_text=_("Delegated employee's decision note."))
 
     is_active = models.BooleanField(default=True)
     deleted_at = models.DateTimeField(null=True, blank=True)
