@@ -62,6 +62,7 @@ export default function LeaveInboxPage() {
     const selectedLeaveTypeId = Form.useWatch("leave_type", manualForm);
     const selectedLeaveType = leaveTypes.find((lt) => lt.id === selectedLeaveTypeId);
     const isSickSelected = ["SICK", "SICK_LEAVE"].includes((selectedLeaveType?.code || "").toUpperCase());
+    const isOtherSelected = ["OTHER", "OTHER_LEAVE"].includes((selectedLeaveType?.code || selectedLeaveType?.name || "").toUpperCase().replace(/\s+/g, "_"));
 
     const loadData = useCallback(async () => {
         setLoading(true);
@@ -123,6 +124,7 @@ export default function LeaveInboxPage() {
             case 'approved': return 'green';
             case 'rejected': return 'red';
             case 'submitted': return 'blue';
+            case 'pending_delegate': return 'gold';
             case 'pending_manager': return 'orange';
             case 'pending_hr': return 'purple';
             case 'pending_ceo': return 'volcano';
@@ -269,6 +271,14 @@ export default function LeaveInboxPage() {
             manual_entry_reason: record.manual_entry_reason || "",
             source_document_ref: record.source_document_ref || "",
             document: [],
+            other_leave_description: record.other_leave_description || "",
+            date_of_rejoin: record.date_of_rejoin ? dayjs(record.date_of_rejoin) : null,
+            po_box: record.po_box || "",
+            full_address: record.full_address || "",
+            airplane_ticket_payer: record.airplane_ticket_payer || undefined,
+            airplane_ticket_address: record.airplane_ticket_address || "",
+            delegated_to: record.delegated_to?.id ?? null,
+            delegation_note: record.delegation_note || "",
         });
         setManualModalOpen(true);
     };
@@ -299,6 +309,14 @@ export default function LeaveInboxPage() {
             payload.append("reason", values.reason || "");
             payload.append("manual_entry_reason", values.manual_entry_reason || "");
             payload.append("source_document_ref", values.source_document_ref || "");
+            payload.append("other_leave_description", values.other_leave_description || "");
+            if (values.date_of_rejoin) payload.append("date_of_rejoin", values.date_of_rejoin.format("YYYY-MM-DD"));
+            payload.append("po_box", values.po_box || "");
+            payload.append("full_address", values.full_address || "");
+            payload.append("airplane_ticket_payer", values.airplane_ticket_payer || "");
+            payload.append("airplane_ticket_address", values.airplane_ticket_address || "");
+            if (values.delegated_to != null) payload.append("delegated_to", String(values.delegated_to));
+            payload.append("delegation_note", values.delegation_note || "");
 
             const fileList = (values.document || []) as UploadFile[];
             const file = fileList[0]?.originFileObj;
@@ -368,6 +386,7 @@ export default function LeaveInboxPage() {
                             <Form.Item label={t("common.status")} name="status">
                                 <Select placeholder={t("employees.list.statusPlaceholder")} allowClear>
                                     <Option value="submitted">{t("status.pending")}</Option>
+                                    <Option value="pending_delegate">{t("leave.status.pending_delegate")}</Option>
                                     <Option value="pending_manager">{t("status.pendingManager")}</Option>
                                     <Option value="pending_hr">{t("status.pendingHr")}</Option>
                                     <Option value="pending_ceo">{t("status.pendingCeo")}</Option>
@@ -462,6 +481,62 @@ export default function LeaveInboxPage() {
                         <Upload beforeUpload={() => false} maxCount={1} accept=".pdf,.png,.jpg,.jpeg">
                             <Button>{t("leave.chooseFile")}</Button>
                         </Upload>
+                    </Form.Item>
+
+                    {isOtherSelected && (
+                        <Form.Item label={t("leave.otherLeaveDescription")} name="other_leave_description">
+                            <Input />
+                        </Form.Item>
+                    )}
+
+                    <Row gutter={16}>
+                        <Col span={12}>
+                            <Form.Item label={t("leave.dateOfRejoin")} name="date_of_rejoin">
+                                <DatePicker style={{ width: "100%" }} />
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item label={t("leave.poBox")} name="po_box">
+                                <Input />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+
+                    <Form.Item label={t("leave.fullAddress")} name="full_address">
+                        <Input />
+                    </Form.Item>
+
+                    <Row gutter={16}>
+                        <Col span={12}>
+                            <Form.Item label={t("leave.airplaneTicketPayer")} name="airplane_ticket_payer">
+                                <Select allowClear placeholder="-">
+                                    <Option value="company">{t("leave.ticketPayer.company")}</Option>
+                                    <Option value="employee">{t("leave.ticketPayer.employee")}</Option>
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item label={t("leave.airplaneTicketAddress")} name="airplane_ticket_address">
+                                <Input />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+
+                    <Form.Item label={t("leave.delegatedTo")} name="delegated_to">
+                        <Select
+                            showSearch
+                            allowClear
+                            optionFilterProp="label"
+                            placeholder="-"
+                            options={employees.map((e) => ({
+                                value: e.id,
+                                label: `${e.full_name_en || e.full_name || e.employee_id} (${e.employee_id})`,
+                            }))}
+                        />
+                    </Form.Item>
+
+                    <Form.Item label={t("leave.delegationNote")} name="delegation_note">
+                        <TextArea rows={2} />
                     </Form.Item>
                 </Form>
             </Modal>

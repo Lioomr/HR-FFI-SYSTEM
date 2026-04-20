@@ -13,6 +13,7 @@ from rest_framework.test import APIClient
 from audit.models import AuditLog
 from hr_reference.models import Department, Position
 from leaves.models import LeaveRequest, LeaveType
+from organization.models import OrganizationNode
 
 from .models import EmployeeProfile
 
@@ -298,6 +299,89 @@ class EmployeeProfileTests(TestCase):
         results = response.data["data"]["results"]
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["employee_id"], "EMP-REP-EMP")
+
+    def test_employee_manager_access_probe_returns_false_without_403(self):
+        self.client.force_authenticate(user=self.employee_user)
+        response = self.client.get("/api/employees/manager/access/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"], {"has_access": False})
+
+    def test_employee_manager_access_probe_returns_true_for_direct_manager(self):
+        manager_profile = EmployeeProfile.objects.create(
+            user=self.employee_user,
+            employee_id="EMP-MGR-ACCESS",
+            department_ref=self.dept,
+            department=self.dept.name,
+            position_ref=self.pos_senior,
+            job_title=self.pos_senior.name,
+            hire_date="2024-01-01",
+            full_name="Employee Manager",
+        )
+        EmployeeProfile.objects.create(
+            user=self.employee_user_2,
+            employee_id="EMP-REP-ACCESS",
+            department_ref=self.dept,
+            department=self.dept.name,
+            position_ref=self.pos,
+            job_title=self.pos.name,
+            hire_date="2024-02-01",
+            full_name="Direct Report",
+            manager_profile=manager_profile,
+        )
+
+        self.client.force_authenticate(user=self.employee_user)
+        response = self.client.get("/api/employees/manager/access/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"], {"has_access": True})
+
+    def test_employee_can_list_same_company_delegation_candidates(self):
+        company = OrganizationNode.objects.create(
+            code="TEST_CO",
+            name="Test Co",
+            node_type=OrganizationNode.NodeType.COMPANY,
+        )
+        other_company = OrganizationNode.objects.create(
+            code="OTHER_CO",
+            name="Other Co",
+            node_type=OrganizationNode.NodeType.COMPANY,
+        )
+        requester_profile = EmployeeProfile.objects.create(
+            user=self.employee_user,
+            company=company,
+            employee_id="EMP-DELEGATOR",
+            full_name="Delegator",
+            hire_date="2024-01-01",
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        )
+        delegate_profile = EmployeeProfile.objects.create(
+            user=self.employee_user_2,
+            company=company,
+            employee_id="EMP-DELEGATE",
+            full_name="Delegate",
+            hire_date="2024-01-01",
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        )
+        outsider_user = User.objects.create_user(email="delegate-outsider@ffi.com", password="password")
+        EmployeeProfile.objects.create(
+            user=outsider_user,
+            company=other_company,
+            employee_id="EMP-DELEGATE-OUT",
+            full_name="Other Delegate",
+            hire_date="2024-01-01",
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        )
+
+        self.client.force_authenticate(user=self.employee_user)
+        response = self.client.get("/api/employees/delegation-candidates/", HTTP_X_ACTIVE_COMPANY_ID=str(company.id))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        candidates = response.data["data"]
+        self.assertEqual([item["id"] for item in candidates], [self.employee_user_2.id])
+        self.assertEqual(candidates[0]["employee_profile_id"], delegate_profile.id)
+        self.assertEqual(candidates[0]["employee_id"], "EMP-DELEGATE")
+        self.assertNotIn(requester_profile.id, [item["employee_profile_id"] for item in candidates])
 
     def test_hr_can_export_filtered_employees_as_xlsx(self):
         EmployeeProfile.objects.create(

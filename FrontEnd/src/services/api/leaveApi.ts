@@ -1,6 +1,7 @@
 import { api } from "./apiClient";
 import type { ApiResponse, PaginatedResponse } from "./apiTypes";
 import type { WorkflowSnapshot } from "../../types/workflow";
+import type { RequestObligationSummary } from "./requestObligationsApi";
 
 /**
  * Leave Type DTO
@@ -36,7 +37,7 @@ export interface LeaveRequest {
   // Frontend had 'days_requested'. I should use 'days' to match backend.
   reason: string;
   document?: string | null;
-  status: "submitted" | "pending_manager" | "pending_hr" | "pending_ceo" | "approved" | "rejected" | "cancelled";
+  status: "submitted" | "pending_delegate" | "pending_manager" | "pending_hr" | "pending_ceo" | "approved" | "rejected" | "cancelled";
   source?: "employee" | "hr_manual";
   manual_entry_reason?: string;
   source_document_ref?: string;
@@ -48,7 +49,9 @@ export interface LeaveRequest {
   // I will keep existing + add specific ones if needed.
   hr_decision_note?: string;
   manager_decision_note?: string;
+  delegate_decision_note?: string;
   ceo_decision_note?: string;
+  delegate_decision_at?: string | null;
   manager_decision_at?: string | null;
   ceo_decision_at?: string | null;
   decided_at?: string | null;
@@ -56,6 +59,16 @@ export interface LeaveRequest {
   created_at?: string;
   updated_at?: string;
   workflow?: WorkflowSnapshot;
+  obligations_summary?: RequestObligationSummary;
+  // Travel & delegation fields
+  other_leave_description?: string;
+  date_of_rejoin?: string | null;
+  po_box?: string;
+  full_address?: string;
+  airplane_ticket_payer?: "company" | "employee" | "";
+  airplane_ticket_address?: string;
+  delegated_to?: { id: number; email: string; full_name: string } | null;
+  delegation_note?: string;
 }
 
 /**
@@ -73,11 +86,19 @@ export interface LeaveBalance {
  * Payload for creating a leave request
  */
 export interface CreateLeaveRequestPayload {
-  leave_type: number; // Changed from leave_type_id
+  leave_type: number;
   start_date: string;
   end_date: string;
   reason: string;
   document?: File;
+  other_leave_description?: string;
+  date_of_rejoin?: string | null;
+  po_box?: string;
+  full_address?: string;
+  airplane_ticket_payer?: "company" | "employee" | "";
+  airplane_ticket_address?: string;
+  delegated_to?: number | null;
+  delegation_note?: string;
 }
 
 /**
@@ -273,6 +294,39 @@ export async function cancelLeaveRequest(
   return data;
 }
 
+export async function approveDelegatedLeaveRequest(
+  id: string | number,
+  comment?: string
+): Promise<ApiResponse<LeaveRequest>> {
+  const { data } = await api.post<ApiResponse<LeaveRequest>>(
+    `/api/leaves/leave-requests/${id}/delegate-approve/`,
+    { comment }
+  );
+  return data;
+}
+
+export async function rejectDelegatedLeaveRequest(
+  id: string | number,
+  comment: string
+): Promise<ApiResponse<LeaveRequest>> {
+  const { data } = await api.post<ApiResponse<LeaveRequest>>(
+    `/api/leaves/leave-requests/${id}/delegate-reject/`,
+    { comment }
+  );
+  return data;
+}
+
+export async function setLeaveRequestDelegate(
+  id: string | number,
+  payload: { delegated_to: number; delegation_note?: string }
+): Promise<ApiResponse<LeaveRequest>> {
+  const { data } = await api.post<ApiResponse<LeaveRequest>>(
+    `/api/leaves/leave-requests/${id}/set-delegate/`,
+    payload
+  );
+  return data;
+}
+
 /**
  * Get leave balances for an employee (HR)
  */
@@ -324,11 +378,12 @@ export async function getCEOLeaveRequests(
  */
 export async function approveCEOLeaveRequest(
   id: string | number,
-  comment?: string
+  comment?: string,
+  waiver_reason?: string
 ): Promise<ApiResponse<LeaveRequest>> {
   const { data } = await api.post<ApiResponse<LeaveRequest>>(
     `/api/leaves/ceo/leave-requests/${id}/approve/`,
-    { comment }
+    { comment, waiver_reason }
   );
   return data;
 }

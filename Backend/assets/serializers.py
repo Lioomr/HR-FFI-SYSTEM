@@ -51,6 +51,7 @@ class AssetSerializer(serializers.ModelSerializer):
             "vendor",
             "invoice_file",
             "notes",
+            "must_return_before_travel",
             "flexible_attributes",
             "plate_number",
             "chassis_number",

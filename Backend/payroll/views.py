@@ -10,7 +10,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
-from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 from django.db import IntegrityError, transaction
 from django.db.models import Avg, Q, Sum
 from django.http import HttpResponse
@@ -24,6 +24,13 @@ from rest_framework.views import APIView
 
 from audit.utils import audit
 from core.pagination import StandardPagination
+from core.pdf import (
+    PALETTE,
+    build_corporate_header,
+    build_platypus_story_pdf,
+    build_signature_stamp_block,
+    build_simple_lines_pdf,
+)
 from core.responses import error, success
 from employees.permissions import IsHRManagerOrAdmin
 from organization.services import ensure_company_write_allowed, filter_queryset_by_company_scope, get_active_company_for_request
@@ -80,19 +87,6 @@ def _first_two_names(full_name):
     return " ".join(name.split(" ")[:2])
 
 
-def _get_pdf_logo_path():
-    candidates = [
-        os.path.join(str(settings.BASE_DIR), "static", "email", "ffi-logo.png"),
-        os.path.join(str(settings.BASE_DIR), "ffi-logo.png"),
-        os.path.join(str(settings.BASE_DIR), "Logo FFI.png"),
-        os.path.join(str(settings.BASE_DIR.parent), "FrontEnd", "public", "ffi-logo.png"),
-        "/app/static/email/ffi-logo.png",
-        "/app/ffi-logo.png",
-        "/app/Logo FFI.png",
-    ]
-    return next((path for path in candidates if os.path.exists(path)), "")
-
-
 def _cell_paragraph(value, style):
     text = escape(str(value or "-"))
     return Paragraph(text, style)
@@ -107,174 +101,9 @@ def _short_text(value, max_chars):
     return f"{text[:max_chars - 3]}..."
 
 
-def _build_reportlab_pdf(story, report_name, pagesize=A4):
-    buffer = io.BytesIO()
-    left_margin = 14 * mm
-    right_margin = 14 * mm
-    top_margin = 16 * mm
-    bottom_margin = 16 * mm
-
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=pagesize,
-        leftMargin=left_margin,
-        rightMargin=right_margin,
-        topMargin=top_margin,
-        bottomMargin=bottom_margin,
-    )
-    generated_at = timezone.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    def _draw_header_footer(canvas, _doc):
-        canvas.saveState()
-        canvas.setFont("Helvetica-Bold", 10)
-        canvas.setFillColor(colors.HexColor("#1f2937"))
-        canvas.drawString(left_margin, pagesize[1] - (10 * mm), report_name)
-        canvas.setFont("Helvetica", 8)
-        canvas.setFillColor(colors.HexColor("#6b7280"))
-        canvas.drawString(left_margin, 8 * mm, f"Generated at: {generated_at}")
-        canvas.drawRightString(pagesize[0] - right_margin, 8 * mm, f"Page {canvas.getPageNumber()}")
-        canvas.restoreState()
-
-    doc.build(story, onFirstPage=_draw_header_footer, onLaterPages=_draw_header_footer)
-    return buffer.getvalue()
-
-
-def _pdf_palette():
-    return {
-        "primary_orange": colors.HexColor("#f97316"),
-        "light_orange": colors.HexColor("#ffedd5"),
-        "soft_orange": colors.HexColor("#fff7ed"),
-        "dark_text": colors.HexColor("#111827"),
-        "muted_text": colors.HexColor("#6b7280"),
-        "border_orange": colors.HexColor("#fdba74"),
-        "grid_orange": colors.HexColor("#fed7aa"),
-    }
-
-
-def _build_corporate_header(title, period_text, palette, second_col_width):
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        "PdfCorporateTitle",
-        parent=styles["Heading1"],
-        fontName="Helvetica-Bold",
-        fontSize=15,
-        textColor=palette["dark_text"],
-        spaceAfter=2,
-    )
-    subtitle_style = ParagraphStyle(
-        "PdfCorporateSubtitle",
-        parent=styles["Normal"],
-        fontName="Helvetica",
-        fontSize=10,
-        textColor=palette["muted_text"],
-        spaceAfter=6,
-    )
-
-    logo_path = _get_pdf_logo_path()
-    logo_cell = ""
-    if logo_path:
-        logo_cell = Image(logo_path, width=32 * mm, height=12 * mm)
-
-    header_table = Table(
-        [
-            [
-                logo_cell,
-                [
-                    Paragraph("FFI HR SYSTEM", subtitle_style),
-                    Paragraph(title, title_style),
-                    Paragraph(period_text, subtitle_style),
-                ],
-            ]
-        ],
-        colWidths=[38 * mm, second_col_width],
-    )
-    header_table.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, -1), colors.white),
-                ("BOX", (0, 0), (-1, -1), 1, palette["primary_orange"]),
-                ("LINEBELOW", (0, 0), (-1, 0), 1, palette["primary_orange"]),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("LEFTPADDING", (0, 0), (-1, -1), 8),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-                ("TOPPADDING", (0, 0), (-1, -1), 8),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-            ]
-        )
-    )
-    return header_table
-
-
-def _build_signature_stamp_block(total_width, palette):
-    signer_width = (total_width * 0.23)
-    stamp_width = total_width - (signer_width * 3)
-    signature_table = Table(
-        [
-            ["Prepared By", "Reviewed By", "Approved By", "Company Stamp"],
-            [
-                "Name: ____________________\nDate: ____________________\nSignature: _______________",
-                "Name: ____________________\nDate: ____________________\nSignature: _______________",
-                "Name: ____________________\nDate: ____________________\nSignature: _______________",
-                "\n\n\n",
-            ],
-        ],
-        colWidths=[signer_width, signer_width, signer_width, stamp_width],
-    )
-    signature_table.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, 0), palette["primary_orange"]),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, 0), 8),
-                ("BACKGROUND", (0, 1), (-2, 1), colors.white),
-                ("BACKGROUND", (-1, 1), (-1, 1), palette["soft_orange"]),
-                ("FONTNAME", (0, 1), (-1, 1), "Helvetica"),
-                ("FONTSIZE", (0, 1), (-2, 1), 7),
-                ("FONTSIZE", (-1, 1), (-1, 1), 7),
-                ("TEXTCOLOR", (0, 1), (-1, 1), palette["dark_text"]),
-                ("BOX", (0, 0), (-1, -1), 0.7, palette["border_orange"]),
-                ("INNERGRID", (0, 0), (-1, -1), 0.25, palette["grid_orange"]),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("LEFTPADDING", (0, 0), (-1, -1), 6),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-                ("TOPPADDING", (0, 0), (-1, -1), 6),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-            ]
-        )
-    )
-    return signature_table
-
-
-def _build_simple_lines_pdf(title, lines):
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        "PdfTitle",
-        parent=styles["Heading2"],
-        fontName="Helvetica-Bold",
-        fontSize=14,
-        textColor=colors.HexColor("#111827"),
-        spaceAfter=8,
-    )
-    line_style = ParagraphStyle(
-        "PdfLine",
-        parent=styles["Normal"],
-        fontName="Helvetica",
-        fontSize=10,
-        leading=14,
-        textColor=colors.HexColor("#374151"),
-    )
-
-    story = [Paragraph(title, title_style), Spacer(1, 4)]
-    for line in lines:
-        story.append(Paragraph(str(line), line_style))
-        story.append(Spacer(1, 2))
-    return _build_reportlab_pdf(story, title)
-
-
 def _build_payslip_pdf(payslip):
     styles = getSampleStyleSheet()
-    palette = _pdf_palette()
+    palette = PALETTE
     primary_orange = palette["primary_orange"]
     light_orange = palette["light_orange"]
     soft_orange = palette["soft_orange"]
@@ -299,10 +128,9 @@ def _build_payslip_pdf(payslip):
     employee_name = getattr(getattr(payslip, "employee", None), "full_name", "") or getattr(
         getattr(payslip, "employee", None), "email", "-"
     )
-    header_table = _build_corporate_header(
+    header_table = build_corporate_header(
         title="Employee Payslip",
         period_text=f"Period {payslip.year}-{payslip.month:02d}",
-        palette=palette,
         second_col_width=138 * mm,
     )
 
@@ -400,14 +228,14 @@ def _build_payslip_pdf(payslip):
         Spacer(1, 8),
         net_table,
         Spacer(1, 10),
-        _build_signature_stamp_block(total_width=182 * mm, palette=palette),
+        build_signature_stamp_block(total_width=182 * mm),
     ]
-    return _build_reportlab_pdf(story, f"Payslip {payslip.id}")
+    return build_platypus_story_pdf(story, f"Payslip {payslip.id}")
 
 
 def _build_payroll_report_pdf(run, items):
     styles = getSampleStyleSheet()
-    palette = _pdf_palette()
+    palette = PALETTE
     primary_orange = palette["primary_orange"]
     light_orange = palette["light_orange"]
     soft_orange = palette["soft_orange"]
@@ -442,10 +270,9 @@ def _build_payroll_report_pdf(run, items):
     total_deductions = sum((item.total_deductions or Decimal("0.00")) for item in items)
     total_net = sum((item.net_salary or Decimal("0.00")) for item in items)
 
-    header_table = _build_corporate_header(
+    header_table = build_corporate_header(
         title="Payroll Run Report",
         period_text=f"Period {run.month:02d}/{run.year}",
-        palette=palette,
         second_col_width=220 * mm,
     )
     story = [header_table, Spacer(1, 8)]
@@ -560,9 +387,9 @@ def _build_payroll_report_pdf(run, items):
         )
     )
     story.append(details_table)
-    story.extend([Spacer(1, 10), _build_signature_stamp_block(total_width=269 * mm, palette=palette)])
+    story.extend([Spacer(1, 10), build_signature_stamp_block(total_width=269 * mm)])
 
-    return _build_reportlab_pdf(story, "Payroll Run Report", pagesize=landscape(A4))
+    return build_platypus_story_pdf(story, "Payroll Run Report", pagesize=landscape(A4))
 
 
 def _export_payroll_run_response(request, run):

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Table, Button, Space, Tag, message, Tooltip, Popconfirm } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
@@ -20,7 +20,7 @@ export default function AnnouncementsManagementPage() {
         total: 0,
     });
 
-    const loadData = async (page = 1, pageSize = 10) => {
+    const loadData = useCallback(async (page = 1, pageSize = 10) => {
         setLoading(true);
         try {
             const response = await getAllAnnouncements(page, pageSize);
@@ -33,16 +33,16 @@ export default function AnnouncementsManagementPage() {
                     total: response.data.count || 0,
                 });
             }
-        } catch (error) {
+        } catch {
             message.error(t('hr.announcements.errorLoad'));
         } finally {
             setLoading(false);
         }
-    };
+    }, [t]);
 
     useEffect(() => {
-        loadData(pagination.current, pagination.pageSize);
-    }, []);
+        loadData(1, 10);
+    }, [loadData]);
 
     const handleDelete = async (id: number) => {
         if (isHeadOffice) return;
@@ -50,7 +50,7 @@ export default function AnnouncementsManagementPage() {
             await deleteAnnouncement(id);
             message.success(t('hr.announcements.successDeleted'));
             loadData(pagination.current, pagination.pageSize);
-        } catch (error) {
+        } catch {
             message.error(t('hr.announcements.errorDelete'));
         }
     };
@@ -75,6 +75,7 @@ export default function AnnouncementsManagementPage() {
                 <Space>
                     <strong>{text}</strong>
                     {record.has_attachment && <Tag color="red">PDF</Tag>}
+                    {record.announcement_type === "MEETING" && <Tag color="blue">{t("announcements.meeting.tag")}</Tag>}
                 </Space>
             ),
         },
@@ -82,8 +83,9 @@ export default function AnnouncementsManagementPage() {
             title: t('hr.announcements.tableTargetRoles'),
             dataIndex: 'target_roles',
             key: 'target_roles',
-            render: (roles: string[]) => (
+            render: (roles: string[], record: AnnouncementListItem) => (
                 <>
+                    {record.target_user_email && <Tag color="cyan">{record.target_user_email}</Tag>}
                     {roles.map((role) => {
                         let displayRole = role.replace('_', ' ');
                         switch (role) {

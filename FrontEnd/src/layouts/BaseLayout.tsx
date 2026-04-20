@@ -23,6 +23,7 @@ import {
   AppstoreOutlined,
   UserSwitchOutlined,
   LockOutlined,
+  FileTextOutlined,
 } from "@ant-design/icons";
 import type { MenuProps } from "antd";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -32,7 +33,7 @@ import { useI18n } from "../i18n/useI18n";
 import type { AppLanguage } from "../i18n/types";
 import { getEmployee } from "../services/api/employeesApi";
 import { isApiError } from "../services/api/apiTypes";
-import { getManagerTeam } from "../services/api/managerApi";
+import { getManagerAccess } from "../services/api/managerApi";
 import { isFinanceApproverEmployee } from "../utils/financeApprover";
 import { isCFOApproverEmployee } from "../utils/cfoApprover";
 import { isCEOApproverEmployee } from "../utils/ceoApprover";
@@ -350,7 +351,7 @@ export default function BaseLayout() {
         return;
       }
       try {
-        const [profileRes, managerRes] = await Promise.allSettled([getEmployee("me"), getManagerTeam()]);
+        const [profileRes, managerRes] = await Promise.allSettled([getEmployee("me"), getManagerAccess()]);
         if (!mounted) return;
         const resolvedProfile =
           profileRes.status === "fulfilled" ? profileRes.value : null;
@@ -361,12 +362,12 @@ export default function BaseLayout() {
           setIsFinanceApprover(false);
           setIsCFOApprover(false);
           setIsCEOApprover(false);
-          setHasManagerAccess(Boolean(resolvedManager && !isApiError(resolvedManager)));
+          setHasManagerAccess(Boolean(resolvedManager && !isApiError(resolvedManager) && resolvedManager.data.has_access));
         } else {
           setIsFinanceApprover(isFinanceApproverEmployee(resolvedProfile.data));
           setIsCFOApprover(isCFOApproverEmployee(resolvedProfile.data));
           setIsCEOApprover(isCEOApproverEmployee(resolvedProfile.data));
-          setHasManagerAccess(Boolean(resolvedManager && !isApiError(resolvedManager)));
+          setHasManagerAccess(Boolean(resolvedManager && !isApiError(resolvedManager) && resolvedManager.data.has_access));
         }
       } catch {
         if (mounted) {
@@ -456,6 +457,7 @@ export default function BaseLayout() {
         { key: "/hr/assets", icon: <AppstoreOutlined />, label: <Link to="/hr/assets">{t("layout.assets", "Assets")}</Link> },
         { key: "/hr/rents", icon: <BellOutlined />, label: <Link to="/hr/rents">{t("layout.rents", "Rents")}</Link> },
         { key: "/hr/rent-types", icon: <SettingOutlined />, label: <Link to="/hr/rent-types">{t("layout.rentTypes", "Rent Types")}</Link> },
+        { key: "/hr/templates", icon: <FileTextOutlined />, label: <Link to="/hr/templates">{t("layout.templateLibrary", "Template Library")}</Link> },
         { key: "/hr/announcements", icon: <BellOutlined />, label: <Link to="/hr/announcements">{t("layout.announcements", "Announcements")}</Link> },
         { key: "/hr/announcements/create", icon: <UserAddOutlined />, label: <Link to="/hr/announcements/create">{t("layout.createAnnouncement", "Create Announcement")}</Link> },
       ],

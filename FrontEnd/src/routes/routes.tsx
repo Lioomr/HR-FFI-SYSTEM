@@ -42,6 +42,7 @@ import CreatePayrollRunPage from "../pages/hr/payroll/CreatePayrollRunPage";
 import PayrollRunDetailsPage from "../pages/hr/payroll/PayrollRunDetailsPage";
 import HRAssetsPage from "../pages/hr/assets/HRAssetsPage";
 import HRRentsPage from "../pages/hr/rents/HRRentsPage";
+import TemplateLibraryPage from "../pages/hr/templates/TemplateLibraryPage";
 import EmployeePayslipsListPage from "../pages/employee/payslips/EmployeePayslipsListPage";
 import EmployeePayslipDetailsPage from "../pages/employee/payslips/EmployeePayslipDetailsPage";
 
@@ -167,6 +168,7 @@ export const routes = [
               { path: "hr/sponsors", element: <SponsorsPage /> },
               { path: "hr/rent-types", element: <RentTypesPage /> },
               { path: "hr/rents", element: <HRRentsPage /> },
+              { path: "hr/templates", element: <TemplateLibraryPage /> },
 
               // Import Employees
               { path: "hr/import/employees", element: <ImportEmployeesEntryPage /> },

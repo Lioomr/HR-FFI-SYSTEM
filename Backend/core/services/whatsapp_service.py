@@ -73,6 +73,21 @@ WHATSAPP_TEMPLATE_REGISTRY: dict[str, WhatsAppTemplateSpec] = {
         version_id="63a457b4-719f-4e52-8bc5-d6a020aa64d6",
         variable_order=("employee_name", "leave_type", "start_date", "end_date", "total_days"),
     ),
+    "meeting_notification_v1": WhatsAppTemplateSpec(
+        template_name="meeting_notification",
+        project_id=getattr(settings, "BIRD_WHATSAPP_MEETING_PROJECT_ID", ""),
+        version_id=getattr(settings, "BIRD_WHATSAPP_MEETING_VERSION_ID", ""),
+        variable_order=(
+            "employee_name",
+            "meeting_title",
+            "meeting_date",
+            "meeting_time",
+            "organizer_name",
+            "google_meet_url",
+            "microsoft_teams_url",
+            "zoom_url",
+        ),
+    ),
 }
 
 
@@ -320,6 +335,7 @@ def _resolve_from_event(event: str) -> str | None:
         "leave_request_rejected": "leave_request_rejected",
         "announcement_created": "new_announcement_notification",
         "new_announcement_notification": "new_announcement_notification",
+        "meeting_notification": "meeting_notification_v1",
     }
     return event_map.get(event_norm)
 
@@ -331,6 +347,7 @@ def _resolve_from_variables(template_variables: dict[str, Any]) -> str | None:
         "new_announcement_notification",
         "leave_request_rejected",
         "leave_request_approved",
+        "meeting_notification_v1",
         "leave_request_submitted_v1",
     ]
     for candidate in preferred_order:

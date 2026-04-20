@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
-from .models import DelegationRule, UserPreference
+from .models import DelegationRule, RequestObligation, UserPreference
 
 
 User = get_user_model()
@@ -64,6 +64,54 @@ class DelegationRuleSerializer(serializers.ModelSerializer):
             if duplicate_qs.exists():
                 raise serializers.ValidationError("An identical delegation rule already exists.")
         return attrs
+
+
+class RequestObligationSerializer(serializers.ModelSerializer):
+    type_display = serializers.CharField(source="get_type_display", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    severity_display = serializers.CharField(source="get_severity_display", read_only=True)
+    target = serializers.SerializerMethodField()
+    waived_by_name = serializers.CharField(source="waived_by.full_name", read_only=True)
+    resolved_by_name = serializers.CharField(source="resolved_by.full_name", read_only=True)
+
+    class Meta:
+        model = RequestObligation
+        fields = [
+            "id",
+            "type",
+            "type_display",
+            "status",
+            "status_display",
+            "severity",
+            "severity_display",
+            "title",
+            "description",
+            "metadata",
+            "target",
+            "resolved_at",
+            "resolved_by",
+            "resolved_by_name",
+            "resolution_note",
+            "waived_at",
+            "waived_by",
+            "waived_by_name",
+            "waiver_reason",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_target(self, obj):
+        target = obj.target
+        if target is None:
+            return None
+        if hasattr(target, "asset_code"):
+            return {
+                "id": target.id,
+                "entity": target.__class__.__name__,
+                "label": target.asset_code,
+                "name": target.name_en or target.name_ar or target.asset_code,
+            }
+        return {"id": target.pk, "entity": target.__class__.__name__, "label": str(target)}
 
 
 class UserPreferenceSerializer(serializers.ModelSerializer):

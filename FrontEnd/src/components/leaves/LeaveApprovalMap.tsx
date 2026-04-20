@@ -1,12 +1,11 @@
 import ApprovalFlowMap, { type ApprovalFlowStage } from "../requests/ApprovalFlowMap";
-import { buildStagesFromWorkflow } from "../requests/workflowPresentation";
 
 import type { LeaveRequest } from "../../services/api/leaveApi";
 
 type TranslateFn = (key: string, params?: Record<string, unknown> | string, fallback?: string) => string;
 
 function inferDecisionNote(request: LeaveRequest) {
-  return request.ceo_decision_note || request.hr_decision_note || request.manager_decision_note || request.rejection_reason || "";
+  return request.ceo_decision_note || request.hr_decision_note || request.manager_decision_note || request.delegate_decision_note || request.rejection_reason || "";
 }
 
 function buildStages(request: LeaveRequest, t: TranslateFn): ApprovalFlowStage[] {
@@ -14,6 +13,9 @@ function buildStages(request: LeaveRequest, t: TranslateFn): ApprovalFlowStage[]
   const needsManager =
     request.status === "pending_manager" ||
     Boolean(request.manager_decision_at || request.manager_decision_note);
+  const needsDelegate =
+    request.status === "pending_delegate" ||
+    Boolean(request.delegated_to || request.delegate_decision_at || request.delegate_decision_note);
   const needsCeo =
     request.status === "pending_ceo" ||
     Boolean(request.ceo_decision_at || request.ceo_decision_note || request.leave_type?.requires_ceo_approval);
@@ -40,6 +42,18 @@ function buildStages(request: LeaveRequest, t: TranslateFn): ApprovalFlowStage[]
     ];
   }
 
+  const delegateState: ApprovalFlowStage["state"] = !needsDelegate
+    ? "skipped"
+    : finalRejected && !!request.delegate_decision_note && !request.manager_decision_note && !request.hr_decision_note && !request.ceo_decision_note
+      ? "rejected"
+      : finalCancelled && Boolean(request.delegate_decision_at)
+        ? "completed"
+      : request.delegate_decision_at
+        ? "completed"
+        : request.status === "pending_delegate"
+          ? "current"
+          : "upcoming";
+
   const managerState: ApprovalFlowStage["state"] = !needsManager
     ? "skipped"
     : finalRejected && !!request.manager_decision_note && !request.hr_decision_note && !request.ceo_decision_note
@@ -64,7 +78,7 @@ function buildStages(request: LeaveRequest, t: TranslateFn): ApprovalFlowStage[]
       ? "current"
       : request.status === "pending_ceo" || request.status === "approved" || Boolean(request.decided_at || request.hr_decision_note)
         ? "completed"
-        : needsManager && !request.manager_decision_at
+        : (needsDelegate && !request.delegate_decision_at) || (needsManager && !request.manager_decision_at)
           ? "upcoming"
           : "current";
 
@@ -87,6 +101,16 @@ function buildStages(request: LeaveRequest, t: TranslateFn): ApprovalFlowStage[]
       state: "completed",
       note: t("leave.approvalMap.requestSent"),
       at: request.created_at,
+    },
+    {
+      key: "delegate",
+      title: t("leave.approvalMap.delegateReview"),
+      state: delegateState,
+      note:
+        delegateState === "skipped"
+          ? t("leave.approvalMap.notRequired")
+          : request.delegate_decision_note || t(`leave.approvalMap.${delegateState}`),
+      at: request.delegate_decision_at,
     },
     {
       key: "manager",
@@ -134,12 +158,11 @@ function buildStages(request: LeaveRequest, t: TranslateFn): ApprovalFlowStage[]
 }
 
 export default function LeaveApprovalMap({ request, t }: { request: LeaveRequest; t: TranslateFn }) {
-  const workflowStages = buildStagesFromWorkflow(request.workflow, ["manager", "hr", "ceo"], t);
   return (
     <ApprovalFlowMap
       eyebrow={t("leave.approvalMap.eyebrow")}
       title={t("leave.approvalMap.title")}
-      stages={workflowStages || buildStages(request, t)}
+      stages={buildStages(request, t)}
       t={t}
     />
   );

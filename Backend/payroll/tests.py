@@ -1,7 +1,8 @@
 from decimal import Decimal
 from types import SimpleNamespace
 
-from payroll.views import _build_payroll_report_pdf, _build_simple_lines_pdf
+from core.pdf import build_simple_lines_pdf
+from payroll.views import _build_payroll_report_pdf
 
 
 def test_build_payroll_report_pdf_returns_pdf_bytes():
@@ -34,7 +35,7 @@ def test_build_payroll_report_pdf_returns_pdf_bytes():
 
 
 def test_build_simple_lines_pdf_returns_pdf_bytes():
-    pdf_bytes = _build_simple_lines_pdf("Payslip 21", ["Period: 2026-02", "Net Salary: 5200.00"])
+    pdf_bytes = build_simple_lines_pdf("Payslip 21", ["Period: 2026-02", "Net Salary: 5200.00"])
 
     assert isinstance(pdf_bytes, bytes)
     assert pdf_bytes.startswith(b"%PDF")

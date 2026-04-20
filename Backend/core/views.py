@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 from django.conf import settings
+from django.contrib.contenttypes.models import ContentType
 from django.core.mail import send_mail
 from django.db import transaction
 from django.db.models import Q
@@ -13,12 +14,13 @@ from rest_framework.views import APIView
 
 from attendance.models import AttendanceRecord
 from audit.utils import audit
-from core.permissions import IsHRManagerOrAdmin
+from core.permissions import IsDepartmentCEOApprover, IsHRManagerOrAdmin
 from core.responses import success
-from core.serializers import DelegationRuleSerializer, UserPreferenceSerializer
+from core.serializers import DelegationRuleSerializer, RequestObligationSerializer, UserPreferenceSerializer
 from core.services import (
     build_pending_approval_item,
     get_pending_approvals_for_user,
+    sync_leave_obligations,
     send_delegation_notification_email,
     sync_workflow,
 )
@@ -34,7 +36,7 @@ from organization.services import (
     get_active_organization_for_request,
     get_user_accessible_company_ids,
 )
-from .models import DelegationRule, UserPreference
+from .models import DelegationRule, RequestObligation, UserPreference
 from .permissions import get_role
 
 
@@ -517,6 +519,82 @@ class DelegationRuleDetailView(APIView):
             rule.delete()
             audit(request, "delegation_rule_deleted", entity="delegation_rule", entity_id=rule_id, metadata=metadata)
         return success(message="Delegation rule deleted.")
+
+
+def _resolve_obligation_parent(parent_type: str, parent_id: str):
+    if parent_type != "leave_request":
+        raise NotFound("Unsupported parent_type.")
+    try:
+        return LeaveRequest.objects.select_related("employee", "employee_profile", "leave_type", "company").get(
+            pk=parent_id,
+            is_active=True,
+        )
+    except LeaveRequest.DoesNotExist as exc:
+        raise NotFound("Leave request not found.") from exc
+
+
+def _user_can_view_parent(request, parent) -> bool:
+    role = get_role(request.user)
+    if role in {"SystemAdmin", "HRManager", "CEO"}:
+        return filter_queryset_by_company_scope(LeaveRequest.objects.filter(pk=parent.pk), request).exists()
+    if getattr(parent, "employee_id", None) == request.user.id:
+        return True
+    workflow = sync_workflow(parent, actor=request.user)
+    return bool(workflow.current_actor_user_id == request.user.id)
+
+
+class RequestObligationListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        parent_type = request.query_params.get("parent_type", "")
+        parent_id = request.query_params.get("parent_id", "")
+        if not parent_type or not parent_id:
+            return success({"items": [], "summary": {}})
+        parent = _resolve_obligation_parent(parent_type, parent_id)
+        if not _user_can_view_parent(request, parent):
+            raise NotFound("Not found.")
+
+        summary = sync_leave_obligations(parent, actor=request.user)
+        parent_ct = ContentType.objects.get_for_model(parent.__class__)
+        queryset = RequestObligation.objects.filter(
+            parent_content_type=parent_ct,
+            parent_object_id=parent.pk,
+        ).select_related("waived_by", "resolved_by")
+        serializer = RequestObligationSerializer(queryset, many=True)
+        return success({"items": serializer.data, "summary": summary})
+
+
+class RequestObligationWaiveView(APIView):
+    permission_classes = [IsAuthenticated, IsDepartmentCEOApprover]
+
+    def post(self, request, pk):
+        reason = (request.data.get("reason") or request.data.get("waiver_reason") or "").strip()
+        if not reason:
+            return Response(
+                {"status": "error", "message": "waiver_reason is required.", "errors": [{"message": "waiver_reason is required."}]},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+        try:
+            obligation = RequestObligation.objects.select_related("parent_content_type").get(pk=pk)
+        except RequestObligation.DoesNotExist as exc:
+            raise NotFound("Request obligation not found.") from exc
+        parent = obligation.parent
+        if parent is None or not _user_can_view_parent(request, parent):
+            raise NotFound("Not found.")
+        obligation.status = RequestObligation.Status.WAIVED
+        obligation.waived_at = timezone.now()
+        obligation.waived_by = request.user
+        obligation.waiver_reason = reason
+        obligation.save(update_fields=["status", "waived_at", "waived_by", "waiver_reason", "updated_at"])
+        audit(
+            request,
+            "request_obligation_waived",
+            entity="RequestObligation",
+            entity_id=obligation.id,
+            metadata={"type": obligation.type, "reason": reason},
+        )
+        return success(RequestObligationSerializer(obligation).data)
 
 
 class UserPreferenceDetailView(APIView):

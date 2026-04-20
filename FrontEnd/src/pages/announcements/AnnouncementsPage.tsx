@@ -10,7 +10,7 @@ import {
 import { useAuthStore } from "../../auth/authStore";
 import { useNavigate } from "react-router-dom";
 import { useI18n } from "../../i18n/useI18n";
-import { DownloadOutlined, EyeOutlined, FilePdfOutlined } from "@ant-design/icons";
+import { CalendarOutlined, DownloadOutlined, EyeOutlined, FilePdfOutlined, GoogleOutlined, VideoCameraOutlined } from "@ant-design/icons";
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -60,6 +60,26 @@ export default function AnnouncementsPage() {
     const importantKeywords = ["urgent", "important", "expiry", "expir", "reminder", "action required"];
     return importantKeywords.some((keyword) => text.includes(keyword));
   };
+
+  const renderMeetingButtons = (announcement: Pick<Announcement, "google_meet_url" | "microsoft_teams_url" | "zoom_url">) => (
+    <Space wrap size={8}>
+      {announcement.google_meet_url && (
+        <Button size="small" type="primary" icon={<GoogleOutlined />} href={announcement.google_meet_url} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>
+          {t("announcements.meeting.googleMeet")}
+        </Button>
+      )}
+      {announcement.microsoft_teams_url && (
+        <Button size="small" icon={<VideoCameraOutlined />} href={announcement.microsoft_teams_url} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>
+          {t("announcements.meeting.teams")}
+        </Button>
+      )}
+      {announcement.zoom_url && (
+        <Button size="small" icon={<VideoCameraOutlined />} href={announcement.zoom_url} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>
+          {t("announcements.meeting.zoom")}
+        </Button>
+      )}
+    </Space>
+  );
 
   const handleOpen = async (item: AnnouncementListItem) => {
     setModalVisible(true);
@@ -175,6 +195,7 @@ export default function AnnouncementsPage() {
                           : t("status.info", "Normal")}
                       </Tag>
                       {item.has_attachment && <Tag color="red">PDF</Tag>}
+                      {item.announcement_type === "MEETING" && <Tag icon={<CalendarOutlined />} color="blue">{t("announcements.meeting.tag")}</Tag>}
                     </Space>
                   }
                   extra={<Text type="secondary" style={{ fontSize: 12 }}>{formatDate(item.created_at)}</Text>}
@@ -186,6 +207,16 @@ export default function AnnouncementsPage() {
                     >
                       {item.content_preview}
                     </Paragraph>
+                    {item.announcement_type === "MEETING" && (
+                      <Space direction="vertical" size={6}>
+                        {item.meeting_starts_at && (
+                          <Text type="secondary">
+                            <CalendarOutlined /> {new Date(item.meeting_starts_at).toLocaleString()}
+                          </Text>
+                        )}
+                        {renderMeetingButtons(item)}
+                      </Space>
+                    )}
                   </div>
 
                   <div style={{ borderTop: "1px solid #f0f0f0", paddingTop: 12, marginTop: "auto" }}>
@@ -229,8 +260,30 @@ export default function AnnouncementsPage() {
                   : t("announcements.widget.normal")}
               </Tag>
               <Tag>{new Date(detail.created_at).toLocaleString()}</Tag>
+              {detail.announcement_type === "MEETING" && <Tag icon={<CalendarOutlined />} color="blue">{t("announcements.meeting.tag")}</Tag>}
             </div>
             <Paragraph style={{ whiteSpace: "pre-wrap" }}>{detail.content}</Paragraph>
+            {detail.announcement_type === "MEETING" && (
+              <div style={{ marginTop: 16, marginBottom: 16, padding: 12, background: "#fafafa", borderRadius: 8 }}>
+                <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                  {detail.meeting_starts_at && (
+                    <Text><strong>{t("announcements.meeting.startsAt")}:</strong> {new Date(detail.meeting_starts_at).toLocaleString()}</Text>
+                  )}
+                  {detail.meeting_duration_minutes && (
+                    <Text><strong>{t("announcements.meeting.duration")}:</strong> {detail.meeting_duration_minutes} {t("announcements.meeting.minutes")}</Text>
+                  )}
+                  {detail.meeting_location && (
+                    <Text><strong>{t("announcements.meeting.location")}:</strong> {detail.meeting_location}</Text>
+                  )}
+                  {detail.meeting_agenda && (
+                    <Paragraph style={{ marginBottom: 0, whiteSpace: "pre-wrap" }}>
+                      <strong>{t("announcements.meeting.agenda")}:</strong> {detail.meeting_agenda}
+                    </Paragraph>
+                  )}
+                  {renderMeetingButtons(detail)}
+                </Space>
+              </div>
+            )}
             {detail.has_attachment && (
               <div style={{ marginTop: 16 }}>
                 <Space wrap size={10}>
