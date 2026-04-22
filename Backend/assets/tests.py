@@ -9,8 +9,9 @@ from rest_framework.test import APIClient
 
 from employees.models import EmployeeProfile
 from hr_reference.models import Department, Position
+from organization.models import OrganizationNode, UserOrganizationAccess
 
-from .models import Asset, AssetAssignment, AssetReturnRequest
+from .models import Asset, AssetAssignment, AssetDamageReport, AssetReturnRequest, PrintedLabelJob
 
 User = get_user_model()
 
@@ -24,13 +25,21 @@ class AssetsTests(TestCase):
         self.employee_group, _ = Group.objects.get_or_create(name="Employee")
         self.manager_group, _ = Group.objects.get_or_create(name="Manager")
 
+        self.company = OrganizationNode.objects.create(
+            code="ASSET_TEST_CO",
+            name="Asset Test Company",
+            node_type=OrganizationNode.NodeType.COMPANY,
+            employee_id_prefix="ATC",
+        )
         self.hr_user = User.objects.create_user(email="hr-assets@ffi.com", password="password")
         self.hr_user.groups.add(self.hr_group)
+        UserOrganizationAccess.objects.create(user=self.hr_user, organization=self.company)
         self.department_ceo = Department.objects.create(id=1, code="CEO", name="CEO Department")
         self.department_ops = Department.objects.create(id=12, code="OPS", name="Operations")
         self.position = Position.objects.create(id=501, code="GEN", name="General")
         self.hr_profile = EmployeeProfile.objects.create(
             user=self.hr_user,
+            company=self.company,
             employee_id="EMP-ASSET-HR",
             full_name="Asset HR",
             employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
@@ -46,6 +55,7 @@ class AssetsTests(TestCase):
 
         self.employee_profile = EmployeeProfile.objects.create(
             user=self.employee_user,
+            company=self.company,
             employee_id="EMP-ASSET-001",
             full_name="Asset Employee",
             employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
@@ -55,6 +65,7 @@ class AssetsTests(TestCase):
 
         self.manager_profile = EmployeeProfile.objects.create(
             user=self.manager_user,
+            company=self.company,
             employee_id="EMP-ASSET-002",
             full_name="Asset Manager",
             employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
@@ -96,6 +107,7 @@ class AssetsTests(TestCase):
 
     def test_asset_code_generation_by_type(self):
         vehicle = Asset.objects.create(
+            company=self.company,
             name_en="Vehicle 1",
             type=Asset.AssetType.VEHICLE,
             plate_number="A123",
@@ -104,6 +116,7 @@ class AssetsTests(TestCase):
             fuel_type="Petrol",
         )
         laptop = Asset.objects.create(
+            company=self.company,
             name_en="Laptop 1",
             type=Asset.AssetType.LAPTOP,
             cpu="i7",
@@ -113,6 +126,7 @@ class AssetsTests(TestCase):
             operating_system="Windows",
         )
         other = Asset.objects.create(
+            company=self.company,
             name_en="Other 1",
             type=Asset.AssetType.OTHER,
             flexible_attributes={"k": "v"},
@@ -170,6 +184,7 @@ class AssetsTests(TestCase):
         self.client.force_authenticate(user=self.hr_user)
 
         asset = Asset.objects.create(
+            company=self.company,
             name_en="Laptop Delete",
             type=Asset.AssetType.LAPTOP,
             cpu="i5",
@@ -191,6 +206,7 @@ class AssetsTests(TestCase):
 
     def test_employee_manager_can_view_only_my_assets(self):
         asset = Asset.objects.create(
+            company=self.company,
             name_en="Laptop Mine",
             type=Asset.AssetType.LAPTOP,
             cpu="i5",
@@ -215,6 +231,7 @@ class AssetsTests(TestCase):
 
     def test_employee_can_create_damage_report_and_return_request_for_own_asset(self):
         asset = Asset.objects.create(
+            company=self.company,
             name_en="Laptop Own",
             type=Asset.AssetType.LAPTOP,
             cpu="i5",
@@ -241,6 +258,7 @@ class AssetsTests(TestCase):
 
     def test_manager_can_use_employee_asset_self_service_for_own_asset(self):
         asset = Asset.objects.create(
+            company=self.company,
             name_en="Manager Laptop",
             type=Asset.AssetType.LAPTOP,
             cpu="i5",
@@ -275,6 +293,7 @@ class AssetsTests(TestCase):
 
     def test_employee_can_view_own_asset_request_history(self):
         asset = Asset.objects.create(
+            company=self.company,
             name_en="History Laptop",
             type=Asset.AssetType.LAPTOP,
             cpu="i5",
@@ -307,6 +326,7 @@ class AssetsTests(TestCase):
 
     def test_hr_can_view_asset_request_history_for_asset(self):
         asset = Asset.objects.create(
+            company=self.company,
             name_en="HR Request Laptop",
             type=Asset.AssetType.LAPTOP,
             cpu="i5",
@@ -338,6 +358,7 @@ class AssetsTests(TestCase):
 
     def test_hr_manager_asset_requests_start_pending_ceo(self):
         asset = Asset.objects.create(
+            company=self.company,
             name_en="Laptop HR",
             type=Asset.AssetType.LAPTOP,
             cpu="i5",
@@ -366,6 +387,7 @@ class AssetsTests(TestCase):
         self.employee_profile.save(update_fields=["manager", "manager_profile", "updated_at"])
 
         asset = Asset.objects.create(
+            company=self.company,
             name_en="Laptop No Manager",
             type=Asset.AssetType.LAPTOP,
             cpu="i5",
@@ -384,6 +406,7 @@ class AssetsTests(TestCase):
 
     def test_manager_can_approve_asset_return_request_and_move_it_to_hr(self):
         asset = Asset.objects.create(
+            company=self.company,
             name_en="Laptop Manager Approval",
             type=Asset.AssetType.LAPTOP,
             cpu="i5",
@@ -417,6 +440,7 @@ class AssetsTests(TestCase):
 
     def test_hr_can_approve_return_request_after_manager_stage(self):
         asset = Asset.objects.create(
+            company=self.company,
             name_en="Laptop HR Approval",
             type=Asset.AssetType.LAPTOP,
             cpu="i5",
@@ -442,6 +466,7 @@ class AssetsTests(TestCase):
 
     def test_duplicate_open_return_request_is_rejected(self):
         asset = Asset.objects.create(
+            company=self.company,
             name_en="Laptop Duplicate Return",
             type=Asset.AssetType.LAPTOP,
             cpu="i5",
@@ -463,6 +488,7 @@ class AssetsTests(TestCase):
     def test_dashboard_summary_and_warranty_window(self):
         today = timezone.localdate()
         Asset.objects.create(
+            company=self.company,
             name_en="Asset Available",
             type=Asset.AssetType.OTHER,
             flexible_attributes={"x": 1},
@@ -470,6 +496,7 @@ class AssetsTests(TestCase):
             warranty_expiry=today + timedelta(days=10),
         )
         Asset.objects.create(
+            company=self.company,
             name_en="Asset Lost",
             type=Asset.AssetType.OTHER,
             flexible_attributes={"x": 2},
@@ -487,12 +514,14 @@ class AssetsTests(TestCase):
     def test_list_can_filter_warranty_expiring_soon(self):
         today = timezone.localdate()
         soon_asset = Asset.objects.create(
+            company=self.company,
             name_en="Soon Warranty",
             type=Asset.AssetType.OTHER,
             flexible_attributes={"x": 1},
             warranty_expiry=today + timedelta(days=5),
         )
         Asset.objects.create(
+            company=self.company,
             name_en="Later Warranty",
             type=Asset.AssetType.OTHER,
             flexible_attributes={"x": 2},
@@ -507,6 +536,7 @@ class AssetsTests(TestCase):
 
     def test_termination_auto_closes_assignments(self):
         asset = Asset.objects.create(
+            company=self.company,
             name_en="Laptop Termination",
             type=Asset.AssetType.LAPTOP,
             cpu="i5",
@@ -532,3 +562,138 @@ class AssetsTests(TestCase):
         self.assertFalse(assignment.is_active)
         self.assertIsNotNone(assignment.returned_at)
         self.assertEqual(asset.status, Asset.AssetStatus.AVAILABLE)
+
+
+class AssetLabelAndLookupTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.hr_group, _ = Group.objects.get_or_create(name="HRManager")
+        self.employee_group, _ = Group.objects.get_or_create(name="Employee")
+
+        self.company = OrganizationNode.objects.create(
+            code="LABEL_CO",
+            name="Label Company",
+            node_type=OrganizationNode.NodeType.COMPANY,
+            employee_id_prefix="LBL",
+        )
+        self.other_company = OrganizationNode.objects.create(
+            code="OTHER_LABEL_CO",
+            name="Other Label Company",
+            node_type=OrganizationNode.NodeType.COMPANY,
+            employee_id_prefix="OTH",
+        )
+        self.hr_user = User.objects.create_user(email="hr-labels@ffi.com", password="password")
+        self.hr_user.groups.add(self.hr_group)
+        UserOrganizationAccess.objects.create(user=self.hr_user, organization=self.company)
+
+        self.employee_user = User.objects.create_user(email="emp-labels@ffi.com", password="password")
+        self.employee_user.groups.add(self.employee_group)
+        self.employee_profile = EmployeeProfile.objects.create(
+            user=self.employee_user,
+            company=self.company,
+            employee_id="LBL-001",
+            full_name="Label Employee",
+            department_name_en="Operations",
+            job_title_en="Technician",
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        )
+        self.asset = Asset.objects.create(
+            company=self.company,
+            name_en="Scanner Laptop",
+            type=Asset.AssetType.LAPTOP,
+            cpu="i7",
+            ram="16GB",
+            storage="512GB",
+            mac_address="AA:BB:CC:DD:EE:70",
+            operating_system="Windows",
+            status=Asset.AssetStatus.ASSIGNED,
+        )
+        self.other_asset = Asset.objects.create(
+            company=self.other_company,
+            name_en="Other Company Laptop",
+            type=Asset.AssetType.LAPTOP,
+            cpu="i7",
+            ram="16GB",
+            storage="512GB",
+            mac_address="AA:BB:CC:DD:EE:71",
+            operating_system="Windows",
+        )
+        AssetAssignment.objects.create(
+            asset=self.asset,
+            employee=self.employee_profile,
+            assigned_by=self.hr_user,
+            is_active=True,
+        )
+        AssetDamageReport.objects.create(asset=self.asset, employee=self.employee_profile, description="Scratch")
+        AssetReturnRequest.objects.create(asset=self.asset, employee=self.employee_profile, note="Replace")
+        self.client.force_authenticate(user=self.hr_user)
+
+    def _company_header(self):
+        return {"HTTP_HOST": "localhost", "HTTP_X_ACTIVE_COMPANY_ID": str(self.company.id)}
+
+    def test_lookup_returns_scoped_asset_context(self):
+        response = self.client.get(
+            f"/api/assets/lookup/?code={self.asset.asset_code.lower()}",
+            **self._company_header(),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.data["data"]
+        self.assertEqual(data["asset"]["id"], self.asset.id)
+        self.assertEqual(data["active_assignment"]["employee"]["employee_id"], "LBL-001")
+        self.assertEqual(len(data["recent_damage_reports"]), 1)
+        self.assertEqual(len(data["recent_return_requests"]), 1)
+
+    def test_lookup_hides_other_company_asset(self):
+        response = self.client.get(
+            f"/api/assets/lookup/?code={self.other_asset.asset_code}",
+            **self._company_header(),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_print_labels_saves_job_and_returns_pdf(self):
+        response = self.client.post(
+            "/api/assets/labels/print/",
+            {"asset_ids": [self.asset.id], "paper_size": "50X30"},
+            format="json",
+            **self._company_header(),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertTrue(bytes(response.content).startswith(b"%PDF"))
+        job = PrintedLabelJob.objects.get()
+        self.assertEqual(response["X-Label-Job-Id"], str(job.id))
+        self.assertEqual(job.company, self.company)
+        self.assertEqual(job.asset_codes, [self.asset.asset_code])
+        self.assertTrue(job.pdf_file.name.startswith("assets/labels/"))
+
+    def test_print_labels_rejects_any_asset_outside_scope(self):
+        response = self.client.post(
+            "/api/assets/labels/print/",
+            {"asset_ids": [self.asset.id, self.other_asset.id], "paper_size": "A4_GRID"},
+            format="json",
+            **self._company_header(),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(PrintedLabelJob.objects.count(), 0)
+
+    def test_label_jobs_list_and_pdf_download_are_scoped(self):
+        print_response = self.client.post(
+            "/api/assets/labels/print/",
+            {"asset_ids": [self.asset.id], "paper_size": "A4_GRID"},
+            format="json",
+            **self._company_header(),
+        )
+        job_id = print_response["X-Label-Job-Id"]
+
+        list_response = self.client.get("/api/assets/labels/jobs/", **self._company_header())
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(list_response.data["data"]["count"], 1)
+        self.assertEqual(list_response.data["data"]["items"][0]["id"], int(job_id))
+
+        pdf_response = self.client.get(f"/api/assets/labels/jobs/{job_id}/pdf/", **self._company_header())
+        self.assertEqual(pdf_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(pdf_response["Content-Type"], "application/pdf")

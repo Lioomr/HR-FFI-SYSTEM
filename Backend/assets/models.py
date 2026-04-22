@@ -260,3 +260,34 @@ class AssetReturnRequest(models.Model):
         self.processed_by = user
         self.processed_at = timezone.now()
         self.save(update_fields=["status", "processed_by", "processed_at"])
+
+
+class PrintedLabelJob(models.Model):
+    class PaperSize(models.TextChoices):
+        SIZE_50X30 = "50X30", _("50x30 mm")
+        SIZE_40X30 = "40X30", _("40x30 mm")
+        SIZE_60X40 = "60X40", _("60x40 mm")
+        A4_GRID = "A4_GRID", _("A4 grid")
+
+    company = models.ForeignKey(OrganizationNode, on_delete=models.PROTECT, related_name="printed_label_jobs")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="printed_label_jobs",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    asset_count = models.PositiveIntegerField()
+    paper_size = models.CharField(max_length=20, choices=PaperSize.choices)
+    pdf_file = models.FileField(storage=PrivateUploadStorage(), upload_to="assets/labels/")
+    asset_codes = models.JSONField(default=list)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["company", "created_at"], name="asset_label_co_created_idx"),
+        ]
+
+    def __str__(self):
+        return f"Label job #{self.id} ({self.asset_count} assets)"

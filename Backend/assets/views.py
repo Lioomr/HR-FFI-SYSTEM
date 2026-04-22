@@ -1,8 +1,10 @@
 from datetime import timedelta
+from uuid import uuid4
 
+from django.core.files.base import ContentFile
 from django.db import transaction
 from django.db.models import Count, Q
-from django.http import HttpResponse
+from django.http import FileResponse, HttpResponse
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
@@ -27,20 +29,28 @@ from core.services import (
 from employees.models import EmployeeProfile
 from leaves.models import LeaveRequest
 from loans.permissions import IsManagerOrAdmin, get_active_workflow_config
-from organization.services import ensure_company_write_allowed, filter_queryset_by_company_scope, get_active_company_for_request
+from organization.services import (
+    ensure_company_write_allowed,
+    filter_queryset_by_company_scope,
+    get_active_company_for_request,
+)
 
-from .models import Asset, AssetAssignment, AssetDamageReport, AssetReturnRequest
+from .models import Asset, AssetAssignment, AssetDamageReport, AssetReturnRequest, PrintedLabelJob
 from .permissions import IsEmployeeSelfAsset, IsHRManagerOrSystemAdmin
 from .serializers import (
-    AssetDamageReportSerializer,
     AssetAssignmentCreateSerializer,
-    AssetRequestActionSerializer,
-    AssetReturnRequestSerializer,
     AssetDamageReportCreateSerializer,
+    AssetDamageReportSerializer,
+    AssetLabelsPrintSerializer,
+    AssetLookupSerializer,
+    AssetRequestActionSerializer,
     AssetReturnRequestCreateSerializer,
+    AssetReturnRequestSerializer,
     AssetReturnSerializer,
     AssetSerializer,
+    PrintedLabelJobSerializer,
 )
+from .services.label_pdf import render_labels_pdf
 
 
 def _is_hr_manager_user(user):
@@ -327,6 +337,10 @@ class AssetViewSet(viewsets.ModelViewSet):
             "return_requests",
             "approve_return_request",
             "reject_return_request",
+            "lookup",
+            "labels_print",
+            "label_jobs",
+            "label_job_pdf",
         ]:
             permission_classes = [IsAuthenticated, IsHRManagerOrSystemAdmin]
         elif self.action in ["my_assets", "my_damage_reports", "my_return_requests", "damage_report", "return_request"]:
@@ -578,6 +592,105 @@ class AssetViewSet(viewsets.ModelViewSet):
             ),
         )
         return success(summary)
+
+    @action(detail=False, methods=["get"], url_path="lookup")
+    def lookup(self, request):
+        code = str(request.query_params.get("code", "") or "").strip()
+        if not code:
+            return error("code is required", status=status.HTTP_400_BAD_REQUEST)
+
+        asset = (
+            filter_queryset_by_company_scope(
+                Asset.objects.select_related("company").prefetch_related(
+                    "assignments",
+                    "damage_reports",
+                    "return_requests",
+                ),
+                request,
+            )
+            .filter(asset_code__iexact=code)
+            .first()
+        )
+        if not asset:
+            return error("Asset not found.", status=status.HTTP_404_NOT_FOUND)
+        return success(AssetLookupSerializer(asset, context={"request": request}).data)
+
+    @action(detail=False, methods=["post"], url_path="labels/print")
+    def labels_print(self, request):
+        try:
+            ensure_company_write_allowed(request)
+        except ValueError as exc:
+            return error(str(exc), status=status.HTTP_400_BAD_REQUEST)
+
+        company = get_active_company_for_request(request)
+        if not company:
+            return error("Select a company to print asset labels.", status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = AssetLabelsPrintSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        asset_ids = serializer.validated_data["asset_ids"]
+        paper_size = serializer.validated_data["paper_size"]
+
+        scoped_assets = list(
+            filter_queryset_by_company_scope(Asset.objects.select_related("company"), request).filter(id__in=asset_ids)
+        )
+        assets_by_id = {asset.id: asset for asset in scoped_assets}
+        if len(assets_by_id) != len(asset_ids):
+            return error("Asset not found.", status=status.HTTP_404_NOT_FOUND)
+        ordered_assets = [assets_by_id[asset_id] for asset_id in asset_ids]
+
+        pdf_bytes = render_labels_pdf(ordered_assets, paper_size)
+        job = PrintedLabelJob.objects.create(
+            company=company,
+            created_by=request.user,
+            asset_count=len(ordered_assets),
+            paper_size=paper_size,
+            asset_codes=[asset.asset_code for asset in ordered_assets],
+        )
+        job.pdf_file.save(f"asset_labels_{uuid4().hex}.pdf", ContentFile(pdf_bytes), save=True)
+
+        audit(
+            request,
+            "asset_label_printed",
+            entity="PrintedLabelJob",
+            entity_id=job.id,
+            metadata={"job_id": job.id, "asset_ids": asset_ids, "paper_size": paper_size},
+        )
+
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="asset_labels_{job.id}.pdf"'
+        response["X-Label-Job-Id"] = str(job.id)
+        return response
+
+    @action(detail=False, methods=["get"], url_path="labels/jobs")
+    def label_jobs(self, request):
+        queryset = filter_queryset_by_company_scope(
+            PrintedLabelJob.objects.select_related("company", "created_by"),
+            request,
+        )
+        page = self.paginate_queryset(queryset)
+        serializer = PrintedLabelJobSerializer(
+            page if page is not None else queryset,
+            many=True,
+            context={"request": request},
+        )
+        if page is not None:
+            return self.get_paginated_response(serializer.data)
+        return success({"items": serializer.data, "count": queryset.count()})
+
+    @action(detail=False, methods=["get"], url_path=r"labels/jobs/(?P<job_id>[^/.]+)/pdf")
+    def label_job_pdf(self, request, job_id=None):
+        job = filter_queryset_by_company_scope(PrintedLabelJob.objects.all(), request).filter(pk=job_id).first()
+        if not job or not job.pdf_file:
+            return error("Not found", errors=["Not found."], status=status.HTTP_404_NOT_FOUND)
+        try:
+            file_handle = job.pdf_file.open("rb")
+        except FileNotFoundError:
+            return error("Not found", errors=["File not found."], status=status.HTTP_404_NOT_FOUND)
+
+        response = FileResponse(file_handle, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="asset_labels_{job.id}.pdf"'
+        return response
 
     @action(detail=False, methods=["get"], url_path="my-assets")
     def my_assets(self, request):

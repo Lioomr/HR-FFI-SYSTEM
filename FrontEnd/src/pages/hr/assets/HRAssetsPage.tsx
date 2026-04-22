@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Card, Checkbox, Col, DatePicker, Descriptions, Form, Input, InputNumber, Modal, Popconfirm, Row, Select, Space, Table, Tabs, Tag, Typography, message } from "antd";
+import { Button, Card, Checkbox, Col, DatePicker, Descriptions, Form, Input, InputNumber, Modal, Popconfirm, Radio, Row, Select, Space, Table, Tabs, Tag, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { DeleteOutlined, PlusOutlined } from "@ant-design/icons";
+import type { TableRowSelection } from "antd/es/table/interface";
+import { DeleteOutlined, HistoryOutlined, PlusOutlined, PrinterOutlined, ScanOutlined } from "@ant-design/icons";
+import { Link } from "react-router-dom";
 import dayjs from "dayjs";
 
 import ErrorState from "../../../components/ui/ErrorState";
@@ -17,6 +19,7 @@ import {
   listAssetDamageReports,
   listAssetReturnRequests,
   listAssets,
+  printAssetLabels,
   returnAsset,
   updateAsset,
   type Asset,
@@ -24,7 +27,9 @@ import {
   type AssetDashboardSummary,
   type AssetReturnRequest,
   type CreateAssetPayload,
+  type LabelPaperSize,
 } from "../../../services/api/assetsApi";
+import { triggerBlobDownload } from "../../../services/api/downloads";
 import { isApiError } from "../../../services/api/apiTypes";
 import { listEmployees, type Employee } from "../../../services/api/employeesApi";
 
@@ -112,6 +117,13 @@ export default function HRAssetsPage() {
   const [assignForm] = Form.useForm();
   const [returnForm] = Form.useForm();
   const selectedType = Form.useWatch("type", createForm);
+
+  // Label printing state
+  const [selectedAssetIds, setSelectedAssetIds] = useState<React.Key[]>([]);
+  const [printModalOpen, setPrintModalOpen] = useState(false);
+  const [printTargetIds, setPrintTargetIds] = useState<number[]>([]);
+  const [printPaperSize, setPrintPaperSize] = useState<LabelPaperSize>("50X30");
+  const [printSubmitting, setPrintSubmitting] = useState(false);
 
   const loadData = async () => {
     try {
@@ -243,9 +255,9 @@ export default function HRAssetsPage() {
     {
       title: t("common.actions"),
       key: "actions",
-      width: 320,
+      width: 440,
       render: (_, record) => (
-        <Space>
+        <Space wrap>
           <Button
             size="small"
             onClick={(e) => {
@@ -310,6 +322,16 @@ export default function HRAssetsPage() {
             }}
           >
             {t("hr.assets.edit")}
+          </Button>
+          <Button
+            size="small"
+            icon={<PrinterOutlined />}
+            onClick={(e) => {
+              e.stopPropagation();
+              openPrintModal([record.id]);
+            }}
+          >
+            {t("hr.assets.printLabel")}
           </Button>
           <Button
             size="small"
@@ -740,6 +762,34 @@ export default function HRAssetsPage() {
     }
   };
 
+  const openPrintModal = (assetIds: number[]) => {
+    if (assetIds.length === 0) return;
+    setPrintTargetIds(assetIds);
+    setPrintPaperSize("50X30");
+    setPrintModalOpen(true);
+  };
+
+  const handlePrintLabels = async () => {
+    if (printTargetIds.length === 0) return;
+    try {
+      setPrintSubmitting(true);
+      const blob = await printAssetLabels({
+        asset_ids: printTargetIds,
+        paper_size: printPaperSize,
+      });
+      const stamp = dayjs().format("YYYYMMDD-HHmm");
+      triggerBlobDownload(blob, `asset_labels_${stamp}.pdf`);
+      await apiMessage.success(t("hr.assets.printLabelsSuccess"));
+      setPrintModalOpen(false);
+      setPrintTargetIds([]);
+      setSelectedAssetIds([]);
+    } catch (err: any) {
+      await apiMessage.error(err?.response?.data?.message || err?.message || t("hr.assets.printLabelsFailed"));
+    } finally {
+      setPrintSubmitting(false);
+    }
+  };
+
   const handleReturnAsset = async () => {
     if (isHeadOffice) return;
     if (!activeAsset) return;
@@ -906,9 +956,38 @@ export default function HRAssetsPage() {
       </Card>
 
       <Card>
+        <Row justify="space-between" align="middle" style={{ marginBottom: 12 }} gutter={[12, 12]}>
+          <Col>
+            <Space wrap>
+              <Button
+                type="primary"
+                icon={<PrinterOutlined />}
+                disabled={selectedAssetIds.length === 0}
+                onClick={() => openPrintModal(selectedAssetIds.map((k) => Number(k)))}
+              >
+                {t("hr.assets.printLabelsSelected", { count: selectedAssetIds.length })}
+              </Button>
+            </Space>
+          </Col>
+          <Col>
+            <Space wrap>
+              <Link to="/hr/assets/lookup">
+                <Button icon={<ScanOutlined />}>{t("hr.assets.lookup.title")}</Button>
+              </Link>
+              <Link to="/hr/assets/label-jobs">
+                <Button icon={<HistoryOutlined />}>{t("hr.assets.labelJobs.title")}</Button>
+              </Link>
+            </Space>
+          </Col>
+        </Row>
         <Table
           columns={columns}
           dataSource={dataSource}
+          rowSelection={{
+            selectedRowKeys: selectedAssetIds,
+            onChange: (keys) => setSelectedAssetIds(keys),
+            preserveSelectedRowKeys: true,
+          } as TableRowSelection<Asset>}
           pagination={{
             current: assetPage,
             pageSize: assetPageSize,
@@ -1332,6 +1411,44 @@ export default function HRAssetsPage() {
             />
           </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal
+        title={t("hr.assets.printLabelDialogTitle")}
+        open={printModalOpen}
+        onCancel={() => {
+          if (printSubmitting) return;
+          setPrintModalOpen(false);
+          setPrintTargetIds([]);
+        }}
+        onOk={handlePrintLabels}
+        okText={t("hr.assets.printLabels")}
+        confirmLoading={printSubmitting}
+      >
+        <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+          <Typography.Text>
+            {t("hr.assets.printLabelsCount", { count: printTargetIds.length })}
+          </Typography.Text>
+          <div>
+            <Typography.Text strong style={{ display: "block", marginBottom: 8 }}>
+              {t("hr.assets.paperSize")}
+            </Typography.Text>
+            <Radio.Group
+              value={printPaperSize}
+              onChange={(e) => setPrintPaperSize(e.target.value as LabelPaperSize)}
+            >
+              <Space direction="vertical">
+                <Radio value="50X30">{t("hr.assets.paperSize50x30")}</Radio>
+                <Radio value="40X30">{t("hr.assets.paperSize40x30")}</Radio>
+                <Radio value="60X40">{t("hr.assets.paperSize60x40")}</Radio>
+                <Radio value="A4_GRID">{t("hr.assets.paperSizeA4Grid")}</Radio>
+              </Space>
+            </Radio.Group>
+          </div>
+          <Typography.Text type="secondary">
+            {t("hr.assets.printLabelsHint")}
+          </Typography.Text>
+        </Space>
       </Modal>
 
       <Modal

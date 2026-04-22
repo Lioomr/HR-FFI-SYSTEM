@@ -41,6 +41,8 @@ import PayrollDashboardPage from "../pages/hr/payroll/PayrollDashboardPage";
 import CreatePayrollRunPage from "../pages/hr/payroll/CreatePayrollRunPage";
 import PayrollRunDetailsPage from "../pages/hr/payroll/PayrollRunDetailsPage";
 import HRAssetsPage from "../pages/hr/assets/HRAssetsPage";
+import AssetLookupPage from "../pages/hr/assets/AssetLookupPage";
+import LabelJobsHistoryPage from "../pages/hr/assets/LabelJobsHistoryPage";
 import HRRentsPage from "../pages/hr/rents/HRRentsPage";
 import TemplateLibraryPage from "../pages/hr/templates/TemplateLibraryPage";
 import EmployeePayslipsListPage from "../pages/employee/payslips/EmployeePayslipsListPage";
@@ -180,6 +182,8 @@ export const routes = [
               { path: "hr/payroll/create", element: <CreatePayrollRunPage /> },
               { path: "hr/payroll/:run_id", element: <PayrollRunDetailsPage /> },
               { path: "hr/assets", element: <HRAssetsPage /> },
+              { path: "hr/assets/lookup", element: <AssetLookupPage /> },
+              { path: "hr/assets/label-jobs", element: <LabelJobsHistoryPage /> },
 
               // Leave Management (HR)
               { path: "hr/leave/requests", element: <LeaveInboxPage /> },

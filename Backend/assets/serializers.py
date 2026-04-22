@@ -7,7 +7,7 @@ from rest_framework import serializers
 from core.services import get_workflow_snapshot
 from employees.models import EmployeeProfile
 
-from .models import Asset, AssetAssignment, AssetDamageReport, AssetReturnRequest
+from .models import Asset, AssetAssignment, AssetDamageReport, AssetReturnRequest, PrintedLabelJob
 
 ASSET_INVOICE_ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png"}
 ASSET_INVOICE_MAX_UPLOAD_SIZE = int(getattr(settings, "MAX_ASSET_INVOICE_SIZE_BYTES", 5 * 1024 * 1024))
@@ -246,3 +246,108 @@ class AssetReturnRequestSerializer(serializers.ModelSerializer):
 
 class AssetRequestActionSerializer(serializers.Serializer):
     comment = serializers.CharField(required=False, allow_blank=True)
+
+
+class PrintedLabelJobSerializer(serializers.ModelSerializer):
+    created_by_name = serializers.SerializerMethodField()
+    pdf_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PrintedLabelJob
+        fields = [
+            "id",
+            "created_by_name",
+            "created_at",
+            "asset_count",
+            "paper_size",
+            "asset_codes",
+            "pdf_url",
+        ]
+
+    def get_created_by_name(self, obj):
+        user = obj.created_by
+        if not user:
+            return ""
+        return str(getattr(user, "full_name", "") or getattr(user, "email", "") or "")
+
+    def get_pdf_url(self, obj):
+        request = self.context.get("request")
+        path = f"/api/assets/labels/jobs/{obj.id}/pdf/"
+        return request.build_absolute_uri(path) if request else path
+
+
+class AssetLabelsPrintSerializer(serializers.Serializer):
+    asset_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        min_length=1,
+        max_length=200,
+        allow_empty=False,
+    )
+    paper_size = serializers.ChoiceField(choices=PrintedLabelJob.PaperSize.choices)
+
+    def validate_asset_ids(self, value):
+        if len(set(value)) != len(value):
+            raise serializers.ValidationError("Duplicate asset ids are not allowed.")
+        return value
+
+
+class AssetLookupSerializer(serializers.Serializer):
+    asset = serializers.SerializerMethodField()
+    active_assignment = serializers.SerializerMethodField()
+    recent_damage_reports = serializers.SerializerMethodField()
+    recent_return_requests = serializers.SerializerMethodField()
+
+    def get_asset(self, obj):
+        return AssetSerializer(obj, context=self.context).data
+
+    def get_active_assignment(self, obj):
+        assignment = obj.assignments.filter(is_active=True).select_related(
+            "employee",
+            "employee__department_ref",
+            "employee__position_ref",
+            "assigned_by",
+        ).first()
+        if not assignment:
+            return None
+        employee = assignment.employee
+        assigned_by = assignment.assigned_by
+        return {
+            "id": assignment.id,
+            "employee": {
+                "id": employee.id,
+                "employee_id": employee.employee_id,
+                "full_name": employee.full_name or employee.full_name_en or "",
+                "department": employee.department_name_en
+                or getattr(employee.department_ref, "name", "")
+                or employee.department
+                or "",
+                "job_title": employee.job_title_en
+                or getattr(employee.position_ref, "name", "")
+                or employee.job_title
+                or "",
+            },
+            "assigned_at": assignment.assigned_at,
+            "assigned_by_name": str(getattr(assigned_by, "full_name", "") or getattr(assigned_by, "email", "") or ""),
+        }
+
+    def get_recent_damage_reports(self, obj):
+        return [
+            {
+                "id": report.id,
+                "description": report.description,
+                "status": report.status,
+                "reported_at": report.reported_at,
+            }
+            for report in obj.damage_reports.order_by("-reported_at")[:3]
+        ]
+
+    def get_recent_return_requests(self, obj):
+        return [
+            {
+                "id": req.id,
+                "status": req.status,
+                "requested_at": req.requested_at,
+                "note": req.note,
+            }
+            for req in obj.return_requests.order_by("-requested_at")[:3]
+        ]
