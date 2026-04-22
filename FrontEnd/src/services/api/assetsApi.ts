@@ -339,3 +339,91 @@ export async function rejectCEOAssetReturnRequest(id: number | string, comment: 
   );
   return data;
 }
+
+// ─── Asset Labels: printing, lookup, history ──────────────────────────────────
+
+export type LabelPaperSize = "50X30" | "40X30" | "60X40" | "A4_GRID";
+
+export interface AssetLookupAssignment {
+  id: number;
+  employee: {
+    id: number;
+    employee_id: string;
+    full_name: string;
+    department?: string | null;
+    job_title?: string | null;
+  };
+  assigned_at: string;
+  assigned_by_name?: string | null;
+}
+
+export interface AssetLookupDamageReport {
+  id: number;
+  description: string;
+  status: string;
+  reported_at: string;
+}
+
+export interface AssetLookupReturnRequest {
+  id: number;
+  status: string;
+  requested_at: string;
+  note?: string;
+}
+
+export interface AssetLookupResult {
+  asset: Asset;
+  active_assignment: AssetLookupAssignment | null;
+  recent_damage_reports: AssetLookupDamageReport[];
+  recent_return_requests: AssetLookupReturnRequest[];
+}
+
+export interface PrintedLabelJob {
+  id: number;
+  created_by_name: string | null;
+  created_at: string;
+  asset_count: number;
+  paper_size: LabelPaperSize;
+  asset_codes: string[];
+  pdf_url?: string | null;
+}
+
+export interface PrintedLabelJobsPaginatedResponse {
+  items: PrintedLabelJob[];
+  page: number;
+  page_size: number;
+  count: number;
+  total_pages: number;
+}
+
+export async function lookupAssetByCode(code: string) {
+  const { data } = await api.get<ApiResponse<AssetLookupResult>>("/api/assets/lookup/", {
+    params: { code },
+  });
+  return data;
+}
+
+export async function printAssetLabels(payload: {
+  asset_ids: number[];
+  paper_size: LabelPaperSize;
+}): Promise<Blob> {
+  const { data } = await api.post("/api/assets/labels/print/", payload, {
+    responseType: "blob",
+  });
+  return data as Blob;
+}
+
+export async function listLabelJobs(params?: { page?: number; page_size?: number }) {
+  const { data } = await api.get<ApiResponse<PrintedLabelJobsPaginatedResponse>>(
+    "/api/assets/labels/jobs/",
+    { params }
+  );
+  return data;
+}
+
+export async function downloadLabelJobPdf(jobId: number | string): Promise<Blob> {
+  const { data } = await api.get(`/api/assets/labels/jobs/${jobId}/pdf/`, {
+    responseType: "blob",
+  });
+  return data as Blob;
+}
