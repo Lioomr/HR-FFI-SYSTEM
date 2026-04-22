@@ -24,6 +24,8 @@ import {
   UserSwitchOutlined,
   LockOutlined,
   FileTextOutlined,
+  ScanOutlined,
+  PrinterOutlined,
 } from "@ant-design/icons";
 import type { MenuProps } from "antd";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -159,6 +161,8 @@ function getTitle(pathname: string, t: (key: string, fallback?: string) => strin
   if (pathname.startsWith("/ceo/announcements")) return t("layout.announcements", "Announcements");
   if (pathname.startsWith("/ceo/profile")) return t("layout.profile");
   if (pathname.startsWith("/hr/loan-requests")) return t("layout.loanRequests", "Loan Requests");
+  if (pathname.startsWith("/hr/assets/lookup")) return t("layout.assetLookup", "Asset Lookup");
+  if (pathname.startsWith("/hr/assets/label-jobs")) return t("layout.labelHistory", "Label History");
   if (pathname.startsWith("/hr/assets")) return t("layout.assets", "Assets");
   if (pathname.startsWith("/hr/rents")) return t("layout.rents", "Rents");
   if (pathname.startsWith("/hr/rent-types")) return t("layout.rentTypes", "Rent Types");
@@ -455,6 +459,8 @@ export default function BaseLayout() {
         { key: "/hr/import/employees", icon: <UploadOutlined />, label: <Link to="/hr/import/employees">{t("layout.importEmployees")}</Link> },
         { key: "/hr/payroll", icon: <DollarOutlined />, label: <Link to="/hr/payroll">{t("layout.payroll")}</Link> },
         { key: "/hr/assets", icon: <AppstoreOutlined />, label: <Link to="/hr/assets">{t("layout.assets", "Assets")}</Link> },
+        { key: "/hr/assets/lookup", icon: <ScanOutlined />, label: <Link to="/hr/assets/lookup">{t("layout.assetLookup", "Asset Lookup")}</Link> },
+        { key: "/hr/assets/label-jobs", icon: <PrinterOutlined />, label: <Link to="/hr/assets/label-jobs">{t("layout.labelHistory", "Label History")}</Link> },
         { key: "/hr/rents", icon: <BellOutlined />, label: <Link to="/hr/rents">{t("layout.rents", "Rents")}</Link> },
         { key: "/hr/rent-types", icon: <SettingOutlined />, label: <Link to="/hr/rent-types">{t("layout.rentTypes", "Rent Types")}</Link> },
         { key: "/hr/templates", icon: <FileTextOutlined />, label: <Link to="/hr/templates">{t("layout.templateLibrary", "Template Library")}</Link> },

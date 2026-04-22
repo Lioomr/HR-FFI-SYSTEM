@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 from assets.models import AssetDamageReport, AssetReturnRequest
+from assets.services.label_pdf import render_labels_pdf
 from assets.views import _build_damage_report_pdf, _build_return_request_pdf
 
 
@@ -73,6 +74,20 @@ def test_build_return_request_pdf_returns_pdf_bytes():
     )
 
     pdf_bytes = _build_return_request_pdf(req)
+    assert isinstance(pdf_bytes, bytes)
+    assert pdf_bytes.startswith(b"%PDF")
+    assert len(pdf_bytes) > 500
+
+
+def test_render_labels_pdf_returns_pdf_bytes():
+    asset = SimpleNamespace(
+        asset_code="LAP-00042",
+        name_en="Dell Laptop",
+        company=SimpleNamespace(name="FFI"),
+    )
+
+    pdf_bytes = render_labels_pdf([asset], "50X30")
+
     assert isinstance(pdf_bytes, bytes)
     assert pdf_bytes.startswith(b"%PDF")
     assert len(pdf_bytes) > 500
