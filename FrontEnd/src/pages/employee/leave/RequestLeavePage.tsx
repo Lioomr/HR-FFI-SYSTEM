@@ -33,6 +33,8 @@ export default function RequestLeavePage() {
     const [submitting, setSubmitting] = useState(false);
     const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
     const [balances, setBalances] = useState<Record<number, LeaveBalance>>({});
+    const selectedLeaveTypeId = Form.useWatch("leave_type", form);
+    const selectedLeaveBalance = selectedLeaveTypeId ? balances[selectedLeaveTypeId] : undefined;
 
     const [daysCount, setDaysCount] = useState(0);
     const [balanceError, setBalanceError] = useState<string | null>(null);
@@ -57,6 +59,11 @@ export default function RequestLeavePage() {
         }
 
         return ownRemaining;
+    };
+
+    const formatDays = (value: number | string | undefined): string => {
+        const numericValue = Number(value || 0);
+        return Number.isInteger(numericValue) ? String(numericValue) : numericValue.toFixed(2);
     };
 
     useEffect(() => {
@@ -89,7 +96,7 @@ export default function RequestLeavePage() {
             }
         }
         init();
-    }, []);
+    }, [t]);
 
     const handleValuesChange = (changedValues: any, allValues: any) => {
         if (changedValues.leave_type) {
@@ -244,6 +251,26 @@ export default function RequestLeavePage() {
                             ))}
                         </Select>
                     </Form.Item>
+
+                    {selectedLeaveBalance && (
+                        <div
+                            style={{
+                                marginTop: -8,
+                                marginBottom: 24,
+                                padding: 12,
+                                background: "#f0f7ff",
+                                border: "1px solid #91caff",
+                                borderRadius: 8,
+                            }}
+                        >
+                            <strong>{t("leave.balanceTitle")}:</strong>{" "}
+                            {t("leave.remaining")}: {formatDays(selectedLeaveBalance.remaining_days)} {t("leave.days")}
+                            {" | "}
+                            {t("leave.used")}: {formatDays(selectedLeaveBalance.used_days)} {t("leave.days")}
+                            {" | "}
+                            {t("leave.allowed")}: {formatDays(selectedLeaveBalance.total_days)} {t("leave.days")}
+                        </div>
+                    )}
 
                     <Form.Item
                         label={t("common.date")}

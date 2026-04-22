@@ -248,7 +248,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action == "import_excel":
             permission_classes = [IsAuthenticated, IsHRManagerOnly]
-        elif self.action in ["manager_team", "delegation_candidates"]:
+        elif self.action in ["manager_access", "manager_team", "delegation_candidates"]:
             permission_classes = [IsAuthenticated]
         elif self.action in ["retrieve", "me"]:
             permission_classes = [IsAuthenticated, IsHRManagerOrAdmin | IsEmployeeOwner]

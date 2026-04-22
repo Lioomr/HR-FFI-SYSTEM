@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button, Card, Descriptions, Divider, Alert, Tag, Modal, Input, notification } from "antd";
-import { ArrowLeftOutlined, CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, DownloadOutlined, ExportOutlined } from "@ant-design/icons";
+import { ArrowLeftOutlined, CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, DownloadOutlined, ExportOutlined, FilePdfOutlined } from "@ant-design/icons";
 
 import PageHeader from "../../../components/ui/PageHeader";
 import LoadingState from "../../../components/ui/LoadingState";
 import ErrorState from "../../../components/ui/ErrorState";
-import { getLeaveRequest, approveLeaveRequest, rejectLeaveRequest, sendLeaveRequestToCEO, getLeaveRequestDocumentBlob, type LeaveRequest } from "../../../services/api/leaveApi";
+import { getLeaveRequest, approveLeaveRequest, rejectLeaveRequest, sendLeaveRequestToCEO, getLeaveRequestDocumentBlob, getLeaveRequestPdfBlob, type LeaveRequest } from "../../../services/api/leaveApi";
 import { isApiError } from "../../../services/api/apiTypes";
 import { useI18n } from "../../../i18n/useI18n";
 import LeaveApprovalMap from "../../../components/leaves/LeaveApprovalMap";
@@ -35,6 +35,7 @@ export default function LeaveRequestDetailsPage() {
     // Action States
     const [processing, setProcessing] = useState(false);
     const [documentLoading, setDocumentLoading] = useState(false);
+    const [pdfLoading, setPdfLoading] = useState(false);
     const [rejectModalVisible, setRejectModalVisible] = useState(false);
     const [rejectionReason, setRejectionReason] = useState("");
 
@@ -137,6 +138,26 @@ export default function LeaveRequestDetailsPage() {
         }
     };
 
+    const downloadPdf = async () => {
+        if (!request) return;
+        setPdfLoading(true);
+        try {
+            const blob = await getLeaveRequestPdfBlob(request.id, true);
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `leave_request_${request.id}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(() => window.URL.revokeObjectURL(url), 5000);
+        } catch {
+            notification.error({ message: t("common.error"), description: t("leave.pdfDownloadFailed") });
+        } finally {
+            setPdfLoading(false);
+        }
+    };
+
     const handleReject = async () => {
         if (!request || !rejectionReason.trim()) {
             notification.error({ message: t("leave.reasonReqTitle"), description: t("leave.reasonReqDesc") });
@@ -204,6 +225,11 @@ export default function LeaveRequestDetailsPage() {
             <PageHeader
                 title={t("leave.requestDetailsTitle", { id: request.id })}
                 tags={<Tag color={statusColor()}>{statusLabel}</Tag>}
+                actions={
+                    <Button icon={<FilePdfOutlined />} onClick={downloadPdf} loading={pdfLoading}>
+                        {t("leave.downloadRequestPdf")}
+                    </Button>
+                }
             />
 
             <div style={{ display: "grid", gap: 18 }}>
