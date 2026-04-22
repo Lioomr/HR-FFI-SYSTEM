@@ -171,6 +171,7 @@ function getTitle(pathname: string, t: (key: string, fallback?: string) => strin
   if (pathname.startsWith("/cfo/loan-requests")) return t("layout.loanRequests", "Loan Requests");
   if (pathname.startsWith("/cfo/profile")) return t("layout.profile");
   if (pathname.startsWith("/employee/loans")) return t("layout.loanRequests", "Loan Requests");
+  if (pathname.startsWith("/employee/delegated-approvals")) return t("layout.delegatedApprovals", "Delegated Approvals");
   if (pathname.startsWith("/employee/assets")) return t("layout.myAssets", "My Assets");
   if (pathname.startsWith("/employee")) return t("layout.employeeSelfService");
   if (pathname.startsWith("/change-password")) return t("layout.changePassword");
@@ -435,6 +436,7 @@ export default function BaseLayout() {
       children: [
         { key: "/employee/leave/request", icon: <CalendarOutlined />, label: <Link to="/employee/leave/request">{t("layout.requestLeave", "Request Leave")}</Link> },
         { key: "/employee/leave/requests", icon: <FileSearchOutlined />, label: <Link to="/employee/leave/requests">{t("layout.myRequests")}</Link> },
+        { key: "/employee/delegated-approvals", icon: <UserSwitchOutlined />, label: <Link to="/employee/delegated-approvals">{t("layout.delegatedApprovals", "Delegated Approvals")}</Link> },
         { key: "/employee/attendance", icon: <ClockCircleOutlined />, label: <Link to="/employee/attendance">{t("layout.attendance")}</Link> },
         { key: "/employee/assets", icon: <AppstoreOutlined />, label: <Link to="/employee/assets">{t("layout.myAssets", "My Assets")}</Link> },
         { key: "/employee/loans/request", icon: <DollarOutlined />, label: <Link to="/employee/loans/request">{t("loans.myRequests.newRequest", "New Loan Request")}</Link> },
@@ -486,6 +488,7 @@ export default function BaseLayout() {
         { key: "/employee/attendance", icon: <CalendarOutlined />, label: <Link to="/employee/attendance">{t("layout.attendance")}</Link> },
         { key: "/employee/leave/balance", icon: <FileSearchOutlined />, label: <Link to="/employee/leave/balance">{t("layout.leaveBalance")}</Link> },
         { key: "/employee/leave/requests", icon: <CalendarOutlined />, label: <Link to="/employee/leave/requests">{t("layout.myRequests")}</Link> },
+        { key: "/employee/delegated-approvals", icon: <UserSwitchOutlined />, label: <Link to="/employee/delegated-approvals">{t("layout.delegatedApprovals", "Delegated Approvals")}</Link> },
         { key: "/employee/assets", icon: <AppstoreOutlined />, label: <Link to="/employee/assets">{t("layout.myAssets", "My Assets")}</Link> },
         { key: "/employee/loans", icon: <DollarOutlined />, label: <Link to="/employee/loans">{t("layout.loanRequests", "Loan Requests")}</Link> },
         { key: "/employee/payslips", icon: <DollarOutlined />, label: <Link to="/employee/payslips">{t("layout.myPayslips")}</Link> },
@@ -543,6 +546,7 @@ export default function BaseLayout() {
         { key: "/employee/leave/balance", icon: <FileSearchOutlined />, label: <Link to="/employee/leave/balance">{t("layout.leaveBalance")}</Link> },
         { key: "/employee/leave/request", icon: <CalendarOutlined />, label: <Link to="/employee/leave/request">{t("layout.requestLeave", "Request Leave")}</Link> },
         { key: "/employee/leave/requests", icon: <FileSearchOutlined />, label: <Link to="/employee/leave/requests">{t("layout.myRequests")}</Link> },
+        { key: "/employee/delegated-approvals", icon: <UserSwitchOutlined />, label: <Link to="/employee/delegated-approvals">{t("layout.delegatedApprovals", "Delegated Approvals")}</Link> },
         { key: "/employee/assets", icon: <AppstoreOutlined />, label: <Link to="/employee/assets">{t("layout.myAssets", "My Assets")}</Link> },
         { key: "/employee/loans/request", icon: <DollarOutlined />, label: <Link to="/employee/loans/request">{t("loans.myRequests.newRequest", "New Loan Request")}</Link> },
         { key: "/employee/loans", icon: <DollarOutlined />, label: <Link to="/employee/loans">{t("layout.loanRequests", "Loan Requests")}</Link> },

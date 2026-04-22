@@ -148,6 +148,16 @@ export async function getMyLeaveRequests(
   return data;
 }
 
+export async function getMyDelegatedLeaveRequests(
+  params?: { page?: number; page_size?: number; status?: string }
+): Promise<ApiResponse<PaginatedResponse<LeaveRequest>>> {
+  const { data } = await api.get<ApiResponse<PaginatedResponse<LeaveRequest>>>(
+    "/api/leaves/employee/delegated-leave-requests/",
+    { params }
+  );
+  return data;
+}
+
 /**
  * Get my leave balance (Employee)
  */
