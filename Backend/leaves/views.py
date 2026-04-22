@@ -1634,6 +1634,51 @@ class EmployeeLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
         )
 
 
+class EmployeeDelegatedLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = LeaveRequestSerializer
+    permission_classes = [IsAuthenticated, IsEmployeeOnly]
+    pagination_class = None
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ["status", "leave_type"]
+    ordering_fields = ["created_at", "start_date"]
+    ordering = ["-created_at"]
+
+    def get_queryset(self):
+        return LeaveRequest.objects.filter(
+            delegated_to=self.request.user,
+            is_active=True,
+        ).select_related(
+            "employee",
+            "employee__employee_profile",
+            "leave_type",
+            "decided_by",
+            "manager_decision_by",
+            "delegated_to",
+            "delegate_decision_by",
+            "company",
+        )
+
+    def list(self, request, *args, **kwargs):
+        qs = self.filter_queryset(self.get_queryset())
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(qs, request, view=self)
+        serializer = self.get_serializer(page if page is not None else qs, many=True)
+        if page is not None:
+            return paginator.get_paginated_response(serializer.data)
+        return Response(
+            {
+                "status": "success",
+                "data": {
+                    "items": serializer.data,
+                    "page": 1,
+                    "page_size": len(serializer.data),
+                    "count": len(serializer.data),
+                    "total_pages": 1,
+                },
+            }
+        )
+
+
 class LeaveBalanceAdjustmentViewSet(viewsets.ModelViewSet):
     """
     CRUD for manual leave balance adjustments.

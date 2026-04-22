@@ -95,7 +95,9 @@ export default function MyLeaveRequestsPage() {
             document.body.removeChild(link);
             setTimeout(() => window.URL.revokeObjectURL(url), 5000);
         } catch (err: unknown) {
-            notification.error({ message: t("common.error"), description: getDetailedHttpErrorMessage(t, err) });
+            const description =
+                getHttpStatus(err) === 403 ? t("leave.pdfDownloadForbidden") : getDetailedHttpErrorMessage(t, err);
+            notification.error({ message: t("common.error"), description });
         } finally {
             setPdfLoadingId(null);
         }

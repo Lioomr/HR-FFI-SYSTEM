@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (
     CEOLeaveRequestViewSet,
+    EmployeeDelegatedLeaveRequestViewSet,
     EmployeeLeaveBalanceView,
     EmployeeLeaveRequestViewSet,
     HRManualLeaveRequestViewSet,
@@ -19,6 +20,7 @@ router.register(r"leave-balances", LeaveBalanceViewSet, basename="leave-balances
 router.register(r"leave-requests", LeaveRequestViewSet, basename="leave-requests")
 router.register(r"hr/manual-leave-requests", HRManualLeaveRequestViewSet, basename="hr-manual-leave-requests")
 router.register(r"employee/leave-requests", EmployeeLeaveRequestViewSet, basename="employee-leave-requests")
+router.register(r"employee/delegated-leave-requests", EmployeeDelegatedLeaveRequestViewSet, basename="employee-delegated-leave-requests")
 router.register(r"manager/leave-requests", ManagerLeaveRequestViewSet, basename="manager-leave-requests")
 router.register(r"ceo/leave-requests", CEOLeaveRequestViewSet, basename="ceo-leave-requests")
 router.register(r"adjustments", LeaveBalanceAdjustmentViewSet, basename="leave-adjustments")
