@@ -875,29 +875,33 @@ def sync_workflow(instance, *, actor=None, workflow_key: str | None = None) -> W
 
 def get_workflow_snapshot(instance, *, actor=None) -> dict[str, Any]:
     workflow = sync_workflow(instance, actor=actor)
-    history = [
-        {
-            "id": action.id,
-            "action": action.action,
-            "stage": action.from_stage or action.to_stage or action.approver_role,
-            "approver_role": action.approver_role,
-            "actor": {
-                "id": action.actor_id,
-                "email": getattr(action.actor, "email", None),
-                "full_name": getattr(action.actor, "full_name", None),
+    history = []
+    for action in workflow.actions.all().order_by("created_at", "id"):
+        stage = action.from_stage or action.approver_role
+        if action.action != WorkflowAction.Action.SUBMIT:
+            stage = stage or action.to_stage
+        history.append(
+            {
+                "id": action.id,
+                "action": action.action,
+                "stage": stage,
+                "approver_role": action.approver_role,
+                "actor": {
+                    "id": action.actor_id,
+                    "email": getattr(action.actor, "email", None),
+                    "full_name": getattr(action.actor, "full_name", None),
+                }
+                if action.actor_id
+                else None,
+                "at": action.created_at,
+                "note": action.note,
+                "from_status": action.from_status,
+                "to_status": action.to_status,
+                "from_stage": action.from_stage,
+                "to_stage": action.to_stage,
+                "metadata": action.metadata,
             }
-            if action.actor_id
-            else None,
-            "at": action.created_at,
-            "note": action.note,
-            "from_status": action.from_status,
-            "to_status": action.to_status,
-            "from_stage": action.from_stage,
-            "to_stage": action.to_stage,
-            "metadata": action.metadata,
-        }
-        for action in workflow.actions.all().order_by("created_at", "id")
-    ]
+        )
     current_actor = None
     if workflow.current_actor_user_id:
         current_actor = {
