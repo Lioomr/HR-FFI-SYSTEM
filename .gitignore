@@ -29,12 +29,21 @@ build/
 # Local tooling and scratch files
 .cursor/
 .cursorrules
+.claude/
 .playwright-cli/
 tmp/
 ai_evals/
 .github/copilot-instructions.md
 leave_request_4 (2).pdf
 *AutoRecovered*.pdf
+postgresql-*-windows-x64.exe
+employment_certificate_blank.pdf
+leave_request_*.pdf
+leave_request_blank*.pdf
+loan_request_blank*.pdf
+rent_agreement_blank.pdf
+salary_certificate_blank.pdf
+*.docx
 
 # Local transfer/docs/scripts artifacts
 BioTime 8.5 API User Manual.pdf
@@ -42,3 +51,4 @@ biotime_manual.txt
 cols.json
 output/
 scripts/
+Backend/static/pdf_templates/

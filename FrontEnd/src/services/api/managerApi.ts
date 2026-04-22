@@ -62,6 +62,17 @@ export async function getManagerLeaveRequestDocumentBlob(
     return data as Blob;
 }
 
+export async function getManagerLeaveRequestPdfBlob(
+    id: number | string,
+    download = true
+) {
+    const { data } = await api.get(`/api/leaves/manager/leave-requests/${id}/pdf/`, {
+        params: download ? { download: 1 } : { download: 0 },
+        responseType: "blob",
+    });
+    return data as Blob;
+}
+
 export async function approveLeaveRequestManager(id: number, comment?: string) {
     const { data } = await api.post<ApiResponse<any>>(`/api/leaves/manager/leave-requests/${id}/approve/`, { comment });
     return data;
