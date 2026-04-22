@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeftOutlined, CheckCircleOutlined, CloseCircleOutlined, DownloadOutlined, EyeOutlined, FilePdfOutlined } from "@ant-design/icons";
 import { Button, Card, Descriptions, Divider, Input, Modal, Space, Tag, Typography, notification } from "antd";
 
@@ -19,6 +19,7 @@ import {
   rejectDelegatedLeaveRequest,
   type LeaveRequest,
 } from "../../../services/api/leaveApi";
+import { getHttpStatus } from "../../../services/api/httpErrors";
 import { useI18n } from "../../../i18n/useI18n";
 
 const { Text } = Typography;
@@ -26,6 +27,7 @@ const { TextArea } = Input;
 
 export default function EmployeeLeaveRequestDetailsPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { id = "" } = useParams();
   const { t } = useI18n();
   const [loading, setLoading] = useState(false);
@@ -106,8 +108,10 @@ export default function EmployeeLeaveRequestDetailsPage() {
       link.click();
       document.body.removeChild(link);
       setTimeout(() => window.URL.revokeObjectURL(url), 5000);
-    } catch {
-      notification.error({ message: t("common.error"), description: t("leave.pdfDownloadFailed") });
+    } catch (err: unknown) {
+      const description =
+        getHttpStatus(err) === 403 ? t("leave.pdfDownloadForbidden") : t("leave.pdfDownloadFailed");
+      notification.error({ message: t("common.error"), description });
     } finally {
       setPdfLoading(false);
     }
@@ -183,6 +187,8 @@ export default function EmployeeLeaveRequestDetailsPage() {
   if (!request) return <ErrorState title={t("common.error")} description={t("leave.loadFail")} />;
 
   const rejectionNote = request.ceo_decision_note || request.hr_decision_note || request.manager_decision_note || request.delegate_decision_note || request.rejection_reason || "-";
+  const isDelegatedApprovalRoute = location.pathname.startsWith("/employee/delegated-approvals");
+  const backPath = isDelegatedApprovalRoute ? "/employee/delegated-approvals" : "/employee/leave/requests";
   const canDelegateAction =
     request.status === "pending_delegate" &&
     request.workflow?.current_stage === "delegate" &&
@@ -190,8 +196,8 @@ export default function EmployeeLeaveRequestDetailsPage() {
 
   return (
     <div style={{ maxWidth: 1080, margin: "0 auto" }}>
-      <Button type="link" icon={<ArrowLeftOutlined />} onClick={() => navigate("/employee/leave/requests")} style={{ paddingInlineStart: 0 }}>
-        {t("leave.backToRequests")}
+      <Button type="link" icon={<ArrowLeftOutlined />} onClick={() => navigate(backPath)} style={{ paddingInlineStart: 0 }}>
+        {isDelegatedApprovalRoute ? t("leave.backToDelegatedInbox", "Back to delegated inbox") : t("leave.backToRequests")}
       </Button>
 
       <PageHeader

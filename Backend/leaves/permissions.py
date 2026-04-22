@@ -39,7 +39,7 @@ class IsOwnerOrHR(BasePermission):
     def has_object_permission(self, request, view, obj):
         if get_role(request.user) in ["SystemAdmin", "HRManager"]:
             return True
-        return obj.employee == request.user
+        return obj.employee == request.user or obj.delegated_to_id == request.user.id
 
 
 class IsManagerOfEmployee(BasePermission):

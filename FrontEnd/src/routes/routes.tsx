@@ -52,6 +52,7 @@ import RequestLeavePage from "../pages/employee/leave/RequestLeavePage";
 import MyLeaveRequestsPage from "../pages/employee/leave/MyLeaveRequestsPage";
 import MyLeaveBalancePage from "../pages/employee/leave/MyLeaveBalancePage";
 import EmployeeLeaveRequestDetailsPage from "../pages/employee/leave/EmployeeLeaveRequestDetailsPage";
+import DelegatedLeaveInboxPage from "../pages/employee/leave/DelegatedLeaveInboxPage";
 import RequestLoanPage from "../pages/employee/loan/RequestLoanPage";
 import MyLoanRequestsPage from "../pages/employee/loan/MyLoanRequestsPage";
 import EmployeeLoanRequestDetailsPage from "../pages/employee/loan/LoanRequestDetailsPage";
@@ -220,6 +221,8 @@ export const routes = [
               { path: "employee/leave/request", element: <RequestLeavePage /> },
               { path: "employee/leave/requests", element: <MyLeaveRequestsPage /> },
               { path: "employee/leave/requests/:id", element: <EmployeeLeaveRequestDetailsPage /> },
+              { path: "employee/delegated-approvals", element: <DelegatedLeaveInboxPage /> },
+              { path: "employee/delegated-approvals/:id", element: <EmployeeLeaveRequestDetailsPage /> },
               { path: "employee/leave/balance", element: <MyLeaveBalancePage /> },
               { path: "employee/loans/request", element: <RequestLoanPage /> },
               { path: "employee/loans", element: <MyLoanRequestsPage /> },

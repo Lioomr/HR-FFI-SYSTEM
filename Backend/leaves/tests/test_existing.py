@@ -402,6 +402,62 @@ class LeaveManagementTests(TestCase):
         self.assertEqual(workflow["current_stage"], "hr")
         self.assertTrue(any(item["stage"] == "delegate" and item["action"] == "approve" for item in workflow["history"]))
 
+    def test_delegated_employee_can_list_and_view_assigned_leave_request(self):
+        from employees.models import EmployeeProfile
+
+        company = OrganizationNode.objects.create(
+            code="LEAVE_DELEGATE_INBOX_CO",
+            name="Leave Delegate Inbox Co",
+            node_type=OrganizationNode.NodeType.COMPANY,
+        )
+        EmployeeProfile.objects.create(
+            user=self.emp1,
+            company=company,
+            employee_id="EMP-DEL-INBOX-SEND",
+            full_name="Delegation Sender",
+            hire_date=date.today() - timedelta(days=700),
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        )
+        EmployeeProfile.objects.create(
+            user=self.emp2,
+            company=company,
+            employee_id="EMP-DEL-INBOX-RECV",
+            full_name="Delegation Receiver",
+            hire_date=date.today() - timedelta(days=700),
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        )
+
+        request_obj = LeaveRequest.objects.create(
+            employee=self.emp1,
+            employee_profile=self.emp1.employee_profile,
+            company=company,
+            leave_type=self.annual_leave,
+            start_date=date.today() + timedelta(days=60),
+            end_date=date.today() + timedelta(days=61),
+            status=LeaveRequest.RequestStatus.PENDING_DELEGATE,
+            delegated_to=self.emp2,
+            delegation_note="Cover urgent items.",
+        )
+
+        self.client.force_authenticate(user=self.emp2)
+        list_response = self.client.get(
+            "/api/leaves/employee/delegated-leave-requests/",
+            HTTP_X_ACTIVE_COMPANY_ID=str(company.id),
+            secure=True,
+        )
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(list_response.data["data"]["count"], 1)
+        self.assertEqual(list_response.data["data"]["items"][0]["id"], request_obj.id)
+
+        detail_response = self.client.get(
+            f"/api/leaves/leave-requests/{request_obj.id}/",
+            HTTP_X_ACTIVE_COMPANY_ID=str(company.id),
+            secure=True,
+        )
+        self.assertEqual(detail_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(detail_response.data["data"]["id"], request_obj.id)
+        self.assertTrue(detail_response.data["data"]["workflow"]["can_approve"])
+
     def test_delete_leave_request_forbidden(self):
         self.client.force_authenticate(user=self.admin)
         start = date.today() + timedelta(days=30)
