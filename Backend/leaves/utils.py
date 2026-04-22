@@ -1,7 +1,7 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
-from django.db.models import Sum
+from django.db.models import Q, Sum
 
 from employees.models import EmployeeProfile
 
@@ -132,6 +132,23 @@ def _normalized_leave_code(leave_type: LeaveType) -> str:
     if leave_type.code:
         return leave_type.code.strip().upper()
     return leave_type.name.strip().upper().replace(" ", "_")
+
+
+def _get_balance_leave_types(profile: EmployeeProfile | None):
+    queryset = LeaveType.objects.filter(is_active=True)
+    company_id = getattr(profile, "company_id", None)
+
+    if not company_id:
+        return list(queryset.filter(company__isnull=True).order_by("id"))
+
+    leave_types_by_code = {}
+    candidates = queryset.filter(Q(company_id=company_id) | Q(company__isnull=True)).order_by("company_id", "id")
+    for leave_type in candidates:
+        code = _normalized_leave_code(leave_type)
+        if code not in leave_types_by_code or leave_type.company_id == company_id:
+            leave_types_by_code[code] = leave_type
+
+    return list(leave_types_by_code.values())
 
 
 def _is_annual(code: str) -> bool:
@@ -496,7 +513,7 @@ def calculate_leave_balance(user, year, profile=None):
         return []  # No balances before hire
 
     ensure_policy_leave_types()
-    leave_types = LeaveType.objects.filter(is_active=True)
+    leave_types = _get_balance_leave_types(profile)
     balances = []
 
     for lt in leave_types:

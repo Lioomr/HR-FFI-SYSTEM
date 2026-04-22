@@ -1529,6 +1529,22 @@ class ManagerLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
         instance = self.get_object()
         return _serve_leave_document(instance, request)
 
+    @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated, IsManagerOfEmployee])
+    def pdf(self, request, pk=None):
+        instance = self.get_object()
+        pdf_bytes = _build_leave_request_pdf(instance)
+        packet = _to_bool(request.query_params.get("packet", "0"))
+        filename = f"leave_request_{instance.id}.pdf"
+        if packet:
+            doc_bytes = _leave_document_pdf_bytes(instance)
+            if doc_bytes:
+                pdf_bytes = merge_pdfs([pdf_bytes, doc_bytes])
+                filename = f"leave_request_{instance.id}_packet.pdf"
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        disposition = "attachment" if _to_bool(request.query_params.get("download", "1")) else "inline"
+        response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
+        return response
+
 
 class LeaveBalanceViewSet(viewsets.ViewSet):
     """

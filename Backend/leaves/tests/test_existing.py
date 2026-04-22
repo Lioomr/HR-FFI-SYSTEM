@@ -459,6 +459,39 @@ class LeaveBalanceTests(TestCase):
         self.assertEqual(float(annual_bal["remaining_days"]), 21.0)
         self.assertEqual(float(annual_bal["used_days"]), 0.0)
 
+    def test_balance_calculation_uses_employee_company_leave_types(self):
+        from leaves.utils import calculate_leave_balance
+
+        own_company = OrganizationNode.objects.create(
+            code="BALANCE_OWN_CO",
+            name="Balance Own Co",
+            node_type=OrganizationNode.NodeType.COMPANY,
+        )
+        other_company = OrganizationNode.objects.create(
+            code="BALANCE_OTHER_CO",
+            name="Balance Other Co",
+            node_type=OrganizationNode.NodeType.COMPANY,
+        )
+        self.profile1.company = own_company
+        self.profile1.save(update_fields=["company"])
+
+        global_business_trip = LeaveType.objects.create(
+            name="Business Trip", code="BUSINESS_TRIP", annual_quota=0, is_active=True
+        )
+        own_business_trip = LeaveType.objects.create(
+            company=own_company, name="Business Trip", code="BUSINESS_TRIP", annual_quota=3, is_active=True
+        )
+        LeaveType.objects.create(
+            company=other_company, name="Business Trip", code="BUSINESS_TRIP", annual_quota=7, is_active=True
+        )
+
+        balances = calculate_leave_balance(self.emp1, date.today().year)
+        business_trip_balances = [item for item in balances if item["leave_code"] == "BUSINESS_TRIP"]
+
+        self.assertEqual(len(business_trip_balances), 1)
+        self.assertEqual(business_trip_balances[0]["leave_type_id"], own_business_trip.id)
+        self.assertNotEqual(business_trip_balances[0]["leave_type_id"], global_business_trip.id)
+
     def test_balance_usage(self):
         year = date.today().year
         # Create Approved Request (2 days)
