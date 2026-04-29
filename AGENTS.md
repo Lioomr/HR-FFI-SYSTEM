@@ -57,3 +57,6 @@ PRs should include:
 Keep secrets in `.env` (never commit credentials).  
 Validate role-based permissions server-side for every endpoint.  
 Run pre-commit checks before pushing: `pre-commit run --all-files`.
+
+## Deployment Handoff
+For AWS production deployment, Docker service layout, real server paths, and production debugging workflow, read `AWS_AGENT_DEPLOYMENT_HANDOFF.md` before making deployment-related changes.
