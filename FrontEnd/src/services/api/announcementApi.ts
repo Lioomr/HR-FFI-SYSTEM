@@ -150,7 +150,9 @@ export async function updateAnnouncement(id: number, data: Partial<CreateAnnounc
 
 export async function getAnnouncementAttachment(id: number, download = false): Promise<Blob> {
     const response = await api.get(`/api/announcements/${id}/attachment`, {
-        params: download ? { download: 1 } : undefined,
+        // Backend defaults to Content-Disposition: attachment. Send `download=0`
+        // explicitly when previewing so the response is returned inline.
+        params: { download: download ? 1 : 0 },
         responseType: "blob",
     });
     return response.data;

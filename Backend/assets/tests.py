@@ -668,6 +668,39 @@ class AssetLabelAndLookupTests(TestCase):
         self.assertEqual(job.company, self.company)
         self.assertEqual(job.asset_codes, [self.asset.asset_code])
         self.assertTrue(job.pdf_file.name.startswith("assets/labels/"))
+        self.asset.refresh_from_db()
+        self.assertIsNotNone(self.asset.last_label_printed_at)
+        self.assertEqual(self.asset.label_print_count, 1)
+
+    def test_label_status_filter_distinguishes_printed_assets(self):
+        unprinted_response = self.client.get(
+            "/api/assets/?label_status=never_printed",
+            **self._company_header(),
+        )
+        self.assertEqual(unprinted_response.status_code, status.HTTP_200_OK)
+        ids_before = {item["id"] for item in unprinted_response.data["data"]["items"]}
+        self.assertIn(self.asset.id, ids_before)
+
+        self.client.post(
+            "/api/assets/labels/print/",
+            {"asset_ids": [self.asset.id], "paper_size": "50X30"},
+            format="json",
+            **self._company_header(),
+        )
+
+        unprinted_after = self.client.get(
+            "/api/assets/?label_status=never_printed",
+            **self._company_header(),
+        )
+        ids_after = {item["id"] for item in unprinted_after.data["data"]["items"]}
+        self.assertNotIn(self.asset.id, ids_after)
+
+        printed = self.client.get(
+            "/api/assets/?label_status=printed",
+            **self._company_header(),
+        )
+        printed_ids = {item["id"] for item in printed.data["data"]["items"]}
+        self.assertIn(self.asset.id, printed_ids)
 
     def test_print_labels_rejects_any_asset_outside_scope(self):
         response = self.client.post(

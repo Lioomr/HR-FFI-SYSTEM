@@ -13,9 +13,9 @@ from rest_framework.test import APIClient
 from audit.models import AuditLog
 from hr_reference.models import Department, Position
 from leaves.models import LeaveRequest, LeaveType
-from organization.models import OrganizationNode
+from organization.models import OrganizationNode, UserOrganizationAccess
 
-from .models import EmployeeProfile
+from .models import EmployeeDeletionRequest, EmployeeProfile
 
 User = get_user_model()
 
@@ -626,3 +626,102 @@ class EmployeeProfileTests(TestCase):
         self.assertEqual(employee_profile.passport_no, "P-998877")
         self.assertEqual(employee_profile.passport_expiry_raw, "31-12-2031")
         self.assertEqual(employee_profile.manager_profile_id, manager_profile.id)
+
+
+class EmployeeDeletionWorkflowTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.hr_group = Group.objects.create(name="HRManager")
+        self.ceo_group = Group.objects.create(name="CEO")
+        self.cfo_group = Group.objects.create(name="CFO")
+
+        self.company = OrganizationNode.objects.create(
+            code="DELCO",
+            name="Delete Co",
+            node_type=OrganizationNode.NodeType.COMPANY,
+            employee_id_prefix="DEL",
+        )
+        self.other_company = OrganizationNode.objects.create(
+            code="OTHDEL",
+            name="Other Delete Co",
+            node_type=OrganizationNode.NodeType.COMPANY,
+            employee_id_prefix="OTH",
+        )
+        self.department = Department.objects.create(name="Operations", code="OPSDEL", company=self.company)
+        self.position = Position.objects.create(name="Engineer", code="ENGDEL", company=self.company)
+
+        self.hr_user = User.objects.create_user(email="hr-delete@test.com", password="password", full_name="HR Delete")
+        self.hr_user.groups.add(self.hr_group)
+        UserOrganizationAccess.objects.create(user=self.hr_user, organization=self.company)
+
+        self.ceo_user = User.objects.create_user(email="ceo-delete@test.com", password="password", full_name="CEO Delete")
+        self.ceo_user.groups.add(self.ceo_group)
+        UserOrganizationAccess.objects.create(user=self.ceo_user, organization=self.other_company)
+
+        self.cfo_user = User.objects.create_user(email="cfo-delete@test.com", password="password", full_name="CFO Delete")
+        self.cfo_user.groups.add(self.cfo_group)
+        UserOrganizationAccess.objects.create(user=self.cfo_user, organization=self.other_company)
+
+        self.employee_user = User.objects.create_user(
+            email="target-delete@test.com",
+            password="password",
+            full_name="Delete Target",
+        )
+        self.profile = EmployeeProfile.objects.create(
+            user=self.employee_user,
+            company=self.company,
+            employee_id="DEL-001",
+            full_name="Delete Target",
+            department_ref=self.department,
+            position_ref=self.position,
+            department=self.department.name,
+            job_title=self.position.name,
+            hire_date="2024-01-01",
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        )
+
+    def test_hr_can_create_employee_hard_delete_request(self):
+        self.client.force_authenticate(user=self.hr_user)
+
+        response = self.client.post(
+            "/api/employees/deletion-requests/",
+            {"employee_profile_id": self.profile.id, "reason": "Left the company"},
+            format="json",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        request_obj = EmployeeDeletionRequest.objects.get()
+        self.assertEqual(request_obj.status, EmployeeDeletionRequest.Status.PENDING_CEO)
+        self.assertEqual(request_obj.request_snapshot["employee_id"], "DEL-001")
+        self.assertTrue(AuditLog.objects.filter(action="employee_hard_delete_requested", entity_id=request_obj.id).exists())
+
+    def test_global_ceo_can_approve_and_hard_delete_across_companies(self):
+        request_obj = EmployeeDeletionRequest.objects.create(
+            company=self.company,
+            employee_profile=self.profile,
+            target_user=self.employee_user,
+            requested_by=self.hr_user,
+            reason="Duplicate employee record cleanup",
+            request_snapshot={"employee_id": self.profile.employee_id, "full_name": self.profile.full_name},
+        )
+
+        self.client.force_authenticate(user=self.ceo_user)
+        response = self.client.post(
+            f"/api/employees/deletion-requests/{request_obj.id}/approve/",
+            {},
+            format="json",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.other_company.id),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        request_obj.refresh_from_db()
+        self.assertEqual(request_obj.status, EmployeeDeletionRequest.Status.EXECUTED)
+        self.assertFalse(User.objects.filter(id=self.employee_user.id).exists())
+        self.assertFalse(EmployeeProfile.objects.filter(id=self.profile.id).exists())
+        self.assertTrue(AuditLog.objects.filter(action="employee_hard_deleted", entity_id=request_obj.id).exists())
+
+    def test_cfo_group_user_is_global_cfo_approver(self):
+        from loans.permissions import is_cfo_approver_user
+
+        self.assertTrue(is_cfo_approver_user(self.cfo_user))

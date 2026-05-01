@@ -24,8 +24,7 @@ import {
   UserSwitchOutlined,
   LockOutlined,
   FileTextOutlined,
-  ScanOutlined,
-  PrinterOutlined,
+  HomeOutlined,
 } from "@ant-design/icons";
 import type { MenuProps } from "antd";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -58,51 +57,53 @@ function BrandLogo({ collapsed, title, subtitle, accent, accentGlow, titleColor 
   return (
     <div
       style={{
-        padding: collapsed ? "20px 0" : "20px 20px",
+        padding: collapsed ? "16px 0" : "18px 16px",
         display: "flex",
         alignItems: "center",
         justifyContent: collapsed ? "center" : "flex-start",
-        gap: collapsed ? 0 : 12,
-        transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)",
-        borderBottom: "1px solid rgba(255,255,255,0.06)",
-        marginBottom: 8,
+        gap: 11,
+        transition: "padding 0.25s cubic-bezier(0.4,0,0.2,1)",
+        borderBottom: "1px solid rgba(255,255,255,0.07)",
+        marginBottom: 2,
+        flexShrink: 0,
       }}
     >
       {/* Logo icon */}
       <div
         style={{
-          width: 38,
-          height: 38,
-          background: `linear-gradient(135deg, ${accent}, ${accentGlow})`,
-          borderRadius: 10,
+          width: 34,
+          height: 34,
+          background: `linear-gradient(135deg, ${accent}e6, ${accentGlow}b3)`,
+          borderRadius: 9,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           color: "white",
-          fontWeight: 700,
-          fontSize: 16,
+          fontSize: 15,
           flexShrink: 0,
-          boxShadow: `0 4px 14px ${accentGlow}66`,
+          boxShadow: `0 0 0 1px ${accent}33, 0 4px 12px ${accent}30`,
         }}
       >
         <ApartmentOutlined />
       </div>
 
       {!collapsed && (
-        <div style={{ overflow: "hidden" }}>
+        <div style={{ overflow: "hidden", minWidth: 0 }}>
           <div
             style={{
-              fontWeight: 800,
-              fontSize: 16,
+              fontWeight: 700,
+              fontSize: 14,
               color: titleColor,
-              letterSpacing: "-0.02em",
-              lineHeight: 1.2,
-              fontFamily: "'Outfit', 'Inter', sans-serif",
+              letterSpacing: "-0.01em",
+              lineHeight: 1.25,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
             }}
           >
             {title}
           </div>
-          <div style={{ fontSize: 11, color: accentGlow, marginTop: 1 }}>
+          <div style={{ fontSize: 10.5, color: `${accentGlow}bb`, marginTop: 2, letterSpacing: "0.02em", whiteSpace: "nowrap" }}>
             {subtitle}
           </div>
         </div>
@@ -158,6 +159,7 @@ function getTitle(pathname: string, t: (key: string, fallback?: string) => strin
   if (pathname.startsWith("/ceo/loan-requests")) return t("layout.loanRequests", "Loan Requests");
   if (pathname.startsWith("/ceo/attendance")) return t("layout.attendance");
   if (pathname.startsWith("/ceo/assets")) return t("layout.assets", "Assets");
+  if (pathname.startsWith("/ceo/employees/deletion-requests")) return t("employees.removalInbox.title", "Employee Removal Requests");
   if (pathname.startsWith("/ceo/announcements")) return t("layout.announcements", "Announcements");
   if (pathname.startsWith("/ceo/profile")) return t("layout.profile");
   if (pathname.startsWith("/hr/loan-requests")) return t("layout.loanRequests", "Loan Requests");
@@ -176,6 +178,25 @@ function getTitle(pathname: string, t: (key: string, fallback?: string) => strin
   if (pathname.startsWith("/employee")) return t("layout.employeeSelfService");
   if (pathname.startsWith("/change-password")) return t("layout.changePassword");
   return t("app.title");
+}
+
+function getOpenKeysForPath(pathname: string): string[] {
+  const opens: string[] = [];
+  // HR sidebar sub-menus
+  if (pathname.startsWith("/hr/assets")) opens.push("hr-assets-sub");
+  if (pathname.startsWith("/hr/rents") || pathname.startsWith("/hr/rent-types")) opens.push("hr-rents-sub");
+  if (pathname.startsWith("/hr/announcements")) opens.push("hr-announcements-sub");
+  if (pathname.startsWith("/employee/loans")) opens.push("hr-loans-sub");
+  // Employee sidebar sub-menus
+  if (pathname.startsWith("/employee/leave")) opens.push("emp-leave-sub");
+  // Manager sidebar sub-menus
+  if (pathname.startsWith("/employee/leave")) opens.push("mgr-leave-sub");
+  if (pathname.startsWith("/employee/loans")) opens.push("mgr-loans-sub");
+  if (pathname.startsWith("/manager/announcements") || pathname.startsWith("/employee/announcements")) opens.push("mgr-announcements-sub");
+  // CEO sidebar sub-menus
+  if (pathname.startsWith("/ceo/assets")) opens.push("ceo-assets-sub");
+  if (pathname.startsWith("/ceo/announcements")) opens.push("ceo-announcements-sub");
+  return opens;
 }
 
 // ─── Avatar color by role ───────────────────────────────────────────────────────
@@ -259,6 +280,66 @@ function getOrganizationTheme(code?: string, nodeType?: string) {
   }
 }
 
+// ─── Per-org sidebar theme (CSS custom properties + computed values) ────────────
+function getSidebarTheme(code?: string, nodeType?: string) {
+  if (nodeType === "head_office") {
+    return {
+      bg: "#0a0d1a",
+      border: "rgba(99,102,241,0.14)",
+      accent: "#6366f1",
+      accentText: "#a5b4fc",
+      activeBg: "rgba(99,102,241,0.11)",
+      hoverBg: "rgba(99,102,241,0.06)",
+      sectionColor: "rgba(165,180,252,0.48)",
+    };
+  }
+  switch (code) {
+    case "ASECO_PRO":
+      return {
+        bg: "#0c0a06",
+        border: "rgba(212,160,23,0.14)",
+        accent: "#d4a017",
+        accentText: "#f6c453",
+        activeBg: "rgba(212,160,23,0.12)",
+        hoverBg: "rgba(212,160,23,0.06)",
+        sectionColor: "rgba(246,196,83,0.5)",
+      };
+    case "ATHROYA":
+      return {
+        bg: "#07090d",
+        border: "rgba(148,163,184,0.10)",
+        accent: "#94a3b8",
+        accentText: "#cbd5e1",
+        activeBg: "rgba(148,163,184,0.10)",
+        hoverBg: "rgba(148,163,184,0.06)",
+        sectionColor: "rgba(148,163,184,0.42)",
+      };
+    case "FFI":
+    default:
+      return {
+        bg: "#0d1117",
+        border: "rgba(249,115,22,0.12)",
+        accent: "#f97316",
+        accentText: "#fb923c",
+        activeBg: "rgba(249,115,22,0.12)",
+        hoverBg: "rgba(249,115,22,0.06)",
+        sectionColor: "rgba(249,115,22,0.5)",
+      };
+  }
+}
+
+function getRoleLabel(role?: string): string {
+  const map: Record<string, string> = {
+    SystemAdmin: "System Admin",
+    HRManager: "HR Manager",
+    Manager: "Manager",
+    CEO: "CEO",
+    CFO: "CFO",
+    Employee: "Employee",
+  };
+  return map[role || ""] || role || "";
+}
+
 function getSidebarBrandTheme(code?: string, nodeType?: string) {
   if (nodeType === "head_office") {
     return {
@@ -321,6 +402,14 @@ export default function BaseLayout() {
   const [isCEOApprover, setIsCEOApprover] = useState(false);
   const [hasManagerAccess, setHasManagerAccess] = useState(false);
   const [isSwitchingOrganization, setIsSwitchingOrganization] = useState(false);
+  const [openMenuKeys, setOpenMenuKeys] = useState<string[]>(() => getOpenKeysForPath(location.pathname));
+
+  useEffect(() => {
+    const pathKeys = getOpenKeysForPath(location.pathname);
+    if (pathKeys.length > 0) {
+      setOpenMenuKeys((prev) => Array.from(new Set([...prev, ...pathKeys])));
+    }
+  }, [location.pathname]);
 
   const role = user?.role;
   const organizations = user?.accessible_organizations ?? [];
@@ -328,6 +417,16 @@ export default function BaseLayout() {
   const activeOrganization = organizations.find((organization) => String(organization.id) === String(activeOrganizationId));
   const organizationTheme = getOrganizationTheme(activeOrganization?.code, activeOrganization?.node_type);
   const sidebarBrandTheme = getSidebarBrandTheme(activeOrganization?.code, activeOrganization?.node_type);
+  const sbTheme = getSidebarTheme(activeOrganization?.code, activeOrganization?.node_type);
+  const sidebarCSSVars = {
+    "--sb-bg": sbTheme.bg,
+    "--sb-border": sbTheme.border,
+    "--sb-accent": sbTheme.accent,
+    "--sb-accent-text": sbTheme.accentText,
+    "--sb-active-bg": sbTheme.activeBg,
+    "--sb-hover-bg": sbTheme.hoverBg,
+    "--sb-section-color": sbTheme.sectionColor,
+  } as React.CSSProperties;
   const isHeadOffice = isHeadOfficeOrganization(user);
   const brandTitle = useMemo(() => {
     if (!activeOrganization?.name) return "FFISYS";
@@ -422,11 +521,11 @@ export default function BaseLayout() {
     { key: "/hr/invites", icon: <UserAddOutlined />, label: <Link to="/hr/invites">{t("layout.invites")}</Link> },
     {
       type: "group",
-      label: sectionLabel(t("layout.menu.workInbox", "Work Inbox"), t("layout.attendanceApprovals", "Attendance Approvals")),
+      label: sectionLabel(t("layout.menu.workInbox", "Work Inbox"), t("layout.menu.approvals", "Approvals")),
       children: [
         { key: "/hr/leave/requests", icon: <CalendarOutlined />, label: <Link to="/hr/leave/requests">{t("layout.leaveInbox")}</Link> },
         { key: "/hr/loan-requests", icon: <DollarOutlined />, label: <Link to="/hr/loan-requests">{t("layout.loanInbox", "Loan Inbox")}</Link> },
-        { key: "/hr/attendance", icon: <ClockCircleOutlined />, label: <Link to="/hr/attendance">{t("layout.attendanceApprovals", "Attendance Approvals")}</Link> },
+        { key: "/hr/attendance", icon: <ClockCircleOutlined />, label: <Link to="/hr/attendance">{t("layout.attendance")}</Link> },
         { key: "/hr/workflow/delegations", icon: <UserSwitchOutlined />, label: <Link to="/hr/workflow/delegations">{t("layout.delegationRules", "Delegation Rules")}</Link> },
       ],
     },
@@ -435,17 +534,24 @@ export default function BaseLayout() {
       label: sectionLabel(t("layout.menu.myRequests", "My Requests"), t("layout.employeeSelfService")),
       children: [
         { key: "/employee/leave/request", icon: <CalendarOutlined />, label: <Link to="/employee/leave/request">{t("layout.requestLeave", "Request Leave")}</Link> },
-        { key: "/employee/leave/requests", icon: <FileSearchOutlined />, label: <Link to="/employee/leave/requests">{t("layout.myRequests")}</Link> },
+        { key: "/employee/leave/requests", icon: <FileSearchOutlined />, label: <Link to="/employee/leave/requests">{t("layout.myLeaveRequests", "My Leave Requests")}</Link> },
         { key: "/employee/delegated-approvals", icon: <UserSwitchOutlined />, label: <Link to="/employee/delegated-approvals">{t("layout.delegatedApprovals", "Delegated Approvals")}</Link> },
         { key: "/employee/attendance", icon: <ClockCircleOutlined />, label: <Link to="/employee/attendance">{t("layout.attendance")}</Link> },
         { key: "/employee/assets", icon: <AppstoreOutlined />, label: <Link to="/employee/assets">{t("layout.myAssets", "My Assets")}</Link> },
-        { key: "/employee/loans/request", icon: <DollarOutlined />, label: <Link to="/employee/loans/request">{t("loans.myRequests.newRequest", "New Loan Request")}</Link> },
-        { key: "/employee/loans", icon: <DollarOutlined />, label: <Link to="/employee/loans">{t("layout.loanRequests", "Loan Requests")}</Link> },
+        {
+          key: "hr-loans-sub",
+          icon: <DollarOutlined />,
+          label: t("layout.loans", "Loans"),
+          children: [
+            { key: "/employee/loans/request", label: <Link to="/employee/loans/request">{t("layout.newLoan", "New Loan")}</Link> },
+            { key: "/employee/loans", label: <Link to="/employee/loans">{t("layout.myLoans", "My Loans")}</Link> },
+          ],
+        },
       ],
     },
     {
       type: "group",
-      label: sectionLabel(t("layout.menu.peopleOrg", "People & Organization"), t("layout.employees")),
+      label: sectionLabel(t("layout.menu.people", "People"), t("layout.employees")),
       children: [
         { key: "/hr/employees", icon: <TeamOutlined />, label: <Link to="/hr/employees">{t("layout.employees")}</Link> },
         { key: "/hr/departments", icon: <ApartmentOutlined />, label: <Link to="/hr/departments">{t("layout.departments")}</Link> },
@@ -460,14 +566,35 @@ export default function BaseLayout() {
       children: [
         { key: "/hr/import/employees", icon: <UploadOutlined />, label: <Link to="/hr/import/employees">{t("layout.importEmployees")}</Link> },
         { key: "/hr/payroll", icon: <DollarOutlined />, label: <Link to="/hr/payroll">{t("layout.payroll")}</Link> },
-        { key: "/hr/assets", icon: <AppstoreOutlined />, label: <Link to="/hr/assets">{t("layout.assets", "Assets")}</Link> },
-        { key: "/hr/assets/lookup", icon: <ScanOutlined />, label: <Link to="/hr/assets/lookup">{t("layout.assetLookup", "Asset Lookup")}</Link> },
-        { key: "/hr/assets/label-jobs", icon: <PrinterOutlined />, label: <Link to="/hr/assets/label-jobs">{t("layout.labelHistory", "Label History")}</Link> },
-        { key: "/hr/rents", icon: <BellOutlined />, label: <Link to="/hr/rents">{t("layout.rents", "Rents")}</Link> },
-        { key: "/hr/rent-types", icon: <SettingOutlined />, label: <Link to="/hr/rent-types">{t("layout.rentTypes", "Rent Types")}</Link> },
+        {
+          key: "hr-assets-sub",
+          icon: <AppstoreOutlined />,
+          label: t("layout.assets", "Assets"),
+          children: [
+            { key: "/hr/assets", label: <Link to="/hr/assets">{t("layout.assetList", "List")}</Link> },
+            { key: "/hr/assets/lookup", label: <Link to="/hr/assets/lookup">{t("layout.assetLookup", "Lookup")}</Link> },
+            { key: "/hr/assets/label-jobs", label: <Link to="/hr/assets/label-jobs">{t("layout.assetLabels", "Labels")}</Link> },
+          ],
+        },
+        {
+          key: "hr-rents-sub",
+          icon: <HomeOutlined />,
+          label: t("layout.rents", "Rents"),
+          children: [
+            { key: "/hr/rents", label: <Link to="/hr/rents">{t("layout.rentList", "List")}</Link> },
+            { key: "/hr/rent-types", label: <Link to="/hr/rent-types">{t("layout.rentTypes", "Rent Types")}</Link> },
+          ],
+        },
         { key: "/hr/templates", icon: <FileTextOutlined />, label: <Link to="/hr/templates">{t("layout.templateLibrary", "Template Library")}</Link> },
-        { key: "/hr/announcements", icon: <BellOutlined />, label: <Link to="/hr/announcements">{t("layout.announcements", "Announcements")}</Link> },
-        { key: "/hr/announcements/create", icon: <UserAddOutlined />, label: <Link to="/hr/announcements/create">{t("layout.createAnnouncement", "Create Announcement")}</Link> },
+        {
+          key: "hr-announcements-sub",
+          icon: <BellOutlined />,
+          label: t("layout.announcements", "Announcements"),
+          children: [
+            { key: "/hr/announcements", label: <Link to="/hr/announcements">{t("layout.announcements", "Announcements")}</Link> },
+            { key: "/hr/announcements/create", label: <Link to="/hr/announcements/create">{t("layout.newAnnouncement", "New")}</Link> },
+          ],
+        },
       ],
     },
     {
@@ -480,25 +607,32 @@ export default function BaseLayout() {
   ];
 
   const employeeItems: MenuProps["items"] = [
+    { key: "/employee/home", icon: <DashboardOutlined />, label: <Link to="/employee/home">{t("layout.home")}</Link> },
     {
       type: "group",
-      label: sectionLabel(t("layout.employeeSelfService"), t("layout.home")),
+      label: sectionLabel(t("layout.menu.myRequests", "My Requests"), t("layout.employeeSelfService")),
       children: [
-        { key: "/employee/home", icon: <DashboardOutlined />, label: <Link to="/employee/home">{t("layout.home")}</Link> },
-        { key: "/employee/attendance", icon: <CalendarOutlined />, label: <Link to="/employee/attendance">{t("layout.attendance")}</Link> },
-        { key: "/employee/leave/balance", icon: <FileSearchOutlined />, label: <Link to="/employee/leave/balance">{t("layout.leaveBalance")}</Link> },
-        { key: "/employee/leave/requests", icon: <CalendarOutlined />, label: <Link to="/employee/leave/requests">{t("layout.myRequests")}</Link> },
+        { key: "/employee/attendance", icon: <ClockCircleOutlined />, label: <Link to="/employee/attendance">{t("layout.attendance")}</Link> },
+        {
+          key: "emp-leave-sub",
+          icon: <CalendarOutlined />,
+          label: t("layout.leave", "Leave"),
+          children: [
+            { key: "/employee/leave/balance", label: <Link to="/employee/leave/balance">{t("layout.leaveBalance")}</Link> },
+            { key: "/employee/leave/requests", label: <Link to="/employee/leave/requests">{t("layout.myLeaveRequests", "My Leave Requests")}</Link> },
+          ],
+        },
         { key: "/employee/delegated-approvals", icon: <UserSwitchOutlined />, label: <Link to="/employee/delegated-approvals">{t("layout.delegatedApprovals", "Delegated Approvals")}</Link> },
         { key: "/employee/assets", icon: <AppstoreOutlined />, label: <Link to="/employee/assets">{t("layout.myAssets", "My Assets")}</Link> },
-        { key: "/employee/loans", icon: <DollarOutlined />, label: <Link to="/employee/loans">{t("layout.loanRequests", "Loan Requests")}</Link> },
-        { key: "/employee/payslips", icon: <DollarOutlined />, label: <Link to="/employee/payslips">{t("layout.myPayslips")}</Link> },
+        { key: "/employee/loans", icon: <DollarOutlined />, label: <Link to="/employee/loans">{t("layout.loans", "Loans")}</Link> },
+        { key: "/employee/payslips", icon: <FileTextOutlined />, label: <Link to="/employee/payslips">{t("layout.myPayslips")}</Link> },
       ],
     },
     ...(hasManagerAccess || isFinanceApprover || isCFOApprover || isCEOApprover
       ? [
         {
           type: "group" as const,
-          label: sectionLabel(t("layout.menu.workInbox", "Work Inbox"), t("layout.teamRequests", "Team Requests")),
+          label: sectionLabel(t("layout.menu.workInbox", "Work Inbox"), t("layout.menu.approvals", "Approvals")),
           children: [
             ...(hasManagerAccess
               ? [
@@ -520,6 +654,7 @@ export default function BaseLayout() {
                 { key: "/ceo/attendance", icon: <ClockCircleOutlined />, label: <Link to="/ceo/attendance">{t("layout.attendance")}</Link> },
                 { key: "/ceo/assets/damage-reports", icon: <AppstoreOutlined />, label: <Link to="/ceo/assets/damage-reports">{t("assets.damageReports", "Damage Reports")}</Link> },
                 { key: "/ceo/assets/return-requests", icon: <AppstoreOutlined />, label: <Link to="/ceo/assets/return-requests">{t("assets.returnRequests", "Return Requests")}</Link> },
+                { key: "/ceo/employees/deletion-requests", icon: <TeamOutlined />, label: <Link to="/ceo/employees/deletion-requests">{t("employees.removalInbox.menu", "Employee Removals")}</Link> },
               ]
               : []),
           ],
@@ -537,27 +672,41 @@ export default function BaseLayout() {
   ];
 
   const managerItems: MenuProps["items"] = [
+    { key: "/employee/home", icon: <DashboardOutlined />, label: <Link to="/employee/home">{t("layout.home")}</Link> },
     {
       type: "group",
-      label: sectionLabel(t("layout.employeeSelfService"), t("layout.menu.myRequests", "My Requests")),
+      label: sectionLabel(t("layout.menu.myRequests", "My Requests"), t("layout.employeeSelfService")),
       children: [
-        { key: "/employee/home", icon: <DashboardOutlined />, label: <Link to="/employee/home">{t("layout.home")}</Link> },
         { key: "/employee/attendance", icon: <ClockCircleOutlined />, label: <Link to="/employee/attendance">{t("layout.attendance")}</Link> },
-        { key: "/employee/leave/balance", icon: <FileSearchOutlined />, label: <Link to="/employee/leave/balance">{t("layout.leaveBalance")}</Link> },
-        { key: "/employee/leave/request", icon: <CalendarOutlined />, label: <Link to="/employee/leave/request">{t("layout.requestLeave", "Request Leave")}</Link> },
-        { key: "/employee/leave/requests", icon: <FileSearchOutlined />, label: <Link to="/employee/leave/requests">{t("layout.myRequests")}</Link> },
+        {
+          key: "mgr-leave-sub",
+          icon: <CalendarOutlined />,
+          label: t("layout.leave", "Leave"),
+          children: [
+            { key: "/employee/leave/balance", label: <Link to="/employee/leave/balance">{t("layout.leaveBalance")}</Link> },
+            { key: "/employee/leave/request", label: <Link to="/employee/leave/request">{t("layout.requestLeave", "Request Leave")}</Link> },
+            { key: "/employee/leave/requests", label: <Link to="/employee/leave/requests">{t("layout.myLeaveRequests", "My Leave Requests")}</Link> },
+          ],
+        },
         { key: "/employee/delegated-approvals", icon: <UserSwitchOutlined />, label: <Link to="/employee/delegated-approvals">{t("layout.delegatedApprovals", "Delegated Approvals")}</Link> },
         { key: "/employee/assets", icon: <AppstoreOutlined />, label: <Link to="/employee/assets">{t("layout.myAssets", "My Assets")}</Link> },
-        { key: "/employee/loans/request", icon: <DollarOutlined />, label: <Link to="/employee/loans/request">{t("loans.myRequests.newRequest", "New Loan Request")}</Link> },
-        { key: "/employee/loans", icon: <DollarOutlined />, label: <Link to="/employee/loans">{t("layout.loanRequests", "Loan Requests")}</Link> },
-        { key: "/employee/payslips", icon: <DollarOutlined />, label: <Link to="/employee/payslips">{t("layout.myPayslips")}</Link> },
+        {
+          key: "mgr-loans-sub",
+          icon: <DollarOutlined />,
+          label: t("layout.loans", "Loans"),
+          children: [
+            { key: "/employee/loans/request", label: <Link to="/employee/loans/request">{t("layout.newLoan", "New Loan")}</Link> },
+            { key: "/employee/loans", label: <Link to="/employee/loans">{t("layout.myLoans", "My Loans")}</Link> },
+          ],
+        },
+        { key: "/employee/payslips", icon: <FileTextOutlined />, label: <Link to="/employee/payslips">{t("layout.myPayslips")}</Link> },
       ],
     },
     {
       type: "group",
-      label: sectionLabel(t("layout.managerDashboard", "Manager Dashboard"), t("layout.menu.workInbox", "Work Inbox")),
+      label: sectionLabel(t("layout.menu.workInbox", "Work Inbox"), t("layout.menu.approvals", "Approvals")),
       children: [
-        { key: "/manager/dashboard", icon: <DashboardOutlined />, label: <Link to="/manager/dashboard">{t("layout.dashboard")}</Link> },
+        { key: "/manager/dashboard", icon: <DashboardOutlined />, label: <Link to="/manager/dashboard">{t("layout.managerDashboard", "Manager Dashboard")}</Link> },
         { key: "/manager/team-requests", icon: <FileSearchOutlined />, label: <Link to="/manager/team-requests">{t("layout.teamRequests", "Team Requests")}</Link> },
         { key: "/manager/loan-requests", icon: <DollarOutlined />, label: <Link to="/manager/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
         { key: "/manager/team", icon: <TeamOutlined />, label: <Link to="/manager/team">{t("layout.myTeam", "My Team")}</Link> },
@@ -565,42 +714,50 @@ export default function BaseLayout() {
     },
     {
       type: "group",
-      label: sectionLabel(t("layout.announcements", "Announcements"), t("layout.menu.operations", "Operations")),
+      label: sectionLabel(t("layout.menu.account", "Account"), t("layout.profile")),
       children: [
-        { key: "/employee/announcements", icon: <BellOutlined />, label: <Link to="/employee/announcements">{t("layout.announcements", "Announcements")}</Link> },
-        { key: "/manager/announcements", icon: <BellOutlined />, label: <Link to="/manager/announcements">{t("layout.announcements", "Announcements")}</Link> },
-        { key: "/manager/announcements/create", icon: <UserAddOutlined />, label: <Link to="/manager/announcements/create">{t("layout.createAnnouncement", "Create Announcement")}</Link> },
-      ],
-    },
-    {
-      type: "group",
-      label: sectionLabel(t("layout.profile"), t("layout.menu.account", "Account")),
-      children: [
-        { key: "/employee/profile", icon: <IdcardOutlined />, label: <Link to="/employee/profile">{t("layout.profile")}</Link> },
+        {
+          key: "mgr-announcements-sub",
+          icon: <BellOutlined />,
+          label: t("layout.announcements", "Announcements"),
+          children: [
+            { key: "/employee/announcements", label: <Link to="/employee/announcements">{t("layout.myFeed", "My Feed")}</Link> },
+            { key: "/manager/announcements", label: <Link to="/manager/announcements">{t("layout.manage", "Manage")}</Link> },
+            { key: "/manager/announcements/create", label: <Link to="/manager/announcements/create">{t("layout.newAnnouncement", "New")}</Link> },
+          ],
+        },
         { key: "/manager/profile", icon: <IdcardOutlined />, label: <Link to="/manager/profile">{t("layout.profile")}</Link> },
       ],
     },
   ];
 
   const ceoItems: MenuProps["items"] = [
+    { key: "/ceo/dashboard", icon: <DashboardOutlined />, label: <Link to="/ceo/dashboard">{t("layout.dashboard")}</Link> },
     {
       type: "group",
-      label: sectionLabel(t("layout.dashboard"), t("layout.menu.workInbox", "Work Inbox")),
+      label: sectionLabel(t("layout.menu.workInbox", "Work Inbox"), t("layout.menu.approvals", "Approvals")),
       children: [
-        { key: "/ceo/dashboard", icon: <DashboardOutlined />, label: <Link to="/ceo/dashboard">{t("layout.dashboard")}</Link> },
         { key: "/ceo/leave/requests", icon: <CalendarOutlined />, label: <Link to="/ceo/leave/requests">{t("layout.ceoLeaveApprovals", "Leave Approvals")}</Link> },
         { key: "/ceo/team-requests", icon: <FileSearchOutlined />, label: <Link to="/ceo/team-requests">{t("layout.teamRequests", "Team Requests")}</Link> },
-        { key: "/ceo/team", icon: <TeamOutlined />, label: <Link to="/ceo/team">{t("layout.ceoTeam", "Leadership Team")}</Link> },
         { key: "/ceo/loan-requests", icon: <DollarOutlined />, label: <Link to="/ceo/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
         { key: "/ceo/attendance", icon: <ClockCircleOutlined />, label: <Link to="/ceo/attendance">{t("layout.attendance")}</Link> },
-        { key: "/ceo/assets/damage-reports", icon: <AppstoreOutlined />, label: <Link to="/ceo/assets/damage-reports">{t("assets.damageReports", "Damage Reports")}</Link> },
-        { key: "/ceo/assets/return-requests", icon: <AppstoreOutlined />, label: <Link to="/ceo/assets/return-requests">{t("assets.returnRequests", "Return Requests")}</Link> },
+        {
+          key: "ceo-assets-sub",
+          icon: <AppstoreOutlined />,
+          label: t("layout.assetReviews", "Asset Reviews"),
+          children: [
+            { key: "/ceo/assets/damage-reports", label: <Link to="/ceo/assets/damage-reports">{t("assets.damageReports", "Damage Reports")}</Link> },
+            { key: "/ceo/assets/return-requests", label: <Link to="/ceo/assets/return-requests">{t("assets.returnRequests", "Return Requests")}</Link> },
+          ],
+        },
+        { key: "/ceo/employees/deletion-requests", icon: <TeamOutlined />, label: <Link to="/ceo/employees/deletion-requests">{t("employees.removalInbox.menu", "Employee Removals")}</Link> },
       ],
     },
     {
       type: "group",
-      label: sectionLabel(t("layout.managerDashboard", "Manager Dashboard"), t("layout.myTeam", "My Team")),
+      label: sectionLabel(t("layout.myTeam", "My Team"), t("layout.leadership", "Leadership")),
       children: [
+        { key: "/ceo/team", icon: <TeamOutlined />, label: <Link to="/ceo/team">{t("layout.ceoTeam", "Leadership Team")}</Link> },
         { key: "/manager/dashboard", icon: <DashboardOutlined />, label: <Link to="/manager/dashboard">{t("layout.managerDashboard", "Manager Dashboard")}</Link> },
         { key: "/manager/team-requests", icon: <FileSearchOutlined />, label: <Link to="/manager/team-requests">{t("layout.teamRequests", "Team Requests")}</Link> },
         { key: "/manager/loan-requests", icon: <DollarOutlined />, label: <Link to="/manager/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
@@ -609,27 +766,34 @@ export default function BaseLayout() {
     },
     {
       type: "group",
-      label: sectionLabel(t("layout.announcements", "Announcements"), t("layout.menu.account", "Account")),
+      label: sectionLabel(t("layout.menu.account", "Account"), t("layout.profile")),
       children: [
-        { key: "/ceo/announcements", icon: <BellOutlined />, label: <Link to="/ceo/announcements">{t("layout.announcements", "Announcements")}</Link> },
-        { key: "/ceo/announcements/create", icon: <UserAddOutlined />, label: <Link to="/ceo/announcements/create">{t("layout.createAnnouncement", "Create Announcement")}</Link> },
+        {
+          key: "ceo-announcements-sub",
+          icon: <BellOutlined />,
+          label: t("layout.announcements", "Announcements"),
+          children: [
+            { key: "/ceo/announcements", label: <Link to="/ceo/announcements">{t("layout.announcements", "Announcements")}</Link> },
+            { key: "/ceo/announcements/create", label: <Link to="/ceo/announcements/create">{t("layout.newAnnouncement", "New")}</Link> },
+          ],
+        },
         { key: "/ceo/profile", icon: <IdcardOutlined />, label: <Link to="/ceo/profile">{t("layout.profile")}</Link> },
       ],
     },
   ];
 
   const cfoItems: MenuProps["items"] = [
+    { key: "/cfo/dashboard", icon: <DashboardOutlined />, label: <Link to="/cfo/dashboard">{t("layout.dashboard")}</Link> },
     {
       type: "group",
-      label: sectionLabel(t("layout.dashboard"), t("layout.menu.workInbox", "Work Inbox")),
+      label: sectionLabel(t("layout.menu.workInbox", "Work Inbox"), t("layout.menu.approvals", "Approvals")),
       children: [
-        { key: "/cfo/dashboard", icon: <DashboardOutlined />, label: <Link to="/cfo/dashboard">{t("layout.dashboard")}</Link> },
         { key: "/cfo/loan-requests", icon: <DollarOutlined />, label: <Link to="/cfo/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
       ],
     },
     {
       type: "group",
-      label: sectionLabel(t("layout.managerDashboard", "Manager Dashboard"), t("layout.myTeam", "My Team")),
+      label: sectionLabel(t("layout.myTeam", "My Team"), t("layout.leadership", "Leadership")),
       children: [
         { key: "/manager/dashboard", icon: <DashboardOutlined />, label: <Link to="/manager/dashboard">{t("layout.managerDashboard", "Manager Dashboard")}</Link> },
         { key: "/manager/team-requests", icon: <FileSearchOutlined />, label: <Link to="/manager/team-requests">{t("layout.teamRequests", "Team Requests")}</Link> },
@@ -639,7 +803,7 @@ export default function BaseLayout() {
     },
     {
       type: "group",
-      label: sectionLabel(t("layout.profile"), t("layout.menu.account", "Account")),
+      label: sectionLabel(t("layout.menu.account", "Account"), t("layout.profile")),
       children: [{ key: "/cfo/profile", icon: <IdcardOutlined />, label: <Link to="/cfo/profile">{t("layout.profile")}</Link> }],
     },
   ];
@@ -689,9 +853,12 @@ export default function BaseLayout() {
     ],
   };
 
+  // ─── User name display ─────────────────────────────────────────────────────
+  const displayName = user?.email?.split("@")[0] || "User";
+
   // ─── Sidebar content ───────────────────────────────────────────────────────
   const sidebarContent = (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", ...sidebarCSSVars }}>
       <BrandLogo
         collapsed={collapsed}
         title={brandTitle}
@@ -700,11 +867,13 @@ export default function BaseLayout() {
         accentGlow={sidebarBrandTheme.accentGlow}
         titleColor={sidebarBrandTheme.titleColor}
       />
-      <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", paddingBottom: 16 }}>
+      <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", paddingBottom: 8, position: "relative" }}>
         <Menu
           mode="inline"
           theme="dark"
           selectedKeys={[getSelectedKey(location.pathname, menuItems)]}
+          openKeys={openMenuKeys}
+          onOpenChange={setOpenMenuKeys}
           items={menuItems}
           className="modern-sidebar"
           style={{
@@ -713,11 +882,45 @@ export default function BaseLayout() {
           }}
         />
       </div>
+      {/* Bottom user card */}
+      <div
+        style={{
+          padding: collapsed ? "10px 0" : "10px 12px",
+          borderTop: `1px solid ${sbTheme.border}`,
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          justifyContent: collapsed ? "center" : "flex-start",
+          flexShrink: 0,
+          transition: "padding 0.25s cubic-bezier(0.4,0,0.2,1)",
+        }}
+      >
+        <Avatar
+          size={32}
+          icon={<UserOutlined />}
+          style={{
+            background: `linear-gradient(135deg, ${roleColor(role)}, ${roleColor(role)}88)`,
+            fontSize: 13,
+            fontWeight: 700,
+            flexShrink: 0,
+            boxShadow: `0 0 0 2px ${sbTheme.bg}, 0 0 0 4px ${sbTheme.accent}44`,
+          }}
+        >
+          {displayName.charAt(0).toUpperCase()}
+        </Avatar>
+        {!collapsed && (
+          <div style={{ minWidth: 0, overflow: "hidden" }}>
+            <div style={{ fontWeight: 600, fontSize: 12.5, color: "rgba(255,255,255,0.82)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {displayName}
+            </div>
+            <div style={{ fontSize: 11, color: sbTheme.sectionColor, whiteSpace: "nowrap" }}>
+              {getRoleLabel(role)}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
-
-  // ─── User name display ─────────────────────────────────────────────────────
-  const displayName = user?.email?.split("@")[0] || "User";
 
   return (
     <Layout style={{ minHeight: "100vh", direction }}>
@@ -730,8 +933,10 @@ export default function BaseLayout() {
           collapsed={collapsed}
           onCollapse={(value) => setCollapsed(value)}
           style={{
-            background: "linear-gradient(180deg, #1a1a1a 0%, #2d2d2d 100%)",
-            boxShadow: "4px 0 24px rgba(0,0,0,0.3)",
+            ...sidebarCSSVars,
+            background: sbTheme.bg,
+            borderInlineEnd: `1px solid ${sbTheme.border}`,
+            boxShadow: "none",
             overflow: "hidden",
             position: "sticky",
             top: 0,
@@ -751,7 +956,7 @@ export default function BaseLayout() {
           onClose={() => setMobileMenuOpen(false)}
           open={mobileMenuOpen}
           width={260}
-          bodyStyle={{ padding: 0, background: "linear-gradient(180deg, #1a1a1a 0%, #2d2d2d 100%)" }}
+          bodyStyle={{ padding: 0, background: sbTheme.bg, ...sidebarCSSVars }}
           styles={{ header: { display: "none" } }}
           className="modern-sidebar"
         >

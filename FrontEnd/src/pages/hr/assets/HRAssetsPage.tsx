@@ -27,6 +27,7 @@ import {
   type AssetDashboardSummary,
   type AssetReturnRequest,
   type CreateAssetPayload,
+  type LabelNameLanguage,
   type LabelPaperSize,
 } from "../../../services/api/assetsApi";
 import { triggerBlobDownload } from "../../../services/api/downloads";
@@ -96,6 +97,7 @@ export default function HRAssetsPage() {
   const [statusFilter, setStatusFilter] = useState<string | undefined>();
   const [ordering, setOrdering] = useState<string | undefined>();
   const [warrantySoonOnly, setWarrantySoonOnly] = useState(false);
+  const [labelStatusFilter, setLabelStatusFilter] = useState<"printed" | "never_printed" | undefined>(undefined);
   const [activeKpi, setActiveKpi] = useState<"total" | "assigned" | "available" | "damaged" | "lost" | "warrantySoon" | null>(
     null
   );
@@ -123,6 +125,7 @@ export default function HRAssetsPage() {
   const [printModalOpen, setPrintModalOpen] = useState(false);
   const [printTargetIds, setPrintTargetIds] = useState<number[]>([]);
   const [printPaperSize, setPrintPaperSize] = useState<LabelPaperSize>("50X30");
+  const [printNameLanguage, setPrintNameLanguage] = useState<LabelNameLanguage>("en");
   const [printSubmitting, setPrintSubmitting] = useState(false);
 
   const loadData = async () => {
@@ -139,6 +142,7 @@ export default function HRAssetsPage() {
           status: statusFilter,
           ordering,
           warranty_expiring_soon: warrantySoonOnly || undefined,
+          label_status: labelStatusFilter,
         }),
         getAssetsDashboardSummary(),
       ]);
@@ -175,7 +179,7 @@ export default function HRAssetsPage() {
 
   useEffect(() => {
     void loadData();
-  }, [assetPage, assetPageSize, appliedSearch, typeFilter, statusFilter, ordering, warrantySoonOnly]);
+  }, [assetPage, assetPageSize, appliedSearch, typeFilter, statusFilter, ordering, warrantySoonOnly, labelStatusFilter]);
 
   useEffect(() => {
     void loadEmployees();
@@ -451,6 +455,7 @@ export default function HRAssetsPage() {
     setStatusFilter(undefined);
     setOrdering(undefined);
     setWarrantySoonOnly(false);
+    setLabelStatusFilter(undefined);
     setActiveKpi(null);
     setAssetPage(1);
   };
@@ -766,6 +771,7 @@ export default function HRAssetsPage() {
     if (assetIds.length === 0) return;
     setPrintTargetIds(assetIds);
     setPrintPaperSize("50X30");
+    setPrintNameLanguage(language === "ar" ? "ar" : "en");
     setPrintModalOpen(true);
   };
 
@@ -776,6 +782,7 @@ export default function HRAssetsPage() {
       const blob = await printAssetLabels({
         asset_ids: printTargetIds,
         paper_size: printPaperSize,
+        name_language: printNameLanguage,
       });
       const stamp = dayjs().format("YYYYMMDD-HHmm");
       triggerBlobDownload(blob, `asset_labels_${stamp}.pdf`);
@@ -924,7 +931,7 @@ export default function HRAssetsPage() {
               ]}
             />
           </Col>
-          <Col xs={24} md={6}>
+          <Col xs={24} md={4}>
             <Select
               allowClear
               value={statusFilter}
@@ -944,6 +951,22 @@ export default function HRAssetsPage() {
                 { label: "LOST", value: "LOST" },
                 { label: "DAMAGED", value: "DAMAGED" },
                 { label: "RETIRED", value: "RETIRED" },
+              ]}
+            />
+          </Col>
+          <Col xs={24} md={2}>
+            <Select
+              allowClear
+              value={labelStatusFilter}
+              style={{ width: "100%" }}
+              placeholder={t("hr.assets.labelStatusFilter")}
+              onChange={(value) => {
+                setLabelStatusFilter(value);
+                setAssetPage(1);
+              }}
+              options={[
+                { label: t("hr.assets.labelStatusNeverPrinted"), value: "never_printed" },
+                { label: t("hr.assets.labelStatusPrinted"), value: "printed" },
               ]}
             />
           </Col>
@@ -1050,6 +1073,11 @@ export default function HRAssetsPage() {
               <Descriptions.Item label={t("assets.warrantyExpiry")}>{activeAsset.warranty_expiry || "-"}</Descriptions.Item>
               <Descriptions.Item label={t("hr.assets.mustReturnBeforeTravel", "Must return before Business Trip")}>
                 {activeAsset.must_return_before_travel ? t("common.yes") : t("common.no")}
+              </Descriptions.Item>
+              <Descriptions.Item label={t("hr.assets.lastLabelPrintedAt")}>
+                {activeAsset.last_label_printed_at
+                  ? `${formatDateTime(activeAsset.last_label_printed_at)} (×${activeAsset.label_print_count ?? 0})`
+                  : t("hr.assets.labelNeverPrinted")}
               </Descriptions.Item>
               <Descriptions.Item label={t("common.notes")} span={2}>{activeAsset.notes || "-"}</Descriptions.Item>
 
@@ -1442,6 +1470,21 @@ export default function HRAssetsPage() {
                 <Radio value="40X30">{t("hr.assets.paperSize40x30")}</Radio>
                 <Radio value="60X40">{t("hr.assets.paperSize60x40")}</Radio>
                 <Radio value="A4_GRID">{t("hr.assets.paperSizeA4Grid")}</Radio>
+              </Space>
+            </Radio.Group>
+          </div>
+          <div>
+            <Typography.Text strong style={{ display: "block", marginBottom: 8 }}>
+              {t("hr.assets.labelLanguage")}
+            </Typography.Text>
+            <Radio.Group
+              value={printNameLanguage}
+              onChange={(e) => setPrintNameLanguage(e.target.value as LabelNameLanguage)}
+            >
+              <Space direction="vertical">
+                <Radio value="en">{t("hr.assets.labelLanguageEn")}</Radio>
+                <Radio value="ar">{t("hr.assets.labelLanguageAr")}</Radio>
+                <Radio value="auto">{t("hr.assets.labelLanguageAuto")}</Radio>
               </Space>
             </Radio.Group>
           </div>

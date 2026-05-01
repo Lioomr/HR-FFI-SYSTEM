@@ -33,7 +33,7 @@ export default function Providers({ children }: { children: ReactNode }) {
     },
     components: {
       Layout: {
-        siderBg: "#1a1a1a",
+        siderBg: "#0d1117",
       },
       Card: {
         borderRadiusLG: 16,
@@ -66,8 +66,12 @@ export default function Providers({ children }: { children: ReactNode }) {
         itemSelectedColor: "#f97316",
       },
       Menu: {
-        darkItemSelectedBg: "rgba(249,115,22,0.18)",
+        darkItemBg: "#0d1117",
+        darkItemSelectedBg: "rgba(249,115,22,0.11)",
         darkItemSelectedColor: "#fb923c",
+        darkItemHoverBg: "rgba(255,255,255,0.06)",
+        darkSubMenuItemBg: "#0d1117",
+        darkPopupBg: "#161b22",
       },
     },
     algorithm: theme.defaultAlgorithm,

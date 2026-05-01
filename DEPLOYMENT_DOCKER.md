@@ -73,6 +73,8 @@ docker compose --env-file .env.prod.compose -f docker-compose.prod.yml down
 - correct `CORS_ALLOWED_ORIGINS`
 - correct `CSRF_TRUSTED_ORIGINS`
 - correct `VITE_API_BASE_URL` (public API domain)
+- correct `BACKEND_PUBLIC_URL` (public API/backend domain used in email download links)
+- correct `EMAIL_DISPLAY_TIME_ZONE` (business timezone used in email timestamps)
 - strong DB credentials
 - `DEFAULT_FROM_EMAIL`
 - `BIRD_API_KEY`

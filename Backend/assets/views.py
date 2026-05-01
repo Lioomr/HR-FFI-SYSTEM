@@ -3,7 +3,7 @@ from uuid import uuid4
 
 from django.core.files.base import ContentFile
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, F, Q
 from django.http import FileResponse, HttpResponse
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
@@ -396,6 +396,11 @@ class AssetViewSet(viewsets.ModelViewSet):
                 warranty_expiry__gte=today,
                 warranty_expiry__lte=expiry_cutoff,
             )
+        label_status = str(request.query_params.get("label_status", "")).lower()
+        if label_status == "never_printed":
+            queryset = queryset.filter(last_label_printed_at__isnull=True)
+        elif label_status == "printed":
+            queryset = queryset.filter(last_label_printed_at__isnull=False)
         page = self.paginate_queryset(queryset)
         serializer = self.get_serializer(page if page is not None else queryset, many=True)
         if page is not None:
@@ -630,31 +635,55 @@ class AssetViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         asset_ids = serializer.validated_data["asset_ids"]
         paper_size = serializer.validated_data["paper_size"]
+        name_language = serializer.validated_data.get("name_language", "en")
 
         scoped_assets = list(
             filter_queryset_by_company_scope(Asset.objects.select_related("company"), request).filter(id__in=asset_ids)
         )
         assets_by_id = {asset.id: asset for asset in scoped_assets}
         if len(assets_by_id) != len(asset_ids):
-            return error("Asset not found.", status=status.HTTP_404_NOT_FOUND)
+            missing_ids = [asset_id for asset_id in asset_ids if asset_id not in assets_by_id]
+            return error(
+                "Some assets are not available in the current company.",
+                errors=[f"Missing asset ids: {missing_ids}"],
+                status=status.HTTP_404_NOT_FOUND,
+            )
         ordered_assets = [assets_by_id[asset_id] for asset_id in asset_ids]
 
-        pdf_bytes = render_labels_pdf(ordered_assets, paper_size)
-        job = PrintedLabelJob.objects.create(
-            company=company,
-            created_by=request.user,
-            asset_count=len(ordered_assets),
-            paper_size=paper_size,
-            asset_codes=[asset.asset_code for asset in ordered_assets],
+        from django.conf import settings
+
+        qr_base_url = (getattr(settings, "FRONTEND_URL", "") or "").rstrip("/")
+        pdf_bytes = render_labels_pdf(
+            ordered_assets,
+            paper_size,
+            name_language=name_language,
+            qr_base_url=qr_base_url,
         )
-        job.pdf_file.save(f"asset_labels_{uuid4().hex}.pdf", ContentFile(pdf_bytes), save=True)
+        with transaction.atomic():
+            job = PrintedLabelJob.objects.create(
+                company=company,
+                created_by=request.user,
+                asset_count=len(ordered_assets),
+                paper_size=paper_size,
+                asset_codes=[asset.asset_code for asset in ordered_assets],
+            )
+            job.pdf_file.save(f"asset_labels_{uuid4().hex}.pdf", ContentFile(pdf_bytes), save=True)
+            Asset.objects.filter(id__in=asset_ids).update(
+                last_label_printed_at=timezone.now(),
+                label_print_count=F("label_print_count") + 1,
+            )
 
         audit(
             request,
             "asset_label_printed",
             entity="PrintedLabelJob",
             entity_id=job.id,
-            metadata={"job_id": job.id, "asset_ids": asset_ids, "paper_size": paper_size},
+            metadata={
+                "job_id": job.id,
+                "asset_ids": asset_ids,
+                "paper_size": paper_size,
+                "name_language": name_language,
+            },
         )
 
         response = HttpResponse(pdf_bytes, content_type="application/pdf")

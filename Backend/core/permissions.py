@@ -87,6 +87,8 @@ def is_department_ceo_approver_user(user):
     """
     if not user or not user.is_authenticated:
         return False
+    if get_role(user) in ["CEO", "SystemAdmin"]:
+        return True
 
     profile = getattr(user, "employee_profile", None)
     if not profile:

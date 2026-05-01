@@ -1,5 +1,5 @@
 import { api } from "./apiClient";
-import type { ApiResponse } from "./apiTypes";
+import type { ApiResponse, ApiSuccess } from "./apiTypes";
 
 /**
  * Employee data type
@@ -359,5 +359,143 @@ export async function notifyExpiringEmployee(
   payload: NotifyExpiryPayload
 ): Promise<ApiResponse<any>> {
   const { data } = await api.post<ApiResponse<any>>(`/employees/${employeeProfileId}/notify-expiry`, payload);
+  return data;
+}
+
+// ── Employee Hard-Delete Requests (CEO-approved) ──────────────────────────────
+
+export type EmployeeDeletionStatus = "PENDING_CEO" | "REJECTED" | "EXECUTED";
+
+export interface EmployeeDeletionRequestSnapshot {
+  employee_profile_id?: number;
+  target_user_id?: number;
+  employee_id?: string;
+  full_name?: string;
+  full_name_en?: string;
+  full_name_ar?: string;
+  email?: string;
+  company_id?: number;
+  company_name?: string;
+  employment_status?: string;
+  department_id?: number;
+  department_name?: string;
+  position_id?: number;
+  position_name?: string;
+  open_leave_requests?: number;
+  asset_assignments?: number;
+  loan_requests?: number;
+  target_user_email?: string;
+}
+
+export interface EmployeeDeletionRequest {
+  id: number;
+  company_id?: number;
+  company_name?: string;
+  employee_profile_id?: number;
+  target_user_id?: number;
+  reason: string;
+  status: EmployeeDeletionStatus;
+  request_snapshot: EmployeeDeletionRequestSnapshot;
+  execution_snapshot: EmployeeDeletionRequestSnapshot;
+  rejection_reason?: string;
+  requested_by?: number;
+  requested_by_name?: string;
+  approved_by?: number | null;
+  approved_by_name?: string | null;
+  rejected_by?: number | null;
+  rejected_by_name?: string | null;
+  approved_at?: string | null;
+  rejected_at?: string | null;
+  executed_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  workflow?: {
+    can_approve?: boolean;
+    can_reject?: boolean;
+    current_actor?: number | null;
+    [k: string]: unknown;
+  };
+}
+
+export interface ListEmployeeDeletionRequestsParams {
+  status?: EmployeeDeletionStatus;
+  page?: number;
+  page_size?: number;
+}
+
+// StandardPagination shape: { items, page, page_size, count, total_pages }
+// (the unpaginated fallback uses { results, count } — both supported below)
+export interface EmployeeDeletionRequestListResponse {
+  items: EmployeeDeletionRequest[];
+  page?: number;
+  page_size?: number;
+  count: number;
+  total_pages?: number;
+}
+
+const DELETION_BASE = "/api/employees/deletion-requests";
+
+export async function requestEmployeeDeletion(
+  payload: { employee_profile_id: number; reason: string }
+): Promise<ApiResponse<EmployeeDeletionRequest>> {
+  const { data } = await api.post<ApiResponse<EmployeeDeletionRequest>>(
+    `${DELETION_BASE}/`,
+    payload
+  );
+  return data;
+}
+
+export async function listEmployeeDeletionRequests(
+  params?: ListEmployeeDeletionRequestsParams
+): Promise<ApiResponse<EmployeeDeletionRequestListResponse>> {
+  const { data } = await api.get<ApiResponse<any>>(
+    `${DELETION_BASE}/`,
+    { params }
+  );
+  if (data && (data as ApiResponse<any>).status === "success") {
+    const payload = (data as ApiSuccess<any>).data || {};
+    const items: EmployeeDeletionRequest[] = Array.isArray(payload.items)
+      ? payload.items
+      : Array.isArray(payload.results)
+        ? payload.results
+        : [];
+    const normalized: EmployeeDeletionRequestListResponse = {
+      items,
+      count: typeof payload.count === "number" ? payload.count : items.length,
+      page: payload.page,
+      page_size: payload.page_size,
+      total_pages: payload.total_pages,
+    };
+    return { status: "success", data: normalized };
+  }
+  return data as ApiResponse<EmployeeDeletionRequestListResponse>;
+}
+
+export async function getEmployeeDeletionRequest(
+  id: number | string
+): Promise<ApiResponse<EmployeeDeletionRequest>> {
+  const { data } = await api.get<ApiResponse<EmployeeDeletionRequest>>(
+    `${DELETION_BASE}/${id}/`
+  );
+  return data;
+}
+
+export async function approveEmployeeDeletionRequest(
+  id: number | string
+): Promise<ApiResponse<EmployeeDeletionRequest>> {
+  const { data } = await api.post<ApiResponse<EmployeeDeletionRequest>>(
+    `${DELETION_BASE}/${id}/approve/`
+  );
+  return data;
+}
+
+export async function rejectEmployeeDeletionRequest(
+  id: number | string,
+  reason: string
+): Promise<ApiResponse<EmployeeDeletionRequest>> {
+  const { data } = await api.post<ApiResponse<EmployeeDeletionRequest>>(
+    `${DELETION_BASE}/${id}/reject/`,
+    { reason }
+  );
   return data;
 }
