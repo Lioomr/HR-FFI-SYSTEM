@@ -98,6 +98,46 @@ def ensure_policy_leave_types():
         )
 
 
+def resolve_employee_company(employee_subject=None, profile=None, leave_type: LeaveType | None = None):
+    if leave_type and leave_type.company_id:
+        return leave_type.company
+
+    profile = profile or resolve_employee_profile(employee_subject)
+    if profile and profile.company_id:
+        return profile.company
+
+    return None
+
+
+def ensure_policy_leave_types_for_company(company=None):
+    """
+    Ensure baseline leave types required by policy exist for one company context.
+    Falls back to legacy global leave types when no company is known.
+    """
+    for definition in POLICY_LEAVE_TYPE_DEFINITIONS:
+        lookup = {"code": definition["code"]}
+        defaults = {
+            "name": definition["name"],
+            "is_paid": definition["is_paid"],
+            "requires_attachment": definition["requires_attachment"],
+            "is_active": True,
+            "annual_quota": definition["annual_quota"],
+        }
+        if company is not None:
+            lookup["company"] = company
+            defaults["company"] = company
+        LeaveType.objects.get_or_create(**lookup, defaults=defaults)
+
+
+def get_balance_leave_types(company=None):
+    if company is not None:
+        ensure_policy_leave_types_for_company(company)
+        return LeaveType.objects.filter(is_active=True, company=company)
+
+    ensure_policy_leave_types()
+    return LeaveType.objects.filter(is_active=True, company__isnull=True)
+
+
 def resolve_employee_profile(employee_subject):
     if isinstance(employee_subject, EmployeeProfile):
         return employee_subject
@@ -303,6 +343,7 @@ def get_payment_breakdown(
     requested_days: int,
     employee_subject=None,
     year: int | None = None,
+    company=None,
 ):
     """
     Returns payment segments for the request:
@@ -316,7 +357,7 @@ def get_payment_breakdown(
         unpaid_remaining_before_request = 0.0
 
         if employee_subject is not None and year is not None:
-            balances = calculate_leave_balance(employee_subject, year)
+            balances = calculate_leave_balance(employee_subject, year, company=company or leave_type.company)
             annual_balance = _find_balance_by_code(balances, "ANNUAL", "ANNUAL_LEAVE")
             unpaid_balance = _find_balance_by_code(balances, "UNPAID", "UNPAID_LEAVE")
 
@@ -405,6 +446,7 @@ def validate_leave_request_policy(
         return "Requested leave duration must be at least 1 day."
 
     code = _normalized_leave_code(leave_type)
+    company = resolve_employee_company(user, profile=profile, leave_type=leave_type)
 
     # Annual leave eligibility: can start after 6 months.
     if _is_annual(code):
@@ -413,7 +455,7 @@ def validate_leave_request_policy(
 
         # Only enforce remaining balance when profile + hire date are available.
         if profile.hire_date:
-            balances = calculate_leave_balance(user, year)
+            balances = calculate_leave_balance(user, year, profile=profile, company=company)
             annual_balance = next((b for b in balances if b["leave_code"] == code), None)
             unpaid_balance = _find_balance_by_code(balances, "UNPAID", "UNPAID_LEAVE")
             annual_remaining = annual_balance["remaining_days"] if annual_balance else 0
@@ -425,7 +467,7 @@ def validate_leave_request_policy(
                 )
 
     if _is_emergency(code):
-        balances = calculate_leave_balance(user, year)
+        balances = calculate_leave_balance(user, year, profile=profile, company=company)
         emergency_balance = next((b for b in balances if b["leave_code"] == code), None)
         emergency_remaining = emergency_balance["remaining_days"] if emergency_balance else 0
         if requested_days > emergency_remaining:
@@ -477,7 +519,7 @@ def validate_leave_request_policy(
     return None
 
 
-def calculate_leave_balance(user, year, profile=None):
+def calculate_leave_balance(user, year, profile=None, company=None):
     """
     Calculate balances for all leave types for a user in a given year.
     Returns a list of dicts.
@@ -486,6 +528,7 @@ def calculate_leave_balance(user, year, profile=None):
     if not profile:
         profile = resolve_employee_profile(user)
     employee_subject = profile or user
+    company = company or resolve_employee_company(user, profile=profile)
 
     if profile:
         hire_year = profile.hire_date.year if profile.hire_date else year
@@ -495,8 +538,7 @@ def calculate_leave_balance(user, year, profile=None):
     if year < hire_year:
         return []  # No balances before hire
 
-    ensure_policy_leave_types()
-    leave_types = LeaveType.objects.filter(is_active=True)
+    leave_types = get_balance_leave_types(company)
     balances = []
 
     for lt in leave_types:
@@ -515,7 +557,7 @@ def calculate_leave_balance(user, year, profile=None):
             if year > hire_year:
                 # Recurse for previous year
                 prev_year = year - 1
-                prev_balances = calculate_leave_balance(employee_subject, prev_year, profile=profile)
+                prev_balances = calculate_leave_balance(employee_subject, prev_year, profile=profile, company=company)
 
                 # Extract remaining from previous year's calculation
                 # prev_balances is a list of dicts, find the matching leave_type

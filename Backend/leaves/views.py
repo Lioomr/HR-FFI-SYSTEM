@@ -828,6 +828,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             requested_days,
             employee_subject=self.request.user,
             year=instance.start_date.year,
+            company=instance.company or instance.leave_type.company,
         )
 
         # Audit
@@ -1087,6 +1088,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             requested_days,
             employee_subject=instance.employee_profile or instance.employee,
             year=instance.start_date.year,
+            company=instance.company or instance.leave_type.company,
         )
 
         audit(
