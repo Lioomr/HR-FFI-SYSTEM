@@ -67,10 +67,20 @@ class AssetSerializer(serializers.ModelSerializer):
             "active_assignment",
             "company_id",
             "company_name",
+            "last_label_printed_at",
+            "label_print_count",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "asset_code", "created_at", "updated_at", "active_assignment"]
+        read_only_fields = [
+            "id",
+            "asset_code",
+            "created_at",
+            "updated_at",
+            "active_assignment",
+            "last_label_printed_at",
+            "label_print_count",
+        ]
 
     def get_active_assignment(self, obj):
         assignment = obj.assignments.filter(is_active=True).select_related("employee").first()
@@ -277,6 +287,8 @@ class PrintedLabelJobSerializer(serializers.ModelSerializer):
 
 
 class AssetLabelsPrintSerializer(serializers.Serializer):
+    NAME_LANGUAGE_CHOICES = (("en", "English"), ("ar", "Arabic"), ("auto", "Auto"))
+
     asset_ids = serializers.ListField(
         child=serializers.IntegerField(min_value=1),
         min_length=1,
@@ -284,6 +296,7 @@ class AssetLabelsPrintSerializer(serializers.Serializer):
         allow_empty=False,
     )
     paper_size = serializers.ChoiceField(choices=PrintedLabelJob.PaperSize.choices)
+    name_language = serializers.ChoiceField(choices=NAME_LANGUAGE_CHOICES, default="en")
 
     def validate_asset_ids(self, value):
         if len(set(value)) != len(value):

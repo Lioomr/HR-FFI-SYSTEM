@@ -278,7 +278,7 @@ export default function HRDashboardPage() {
                                     key: "status",
                                     render: (text: string, record: any) => {
                                         let display = text;
-                                        const match = text.match(/^(.*?)( \(\#.*\))?$/);
+                                        const match = text.match(/^(.*?)( \(#.*\))?$/);
                                         if (match) {
                                             const entity = match[1];
                                             const suffix = match[2] || '';

@@ -31,19 +31,31 @@ def _announcement_attachment_url(announcement):
     if not announcement.attachment:
         return None
 
-    base_url = (getattr(settings, "FRONTEND_URL", "") or "").rstrip("/")
+    base_url = (getattr(settings, "BACKEND_PUBLIC_URL", "") or "").rstrip("/")
     if not base_url:
         return None
 
     token = signing.dumps({"announcement_id": announcement.id}, salt=ANNOUNCEMENT_ATTACHMENT_SALT)
-    return f"{base_url}/api/announcements/{announcement.id}/attachment-public?token={token}"
+    return f"{base_url}/api/announcements/{announcement.id}/attachment-public?token={token}&download=1"
 
 
 def _meeting_datetime_parts(announcement):
     if not announcement.meeting_starts_at:
         return "", ""
-    starts_at = timezone.localtime(announcement.meeting_starts_at)
-    return starts_at.strftime("%Y-%m-%d"), starts_at.strftime("%H:%M")
+    starts_at = _email_localtime(announcement.meeting_starts_at)
+    return starts_at.strftime("%Y-%m-%d"), starts_at.strftime("%I:%M %p %Z")
+
+
+def _email_localtime(value):
+    tzinfo = getattr(settings, "EMAIL_DISPLAY_TZINFO", None)
+    return timezone.localtime(value, tzinfo) if tzinfo else timezone.localtime(value)
+
+
+def _format_announcement_published_at(value):
+    if not value:
+        return None
+    localized = _email_localtime(value)
+    return localized.strftime("%Y-%m-%d %I:%M %p %Z")
 
 
 def send_announcement_email(announcement):
@@ -106,7 +118,7 @@ def send_announcement_email(announcement):
                 employee_name=recipient_name,
                 announcement_title=announcement.title,
                 message=announcement.content,
-                published_at=announcement.created_at.strftime("%Y-%m-%d %H:%M") if announcement.created_at else None,
+                published_at=_format_announcement_published_at(announcement.created_at),
                 publisher_name=publisher_name,
                 action_url=_announcement_action_url(user),
                 attachment_name=attachment_name,

@@ -83,6 +83,7 @@ def test_render_labels_pdf_returns_pdf_bytes():
     asset = SimpleNamespace(
         asset_code="LAP-00042",
         name_en="Dell Laptop",
+        name_ar="حاسوب ديل",
         company=SimpleNamespace(name="FFI"),
     )
 
@@ -91,3 +92,18 @@ def test_render_labels_pdf_returns_pdf_bytes():
     assert isinstance(pdf_bytes, bytes)
     assert pdf_bytes.startswith(b"%PDF")
     assert len(pdf_bytes) > 500
+
+
+def test_render_labels_pdf_arabic_name_does_not_crash():
+    asset = SimpleNamespace(
+        asset_code="LAP-00099",
+        name_en="",
+        name_ar="حاسوب محمول",
+        company=SimpleNamespace(name="شركة"),
+    )
+
+    pdf_bytes = render_labels_pdf(
+        [asset], "60X40", name_language="ar", qr_base_url="https://hr.example.com"
+    )
+
+    assert pdf_bytes.startswith(b"%PDF")

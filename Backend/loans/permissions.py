@@ -107,6 +107,8 @@ def is_cfo_approver_user(user):
 def is_ceo_approver_user(user):
     if not user or not user.is_authenticated:
         return False
+    if _is_group_member(user, "SystemAdmin") or _is_group_member(user, "CEO"):
+        return True
     if _is_delegated_role_user(user, "ceo"):
         return True
 

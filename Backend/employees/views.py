@@ -21,19 +21,26 @@ from core.exporting import audit_export, xlsx_response
 from core.pagination import EmployeePagination, StandardPagination
 from core.permissions import get_role, has_direct_reports
 from core.responses import error, success
-from core.services import send_document_expiry_reminder_email
+from core.services import (
+    get_ceo_approver_users,
+    notify_users_for_pending_status,
+    send_document_expiry_reminder_email,
+)
 from leaves.models import LeaveRequest
+from loans.models import LoanRequest
 from organization.services import (
     ensure_company_write_allowed,
     filter_queryset_by_company_scope,
     get_active_company_for_request,
 )
 
-from .models import EmployeeImport, EmployeeProfile
+from .models import EmployeeDeletionRequest, EmployeeImport, EmployeeProfile
 from .notifications import send_document_expiry_whatsapp
 from .permissions import IsEmployeeOwner, IsHRManagerOnly, IsHRManagerOrAdmin
 from .serializers import (
     DelegationCandidateSerializer,
+    EmployeeDeletionRequestCreateSerializer,
+    EmployeeDeletionRequestReadSerializer,
     EmployeeImportSerializer,
     EmployeeProfileReadSerializer,
     EmployeeProfileWriteSerializer,
@@ -68,6 +75,25 @@ def _audit_snapshot(instance: EmployeeProfile) -> dict:
         "employment_status": instance.employment_status,
         "manager_profile_id": instance.manager_profile.id if instance.manager_profile else None,
         "data_source": instance.data_source,
+    }
+
+
+def _deletion_request_snapshot(instance: EmployeeProfile) -> dict:
+    return {
+        "employee_profile_id": instance.id,
+        "target_user_id": instance.user_id,
+        "employee_id": instance.employee_id,
+        "full_name": instance.full_name,
+        "full_name_en": instance.full_name_en,
+        "full_name_ar": instance.full_name_ar,
+        "email": instance.user.email if instance.user_id else "",
+        "company_id": instance.company_id,
+        "company_name": instance.company.name if instance.company_id else "",
+        "employment_status": instance.employment_status,
+        "department_id": instance.department_ref_id,
+        "department_name": instance.department_ref.name if instance.department_ref_id else instance.department,
+        "position_id": instance.position_ref_id,
+        "position_name": instance.position_ref.name if instance.position_ref_id else instance.job_title,
     }
 
 
@@ -248,7 +274,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action == "import_excel":
             permission_classes = [IsAuthenticated, IsHRManagerOnly]
-        elif self.action in ["manager_team", "delegation_candidates"]:
+        elif self.action in ["manager_access", "manager_team", "delegation_candidates"]:
             permission_classes = [IsAuthenticated]
         elif self.action in ["retrieve", "me"]:
             permission_classes = [IsAuthenticated, IsHRManagerOrAdmin | IsEmployeeOwner]
@@ -273,7 +299,8 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         base_qs = _with_effective_status(base_qs)
 
         if role in ["SystemAdmin", "HRManager"]:
-            return filter_queryset_by_company_scope(base_qs.all(), self.request)
+            scoped_qs = filter_queryset_by_company_scope(base_qs.all(), self.request)
+            return scoped_qs | base_qs.filter(company__isnull=True)
 
         return base_qs.filter(user=user)
 
@@ -828,6 +855,212 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             return response
         except Exception as e:
             return error(f"Failed to download template: {str(e)}", status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class EmployeeDeletionRequestViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
+    pagination_class = StandardPagination
+
+    def get_permissions(self):
+        return [permission() for permission in self.permission_classes]
+
+    def get_queryset(self):
+        base_qs = EmployeeDeletionRequest.objects.select_related(
+            "company",
+            "employee_profile",
+            "employee_profile__company",
+            "target_user",
+            "requested_by",
+            "approved_by",
+            "rejected_by",
+        )
+        role = get_role(self.request.user)
+        if role in ["CEO", "SystemAdmin"]:
+            return base_qs
+        return filter_queryset_by_company_scope(base_qs, self.request)
+
+    def get_serializer_class(self):
+        if self.action == "create":
+            return EmployeeDeletionRequestCreateSerializer
+        return EmployeeDeletionRequestReadSerializer
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["request"]._active_company = get_active_company_for_request(self.request)
+        return context
+
+    def list(self, request, *args, **kwargs):
+        role = get_role(request.user)
+        if role not in ["HRManager", "SystemAdmin", "CEO"]:
+            return error("Forbidden", status=status.HTTP_403_FORBIDDEN)
+
+        queryset = self.get_queryset()
+        status_value = request.query_params.get("status")
+        if status_value:
+            queryset = queryset.filter(status=status_value)
+
+        page = self.paginate_queryset(queryset)
+        serializer = self.get_serializer(page if page is not None else queryset, many=True)
+        if page is not None:
+            return self.get_paginated_response(serializer.data)
+        return success({"results": serializer.data, "count": queryset.count()})
+
+    def retrieve(self, request, *args, **kwargs):
+        role = get_role(request.user)
+        if role not in ["HRManager", "SystemAdmin", "CEO"]:
+            return error("Forbidden", status=status.HTTP_403_FORBIDDEN)
+        serializer = self.get_serializer(self.get_object())
+        return success(serializer.data)
+
+    def create(self, request, *args, **kwargs):
+        role = get_role(request.user)
+        if role not in ["HRManager", "SystemAdmin"]:
+            return error("Forbidden", status=status.HTTP_403_FORBIDDEN)
+
+        ensure_company_write_allowed(request)
+        serializer = self.get_serializer(data=request.data)
+        if not serializer.is_valid():
+            return error("Validation error", errors=serializer.errors, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+        employee_profile = serializer.validated_data["employee_profile"]
+        instance = EmployeeDeletionRequest.objects.create(
+            company=employee_profile.company,
+            employee_profile=employee_profile,
+            target_user=employee_profile.user,
+            requested_by=request.user,
+            reason=serializer.validated_data["reason"],
+            request_snapshot=_deletion_request_snapshot(employee_profile),
+        )
+        audit(
+            request,
+            "employee_hard_delete_requested",
+            entity="employee_deletion_request",
+            entity_id=instance.id,
+            metadata={
+                "request_id": instance.id,
+                "employee": instance.request_snapshot,
+                "reason": instance.reason,
+            },
+        )
+        try:
+            notify_users_for_pending_status(
+                users=get_ceo_approver_users(),
+                request_type="Employee Deletion",
+                request_id=instance.id,
+                requester_name=request.user.full_name or request.user.email,
+                status_label="Pending CEO",
+                details=[
+                    f"Employee: {instance.request_snapshot.get('full_name') or instance.request_snapshot.get('employee_id')}",
+                    f"Reason: {instance.reason}",
+                ],
+                action_path=f"/ceo/employees/deletion-requests/{instance.id}",
+            )
+        except Exception:
+            pass
+
+        data = EmployeeDeletionRequestReadSerializer(instance, context=self.get_serializer_context()).data
+        return success(data, status=status.HTTP_201_CREATED)
+
+    @staticmethod
+    def _build_execution_snapshot(instance: EmployeeDeletionRequest) -> dict:
+        from assets.models import AssetAssignment
+
+        profile = instance.employee_profile
+        target_user = instance.target_user
+        snapshot = dict(instance.request_snapshot or {})
+        if profile:
+            snapshot.update(
+                {
+                    "open_leave_requests": LeaveRequest.objects.filter(employee_profile=profile).count(),
+                    "asset_assignments": AssetAssignment.objects.filter(employee=profile, is_active=True).count(),
+                    "loan_requests": LoanRequest.objects.filter(employee_profile=profile).count(),
+                }
+            )
+        snapshot["target_user_email"] = target_user.email if target_user else snapshot.get("email", "")
+        return snapshot
+
+    @action(detail=True, methods=["post"], url_path="approve")
+    def approve(self, request, pk=None):
+        if get_role(request.user) not in ["CEO", "SystemAdmin"]:
+            return error("Forbidden", status=status.HTTP_403_FORBIDDEN)
+
+        instance = self.get_object()
+        if instance.status != EmployeeDeletionRequest.Status.PENDING_CEO:
+            return error("Validation error", errors=["Request is not pending CEO approval."], status=422)
+
+        profile = instance.employee_profile
+        target_user = instance.target_user or (profile.user if profile and profile.user_id else None)
+        execution_snapshot = self._build_execution_snapshot(instance)
+
+        with transaction.atomic():
+            now = timezone.now()
+            instance.status = EmployeeDeletionRequest.Status.EXECUTED
+            instance.approved_by = request.user
+            instance.approved_at = now
+            instance.executed_at = now
+            instance.execution_snapshot = execution_snapshot
+            instance.save(
+                update_fields=[
+                    "status",
+                    "approved_by",
+                    "approved_at",
+                    "executed_at",
+                    "execution_snapshot",
+                    "updated_at",
+                ]
+            )
+
+            if target_user is not None:
+                target_user.delete()
+            elif profile is not None:
+                profile.delete()
+
+        instance.refresh_from_db()
+        audit(
+            request,
+            "employee_hard_deleted",
+            entity="employee_deletion_request",
+            entity_id=instance.id,
+            metadata={
+                "request_id": instance.id,
+                "employee": execution_snapshot,
+                "approved_by": request.user.id,
+            },
+        )
+        data = EmployeeDeletionRequestReadSerializer(instance, context=self.get_serializer_context()).data
+        return success(data)
+
+    @action(detail=True, methods=["post"], url_path="reject")
+    def reject(self, request, pk=None):
+        if get_role(request.user) not in ["CEO", "SystemAdmin"]:
+            return error("Forbidden", status=status.HTTP_403_FORBIDDEN)
+
+        instance = self.get_object()
+        if instance.status != EmployeeDeletionRequest.Status.PENDING_CEO:
+            return error("Validation error", errors=["Request is not pending CEO approval."], status=422)
+
+        reason = (request.data.get("reason") or "").strip()
+        if not reason:
+            return error("Validation error", errors={"reason": ["Reason is required."]}, status=422)
+
+        instance.status = EmployeeDeletionRequest.Status.REJECTED
+        instance.rejected_by = request.user
+        instance.rejected_at = timezone.now()
+        instance.rejection_reason = reason
+        instance.save(update_fields=["status", "rejected_by", "rejected_at", "rejection_reason", "updated_at"])
+
+        audit(
+            request,
+            "employee_hard_delete_rejected",
+            entity="employee_deletion_request",
+            entity_id=instance.id,
+            metadata={"request_id": instance.id, "reason": reason, "employee": instance.request_snapshot},
+        )
+        data = EmployeeDeletionRequestReadSerializer(instance, context=self.get_serializer_context()).data
+        return success(data)
+
+    def destroy(self, request, *args, **kwargs):
+        return error("Hard delete requests cannot be deleted.", status=status.HTTP_403_FORBIDDEN)
 
 
 class EmployeeImportHistoryViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):

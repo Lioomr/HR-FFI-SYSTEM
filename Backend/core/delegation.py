@@ -76,9 +76,12 @@ def get_role_approver_users(role: str):
 
     if role == "ceo":
         return User.objects.filter(
-            is_active=True,
-            employee_profile__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
-            employee_profile__department_ref_id=_get_ceo_department_id(),
+            Q(is_active=True, groups__name__in=["CEO", "SystemAdmin"])
+            | Q(
+                is_active=True,
+                employee_profile__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+                employee_profile__department_ref_id=_get_ceo_department_id(),
+            )
         ).exclude(email="").distinct()
 
     if role == "disbursement":

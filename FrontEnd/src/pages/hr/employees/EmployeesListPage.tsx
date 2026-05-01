@@ -1,7 +1,7 @@
 
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Card, Checkbox, Input, Select, Table, Dropdown, Typography, Tooltip, Popover, message } from "antd";
+import { Button, Card, Checkbox, Input, Modal, Select, Table, Tag, Dropdown, Typography, Tooltip, Popover, Form, message } from "antd";
 import type { MenuProps } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
@@ -47,11 +47,17 @@ import Unauthorized403Page from "../../Unauthorized403Page";
 
 import { useHrEmployeeListStore } from "../../../stores/hrEmployeeListStore";
 import type { Employee } from "../../../services/api/employeesApi";
-import { exportEmployees, listEmployees } from "../../../services/api/employeesApi";
+import {
+    exportEmployees,
+    listEmployees,
+    listEmployeeDeletionRequests,
+    requestEmployeeDeletion,
+} from "../../../services/api/employeesApi";
 import { listDepartments } from "../../../services/api/departmentsApi";
 import { isApiError } from "../../../services/api/apiTypes";
 import { triggerBlobDownload } from "../../../services/api/downloads";
 import { isForbidden } from "../../../services/api/httpErrors";
+import { getFirstApiErrorMessage } from "../../../utils/formErrors";
 import { getUserPreference, saveUserPreference } from "../../../services/api/preferencesApi";
 
 const { Option } = Select;
@@ -202,6 +208,14 @@ export default function EmployeesListPage() {
     const [savingPreference, setSavingPreference] = useState(false);
     const preferenceLoadedRef = useRef(false);
 
+    // Employee removal flow
+    const [pendingDeletionIds, setPendingDeletionIds] = useState<Set<number>>(new Set());
+    const [deletionTarget, setDeletionTarget] = useState<Employee | null>(null);
+    const [deletionReason, setDeletionReason] = useState("");
+    const [deletionSubmitting, setDeletionSubmitting] = useState(false);
+    const [deletionError, setDeletionError] = useState<string | null>(null);
+    const [deletionReasonError, setDeletionReasonError] = useState<string | null>(null);
+
     /**
      * Fetch filter options
      */
@@ -286,6 +300,41 @@ export default function EmployeesListPage() {
     useEffect(() => {
         loadFilterOptions();
     }, [loadFilterOptions]);
+
+    const loadPendingDeletions = useCallback(async () => {
+        try {
+            const ids = new Set<number>();
+            let nextPage = 1;
+            let totalPages = 1;
+
+            while (nextPage <= totalPages) {
+                const response = await listEmployeeDeletionRequests({
+                    status: "PENDING_CEO",
+                    page: nextPage,
+                    page_size: 200,
+                });
+                if (isApiError(response)) return;
+
+                const items = response.data.items || [];
+                items.forEach((item) => {
+                    if (typeof item.employee_profile_id === "number") {
+                        ids.add(item.employee_profile_id);
+                    }
+                });
+
+                totalPages = Math.max(response.data.total_pages || 1, 1);
+                nextPage += 1;
+            }
+
+            setPendingDeletionIds(ids);
+        } catch {
+            // Non-fatal: list still works without the pending overlay.
+        }
+    }, []);
+
+    useEffect(() => {
+        loadPendingDeletions();
+    }, [loadPendingDeletions]);
 
     useEffect(() => {
         let active = true;
@@ -375,33 +424,111 @@ export default function EmployeesListPage() {
         navigate(`/hr/employees/${record.id}`);
     };
 
-    const getActionItems = (record: Employee): MenuProps['items'] => [
-        {
-            key: 'view',
-            label: t("employees.list.actionView"),
-            onClick: ({ domEvent }) => {
-                domEvent.stopPropagation();
-                navigate(`/hr/employees/${record.id}`);
+    const openDeletionModal = (record: Employee) => {
+        if (isHeadOffice) {
+            message.warning(t("organization.headOffice.switchToRemoveEmployees"));
+            return;
+        }
+        setDeletionTarget(record);
+        setDeletionReason("");
+        setDeletionError(null);
+        setDeletionReasonError(null);
+    };
+
+    const closeDeletionModal = () => {
+        if (deletionSubmitting) return;
+        setDeletionTarget(null);
+        setDeletionReason("");
+        setDeletionError(null);
+        setDeletionReasonError(null);
+    };
+
+    const submitDeletionRequest = async () => {
+        if (!deletionTarget) return;
+        const trimmed = deletionReason.trim();
+        if (!trimmed) {
+            setDeletionReasonError(t("employees.removal.reasonRequired"));
+            return;
+        }
+        setDeletionReasonError(null);
+        setDeletionError(null);
+        setDeletionSubmitting(true);
+        try {
+            const response = await requestEmployeeDeletion({
+                employee_profile_id: deletionTarget.id,
+                reason: trimmed,
+            });
+            if (isApiError(response)) {
+                const friendly = response.message || t("employees.removal.errorGeneric");
+                setDeletionError(friendly);
+                setDeletionSubmitting(false);
+                return;
             }
-        },
-        {
-            key: 'edit',
-            label: t("employees.list.actionEdit"),
-            onClick: ({ domEvent }) => {
-                domEvent.stopPropagation();
-                navigate(`/hr/employees/${record.id}/edit`);
+            setPendingDeletionIds((prev) => {
+                const next = new Set(prev);
+                next.add(deletionTarget.id);
+                return next;
+            });
+            message.success(t("employees.removal.successSubmitted"));
+            setDeletionTarget(null);
+            setDeletionReason("");
+            setDeletionSubmitting(false);
+        } catch (err: any) {
+            const httpStatus = err?.response?.status;
+            if (httpStatus === 403 || isForbidden(err)) {
+                setDeletionError(t("employees.removal.errorForbidden"));
+            } else if (httpStatus === 422) {
+                const apiMessage = getFirstApiErrorMessage(err);
+                setDeletionError(apiMessage || t("employees.removal.errorAlreadyPending"));
+            } else if (httpStatus === 409) {
+                setDeletionError(t("employees.removal.errorConflict"));
+            } else {
+                const apiMessage = getFirstApiErrorMessage(err);
+                setDeletionError(apiMessage || t("employees.removal.errorGeneric"));
             }
-        },
-        {
-            key: 'delete',
-            label: t("employees.list.actionDelete"),
-            danger: true,
-            onClick: ({ domEvent }) => {
-                domEvent.stopPropagation();
-                // delete logic here
-            }
-        },
-    ];
+            setDeletionSubmitting(false);
+        }
+    };
+
+    const getActionItems = (record: Employee): MenuProps['items'] => {
+        const isPending = pendingDeletionIds.has(record.id);
+        const removalDisabled = isPending || isHeadOffice;
+        return [
+            {
+                key: 'view',
+                label: t("employees.list.actionView"),
+                onClick: ({ domEvent }) => {
+                    domEvent.stopPropagation();
+                    navigate(`/hr/employees/${record.id}`);
+                }
+            },
+            {
+                key: 'edit',
+                label: t("employees.list.actionEdit"),
+                onClick: ({ domEvent }) => {
+                    domEvent.stopPropagation();
+                    navigate(`/hr/employees/${record.id}/edit`);
+                }
+            },
+            {
+                key: 'request-removal',
+                label: removalDisabled ? (
+                    <span title={isHeadOffice ? t("organization.headOffice.switchToRemoveEmployees") : undefined}>
+                        {isPending ? t("employees.removal.actionPending") : t("employees.removal.action")}
+                    </span>
+                ) : (
+                    isPending ? t("employees.removal.actionPending") : t("employees.removal.action")
+                ),
+                danger: !removalDisabled,
+                disabled: removalDisabled,
+                onClick: ({ domEvent }) => {
+                    domEvent.stopPropagation();
+                    if (removalDisabled) return;
+                    openDeletionModal(record);
+                }
+            },
+        ];
+    };
 
     const toggleJoinDateOrder = () => {
         const nextOrder = filters.joinDateOrder === "desc" ? "asc" : "desc";
@@ -480,7 +607,14 @@ export default function EmployeesListPage() {
                         {getInitials(record.full_name)}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <Text strong style={{ fontSize: 14 }}>{record.full_name}</Text>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <Text strong style={{ fontSize: 14 }}>{record.full_name}</Text>
+                            {pendingDeletionIds.has(record.id) && (
+                                <Tag color="warning" style={{ fontSize: 11, marginInlineStart: 0 }}>
+                                    {t("employees.removal.pendingTag")}
+                                </Tag>
+                            )}
+                        </div>
                         <Text type="secondary" style={{ fontSize: 12 }}>{record.email}</Text>
                     </div>
                 </div>
@@ -774,6 +908,67 @@ export default function EmployeesListPage() {
                     />
                 )}
             </Card>
+
+            <Modal
+                open={deletionTarget !== null}
+                title={t("employees.removal.modalTitle")}
+                okText={t("employees.removal.confirmButton")}
+                okButtonProps={{ danger: true, loading: deletionSubmitting }}
+                cancelText={t("common.cancel")}
+                cancelButtonProps={{ disabled: deletionSubmitting }}
+                onOk={submitDeletionRequest}
+                onCancel={closeDeletionModal}
+                closable={!deletionSubmitting}
+                maskClosable={!deletionSubmitting}
+                destroyOnClose
+            >
+                {deletionTarget && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                        <Text>
+                            {t("employees.removal.modalIntro", { name: deletionTarget.full_name || deletionTarget.email })}
+                        </Text>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                            {t("employees.removal.modalNote")}
+                        </Text>
+                        <Form layout="vertical">
+                            <Form.Item
+                                label={t("employees.removal.reasonLabel")}
+                                required
+                                validateStatus={deletionReasonError ? "error" : undefined}
+                                help={deletionReasonError || undefined}
+                            >
+                                <Input.TextArea
+                                    rows={4}
+                                    value={deletionReason}
+                                    placeholder={t("employees.removal.reasonPlaceholder")}
+                                    onChange={(e) => {
+                                        setDeletionReason(e.target.value);
+                                        if (deletionReasonError) setDeletionReasonError(null);
+                                    }}
+                                    maxLength={500}
+                                    disabled={deletionSubmitting}
+                                    showCount
+                                />
+                            </Form.Item>
+                        </Form>
+                        {deletionError && (
+                            <div
+                                role="alert"
+                                style={{
+                                    background: "rgba(255, 77, 79, 0.08)",
+                                    border: "1px solid rgba(255, 77, 79, 0.24)",
+                                    color: "#cf1322",
+                                    padding: "8px 12px",
+                                    borderRadius: 8,
+                                    fontSize: 13,
+                                }}
+                            >
+                                {deletionError}
+                            </div>
+                        )}
+                    </div>
+                )}
+            </Modal>
 
             <style>{`
                 .custom-select-filter .ant-select-selector {

@@ -42,6 +42,8 @@ export interface Asset {
   mac_address?: string;
   operating_system?: string;
   active_assignment?: AssetAssignmentSummary | null;
+  last_label_printed_at?: string | null;
+  label_print_count?: number;
   created_at: string;
   updated_at: string;
 }
@@ -146,6 +148,7 @@ export async function listAssets(params?: {
   vendor?: string;
   ordering?: string;
   warranty_expiring_soon?: boolean;
+  label_status?: "printed" | "never_printed";
 }) {
   const { data } = await api.get<ApiResponse<AssetsPaginatedResponse>>("/api/assets/", { params });
   return data;
@@ -343,6 +346,7 @@ export async function rejectCEOAssetReturnRequest(id: number | string, comment: 
 // ─── Asset Labels: printing, lookup, history ──────────────────────────────────
 
 export type LabelPaperSize = "50X30" | "40X30" | "60X40" | "A4_GRID";
+export type LabelNameLanguage = "en" | "ar" | "auto";
 
 export interface AssetLookupAssignment {
   id: number;
@@ -406,6 +410,7 @@ export async function lookupAssetByCode(code: string) {
 export async function printAssetLabels(payload: {
   asset_ids: number[];
   paper_size: LabelPaperSize;
+  name_language?: LabelNameLanguage;
 }): Promise<Blob> {
   const { data } = await api.post("/api/assets/labels/print/", payload, {
     responseType: "blob",

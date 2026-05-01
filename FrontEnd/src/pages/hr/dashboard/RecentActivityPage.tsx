@@ -150,7 +150,7 @@ export default function RecentActivityPage() {
             key: "status",
             render: (text: string, record: HrRecentActivityItem) => {
                 let display = text;
-                const match = text.match(/^(.*?)( \(\#.*\))?$/);
+                const match = text.match(/^(.*?)( \(#.*\))?$/);
                 if (match) {
                     const entity = match[1];
                     const suffix = match[2] || '';

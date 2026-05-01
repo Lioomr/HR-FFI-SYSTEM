@@ -1,11 +1,14 @@
 from django.contrib.auth import get_user_model
+from django.db import models
 from rest_framework import serializers
 
 from core.permissions import get_role
 from hr_reference.models import Department, Position, Sponsor, TaskGroup
 from organization.models import OrganizationNode
 
-from .models import EmployeeImport, EmployeeProfile
+from core.services import get_workflow_snapshot
+
+from .models import EmployeeDeletionRequest, EmployeeImport, EmployeeProfile
 
 User = get_user_model()
 
@@ -258,11 +261,25 @@ class EmployeeProfileWriteSerializer(serializers.ModelSerializer):
         if self.instance and getattr(self.instance, "company_id", None):
             company = self.instance.company
         if company is not None:
-            self.fields["department_id"].queryset = Department.objects.filter(company=company, is_active=True)
-            self.fields["position_id"].queryset = Position.objects.filter(company=company, is_active=True)
-            self.fields["task_group_id"].queryset = TaskGroup.objects.filter(company=company, is_active=True)
-            self.fields["sponsor_id"].queryset = Sponsor.objects.filter(company=company, is_active=True)
-            self.fields["manager_profile_id"].queryset = EmployeeProfile.objects.filter(company=company)
+            self.fields["department_id"].queryset = Department.objects.filter(
+                models.Q(company=company) | models.Q(company__isnull=True),
+                is_active=True,
+            )
+            self.fields["position_id"].queryset = Position.objects.filter(
+                models.Q(company=company) | models.Q(company__isnull=True),
+                is_active=True,
+            )
+            self.fields["task_group_id"].queryset = TaskGroup.objects.filter(
+                models.Q(company=company) | models.Q(company__isnull=True),
+                is_active=True,
+            )
+            self.fields["sponsor_id"].queryset = Sponsor.objects.filter(
+                models.Q(company=company) | models.Q(company__isnull=True),
+                is_active=True,
+            )
+            self.fields["manager_profile_id"].queryset = EmployeeProfile.objects.filter(
+                models.Q(company=company) | models.Q(company__isnull=True)
+            )
 
     def validate_full_name(self, value):
         if not value.strip():
@@ -296,3 +313,92 @@ class EmployeeImportSerializer(serializers.ModelSerializer):
         if obj.uploader:
             return obj.uploader.email
         return None
+
+
+class EmployeeDeletionRequestReadSerializer(serializers.ModelSerializer):
+    employee_profile_id = serializers.IntegerField(read_only=True)
+    target_user_id = serializers.IntegerField(read_only=True)
+    company_id = serializers.IntegerField(read_only=True)
+    company_name = serializers.CharField(source="company.name", read_only=True)
+    requested_by_name = serializers.CharField(source="requested_by.full_name", read_only=True)
+    approved_by_name = serializers.CharField(source="approved_by.full_name", read_only=True)
+    rejected_by_name = serializers.CharField(source="rejected_by.full_name", read_only=True)
+    workflow = serializers.SerializerMethodField()
+
+    class Meta:
+        model = EmployeeDeletionRequest
+        fields = [
+            "id",
+            "company_id",
+            "company_name",
+            "employee_profile_id",
+            "target_user_id",
+            "reason",
+            "status",
+            "request_snapshot",
+            "execution_snapshot",
+            "rejection_reason",
+            "requested_by",
+            "requested_by_name",
+            "approved_by",
+            "approved_by_name",
+            "rejected_by",
+            "rejected_by_name",
+            "approved_at",
+            "rejected_at",
+            "executed_at",
+            "created_at",
+            "updated_at",
+            "workflow",
+        ]
+
+    def get_workflow(self, obj):
+        request = self.context.get("request")
+        actor = getattr(request, "user", None)
+        return get_workflow_snapshot(obj, actor=actor)
+
+
+class EmployeeDeletionRequestCreateSerializer(serializers.ModelSerializer):
+    employee_profile_id = serializers.PrimaryKeyRelatedField(
+        queryset=EmployeeProfile.objects.none(),
+        source="employee_profile",
+        write_only=True,
+    )
+
+    class Meta:
+        model = EmployeeDeletionRequest
+        fields = ["employee_profile_id", "reason"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get("request")
+        if request is not None:
+            self.fields["employee_profile_id"].queryset = EmployeeProfile.objects.filter(company=getattr(request, "_active_company", None))
+
+    def validate_reason(self, value):
+        value = (value or "").strip()
+        if not value:
+            raise serializers.ValidationError("Reason is required.")
+        return value
+
+    def validate(self, attrs):
+        employee_profile = attrs["employee_profile"]
+        request = self.context["request"]
+        active_company = getattr(request, "_active_company", None)
+
+        if active_company is None:
+            raise serializers.ValidationError("Active company is required.")
+        if employee_profile.company_id != active_company.id:
+            raise serializers.ValidationError("Employee does not belong to the active company.")
+
+        existing = EmployeeDeletionRequest.objects.filter(
+            company=active_company,
+            employee_profile=employee_profile,
+            status=EmployeeDeletionRequest.Status.PENDING_CEO,
+        )
+        if self.instance:
+            existing = existing.exclude(pk=self.instance.pk)
+        if existing.exists():
+            raise serializers.ValidationError("A pending deletion request already exists for this employee.")
+
+        return attrs
