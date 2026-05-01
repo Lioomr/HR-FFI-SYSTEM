@@ -42,7 +42,7 @@ from core.services import (
 from core.services.request_obligations import is_business_trip_leave
 from employees.models import EmployeeProfile
 from employees.permissions import IsHRManagerOrAdmin
-from organization.services import filter_queryset_by_company_scope
+from organization.services import filter_queryset_by_company_scope, get_active_company_for_request
 
 from .models import LeaveBalanceAdjustment, LeaveRequest, LeaveType
 from .notifications import (
@@ -1593,7 +1593,11 @@ class EmployeeLeaveBalanceView(APIView):
             except ValueError:
                 return error("Validation error", errors=["year must be a valid integer."], status=422)
 
-        balances = calculate_leave_balance(request.user, year)
+        balances = calculate_leave_balance(
+            request.user,
+            year,
+            company=get_active_company_for_request(request),
+        )
 
         # Audit
         audit(request, "leave_balance.viewed", entity="user", entity_id=request.user.id, metadata={"year": year})
