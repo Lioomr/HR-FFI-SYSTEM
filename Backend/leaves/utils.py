@@ -82,11 +82,14 @@ POLICY_LEAVE_TYPE_DEFINITIONS = [
 
 def ensure_policy_leave_types():
     """
-    Ensure baseline leave types required by policy exist.
-    This keeps balance/eligibility logic reliable even if DB seed was skipped.
+    Ensure baseline leave types required by policy exist for legacy
+    non-company-scoped records only.
+    This avoids colliding with company-scoped leave types that reuse the
+    same codes across multiple organizations.
     """
     for definition in POLICY_LEAVE_TYPE_DEFINITIONS:
         LeaveType.objects.get_or_create(
+            company=None,
             code=definition["code"],
             defaults={
                 "name": definition["name"],
