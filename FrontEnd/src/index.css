@@ -245,7 +245,7 @@ body.ltr textarea.ant-input {
   background: transparent !important;
   border-right: none !important;
   padding: 4px 0 24px !important;
-  font-size: 13px !important;
+  font-size: 15px !important;
 }
 
 /* ─── Section groups (flat) ─ */
@@ -261,7 +261,7 @@ body.ltr textarea.ant-input {
 
 .modern-sidebar .ant-menu-item-group-title {
   color: var(--sb-section-color, rgba(255,255,255,0.25)) !important;
-  font-size: 10px !important;
+  font-size: 12px !important;
   font-weight: 700 !important;
   letter-spacing: 0.14em !important;
   text-transform: uppercase !important;
@@ -309,7 +309,7 @@ body.ltr textarea.ant-input {
   border-radius: 8px !important;
   margin: 1px 0 !important;
   width: 100% !important;
-  font-size: 13px !important;
+  font-size: 15px !important;
   font-weight: 400 !important;
   transition: background 0.13s ease, color 0.13s ease !important;
   position: relative !important;
@@ -369,7 +369,7 @@ html[dir='rtl'] .modern-sidebar .ant-menu-item-selected::before {
   color: rgba(255, 255, 255, 0.48) !important;
   border-radius: 8px !important;
   margin: 1px 0 !important;
-  font-size: 13px !important;
+  font-size: 15px !important;
   font-weight: 400 !important;
   transition: background 0.13s ease, color 0.13s ease !important;
 }
@@ -408,7 +408,7 @@ html[dir='rtl'] .modern-sidebar .ant-menu-item-selected::before {
 .modern-sidebar .ant-menu-sub .ant-menu-item {
   height: 32px !important;
   line-height: 32px !important;
-  font-size: 12.5px !important;
+  font-size: 14.5px !important;
   font-weight: 400 !important;
   color: rgba(255, 255, 255, 0.35) !important;
   margin: 1px 0 !important;
