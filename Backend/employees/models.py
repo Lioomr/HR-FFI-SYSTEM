@@ -227,3 +227,72 @@ class EmployeeImport(models.Model):
         ordering = ["-created_at"]
         verbose_name = _("Employee Import")
         verbose_name_plural = _("Employee Imports")
+
+
+class EmployeeDeletionRequest(models.Model):
+    class Status(models.TextChoices):
+        PENDING_CEO = "PENDING_CEO", _("Pending CEO")
+        REJECTED = "REJECTED", _("Rejected")
+        EXECUTED = "EXECUTED", _("Executed")
+
+    company = models.ForeignKey(
+        OrganizationNode,
+        on_delete=models.PROTECT,
+        related_name="employee_deletion_requests",
+    )
+    employee_profile = models.ForeignKey(
+        "employees.EmployeeProfile",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="deletion_requests",
+    )
+    target_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="employee_deletion_targets",
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="employee_deletion_requests_created",
+    )
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="employee_deletion_requests_approved",
+    )
+    rejected_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="employee_deletion_requests_rejected",
+    )
+    reason = models.TextField()
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING_CEO)
+    request_snapshot = models.JSONField(default=dict, blank=True)
+    execution_snapshot = models.JSONField(default=dict, blank=True)
+    rejection_reason = models.TextField(blank=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    rejected_at = models.DateTimeField(null=True, blank=True)
+    executed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["company", "status"], name="emp_delreq_company_status_idx"),
+            models.Index(fields=["employee_profile", "status"], name="emp_delreq_profile_status_idx"),
+        ]
+
+    def __str__(self):
+        employee_id = self.request_snapshot.get("employee_id") or self.employee_profile_id or "unknown"
+        return f"Delete:{employee_id}:{self.status}"

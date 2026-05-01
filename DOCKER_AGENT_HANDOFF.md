@@ -93,6 +93,8 @@ Reasoning:
 - Debug enabled
 - Local hosts and CORS
 - Local DB values (`db`, `5432`, `postgres/postgres`)
+- `BACKEND_PUBLIC_URL` for email/download links that must hit Django directly
+- `EMAIL_DISPLAY_TIME_ZONE` for human-facing timestamps in emails (for example `Asia/Riyadh`)
 - Safe for local containerized development only
 
 ### `Backend/.env.production.example`
@@ -104,6 +106,7 @@ Reasoning:
   - Real `DJANGO_ALLOWED_HOSTS`
   - Real `CORS_ALLOWED_ORIGINS`
   - Real `CSRF_TRUSTED_ORIGINS`
+  - Real `BACKEND_PUBLIC_URL` pointing at the public Django/API origin
   - Secure DB credentials
   - `DEFAULT_FROM_EMAIL`
   - `BIRD_API_KEY`
@@ -178,6 +181,7 @@ After boot:
   - Frontend build arg `VITE_API_BASE_URL`
 - If emails are not delivered but API calls succeed, check Bird suppression lists.
   Bird may return `InvalidPayload` with message `all contact identifiers are suppressed`.
+- If email attachment links open the frontend 404 page, verify `BACKEND_PUBLIC_URL` points to the public backend/API host rather than the SPA host.
 
 ## 9) Agent Rules for Future Docker Changes
 

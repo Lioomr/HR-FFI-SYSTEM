@@ -79,6 +79,9 @@ class Asset(models.Model):
     mac_address = models.CharField(max_length=100, blank=True)
     operating_system = models.CharField(max_length=100, blank=True)
 
+    last_label_printed_at = models.DateTimeField(null=True, blank=True)
+    label_print_count = models.PositiveIntegerField(default=0)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -87,6 +90,7 @@ class Asset(models.Model):
         indexes = [
             models.Index(fields=["status", "type"], name="assets_asset_status_type_idx"),
             models.Index(fields=["warranty_expiry"], name="assets_asset_warranty_idx"),
+            models.Index(fields=["last_label_printed_at"], name="asset_last_label_idx"),
         ]
 
     def __str__(self):

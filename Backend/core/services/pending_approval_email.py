@@ -75,7 +75,7 @@ def get_cfo_approver_users():
 
 
 def get_ceo_approver_users():
-    return _active_profile_users_by_department(CEO_APPROVER_DEPARTMENT_ID).distinct()
+    return (_active_users_in_groups(["CEO", "SystemAdmin"]) | _active_profile_users_by_department(CEO_APPROVER_DEPARTMENT_ID)).distinct()
 
 
 def get_disbursement_approver_users():

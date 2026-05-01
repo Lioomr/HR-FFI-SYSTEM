@@ -1,6 +1,7 @@
 import os
 from datetime import timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.core.exceptions import ImproperlyConfigured
 from corsheaders.defaults import default_headers
@@ -116,6 +117,8 @@ MIDDLEWARE = [
 
 # Email / Bird
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
+BACKEND_PUBLIC_URL = os.environ.get("BACKEND_PUBLIC_URL", "")
+EMAIL_DISPLAY_TIME_ZONE = os.environ.get("EMAIL_DISPLAY_TIME_ZONE", "")
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "no-reply@fficontracting.com")
 NOTIFICATION_HTTP_TIMEOUT_SECONDS = int(os.environ.get("NOTIFICATION_HTTP_TIMEOUT_SECONDS", "10"))
 PASSWORD_RESET_TOKEN_TTL_SECONDS = int(os.environ.get("PASSWORD_RESET_TOKEN_TTL_SECONDS", "3600"))
@@ -144,6 +147,14 @@ if not BIRD_API_KEY:
     BIRD_API_KEY = BIRD_ACCESS_KEY
 if not BIRD_CHANNEL_ID:
     BIRD_CHANNEL_ID = BIRD_EMAIL_CHANNEL_ID
+
+if EMAIL_DISPLAY_TIME_ZONE:
+    try:
+        EMAIL_DISPLAY_TZINFO = ZoneInfo(EMAIL_DISPLAY_TIME_ZONE)
+    except ZoneInfoNotFoundError:
+        raise ImproperlyConfigured(f"EMAIL_DISPLAY_TIME_ZONE '{EMAIL_DISPLAY_TIME_ZONE}' is invalid.")
+else:
+    EMAIL_DISPLAY_TZINFO = None
 
 CORS_ALLOWED_ORIGINS = _env_list(
     "CORS_ALLOWED_ORIGINS",

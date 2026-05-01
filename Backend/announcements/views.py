@@ -1,4 +1,5 @@
 import os
+import re
 
 from django.contrib.auth import get_user_model
 from django.core import signing
@@ -6,6 +7,7 @@ from django.core.files.base import ContentFile
 from django.db.models import Min, Q
 from django.db.models.functions import TruncMinute
 from django.http import FileResponse
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -30,6 +32,13 @@ from .utils import ANNOUNCEMENT_ATTACHMENT_SALT
 from .utils import send_announcement_email, send_announcement_whatsapp
 
 User = get_user_model()
+
+
+def _download_filename(file_name):
+    filename = os.path.basename(file_name)
+    stem, extension = os.path.splitext(filename)
+    stem = re.sub(r"_[A-Za-z0-9]{7}$", "", stem)
+    return f"{stem}{extension}"
 
 
 class AnnouncementViewSet(viewsets.ModelViewSet):
@@ -333,7 +342,7 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         if not announcement.attachment:
             return error("Attachment not found.", status=status.HTTP_404_NOT_FOUND)
 
-        filename = os.path.basename(announcement.attachment.name)
+        filename = _download_filename(announcement.attachment.name)
         disposition = "attachment" if request.query_params.get("download") == "1" else "inline"
         announcement.attachment.open("rb")
         response = FileResponse(announcement.attachment, content_type="application/pdf")
@@ -342,7 +351,7 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get"], url_path="attachment-public")
     def attachment_public(self, request, *args, **kwargs):
-        announcement = self.get_object()
+        announcement = get_object_or_404(Announcement.objects.filter(is_active=True), pk=kwargs.get("pk"))
         if not announcement.attachment:
             return error("Attachment not found.", status=status.HTTP_404_NOT_FOUND)
 
@@ -364,10 +373,11 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         if payload.get("announcement_id") != announcement.id:
             return error("Unauthorized", status=status.HTTP_401_UNAUTHORIZED)
 
-        filename = os.path.basename(announcement.attachment.name)
+        filename = _download_filename(announcement.attachment.name)
         announcement.attachment.open("rb")
         response = FileResponse(announcement.attachment, content_type="application/pdf")
-        response["Content-Disposition"] = f'inline; filename="{filename}"'
+        disposition = "attachment" if request.query_params.get("download", "1") != "0" else "inline"
+        response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
         return response
 
     def update(self, request, *args, **kwargs):

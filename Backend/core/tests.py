@@ -9,7 +9,7 @@ from django.utils.translation import override
 from rest_framework.test import APITestCase
 
 from audit.models import AuditLog
-from core.permissions import get_role
+from core.permissions import get_role, is_department_ceo_approver_user
 from core.responses import error
 from core.services import (
     build_pending_approval_item,
@@ -35,6 +35,14 @@ class RoleResolutionTests(TestCase):
         user.groups.add(cfo_group)
 
         self.assertEqual(get_role(user), "CFO")
+
+    def test_ceo_group_user_is_global_ceo_approver(self):
+        user_model = get_user_model()
+        user = user_model.objects.create_user(email="ceo-role@test.com", password="password")
+        ceo_group, _ = Group.objects.get_or_create(name="CEO")
+        user.groups.add(ceo_group)
+
+        self.assertTrue(is_department_ceo_approver_user(user))
 
 
 class HrSummaryViewTests(APITestCase):

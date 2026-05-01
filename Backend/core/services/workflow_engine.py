@@ -66,6 +66,13 @@ WORKFLOW_TEMPLATES = {
             {"key": "ceo", "title": "CEO Review", "approver_role": "ceo", "order": 3, "is_optional": True},
         ],
     },
+    "employee_deletion_request": {
+        "name": "Employee Deletion Workflow",
+        "module_key": "employees",
+        "stages": [
+            {"key": "ceo", "title": "CEO Review", "approver_role": "ceo", "order": 1},
+        ],
+    },
 }
 
 
@@ -101,6 +108,7 @@ def _build_action_url_path(workflow_key: str, role: str, object_id: int) -> str:
         ("asset_return_request", "manager"): "/manager/team-requests?tab=asset-returns",
         ("asset_return_request", "hr"): "/hr/assets",
         ("asset_return_request", "ceo"): "/ceo/assets/return-requests",
+        ("employee_deletion_request", "ceo"): f"/ceo/employees/deletion-requests/{object_id}",
     }
     return route_map.get((workflow_key, role), "")
 
@@ -144,6 +152,8 @@ def get_or_create_workflow_definition(workflow_key: str) -> WorkflowDefinition:
 
 
 def _get_subject_user(instance):
+    if hasattr(instance, "target_user"):
+        return getattr(instance, "target_user", None)
     if hasattr(instance, "employee"):
         return instance.employee
     if hasattr(instance, "employee_profile"):
@@ -783,6 +793,92 @@ def _legacy_events_for_asset_return(instance) -> list[WorkflowEvent]:
     return events
 
 
+def _legacy_status_snapshot_for_employee_deletion(instance):
+    from employees.models import EmployeeDeletionRequest
+
+    status = WorkflowInstance.Status.SUBMITTED
+    current_stage = "ceo"
+    current_role = "ceo"
+    terminal_at = None
+
+    if instance.status == EmployeeDeletionRequest.Status.REJECTED:
+        status = WorkflowInstance.Status.REJECTED
+        current_stage = ""
+        current_role = ""
+        terminal_at = instance.rejected_at or instance.updated_at
+    elif instance.status == EmployeeDeletionRequest.Status.EXECUTED:
+        status = WorkflowInstance.Status.APPROVED
+        current_stage = ""
+        current_role = ""
+        terminal_at = instance.executed_at or instance.approved_at or instance.updated_at
+
+    return {
+        "status": status,
+        "current_stage": current_stage,
+        "current_role": current_role,
+        "current_actor_user": _resolve_current_actor(current_role, instance) if current_role else None,
+        "submitted_by": instance.requested_by,
+        "submitted_at": instance.created_at,
+        "decided_at": terminal_at if status in {WorkflowInstance.Status.APPROVED, WorkflowInstance.Status.REJECTED} else None,
+        "cancelled_at": None,
+    }
+
+
+def _legacy_events_for_employee_deletion(instance) -> list[WorkflowEvent]:
+    from employees.models import EmployeeDeletionRequest
+
+    events = [
+        WorkflowEvent(
+            signature=f"employee-delete:submitted:{instance.id}:{instance.created_at.isoformat()}",
+            action=WorkflowAction.Action.SUBMIT,
+            approver_role="",
+            from_status="draft",
+            to_status="submitted",
+            from_stage="",
+            to_stage="ceo",
+            actor=instance.requested_by,
+            note=instance.reason or "",
+            at=instance.created_at,
+            metadata={"legacy_signature": "submitted", "workflow_key": "employee_deletion_request"},
+        )
+    ]
+
+    if instance.status == EmployeeDeletionRequest.Status.REJECTED and instance.rejected_at:
+        events.append(
+            WorkflowEvent(
+                signature=f"employee-delete:rejected:{instance.id}:{instance.rejected_at.isoformat()}",
+                action=WorkflowAction.Action.REJECT,
+                approver_role="ceo",
+                from_status="submitted",
+                to_status="rejected",
+                from_stage="ceo",
+                to_stage="",
+                actor=instance.rejected_by,
+                note=instance.rejection_reason or "",
+                at=instance.rejected_at,
+                metadata={"legacy_signature": "ceo", "workflow_key": "employee_deletion_request"},
+            )
+        )
+    elif instance.status == EmployeeDeletionRequest.Status.EXECUTED and instance.executed_at:
+        events.append(
+            WorkflowEvent(
+                signature=f"employee-delete:approved:{instance.id}:{instance.executed_at.isoformat()}",
+                action=WorkflowAction.Action.APPROVE,
+                approver_role="ceo",
+                from_status="submitted",
+                to_status="approved",
+                from_stage="ceo",
+                to_stage="",
+                actor=instance.approved_by,
+                note=instance.reason or "",
+                at=instance.executed_at,
+                metadata={"legacy_signature": "ceo", "workflow_key": "employee_deletion_request"},
+            )
+        )
+
+    return events
+
+
 def _adapter_for_instance(instance):
     class_name = instance.__class__.__name__
     if class_name == "LeaveRequest":
@@ -793,6 +889,12 @@ def _adapter_for_instance(instance):
         return "attendance_request", _legacy_status_snapshot_for_attendance, _legacy_events_for_attendance
     if class_name == "AssetReturnRequest":
         return "asset_return_request", _legacy_status_snapshot_for_asset_return, _legacy_events_for_asset_return
+    if class_name == "EmployeeDeletionRequest":
+        return (
+            "employee_deletion_request",
+            _legacy_status_snapshot_for_employee_deletion,
+            _legacy_events_for_employee_deletion,
+        )
     raise ValueError(f"Unsupported workflow instance class: {class_name}")
 
 
@@ -987,6 +1089,11 @@ def build_pending_approval_item(workflow: WorkflowInstance) -> dict[str, Any] | 
         asset = getattr(obj, "asset", None)
         action = f"Asset Return: {getattr(asset, 'asset_code', obj.pk)}"
         request_type = "ASSET"
+    elif workflow_key == "employee_deletion_request":
+        snapshot = getattr(obj, "request_snapshot", {}) or {}
+        name = snapshot.get("full_name") or snapshot.get("employee_id") or f"Request #{obj.pk}"
+        action = "Employee hard delete request"
+        request_type = "EMPLOYEE_DELETION"
     else:
         profile = getattr(obj, "employee_profile", None)
         user = getattr(profile, "user", None)

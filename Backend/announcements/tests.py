@@ -3,6 +3,8 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.core import signing
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
 from django.utils import timezone
 from rest_framework import status
@@ -12,6 +14,7 @@ from employees.models import EmployeeProfile
 from organization.models import OrganizationNode, UserOrganizationAccess
 
 from .models import Announcement
+from .utils import ANNOUNCEMENT_ATTACHMENT_SALT, _announcement_attachment_url, _format_announcement_published_at
 
 User = get_user_model()
 
@@ -185,3 +188,53 @@ class MeetingAnnouncementTests(APITestCase):
         self.assertEqual(data["google_meet_url"], "https://meet.google.com/abc-defg-hij")
         self.assertEqual(data["microsoft_teams_url"], "https://teams.microsoft.com/l/meetup-join/example")
         self.assertEqual(data["zoom_url"], "https://zoom.us/j/123456789")
+
+    def test_public_attachment_link_downloads_pdf(self):
+        attachment = SimpleUploadedFile("notice.pdf", b"%PDF-1.4 test pdf", content_type="application/pdf")
+        announcement = Announcement.objects.create(
+            company=self.company,
+            title="Policy Notice",
+            content="Please download the attached notice.",
+            target_roles=["EMPLOYEE"],
+            publish_to_dashboard=True,
+            publish_to_email=True,
+            created_by=self.hr,
+            attachment=attachment,
+        )
+        token = signing.dumps({"announcement_id": announcement.id}, salt=ANNOUNCEMENT_ATTACHMENT_SALT)
+
+        response = self.client.get(
+            f"/api/announcements/{announcement.id}/attachment-public",
+            {"token": token, "download": 1},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('attachment; filename="notice.pdf"', response["Content-Disposition"])
+
+    @override_settings(BACKEND_PUBLIC_URL="http://localhost:8000", FRONTEND_URL="http://localhost:5173")
+    def test_attachment_email_link_uses_backend_public_url(self):
+        attachment = SimpleUploadedFile("notice.pdf", b"%PDF-1.4 test pdf", content_type="application/pdf")
+        announcement = Announcement.objects.create(
+            company=self.company,
+            title="Policy Notice",
+            content="Please download the attached notice.",
+            target_roles=["EMPLOYEE"],
+            publish_to_dashboard=True,
+            publish_to_email=True,
+            created_by=self.hr,
+            attachment=attachment,
+        )
+
+        attachment_url = _announcement_attachment_url(announcement)
+
+        self.assertTrue(attachment_url.startswith("http://localhost:8000/api/announcements/"))
+        self.assertIn("attachment-public?token=", attachment_url)
+        self.assertTrue(attachment_url.endswith("&download=1"))
+
+    @override_settings(EMAIL_DISPLAY_TIME_ZONE="Asia/Riyadh")
+    def test_announcement_email_timestamp_uses_configured_display_timezone(self):
+        published_at = timezone.make_aware(timezone.datetime(2026, 5, 1, 11, 54))
+
+        formatted = _format_announcement_published_at(published_at)
+
+        self.assertEqual(formatted, "2026-05-01 02:54 PM +03")

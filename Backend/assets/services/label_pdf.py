@@ -21,14 +21,21 @@ LABEL_SIZES_MM = {
 PAPER_SIZES = {*LABEL_SIZES_MM.keys(), "A4_GRID"}
 
 
-def _build_qr_png(code: str) -> bytes:
+def _build_qr_png(payload: str) -> bytes:
     qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_Q, box_size=10, border=2)
-    qr.add_data(code)
+    qr.add_data(payload)
     qr.make(fit=True)
     image = qr.make_image(fill_color="black", back_color="white").convert("RGB")
     buffer = io.BytesIO()
     image.save(buffer, format="PNG")
     return buffer.getvalue()
+
+
+def _build_qr_payload(code: str, qr_base_url: str) -> str:
+    base = (qr_base_url or "").rstrip("/")
+    if not base:
+        return code
+    return f"{base}/hr/assets/lookup?code={code}"
 
 
 def _build_code128_png(code: str) -> bytes:
@@ -47,6 +54,10 @@ def _build_code128_png(code: str) -> bytes:
     return buffer.getvalue()
 
 
+def _is_rtl(text: object) -> bool:
+    return any("؀" <= ch <= "ۿ" for ch in str(text or ""))
+
+
 def _truncate_to_width(text: object, font_name: str, font_size: float, max_width: float) -> str:
     value = str(text or "").strip()
     if not value:
@@ -63,10 +74,32 @@ def _truncate_to_width(text: object, font_name: str, font_size: float, max_width
     return (result or value[:1]) + ellipsis
 
 
-def _draw_single_label(pdf, x: float, y: float, w: float, h: float, asset, company=None) -> None:
+def _resolve_label_name(asset, name_language: str) -> str:
+    name_en = str(getattr(asset, "name_en", "") or "").strip()
+    name_ar = str(getattr(asset, "name_ar", "") or "").strip()
+    code = str(getattr(asset, "asset_code", "") or "")
+    if name_language == "ar":
+        return name_ar or name_en or code
+    if name_language == "auto":
+        return name_ar or name_en or code
+    return name_en or name_ar or code
+
+
+def _draw_single_label(
+    pdf,
+    x: float,
+    y: float,
+    w: float,
+    h: float,
+    asset,
+    company=None,
+    name_language: str = "en",
+    qr_base_url: str = "",
+) -> None:
     regular, bold = font_pair()
     code = str(getattr(asset, "asset_code", "") or "")
-    name = str(getattr(asset, "name_en", "") or code)
+    name = _resolve_label_name(asset, name_language)
+    qr_payload = _build_qr_payload(code, qr_base_url)
     size_key = _size_key(w, h)
     padding = 2.0 * mm
 
@@ -98,7 +131,7 @@ def _draw_single_label(pdf, x: float, y: float, w: float, h: float, asset, compa
     qr_size = min(qr_size, h - 10, w * 0.44)
     qr_x = x + w - qr_size - padding
     qr_y = y + h - qr_size - 2.2 * mm
-    pdf.drawImage(ImageReader(io.BytesIO(_build_qr_png(code))), qr_x, qr_y, width=qr_size, height=qr_size, mask="auto")
+    pdf.drawImage(ImageReader(io.BytesIO(_build_qr_png(qr_payload))), qr_x, qr_y, width=qr_size, height=qr_size, mask="auto")
 
     text_right = qr_x - 3
     text_width = max(text_right - (x + padding), 20)
@@ -108,13 +141,23 @@ def _draw_single_label(pdf, x: float, y: float, w: float, h: float, asset, compa
     pdf.setFillColorRGB(*PALETTE_RGB["dark_text"])
     pdf.setFont(bold, name_size)
     name_y = y + (18.3 * mm if size_key != "60X40" else 25.5 * mm)
-    pdf.drawString(x + padding, name_y, _truncate_to_width(name, bold, name_size, text_width))
+    truncated_name = _truncate_to_width(name, bold, name_size, text_width)
+    shaped_name = shape_ar(truncated_name)
+    name_x = x + w - padding - pdfmetrics.stringWidth(shaped_name, bold, name_size) if _is_rtl(truncated_name) else x + padding
+    pdf.drawString(name_x, name_y, shaped_name)
 
     company_name = str(getattr(company, "name", "") or "")
     if size_key == "60X40" and company_name:
         pdf.setFont(regular, 5.5)
         pdf.setFillColorRGB(*PALETTE_RGB["muted_text"])
-        pdf.drawString(x + padding, y + 21.0 * mm, _truncate_to_width(shape_ar(company_name), regular, 5.5, text_width))
+        truncated_company = _truncate_to_width(company_name, regular, 5.5, text_width)
+        shaped_company = shape_ar(truncated_company)
+        company_x = (
+            x + w - padding - pdfmetrics.stringWidth(shaped_company, regular, 5.5)
+            if _is_rtl(truncated_company)
+            else x + padding
+        )
+        pdf.drawString(company_x, y + 21.0 * mm, shaped_company)
 
     pdf.setFillColorRGB(*PALETTE_RGB["dark_text"])
     pdf.setFont(bold, code_size)
@@ -143,20 +186,30 @@ def _size_key(w: float, h: float) -> str:
     return f"{width_mm}X{height_mm}"
 
 
-def _render_strip(assets, size_mm: tuple[int, int]) -> bytes:
+def _render_strip(assets, size_mm: tuple[int, int], name_language: str, qr_base_url: str) -> bytes:
     register_fonts()
     width, height = size_mm[0] * mm, size_mm[1] * mm
     buffer = io.BytesIO()
     pdf = pdf_canvas.Canvas(buffer, pagesize=(width, height))
     pdf.setTitle("Asset Labels")
     for asset in assets:
-        _draw_single_label(pdf, 0, 0, width, height, asset, getattr(asset, "company", None))
+        _draw_single_label(
+            pdf,
+            0,
+            0,
+            width,
+            height,
+            asset,
+            getattr(asset, "company", None),
+            name_language=name_language,
+            qr_base_url=qr_base_url,
+        )
         pdf.showPage()
     pdf.save()
     return buffer.getvalue()
 
 
-def _render_grid_a4(assets) -> bytes:
+def _render_grid_a4(assets, name_language: str, qr_base_url: str) -> bytes:
     register_fonts()
     buffer = io.BytesIO()
     width, height = A4
@@ -190,16 +243,25 @@ def _render_grid_a4(assets) -> bytes:
             cell_h - 3 * mm,
             asset,
             getattr(asset, "company", None),
+            name_language=name_language,
+            qr_base_url=qr_base_url,
         )
 
     pdf.save()
     return buffer.getvalue()
 
 
-def render_labels_pdf(assets, paper_size: str) -> bytes:
+def render_labels_pdf(
+    assets,
+    paper_size: str,
+    name_language: str = "en",
+    qr_base_url: str = "",
+) -> bytes:
     if paper_size not in PAPER_SIZES:
         raise ValueError("Unsupported paper size.")
+    if name_language not in {"en", "ar", "auto"}:
+        name_language = "en"
     assets = list(assets)
     if paper_size == "A4_GRID":
-        return _render_grid_a4(assets)
-    return _render_strip(assets, LABEL_SIZES_MM[paper_size])
+        return _render_grid_a4(assets, name_language, qr_base_url)
+    return _render_strip(assets, LABEL_SIZES_MM[paper_size], name_language, qr_base_url)

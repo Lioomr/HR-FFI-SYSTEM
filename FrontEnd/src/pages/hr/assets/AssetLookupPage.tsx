@@ -3,6 +3,7 @@ import { Alert, Button, Card, Col, Descriptions, Empty, Input, Row, Space, Spin,
 import type { InputRef } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { ScanOutlined } from "@ant-design/icons";
+import { useSearchParams } from "react-router-dom";
 import dayjs from "dayjs";
 
 import PageHeader from "../../../components/ui/PageHeader";
@@ -40,9 +41,25 @@ function formatDateTime(value?: string | null) {
   return parsed.isValid() ? parsed.format("YYYY-MM-DD HH:mm") : value;
 }
 
+function extractAssetCode(raw: string): string {
+  const cleaned = raw.replace(/[\r\n\t]/g, "").trim();
+  if (!cleaned) return "";
+  // Scanners on phones / shaped URLs read a full URL — pull ?code= out of it.
+  const match = cleaned.match(/[?&]code=([^&#\s]+)/i);
+  if (match) {
+    try {
+      return decodeURIComponent(match[1]).trim();
+    } catch {
+      return match[1].trim();
+    }
+  }
+  return cleaned;
+}
+
 export default function AssetLookupPage() {
   const { t, language } = useI18n();
   const inputRef = useRef<InputRef>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [rawValue, setRawValue] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AssetLookupResult | null>(null);
@@ -55,11 +72,19 @@ export default function AssetLookupPage() {
 
   useEffect(() => {
     focusInput();
+    const initialCode = searchParams.get("code");
+    if (initialCode) {
+      void runLookup(initialCode);
+      // Clear the param so a manual refresh doesn't re-trigger the same lookup.
+      const next = new URLSearchParams(searchParams);
+      next.delete("code");
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const runLookup = async (value: string) => {
-    // HID scanners often emit trailing CR/LF/TAB — strip and trim.
-    const code = value.replace(/[\r\n\t]/g, "").trim();
+    const code = extractAssetCode(value);
     if (!code) {
       setRawValue("");
       focusInput();
