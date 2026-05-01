@@ -32,10 +32,13 @@ build/
 .cursorrules
 .playwright-cli/
 tmp/
+/tmp_*.py
 ai_evals/
 .github/copilot-instructions.md
 /*.docx
 /*.exe
+/*.sql
+/*.tar
 /*_blank*.pdf
 /leave_request_*.pdf
 *AutoRecovered*.pdf
