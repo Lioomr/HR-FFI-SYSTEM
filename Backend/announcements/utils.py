@@ -33,6 +33,12 @@ def _announcement_attachment_url(announcement):
 
     base_url = (getattr(settings, "BACKEND_PUBLIC_URL", "") or "").rstrip("/")
     if not base_url:
+        allowed_hosts = getattr(settings, "ALLOWED_HOSTS", []) or []
+        public_host = next((host for host in allowed_hosts if host and host not in {"*", ".localhost"}), "")
+        if public_host:
+            scheme = "http" if getattr(settings, "DEBUG", False) else "https"
+            base_url = f"{scheme}://{public_host}".rstrip("/")
+    if not base_url:
         return None
 
     token = signing.dumps({"announcement_id": announcement.id}, salt=ANNOUNCEMENT_ATTACHMENT_SALT)

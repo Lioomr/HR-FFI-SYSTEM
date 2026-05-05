@@ -612,19 +612,19 @@ def send_delegation_notification_email(
 ) -> dict[str, Any]:
     service = BirdEmailService()
     if recipient_role == "delegate":
-        title = "You have been delegated approval authority"
-        title_ar = "تم تفويضك بصلاحية الموافقة"
+        title = "You have been assigned as an alternative employee"
+        title_ar = "تم تعيينك كموظف بديل لصلاحية الموافقة"
         message = (
-            f"{from_user_name} has delegated approval responsibilities to you for the specified period."
+            f"{from_user_name} has assigned you as an alternative employee for the specified period."
         )
-        message_ar = "قام المستخدم الأصلي بتفويض مسؤوليات الموافقة إليك خلال الفترة المحددة."
+        message_ar = "قام المستخدم الأصلي بإسناد مسؤوليات الموافقة إليك كموظف بديل خلال الفترة المحددة."
     else:
-        title = "Your delegation rule is active"
-        title_ar = "تم تفعيل قاعدة التفويض الخاصة بك"
+        title = "Your alternative employee option is active"
+        title_ar = "تم تفعيل خيار الموظف البديل الخاص بك"
         message = (
-            f"Your approval responsibilities have been delegated to {to_user_name} for the specified period."
+            f"Your approval responsibilities have been assigned to {to_user_name} for the specified period."
         )
-        message_ar = "تم تفويض مسؤوليات الموافقة الخاصة بك إلى المستخدم الآخر خلال الفترة المحددة."
+        message_ar = "تم إسناد مسؤوليات الموافقة الخاصة بك إلى الموظف البديل خلال الفترة المحددة."
 
     context = _base_email_context(
         title=title,
@@ -633,13 +633,13 @@ def send_delegation_notification_email(
         message=message,
         message_ar=message_ar,
         action_url=action_url,
-        action_text="View Delegation",
-        action_text_ar="عرض التفويض",
+        action_text="View Details",
+        action_text_ar="عرض الموظف البديل",
     )
     context.update(
         {
-            "subtitle": "Delegation details",
-            "subtitle_ar": "تفاصيل التفويض",
+            "subtitle": "Details",
+            "subtitle_ar": "تفاصيل الموظف البديل",
             "from_user_name": from_user_name,
             "to_user_name": to_user_name,
             "start_at": start_at,
@@ -647,7 +647,7 @@ def send_delegation_notification_email(
             "reason": reason,
         }
     )
-    subject = f"Delegation rule active: {from_user_name} -> {to_user_name}"
+    subject = f"Alternative employee active: {from_user_name} -> {to_user_name}"
     return service.send_template_email(
         to_email=to_email,
         subject=subject,
