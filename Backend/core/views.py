@@ -32,6 +32,7 @@ from audit.models import AuditLog
 from audit.views import apply_filters, AuditPagination
 from organization.models import OrganizationNode
 from organization.services import (
+    filter_queryset_by_accessible_companies,
     filter_queryset_by_company_scope,
     get_active_organization_for_request,
     get_user_accessible_company_ids,
@@ -536,7 +537,7 @@ def _resolve_obligation_parent(parent_type: str, parent_id: str):
 def _user_can_view_parent(request, parent) -> bool:
     role = get_role(request.user)
     if role in {"SystemAdmin", "HRManager", "CEO"}:
-        return filter_queryset_by_company_scope(LeaveRequest.objects.filter(pk=parent.pk), request).exists()
+        return filter_queryset_by_accessible_companies(LeaveRequest.objects.filter(pk=parent.pk), request).exists()
     if getattr(parent, "employee_id", None) == request.user.id:
         return True
     workflow = sync_workflow(parent, actor=request.user)

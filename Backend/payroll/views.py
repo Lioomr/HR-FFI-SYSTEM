@@ -33,7 +33,12 @@ from core.pdf import (
 )
 from core.responses import error, success
 from employees.permissions import IsHRManagerOrAdmin
-from organization.services import ensure_company_write_allowed, filter_queryset_by_company_scope, get_active_company_for_request
+from organization.services import (
+    ensure_company_write_allowed,
+    filter_queryset_by_accessible_companies,
+    filter_queryset_by_company_scope,
+    get_active_company_for_request,
+)
 
 from .models import PayrollRun, PayrollRunItem, Payslip
 from .permissions import IsEmployeeOnly
@@ -634,7 +639,11 @@ class PayrollRunViewSet(
     pagination_class = StandardPagination
 
     def get_queryset(self):
-        qs = filter_queryset_by_company_scope(PayrollRun.objects.all(), self.request)
+        base_qs = PayrollRun.objects.all()
+        if self.action == "list":
+            qs = filter_queryset_by_company_scope(base_qs, self.request)
+        else:
+            qs = filter_queryset_by_accessible_companies(base_qs, self.request)
         year = self.request.query_params.get("year")
         if year:
             try:
@@ -832,7 +841,7 @@ class PayrollRunExportView(APIView):
     permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
 
     def get(self, request, pk):
-        run = get_object_or_404(PayrollRun.objects.all(), pk=pk)
+        run = get_object_or_404(filter_queryset_by_accessible_companies(PayrollRun.objects.all(), request), pk=pk)
         return _export_payroll_run_response(request, run)
 
 

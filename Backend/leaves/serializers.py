@@ -8,6 +8,7 @@ from rest_framework import serializers
 
 from core.services import get_obligations_summary, get_workflow_snapshot, sync_leave_obligations
 from employees.models import EmployeeProfile
+from organization.services import get_active_company_for_request
 
 from .models import LeaveBalanceAdjustment, LeaveRequest, LeaveType
 from .utils import (
@@ -181,6 +182,18 @@ class LeaveRequestCreateSerializer(serializers.ModelSerializer):
                 employee_profile__company_id=profile.company_id,
             ).exclude(id=request.user.id)
 
+    def _resolve_company(self, leave_type=None):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        profile = getattr(user, "employee_profile", None) if user else None
+        if profile and profile.company_id:
+            return profile.company
+        if leave_type and leave_type.company_id:
+            return leave_type.company
+        if request:
+            return get_active_company_for_request(request)
+        return None
+
     def validate(self, attrs):
         start = attrs.get("start_date")
         end = attrs.get("end_date")
@@ -215,9 +228,10 @@ class LeaveRequestCreateSerializer(serializers.ModelSerializer):
         # Overlap Check
         # Check against APPROVED or PENDING requests
         # PENDING includes SUBMITTED, PENDING_MANAGER, PENDING_HR
+        company = self._resolve_company(leave_type)
         overlap_qs = LeaveRequest.objects.filter(
             employee=user,
-            company=getattr(getattr(user, "employee_profile", None), "company", None),
+            company=company,
             status__in=[
                 LeaveRequest.RequestStatus.APPROVED,
                 LeaveRequest.RequestStatus.SUBMITTED,
