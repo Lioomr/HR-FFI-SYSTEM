@@ -25,7 +25,7 @@ from core.services import (
 from leaves.permissions import IsOwnerOrHR
 
 from .models import LoanRequest
-from organization.services import filter_queryset_by_company_scope
+from organization.services import filter_queryset_by_accessible_companies, filter_queryset_by_company_scope
 from .permissions import (
     IsCEOApproverOrAdmin,
     IsCFOApproverOrAdmin,
@@ -296,10 +296,10 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        return filter_queryset_by_company_scope(
-            LoanRequest.objects.filter(is_active=True).select_related("employee", "employee_profile", "company"),
-            self.request,
-        )
+        qs = LoanRequest.objects.filter(is_active=True).select_related("employee", "employee_profile", "company")
+        if self.action == "list":
+            return filter_queryset_by_company_scope(qs, self.request)
+        return filter_queryset_by_accessible_companies(qs, self.request)
 
     def get_serializer_class(self):
         if self.action == "create":
@@ -620,10 +620,11 @@ class ManagerLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         role = get_role(self.request.user)
-        base_qs = filter_queryset_by_company_scope(
-            LoanRequest.objects.filter(is_active=True).select_related("employee", "employee_profile", "company"),
-            self.request,
-        )
+        qs = LoanRequest.objects.filter(is_active=True).select_related("employee", "employee_profile", "company")
+        if self.action == "list":
+            base_qs = filter_queryset_by_company_scope(qs, self.request)
+        else:
+            base_qs = filter_queryset_by_accessible_companies(qs, self.request)
         if role == "SystemAdmin":
             return base_qs
 
@@ -742,10 +743,11 @@ class CFOLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ["-created_at"]
 
     def get_queryset(self):
-        qs = filter_queryset_by_company_scope(
-            LoanRequest.objects.filter(is_active=True).select_related("employee", "employee_profile", "company"),
-            self.request,
-        )
+        qs = LoanRequest.objects.filter(is_active=True).select_related("employee", "employee_profile", "company")
+        if self.action == "list":
+            qs = filter_queryset_by_company_scope(qs, self.request)
+        else:
+            qs = filter_queryset_by_accessible_companies(qs, self.request)
         qs = _scope_cfo_queryset_for_user(self.request.user, qs)
         status_param = self.request.query_params.get("status")
         if status_param:
@@ -902,10 +904,11 @@ class CEOLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ["-created_at"]
 
     def get_queryset(self):
-        qs = filter_queryset_by_company_scope(
-            LoanRequest.objects.filter(is_active=True).select_related("employee", "employee_profile", "company"),
-            self.request,
-        )
+        qs = LoanRequest.objects.filter(is_active=True).select_related("employee", "employee_profile", "company")
+        if self.action == "list":
+            qs = filter_queryset_by_company_scope(qs, self.request)
+        else:
+            qs = filter_queryset_by_accessible_companies(qs, self.request)
         qs = _scope_ceo_queryset_for_user(self.request.user, qs)
         status_param = self.request.query_params.get("status")
         if status_param:
@@ -1017,10 +1020,11 @@ class DisbursementLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ["-created_at"]
 
     def get_queryset(self):
-        qs = filter_queryset_by_company_scope(
-            LoanRequest.objects.filter(is_active=True).select_related("employee", "employee_profile", "company"),
-            self.request,
-        )
+        qs = LoanRequest.objects.filter(is_active=True).select_related("employee", "employee_profile", "company")
+        if self.action == "list":
+            qs = filter_queryset_by_company_scope(qs, self.request)
+        else:
+            qs = filter_queryset_by_accessible_companies(qs, self.request)
         qs = _scope_disbursement_queryset_for_user(self.request.user, qs)
         status_param = self.request.query_params.get("status")
         if status_param:

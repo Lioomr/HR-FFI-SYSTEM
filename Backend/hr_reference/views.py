@@ -4,7 +4,12 @@ from rest_framework.permissions import IsAuthenticated
 from audit.utils import audit
 from core.permissions import IsHRManagerOrAdmin
 from core.responses import success
-from organization.services import ensure_company_write_allowed, filter_queryset_by_company_scope, get_active_company_for_request
+from organization.services import (
+    ensure_company_write_allowed,
+    filter_queryset_by_accessible_companies,
+    filter_queryset_by_company_scope,
+    get_active_company_for_request,
+)
 
 from .models import Department, Position, Sponsor, TaskGroup
 from .serializers import (
@@ -21,7 +26,10 @@ class BaseReferenceViewSet(viewsets.ModelViewSet):
     audit_entity = ""
 
     def get_queryset(self):
-        return filter_queryset_by_company_scope(self.queryset.filter(is_active=True), self.request)
+        qs = self.queryset.filter(is_active=True)
+        if self.action == "list":
+            return filter_queryset_by_company_scope(qs, self.request)
+        return filter_queryset_by_accessible_companies(qs, self.request)
 
     def list(self, request, *args, **kwargs):
         response = super().list(request, *args, **kwargs)

@@ -42,7 +42,11 @@ from core.services import (
 from core.services.request_obligations import is_business_trip_leave
 from employees.models import EmployeeProfile
 from employees.permissions import IsHRManagerOrAdmin
-from organization.services import filter_queryset_by_company_scope, get_active_company_for_request
+from organization.services import (
+    filter_queryset_by_accessible_companies,
+    filter_queryset_by_company_scope,
+    get_active_company_for_request,
+)
 
 from .models import LeaveBalanceAdjustment, LeaveRequest, LeaveType
 from .notifications import (
@@ -199,7 +203,7 @@ def _approval_path_rows(instance: LeaveRequest):
     if instance.delegated_to_id or instance.delegate_decision_at:
         rows.append(
             (
-                "Delegate Review",
+                "Alternative Employee Review",
                 instance.delegate_decision_at,
                 instance.delegate_decision_note or instance.status,
                 _display_user(instance.delegate_decision_by or instance.delegated_to),
@@ -268,7 +272,7 @@ def _leave_type_labels(leave_type: LeaveType | None) -> tuple[str, str]:
 
 _LEAVE_STATUS_LABELS = {
     LeaveRequest.RequestStatus.SUBMITTED: ("Submitted", "تم التقديم"),
-    LeaveRequest.RequestStatus.PENDING_DELEGATE: ("Pending Delegate", "بانتظار المفوض"),
+    LeaveRequest.RequestStatus.PENDING_DELEGATE: ("Pending Alternative Employee", "بانتظار الموظف البديل"),
     LeaveRequest.RequestStatus.PENDING_MANAGER: ("Pending Manager", "بانتظار المدير"),
     LeaveRequest.RequestStatus.PENDING_HR: ("Pending HR", "بانتظار الموارد البشرية"),
     LeaveRequest.RequestStatus.PENDING_CEO: ("Pending CEO", "بانتظار المدير التنفيذي"),
@@ -280,7 +284,7 @@ _LEAVE_STATUS_LABELS = {
 _LEAVE_STAGE_LABELS = {
     "Submitted": ("Submitted", "تم التقديم"),
     "HR Manual Entry": ("HR Manual Entry", "إدخال يدوي من الموارد البشرية"),
-    "Delegate Review": ("Delegate Review", "مراجعة المفوض"),
+    "Alternative Employee Review": ("Alternative Employee Review", "مراجعة الموظف البديل"),
     "Manager Review": ("Manager Review", "مراجعة المدير"),
     "HR Review": ("HR Review", "مراجعة الموارد البشرية"),
     "CEO Review": ("CEO Review", "مراجعة المدير التنفيذي"),
@@ -674,7 +678,9 @@ class LeaveTypeViewSet(viewsets.ModelViewSet):
         audit(self.request, "leave_type_updated", entity="leave_type", entity_id=instance.id, metadata=serializer.data)
 
     def destroy(self, request, *args, **kwargs):
-        instance = self.get_object()
+        instance = filter_queryset_by_accessible_companies(self.get_queryset(), request).filter(pk=kwargs.get("pk")).first()
+        if not instance:
+            return error("Not found", errors=["Not found."], status=404)
         self.perform_destroy(instance)
         return success({"id": instance.id, "is_active": instance.is_active})
 
@@ -692,16 +698,32 @@ class LeaveTypeViewSet(viewsets.ModelViewSet):
 
     # Wrap responses
     def retrieve(self, request, *args, **kwargs):
-        response = super().retrieve(request, *args, **kwargs)
-        return success(response.data)
+        instance = filter_queryset_by_accessible_companies(self.get_queryset(), request).filter(pk=kwargs.get("pk")).first()
+        if not instance:
+            return error("Not found", errors=["Not found."], status=404)
+        return success(self.get_serializer(instance).data)
 
     def create(self, request, *args, **kwargs):
         response = super().create(request, *args, **kwargs)
         return success(response.data, status=response.status_code)
 
     def update(self, request, *args, **kwargs):
-        response = super().update(request, *args, **kwargs)
-        return success(response.data)
+        instance = filter_queryset_by_accessible_companies(self.get_queryset(), request).filter(pk=kwargs.get("pk")).first()
+        if not instance:
+            return error("Not found", errors=["Not found."], status=404)
+        serializer = self.get_serializer(instance, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return success(serializer.data)
+
+    def partial_update(self, request, *args, **kwargs):
+        instance = filter_queryset_by_accessible_companies(self.get_queryset(), request).filter(pk=kwargs.get("pk")).first()
+        if not instance:
+            return error("Not found", errors=["Not found."], status=404)
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return success(serializer.data)
 
 
 class LeaveRequestViewSet(viewsets.ModelViewSet):
@@ -737,19 +759,17 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         return LeaveRequestSerializer
 
     def _unscoped_queryset(self):
-        return filter_queryset_by_company_scope(
-            LeaveRequest.objects.filter(is_active=True).select_related(
-                "employee",
-                "employee__employee_profile",
-                "leave_type",
-                "decided_by",
-                "manager_decision_by",
-                "delegated_to",
-                "delegate_decision_by",
-                "company",
-            ),
-            self.request,
+        qs = LeaveRequest.objects.filter(is_active=True).select_related(
+            "employee",
+            "employee__employee_profile",
+            "leave_type",
+            "decided_by",
+            "manager_decision_by",
+            "delegated_to",
+            "delegate_decision_by",
+            "company",
         )
+        return filter_queryset_by_accessible_companies(qs, self.request)
 
     def get_permissions(self):
         if self.action == "create":
@@ -812,10 +832,14 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         else:
             initial_status = LeaveRequest.RequestStatus.PENDING_HR
 
+        profile = getattr(self.request.user, "employee_profile", None)
+        leave_type = serializer.validated_data.get("leave_type")
         instance = serializer.save(
             employee=self.request.user,
-            employee_profile=getattr(self.request.user, "employee_profile", None),
-            company=getattr(getattr(self.request.user, "employee_profile", None), "company", None),
+            employee_profile=profile,
+            company=getattr(profile, "company", None)
+            or getattr(leave_type, "company", None)
+            or get_active_company_for_request(self.request),
             status=initial_status,
         )
         sync_workflow(instance, actor=self.request.user)
@@ -1290,7 +1314,9 @@ class HRManualLeaveRequestViewSet(viewsets.ModelViewSet):
     http_method_names = ["post", "patch", "delete", "get", "head", "options"]
 
     def get_queryset(self):
-        return filter_queryset_by_company_scope(super().get_queryset(), self.request)
+        if self.action == "list":
+            return filter_queryset_by_company_scope(super().get_queryset(), self.request)
+        return filter_queryset_by_accessible_companies(super().get_queryset(), self.request)
 
     def _notify_manager(self, instance: LeaveRequest, action_label: str):
         try:
@@ -1421,12 +1447,13 @@ class ManagerLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         role = get_role(self.request.user)
-        base_qs = filter_queryset_by_company_scope(
-            LeaveRequest.objects.filter(is_active=True).select_related(
-                "employee", "leave_type", "employee__employee_profile", "employee__employee_profile__manager_profile"
-            ),
-            self.request,
+        qs = LeaveRequest.objects.filter(is_active=True).select_related(
+            "employee", "leave_type", "employee__employee_profile", "employee__employee_profile__manager_profile"
         )
+        if self.action == "list":
+            base_qs = filter_queryset_by_company_scope(qs, self.request)
+        else:
+            base_qs = filter_queryset_by_accessible_companies(qs, self.request)
         if role == "SystemAdmin":
             return base_qs
 
@@ -1697,7 +1724,9 @@ class LeaveBalanceAdjustmentViewSet(viewsets.ModelViewSet):
     filterset_fields = ["employee", "leave_type"]
 
     def get_queryset(self):
-        return filter_queryset_by_company_scope(super().get_queryset(), self.request)
+        if self.action == "list":
+            return filter_queryset_by_company_scope(super().get_queryset(), self.request)
+        return filter_queryset_by_accessible_companies(super().get_queryset(), self.request)
 
     def perform_create(self, serializer):
         instance = serializer.save(created_by=self.request.user)
@@ -1728,13 +1757,13 @@ class CEOLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         # CEO sees all requests pending CEO approval
-        return filter_queryset_by_company_scope(
-            LeaveRequest.objects.filter(
-                status=LeaveRequest.RequestStatus.PENDING_CEO,
-                is_active=True,
-            ).select_related("employee", "leave_type", "employee__employee_profile"),
-            self.request,
-        )
+        qs = LeaveRequest.objects.filter(
+            status=LeaveRequest.RequestStatus.PENDING_CEO,
+            is_active=True,
+        ).select_related("employee", "leave_type", "employee__employee_profile")
+        if self.action == "list":
+            return filter_queryset_by_company_scope(qs, self.request)
+        return filter_queryset_by_accessible_companies(qs, self.request)
 
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):

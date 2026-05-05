@@ -30,6 +30,7 @@ from leaves.models import LeaveRequest
 from loans.models import LoanRequest
 from organization.services import (
     ensure_company_write_allowed,
+    filter_queryset_by_accessible_companies,
     filter_queryset_by_company_scope,
     get_active_company_for_request,
 )
@@ -299,7 +300,10 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         base_qs = _with_effective_status(base_qs)
 
         if role in ["SystemAdmin", "HRManager"]:
-            scoped_qs = filter_queryset_by_company_scope(base_qs.all(), self.request)
+            if self.action in ["list", "export", "expiries"]:
+                scoped_qs = filter_queryset_by_company_scope(base_qs.all(), self.request)
+            else:
+                scoped_qs = filter_queryset_by_accessible_companies(base_qs.all(), self.request)
             return scoped_qs | base_qs.filter(company__isnull=True)
 
         return base_qs.filter(user=user)
@@ -781,6 +785,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
                         publish_to_email=False,
                         publish_to_sms=False,
                         created_by=request.user,
+                        company=profile.company,
                     )
                     delivery["announcement"] = {"sent": True, "announcement_id": announcement.id}
             except Exception as exc:
@@ -877,7 +882,9 @@ class EmployeeDeletionRequestViewSet(viewsets.ModelViewSet):
         role = get_role(self.request.user)
         if role in ["CEO", "SystemAdmin"]:
             return base_qs
-        return filter_queryset_by_company_scope(base_qs, self.request)
+        if self.action == "list":
+            return filter_queryset_by_company_scope(base_qs, self.request)
+        return filter_queryset_by_accessible_companies(base_qs, self.request)
 
     def get_serializer_class(self):
         if self.action == "create":

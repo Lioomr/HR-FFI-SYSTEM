@@ -31,6 +31,7 @@ from leaves.models import LeaveRequest
 from loans.permissions import IsManagerOrAdmin, get_active_workflow_config
 from organization.services import (
     ensure_company_write_allowed,
+    filter_queryset_by_accessible_companies,
     filter_queryset_by_company_scope,
     get_active_company_for_request,
 )
@@ -350,7 +351,10 @@ class AssetViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
 
     def get_queryset(self):
-        return filter_queryset_by_company_scope(Asset.objects.all().prefetch_related("assignments"), self.request)
+        qs = Asset.objects.all().prefetch_related("assignments")
+        if self.action == "list":
+            return filter_queryset_by_company_scope(qs, self.request)
+        return filter_queryset_by_accessible_companies(qs, self.request)
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -474,7 +478,11 @@ class AssetViewSet(viewsets.ModelViewSet):
         employee = serializer.validated_data["employee"]
 
         with transaction.atomic():
-            asset = Asset.objects.select_for_update().filter(pk=pk).first()
+            asset = (
+                filter_queryset_by_accessible_companies(Asset.objects.select_for_update(), request)
+                .filter(pk=pk)
+                .first()
+            )
             if not asset:
                 return error("Not found", status=status.HTTP_404_NOT_FOUND)
             if AssetAssignment.objects.select_for_update().filter(asset=asset, is_active=True).exists():
@@ -514,7 +522,11 @@ class AssetViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         with transaction.atomic():
-            asset = Asset.objects.select_for_update().filter(pk=pk).first()
+            asset = (
+                filter_queryset_by_accessible_companies(Asset.objects.select_for_update(), request)
+                .filter(pk=pk)
+                .first()
+            )
             if not asset:
                 return error("Not found", status=status.HTTP_404_NOT_FOUND)
             assignment = (
@@ -709,7 +721,7 @@ class AssetViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path=r"labels/jobs/(?P<job_id>[^/.]+)/pdf")
     def label_job_pdf(self, request, job_id=None):
-        job = filter_queryset_by_company_scope(PrintedLabelJob.objects.all(), request).filter(pk=job_id).first()
+        job = filter_queryset_by_accessible_companies(PrintedLabelJob.objects.all(), request).filter(pk=job_id).first()
         if not job or not job.pdf_file:
             return error("Not found", errors=["Not found."], status=status.HTTP_404_NOT_FOUND)
         try:
@@ -783,7 +795,11 @@ class AssetViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["post"], url_path=r"return-requests/(?P<request_id>[^/.]+)/approve")
     def approve_return_request(self, request, request_id=None):
         instance = (
-            AssetReturnRequest.objects.select_related("asset", "employee", "employee__user")
+            filter_queryset_by_accessible_companies(
+                AssetReturnRequest.objects.select_related("asset", "employee", "employee__user"),
+                request,
+                field_name="asset__company_id",
+            )
             .filter(pk=request_id)
             .first()
         )
@@ -814,7 +830,11 @@ class AssetViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["post"], url_path=r"return-requests/(?P<request_id>[^/.]+)/reject")
     def reject_return_request(self, request, request_id=None):
         instance = (
-            AssetReturnRequest.objects.select_related("asset", "employee", "employee__user")
+            filter_queryset_by_accessible_companies(
+                AssetReturnRequest.objects.select_related("asset", "employee", "employee__user"),
+                request,
+                field_name="asset__company_id",
+            )
             .filter(pk=request_id)
             .first()
         )
@@ -1069,7 +1089,7 @@ class AssetViewSet(viewsets.ModelViewSet):
         )
 
     def _resolve_damage_report_for_pdf(self, request, report_id):
-        qs = filter_queryset_by_company_scope(
+        qs = filter_queryset_by_accessible_companies(
             AssetDamageReport.objects.select_related("asset", "employee", "employee__user"),
             request,
             field_name="asset__company_id",
@@ -1085,7 +1105,7 @@ class AssetViewSet(viewsets.ModelViewSet):
         return None
 
     def _resolve_return_request_for_pdf(self, request, request_id):
-        qs = filter_queryset_by_company_scope(
+        qs = filter_queryset_by_accessible_companies(
             AssetReturnRequest.objects.select_related("asset", "employee", "employee__user"),
             request,
             field_name="asset__company_id",
@@ -1174,11 +1194,11 @@ class CEOAssetDamageReportViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ["-reported_at"]
 
     def get_queryset(self):
-        qs = filter_queryset_by_company_scope(
-            AssetDamageReport.objects.select_related("asset", "employee", "employee__user"),
-            self.request,
-            field_name="asset__company_id",
-        )
+        qs = AssetDamageReport.objects.select_related("asset", "employee", "employee__user")
+        if self.action == "list":
+            qs = filter_queryset_by_company_scope(qs, self.request, field_name="asset__company_id")
+        else:
+            qs = filter_queryset_by_accessible_companies(qs, self.request, field_name="asset__company_id")
         status_param = self.request.query_params.get("status")
         if status_param:
             return qs.filter(status=status_param)
@@ -1243,11 +1263,11 @@ class ManagerAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         role = get_role(self.request.user)
-        base_qs = filter_queryset_by_company_scope(
-            AssetReturnRequest.objects.select_related("asset", "employee", "employee__user"),
-            self.request,
-            field_name="asset__company_id",
-        )
+        qs = AssetReturnRequest.objects.select_related("asset", "employee", "employee__user")
+        if self.action == "list":
+            base_qs = filter_queryset_by_company_scope(qs, self.request, field_name="asset__company_id")
+        else:
+            base_qs = filter_queryset_by_accessible_companies(qs, self.request, field_name="asset__company_id")
         if role == "SystemAdmin":
             return base_qs
 
@@ -1353,11 +1373,11 @@ class CEOAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ["-requested_at"]
 
     def get_queryset(self):
-        qs = filter_queryset_by_company_scope(
-            AssetReturnRequest.objects.select_related("asset", "employee", "employee__user"),
-            self.request,
-            field_name="asset__company_id",
-        )
+        qs = AssetReturnRequest.objects.select_related("asset", "employee", "employee__user")
+        if self.action == "list":
+            qs = filter_queryset_by_company_scope(qs, self.request, field_name="asset__company_id")
+        else:
+            qs = filter_queryset_by_accessible_companies(qs, self.request, field_name="asset__company_id")
         status_param = self.request.query_params.get("status")
         if status_param:
             return qs.filter(status=status_param)

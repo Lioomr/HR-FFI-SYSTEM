@@ -13,7 +13,7 @@ from core.services import get_workflow_snapshot
 from leaves.models import LeaveRequest, LeaveType
 from leaves.views import _approval_path_rows
 from leaves.views import _leave_type_labels
-from organization.models import OrganizationNode
+from organization.models import OrganizationNode, UserOrganizationAccess
 
 User = get_user_model()
 
@@ -125,6 +125,35 @@ class LeaveManagementTests(TestCase):
         response = self.client.post("/api/leaves/leave-requests/", data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["data"]["status"], LeaveRequest.RequestStatus.PENDING_CEO)
+
+    def test_hr_manager_self_request_without_profile_uses_leave_type_company(self):
+        company = OrganizationNode.objects.create(
+            code="FFI_HR_SELF",
+            name="FFI HR Self",
+            node_type=OrganizationNode.NodeType.COMPANY,
+        )
+        UserOrganizationAccess.objects.create(user=self.hr, organization=company)
+        leave_type = LeaveType.objects.create(company=company, name="Company Annual", code="COMPANY_ANNUAL")
+
+        self.client.force_authenticate(user=self.hr)
+        start = date.today() + timedelta(days=20)
+        end = date.today() + timedelta(days=21)
+        response = self.client.post(
+            "/api/leaves/leave-requests/",
+            {"leave_type": leave_type.id, "start_date": str(start), "end_date": str(end), "reason": "HR leave"},
+            HTTP_X_ACTIVE_COMPANY_ID=str(company.id),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        request_id = response.data["data"]["id"]
+        request = LeaveRequest.objects.get(id=request_id)
+        self.assertEqual(request.company, company)
+
+        response = self.client.get(
+            f"/api/leaves/leave-requests/{request_id}/",
+            HTTP_X_ACTIVE_COMPANY_ID=str(company.id),
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_annual_leave_allowed_after_six_months_service(self):
         from employees.models import EmployeeProfile
@@ -454,6 +483,51 @@ class LeaveManagementTests(TestCase):
             HTTP_X_ACTIVE_COMPANY_ID=str(company.id),
             secure=True,
         )
+        self.assertEqual(detail_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(detail_response.data["data"]["id"], request_obj.id)
+        self.assertTrue(detail_response.data["data"]["workflow"]["can_approve"])
+
+    def test_delegated_employee_can_view_assigned_request_without_active_company_header(self):
+        from employees.models import EmployeeProfile
+
+        company = OrganizationNode.objects.create(
+            code="LEAVE_DELEGATE_DIRECT_CO",
+            name="Leave Delegate Direct Co",
+            node_type=OrganizationNode.NodeType.COMPANY,
+        )
+        EmployeeProfile.objects.create(
+            user=self.emp1,
+            company=company,
+            employee_id="EMP-DEL-DIRECT-SEND",
+            full_name="Delegation Sender",
+            hire_date=date.today() - timedelta(days=700),
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        )
+        EmployeeProfile.objects.create(
+            user=self.emp2,
+            company=company,
+            employee_id="EMP-DEL-DIRECT-RECV",
+            full_name="Delegation Receiver",
+            hire_date=date.today() - timedelta(days=700),
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        )
+
+        request_obj = LeaveRequest.objects.create(
+            employee=self.emp1,
+            employee_profile=self.emp1.employee_profile,
+            company=company,
+            leave_type=self.annual_leave,
+            start_date=date.today() + timedelta(days=70),
+            end_date=date.today() + timedelta(days=71),
+            status=LeaveRequest.RequestStatus.PENDING_DELEGATE,
+            delegated_to=self.emp2,
+            delegation_note="Cover urgent items.",
+        )
+        get_workflow_snapshot(request_obj, actor=self.emp2)
+
+        self.client.force_authenticate(user=self.emp2)
+        detail_response = self.client.get(f"/api/leaves/leave-requests/{request_obj.id}/")
+
         self.assertEqual(detail_response.status_code, status.HTTP_200_OK)
         self.assertEqual(detail_response.data["data"]["id"], request_obj.id)
         self.assertTrue(detail_response.data["data"]["workflow"]["can_approve"])
