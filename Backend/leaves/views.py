@@ -199,7 +199,7 @@ def _approval_path_rows(instance: LeaveRequest):
     if instance.delegated_to_id or instance.delegate_decision_at:
         rows.append(
             (
-                "Delegate Review",
+                "Alternative Employee Review",
                 instance.delegate_decision_at,
                 instance.delegate_decision_note or instance.status,
                 _display_user(instance.delegate_decision_by or instance.delegated_to),
@@ -268,7 +268,7 @@ def _leave_type_labels(leave_type: LeaveType | None) -> tuple[str, str]:
 
 _LEAVE_STATUS_LABELS = {
     LeaveRequest.RequestStatus.SUBMITTED: ("Submitted", "تم التقديم"),
-    LeaveRequest.RequestStatus.PENDING_DELEGATE: ("Pending Delegate", "بانتظار المفوض"),
+    LeaveRequest.RequestStatus.PENDING_DELEGATE: ("Pending Alternative Employee", "بانتظار الموظف البديل"),
     LeaveRequest.RequestStatus.PENDING_MANAGER: ("Pending Manager", "بانتظار المدير"),
     LeaveRequest.RequestStatus.PENDING_HR: ("Pending HR", "بانتظار الموارد البشرية"),
     LeaveRequest.RequestStatus.PENDING_CEO: ("Pending CEO", "بانتظار المدير التنفيذي"),
@@ -280,7 +280,7 @@ _LEAVE_STATUS_LABELS = {
 _LEAVE_STAGE_LABELS = {
     "Submitted": ("Submitted", "تم التقديم"),
     "HR Manual Entry": ("HR Manual Entry", "إدخال يدوي من الموارد البشرية"),
-    "Delegate Review": ("Delegate Review", "مراجعة المفوض"),
+    "Alternative Employee Review": ("Alternative Employee Review", "مراجعة الموظف البديل"),
     "Manager Review": ("Manager Review", "مراجعة المدير"),
     "HR Review": ("HR Review", "مراجعة الموارد البشرية"),
     "CEO Review": ("CEO Review", "مراجعة المدير التنفيذي"),

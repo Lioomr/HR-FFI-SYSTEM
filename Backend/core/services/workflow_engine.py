@@ -31,7 +31,7 @@ WORKFLOW_TEMPLATES = {
         "name": "Leave Request Workflow",
         "module_key": "leaves",
         "stages": [
-            {"key": "delegate", "title": "Delegate Review", "approver_role": "delegate", "order": 0, "is_optional": True},
+            {"key": "delegate", "title": "Alternative Employee Review", "approver_role": "delegate", "order": 0, "is_optional": True},
             {"key": "manager", "title": "Manager Review", "approver_role": "manager", "order": 1},
             {"key": "hr", "title": "HR Review", "approver_role": "hr", "order": 2},
             {"key": "ceo", "title": "CEO Review", "approver_role": "ceo", "order": 3, "is_optional": True},
