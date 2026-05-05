@@ -76,14 +76,18 @@ export default function RequestLeavePage() {
                     });
                     setBalances(map);
                 }
+            } catch (e) {
+                console.error(e);
+                notification.error({ message: t("common.error"), description: t("common.tryAgain") });
+            }
 
+            try {
                 const employeesRes = await listDelegationCandidates();
                 if (!isApiError(employeesRes)) {
                     setDelegationCandidates(employeesRes.data || []);
                 }
             } catch (e) {
                 console.error(e);
-                notification.error({ message: t("common.error"), description: t("common.tryAgain") });
             } finally {
                 setLoading(false);
             }
