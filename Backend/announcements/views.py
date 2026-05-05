@@ -22,6 +22,7 @@ from employees.permissions import IsHRManagerOrAdmin
 from organization.models import OrganizationNode
 from organization.services import (
     ensure_company_write_allowed,
+    filter_queryset_by_accessible_companies,
     filter_queryset_by_company_scope,
     get_active_company_for_request,
 )
@@ -128,7 +129,11 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
 
         # HR Managers and Admins can see all announcements
         if user_role in ["ADMIN", "HR_MANAGER"]:
-            qs = filter_queryset_by_company_scope(Announcement.objects.filter(is_active=True), self.request)
+            qs = Announcement.objects.filter(is_active=True)
+            if self.action == "list":
+                qs = filter_queryset_by_company_scope(qs, self.request)
+            else:
+                qs = filter_queryset_by_accessible_companies(qs, self.request)
             return self._collapse_broadcast_duplicates(qs)
 
         # Managers can also see what they created for their team.

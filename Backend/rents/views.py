@@ -11,7 +11,12 @@ from core.pagination import StandardPagination
 from core.permissions import get_role
 from core.responses import error, success
 from employees.permissions import IsHRManagerOnly
-from organization.services import ensure_company_write_allowed, filter_queryset_by_company_scope, get_active_company_for_request
+from organization.services import (
+    ensure_company_write_allowed,
+    filter_queryset_by_accessible_companies,
+    filter_queryset_by_company_scope,
+    get_active_company_for_request,
+)
 
 from .models import Rent, RentType
 from .serializers import (
@@ -144,7 +149,9 @@ class RentTypeViewSet(viewsets.ModelViewSet):
     queryset = RentType.objects.filter(is_active=True).order_by("code")
 
     def get_queryset(self):
-        return filter_queryset_by_company_scope(super().get_queryset(), self.request)
+        if self.action == "list":
+            return filter_queryset_by_company_scope(super().get_queryset(), self.request)
+        return filter_queryset_by_accessible_companies(super().get_queryset(), self.request)
 
     def get_serializer_class(self):
         if self.action in ["create", "update", "partial_update"]:
@@ -200,7 +207,9 @@ class RentViewSet(viewsets.ModelViewSet):
     queryset = Rent.objects.filter(is_active=True).select_related("rent_type", "asset", "created_by", "updated_by")
 
     def get_queryset(self):
-        return filter_queryset_by_company_scope(super().get_queryset(), self.request)
+        if self.action == "list":
+            return filter_queryset_by_company_scope(super().get_queryset(), self.request)
+        return filter_queryset_by_accessible_companies(super().get_queryset(), self.request)
 
     def get_serializer_class(self):
         if self.action in ["create", "update", "partial_update"]:

@@ -157,6 +157,28 @@ def filter_queryset_by_company_scope(queryset, request, field_name: str = "compa
     return queryset.filter(**{f"{field_name}__in": list(accessible_company_ids)})
 
 
+def filter_queryset_by_accessible_companies(queryset, request, field_name: str = "company_id", include_null: bool = False):
+    """
+    Scope direct object lookups to every company the user can access.
+
+    List views should usually use filter_queryset_by_company_scope because they
+    intentionally follow the active company selector. Direct links from emails,
+    workflow inboxes, and notifications should use this helper so a valid object
+    does not disappear only because the user currently selected a different
+    accessible company.
+    """
+    accessible_company_ids = get_user_accessible_company_ids(request.user)
+    if not accessible_company_ids:
+        return queryset.none()
+
+    scoped = queryset.filter(**{f"{field_name}__in": list(accessible_company_ids)})
+    if include_null:
+        from django.db.models import Q
+
+        scoped = queryset.filter(Q(**{f"{field_name}__in": list(accessible_company_ids)}) | Q(**{field_name: None}))
+    return scoped
+
+
 def serialize_organization(node: OrganizationNode) -> dict:
     return {
         "id": node.id,
