@@ -176,7 +176,7 @@ export default function DelegationRulesPage() {
       render: (_, record) => (
         <Popconfirm
           title={t("common.delete", "Delete")}
-          description={t("delegation.deleteConfirm", "Remove this delegation rule?")}
+          description={t("delegation.deleteConfirm", "Remove this alternative employee option?")}
           onConfirm={async () => {
             try {
               const res = await deleteDelegationRule(record.id);
@@ -215,7 +215,7 @@ export default function DelegationRulesPage() {
       setRows((prev) => [res.data, ...prev]);
       setOpen(false);
       form.resetFields();
-      message.success(t("delegation.createSuccess", "Delegation rule created."));
+      message.success(t("delegation.createSuccess", "Alternative employee option created."));
     } catch (err: any) {
       message.error(err?.message || t("error.generic"));
     } finally {
@@ -224,11 +224,11 @@ export default function DelegationRulesPage() {
   }
 
   if (unauthorized) return <Unauthorized403Page />;
-  if (mode === "loading") return <LoadingState title={t("delegation.loading", "Loading delegation rules")} />;
+  if (mode === "loading") return <LoadingState title={t("delegation.loading", "Loading alternative employee options")} />;
   if (mode === "error") {
     return (
       <ErrorState
-        title={t("delegation.loadFailed", "Delegation rules unavailable")}
+        title={t("delegation.loadFailed", "Alternative employee options unavailable")}
         description={error || t("delegation.tryAgain", "Please try again.")}
         onRetry={loadData}
       />
@@ -238,11 +238,11 @@ export default function DelegationRulesPage() {
   return (
     <div>
       <PageHeader
-        title={t("delegation.title", "Delegation Rules")}
+        title={t("delegation.title", "Alternative Employee Option")}
         subtitle={t("delegation.subtitle", "Reassign workflow responsibilities during absence or temporary coverage.")}
         actions={
           <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
-            {t("delegation.create", "New delegation")}
+            {t("delegation.create", "New alternative employee")}
           </Button>
         }
       />
@@ -253,7 +253,7 @@ export default function DelegationRulesPage() {
           <Typography.Text type="secondary">
             {t(
               "delegation.summaryBody",
-              "Rules here are applied by the shared workflow engine to manager and role-based approval assignments."
+              "Options here are applied by the shared workflow engine to manager and role-based approval assignments."
             )}
           </Typography.Text>
         </Space>
@@ -263,14 +263,14 @@ export default function DelegationRulesPage() {
           columns={columns}
           dataSource={rows}
           pagination={{ pageSize: 10, hideOnSinglePage: true }}
-          locale={{ emptyText: t("delegation.empty", "No delegation rules yet.") }}
+          locale={{ emptyText: t("delegation.empty", "No alternative employee options yet.") }}
           scroll={{ x: 900 }}
         />
       </Card>
 
       <Modal
         open={open}
-        title={t("delegation.create", "New delegation")}
+        title={t("delegation.create", "New alternative employee")}
         onCancel={() => setOpen(false)}
         onOk={() => form.submit()}
         confirmLoading={saving}
@@ -292,7 +292,7 @@ export default function DelegationRulesPage() {
           <Form.Item
             name="to_user_id"
             label={t("common.to", "To")}
-            rules={[{ required: true, message: t("delegation.toRequired", "Choose the delegate user.") }]}
+            rules={[{ required: true, message: t("delegation.toRequired", "Choose the alternative employee.") }]}
           >
             <Select showSearch options={userOptions} optionFilterProp="label" />
           </Form.Item>
