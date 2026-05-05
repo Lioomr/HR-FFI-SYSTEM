@@ -40,7 +40,7 @@ class Migration(migrations.Migration):
             field=models.CharField(
                 choices=[
                     ("submitted", "Submitted"),
-                    ("pending_delegate", "Pending Delegate"),
+                    ("pending_delegate", "Pending Alternative Employee"),
                     ("pending_manager", "Pending Manager"),
                     ("pending_hr", "Pending HR"),
                     ("pending_ceo", "Pending CEO"),

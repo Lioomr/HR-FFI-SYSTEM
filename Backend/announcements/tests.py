@@ -6,6 +6,7 @@ from django.contrib.auth.models import Group
 from django.core import signing
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
+from django.template.loader import render_to_string
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -230,6 +231,48 @@ class MeetingAnnouncementTests(APITestCase):
         self.assertTrue(attachment_url.startswith("http://localhost:8000/api/announcements/"))
         self.assertIn("attachment-public?token=", attachment_url)
         self.assertTrue(attachment_url.endswith("&download=1"))
+
+    @override_settings(BACKEND_PUBLIC_URL="", ALLOWED_HOSTS=["api.asecopro.com"], DEBUG=False)
+    def test_attachment_email_link_falls_back_to_allowed_host(self):
+        attachment = SimpleUploadedFile("notice.pdf", b"%PDF-1.4 test pdf", content_type="application/pdf")
+        announcement = Announcement.objects.create(
+            company=self.company,
+            title="Policy Notice",
+            content="Please download the attached notice.",
+            target_roles=["EMPLOYEE"],
+            publish_to_dashboard=True,
+            publish_to_email=True,
+            created_by=self.hr,
+            attachment=attachment,
+        )
+
+        attachment_url = _announcement_attachment_url(announcement)
+
+        self.assertTrue(attachment_url.startswith("https://api.asecopro.com/api/announcements/"))
+        self.assertIn("attachment-public?token=", attachment_url)
+        self.assertTrue(attachment_url.endswith("&download=1"))
+
+    def test_announcement_email_template_renders_attachment_download_button(self):
+        html = render_to_string(
+            "emails/announcement_notification.html",
+            {
+                "logo_url": "",
+                "contact_email": "hr@ffi.test",
+                "title": "New Company Announcement",
+                "title_ar": "New Company Announcement",
+                "employee_name": "Employee One",
+                "message": "Please download the attachment.",
+                "message_ar": "Please download the attachment.",
+                "announcement_title": "Policy Notice",
+                "publisher_name": "HR",
+                "published_at": "2026-05-04 11:45 AM UTC",
+                "attachment_name": "notice.pdf",
+                "attachment_url": "https://api.asecopro.com/api/announcements/1/attachment-public?token=abc&download=1",
+            },
+        )
+
+        self.assertIn("Download Attachment", html)
+        self.assertIn("https://api.asecopro.com/api/announcements/1/attachment-public", html)
 
     @override_settings(EMAIL_DISPLAY_TIME_ZONE="Asia/Riyadh")
     def test_announcement_email_timestamp_uses_configured_display_timezone(self):

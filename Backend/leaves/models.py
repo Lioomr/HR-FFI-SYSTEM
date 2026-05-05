@@ -56,7 +56,7 @@ class LeaveRequest(models.Model):
 
     class RequestStatus(models.TextChoices):
         SUBMITTED = "submitted", _("Submitted")
-        PENDING_DELEGATE = "pending_delegate", _("Pending Delegate")
+        PENDING_DELEGATE = "pending_delegate", _("Pending Alternative Employee")
         PENDING_MANAGER = "pending_manager", _("Pending Manager")
         PENDING_HR = "pending_hr", _("Pending HR")
         PENDING_CEO = "pending_ceo", _("Pending CEO")
