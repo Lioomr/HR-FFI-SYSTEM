@@ -8,7 +8,10 @@ from django.utils import timezone
 from django.utils.translation import override
 from rest_framework.test import APITestCase
 
+from assets.models import Asset, AssetReturnRequest
+from attendance.models import AttendanceRecord
 from audit.models import AuditLog
+from core.models import DelegationRule, UserPreference
 from core.permissions import get_role, is_department_ceo_approver_user
 from core.responses import error
 from core.services import (
@@ -18,12 +21,11 @@ from core.services import (
     get_workflow_snapshot,
     sync_workflow,
 )
-from employees.models import EmployeeProfile
+from employees.models import EmployeeDeletionRequest, EmployeeProfile
 from hr_reference.models import Department, Position
-from core.models import DelegationRule, UserPreference
 from leaves.models import LeaveRequest, LeaveType
 from loans.models import LoanRequest
-from organization.models import OrganizationNode
+from organization.models import OrganizationNode, UserOrganizationAccess
 from organization.services import get_default_company
 
 
@@ -326,6 +328,253 @@ class WorkflowSnapshotTests(TestCase):
         pending = get_pending_approvals_for_user(self.delegate_user, limit=10)
         self.assertEqual(len(pending), 1)
         self.assertEqual(pending[0].object_id, loan_request.id)
+
+
+class PendingRequestsApiTests(APITestCase):
+    def setUp(self):
+        self.user_model = get_user_model()
+        self.hr_group, _ = Group.objects.get_or_create(name="HRManager")
+        self.ceo_group, _ = Group.objects.get_or_create(name="CEO")
+        self.company = get_default_company()
+        self.other_company = OrganizationNode.objects.exclude(id=self.company.id).filter(
+            node_type=OrganizationNode.NodeType.COMPANY
+        ).first()
+        self.department = Department.objects.create(code="PEND", name="Pending Department", company=self.company)
+        self.position = Position.objects.create(code="PENDPOS", name="Pending Position", company=self.company)
+        self.other_department = Department.objects.create(
+            code="PENDOTH",
+            name="Pending Other Department",
+            company=self.other_company,
+        )
+        self.other_position = Position.objects.create(
+            code="PENDOTHPOS",
+            name="Pending Other Position",
+            company=self.other_company,
+        )
+
+        self.hr_user = self.user_model.objects.create_user(
+            email="pending-hr@test.com",
+            password="StrongPass123!",
+            full_name="Pending HR",
+        )
+        self.hr_user.groups.add(self.hr_group)
+        EmployeeProfile.objects.create(
+            user=self.hr_user,
+            employee_id="EMP-PENDING-HR",
+            full_name="Pending HR",
+            basic_salary=Decimal("10000.00"),
+            department_ref=self.department,
+            position_ref=self.position,
+            hire_date=date(2024, 1, 1),
+            company=self.company,
+        )
+
+        self.ceo_user = self.user_model.objects.create_user(
+            email="pending-ceo@test.com",
+            password="StrongPass123!",
+            full_name="Pending CEO",
+        )
+        self.ceo_user.groups.add(self.ceo_group)
+        EmployeeProfile.objects.create(
+            user=self.ceo_user,
+            employee_id="EMP-PENDING-CEO",
+            full_name="Pending CEO",
+            basic_salary=Decimal("15000.00"),
+            department_ref=self.department,
+            position_ref=self.position,
+            hire_date=date(2024, 1, 1),
+            company=self.company,
+        )
+
+        self.manager_user = self.user_model.objects.create_user(
+            email="pending-manager@test.com",
+            password="StrongPass123!",
+            full_name="Pending Manager",
+        )
+        self.manager_profile = EmployeeProfile.objects.create(
+            user=self.manager_user,
+            employee_id="EMP-PENDING-MGR",
+            full_name="Pending Manager",
+            basic_salary=Decimal("12000.00"),
+            department_ref=self.department,
+            position_ref=self.position,
+            hire_date=date(2024, 1, 1),
+            company=self.company,
+        )
+
+        self.employee = self.user_model.objects.create_user(
+            email="pending-employee@test.com",
+            password="StrongPass123!",
+            full_name="Pending Employee",
+        )
+        self.employee_profile = EmployeeProfile.objects.create(
+            user=self.employee,
+            employee_id="EMP-PENDING-EMP",
+            full_name="Pending Employee",
+            basic_salary=Decimal("7000.00"),
+            department_ref=self.department,
+            position_ref=self.position,
+            manager_profile=self.manager_profile,
+            hire_date=date(2024, 1, 1),
+            company=self.company,
+        )
+        self.leave_type = LeaveType.objects.create(name="Annual Leave Pending", code="PEND_ANNUAL", company=self.company)
+
+    def _create_hr_pending_requests(self):
+        LeaveRequest.objects.create(
+            employee=self.employee,
+            employee_profile=self.employee_profile,
+            company=self.company,
+            leave_type=self.leave_type,
+            start_date=date(2026, 5, 20),
+            end_date=date(2026, 5, 22),
+            reason="Annual leave",
+            status=LeaveRequest.RequestStatus.PENDING_HR,
+        )
+        LoanRequest.objects.create(
+            employee=self.employee,
+            employee_profile=self.employee_profile,
+            company=self.company,
+            requested_amount=Decimal("2500.00"),
+            reason="School fees",
+            status=LoanRequest.RequestStatus.PENDING_HR,
+        )
+        AttendanceRecord.objects.create(
+            employee_profile=self.employee_profile,
+            date=date(2026, 5, 7),
+            status=AttendanceRecord.Status.PENDING_HR,
+            source=AttendanceRecord.Source.EMPLOYEE,
+        )
+        asset = Asset.objects.create(
+            company=self.company,
+            name_en="Pending Laptop",
+            type=Asset.AssetType.OTHER,
+            flexible_attributes={"kind": "laptop"},
+        )
+        AssetReturnRequest.objects.create(
+            asset=asset,
+            employee=self.employee_profile,
+            note="Returning asset",
+            status=AssetReturnRequest.RequestStatus.PENDING,
+        )
+
+    def test_hr_pending_requests_include_all_hr_workflow_types_and_filters(self):
+        self._create_hr_pending_requests()
+        self.client.force_authenticate(user=self.hr_user)
+
+        response = self.client.get("/api/core/pending-requests/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id))
+
+        self.assertEqual(response.status_code, 200)
+        items = response.data["data"]["items"]
+        self.assertEqual({item["request_type"] for item in items}, {"LEAVE", "LOAN", "ATTENDANCE", "ASSET"})
+        self.assertTrue(all(item["current_approver_role"] == "hr" for item in items))
+        self.assertTrue(all("workflow_id" in item for item in items))
+
+        loan_response = self.client.get(
+            "/api/core/pending-requests/",
+            {"request_type": "LOAN"},
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+        self.assertEqual([item["request_type"] for item in loan_response.data["data"]["items"]], ["LOAN"])
+
+        search_response = self.client.get(
+            "/api/core/pending-requests/",
+            {"search": "school"},
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+        self.assertEqual([item["request_type"] for item in search_response.data["data"]["items"]], ["LOAN"])
+
+    def test_ceo_pending_requests_include_employee_deletion(self):
+        EmployeeDeletionRequest.objects.create(
+            company=self.company,
+            employee_profile=self.employee_profile,
+            target_user=self.employee,
+            requested_by=self.hr_user,
+            reason="Duplicate profile",
+            status=EmployeeDeletionRequest.Status.PENDING_CEO,
+            request_snapshot={"full_name": "Pending Employee", "employee_id": "EMP-PENDING-EMP"},
+        )
+        self.client.force_authenticate(user=self.ceo_user)
+
+        response = self.client.get("/api/core/pending-requests/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id))
+
+        self.assertEqual(response.status_code, 200)
+        items = response.data["data"]["items"]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["request_type"], "EMPLOYEE_DELETION")
+        self.assertEqual(items[0]["review_path"], f"/ceo/employees/deletion-requests/{items[0]['id']}")
+
+    def test_manager_sees_only_direct_actionable_requests(self):
+        LeaveRequest.objects.create(
+            employee=self.employee,
+            employee_profile=self.employee_profile,
+            company=self.company,
+            leave_type=self.leave_type,
+            start_date=date(2026, 5, 20),
+            end_date=date(2026, 5, 22),
+            reason="Manager review",
+            status=LeaveRequest.RequestStatus.PENDING_MANAGER,
+        )
+        LoanRequest.objects.create(
+            employee=self.employee,
+            employee_profile=self.employee_profile,
+            company=self.company,
+            requested_amount=Decimal("2500.00"),
+            reason="HR only",
+            status=LoanRequest.RequestStatus.PENDING_HR,
+        )
+        self.client.force_authenticate(user=self.manager_user)
+
+        response = self.client.get("/api/core/pending-requests/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id))
+
+        self.assertEqual(response.status_code, 200)
+        items = response.data["data"]["items"]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["request_type"], "LEAVE")
+        self.assertEqual(items[0]["current_approver_role"], "manager")
+
+    def test_pending_requests_are_scoped_to_active_company(self):
+        self._create_hr_pending_requests()
+        other_employee = self.user_model.objects.create_user(
+            email="pending-other@test.com",
+            password="StrongPass123!",
+            full_name="Other Company Employee",
+        )
+        other_profile = EmployeeProfile.objects.create(
+            user=other_employee,
+            employee_id="EMP-PENDING-OTHER",
+            full_name="Other Company Employee",
+            basic_salary=Decimal("7000.00"),
+            department_ref=self.other_department,
+            position_ref=self.other_position,
+            hire_date=date(2024, 1, 1),
+            company=self.other_company,
+        )
+        LoanRequest.objects.create(
+            employee=other_employee,
+            employee_profile=other_profile,
+            company=self.other_company,
+            requested_amount=Decimal("9999.00"),
+            reason="Other company loan",
+            status=LoanRequest.RequestStatus.PENDING_HR,
+        )
+        self.client.force_authenticate(user=self.hr_user)
+
+        response = self.client.get("/api/core/pending-requests/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"]["count"], 4)
+        self.assertNotIn("Other company loan", [item["action"] for item in response.data["data"]["items"]])
+
+        UserOrganizationAccess.objects.create(user=self.hr_user, organization=self.company)
+        UserOrganizationAccess.objects.create(user=self.hr_user, organization=self.other_company)
+        head_office = OrganizationNode.objects.get(node_type=OrganizationNode.NodeType.HEAD_OFFICE)
+        UserOrganizationAccess.objects.create(user=self.hr_user, organization=head_office)
+        response = self.client.get("/api/core/pending-requests/", HTTP_X_ACTIVE_COMPANY_ID=str(head_office.id))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"]["count"], 5)
+        self.assertIn(self.other_company.name, {item["company_name"] for item in response.data["data"]["items"]})
 
 
 class DelegationRuleApiTests(APITestCase):

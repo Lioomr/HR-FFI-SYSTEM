@@ -18,6 +18,7 @@ import StatCard from "../../../components/ui/StatCard";
 import Unauthorized403Page from "../../Unauthorized403Page";
 import { getHrSummary } from "../../../services/api/hrSummaryApi";
 import type { HRSummary } from "../../../services/api/hrSummaryApi";
+import { getPendingRequests } from "../../../services/api/pendingRequestsApi";
 import { isApiError } from "../../../services/api/apiTypes";
 import { isForbidden } from "../../../services/api/httpErrors";
 import AnnouncementWidget from "../../../components/announcements/AnnouncementWidget";
@@ -35,17 +36,24 @@ export default function HRDashboardPage() {
     const [error, setError] = useState<string | null>(null);
     const [forbidden, setForbidden] = useState(false);
     const [summary, setSummary] = useState<HRSummary | null>(null);
+    const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
 
     const loadSummary = async () => {
         setLoading(true);
         setError(null);
         setForbidden(false);
         try {
-            const response = await getHrSummary();
+            const [response, pendingResponse] = await Promise.all([
+                getHrSummary(),
+                getPendingRequests({ page: 1, page_size: 1 }),
+            ]);
             if (isApiError(response)) {
                 setError(response.message || t("error.loadDashboard"));
                 setLoading(false);
                 return;
+            }
+            if (!isApiError(pendingResponse)) {
+                setPendingRequestsCount(pendingResponse.data.count || 0);
             }
             setSummary(response.data);
             setLoading(false);
@@ -122,12 +130,12 @@ export default function HRDashboardPage() {
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
                     <StatCard
-                        title={t("hr.dashboard.pendingLeave")}
-                        value={summary?.pending_leaves || 0}
+                        title={t("pendingInbox.title", "Pending Requests")}
+                        value={pendingRequestsCount}
                         icon={<ScheduleOutlined />}
                         color="#8b5cf6"
                         trend={null}
-                        onClick={() => navigate("/hr/leave/requests")}
+                        onClick={() => navigate("/pending-inbox")}
                         animDelay={240}
                     />
                 </Col>

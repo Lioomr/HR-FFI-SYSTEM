@@ -96,7 +96,7 @@ import CFOLoanRequestDetailsPage from "../pages/cfo/CFOLoanRequestDetailsPage";
 import AttendanceMaintenancePage from "../pages/shared/AttendanceMaintenancePage";
 
 import RouteErrorBoundary from "./RouteErrorBoundary";
-
+import PendingInboxPage from "../pages/shared/PendingInboxPage";
 
 
 
@@ -310,6 +310,14 @@ export const routes = [
             children: [
               { path: "finance/loan-requests", element: <LoanInboxPage /> },
               { path: "finance/loan-requests/:id", element: <HrLoanRequestDetailsPage /> },
+            ],
+          },
+
+          // Unified pending inbox (all authenticated roles)
+          {
+            element: <RequireRole roles={["SystemAdmin", "HRManager", "Manager", "CEO", "CFO", "Employee"]} />,
+            children: [
+              { path: "pending-inbox", element: <PendingInboxPage /> },
             ],
           },
         ],

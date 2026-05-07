@@ -25,6 +25,7 @@ import {
   LockOutlined,
   FileTextOutlined,
   HomeOutlined,
+  InboxOutlined,
 } from "@ant-design/icons";
 import type { MenuProps } from "antd";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -175,6 +176,7 @@ function getTitle(pathname: string, t: (key: string, fallback?: string) => strin
   if (pathname.startsWith("/employee/loans")) return t("layout.loanRequests", "Loan Requests");
   if (pathname.startsWith("/employee/delegated-approvals")) return t("layout.delegatedApprovals", "Delegated Approvals");
   if (pathname.startsWith("/employee/assets")) return t("layout.myAssets", "My Assets");
+  if (pathname.startsWith("/pending-inbox")) return t("layout.pendingInbox", "Pending Inbox");
   if (pathname.startsWith("/employee")) return t("layout.employeeSelfService");
   if (pathname.startsWith("/change-password")) return t("layout.changePassword");
   return t("app.title");
@@ -523,6 +525,7 @@ export default function BaseLayout() {
       type: "group",
       label: sectionLabel(t("layout.menu.workInbox", "Work Inbox"), t("layout.menu.approvals", "Approvals")),
       children: [
+        { key: "/pending-inbox", icon: <InboxOutlined />, label: <Link to="/pending-inbox">{t("layout.pendingInbox", "Pending Inbox")}</Link> },
         { key: "/hr/leave/requests", icon: <CalendarOutlined />, label: <Link to="/hr/leave/requests">{t("layout.leaveInbox")}</Link> },
         { key: "/hr/loan-requests", icon: <DollarOutlined />, label: <Link to="/hr/loan-requests">{t("layout.loanInbox", "Loan Inbox")}</Link> },
         { key: "/hr/attendance", icon: <ClockCircleOutlined />, label: <Link to="/hr/attendance">{t("layout.attendance")}</Link> },
@@ -634,6 +637,7 @@ export default function BaseLayout() {
           type: "group" as const,
           label: sectionLabel(t("layout.menu.workInbox", "Work Inbox"), t("layout.menu.approvals", "Approvals")),
           children: [
+            { key: "/pending-inbox", icon: <InboxOutlined />, label: <Link to="/pending-inbox">{t("layout.pendingInbox", "Pending Inbox")}</Link> },
             ...(hasManagerAccess
               ? [
                 { key: "/manager/dashboard", icon: <DashboardOutlined />, label: <Link to="/manager/dashboard">{t("layout.managerDashboard", "Manager Dashboard")}</Link> },
@@ -706,6 +710,7 @@ export default function BaseLayout() {
       type: "group",
       label: sectionLabel(t("layout.menu.workInbox", "Work Inbox"), t("layout.menu.approvals", "Approvals")),
       children: [
+        { key: "/pending-inbox", icon: <InboxOutlined />, label: <Link to="/pending-inbox">{t("layout.pendingInbox", "Pending Inbox")}</Link> },
         { key: "/manager/dashboard", icon: <DashboardOutlined />, label: <Link to="/manager/dashboard">{t("layout.managerDashboard", "Manager Dashboard")}</Link> },
         { key: "/manager/team-requests", icon: <FileSearchOutlined />, label: <Link to="/manager/team-requests">{t("layout.teamRequests", "Team Requests")}</Link> },
         { key: "/manager/loan-requests", icon: <DollarOutlined />, label: <Link to="/manager/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
@@ -737,6 +742,7 @@ export default function BaseLayout() {
       type: "group",
       label: sectionLabel(t("layout.menu.workInbox", "Work Inbox"), t("layout.menu.approvals", "Approvals")),
       children: [
+        { key: "/pending-inbox", icon: <InboxOutlined />, label: <Link to="/pending-inbox">{t("layout.pendingInbox", "Pending Inbox")}</Link> },
         { key: "/ceo/leave/requests", icon: <CalendarOutlined />, label: <Link to="/ceo/leave/requests">{t("layout.ceoLeaveApprovals", "Leave Approvals")}</Link> },
         { key: "/ceo/team-requests", icon: <FileSearchOutlined />, label: <Link to="/ceo/team-requests">{t("layout.teamRequests", "Team Requests")}</Link> },
         { key: "/ceo/loan-requests", icon: <DollarOutlined />, label: <Link to="/ceo/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
@@ -788,6 +794,7 @@ export default function BaseLayout() {
       type: "group",
       label: sectionLabel(t("layout.menu.workInbox", "Work Inbox"), t("layout.menu.approvals", "Approvals")),
       children: [
+        { key: "/pending-inbox", icon: <InboxOutlined />, label: <Link to="/pending-inbox">{t("layout.pendingInbox", "Pending Inbox")}</Link> },
         { key: "/cfo/loan-requests", icon: <DollarOutlined />, label: <Link to="/cfo/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
       ],
     },

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from django.contrib.contenttypes.models import ContentType
-from django.db import models, transaction
+from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
@@ -17,14 +17,7 @@ from core.delegation import (
 from core.models import WorkflowAction, WorkflowDefinition, WorkflowInstance, WorkflowStageDefinition
 from core.permissions import get_role
 
-from .pending_approval_email import (
-    get_ceo_approver_users,
-    get_cfo_approver_users,
-    get_direct_manager_user,
-    get_disbursement_approver_users,
-    get_hr_approver_users,
-)
-
+from .pending_approval_email import get_direct_manager_user
 
 WORKFLOW_TEMPLATES = {
     "leave_request": {
@@ -1030,15 +1023,18 @@ def get_workflow_snapshot(instance, *, actor=None) -> dict[str, Any]:
     }
 
 
-def get_pending_approvals_for_role(role: str, *, limit: int = 10) -> list[WorkflowInstance]:
-    return list(
+def get_pending_approvals_for_role(role: str, *, limit: int | None = 10) -> list[WorkflowInstance]:
+    qs = (
         WorkflowInstance.objects.select_related("definition", "current_actor_user", "submitted_by")
         .filter(status__in=[WorkflowInstance.Status.SUBMITTED, WorkflowInstance.Status.IN_REVIEW], current_approver_role=role)
-        .order_by("-updated_at", "-id")[:limit]
+        .order_by("-updated_at", "-id")
     )
+    if limit is not None:
+        qs = qs[:limit]
+    return list(qs)
 
 
-def get_pending_approvals_for_user(user, *, limit: int = 10) -> list[WorkflowInstance]:
+def get_pending_approvals_for_user(user, *, limit: int | None = 10) -> list[WorkflowInstance]:
     if not user or not user.is_authenticated:
         return []
 
@@ -1046,12 +1042,15 @@ def get_pending_approvals_for_user(user, *, limit: int = 10) -> list[WorkflowIns
     for role in get_pending_approval_roles_for_user(user):
         filters |= Q(current_actor_user__isnull=True, current_approver_role=role)
 
-    return list(
+    qs = (
         WorkflowInstance.objects.select_related("definition", "current_actor_user", "submitted_by")
         .filter(status__in=[WorkflowInstance.Status.SUBMITTED, WorkflowInstance.Status.IN_REVIEW])
         .filter(filters)
-        .order_by("-updated_at", "-id")[:limit]
+        .order_by("-updated_at", "-id")
     )
+    if limit is not None:
+        qs = qs[:limit]
+    return list(qs)
 
 
 def normalize_role_for_pending_approvals(user) -> str:
@@ -1070,6 +1069,13 @@ def build_pending_approval_item(workflow: WorkflowInstance) -> dict[str, Any] | 
     if obj is None:
         return None
     workflow_key = workflow.definition.key
+    label_map = {
+        "leave_request": "Leave",
+        "loan_request": "Loan",
+        "attendance_request": "Attendance",
+        "asset_return_request": "Asset Return",
+        "employee_deletion_request": "Employee Deletion",
+    }
     review_path = _build_action_url_path(workflow_key, workflow.current_approver_role, obj.pk)
     if workflow_key == "leave_request":
         profile = getattr(getattr(obj, "employee", None), "employee_profile", None)
@@ -1102,10 +1108,13 @@ def build_pending_approval_item(workflow: WorkflowInstance) -> dict[str, Any] | 
         request_type = "ATTENDANCE"
     return {
         "id": obj.pk,
+        "workflow_id": workflow.id,
         "name": name,
         "request_type": request_type,
+        "request_type_label": label_map.get(workflow_key, "Request"),
         "action": action,
         "time": workflow.updated_at.strftime("%Y-%m-%d"),
         "avatar": "",
         "review_path": review_path,
+        "current_approver_role": workflow.current_approver_role,
     }
