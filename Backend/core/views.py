@@ -7,29 +7,30 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.exceptions import NotFound, PermissionDenied
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from assets.models import AssetReturnRequest
 from attendance.models import AttendanceRecord
+from audit.models import AuditLog
 from audit.utils import audit
+from audit.views import AuditPagination, apply_filters
 from core.permissions import IsDepartmentCEOApprover, IsHRManagerOrAdmin
 from core.responses import success
 from core.serializers import DelegationRuleSerializer, RequestObligationSerializer, UserPreferenceSerializer
 from core.services import (
     build_pending_approval_item,
     get_pending_approvals_for_user,
-    sync_leave_obligations,
     send_delegation_notification_email,
+    sync_leave_obligations,
     sync_workflow,
 )
-from employees.models import EmployeeProfile
+from employees.models import EmployeeDeletionRequest, EmployeeProfile
 from leaves.models import LeaveRequest
 from loans.models import LoanRequest
-from payroll.models import PayrollRun
-from audit.models import AuditLog
-from audit.views import apply_filters, AuditPagination
 from organization.models import OrganizationNode
 from organization.services import (
     filter_queryset_by_accessible_companies,
@@ -37,8 +38,28 @@ from organization.services import (
     get_active_organization_for_request,
     get_user_accessible_company_ids,
 )
+from payroll.models import PayrollRun
+
 from .models import DelegationRule, RequestObligation, UserPreference
 from .permissions import get_role
+
+
+class PendingRequestsPagination(PageNumberPagination):
+    page_size = 25
+    page_size_query_param = "page_size"
+    page_query_param = "page"
+    max_page_size = 100
+
+    def get_paginated_response(self, data):
+        return success(
+            {
+                "items": data,
+                "page": self.page.number,
+                "page_size": self.get_page_size(self.request),
+                "count": self.page.paginator.count,
+                "total_pages": self.page.paginator.num_pages,
+            }
+        )
 
 
 def _safe_send_delegation_emails(rule: DelegationRule):
@@ -79,6 +100,131 @@ def _safe_send_delegation_emails(rule: DelegationRule):
             pass
 
 
+def _sync_pending_request_workflows_for_request(request, *, limit_per_type: int = 100) -> None:
+    leave_statuses = [
+        LeaveRequest.RequestStatus.SUBMITTED,
+        LeaveRequest.RequestStatus.PENDING_DELEGATE,
+        LeaveRequest.RequestStatus.PENDING_MANAGER,
+        LeaveRequest.RequestStatus.PENDING_HR,
+        LeaveRequest.RequestStatus.PENDING_CEO,
+        LeaveRequest.RequestStatus.APPROVED,
+        LeaveRequest.RequestStatus.REJECTED,
+        LeaveRequest.RequestStatus.CANCELLED,
+    ]
+    for leave_req in filter_queryset_by_company_scope(LeaveRequest.objects.all(), request).filter(
+        status__in=leave_statuses
+    )[:limit_per_type]:
+        sync_workflow(leave_req, actor=request.user)
+
+    attendance_statuses = [
+        AttendanceRecord.Status.PENDING,
+        AttendanceRecord.Status.PENDING_MANAGER,
+        AttendanceRecord.Status.PENDING_HR,
+        AttendanceRecord.Status.PENDING_CEO,
+        AttendanceRecord.Status.PRESENT,
+        AttendanceRecord.Status.REJECTED,
+    ]
+    for record in filter_queryset_by_company_scope(
+        AttendanceRecord.objects.all(),
+        request,
+        field_name="employee_profile__company_id",
+    ).filter(status__in=attendance_statuses)[:limit_per_type]:
+        sync_workflow(record, actor=request.user)
+
+    loan_statuses = [
+        LoanRequest.RequestStatus.SUBMITTED,
+        LoanRequest.RequestStatus.PENDING_MANAGER,
+        LoanRequest.RequestStatus.PENDING_HR,
+        LoanRequest.RequestStatus.PENDING_FINANCE,
+        LoanRequest.RequestStatus.PENDING_CFO,
+        LoanRequest.RequestStatus.PENDING_CEO,
+        LoanRequest.RequestStatus.PENDING_DISBURSEMENT,
+        LoanRequest.RequestStatus.APPROVED,
+        LoanRequest.RequestStatus.REJECTED,
+        LoanRequest.RequestStatus.CANCELLED,
+        LoanRequest.RequestStatus.DEDUCTED,
+    ]
+    for loan_req in filter_queryset_by_company_scope(LoanRequest.objects.all(), request).filter(
+        status__in=loan_statuses
+    )[:limit_per_type]:
+        sync_workflow(loan_req, actor=request.user)
+
+    asset_return_statuses = [
+        AssetReturnRequest.RequestStatus.PENDING_MANAGER,
+        AssetReturnRequest.RequestStatus.PENDING,
+        AssetReturnRequest.RequestStatus.PENDING_CEO,
+        AssetReturnRequest.RequestStatus.APPROVED,
+        AssetReturnRequest.RequestStatus.PROCESSED,
+        AssetReturnRequest.RequestStatus.REJECTED,
+    ]
+    for return_req in filter_queryset_by_company_scope(
+        AssetReturnRequest.objects.select_related("asset"),
+        request,
+        field_name="asset__company_id",
+    ).filter(status__in=asset_return_statuses)[:limit_per_type]:
+        sync_workflow(return_req, actor=request.user)
+
+    for deletion_req in filter_queryset_by_company_scope(EmployeeDeletionRequest.objects.all(), request).filter(
+        status__in=[
+            EmployeeDeletionRequest.Status.PENDING_CEO,
+            EmployeeDeletionRequest.Status.REJECTED,
+            EmployeeDeletionRequest.Status.EXECUTED,
+        ]
+    )[:limit_per_type]:
+        sync_workflow(deletion_req, actor=request.user)
+
+
+def _is_dashboard_object_in_active_scope(obj, request) -> bool:
+    active_org = get_active_organization_for_request(request)
+    accessible_company_ids = get_user_accessible_company_ids(request.user)
+    workflow_company_id = _get_company_id_for_dashboard_object(obj)
+    if workflow_company_id is None:
+        return False
+    if active_org and active_org.node_type == OrganizationNode.NodeType.HEAD_OFFICE:
+        return workflow_company_id in accessible_company_ids
+    return workflow_company_id == getattr(active_org, "id", None)
+
+
+def _build_pending_request_items_for_request(request, *, limit: int | None = None) -> list[dict]:
+    _sync_pending_request_workflows_for_request(request)
+    items = []
+    for workflow in get_pending_approvals_for_user(request.user, limit=limit):
+        content_object = workflow.content_object
+        if content_object is None or not _is_dashboard_object_in_active_scope(content_object, request):
+            continue
+        item = build_pending_approval_item(workflow)
+        if not item:
+            continue
+        item["company_name"] = _get_company_name_for_dashboard_object(content_object)
+        items.append(item)
+    return items
+
+
+class PendingRequestsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        items = _build_pending_request_items_for_request(request, limit=None)
+
+        request_type = (request.query_params.get("request_type") or "").strip().upper()
+        if request_type:
+            items = [item for item in items if item["request_type"] == request_type]
+
+        search = (request.query_params.get("search") or "").strip().lower()
+        if search:
+            items = [
+                item
+                for item in items
+                if search in (item.get("name") or "").lower()
+                or search in (item.get("action") or "").lower()
+                or search in (item.get("request_type_label") or "").lower()
+            ]
+
+        paginator = PendingRequestsPagination()
+        page = paginator.paginate_queryset(items, request)
+        return paginator.get_paginated_response(page)
+
+
 class HrSummaryView(APIView):
     permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
 
@@ -116,66 +262,7 @@ class HrSummaryView(APIView):
         pending_leaves_count = leave_qs.filter(status=LeaveRequest.RequestStatus.PENDING_HR).count()
 
         # 4. Pending Approvals List (workflow-backed)
-        pending_approvals = []
-        for leave_req in leave_qs.filter(
-            status__in=[
-                LeaveRequest.RequestStatus.SUBMITTED,
-                LeaveRequest.RequestStatus.PENDING_MANAGER,
-                LeaveRequest.RequestStatus.PENDING_HR,
-                LeaveRequest.RequestStatus.PENDING_CEO,
-                LeaveRequest.RequestStatus.APPROVED,
-                LeaveRequest.RequestStatus.REJECTED,
-                LeaveRequest.RequestStatus.CANCELLED,
-            ]
-        )[:50]:
-            sync_workflow(leave_req, actor=request.user)
-        for record in AttendanceRecord.objects.filter(
-            employee_profile__in=employee_qs,
-            status__in=[
-                AttendanceRecord.Status.PENDING,
-                AttendanceRecord.Status.PENDING_MANAGER,
-                AttendanceRecord.Status.PENDING_HR,
-                AttendanceRecord.Status.PENDING_CEO,
-                AttendanceRecord.Status.PRESENT,
-                AttendanceRecord.Status.REJECTED,
-            ]
-        )[:50]:
-            sync_workflow(record, actor=request.user)
-        for loan_req in filter_queryset_by_company_scope(LoanRequest.objects.all(), request).filter(
-            status__in=[
-                LoanRequest.RequestStatus.SUBMITTED,
-                LoanRequest.RequestStatus.PENDING_MANAGER,
-                LoanRequest.RequestStatus.PENDING_HR,
-                LoanRequest.RequestStatus.PENDING_FINANCE,
-                LoanRequest.RequestStatus.PENDING_CFO,
-                LoanRequest.RequestStatus.PENDING_CEO,
-                LoanRequest.RequestStatus.PENDING_DISBURSEMENT,
-                LoanRequest.RequestStatus.APPROVED,
-                LoanRequest.RequestStatus.REJECTED,
-                LoanRequest.RequestStatus.CANCELLED,
-            ]
-        )[:50]:
-            sync_workflow(loan_req, actor=request.user)
-
-        pending_workflows = get_pending_approvals_for_user(request.user, limit=12)
-        for workflow in pending_workflows:
-            content_object = workflow.content_object
-            if content_object is None:
-                continue
-            workflow_company_id = _get_company_id_for_dashboard_object(content_object)
-            if workflow_company_id is None:
-                continue
-            if active_org and active_org.node_type == OrganizationNode.NodeType.HEAD_OFFICE:
-                if workflow_company_id not in accessible_company_ids:
-                    continue
-            elif workflow_company_id != getattr(active_org, "id", None):
-                continue
-            item = build_pending_approval_item(workflow)
-            if item:
-                item["company_name"] = _get_company_name_for_dashboard_object(content_object)
-                pending_approvals.append(item)
-
-        pending_approvals = pending_approvals[:5]
+        pending_approvals = _build_pending_request_items_for_request(request, limit=None)[:5]
 
         # 5. Recent Activity (From AuditLogs)
         from audit.models import AuditLog
@@ -347,11 +434,18 @@ def _get_company_id_for_dashboard_object(obj):
     if direct_company_id:
         return direct_company_id
 
+    asset = getattr(obj, "asset", None)
+    if asset and getattr(asset, "company_id", None):
+        return asset.company_id
+
     employee_profile = getattr(obj, "employee_profile", None)
     if employee_profile and getattr(employee_profile, "company_id", None):
         return employee_profile.company_id
 
     employee = getattr(obj, "employee", None)
+    if employee and getattr(employee, "company_id", None):
+        return employee.company_id
+
     employee_profile = getattr(employee, "employee_profile", None) if employee else None
     if employee_profile and getattr(employee_profile, "company_id", None):
         return employee_profile.company_id
@@ -364,6 +458,11 @@ def _get_company_name_for_dashboard_object(obj):
     if company and getattr(company, "name", None):
         return company.name
 
+    asset = getattr(obj, "asset", None)
+    company = getattr(asset, "company", None) if asset else None
+    if company and getattr(company, "name", None):
+        return company.name
+
     employee_profile = getattr(obj, "employee_profile", None)
     if employee_profile:
         company = getattr(employee_profile, "company", None)
@@ -371,6 +470,10 @@ def _get_company_name_for_dashboard_object(obj):
             return company.name
 
     employee = getattr(obj, "employee", None)
+    company = getattr(employee, "company", None) if employee else None
+    if company and getattr(company, "name", None):
+        return company.name
+
     employee_profile = getattr(employee, "employee_profile", None) if employee else None
     if employee_profile:
         company = getattr(employee_profile, "company", None)
