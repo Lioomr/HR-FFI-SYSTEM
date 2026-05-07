@@ -60,3 +60,9 @@ Run pre-commit checks before pushing: `pre-commit run --all-files`.
 
 ## Deployment Handoff
 For AWS production deployment, Docker service layout, real server paths, and production debugging workflow, read `AWS_AGENT_DEPLOYMENT_HANDOFF.md` before making deployment-related changes.
+
+## Agent Knowledge & Context Strategy
+You have access to a rich context library in the `.agents/` directory. To maximize performance and keep token usage low:
+- **Do not guess architecture, project standards, or workflows.** 
+- **Start here:** Always read `.agents/context/INDEX.md` first to map your current task to the correct context file.
+- **Lazy Load:** Only use `view_file` to read the specific files from `.agents/context/`, `.agents/rules/`, or `.agents/skills/` that are explicitly required for your task. Do NOT bulk-load the entire folder.

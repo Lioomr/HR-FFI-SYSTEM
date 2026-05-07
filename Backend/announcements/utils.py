@@ -1,3 +1,7 @@
+import logging
+from datetime import timedelta, timezone as datetime_timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core import signing
@@ -10,6 +14,20 @@ from .models import Announcement
 
 User = get_user_model()
 ANNOUNCEMENT_ATTACHMENT_SALT = "announcement-email-attachment"
+logger = logging.getLogger(__name__)
+
+EMAIL_TIME_ZONE_FALLBACKS = {
+    "Asia/Riyadh": datetime_timezone(timedelta(hours=3), "+03"),
+}
+
+ANNOUNCEMENT_ROLE_TO_GROUP = {
+    "ADMIN": "SystemAdmin",
+    "HR_MANAGER": "HRManager",
+    "MANAGER": "Manager",
+    "CEO": "CEO",
+    "CFO": "CFO",
+    "EMPLOYEE": "Employee",
+}
 
 
 def _announcement_action_url(user):
@@ -54,6 +72,12 @@ def _meeting_datetime_parts(announcement):
 
 def _email_localtime(value):
     tzinfo = getattr(settings, "EMAIL_DISPLAY_TZINFO", None)
+    timezone_name = getattr(settings, "EMAIL_DISPLAY_TIME_ZONE", "")
+    if not tzinfo and timezone_name:
+        try:
+            tzinfo = ZoneInfo(timezone_name)
+        except ZoneInfoNotFoundError:
+            tzinfo = EMAIL_TIME_ZONE_FALLBACKS.get(timezone_name)
     return timezone.localtime(value, tzinfo) if tzinfo else timezone.localtime(value)
 
 
@@ -69,30 +93,41 @@ def send_announcement_email(announcement):
     Send announcement via email to users with target roles.
     """
     if not announcement.publish_to_email:
-        return
+        logger.warning(
+            "announcement_email_skipped_publish_to_email_false",
+            extra={"announcement_id": announcement.id, "title": announcement.title},
+        )
+        return {"sent": 0, "failed": 0, "reason": "publish_to_email_false"}
 
     # Private targeted announcement
     if getattr(announcement, "target_user_id", None):
         users = User.objects.filter(id=announcement.target_user_id, is_active=True)
     else:
-        role_map = {
-            "ADMIN": "SystemAdmin",
-            "HR_MANAGER": "HRManager",
-            "MANAGER": "Manager",
-            "EMPLOYEE": "Employee",
+        expected_roles = {
+            ANNOUNCEMENT_ROLE_TO_GROUP[r] for r in (announcement.target_roles or []) if r in ANNOUNCEMENT_ROLE_TO_GROUP
         }
-        expected_roles = {role_map[r] for r in (announcement.target_roles or []) if r in role_map}
         users = [u for u in User.objects.filter(is_active=True) if get_role(u) in expected_roles]
 
     recipient_emails = [user.email for user in users if getattr(user, "email", None)]
 
     if not recipient_emails:
-        return
+        logger.warning(
+            "announcement_email_skipped_no_recipients",
+            extra={
+                "announcement_id": announcement.id,
+                "title": announcement.title,
+                "target_roles": announcement.target_roles,
+                "target_user_id": getattr(announcement, "target_user_id", None),
+            },
+        )
+        return {"sent": 0, "failed": 0, "reason": "no_recipients"}
 
     publisher_name = announcement.created_by.full_name or announcement.created_by.email
     attachment_name = announcement.attachment.name.rsplit("/", 1)[-1] if announcement.attachment else None
     attachment_url = _announcement_attachment_url(announcement)
     meeting_date, meeting_time = _meeting_datetime_parts(announcement)
+    sent_count = 0
+    failed_count = 0
 
     for user in users:
         recipient_email = getattr(user, "email", None)
@@ -131,7 +166,30 @@ def send_announcement_email(announcement):
                 attachment_url=attachment_url,
             )
         if not result.get("success"):
-            print(f"Error sending announcement email to {recipient_email}: {result.get('error', 'Unknown error')}")
+            failed_count += 1
+            logger.error(
+                "announcement_email_failed",
+                extra={
+                    "announcement_id": announcement.id,
+                    "recipient_email": recipient_email,
+                    "error": result.get("error", "Unknown error"),
+                    "status_code": result.get("status_code"),
+                },
+            )
+            continue
+
+        sent_count += 1
+
+    logger.warning(
+        "announcement_email_delivery_finished",
+        extra={
+            "announcement_id": announcement.id,
+            "recipient_count": len(recipient_emails),
+            "sent_count": sent_count,
+            "failed_count": failed_count,
+        },
+    )
+    return {"sent": sent_count, "failed": failed_count, "reason": None}
 
 
 def send_announcement_whatsapp(announcement):

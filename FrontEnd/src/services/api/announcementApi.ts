@@ -59,7 +59,7 @@ export interface CreateAnnouncementData {
     title: string;
     content: string;
     announcement_type?: "GENERAL" | "MEETING";
-    target_roles: string[];
+    target_roles?: string[];
     target_user?: number;
     target_user_ids?: number[];
     publish_to_dashboard: boolean;
@@ -73,6 +73,42 @@ export interface CreateAnnouncementData {
     microsoft_teams_url?: string;
     zoom_url?: string;
     attachment?: File | null;
+}
+
+function toAnnouncementFormData(data: Partial<CreateAnnouncementData>) {
+    const formData = new FormData();
+    if (data.title !== undefined) formData.append("title", data.title);
+    if (data.content !== undefined) formData.append("content", data.content);
+    if (data.announcement_type !== undefined) formData.append("announcement_type", data.announcement_type);
+    if (data.target_roles !== undefined) formData.append("target_roles", JSON.stringify(data.target_roles));
+    if (data.target_user !== undefined) formData.append("target_user", String(data.target_user));
+    if (data.target_user_ids?.length) {
+        data.target_user_ids.forEach((id) => formData.append("target_user_ids", String(id)));
+    }
+    if (data.publish_to_dashboard !== undefined) {
+        formData.append("publish_to_dashboard", String(data.publish_to_dashboard));
+    }
+    if (data.publish_to_email !== undefined) {
+        formData.append("publish_to_email", String(data.publish_to_email));
+    }
+    if (data.publish_to_sms !== undefined) {
+        formData.append("publish_to_sms", String(data.publish_to_sms));
+    }
+    if (data.meeting_starts_at) formData.append("meeting_starts_at", data.meeting_starts_at);
+    if (data.meeting_duration_minutes != null) {
+        formData.append("meeting_duration_minutes", String(data.meeting_duration_minutes));
+    }
+    if (data.meeting_location !== undefined) formData.append("meeting_location", data.meeting_location);
+    if (data.meeting_agenda !== undefined) formData.append("meeting_agenda", data.meeting_agenda);
+    if (data.google_meet_url !== undefined) formData.append("google_meet_url", data.google_meet_url);
+    if (data.microsoft_teams_url !== undefined) {
+        formData.append("microsoft_teams_url", data.microsoft_teams_url);
+    }
+    if (data.zoom_url !== undefined) formData.append("zoom_url", data.zoom_url);
+    if (data.attachment) {
+        formData.append("attachment", data.attachment);
+    }
+    return formData;
 }
 
 /**
@@ -107,30 +143,11 @@ export async function getAnnouncement(id: number) {
  * Create a new announcement (HR managers only)
  */
 export async function createAnnouncement(data: CreateAnnouncementData) {
-    const formData = new FormData();
-    formData.append("title", data.title);
-    formData.append("content", data.content);
-    formData.append("announcement_type", data.announcement_type || "GENERAL");
-    formData.append("target_roles", JSON.stringify(data.target_roles));
-    if (data.target_user !== undefined) {
-        formData.append("target_user", String(data.target_user));
-    }
-    if (data.target_user_ids?.length) {
-        data.target_user_ids.forEach((id) => formData.append("target_user_ids", String(id)));
-    }
-    formData.append("publish_to_dashboard", String(data.publish_to_dashboard));
-    formData.append("publish_to_email", String(data.publish_to_email));
-    formData.append("publish_to_sms", String(data.publish_to_sms));
-    if (data.meeting_starts_at) formData.append("meeting_starts_at", data.meeting_starts_at);
-    if (data.meeting_duration_minutes != null) formData.append("meeting_duration_minutes", String(data.meeting_duration_minutes));
-    if (data.meeting_location) formData.append("meeting_location", data.meeting_location);
-    if (data.meeting_agenda) formData.append("meeting_agenda", data.meeting_agenda);
-    if (data.google_meet_url) formData.append("google_meet_url", data.google_meet_url);
-    if (data.microsoft_teams_url) formData.append("microsoft_teams_url", data.microsoft_teams_url);
-    if (data.zoom_url) formData.append("zoom_url", data.zoom_url);
-    if (data.attachment) {
-        formData.append("attachment", data.attachment);
-    }
+    const formData = toAnnouncementFormData({
+        ...data,
+        announcement_type: data.announcement_type || "GENERAL",
+        target_roles: data.target_roles || [],
+    });
 
     const response = await api.post('/api/announcements', formData, {
         headers: {
@@ -144,7 +161,11 @@ export async function createAnnouncement(data: CreateAnnouncementData) {
  * Update an existing announcement (HR managers only)
  */
 export async function updateAnnouncement(id: number, data: Partial<CreateAnnouncementData>) {
-    const response = await api.patch(`/api/announcements/${id}`, data);
+    const response = await api.patch(`/api/announcements/${id}`, toAnnouncementFormData(data), {
+        headers: {
+            "Content-Type": "multipart/form-data",
+        },
+    });
     return response.data;
 }
 
