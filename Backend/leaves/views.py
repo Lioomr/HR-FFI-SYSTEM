@@ -1,8 +1,8 @@
 import mimetypes
 import os
-from io import BytesIO
 from datetime import date
 from glob import glob
+from io import BytesIO
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -10,12 +10,11 @@ from django.db.models import Q
 from django.http import FileResponse, HttpResponse
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.utils import ImageReader, simpleSplit
+from pypdf import PdfReader, PdfWriter
+from reportlab.lib.utils import simpleSplit
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
-from pypdf import PdfReader, PdfWriter
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -42,10 +41,12 @@ from core.services import (
 from core.services.request_obligations import is_business_trip_leave
 from employees.models import EmployeeProfile
 from employees.permissions import IsHRManagerOrAdmin
+from organization.models import OrganizationNode
 from organization.services import (
     filter_queryset_by_accessible_companies,
     filter_queryset_by_company_scope,
     get_active_company_for_request,
+    get_user_accessible_company_ids,
 )
 
 from .models import LeaveBalanceAdjustment, LeaveRequest, LeaveType
@@ -65,13 +66,20 @@ from .serializers import (
     HRManualLeaveRequestSerializer,
     LeaveBalanceAdjustmentSerializer,
     LeaveBalanceSerializer,
-    LeaveRequestDelegationSerializer,
     LeaveRequestActionSerializer,
     LeaveRequestCreateSerializer,
+    LeaveRequestDelegationSerializer,
     LeaveRequestSerializer,
     LeaveTypeSerializer,
 )
-from .utils import calculate_leave_balance, get_leave_days, get_payment_breakdown, get_used_days_for_type, resolve_employee_profile
+from .utils import (
+    calculate_leave_balance,
+    ensure_policy_leave_types_for_company,
+    get_leave_days,
+    get_payment_breakdown,
+    get_used_days_for_type,
+    resolve_employee_profile,
+)
 
 User = get_user_model()
 
@@ -647,6 +655,27 @@ class LeaveTypeViewSet(viewsets.ModelViewSet):
     serializer_class = LeaveTypeSerializer
     permission_classes = [IsAuthenticated]  # Overridden by get_permissions
 
+    def _ensure_policy_types_for_list_scope(self, request):
+        accessible_company_ids = get_user_accessible_company_ids(request.user)
+        if not accessible_company_ids:
+            return
+
+        company_ids = set()
+        query_key = request.query_params.get("company_id")
+        if query_key and str(query_key).isdigit():
+            requested_id = int(query_key)
+            if requested_id in accessible_company_ids:
+                company_ids.add(requested_id)
+        else:
+            active_company = get_active_company_for_request(request)
+            if active_company:
+                company_ids.add(active_company.id)
+            else:
+                company_ids.update(accessible_company_ids)
+
+        for company in OrganizationNode.objects.filter(id__in=company_ids):
+            ensure_policy_leave_types_for_company(company)
+
     def get_permissions(self):
         # List/Retrieve: Anyone authenticated can try, but logic filters content
         if self.action in ["list", "retrieve"]:
@@ -658,6 +687,7 @@ class LeaveTypeViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         # Employees only see active leave types; HR/Admin see all
         role = get_role(request.user)
+        self._ensure_policy_types_for_list_scope(request)
         qs = filter_queryset_by_company_scope(self.get_queryset(), request)
 
         if role == "Employee":
@@ -1582,7 +1612,6 @@ class LeaveBalanceViewSet(viewsets.ViewSet):
             return error("Validation error", errors=["year must be a valid integer."], status=422)
 
         # Get Employee User
-        from employees.models import EmployeeProfile
 
         try:
             profile = EmployeeProfile.objects.get(id=employee_id)
