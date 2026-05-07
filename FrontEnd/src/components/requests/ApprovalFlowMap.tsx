@@ -10,6 +10,7 @@ export type ApprovalFlowStage = {
   title: string;
   state: "completed" | "current" | "rejected" | "upcoming" | "skipped" | "cancelled";
   note: string;
+  detail?: string;
   at?: string | null;
 };
 
@@ -147,6 +148,9 @@ export default function ApprovalFlowMap({
                   </Tag>
                 </div>
                 <Text style={{ fontSize: 15, fontWeight: 700, color: "#0f172a" }}>{stage.title}</Text>
+                {stage.detail ? (
+                  <Text style={{ color: "#0f172a", fontSize: 13, fontWeight: 600 }}>{stage.detail}</Text>
+                ) : null}
                 <Paragraph style={{ marginBottom: 0, color: "#475569", minHeight: 44 }}>{stage.note}</Paragraph>
                 <Text type="secondary" style={{ fontSize: 12 }}>
                   {stage.at ? new Date(stage.at).toLocaleString() : t("leave.approvalMap.noDate")}

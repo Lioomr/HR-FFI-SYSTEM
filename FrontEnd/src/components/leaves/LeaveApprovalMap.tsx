@@ -1,11 +1,41 @@
 import ApprovalFlowMap, { type ApprovalFlowStage } from "../requests/ApprovalFlowMap";
 
 import type { LeaveRequest } from "../../services/api/leaveApi";
+import type { WorkflowActor } from "../../types/workflow";
 
 type TranslateFn = (key: string, params?: Record<string, unknown> | string, fallback?: string) => string;
 
 function inferDecisionNote(request: LeaveRequest) {
   return request.ceo_decision_note || request.hr_decision_note || request.manager_decision_note || request.delegate_decision_note || request.rejection_reason || "";
+}
+
+function getDelegatedEmployeeName(request: LeaveRequest) {
+  const delegatedTo = request.delegated_to;
+  if (!delegatedTo) return "";
+  return delegatedTo.full_name || delegatedTo.email || "";
+}
+
+function getActorDisplayName(actor?: WorkflowActor | null) {
+  return actor?.full_name || actor?.email || "";
+}
+
+function getWorkflowStageActorName(request: LeaveRequest, stageKey: string) {
+  const workflow = request.workflow;
+  if (!workflow) return "";
+
+  if (workflow.current_stage === stageKey) {
+    const currentActorName = getActorDisplayName(workflow.current_actor);
+    if (currentActorName) return currentActorName;
+  }
+
+  const historyEntry = [...(workflow.history || [])].reverse().find(
+    (item) =>
+      item.approver_role === stageKey ||
+      item.stage === stageKey ||
+      item.from_stage === stageKey ||
+      item.to_stage === stageKey
+  );
+  return getActorDisplayName(historyEntry?.actor);
 }
 
 function buildStages(request: LeaveRequest, t: TranslateFn): ApprovalFlowStage[] {
@@ -22,6 +52,10 @@ function buildStages(request: LeaveRequest, t: TranslateFn): ApprovalFlowStage[]
   const finalRejected = request.status === "rejected";
   const finalCancelled = request.status === "cancelled";
   const decisionNote = inferDecisionNote(request);
+  const delegatedEmployeeName = getDelegatedEmployeeName(request);
+  const managerName = getWorkflowStageActorName(request, "manager");
+  const hrManagerName = getWorkflowStageActorName(request, "hr");
+  const ceoName = getWorkflowStageActorName(request, "ceo");
 
   if (isManual) {
     return [
@@ -106,6 +140,13 @@ function buildStages(request: LeaveRequest, t: TranslateFn): ApprovalFlowStage[]
       key: "delegate",
       title: t("leave.approvalMap.delegateReview"),
       state: delegateState,
+      detail: delegatedEmployeeName
+        ? t(
+          "leave.approvalMap.alternativeEmployeeName",
+          { name: delegatedEmployeeName },
+          `Alternative Employee: ${delegatedEmployeeName}`
+        )
+        : undefined,
       note:
         delegateState === "skipped"
           ? t("leave.approvalMap.notRequired")
@@ -116,6 +157,9 @@ function buildStages(request: LeaveRequest, t: TranslateFn): ApprovalFlowStage[]
       key: "manager",
       title: t("leave.approvalMap.managerReview"),
       state: managerState,
+      detail: managerName
+        ? t("leave.approvalMap.managerName", { name: managerName }, `Manager: ${managerName}`)
+        : undefined,
       note:
         managerState === "skipped"
           ? t("leave.approvalMap.notRequired")
@@ -126,6 +170,9 @@ function buildStages(request: LeaveRequest, t: TranslateFn): ApprovalFlowStage[]
       key: "hr",
       title: t("leave.approvalMap.hrReview"),
       state: hrState,
+      detail: hrManagerName
+        ? t("leave.approvalMap.hrManagerName", { name: hrManagerName }, `HR Manager: ${hrManagerName}`)
+        : undefined,
       note:
         request.hr_decision_note ||
         request.decision_reason ||
@@ -136,6 +183,9 @@ function buildStages(request: LeaveRequest, t: TranslateFn): ApprovalFlowStage[]
       key: "ceo",
       title: t("leave.approvalMap.ceoReview"),
       state: ceoState,
+      detail: ceoName
+        ? t("leave.approvalMap.ceoName", { name: ceoName }, `CEO: ${ceoName}`)
+        : undefined,
       note:
         ceoState === "skipped"
           ? t("leave.approvalMap.notRequired")
