@@ -77,6 +77,7 @@ import DashboardPage from "../pages/employee/DashboardPage";
 // Announcements
 import AnnouncementsManagementPage from "../pages/hr/announcements/AnnouncementsManagementPage";
 import CreateAnnouncementPage from "../pages/hr/announcements/CreateAnnouncementPage";
+import EditAnnouncementPage from "../pages/hr/announcements/EditAnnouncementPage";
 import AnnouncementsPage from "../pages/announcements/AnnouncementsPage";
 
 // CEO
@@ -198,6 +199,7 @@ export const routes = [
               // Announcements (HR)
               { path: "hr/announcements", element: <AnnouncementsManagementPage /> },
               { path: "hr/announcements/create", element: <CreateAnnouncementPage /> },
+              { path: "hr/announcements/:id/edit", element: <EditAnnouncementPage /> },
 
               // Existing pages
               { path: "hr/attendance", element: <AttendanceMaintenancePage titleKey="layout.attendanceApprovals" backPath="/hr/dashboard" /> },
