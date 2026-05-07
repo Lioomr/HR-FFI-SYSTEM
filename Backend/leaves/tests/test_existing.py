@@ -10,9 +10,9 @@ from rest_framework.test import APIClient
 
 from audit.models import AuditLog
 from core.services import get_workflow_snapshot
+from employees.models import EmployeeProfile
 from leaves.models import LeaveRequest, LeaveType
-from leaves.views import _approval_path_rows
-from leaves.views import _leave_type_labels
+from leaves.views import _approval_path_rows, _leave_type_labels
 from organization.models import OrganizationNode, UserOrganizationAccess
 
 User = get_user_model()
@@ -83,6 +83,28 @@ class LeaveManagementTests(TestCase):
         response = self.client.get("/api/leaves/leave-types/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data["data"]), 2)
+
+    def test_employee_leave_type_list_seeds_company_policy_types(self):
+        company = OrganizationNode.objects.create(
+            code="COMPANY_WITHOUT_TYPES",
+            name="Company Without Types",
+            node_type=OrganizationNode.NodeType.COMPANY,
+        )
+        EmployeeProfile.objects.create(
+            user=self.emp1,
+            company=company,
+            employee_id="EMP-WITHOUT-TYPES",
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        )
+
+        self.client.force_authenticate(user=self.emp1)
+        response = self.client.get("/api/leaves/leave-types/", follow=True)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        codes = {item["code"] for item in response.data["data"]}
+        self.assertIn("ANNUAL", codes)
+        self.assertIn("SICK", codes)
+        self.assertTrue(LeaveType.objects.filter(company=company, code="ANNUAL", is_active=True).exists())
 
     # --- Leave Requests ---
     def test_create_leave_request_flow(self):
