@@ -15,7 +15,12 @@ from employees.models import EmployeeProfile
 from organization.models import OrganizationNode, UserOrganizationAccess
 
 from .models import Announcement
-from .utils import ANNOUNCEMENT_ATTACHMENT_SALT, _announcement_attachment_url, _format_announcement_published_at
+from .utils import (
+    ANNOUNCEMENT_ATTACHMENT_SALT,
+    _announcement_attachment_url,
+    _format_announcement_published_at,
+    send_announcement_email,
+)
 
 User = get_user_model()
 
@@ -273,6 +278,45 @@ class MeetingAnnouncementTests(APITestCase):
 
         self.assertIn("Download Attachment", html)
         self.assertIn("https://api.asecopro.com/api/announcements/1/attachment-public", html)
+
+    def test_send_announcement_email_calls_provider_for_target_user(self):
+        announcement = Announcement.objects.create(
+            company=self.company,
+            title="Policy Notice",
+            content="Please review the policy notice.",
+            target_roles=[],
+            target_user=self.employee_one,
+            publish_to_dashboard=True,
+            publish_to_email=True,
+            created_by=self.hr,
+        )
+
+        with patch("announcements.utils.send_announcement_notification_email") as send_email:
+            send_email.return_value = {"success": True, "status_code": 202}
+            result = send_announcement_email(announcement)
+
+        self.assertEqual(result["sent"], 1)
+        self.assertEqual(result["failed"], 0)
+        send_email.assert_called_once()
+        self.assertEqual(send_email.call_args.kwargs["to_email"], "employee-one@ffi.test")
+
+    def test_send_announcement_email_reports_no_recipients(self):
+        announcement = Announcement.objects.create(
+            company=self.company,
+            title="Policy Notice",
+            content="Please review the policy notice.",
+            target_roles=["EMPLOYEE"],
+            publish_to_dashboard=True,
+            publish_to_email=True,
+            created_by=self.hr,
+        )
+        User.objects.filter(groups=self.employee_group).update(is_active=False)
+
+        with self.assertLogs("announcements.utils", level="WARNING") as logs:
+            result = send_announcement_email(announcement)
+
+        self.assertEqual(result["reason"], "no_recipients")
+        self.assertIn("announcement_email_skipped_no_recipients", "\n".join(logs.output))
 
     @override_settings(EMAIL_DISPLAY_TIME_ZONE="Asia/Riyadh")
     def test_announcement_email_timestamp_uses_configured_display_timezone(self):

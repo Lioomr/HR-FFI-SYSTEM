@@ -1,5 +1,6 @@
 import os
 import re
+import logging
 
 from django.contrib.auth import get_user_model
 from django.core import signing
@@ -33,6 +34,7 @@ from .utils import ANNOUNCEMENT_ATTACHMENT_SALT
 from .utils import send_announcement_email, send_announcement_whatsapp
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 def _download_filename(file_name):
@@ -305,15 +307,24 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
             announcement = serializer.save(created_by=request.user, company=active_company)
             created_announcements = [announcement]
 
-        # Send notifications based on publishing options
-        try:
-            for announcement in created_announcements:
-                if announcement.publish_to_email:
-                    send_announcement_email(announcement)
-                if announcement.publish_to_sms:
+        # Send notifications based on publishing options. Keep failures isolated so
+        # one recipient/channel cannot prevent the remaining announcements from sending.
+        for announcement in created_announcements:
+            try:
+                send_announcement_email(announcement)
+            except Exception:
+                logger.exception(
+                    "announcement_email_unhandled_exception",
+                    extra={"announcement_id": announcement.id},
+                )
+            if announcement.publish_to_sms:
+                try:
                     send_announcement_whatsapp(announcement)
-        except Exception as e:
-            print(f"Error sending notifications: {e}")
+                except Exception:
+                    logger.exception(
+                        "announcement_whatsapp_unhandled_exception",
+                        extra={"announcement_id": announcement.id},
+                    )
 
         # Audit log
         audit(
@@ -388,7 +399,12 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop("partial", False)
         instance = self.get_object()
-        serializer = AnnouncementCreateSerializer(instance, data=request.data, partial=partial)
+        serializer = AnnouncementCreateSerializer(
+            instance,
+            data=request.data,
+            partial=partial,
+            context=self.get_serializer_context(),
+        )
 
         if not serializer.is_valid():
             return error("Validation error", errors=serializer.errors, status=status.HTTP_422_UNPROCESSABLE_ENTITY)

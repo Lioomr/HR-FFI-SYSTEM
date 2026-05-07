@@ -190,10 +190,15 @@ class AnnouncementCreateSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
-        target_roles = attrs.get("target_roles")
-        target_user = attrs.get("target_user")
+        target_roles = attrs.get("target_roles", getattr(self.instance, "target_roles", None))
+        target_user = attrs.get("target_user", getattr(self.instance, "target_user", None))
         target_user_ids = attrs.get("target_user_ids") or []
-        announcement_type = attrs.get("announcement_type") or Announcement.AnnouncementType.GENERAL
+        announcement_type = (
+            attrs.get("announcement_type")
+            or getattr(self.instance, "announcement_type", None)
+            or Announcement.AnnouncementType.GENERAL
+        )
+        meeting_starts_at = attrs.get("meeting_starts_at", getattr(self.instance, "meeting_starts_at", None))
 
         allow_empty_targets_for_manager = bool(self.context.get("allow_empty_targets_for_manager"))
 
@@ -201,9 +206,9 @@ class AnnouncementCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Selected employees cannot be combined with role or single-user targets")
 
         if announcement_type == Announcement.AnnouncementType.MEETING:
-            if not target_user_ids:
+            if not target_user_ids and not target_user:
                 raise serializers.ValidationError({"target_user_ids": "Select at least one employee for a meeting notification."})
-            if not attrs.get("meeting_starts_at"):
+            if not meeting_starts_at:
                 raise serializers.ValidationError({"meeting_starts_at": "Meeting date and time is required."})
 
         if not target_user and not target_roles and not target_user_ids and not allow_empty_targets_for_manager:

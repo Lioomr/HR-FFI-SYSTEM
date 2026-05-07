@@ -41,3 +41,8 @@ Scan this file first. Each row lists the file, size, and the exact keywords that
 3. If unsure between two files, read the shorter one first.
 4. Never load every context file — the full set is ~45K of tokens and almost always wasteful.
 5. After reading a context file, check it for inline links before expanding to others.
+
+## Domain Skills & Global Rules
+
+- **Skills (`.agents/skills/`)**: Contains workflow-specific guides (e.g., `approval_workflow.md`, `leave_management.md`, `payroll_processing.md`). Only read the specific skill file if your task involves that domain.
+- **Rules (`.agents/rules/`)**: Contains specific conventions (e.g., `api_conventions.md`, `code_style.md`, `security_auditor.md`). Reference these if you are unsure about formatting or project standards.
