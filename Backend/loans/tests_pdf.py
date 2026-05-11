@@ -1,5 +1,8 @@
 from decimal import Decimal
+from io import BytesIO
 from types import SimpleNamespace
+
+from pypdf import PdfReader
 
 from loans.models import LoanRequest
 from loans.views import _build_loan_request_pdf
@@ -56,3 +59,9 @@ def test_build_loan_request_pdf_returns_pdf_bytes():
     assert isinstance(pdf_bytes, bytes)
     assert pdf_bytes.startswith(b"%PDF")
     assert len(pdf_bytes) > 500
+    reader = PdfReader(BytesIO(pdf_bytes))
+    extracted_text = "\n".join(page.extract_text() or "" for page in reader.pages)
+    assert len(reader.pages) == 1
+    assert "Loan Request" in extracted_text
+    assert "Installment Loan" in extracted_text
+    assert "pending_hr" not in extracted_text

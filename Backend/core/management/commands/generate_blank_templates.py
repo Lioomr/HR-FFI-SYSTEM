@@ -31,12 +31,10 @@ from core.pdf import (
     render_request_pdf,
     shape_ar,
 )
+from core.views_templates import _get_templates_dir
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader, simpleSplit
 from reportlab.pdfgen import canvas as pdf_canvas
-
-
-TEMPLATES_DIR = os.path.join(str(settings.BASE_DIR), "static", "pdf_templates")
 
 
 def _blank_employee_block() -> EmployeeBlock:
@@ -364,9 +362,10 @@ class Command(BaseCommand):
     help = "Regenerate blank PDF templates under Backend/static/pdf_templates/"
 
     def handle(self, *args, **options):
-        os.makedirs(TEMPLATES_DIR, exist_ok=True)
+        templates_dir = _get_templates_dir()
+        os.makedirs(templates_dir, exist_ok=True)
         for filename, writer in TEMPLATE_WRITERS.items():
-            dest = os.path.join(TEMPLATES_DIR, filename)
+            dest = os.path.join(templates_dir, filename)
             if filename == "leave_request_blank.pdf" and _copy_leave_overlay_if_present(dest):
                 self.stdout.write(self.style.SUCCESS(f"Copied overlay template -> {dest}"))
                 continue

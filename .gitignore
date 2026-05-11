@@ -11,6 +11,17 @@ Backend/.env
 !Backend/.env.production.example
 !Backend/.env.docker.example
 
+# Private keys (never commit)
+ffi_hr_key.pem
+
+# Local production access runbooks (never commit)
+PRODUCTION_AGENT_RUNBOOK.local.md
+$ Production Runbook (HR-FFI).txt
+
+# Local Docker compose overrides
+docker-compose.dev.yml
+docker-compose.prod.yml
+
 # Python cache
 __pycache__/
 *.py[cod]

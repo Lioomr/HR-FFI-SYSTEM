@@ -1,10 +1,12 @@
 from datetime import date, timedelta
+from io import BytesIO
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
+from pypdf import PdfReader
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -143,7 +145,12 @@ class LeaveManagementTests(TestCase):
         self.client.force_authenticate(user=self.hr)
         start = date.today() + timedelta(days=2)
         end = date.today() + timedelta(days=3)
-        data = {"leave_type": self.annual_leave.id, "start_date": str(start), "end_date": str(end), "reason": "HR leave"}
+        data = {
+            "leave_type": self.annual_leave.id,
+            "start_date": str(start),
+            "end_date": str(end),
+            "reason": "HR leave",
+        }
         response = self.client.post("/api/leaves/leave-requests/", data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["data"]["status"], LeaveRequest.RequestStatus.PENDING_CEO)
@@ -255,7 +262,12 @@ class LeaveManagementTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response["Content-Type"], "application/pdf")
-        self.assertIn(f'leave_request_{req.id}.pdf', response["Content-Disposition"])
+        self.assertIn(f"leave_request_{req.id}.pdf", response["Content-Disposition"])
+        reader = PdfReader(BytesIO(response.content))
+        extracted_text = "\n".join(page.extract_text() or "" for page in reader.pages)
+        self.assertEqual(len(reader.pages), 2)
+        self.assertIn("Pending", extracted_text)
+        self.assertNotIn("pending_hr", extracted_text)
 
     def test_leave_type_labels_translate_known_arabic_policy_labels(self):
         english, arabic = _leave_type_labels(LeaveType(name="Unpaid Leave", code="UNPAID"))
@@ -398,6 +410,56 @@ class LeaveManagementTests(TestCase):
         self.assertEqual(workflow["current_stage"], "delegate")
         self.assertTrue(workflow["can_approve"])
 
+    def test_employee_can_create_leave_request_with_cross_company_delegate(self):
+        from employees.models import EmployeeProfile
+
+        requester_company = OrganizationNode.objects.create(
+            code="LEAVE_CROSS_REQUESTER",
+            name="Leave Cross Requester",
+            node_type=OrganizationNode.NodeType.COMPANY,
+        )
+        delegate_company = OrganizationNode.objects.create(
+            code="LEAVE_CROSS_DELEGATE",
+            name="Leave Cross Delegate",
+            node_type=OrganizationNode.NodeType.COMPANY,
+        )
+        EmployeeProfile.objects.create(
+            user=self.emp1,
+            company=requester_company,
+            employee_id="EMP-CROSS-SEND",
+            full_name="Cross Sender",
+            hire_date=date.today() - timedelta(days=700),
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        )
+        EmployeeProfile.objects.create(
+            user=self.emp2,
+            company=delegate_company,
+            employee_id="EMP-CROSS-RECV",
+            full_name="Cross Receiver",
+            hire_date=date.today() - timedelta(days=700),
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        )
+
+        self.client.force_authenticate(user=self.emp1)
+        response = self.client.post(
+            "/api/leaves/leave-requests/",
+            {
+                "leave_type": self.annual_leave.id,
+                "start_date": str(date.today() + timedelta(days=40)),
+                "end_date": str(date.today() + timedelta(days=41)),
+                "reason": "Cross-company coverage",
+                "delegated_to": self.emp2.id,
+                "delegation_note": "Please cover with the other company.",
+            },
+            HTTP_X_ACTIVE_COMPANY_ID=str(requester_company.id),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        request_obj = LeaveRequest.objects.get(pk=response.data["data"]["id"])
+        self.assertEqual(request_obj.company, requester_company)
+        self.assertEqual(request_obj.delegated_to, self.emp2)
+        self.assertEqual(request_obj.status, LeaveRequest.RequestStatus.PENDING_DELEGATE)
+
     def test_delegate_approval_moves_leave_request_to_hr(self):
         from employees.models import EmployeeProfile
 
@@ -451,7 +513,9 @@ class LeaveManagementTests(TestCase):
         self.assertEqual(request_obj.delegate_decision_note, "I can cover this.")
         workflow = get_workflow_snapshot(request_obj, actor=self.hr)
         self.assertEqual(workflow["current_stage"], "hr")
-        self.assertTrue(any(item["stage"] == "delegate" and item["action"] == "approve" for item in workflow["history"]))
+        self.assertTrue(
+            any(item["stage"] == "delegate" and item["action"] == "approve" for item in workflow["history"])
+        )
 
     def test_delegated_employee_can_list_and_view_assigned_leave_request(self):
         from employees.models import EmployeeProfile

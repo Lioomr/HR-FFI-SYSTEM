@@ -1,10 +1,20 @@
 from django.contrib.auth import get_user_model
+from django.db.models import Q
 from rest_framework import serializers
+
+from employees.models import EmployeeProfile
 
 from .models import DelegationRule, RequestObligation, UserPreference
 
 
 User = get_user_model()
+
+
+def delegation_rule_user_queryset():
+    return User.objects.filter(
+        is_active=True,
+        employee_profile__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+    ).filter(Q(employee_profile__company__is_active=True) | Q(employee_profile__company__isnull=True))
 
 
 class DelegationUserSerializer(serializers.ModelSerializer):
@@ -16,8 +26,12 @@ class DelegationUserSerializer(serializers.ModelSerializer):
 class DelegationRuleSerializer(serializers.ModelSerializer):
     from_user = DelegationUserSerializer(read_only=True)
     to_user = DelegationUserSerializer(read_only=True)
-    from_user_id = serializers.PrimaryKeyRelatedField(source="from_user", queryset=User.objects.all(), write_only=True)
-    to_user_id = serializers.PrimaryKeyRelatedField(source="to_user", queryset=User.objects.all(), write_only=True)
+    from_user_id = serializers.PrimaryKeyRelatedField(
+        source="from_user", queryset=delegation_rule_user_queryset(), write_only=True
+    )
+    to_user_id = serializers.PrimaryKeyRelatedField(
+        source="to_user", queryset=delegation_rule_user_queryset(), write_only=True
+    )
     created_by = DelegationUserSerializer(read_only=True)
 
     class Meta:

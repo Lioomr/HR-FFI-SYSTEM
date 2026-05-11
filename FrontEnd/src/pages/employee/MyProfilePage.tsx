@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Card, Descriptions, Space, Button, Avatar, Row, Col, Tabs, Tag, Typography, Divider } from "antd";
-import { UserOutlined, ContainerOutlined, DollarOutlined, FolderOpenOutlined, PhoneOutlined, SafetyCertificateOutlined, ReloadOutlined } from "@ant-design/icons";
+import { Card, Descriptions, Space, Button, Avatar, Row, Col, Tabs, Tag, Typography, Divider, message, Tooltip } from "antd";
+import { UserOutlined, ContainerOutlined, DollarOutlined, FolderOpenOutlined, PhoneOutlined, SafetyCertificateOutlined, ReloadOutlined, CopyOutlined, MailOutlined } from "@ant-design/icons";
 import { getCountryFlag } from "../../utils/countries";
 import LoadingState from "../../components/ui/LoadingState";
 import EmptyState from "../../components/ui/EmptyState";
@@ -11,7 +11,6 @@ import type { Employee } from "../../services/api/employeesApi";
 import { isApiError } from "../../services/api/apiTypes";
 import { formatNumber } from "../../utils/currency";
 
-// Helper functions
 const formatValue = (val: any) => {
     if (val === null || val === undefined || val === "") return "—";
     return String(val);
@@ -29,6 +28,44 @@ const formatCurrency = (val: any) => {
     if (val === null || val === undefined || val === "") return "—";
     return formatNumber(val);
 };
+
+function getExpiryStatus(dateStr: string | undefined): 'expired' | 'warning' | 'ok' | 'unknown' {
+    if (!dateStr) return 'unknown';
+    const expiry = new Date(dateStr);
+    const now = new Date();
+    const diffDays = Math.floor((expiry.getTime() - now.getTime()) / 86400000);
+    if (diffDays < 0) return 'expired';
+    if (diffDays <= 60) return 'warning';
+    return 'ok';
+}
+
+function ExpiryTag({ status }: { status: ReturnType<typeof getExpiryStatus> }) {
+    if (status === 'expired') return <Tag color="error">Expired</Tag>;
+    if (status === 'warning') return <Tag color="warning">Expiring Soon</Tag>;
+    if (status === 'ok') return <Tag color="success">Valid</Tag>;
+    return <Tag>Unknown</Tag>;
+}
+
+function DocCard({ label, tagLabel, tagColor, number, expiry }: {
+    label: string; tagLabel: string; tagColor: string;
+    number: string; expiry: string | undefined;
+}) {
+    const status = getExpiryStatus(expiry);
+    const borderColor = status === 'expired' ? '#ff4d4f' : status === 'warning' ? '#faad14' : '#f0f0f0';
+    return (
+        <div style={{ padding: 12, background: '#fafafa', borderRadius: 8, border: `1px solid ${borderColor}` }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                <Typography.Text strong><SafetyCertificateOutlined /> {label}</Typography.Text>
+                <Space size={4}>
+                    <ExpiryTag status={status} />
+                    <Tag color={tagColor}>{tagLabel}</Tag>
+                </Space>
+            </div>
+            <div style={{ fontSize: 13, color: '#595959', marginBottom: 4 }}>{number}</div>
+            <div style={{ fontSize: 12, color: '#8c8c8c' }}>Expires: {formatDate(expiry)}</div>
+        </div>
+    );
+}
 
 const { Title, Text } = Typography;
 
@@ -79,17 +116,43 @@ export default function MyProfilePage() {
 
     return (
         <div>
-            {/* Header / Actions */}
-            <div style={{ marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <Title level={4} style={{ margin: 0 }}>{t("profile.myProfile")}</Title>
-                <Button icon={<ReloadOutlined />} onClick={loadProfile}>
-                    {t("profile.refresh")}
-                </Button>
-            </div>
+            {/* Hero Banner */}
+            <Card style={{ borderRadius: 16, border: 'none', boxShadow: '0 2px 16px rgba(0,0,0,0.06)', marginBottom: 24, background: 'linear-gradient(135deg, #f8faff 0%, #fff 100%)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
+                    <Avatar
+                        size={88}
+                        style={{ backgroundColor: '#1890ff', fontSize: 36, flexShrink: 0, boxShadow: '0 0 0 4px #e6f4ff' }}
+                    >
+                        {employee.full_name?.charAt(0).toUpperCase()}
+                    </Avatar>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <Title level={3} style={{ margin: 0 }}>{employee.full_name}</Title>
+                        <Text type="secondary" style={{ fontSize: 15 }}>{employee.position || "—"}</Text>
+                        <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                            {employee.department && <Tag color="blue">{employee.department}</Tag>}
+                            <Tag color={employee.employment_status === 'ACTIVE' ? 'success' : 'default'}>
+                                {employee.employment_status || 'ACTIVE'}
+                            </Tag>
+                            <Tag style={{ fontFamily: 'monospace', background: '#f5f5f5', border: '1px solid #d9d9d9', color: '#595959' }}>
+                                #{employee.employee_id}
+                            </Tag>
+                        </div>
+                        <div style={{ marginTop: 8, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                            <Text type="secondary" style={{ fontSize: 12 }}>
+                                <span style={{ marginRight: 4 }}>Manager:</span>
+                                <Text style={{ fontSize: 12 }}>{directManagerName}</Text>
+                            </Text>
+                        </div>
+                    </div>
+                    <Button icon={<ReloadOutlined />} onClick={loadProfile} style={{ alignSelf: 'flex-start' }}>
+                        {t("profile.refresh")}
+                    </Button>
+                </div>
+            </Card>
 
             <Row gutter={24}>
                 {/* Left Column: Main Tabs */}
-                <Col xs={24} lg={16}>
+                <Col xs={24} lg={17}>
                     <Card style={{ borderRadius: 16, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
                         <Tabs
                             defaultActiveKey="1"
@@ -112,15 +175,33 @@ export default function MyProfilePage() {
                                                     {formatValue((employee as any).nationality)}
                                                 </Space>
                                             </Descriptions.Item>
-                                            <Descriptions.Item label={t("profile.employeeNumber")}>{formatValue((employee as any).employee_number)}</Descriptions.Item>
+                                            <Descriptions.Item label={t("profile.employeeNumber")}>
+                                                <Space>
+                                                    {formatValue((employee as any).employee_number)}
+                                                    <Tooltip title="Copy">
+                                                        <Button
+                                                            type="text"
+                                                            size="small"
+                                                            icon={<CopyOutlined />}
+                                                            onClick={() => {
+                                                                navigator.clipboard.writeText(String((employee as any).employee_number || ''));
+                                                                message.success('Copied!');
+                                                            }}
+                                                        />
+                                                    </Tooltip>
+                                                </Space>
+                                            </Descriptions.Item>
                                             <Descriptions.Item label={t("profile.mobileNumber")}>
                                                 <Space>
                                                     <PhoneOutlined style={{ color: '#bfbfbf' }} />
-                                                    {formatValue(employee.mobile)}
+                                                    <a href={`tel:${employee.mobile}`} style={{ color: 'inherit' }}>{formatValue(employee.mobile)}</a>
                                                 </Space>
                                             </Descriptions.Item>
                                             <Descriptions.Item label={t("common.email")}>
-                                                <span style={{ color: '#1890ff' }}>{employee.email}</span>
+                                                <Space>
+                                                    <MailOutlined style={{ color: '#bfbfbf' }} />
+                                                    <a href={`mailto:${employee.email}`}>{employee.email}</a>
+                                                </Space>
                                             </Descriptions.Item>
                                             <Descriptions.Item label={t("profile.directManager")}>{formatValue(directManagerName)}</Descriptions.Item>
                                         </Descriptions>
@@ -180,33 +261,8 @@ export default function MyProfilePage() {
                     </Card>
                 </Col>
 
-                {/* Right Column: Sidebar */}
-                <Col xs={24} lg={8}>
-                    {/* Profile Summary Card */}
-                    <Card style={{ borderRadius: 16, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', marginBottom: 24, textAlign: 'center' }}>
-                        <div style={{ marginBottom: 16 }}>
-                            <Avatar size={100} style={{ backgroundColor: '#1890ff', fontSize: 36 }}>
-                                {employee.full_name?.charAt(0).toUpperCase()}
-                            </Avatar>
-                        </div>
-                        <Title level={3} style={{ marginBottom: 4 }}>{employee.full_name}</Title>
-                        <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>{employee.position || t("common.noData")}</Text>
-
-                        <Tag color={employee.employment_status === 'ACTIVE' ? 'success' : 'default'} style={{ padding: '4px 12px', fontSize: 14 }}>
-                            {employee.employment_status || 'ACTIVE'}
-                        </Tag>
-
-                        <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #f0f0f0' }}>
-                            <div style={{ marginBottom: 10 }}>
-                                <Text type="secondary" style={{ fontSize: 12 }}>{t("profile.directManager")}</Text>
-                                <div style={{ fontSize: 14, fontWeight: 500 }}>{formatValue(directManagerName)}</div>
-                            </div>
-                            <Text type="secondary" style={{ fontSize: 12 }}>{t("profile.employeeId")}</Text>
-                            <div style={{ fontSize: 16, fontWeight: 500 }}>{employee.employee_id}</div>
-                        </div>
-                    </Card>
-
-                    {/* Documents Card */}
+                {/* Right Column: Documents only */}
+                <Col xs={24} lg={7}>
                     <Card
                         title={
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -216,48 +272,28 @@ export default function MyProfilePage() {
                         }
                         style={{ borderRadius: 16, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}
                     >
-                        <Space direction="vertical" style={{ width: '100%' }} size={16}>
-                            {/* Passport */}
-                            <div style={{ padding: 12, background: '#fafafa', borderRadius: 8, border: '1px solid #f0f0f0' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                                    <Text strong><SafetyCertificateOutlined /> {t("profile.passport")}</Text>
-                                    <Tag color="cyan">Doc</Tag>
-                                </div>
-                                <div style={{ fontSize: 13, color: '#595959', marginBottom: 4 }}>
-                                    {formatValue(employee.passport || (employee as any).passport_no)}
-                                </div>
-                                <div style={{ fontSize: 12, color: '#8c8c8c' }}>
-                                    {t("profile.expires")}: {formatDate((employee as any).passport_expiry)}
-                                </div>
-                            </div>
-
-                            {/* National ID */}
-                            <div style={{ padding: 12, background: '#fafafa', borderRadius: 8, border: '1px solid #f0f0f0' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                                    <Text strong><SafetyCertificateOutlined /> {t("profile.nationalId")}</Text>
-                                    <Tag color="blue">ID</Tag>
-                                </div>
-                                <div style={{ fontSize: 13, color: '#595959', marginBottom: 4 }}>
-                                    {formatValue((employee as any).national_id)}
-                                </div>
-                                <div style={{ fontSize: 12, color: '#8c8c8c' }}>
-                                    {t("profile.expires")}: {formatDate((employee as any).id_expiry)}
-                                </div>
-                            </div>
-
-                            {/* Health Card */}
-                            <div style={{ padding: 12, background: '#fafafa', borderRadius: 8, border: '1px solid #f0f0f0' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                                    <Text strong><SafetyCertificateOutlined /> {t("profile.healthCard")}</Text>
-                                    <Tag color="green">Health</Tag>
-                                </div>
-                                <div style={{ fontSize: 13, color: '#595959', marginBottom: 4 }}>
-                                    {formatValue((employee as any).health_card)}
-                                </div>
-                                <div style={{ fontSize: 12, color: '#8c8c8c' }}>
-                                    {t("profile.expires")}: {formatDate((employee as any).health_card_expiry)}
-                                </div>
-                            </div>
+                        <Space direction="vertical" style={{ width: '100%' }} size={12}>
+                            <DocCard
+                                label={t("profile.passport")}
+                                tagLabel="Passport"
+                                tagColor="cyan"
+                                number={formatValue(employee.passport || (employee as any).passport_no)}
+                                expiry={(employee as any).passport_expiry}
+                            />
+                            <DocCard
+                                label={t("profile.nationalId")}
+                                tagLabel="ID"
+                                tagColor="blue"
+                                number={formatValue((employee as any).national_id)}
+                                expiry={(employee as any).id_expiry}
+                            />
+                            <DocCard
+                                label={t("profile.healthCard")}
+                                tagLabel="Health"
+                                tagColor="green"
+                                number={formatValue((employee as any).health_card)}
+                                expiry={(employee as any).health_card_expiry}
+                            />
                         </Space>
                     </Card>
                 </Col>

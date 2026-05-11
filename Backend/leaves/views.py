@@ -28,6 +28,7 @@ from core.pagination import StandardPagination
 from core.pdf import merge_pdfs
 from core.permissions import IsDepartmentCEOApprover, IsHRWorkflowApprover, get_role
 from core.responses import error, success
+from core.views_templates import resolve_template_path
 from core.services import (
     can_user_act_on_instance,
     get_ceo_approver_users,
@@ -422,7 +423,14 @@ def _build_leave_request_pdf(instance: LeaveRequest):
         return regular, bold
 
     def _template_path():
-        search_roots = [str(settings.BASE_DIR.parent), str(settings.BASE_DIR)]
+        template = resolve_template_path("leave_request_blank.pdf", aliases=["leave-request-template.pdf"])
+        if template:
+            return template
+        hr_templates_dir = getattr(settings, "HR_TEMPLATES_DIR", os.environ.get("HR_TEMPLATES_DIR") or "")
+        if hr_templates_dir:
+            search_roots = [hr_templates_dir]
+        else:
+            search_roots = [str(settings.BASE_DIR.parent), str(settings.BASE_DIR)]
         explicit_names = [
             "طلب إجازة (AutoRecovered).pdf",
             "طلب إجازة.pdf",
@@ -446,11 +454,38 @@ def _build_leave_request_pdf(instance: LeaveRequest):
             return None
 
     def _display_name(user):
-        return str(getattr(user, "full_name", "") or getattr(user, "email", "") or "-")
+        return str(getattr(user, "full_name", "") or getattr(user, "email", "") or "")
+
+    def _format_date(value):
+        if not value:
+            return ""
+        try:
+            if hasattr(value, "hour"):
+                value = timezone.localtime(value)
+            return value.strftime("%Y-%m-%d")
+        except Exception:
+            return str(value)
+
+    def _profile_employee_number(profile):
+        if not profile:
+            return ""
+        return getattr(profile, "employee_number", "") or getattr(profile, "employee_id", "") or ""
+
+    def _display_user_profile_name(user):
+        if not user:
+            return ""
+        profile = _profile_for(user)
+        return (
+            getattr(profile, "full_name_en", "")
+            or getattr(profile, "full_name", "")
+            or getattr(user, "full_name", "")
+            or getattr(user, "email", "")
+            or ""
+        )
 
     def _display_manager(profile):
         if not profile:
-            return "-"
+            return ""
         manager_profile = getattr(profile, "manager_profile", None)
         manager_user = getattr(manager_profile, "user", None) if manager_profile else None
         manager_name = (
@@ -459,27 +494,27 @@ def _build_leave_request_pdf(instance: LeaveRequest):
             or getattr(manager_user, "full_name", "")
             or getattr(manager_user, "email", "")
         )
-        return str(manager_name or "-")
+        return str(manager_name or "")
 
     def _project_department(profile):
         if not profile:
-            return "-"
+            return ""
         department = getattr(profile, "department_name_en", "") or getattr(profile, "department", "")
         task_group = getattr(getattr(profile, "task_group_ref", None), "name", "")
         parts = [part for part in [department, task_group] if part]
-        return " / ".join(parts) if parts else "-"
+        return " / ".join(parts) if parts else ""
 
     def _find_balance(profile):
         if not profile:
-            return "-"
+            return ""
         try:
             balances = calculate_leave_balance(instance.employee, instance.start_date.year, profile=profile)
         except Exception:
-            return "-"
+            return ""
         for balance in balances:
             if balance["leave_type_id"] == instance.leave_type_id:
                 return str(balance["remaining_days"])
-        return "-"
+        return ""
 
     def _leave_flags():
         code = str(instance.leave_type.code or instance.leave_type.name or "").strip().upper().replace(" ", "_")
@@ -499,8 +534,53 @@ def _build_leave_request_pdf(instance: LeaveRequest):
             summary_parts.append(f"Manual note: {instance.manual_entry_reason}")
         return " | ".join(summary_parts)
 
+    def _last_approved_leave(profile):
+        subject_filter = Q(employee=instance.employee)
+        if profile:
+            subject_filter |= Q(employee_profile=profile)
+        return (
+            LeaveRequest.objects.filter(subject_filter, status=LeaveRequest.RequestStatus.APPROVED, is_active=True)
+            .exclude(id=instance.id)
+            .filter(start_date__lt=instance.start_date)
+            .select_related("leave_type")
+            .order_by("-end_date", "-id")
+            .first()
+        )
+
+    def _latest_decision():
+        decisions = [
+            (
+                "Delegate",
+                instance.delegate_decision_at,
+                instance.delegate_decision_by or instance.delegated_to,
+                instance.delegate_decision_note,
+            ),
+            ("Manager", instance.manager_decision_at, instance.manager_decision_by, instance.manager_decision_note),
+            ("CEO", instance.ceo_decision_at, instance.ceo_decision_by, instance.ceo_decision_note),
+            (
+                "HR",
+                instance.decided_at,
+                instance.decided_by or instance.entered_by,
+                instance.hr_decision_note or instance.decision_reason,
+            ),
+        ]
+        dated = [item for item in decisions if item[1]]
+        if not dated:
+            return None
+        return max(dated, key=lambda item: item[1])
+
+    def _decision_status(stage, at):
+        if not at:
+            return ""
+        latest = _latest_decision()
+        if latest and latest[0] == stage and instance.status == LeaveRequest.RequestStatus.REJECTED:
+            return "Rejected"
+        return "Approved"
+
     def _fit_single_line(text, font_name, size, max_width):
-        value = _shape_ar(text) or "-"
+        value = _shape_ar(text)
+        if not value:
+            return ""
         if pdfmetrics.stringWidth(value, font_name, size) <= max_width:
             return value
 
@@ -511,12 +591,14 @@ def _build_leave_request_pdf(instance: LeaveRequest):
         return f"{trimmed}{ellipsis}" if trimmed else ellipsis
 
     def _draw_text(pdf, x, y, text, *, size=8, font=None, max_width=110, align="left", max_lines=2):
-        value = _shape_ar(text) or "-"
+        value = _shape_ar(text)
+        if not value:
+            return
         chosen_font = font or regular_font
         if max_lines == 1:
             lines = [_fit_single_line(value, chosen_font, size, max_width)]
         else:
-            lines = simpleSplit(value, chosen_font, size, max_width)[:max_lines] or ["-"]
+            lines = simpleSplit(value, chosen_font, size, max_width)[:max_lines]
         pdf.setFont(chosen_font, size)
         for index, line in enumerate(lines):
             line_y = y - (index * (size + 1))
@@ -540,6 +622,27 @@ def _build_leave_request_pdf(instance: LeaveRequest):
     _register_pdf_fonts()
     regular_font, bold_font = _font_pair()
 
+    def _stage_label(stage, at, status_value=None):
+        if at:
+            latest = _latest_decision()
+            if latest and latest[0] == stage and instance.status == LeaveRequest.RequestStatus.REJECTED:
+                return "Rejected"
+            return "Approved"
+        pending_map = {
+            "Delegate": LeaveRequest.RequestStatus.PENDING_DELEGATE,
+            "Manager": LeaveRequest.RequestStatus.PENDING_MANAGER,
+            "HR": LeaveRequest.RequestStatus.PENDING_HR,
+            "CEO": LeaveRequest.RequestStatus.PENDING_CEO,
+        }
+        if instance.status == pending_map.get(stage):
+            return "Pending"
+        if instance.status in (
+            LeaveRequest.RequestStatus.CANCELLED,
+            LeaveRequest.RequestStatus.REJECTED,
+        ):
+            return ""
+        return ""
+
     reader = PdfReader(template_path)
     base_page = reader.pages[0]
     width = float(base_page.mediabox.width)
@@ -547,7 +650,8 @@ def _build_leave_request_pdf(instance: LeaveRequest):
 
     profile = _profile_for(instance.employee)
     days = str(get_leave_days(instance.start_date, instance.end_date))
-    hr_name = _display_name(instance.decided_by or instance.entered_by) if (instance.decided_by or instance.entered_by) else "-"
+    hr_user = instance.decided_by or instance.entered_by
+    hr_name = _display_user_profile_name(hr_user) if hr_user else ""
     flags = _leave_flags()
     employee_name = (
         getattr(profile, "full_name_en", "")
@@ -555,86 +659,135 @@ def _build_leave_request_pdf(instance: LeaveRequest):
         or getattr(instance.employee, "full_name", "")
         or instance.employee.email
     )
-    reference_no = str(instance.id)
-    created_date = timezone.localtime(instance.created_at).strftime("%Y-%m-%d")
+    reference_no = f"LR-{instance.id:05d}"
+    created_date = _format_date(instance.created_at)
     department_project = _project_department(profile)
+    delegated_profile = _profile_for(instance.delegated_to) if instance.delegated_to else None
+    delegated_name = _display_user_profile_name(instance.delegated_to) if instance.delegated_to else ""
+    delegated_number = _profile_employee_number(delegated_profile) if instance.delegated_to else ""
+    actual_departure_date = instance.start_date
+    actual_return_date = instance.date_of_rejoin or instance.end_date
+    destination = instance.airplane_ticket_address or instance.other_leave_description or ""
+    address_parts = [
+        part for part in [instance.full_address, instance.po_box, getattr(profile, "mobile", "")] if part
+    ]
+    address_during_leave = " | ".join(address_parts) if address_parts else ""
+    leave_type_en, leave_type_ar = _leave_type_labels(instance.leave_type)
+    other_leave_label = (
+        instance.other_leave_description
+        or (f"{leave_type_en} / {leave_type_ar}" if flags["other"] else "")
+    )
+
+    # Column x-centers and safe widths (avoid overlap with English/Arabic labels)
+    LEFT_X = 175
+    RIGHT_X = 445
+    LEFT_W = 130
+    RIGHT_W = 120
 
     overlay_buffer = BytesIO()
     pdf = canvas.Canvas(overlay_buffer, pagesize=(width, height))
     pdf.setTitle(f"Leave Request {instance.id}")
     pdf.setFillColorRGB(0.1, 0.1, 0.1)
 
-    # Header
-    _draw_text(pdf, 92, height - 69, reference_no, size=8, font=bold_font, max_width=115, max_lines=1)
-    _draw_text(pdf, 92, height - 85, created_date, size=8, max_width=115, max_lines=1)
+    def L(y, text, *, size=8.6, font=None, bold=False):
+        _draw_text(
+            pdf, LEFT_X, y, text,
+            size=size, font=font or (bold_font if bold else regular_font),
+            max_width=LEFT_W, align="center", max_lines=1,
+        )
 
-    # Employee info
-    _draw_text(pdf, 112, height - 118, employee_name, size=6.4, font=bold_font, max_width=152, max_lines=1)
-    _draw_text(
+    def R(y, text, *, size=8.6, font=None, bold=False):
+        _draw_text(
+            pdf, RIGHT_X, y, text,
+            size=size, font=font or (bold_font if bold else regular_font),
+            max_width=RIGHT_W, align="center", max_lines=1,
+        )
+
+    def _mask_input_lines(pdf, line_specs):
+        pdf.setFillColorRGB(1, 0.985, 0.96)
+        for x, y, width_value in line_specs:
+            pdf.rect(x, y - 3, width_value, 6, stroke=0, fill=1)
+        pdf.setFillColorRGB(0.1, 0.1, 0.1)
+
+    _mask_input_lines(
         pdf,
-        418,
-        height - 118,
-        getattr(profile, "employee_number", "") or getattr(profile, "employee_id", "") or "-",
-        size=7.0,
-        max_width=72,
-        max_lines=1,
+        [
+            (38, 752, 260), (308, 752, 260),
+            (38, 690, 260), (308, 690, 260),
+            (38, 662, 260), (308, 662, 260),
+            (38, 634, 260), (308, 634, 260),
+            (38, 606, 260), (308, 606, 260),
+            (420, 550, 146),
+            (38, 512, 260), (308, 512, 260),
+            (38, 485, 260), (308, 485, 260),
+            (38, 458, 260), (308, 458, 260),
+            (38, 431, 260), (308, 431, 260),
+            (38, 404, 260), (308, 404, 260),
+            (38, 310, 530),
+            (38, 278, 530),
+        ],
     )
-    _draw_text(pdf, 112, height - 135, department_project, size=6.0, max_width=152, max_lines=1)
+
+    # Each row's horizontal underline sits BELOW the label; values are centered
+    # in the white space between that line and the next row's label.
+    # Header (line top=90, next section top=114) → value center top=102 → y=740
+    L(748, reference_no, size=9.4, bold=True)
+    R(748, created_date, size=9.4, bold=True)
+
+    # Name / Employee No (line top=152, next top=167) → center top=159 → y=682
+    L(686, employee_name, size=8.8, bold=True)
+    R(686, _profile_employee_number(profile), size=8.8, bold=True)
+    # Dept / Position (line top=180, next top=195) → center 187 → y=654
+    L(658, department_project, size=8)
+    R(658, getattr(profile, "job_title_en", "") or getattr(profile, "job_title", ""), size=8.2)
+    # ID / Nationality (line top=208, next top=223) → center 215 → y=626
+    L(630, getattr(profile, "national_id", ""), size=8.4)
+    R(630, getattr(profile, "nationality_en", "") or getattr(profile, "nationality", ""), size=8.4)
+    # Mobile / Passport (line top=236, next section top=265) → center 250 → y=591
+    L(602, getattr(profile, "mobile", ""), size=8.4)
+    R(602, getattr(profile, "passport_no", ""), size=8.4)
+
+    # Request details — checkboxes (centers extracted: x=40/181/326, y=290 → ry=551)
+    _draw_checkbox(pdf, 40, 551, flags["accrued"])
+    _draw_checkbox(pdf, 181, 551, flags["unpaid"])
+    _draw_checkbox(pdf, 326, 551, flags["other"])
+    # Specify (line top=292, next top=317) → center 304 → y=537
     _draw_text(
-        pdf,
-        418,
-        height - 135,
-        getattr(profile, "job_title_en", "") or getattr(profile, "job_title", "") or "-",
-        size=6.8,
-        max_width=72,
-        max_lines=1,
+        pdf, 524, 548, other_leave_label if flags["other"] else "",
+        size=8.2, max_width=76, align="center", max_lines=1,
     )
-    _draw_text(pdf, 112, height - 152, getattr(profile, "national_id", "") or "-", size=6.6, max_width=152, max_lines=1)
+
+    # Leave Duration / Substitute Employee (line top=330, next top=344) → center 337 → y=505
+    L(508, days, size=9.2, bold=True)
+    R(508, "Yes" if instance.delegated_to_id else "No", size=9, bold=True)
+
+    # Starting Day / Substitute Name (line top=357, next top=371) → center 364 → y=478
+    L(481, _format_date(instance.start_date), size=8.8)
+    R(481, delegated_name, size=8)
+
+    # Ending Day / Substitute Emp No. (line top=384, next top=398) → center 391 → y=451
+    L(454, _format_date(instance.end_date), size=8.8)
+    R(454, delegated_number, size=8.4)
+
+    # Destination / Substitute Signature (line top=411, next top=425) → center 418 → y=424
+    L(427, destination, size=8)
+    R(427, _stage_label("Delegate", instance.delegate_decision_at), size=8.4)
+
+    # Actual Departure / Actual Return (line top=438, next section top=471) → center 454 → y=388
+    L(400, _format_date(actual_departure_date), size=8.8)
+    R(400, _format_date(actual_return_date), size=8.8)
+
+    # Address & tel during leave (line top=532, next label top=549) → center 540 → y=301
     _draw_text(
-        pdf,
-        418,
-        height - 152,
-        getattr(profile, "nationality_en", "") or getattr(profile, "nationality", "") or "-",
-        size=6.8,
-        max_width=72,
-        max_lines=1,
+        pdf, width / 2, 306, address_during_leave,
+        size=8.2, max_width=480, align="center", max_lines=1,
     )
-    _draw_text(pdf, 112, height - 169, getattr(profile, "mobile", "") or "-", size=6.6, max_width=152, max_lines=1)
-    _draw_text(pdf, 418, height - 169, getattr(profile, "passport_no", "") or "-", size=6.6, max_width=72, max_lines=1)
 
-    # Request details
-    _draw_checkbox(pdf, 229, height - 191, flags["other"])
-    _draw_checkbox(pdf, 355, height - 191, flags["unpaid"])
-    _draw_checkbox(pdf, 510, height - 191, flags["accrued"])
-    
-    # First row: Duration & Substitute Employee
-    _draw_text(pdf, 72, height - 222, "-", size=6.2, max_width=98, max_lines=1)
-    _draw_text(pdf, 409, height - 222, days, size=6.7, font=bold_font, max_width=24, align="center", max_lines=1)
-    
-    # Second row: Leave starting day & Substitute Name
-    _draw_text(pdf, 72, height - 239, "-", size=5.9, max_width=98, max_lines=1)
-    _draw_text(pdf, 392, height - 239, instance.start_date.strftime("%Y-%m-%d"), size=5.9, max_width=52, align="center", max_lines=1)
-    
-    # Third row: Leave ending day & Substitute Emp No
-    _draw_text(pdf, 72, height - 256, "-", size=5.9, max_width=98, max_lines=1)
-    _draw_text(pdf, 392, height - 256, instance.end_date.strftime("%Y-%m-%d"), size=5.9, max_width=52, align="center", max_lines=1)
-    
-    # Fourth row: Destination
-    _draw_text(pdf, 392, height - 273, "-", size=5.9, max_width=52, align="center", max_lines=1)
-    
-    # Fifth row: Actual departure date
-    _draw_text(pdf, 392, height - 290, instance.start_date.strftime("%Y-%m-%d"), size=5.9, max_width=52, align="center", max_lines=1)
-    
-    # Sixth row: Actual return date
-    _draw_text(pdf, 392, height - 307, instance.end_date.strftime("%Y-%m-%d"), size=5.9, max_width=52, align="center", max_lines=1)
-
-    # Approval block intentionally left blank; signatures and manager names belong to the manual approval section.
-
-    # HR section
-    _draw_text(pdf, 170, height - 703, _request_summary(), size=5.9, max_width=330, max_lines=1)
-    _draw_text(pdf, 170, height - 733, instance.source_document_ref or "-", size=5.9, max_width=330, max_lines=1)
-    _draw_text(pdf, 475, height - 775, hr_name, size=6.1, max_width=78, align="center", max_lines=1)
-    _draw_text(pdf, 298, height - 775, "HR", size=6.1, max_width=60, align="center", max_lines=1)
+    # Employee Signature (line top=564, free space below) → value top=580 → y=261
+    _draw_text(
+        pdf, width / 2, 274, employee_name,
+        size=8.4, max_width=480, align="center", max_lines=1, font=bold_font,
+    )
 
     pdf.save()
     overlay_buffer.seek(0)
@@ -642,9 +795,131 @@ def _build_leave_request_pdf(instance: LeaveRequest):
     overlay_page = PdfReader(overlay_buffer).pages[0]
     base_page.merge_page(overlay_page)
 
+    if len(reader.pages) > 1:
+        page_two = reader.pages[1]
+        page_two_width = float(page_two.mediabox.width)
+        page_two_height = float(page_two.mediabox.height)
+        page_two_overlay = BytesIO()
+        pdf = canvas.Canvas(page_two_overlay, pagesize=(page_two_width, page_two_height))
+        pdf.setFillColorRGB(0.1, 0.1, 0.1)
+
+        _mask_input_lines(
+            pdf,
+            [
+                (38, 412, 260), (308, 412, 260),
+                (38, 385, 260), (308, 385, 260),
+                (38, 358, 260), (308, 358, 260),
+                (38, 331, 260), (308, 331, 260),
+                (38, 304, 260), (308, 304, 260),
+            ],
+        )
+
+        ticket_requested = bool(instance.airplane_ticket_payer or instance.airplane_ticket_address)
+        # Tickets section checkboxes — centers from extracted structure
+        # Single visa: x=40, top=106 → y=735
+        # Need to issue Yes: x=40, top=128 → y=713
+        # Need to issue No: x=246, top=128 → y=713
+        _draw_checkbox(pdf, 40, 735, ticket_requested)
+        _draw_checkbox(pdf, 40, 713, ticket_requested)
+        _draw_checkbox(pdf, 246, 713, not ticket_requested)
+
+        # Passport / travel detail row — first data row of ticket table (centered y=654)
+        if ticket_requested:
+            _draw_text(pdf, 90, 654, employee_name, size=6.5, max_width=80, align="center", max_lines=1)
+            _draw_text(pdf, 165, 654, "Self", size=6.5, max_width=50, align="center", max_lines=1)
+            _draw_text(pdf, 235, 654, destination, size=6.5, max_width=64, align="center", max_lines=1)
+            _draw_text(pdf, 302, 654, _format_date(actual_departure_date), size=6.5, max_width=60, align="center", max_lines=1)
+            _draw_text(pdf, 365, 654, _format_date(actual_return_date), size=6.5, max_width=58, align="center", max_lines=1)
+            _draw_text(pdf, 430, 654, getattr(profile, "passport_no", ""), size=6.5, max_width=60, align="center", max_lines=1)
+            _draw_text(pdf, 510, 654, _format_date(getattr(profile, "passport_expiry", None)), size=6.5, max_width=72, align="center", max_lines=1)
+
+        # Approval table (Line Manager + Dept Manager rows)
+        manager_status = _stage_label("Manager", instance.manager_decision_at)
+        manager_user = instance.manager_decision_by or (
+            _leave_manager_user(instance) if manager_status == "Pending" else None
+        )
+        manager_name = _display_user_profile_name(manager_user) if manager_user else ""
+        ceo_status = _stage_label("CEO", instance.ceo_decision_at)
+        ceo_user = instance.ceo_decision_by
+        ceo_name = _display_user_profile_name(ceo_user) if ceo_user else ""
+
+        # Approval table geometry:
+        # first column 32-202, name 202-332, signature 332-452, date 452-532.
+        approval_name_x = 267
+        approval_signature_x = 392
+        approval_date_x = 492
+        manager_row_y = 506
+        department_row_y = 481
+        _draw_text(
+            pdf, approval_name_x, manager_row_y, manager_name,
+            size=7.0, font=bold_font, max_width=112, align="center", max_lines=1,
+        )
+        _draw_text(
+            pdf, approval_signature_x, manager_row_y, manager_status,
+            size=7.0, max_width=100, align="center", max_lines=1,
+        )
+        _draw_text(
+            pdf, approval_date_x, manager_row_y, _format_date(instance.manager_decision_at),
+            size=7.0, max_width=68, align="center", max_lines=1,
+        )
+
+        _draw_text(
+            pdf, approval_name_x, department_row_y, ceo_name,
+            size=7.0, font=bold_font, max_width=112, align="center", max_lines=1,
+        )
+        _draw_text(
+            pdf, approval_signature_x, department_row_y, ceo_status,
+            size=7.0, max_width=100, align="center", max_lines=1,
+        )
+        _draw_text(
+            pdf, approval_date_x, department_row_y, _format_date(instance.ceo_decision_at),
+            size=7.0, max_width=68, align="center", max_lines=1,
+        )
+
+        # HR Department Use section
+        last_leave = _last_approved_leave(profile)
+        latest = _latest_decision()
+        latest_note = (latest[3] if latest else "") or instance.decision_reason or instance.reason or ""
+        ticket_status = (
+            "Company" if instance.airplane_ticket_payer == "company"
+            else "Employee" if instance.airplane_ticket_payer == "employee" else ""
+        )
+        hr_status = _stage_label("HR", instance.decided_at)
+
+        # HR section — values centered in space below each underline
+        # Annual Entitlement / Date of Return From Last Vacation
+        # (line top=430, next label top=444) → center 437 → y=405
+        _draw_text(pdf, LEFT_X, 409, _format_date(getattr(profile, "hire_date", None)), size=8.2, max_width=LEFT_W, align="center", max_lines=1)
+        _draw_text(pdf, RIGHT_X, 409, _format_date(getattr(last_leave, "date_of_rejoin", None) or getattr(last_leave, "end_date", None)), size=8.2, max_width=RIGHT_W, align="center", max_lines=1)
+        # Leave Balance / Last Leave Type (line top=457, next 471) → center 464 → y=378
+        _draw_text(pdf, LEFT_X, 382, _find_balance(profile), size=8.2, max_width=LEFT_W, align="center", max_lines=1)
+        _draw_text(pdf, RIGHT_X, 382, getattr(getattr(last_leave, "leave_type", None), "name", ""), size=8.2, max_width=RIGHT_W, align="center", max_lines=1)
+        # Last Ticket / Ticket Request Status (line top=484, next 498) → center 491 → y=351
+        _draw_text(pdf, LEFT_X, 355, "", size=8.2, max_width=LEFT_W, align="center", max_lines=1)
+        _draw_text(pdf, RIGHT_X, 355, "Requested" if ticket_requested else "Not requested", size=8.2, max_width=RIGHT_W, align="center", max_lines=1)
+        # Visa Charge / Custody (line top=511, next 525) → center 518 → y=324
+        _draw_text(pdf, LEFT_X, 328, ticket_status, size=8.2, max_width=LEFT_W, align="center", max_lines=1)
+        _draw_text(pdf, RIGHT_X, 328, "", size=8.2, max_width=RIGHT_W, align="center", max_lines=1)
+        # Notes / HR Approval (line top=538, next ~552) → center 545 → y=297
+        _draw_text(pdf, LEFT_X, 301, latest_note or f"Status: {instance.get_status_display()}", size=7.6, max_width=LEFT_W + 20, align="center", max_lines=1)
+        _draw_text(pdf, RIGHT_X, 301, hr_status, size=8.2, font=bold_font, max_width=RIGHT_W, align="center", max_lines=1)
+
+        # Human Resources Approval table body row:
+        # first column 32-202, name 202-322, position 322-432, signature 432-532.
+        hr_body_y = 232
+        _draw_text(pdf, 262, hr_body_y, hr_name, size=7.4, font=bold_font, max_width=104, align="center", max_lines=1)
+        _draw_text(pdf, 377, hr_body_y, "HR Manager" if hr_name else "", size=7.4, max_width=96, align="center", max_lines=1)
+        signature_text = f"{hr_status} - {_format_date(instance.decided_at)}".strip(" -")
+        _draw_text(pdf, 482, hr_body_y, signature_text, size=6.9, max_width=86, align="center", max_lines=1)
+
+        pdf.save()
+        page_two_overlay.seek(0)
+        page_two.merge_page(PdfReader(page_two_overlay).pages[0])
+
     output = BytesIO()
     writer = PdfWriter()
-    writer.add_page(base_page)
+    for page in reader.pages:
+        writer.add_page(page)
     writer.write(output)
     output.seek(0)
     return output.getvalue()
@@ -763,20 +1038,23 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
     ordering_fields = ["created_at", "start_date"]
     ordering = ["-created_at"]
 
+    def _base_queryset(self):
+        return LeaveRequest.objects.filter(is_active=True).select_related(
+            "employee",
+            "employee__employee_profile",
+            "leave_type",
+            "decided_by",
+            "manager_decision_by",
+            "delegated_to",
+            "delegate_decision_by",
+            "company",
+        )
+
     def get_queryset(self):
         user = self.request.user
         role = get_role(user)
         base_qs = filter_queryset_by_company_scope(
-            LeaveRequest.objects.filter(is_active=True).select_related(
-                "employee",
-                "employee__employee_profile",
-                "leave_type",
-                "decided_by",
-                "manager_decision_by",
-                "delegated_to",
-                "delegate_decision_by",
-                "company",
-            ),
+            self._base_queryset(),
             self.request,
         )
         if role in ["SystemAdmin", "HRManager"]:
@@ -789,17 +1067,32 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         return LeaveRequestSerializer
 
     def _unscoped_queryset(self):
-        qs = LeaveRequest.objects.filter(is_active=True).select_related(
-            "employee",
-            "employee__employee_profile",
-            "leave_type",
-            "decided_by",
-            "manager_decision_by",
-            "delegated_to",
-            "delegate_decision_by",
-            "company",
-        )
-        return filter_queryset_by_accessible_companies(qs, self.request)
+        return filter_queryset_by_accessible_companies(self._base_queryset(), self.request)
+
+    def get_object(self):
+        if self.action in {"retrieve", "document", "pdf"}:
+            user = self.request.user
+            role = get_role(user)
+            qs = self._unscoped_queryset()
+            if role not in ["SystemAdmin", "HRManager"]:
+                qs = qs.filter(Q(employee=user) | Q(delegated_to=user))
+            obj = qs.filter(pk=self.kwargs.get(self.lookup_field)).first()
+            if obj is None:
+                from django.shortcuts import get_object_or_404
+
+                include_null_qs = self._base_queryset().filter(company__isnull=True)
+                if role not in ["SystemAdmin", "HRManager"]:
+                    include_null_qs = include_null_qs.filter(Q(employee=user) | Q(delegated_to=user))
+                else:
+                    include_null_qs = filter_queryset_by_accessible_companies(
+                        self._base_queryset(),
+                        self.request,
+                        include_null=True,
+                    )
+                obj = get_object_or_404(include_null_qs, pk=self.kwargs.get(self.lookup_field))
+            self.check_object_permissions(self.request, obj)
+            return obj
+        return super().get_object()
 
     def get_permissions(self):
         if self.action == "create":

@@ -451,12 +451,16 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
     )
     def delegation_candidates(self, request):
         qs = EmployeeProfile.objects.select_related("user", "company").filter(
-            user__isnull=False,
-            user__is_active=True,
             employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
         )
-        qs = filter_queryset_by_company_scope(qs, request)
-        qs = qs.exclude(user=request.user).order_by("full_name_en", "full_name", "employee_id")
+
+        if request.query_params.get("scope") == "all":
+            qs = qs.filter(company__is_active=True)
+        else:
+            qs = qs.filter(user__isnull=False, user__is_active=True)
+            qs = filter_queryset_by_company_scope(qs, request)
+
+        qs = qs.exclude(user=request.user).order_by("company__name", "full_name_en", "full_name", "employee_id")
         serializer = self.get_serializer(qs, many=True)
         return success(serializer.data)
 
