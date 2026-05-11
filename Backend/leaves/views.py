@@ -1069,6 +1069,9 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
     def _unscoped_queryset(self):
         return filter_queryset_by_accessible_companies(self._base_queryset(), self.request)
 
+    def _delegated_action_queryset(self):
+        return self._base_queryset().filter(delegated_to=self.request.user)
+
     def get_object(self):
         if self.action in {"retrieve", "document", "pdf"}:
             user = self.request.user
@@ -1077,6 +1080,8 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             if role not in ["SystemAdmin", "HRManager"]:
                 qs = qs.filter(Q(employee=user) | Q(delegated_to=user))
             obj = qs.filter(pk=self.kwargs.get(self.lookup_field)).first()
+            if obj is None and role not in ["SystemAdmin", "HRManager"]:
+                obj = self._base_queryset().filter(pk=self.kwargs.get(self.lookup_field), delegated_to=user).first()
             if obj is None:
                 from django.shortcuts import get_object_or_404
 
@@ -1251,12 +1256,10 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated], url_path="delegate-approve")
     def delegate_approve(self, request, pk=None):
         try:
-            instance = self._unscoped_queryset().get(pk=pk)
+            instance = self._delegated_action_queryset().get(pk=pk)
         except LeaveRequest.DoesNotExist:
             return error("Not found", errors=["Not found."], status=404)
 
-        if instance.delegated_to_id != request.user.id:
-            return error("Forbidden", errors=["Only the delegated user can approve this step."], status=403)
         if instance.status != LeaveRequest.RequestStatus.PENDING_DELEGATE:
             return error(
                 "Validation error",
@@ -1293,12 +1296,10 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated], url_path="delegate-reject")
     def delegate_reject(self, request, pk=None):
         try:
-            instance = self._unscoped_queryset().get(pk=pk)
+            instance = self._delegated_action_queryset().get(pk=pk)
         except LeaveRequest.DoesNotExist:
             return error("Not found", errors=["Not found."], status=404)
 
-        if instance.delegated_to_id != request.user.id:
-            return error("Forbidden", errors=["Only the delegated user can reject this step."], status=403)
         if instance.status != LeaveRequest.RequestStatus.PENDING_DELEGATE:
             return error(
                 "Validation error",

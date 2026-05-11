@@ -360,7 +360,11 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
 
         filename = _download_filename(announcement.attachment.name)
         disposition = "attachment" if request.query_params.get("download") == "1" else "inline"
-        announcement.attachment.open("rb")
+        try:
+            announcement.attachment.open("rb")
+        except FileNotFoundError:
+            logger.warning("announcement_attachment_missing", extra={"announcement_id": announcement.id})
+            return error("Attachment not found.", status=status.HTTP_404_NOT_FOUND)
         response = FileResponse(announcement.attachment, content_type="application/pdf")
         response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
         return response
@@ -390,7 +394,11 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
             return error("Unauthorized", status=status.HTTP_401_UNAUTHORIZED)
 
         filename = _download_filename(announcement.attachment.name)
-        announcement.attachment.open("rb")
+        try:
+            announcement.attachment.open("rb")
+        except FileNotFoundError:
+            logger.warning("announcement_attachment_missing", extra={"announcement_id": announcement.id})
+            return error("Attachment not found.", status=status.HTTP_404_NOT_FOUND)
         response = FileResponse(announcement.attachment, content_type="application/pdf")
         disposition = "attachment" if request.query_params.get("download", "1") != "0" else "inline"
         response["Content-Disposition"] = f'{disposition}; filename="{filename}"'

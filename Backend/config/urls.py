@@ -1,10 +1,22 @@
 from django.contrib import admin
+from django.http import HttpResponse
 from django.urls import include, path, re_path
 
 from core.views import HrSummaryView, HrRecentActivityView
 from payroll.views import PayrollRunExportView
 
+
+def empty_ok(_request):
+    return HttpResponse("OK")
+
+
+def empty_no_content(_request):
+    return HttpResponse(status=204)
+
+
 urlpatterns = [
+    path("favicon.ico", empty_no_content),
+    path("iclock/cdata", empty_ok),
     path("auth/", include("accounts.urls")),
     path("", include("admin_portal.urls")),
     path("", include("invites.urls")),
