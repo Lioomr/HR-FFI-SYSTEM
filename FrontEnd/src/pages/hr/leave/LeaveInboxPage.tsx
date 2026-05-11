@@ -1,26 +1,55 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Card, Table, Tag, Tooltip, notification, Form, Select, DatePicker, Row, Col, Modal, Input, Upload, Popconfirm } from "antd";
+import {
+  Button,
+  Card,
+  Table,
+  Tag,
+  Tooltip,
+  notification,
+  Form,
+  Select,
+  DatePicker,
+  Row,
+  Col,
+  Modal,
+  Input,
+  Upload,
+  Popconfirm,
+} from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { EyeOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
+import {
+  EyeOutlined,
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+} from "@ant-design/icons";
 import type { UploadFile } from "antd/es/upload/interface";
 import dayjs from "dayjs";
 
 import PageHeader from "../../../components/ui/PageHeader";
 import {
-    createHRManualLeaveRequest,
-    deleteHRManualLeaveRequest,
-    getLeaveRequests,
-    getLeaveTypes,
-    updateHRManualLeaveRequest,
-    type LeaveRequest,
-    type LeaveRequestFilter,
-    type LeaveType,
+  createHRManualLeaveRequest,
+  deleteHRManualLeaveRequest,
+  getLeaveRequests,
+  getLeaveTypes,
+  updateHRManualLeaveRequest,
+  type LeaveRequest,
+  type LeaveRequestFilter,
+  type LeaveType,
 } from "../../../services/api/leaveApi";
 import { isApiError } from "../../../services/api/apiTypes";
-import { listEmployees, type Employee } from "../../../services/api/employeesApi";
+import {
+  listDelegationCandidates,
+  listEmployees,
+  type DelegationCandidate,
+  type Employee,
+} from "../../../services/api/employeesApi";
 import { useI18n } from "../../../i18n/useI18n";
-import { apply422ToForm, getFirstApiErrorMessage } from "../../../utils/formErrors";
+import {
+  apply422ToForm,
+  getFirstApiErrorMessage,
+} from "../../../utils/formErrors";
 import LeaveApprovalMap from "../../../components/leaves/LeaveApprovalMap";
 import { useAuthStore } from "../../../auth/authStore";
 import { isHeadOfficeOrganization } from "../../../utils/organizationContext";
@@ -30,516 +59,695 @@ const { RangePicker } = DatePicker;
 const { TextArea } = Input;
 
 export default function LeaveInboxPage() {
-    const navigate = useNavigate();
-    const { t } = useI18n();
-    const user = useAuthStore((state) => state.user);
-    const isHeadOffice = isHeadOfficeOrganization(user);
+  const navigate = useNavigate();
+  const { t } = useI18n();
+  const user = useAuthStore((state) => state.user);
+  const isHeadOffice = isHeadOfficeOrganization(user);
 
-    // Translate leave type names from the API
-    const translateLeaveType = (name?: string): string => {
-        if (!name) return '-';
-        const key = `leave.type.${name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z_]/g, '')}`;
-        const translated = t(key);
-        return translated === key ? name : translated;
-    };
+  // Translate leave type names from the API
+  const translateLeaveType = (name?: string): string => {
+    if (!name) return "-";
+    const key = `leave.type.${name
+      .toLowerCase()
+      .replace(/\s+/g, "_")
+      .replace(/[^a-z_]/g, "")}`;
+    const translated = t(key);
+    return translated === key ? name : translated;
+  };
 
-    const [loading, setLoading] = useState(false);
-    const [data, setData] = useState<LeaveRequest[]>([]);
-    const [total, setTotal] = useState(0);
-    const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState(10);
+  const [loading, setLoading] = useState(false);
+  const [data, setData] = useState<LeaveRequest[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
-    // Filters
-    const [filters, setFilters] = useState<LeaveRequestFilter>({});
-    const [form] = Form.useForm();
-    const [manualForm] = Form.useForm();
+  // Filters
+  const [filters, setFilters] = useState<LeaveRequestFilter>({});
+  const [form] = Form.useForm();
+  const [manualForm] = Form.useForm();
 
-    const [manualModalOpen, setManualModalOpen] = useState(false);
-    const [manualModalLoading, setManualModalLoading] = useState(false);
-    const [editingRecord, setEditingRecord] = useState<LeaveRequest | null>(null);
-    const [employees, setEmployees] = useState<Employee[]>([]);
-    const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
-    const selectedLeaveTypeId = Form.useWatch("leave_type", manualForm);
-    const selectedLeaveType = leaveTypes.find((lt) => lt.id === selectedLeaveTypeId);
-    const isSickSelected = ["SICK", "SICK_LEAVE"].includes((selectedLeaveType?.code || "").toUpperCase());
-    const isOtherSelected = ["OTHER", "OTHER_LEAVE"].includes((selectedLeaveType?.code || selectedLeaveType?.name || "").toUpperCase().replace(/\s+/g, "_"));
+  const [manualModalOpen, setManualModalOpen] = useState(false);
+  const [manualModalLoading, setManualModalLoading] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<LeaveRequest | null>(null);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [delegationCandidates, setDelegationCandidates] = useState<
+    DelegationCandidate[]
+  >([]);
+  const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
+  const selectedLeaveTypeId = Form.useWatch("leave_type", manualForm);
+  const selectedLeaveType = leaveTypes.find(
+    (lt) => lt.id === selectedLeaveTypeId,
+  );
+  const isSickSelected = ["SICK", "SICK_LEAVE"].includes(
+    (selectedLeaveType?.code || "").toUpperCase(),
+  );
+  const isOtherSelected = ["OTHER", "OTHER_LEAVE"].includes(
+    (selectedLeaveType?.code || selectedLeaveType?.name || "")
+      .toUpperCase()
+      .replace(/\s+/g, "_"),
+  );
 
-    const loadData = useCallback(async () => {
-        setLoading(true);
-        try {
-            const res = await getLeaveRequests({ ...filters, page, page_size: pageSize });
-            if (isApiError(res)) {
-                notification.error({ message: t("error.generic"), description: res.message });
-            } else {
-                setData(res.data.items || []);
-                setTotal(res.data.count || 0);
-            }
-        } catch (err: any) {
-            notification.error({ message: t("common.error"), description: t("leave.noRequests") });
-        } finally {
-            setLoading(false);
-        }
-    }, [page, pageSize, filters]);
-
-    const loadManualFormReferences = useCallback(async () => {
-        try {
-            const [employeesRes, leaveTypesRes] = await Promise.all([
-                listEmployees({ page: 1, page_size: 300 }),
-                getLeaveTypes(),
-            ]);
-
-            if (!isApiError(employeesRes)) {
-                setEmployees(employeesRes.data.results || []);
-            }
-            if (!isApiError(leaveTypesRes)) {
-                setLeaveTypes(leaveTypesRes.data || []);
-            }
-        } catch {
-            notification.error({ message: t("common.error"), description: t("common.tryAgain") });
-        }
-    }, []);
-
-    useEffect(() => {
-        loadData();
-    }, [loadData]);
-
-    useEffect(() => {
-        loadManualFormReferences();
-    }, [loadManualFormReferences]);
-
-    const handleFilterChange = (values: any) => {
-        const newFilters: LeaveRequestFilter = {};
-        if (values.status) newFilters.status = values.status;
-        if (values.dates && values.dates[0]) {
-            newFilters.date_from = values.dates[0].format("YYYY-MM-DD");
-            newFilters.date_to = values.dates[1].format("YYYY-MM-DD");
-        }
-        setFilters(newFilters);
-        setPage(1); // Reset to first page
-    };
-
-    const getStatusColor = (status: string) => {
-        const s = status?.toLowerCase();
-        switch (s) {
-            case 'approved': return 'green';
-            case 'rejected': return 'red';
-            case 'submitted': return 'blue';
-            case 'pending_delegate': return 'gold';
-            case 'pending_manager': return 'orange';
-            case 'pending_hr': return 'purple';
-            case 'pending_ceo': return 'volcano';
-            case 'pending': return 'gold';
-            case 'cancelled': return 'default';
-            default: return 'default';
-        }
-    };
-
-    const columns: ColumnsType<LeaveRequest> = [
-        {
-            title: t("hr.dashboard.employee"),
-            key: "employee",
-            render: (_, record) => {
-                const employeeName = record.employee?.full_name || `ID: ${record.employee?.id ?? record.employee_profile ?? "-"}`;
-                const employeeProfileId =
-                    record.employee_profile ?? employees.find((employee) => employee.user_id === record.employee?.id)?.id;
-
-                if (!employeeProfileId) {
-                    return employeeName;
-                }
-
-                return (
-                    <Button
-                        type="link"
-                        style={{ padding: 0, height: "auto", color: "#f97316", fontWeight: 500 }}
-                        onClick={() => navigate(`/hr/employees/${employeeProfileId}`)}
-                    >
-                        {employeeName}
-                    </Button>
-                );
-            },
-        },
-        {
-            title: t("leave.leaveType"),
-            key: "leave_type",
-            render: (_, record) => translateLeaveType(record.leave_type?.name)
-        },
-        ...(isHeadOffice
-            ? [{
-                title: t("common.company", "Company"),
-                key: "company_name",
-                dataIndex: "company_name",
-                render: (value?: string) => value ? <Tag color="blue">{value}</Tag> : "-",
-            }]
-            : []),
-        {
-            title: t("leave.startDate"),
-            dataIndex: "start_date",
-            key: "start_date",
-        },
-        {
-            title: t("leave.days"),
-            dataIndex: "days",
-            key: "days",
-            align: 'center'
-        },
-        {
-            title: t("common.status"),
-            dataIndex: "status",
-            key: "status",
-            render: (status, record) => {
-                const statusKey = `leave.status.${status?.toLowerCase()}`;
-                const translated = t(statusKey);
-                const display = translated === statusKey
-                    ? (status?.charAt(0).toUpperCase() + status?.slice(1).toLowerCase()).replace(/_/g, ' ')
-                    : translated;
-                return (
-                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                        <Tag color={getStatusColor(status)}>{display}</Tag>
-                        {record.source === "hr_manual" && <Tag color="cyan">{t("leave.manual.badge")}</Tag>}
-                    </div>
-                );
-            }
-        },
-        {
-            title: t("common.createdAt"),
-            dataIndex: "created_at",
-            key: "created_at",
-            render: (val) => val ? new Date(val).toLocaleDateString() : '-'
-        },
-        {
-            title: t("common.actions"),
-            key: "actions",
-            align: 'center',
-            render: (_, record) => (
-                <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
-                    <Tooltip title={t("common.details")}>
-                        <Button
-                            icon={<EyeOutlined />}
-                            onClick={() => navigate(`/hr/leave/requests/${record.id}`)}
-                            size="small"
-                        />
-                    </Tooltip>
-                    {record.source === "hr_manual" && (
-                        <>
-                            <Tooltip title={t("common.edit")}>
-                                <Button
-                                    icon={<EditOutlined />}
-                                    size="small"
-                                    disabled={isHeadOffice}
-                                    title={isHeadOffice ? t("organization.headOffice.switchToEditRecords") : undefined}
-                                    onClick={() => openEditModal(record)}
-                                />
-                            </Tooltip>
-                            <Popconfirm
-                                title={t("leave.manual.deleteConfirm")}
-                                okText={t("common.delete")}
-                                cancelText={t("common.cancel")}
-                                onConfirm={() => handleDeleteManual(record.id)}
-                            >
-                                <Button
-                                    danger
-                                    icon={<DeleteOutlined />}
-                                    size="small"
-                                    disabled={isHeadOffice}
-                                    title={isHeadOffice ? t("organization.headOffice.switchToEditRecords") : undefined}
-                                />
-                            </Popconfirm>
-                        </>
-                    )}
-                </div>
-            ),
-        },
-    ];
-
-    const openCreateModal = () => {
-        setEditingRecord(null);
-        manualForm.resetFields();
-        setManualModalOpen(true);
-    };
-
-    const openEditModal = (record: LeaveRequest) => {
-        const matchedEmployeeProfile = employees.find((e) => e.user_id === record.employee?.id);
-        setEditingRecord(record);
-        manualForm.setFieldsValue({
-            employee_id: matchedEmployeeProfile?.id,
-            leave_type: record.leave_type?.id,
-            dates: [
-                record.start_date ? dayjs(record.start_date) : null,
-                record.end_date ? dayjs(record.end_date) : null,
-            ],
-            reason: record.reason || "",
-            manual_entry_reason: record.manual_entry_reason || "",
-            source_document_ref: record.source_document_ref || "",
-            document: [],
-            other_leave_description: record.other_leave_description || "",
-            date_of_rejoin: record.date_of_rejoin ? dayjs(record.date_of_rejoin) : null,
-            po_box: record.po_box || "",
-            full_address: record.full_address || "",
-            airplane_ticket_payer: record.airplane_ticket_payer || undefined,
-            airplane_ticket_address: record.airplane_ticket_address || "",
-            delegated_to: record.delegated_to?.id ?? null,
-            delegation_note: record.delegation_note || "",
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await getLeaveRequests({
+        ...filters,
+        page,
+        page_size: pageSize,
+      });
+      if (isApiError(res)) {
+        notification.error({
+          message: t("error.generic"),
+          description: res.message,
         });
-        setManualModalOpen(true);
-    };
+      } else {
+        setData(res.data.items || []);
+        setTotal(res.data.count || 0);
+      }
+    } catch (err: any) {
+      notification.error({
+        message: t("common.error"),
+        description: t("leave.noRequests"),
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [page, pageSize, filters]);
 
-    const handleDeleteManual = async (id: number) => {
-        try {
-            const res = await deleteHRManualLeaveRequest(id);
-            if (isApiError(res)) {
-                notification.error({ message: t("common.error"), description: res.message });
-                return;
-            }
-            notification.success({ message: t("leave.manual.deleted") });
-            loadData();
-        } catch {
-            notification.error({ message: t("common.error"), description: t("common.tryAgain") });
+  const loadManualFormReferences = useCallback(async () => {
+    try {
+      const [employeesRes, delegationCandidatesRes, leaveTypesRes] =
+        await Promise.all([
+          listEmployees({ page: 1, page_size: 300 }),
+          listDelegationCandidates({ scope: "all" }),
+          getLeaveTypes(),
+        ]);
+
+      if (!isApiError(employeesRes)) {
+        setEmployees(employeesRes.data.results || []);
+      }
+      if (!isApiError(delegationCandidatesRes)) {
+        setDelegationCandidates(delegationCandidatesRes.data || []);
+      }
+      if (!isApiError(leaveTypesRes)) {
+        setLeaveTypes(leaveTypesRes.data || []);
+      }
+    } catch {
+      notification.error({
+        message: t("common.error"),
+        description: t("common.tryAgain"),
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  useEffect(() => {
+    loadManualFormReferences();
+  }, [loadManualFormReferences]);
+
+  const handleFilterChange = (values: any) => {
+    const newFilters: LeaveRequestFilter = {};
+    if (values.status) newFilters.status = values.status;
+    if (values.dates && values.dates[0]) {
+      newFilters.date_from = values.dates[0].format("YYYY-MM-DD");
+      newFilters.date_to = values.dates[1].format("YYYY-MM-DD");
+    }
+    setFilters(newFilters);
+    setPage(1); // Reset to first page
+  };
+
+  const getStatusColor = (status: string) => {
+    const s = status?.toLowerCase();
+    switch (s) {
+      case "approved":
+        return "green";
+      case "rejected":
+        return "red";
+      case "submitted":
+        return "blue";
+      case "pending_delegate":
+        return "gold";
+      case "pending_manager":
+        return "orange";
+      case "pending_hr":
+        return "purple";
+      case "pending_ceo":
+        return "volcano";
+      case "pending":
+        return "gold";
+      case "cancelled":
+        return "default";
+      default:
+        return "default";
+    }
+  };
+
+  const columns: ColumnsType<LeaveRequest> = [
+    {
+      title: t("hr.dashboard.employee"),
+      key: "employee",
+      render: (_, record) => {
+        const employeeName =
+          record.employee?.full_name ||
+          `ID: ${record.employee?.id ?? record.employee_profile ?? "-"}`;
+        const employeeProfileId =
+          record.employee_profile ??
+          employees.find((employee) => employee.user_id === record.employee?.id)
+            ?.id;
+
+        if (!employeeProfileId) {
+          return employeeName;
         }
-    };
 
-    const handleSubmitManual = async () => {
-        const values = await manualForm.validateFields();
-        setManualModalLoading(true);
-        try {
-            const payload = new FormData();
-            payload.append("employee_id", String(values.employee_id));
-            payload.append("leave_type", String(values.leave_type));
-            payload.append("start_date", values.dates[0].format("YYYY-MM-DD"));
-            payload.append("end_date", values.dates[1].format("YYYY-MM-DD"));
-            payload.append("reason", values.reason || "");
-            payload.append("manual_entry_reason", values.manual_entry_reason || "");
-            payload.append("source_document_ref", values.source_document_ref || "");
-            payload.append("other_leave_description", values.other_leave_description || "");
-            if (values.date_of_rejoin) payload.append("date_of_rejoin", values.date_of_rejoin.format("YYYY-MM-DD"));
-            payload.append("po_box", values.po_box || "");
-            payload.append("full_address", values.full_address || "");
-            payload.append("airplane_ticket_payer", values.airplane_ticket_payer || "");
-            payload.append("airplane_ticket_address", values.airplane_ticket_address || "");
-            if (values.delegated_to != null) payload.append("delegated_to", String(values.delegated_to));
-            payload.append("delegation_note", values.delegation_note || "");
-
-            const fileList = (values.document || []) as UploadFile[];
-            const file = fileList[0]?.originFileObj;
-            if (file) {
-                payload.append("document", file);
-            }
-
-            const res = editingRecord
-                ? await updateHRManualLeaveRequest(editingRecord.id, payload)
-                : await createHRManualLeaveRequest(payload);
-
-            if (isApiError(res)) {
-                notification.error({ message: t("common.error"), description: res.message });
-                return;
-            }
-
-            const warnings = res.data.warning_messages || [];
-            if (warnings.length > 0) {
-                notification.warning({
-                    message: t("leave.manual.savedWithWarnings"),
-                    description: warnings.join(" | "),
-                    duration: 8,
-                });
-            } else {
-                notification.success({ message: editingRecord ? t("leave.manual.updated") : t("leave.manual.created") });
-            }
-
-            setManualModalOpen(false);
-            manualForm.resetFields();
-            setEditingRecord(null);
-            loadData();
-        } catch (err: any) {
-            if (!err?.errorFields) {
-                apply422ToForm(manualForm, err);
-                notification.error({
-                    message: t("common.error"),
-                    description: getFirstApiErrorMessage(err) || err?.message || t("common.tryAgain"),
-                });
-            }
-        } finally {
-            setManualModalLoading(false);
-        }
-    };
-
-    return (
-        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-            <PageHeader
-                title={t("leave.title")}
-                subtitle={t("layout.leaveInbox")}
-                actions={
-                    <Button
-                        type="primary"
-                        icon={<PlusOutlined />}
-                        onClick={openCreateModal}
-                        disabled={isHeadOffice}
-                        title={isHeadOffice ? t("organization.headOffice.switchToCreateRecords") : undefined}
-                    >
-                        {t("leave.manual.addButton")}
-                    </Button>
-                }
+        return (
+          <Button
+            type="link"
+            style={{
+              padding: 0,
+              height: "auto",
+              color: "#f97316",
+              fontWeight: 500,
+            }}
+            onClick={() => navigate(`/hr/employees/${employeeProfileId}`)}
+          >
+            {employeeName}
+          </Button>
+        );
+      },
+    },
+    {
+      title: t("leave.leaveType"),
+      key: "leave_type",
+      render: (_, record) => translateLeaveType(record.leave_type?.name),
+    },
+    ...(isHeadOffice
+      ? [
+          {
+            title: t("common.company", "Company"),
+            key: "company_name",
+            dataIndex: "company_name",
+            render: (value?: string) =>
+              value ? <Tag color="blue">{value}</Tag> : "-",
+          },
+        ]
+      : []),
+    {
+      title: t("leave.startDate"),
+      dataIndex: "start_date",
+      key: "start_date",
+    },
+    {
+      title: t("leave.days"),
+      dataIndex: "days",
+      key: "days",
+      align: "center",
+    },
+    {
+      title: t("common.status"),
+      dataIndex: "status",
+      key: "status",
+      render: (status, record) => {
+        const statusKey = `leave.status.${status?.toLowerCase()}`;
+        const translated = t(statusKey);
+        const display =
+          translated === statusKey
+            ? (
+                status?.charAt(0).toUpperCase() + status?.slice(1).toLowerCase()
+              ).replace(/_/g, " ")
+            : translated;
+        return (
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              alignItems: "center",
+              flexWrap: "wrap",
+            }}
+          >
+            <Tag color={getStatusColor(status)}>{display}</Tag>
+            {record.source === "hr_manual" && (
+              <Tag color="cyan">{t("leave.manual.badge")}</Tag>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      title: t("common.createdAt"),
+      dataIndex: "created_at",
+      key: "created_at",
+      render: (val) => (val ? new Date(val).toLocaleDateString() : "-"),
+    },
+    {
+      title: t("common.actions"),
+      key: "actions",
+      align: "center",
+      render: (_, record) => (
+        <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+          <Tooltip title={t("common.details")}>
+            <Button
+              icon={<EyeOutlined />}
+              onClick={() => navigate(`/hr/leave/requests/${record.id}`)}
+              size="small"
             />
-
-            <Card style={{ marginBottom: 16, borderRadius: 16 }}>
-                <Form form={form} layout="vertical" onValuesChange={handleFilterChange}>
-                    <Row gutter={16}>
-                        <Col span={8}>
-                            <Form.Item label={t("common.status")} name="status">
-                                <Select placeholder={t("employees.list.statusPlaceholder")} allowClear>
-                                    <Option value="submitted">{t("status.pending")}</Option>
-                                    <Option value="pending_delegate">{t("leave.status.pending_delegate")}</Option>
-                                    <Option value="pending_manager">{t("status.pendingManager")}</Option>
-                                    <Option value="pending_hr">{t("status.pendingHr")}</Option>
-                                    <Option value="pending_ceo">{t("status.pendingCeo")}</Option>
-                                    <Option value="approved">{t("status.approved")}</Option>
-                                    <Option value="rejected">{t("status.rejected")}</Option>
-                                    <Option value="cancelled">{t("status.cancelled")}</Option>
-                                </Select>
-                            </Form.Item>
-                        </Col>
-                        <Col span={8}>
-                            <Form.Item label={t("leave.startDate") + " - " + t("leave.endDate")} name="dates">
-                                <RangePicker style={{ width: '100%' }} />
-                            </Form.Item>
-                        </Col>
-                    </Row>
-                </Form>
-            </Card>
-
-            <Card style={{ borderRadius: 16 }}>
-                <Table
-                    dataSource={data}
-                    columns={columns}
-                    rowKey="id"
-                    loading={loading}
-                    expandable={{
-                        expandedRowRender: (record) => <LeaveApprovalMap request={record} t={t} />,
-                    }}
-                    pagination={{
-                        current: page,
-                        pageSize,
-                        total,
-                        onChange: (p, ps) => {
-                            setPage(p);
-                            if (ps !== pageSize) setPageSize(ps);
-                        },
-                    }}
+          </Tooltip>
+          {record.source === "hr_manual" && (
+            <>
+              <Tooltip title={t("common.edit")}>
+                <Button
+                  icon={<EditOutlined />}
+                  size="small"
+                  disabled={isHeadOffice}
+                  title={
+                    isHeadOffice
+                      ? t("organization.headOffice.switchToEditRecords")
+                      : undefined
+                  }
+                  onClick={() => openEditModal(record)}
                 />
-            </Card>
-
-            <Modal
-                title={editingRecord ? t("leave.manual.editTitle") : t("leave.manual.addTitle")}
-                open={manualModalOpen}
-                onCancel={() => {
-                    setManualModalOpen(false);
-                    setEditingRecord(null);
-                    manualForm.resetFields();
-                }}
-                onOk={handleSubmitManual}
-                confirmLoading={manualModalLoading}
-                okText={editingRecord ? t("common.save") : t("common.create")}
-            >
-                <Form form={manualForm} layout="vertical">
-                    <Form.Item label={t("common.employee")} name="employee_id" rules={[{ required: true }]}>
-                        <Select showSearch optionFilterProp="label" options={employees.map((e) => ({
-                            value: e.id,
-                            label: `${e.full_name_en || e.full_name || e.employee_id} (${e.employee_id})`,
-                        }))} />
-                    </Form.Item>
-                    <Form.Item label={t("leave.leaveType")} name="leave_type" rules={[{ required: true }]}>
-                        <Select options={leaveTypes.map((lt) => ({ value: lt.id, label: translateLeaveType(lt.name) }))} />
-                    </Form.Item>
-                    <Form.Item label={`${t("leave.startDate")} - ${t("leave.endDate")}`} name="dates" rules={[{ required: true }]}>
-                        <RangePicker style={{ width: "100%" }} />
-                    </Form.Item>
-                    <Form.Item label={t("common.reason")} name="reason">
-                        <TextArea rows={2} />
-                    </Form.Item>
-                    <Form.Item label={t("leave.manual.entryReason")} name="manual_entry_reason" rules={[{ required: true }]}>
-                        <TextArea rows={2} />
-                    </Form.Item>
-                    <Form.Item label={t("leave.manual.sourceDocumentRef")} name="source_document_ref" rules={[{ required: true }]}>
-                        <Input />
-                    </Form.Item>
-                    <Form.Item
-                        label={t("common.document")}
-                        name="document"
-                        valuePropName="fileList"
-                        getValueFromEvent={(e) => (Array.isArray(e) ? e : e?.fileList || [])}
-                        rules={[
-                            {
-                                validator: (_, value: UploadFile[]) => {
-                                    if (!isSickSelected) return Promise.resolve();
-                                    const hasExistingDocument = Boolean(editingRecord?.document);
-                                    if (hasExistingDocument) return Promise.resolve();
-                                    return value && value.length > 0
-                                        ? Promise.resolve()
-                                        : Promise.reject(new Error(t("leave.manual.sickDocRequired")));
-                                },
-                            },
-                        ]}
-                    >
-                        <Upload beforeUpload={() => false} maxCount={1} accept=".pdf,.png,.jpg,.jpeg">
-                            <Button>{t("leave.chooseFile")}</Button>
-                        </Upload>
-                    </Form.Item>
-
-                    {isOtherSelected && (
-                        <Form.Item label={t("leave.otherLeaveDescription")} name="other_leave_description">
-                            <Input />
-                        </Form.Item>
-                    )}
-
-                    <Row gutter={16}>
-                        <Col span={12}>
-                            <Form.Item label={t("leave.dateOfRejoin")} name="date_of_rejoin">
-                                <DatePicker style={{ width: "100%" }} />
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            <Form.Item label={t("leave.poBox")} name="po_box">
-                                <Input />
-                            </Form.Item>
-                        </Col>
-                    </Row>
-
-                    <Form.Item label={t("leave.fullAddress")} name="full_address">
-                        <Input />
-                    </Form.Item>
-
-                    <Row gutter={16}>
-                        <Col span={12}>
-                            <Form.Item label={t("leave.airplaneTicketPayer")} name="airplane_ticket_payer">
-                                <Select allowClear placeholder="-">
-                                    <Option value="company">{t("leave.ticketPayer.company")}</Option>
-                                    <Option value="employee">{t("leave.ticketPayer.employee")}</Option>
-                                </Select>
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            <Form.Item label={t("leave.airplaneTicketAddress")} name="airplane_ticket_address">
-                                <Input />
-                            </Form.Item>
-                        </Col>
-                    </Row>
-
-                    <Form.Item label={t("leave.delegatedTo")} name="delegated_to">
-                        <Select
-                            showSearch
-                            allowClear
-                            optionFilterProp="label"
-                            placeholder="-"
-                            options={employees.map((e) => ({
-                                value: e.id,
-                                label: `${e.full_name_en || e.full_name || e.employee_id} (${e.employee_id})`,
-                            }))}
-                        />
-                    </Form.Item>
-
-                    <Form.Item label={t("leave.delegationNote")} name="delegation_note">
-                        <TextArea rows={2} />
-                    </Form.Item>
-                </Form>
-            </Modal>
+              </Tooltip>
+              <Popconfirm
+                title={t("leave.manual.deleteConfirm")}
+                okText={t("common.delete")}
+                cancelText={t("common.cancel")}
+                onConfirm={() => handleDeleteManual(record.id)}
+              >
+                <Button
+                  danger
+                  icon={<DeleteOutlined />}
+                  size="small"
+                  disabled={isHeadOffice}
+                  title={
+                    isHeadOffice
+                      ? t("organization.headOffice.switchToEditRecords")
+                      : undefined
+                  }
+                />
+              </Popconfirm>
+            </>
+          )}
         </div>
+      ),
+    },
+  ];
+
+  const openCreateModal = () => {
+    setEditingRecord(null);
+    manualForm.resetFields();
+    setManualModalOpen(true);
+  };
+
+  const openEditModal = (record: LeaveRequest) => {
+    const matchedEmployeeProfile = employees.find(
+      (e) => e.user_id === record.employee?.id,
     );
+    setEditingRecord(record);
+    manualForm.setFieldsValue({
+      employee_id: matchedEmployeeProfile?.id,
+      leave_type: record.leave_type?.id,
+      dates: [
+        record.start_date ? dayjs(record.start_date) : null,
+        record.end_date ? dayjs(record.end_date) : null,
+      ],
+      reason: record.reason || "",
+      manual_entry_reason: record.manual_entry_reason || "",
+      source_document_ref: record.source_document_ref || "",
+      document: [],
+      other_leave_description: record.other_leave_description || "",
+      date_of_rejoin: record.date_of_rejoin
+        ? dayjs(record.date_of_rejoin)
+        : null,
+      po_box: record.po_box || "",
+      full_address: record.full_address || "",
+      airplane_ticket_payer: record.airplane_ticket_payer || undefined,
+      airplane_ticket_address: record.airplane_ticket_address || "",
+      delegated_to: record.delegated_to?.id ?? null,
+      delegation_note: record.delegation_note || "",
+    });
+    setManualModalOpen(true);
+  };
+
+  const handleDeleteManual = async (id: number) => {
+    try {
+      const res = await deleteHRManualLeaveRequest(id);
+      if (isApiError(res)) {
+        notification.error({
+          message: t("common.error"),
+          description: res.message,
+        });
+        return;
+      }
+      notification.success({ message: t("leave.manual.deleted") });
+      loadData();
+    } catch {
+      notification.error({
+        message: t("common.error"),
+        description: t("common.tryAgain"),
+      });
+    }
+  };
+
+  const handleSubmitManual = async () => {
+    const values = await manualForm.validateFields();
+    setManualModalLoading(true);
+    try {
+      const payload = new FormData();
+      payload.append("employee_id", String(values.employee_id));
+      payload.append("leave_type", String(values.leave_type));
+      payload.append("start_date", values.dates[0].format("YYYY-MM-DD"));
+      payload.append("end_date", values.dates[1].format("YYYY-MM-DD"));
+      payload.append("reason", values.reason || "");
+      payload.append("manual_entry_reason", values.manual_entry_reason || "");
+      payload.append("source_document_ref", values.source_document_ref || "");
+      payload.append(
+        "other_leave_description",
+        values.other_leave_description || "",
+      );
+      if (values.date_of_rejoin)
+        payload.append(
+          "date_of_rejoin",
+          values.date_of_rejoin.format("YYYY-MM-DD"),
+        );
+      payload.append("po_box", values.po_box || "");
+      payload.append("full_address", values.full_address || "");
+      payload.append(
+        "airplane_ticket_payer",
+        values.airplane_ticket_payer || "",
+      );
+      payload.append(
+        "airplane_ticket_address",
+        values.airplane_ticket_address || "",
+      );
+      if (values.delegated_to != null)
+        payload.append("delegated_to", String(values.delegated_to));
+      payload.append("delegation_note", values.delegation_note || "");
+
+      const fileList = (values.document || []) as UploadFile[];
+      const file = fileList[0]?.originFileObj;
+      if (file) {
+        payload.append("document", file);
+      }
+
+      const res = editingRecord
+        ? await updateHRManualLeaveRequest(editingRecord.id, payload)
+        : await createHRManualLeaveRequest(payload);
+
+      if (isApiError(res)) {
+        notification.error({
+          message: t("common.error"),
+          description: res.message,
+        });
+        return;
+      }
+
+      const warnings = res.data.warning_messages || [];
+      if (warnings.length > 0) {
+        notification.warning({
+          message: t("leave.manual.savedWithWarnings"),
+          description: warnings.join(" | "),
+          duration: 8,
+        });
+      } else {
+        notification.success({
+          message: editingRecord
+            ? t("leave.manual.updated")
+            : t("leave.manual.created"),
+        });
+      }
+
+      setManualModalOpen(false);
+      manualForm.resetFields();
+      setEditingRecord(null);
+      loadData();
+    } catch (err: any) {
+      if (!err?.errorFields) {
+        apply422ToForm(manualForm, err);
+        notification.error({
+          message: t("common.error"),
+          description:
+            getFirstApiErrorMessage(err) ||
+            err?.message ||
+            t("common.tryAgain"),
+        });
+      }
+    } finally {
+      setManualModalLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+      <PageHeader
+        title={t("leave.title")}
+        subtitle={t("layout.leaveInbox")}
+        actions={
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={openCreateModal}
+            disabled={isHeadOffice}
+            title={
+              isHeadOffice
+                ? t("organization.headOffice.switchToCreateRecords")
+                : undefined
+            }
+          >
+            {t("leave.manual.addButton")}
+          </Button>
+        }
+      />
+
+      <Card style={{ marginBottom: 16, borderRadius: 16 }}>
+        <Form form={form} layout="vertical" onValuesChange={handleFilterChange}>
+          <Row gutter={16}>
+            <Col span={8}>
+              <Form.Item label={t("common.status")} name="status">
+                <Select
+                  placeholder={t("employees.list.statusPlaceholder")}
+                  allowClear
+                >
+                  <Option value="submitted">{t("status.pending")}</Option>
+                  <Option value="pending_delegate">
+                    {t("leave.status.pending_delegate")}
+                  </Option>
+                  <Option value="pending_manager">
+                    {t("status.pendingManager")}
+                  </Option>
+                  <Option value="pending_hr">{t("status.pendingHr")}</Option>
+                  <Option value="pending_ceo">{t("status.pendingCeo")}</Option>
+                  <Option value="approved">{t("status.approved")}</Option>
+                  <Option value="rejected">{t("status.rejected")}</Option>
+                  <Option value="cancelled">{t("status.cancelled")}</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                label={t("leave.startDate") + " - " + t("leave.endDate")}
+                name="dates"
+              >
+                <RangePicker style={{ width: "100%" }} />
+              </Form.Item>
+            </Col>
+          </Row>
+        </Form>
+      </Card>
+
+      <Card style={{ borderRadius: 16 }}>
+        <Table
+          dataSource={data}
+          columns={columns}
+          rowKey="id"
+          loading={loading}
+          expandable={{
+            expandedRowRender: (record) => (
+              <LeaveApprovalMap request={record} t={t} />
+            ),
+          }}
+          pagination={{
+            current: page,
+            pageSize,
+            total,
+            onChange: (p, ps) => {
+              setPage(p);
+              if (ps !== pageSize) setPageSize(ps);
+            },
+          }}
+        />
+      </Card>
+
+      <Modal
+        title={
+          editingRecord
+            ? t("leave.manual.editTitle")
+            : t("leave.manual.addTitle")
+        }
+        open={manualModalOpen}
+        onCancel={() => {
+          setManualModalOpen(false);
+          setEditingRecord(null);
+          manualForm.resetFields();
+        }}
+        onOk={handleSubmitManual}
+        confirmLoading={manualModalLoading}
+        okText={editingRecord ? t("common.save") : t("common.create")}
+      >
+        <Form form={manualForm} layout="vertical">
+          <Form.Item
+            label={t("common.employee")}
+            name="employee_id"
+            rules={[{ required: true }]}
+          >
+            <Select
+              showSearch
+              optionFilterProp="label"
+              options={employees.map((e) => ({
+                value: e.id,
+                label: `${e.full_name_en || e.full_name || e.employee_id} (${e.employee_id})`,
+              }))}
+            />
+          </Form.Item>
+          <Form.Item
+            label={t("leave.leaveType")}
+            name="leave_type"
+            rules={[{ required: true }]}
+          >
+            <Select
+              options={leaveTypes.map((lt) => ({
+                value: lt.id,
+                label: translateLeaveType(lt.name),
+              }))}
+            />
+          </Form.Item>
+          <Form.Item
+            label={`${t("leave.startDate")} - ${t("leave.endDate")}`}
+            name="dates"
+            rules={[{ required: true }]}
+          >
+            <RangePicker style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item label={t("common.reason")} name="reason">
+            <TextArea rows={2} />
+          </Form.Item>
+          <Form.Item
+            label={t("leave.manual.entryReason")}
+            name="manual_entry_reason"
+            rules={[{ required: true }]}
+          >
+            <TextArea rows={2} />
+          </Form.Item>
+          <Form.Item
+            label={t("leave.manual.sourceDocumentRef")}
+            name="source_document_ref"
+            rules={[{ required: true }]}
+          >
+            <Input />
+          </Form.Item>
+          <Form.Item
+            label={t("common.document")}
+            name="document"
+            valuePropName="fileList"
+            getValueFromEvent={(e) =>
+              Array.isArray(e) ? e : e?.fileList || []
+            }
+            rules={[
+              {
+                validator: (_, value: UploadFile[]) => {
+                  if (!isSickSelected) return Promise.resolve();
+                  const hasExistingDocument = Boolean(editingRecord?.document);
+                  if (hasExistingDocument) return Promise.resolve();
+                  return value && value.length > 0
+                    ? Promise.resolve()
+                    : Promise.reject(
+                        new Error(t("leave.manual.sickDocRequired")),
+                      );
+                },
+              },
+            ]}
+          >
+            <Upload
+              beforeUpload={() => false}
+              maxCount={1}
+              accept=".pdf,.png,.jpg,.jpeg"
+            >
+              <Button>{t("leave.chooseFile")}</Button>
+            </Upload>
+          </Form.Item>
+
+          {isOtherSelected && (
+            <Form.Item
+              label={t("leave.otherLeaveDescription")}
+              name="other_leave_description"
+            >
+              <Input />
+            </Form.Item>
+          )}
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item label={t("leave.dateOfRejoin")} name="date_of_rejoin">
+                <DatePicker style={{ width: "100%" }} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item label={t("leave.poBox")} name="po_box">
+                <Input />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Form.Item label={t("leave.fullAddress")} name="full_address">
+            <Input />
+          </Form.Item>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                label={t("leave.airplaneTicketPayer")}
+                name="airplane_ticket_payer"
+              >
+                <Select allowClear placeholder="-">
+                  <Option value="company">
+                    {t("leave.ticketPayer.company")}
+                  </Option>
+                  <Option value="employee">
+                    {t("leave.ticketPayer.employee")}
+                  </Option>
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                label={t("leave.airplaneTicketAddress")}
+                name="airplane_ticket_address"
+              >
+                <Input />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Form.Item label={t("leave.delegatedTo")} name="delegated_to">
+            <Select
+              showSearch
+              allowClear
+              optionFilterProp="label"
+              placeholder="-"
+              options={delegationCandidates.map((e) => ({
+                value: e.id ?? `employee-profile-${e.employee_profile_id}`,
+                label: `${e.full_name_en || e.full_name || e.employee_id} (${e.employee_id})${e.company_name ? ` - ${e.company_name}` : ""}${e.disabled_reason ? ` - ${e.disabled_reason}` : ""}`,
+                disabled: !e.can_delegate,
+              }))}
+            />
+          </Form.Item>
+
+          <Form.Item label={t("leave.delegationNote")} name="delegation_note">
+            <TextArea rows={2} />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </div>
+  );
 }

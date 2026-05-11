@@ -291,13 +291,22 @@ body.ltr textarea.ant-input {
   padding: 0 8px 4px !important;
 }
 
-/* Collapsed — hide section headers */
+/* Collapsed — section headers become thin dividers */
 .modern-sidebar.ant-layout-sider-collapsed .ant-menu-item-group {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
 }
 .modern-sidebar.ant-layout-sider-collapsed .ant-menu-item-group-title {
+  font-size: 0 !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: 6px 10px !important;
+  background: var(--sb-border) !important;
+  border-radius: 1px !important;
+  overflow: hidden !important;
+}
+.modern-sidebar.ant-layout-sider-collapsed .ant-menu-item-group-title::before {
   display: none !important;
 }
 

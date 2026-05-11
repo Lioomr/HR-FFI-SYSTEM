@@ -1,4 +1,4 @@
-"""HR Template Library — serves blank PDF templates to HR staff."""
+"""HR Template Library - serves blank PDF templates to HR staff."""
 
 from __future__ import annotations
 
@@ -20,6 +20,40 @@ SENSITIVE_TEMPLATE_KEYS = {"salary_certificate", "termination_letter", "employme
 
 
 TEMPLATES_DIR = os.path.join(str(settings.BASE_DIR), "static", "pdf_templates")
+
+
+def _get_templates_dir() -> str:
+    # Primary writable/readable directory. Deployments can mount this outside the image.
+    # Example: HR_TEMPLATES_DIR=/hr/templates
+    configured = getattr(settings, "HR_TEMPLATES_DIR", "") or os.environ.get("HR_TEMPLATES_DIR", "")
+    return configured.strip() or TEMPLATES_DIR
+
+
+def get_template_search_dirs() -> list[str]:
+    """Return template directories in precedence order, skipping duplicates."""
+
+    dirs = [_get_templates_dir(), TEMPLATES_DIR]
+    seen = set()
+    result = []
+    for directory in dirs:
+        normalized = os.path.abspath(directory)
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        result.append(directory)
+    return result
+
+
+def resolve_template_path(filename: str, aliases: list[str] | None = None) -> str:
+    """Find a template in the configured HR library, then bundled defaults."""
+
+    names = [filename, *(aliases or [])]
+    for directory in get_template_search_dirs():
+        for name in names:
+            path = os.path.join(directory, name)
+            if os.path.exists(path):
+                return path
+    return ""
 
 
 TEMPLATE_CATALOG = [
@@ -103,7 +137,7 @@ def _templates_by_key() -> dict:
 
 
 def _template_file_path(template: dict) -> str:
-    return os.path.join(TEMPLATES_DIR, template["filename"])
+    return resolve_template_path(template["filename"]) or os.path.join(_get_templates_dir(), template["filename"])
 
 
 def _template_updated_at(path: str) -> str | None:

@@ -154,7 +154,7 @@ def _fmt_dt(value):
         return str(value)
 
 
-def _build_loan_request_pdf(instance: LoanRequest) -> bytes:
+def _build_loan_request_pdf_fallback(instance: LoanRequest) -> bytes:
     from core.pdf import (
         ApprovalStage,
         DetailRow,
@@ -275,6 +275,246 @@ def _build_loan_request_pdf(instance: LoanRequest) -> bytes:
         status_label=status_en,
     )
     return render_request_pdf(doc)
+
+
+def _build_loan_request_pdf(instance: LoanRequest) -> bytes:
+    from io import BytesIO
+
+    from pypdf import PdfReader, PdfWriter
+    from reportlab.lib.utils import simpleSplit
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfgen import canvas
+
+    from core.pdf import font_pair, shape_ar
+    from core.views_templates import resolve_template_path
+
+    template_path = resolve_template_path("loan_request_blank.pdf", aliases=["loan-request-template.pdf"])
+    if not template_path:
+        return _build_loan_request_pdf_fallback(instance)
+
+    reader = PdfReader(template_path)
+    page = reader.pages[0]
+    width = float(page.mediabox.width)
+    height = float(page.mediabox.height)
+    regular_font, bold_font = font_pair()
+
+    profile = instance.employee_profile
+    employee = instance.employee
+    status_en, _ = _LOAN_STATUS_LABELS.get(instance.status, (str(instance.status), str(instance.status)))
+    loan_type_en, loan_type_ar = _LOAN_TYPE_LABELS.get(
+        instance.loan_type, (str(instance.loan_type), str(instance.loan_type))
+    )
+
+    def _blank(value):
+        value = str(value or "").strip()
+        return "" if value in {"-", "None"} else value
+
+    def _display_user(user):
+        return _blank(getattr(user, "full_name", "") or getattr(user, "email", ""))
+
+    def _fmt_date(value):
+        if not value:
+            return ""
+        try:
+            if hasattr(value, "hour"):
+                value = timezone.localtime(value)
+            return value.strftime("%Y-%m-%d")
+        except Exception:
+            return str(value)
+
+    def _money(value):
+        if value is None:
+            return ""
+        try:
+            return f"{value:,.2f}"
+        except Exception:
+            return str(value)
+
+    def _employee_name():
+        return _blank(
+            getattr(profile, "full_name_en", "")
+            or getattr(profile, "full_name", "")
+            or getattr(employee, "full_name", "")
+            or getattr(employee, "email", "")
+        )
+
+    def _employee_number():
+        return _blank(getattr(profile, "employee_number", "") or getattr(profile, "employee_id", ""))
+
+    def _department():
+        return _blank(getattr(profile, "department_name_en", "") or getattr(profile, "department", ""))
+
+    def _job_title():
+        return _blank(getattr(profile, "job_title_en", "") or getattr(profile, "job_title", ""))
+
+    def _basic_salary():
+        return _money(getattr(profile, "basic_salary", None))
+
+    def _target_deduction():
+        year = getattr(instance, "target_deduction_year", None)
+        month = getattr(instance, "target_deduction_month", None)
+        if year and month:
+            return f"{year}-{month:02d}"
+        return ""
+
+    def _latest_decision_stage():
+        decisions = [
+            ("Manager", instance.manager_decision_at),
+            ("HR", instance.finance_decision_at),
+            ("CFO", instance.cfo_decision_at),
+            ("CEO", instance.ceo_decision_at),
+            ("Disbursement", instance.disbursed_at),
+        ]
+        dated = [(stage, at) for stage, at in decisions if at]
+        if not dated:
+            return None
+        return max(dated, key=lambda item: item[1])[0]
+
+    def _stage_status(stage, at, pending_status):
+        if at:
+            if instance.status == LoanRequest.RequestStatus.REJECTED and _latest_decision_stage() == stage:
+                return "Rejected"
+            return "Approved"
+        if instance.status == pending_status:
+            return "Pending"
+        return ""
+
+    def _fit(text, font_name, size, max_width):
+        value = shape_ar(_blank(text))
+        if not value:
+            return ""
+        if pdfmetrics.stringWidth(value, font_name, size) <= max_width:
+            return value
+        ellipsis = "..."
+        trimmed = value
+        while trimmed and pdfmetrics.stringWidth(f"{trimmed}{ellipsis}", font_name, size) > max_width:
+            trimmed = trimmed[:-1]
+        return f"{trimmed}{ellipsis}" if trimmed else ellipsis
+
+    def _draw_text(pdf, x, y, text, *, size=8.2, font=None, max_width=120, align="center", max_lines=1):
+        value = shape_ar(_blank(text))
+        if not value:
+            return
+        chosen_font = font or regular_font
+        if max_lines == 1:
+            lines = [_fit(value, chosen_font, size, max_width)]
+        else:
+            lines = simpleSplit(value, chosen_font, size, max_width)[:max_lines]
+        pdf.setFont(chosen_font, size)
+        pdf.setFillColorRGB(0.1, 0.1, 0.1)
+        for index, line in enumerate(lines):
+            line_y = y - (index * (size + 1.2))
+            if align == "right":
+                pdf.drawRightString(x, line_y, line)
+            elif align == "left":
+                pdf.drawString(x, line_y, line)
+            else:
+                pdf.drawCentredString(x, line_y, line)
+
+    def _mask_input_lines(pdf):
+        pdf.setFillColorRGB(1, 0.985, 0.965)
+        line_specs = [
+            (38, 752, 530),
+            (38, 686, 260), (308, 686, 260),
+            (38, 658, 260), (308, 658, 260),
+            (38, 630, 260), (308, 630, 260),
+            (38, 566, 260), (308, 566, 260),
+            (38, 538, 260), (308, 538, 260),
+            (38, 510, 260), (308, 510, 260),
+            (38, 414, 530),
+        ]
+        for x, y, line_width in line_specs:
+            pdf.rect(x, y - 3, line_width, 6, stroke=0, fill=1)
+        pdf.setFillColorRGB(0.1, 0.1, 0.1)
+
+    overlay = BytesIO()
+    pdf = canvas.Canvas(overlay, pagesize=(width, height))
+    pdf.setTitle(f"Loan Request {instance.id}")
+    _mask_input_lines(pdf)
+
+    left_x = 175
+    right_x = 445
+    left_w = 130
+    right_w = 120
+
+    _draw_text(pdf, left_x, 748, f"LN-{instance.id:05d}", size=9.2, font=bold_font, max_width=left_w)
+    _draw_text(pdf, right_x, 748, _fmt_date(getattr(instance, "created_at", None)), size=9.2, font=bold_font, max_width=right_w)
+
+    _draw_text(pdf, left_x, 682, _employee_name(), size=8.6, font=bold_font, max_width=left_w)
+    _draw_text(pdf, right_x, 682, _employee_number(), size=8.6, font=bold_font, max_width=right_w)
+    _draw_text(pdf, left_x, 654, _department(), size=8.2, max_width=left_w)
+    _draw_text(pdf, right_x, 654, _job_title(), size=8.2, max_width=right_w)
+    _draw_text(pdf, left_x, 626, getattr(profile, "mobile", ""), size=8.2, max_width=left_w)
+    _draw_text(pdf, right_x, 626, _basic_salary(), size=8.2, max_width=right_w)
+
+    _draw_text(pdf, left_x, 562, f"{loan_type_en} / {loan_type_ar}", size=7.4, max_width=left_w)
+    _draw_text(pdf, right_x, 562, _money(instance.requested_amount), size=8.4, font=bold_font, max_width=right_w)
+    _draw_text(
+        pdf,
+        left_x,
+        534,
+        str(instance.installment_months) if instance.installment_months else "",
+        size=8.4,
+        font=bold_font,
+        max_width=left_w,
+    )
+    _draw_text(pdf, right_x, 534, _target_deduction(), size=8.4, max_width=right_w)
+    payroll_ref = ""
+    if getattr(instance, "deduction_payroll_run_id", None):
+        payroll_ref = f"Payroll #{instance.deduction_payroll_run_id}"
+    elif getattr(instance, "approved_year", None) and getattr(instance, "approved_month", None):
+        payroll_ref = f"{instance.approved_year}-{instance.approved_month:02d}"
+    _draw_text(pdf, left_x, 506, payroll_ref, size=8.2, max_width=left_w)
+    _draw_text(pdf, right_x, 506, _employee_name(), size=8.2, font=bold_font, max_width=right_w)
+
+    _draw_text(pdf, width / 2, 410, instance.reason, size=8.0, max_width=500, max_lines=2)
+
+    stages = [
+        (
+            "Manager",
+            instance.manager_decision_by,
+            instance.manager_decision_at,
+            LoanRequest.RequestStatus.PENDING_MANAGER,
+        ),
+        (
+            "HR",
+            instance.finance_decision_by,
+            instance.finance_decision_at,
+            LoanRequest.RequestStatus.PENDING_HR,
+        ),
+        ("CFO", instance.cfo_decision_by, instance.cfo_decision_at, LoanRequest.RequestStatus.PENDING_CFO),
+        ("CEO", instance.ceo_decision_by, instance.ceo_decision_at, LoanRequest.RequestStatus.PENDING_CEO),
+        (
+            "Disbursement",
+            instance.disbursed_by,
+            instance.disbursed_at,
+            LoanRequest.RequestStatus.PENDING_DISBURSEMENT,
+        ),
+    ]
+    row_y = [333, 307, 281, 255, 229]
+    name_x = 227
+    decision_x = 339
+    date_x = 432
+    signature_x = 502
+    for y, (stage, actor, at, pending_status) in zip(row_y, stages, strict=False):
+        decision = _stage_status(stage, at, pending_status)
+        actor_name = _display_user(actor) if at or decision == "Pending" else ""
+        _draw_text(pdf, name_x, y, actor_name, size=6.8, font=bold_font, max_width=106)
+        _draw_text(pdf, decision_x, y, decision, size=6.8, max_width=88)
+        _draw_text(pdf, date_x, y, _fmt_date(at), size=6.8, max_width=68)
+        _draw_text(pdf, signature_x, y, "Signed" if at else "", size=6.6, max_width=48)
+
+    pdf.save()
+    overlay.seek(0)
+    page.merge_page(PdfReader(overlay).pages[0])
+
+    output = BytesIO()
+    writer = PdfWriter()
+    for item in reader.pages:
+        writer.add_page(item)
+    writer.write(output)
+    output.seek(0)
+    return output.getvalue()
 
 
 class LoanRequestViewSet(viewsets.ModelViewSet):

@@ -10,6 +10,7 @@ from rest_framework.test import APITestCase
 from employees.models import EmployeeProfile
 from leaves.models import LeaveBalanceAdjustment, LeaveRequest, LeaveType
 from leaves.utils import calculate_leave_balance
+from organization.models import OrganizationNode
 
 User = get_user_model()
 
@@ -87,6 +88,42 @@ class HRManualLeaveRecordTests(APITestCase):
         record = LeaveRequest.objects.get(pk=response.data["data"]["id"])
         self.assertEqual(record.delegated_to, self.manager_user)
         self.assertEqual(record.delegation_note, "Please cover the employee's urgent duties.")
+
+    def test_hr_manual_record_accepts_cross_company_delegate(self):
+        employee_company = OrganizationNode.objects.create(
+            code="HR_MANUAL_EMPLOYEE_CO",
+            name="HR Manual Employee Co",
+            node_type=OrganizationNode.NodeType.COMPANY,
+        )
+        delegate_company = OrganizationNode.objects.create(
+            code="HR_MANUAL_DELEGATE_CO",
+            name="HR Manual Delegate Co",
+            node_type=OrganizationNode.NodeType.COMPANY,
+        )
+        self.employee_profile.company = employee_company
+        self.employee_profile.save(update_fields=["company", "updated_at"])
+        self.manager_profile.company = delegate_company
+        self.manager_profile.save(update_fields=["company", "updated_at"])
+
+        self.client.force_authenticate(user=self.hr_user)
+        payload = {
+            "employee_id": self.employee_profile.id,
+            "leave_type": self.annual.id,
+            "start_date": "2026-06-01",
+            "end_date": "2026-06-05",
+            "reason": "Manual cross-company delegation coverage",
+            "manual_entry_reason": "Added by HR with delegation.",
+            "source_document_ref": "paper-file-2026-003",
+            "delegated_to": self.manager_user.id,
+            "delegation_note": "Cross-company coverage.",
+        }
+
+        response = self.client.post(self.url, payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        record = LeaveRequest.objects.get(pk=response.data["data"]["id"])
+        self.assertEqual(record.delegated_to, self.manager_user)
+        self.assertEqual(record.company, employee_company)
 
     def test_manual_create_blocks_non_active_employee(self):
         self.employee_profile.employment_status = EmployeeProfile.EmploymentStatus.TERMINATED
