@@ -24,6 +24,13 @@ LEAVE_ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png"}
 LEAVE_MAX_UPLOAD_SIZE = int(getattr(settings, "MAX_LEAVE_DOCUMENT_SIZE_BYTES", 5 * 1024 * 1024))
 
 
+def delegation_user_queryset():
+    return User.objects.filter(
+        is_active=True,
+        employee_profile__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+    ).filter(Q(employee_profile__company__is_active=True) | Q(employee_profile__company__isnull=True))
+
+
 class UserSummarySerializer(serializers.ModelSerializer):
     class Meta:
         model = User
@@ -151,7 +158,7 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
 
 class LeaveRequestCreateSerializer(serializers.ModelSerializer):
     delegated_to = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.all(), allow_null=True, required=False
+        queryset=delegation_user_queryset(), allow_null=True, required=False
     )
 
     class Meta:
@@ -175,12 +182,10 @@ class LeaveRequestCreateSerializer(serializers.ModelSerializer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         request = self.context.get("request")
-        profile = getattr(getattr(request, "user", None), "employee_profile", None) if request else None
-        if profile and profile.company_id:
-            self.fields["delegated_to"].queryset = User.objects.filter(
-                is_active=True,
-                employee_profile__company_id=profile.company_id,
-            ).exclude(id=request.user.id)
+        qs = delegation_user_queryset()
+        if request and getattr(request, "user", None) and request.user.is_authenticated:
+            qs = qs.exclude(id=request.user.id)
+        self.fields["delegated_to"].queryset = qs
 
     def _resolve_company(self, leave_type=None):
         request = self.context.get("request")
@@ -204,7 +209,9 @@ class LeaveRequestCreateSerializer(serializers.ModelSerializer):
         user = self.context["request"].user
 
         if delegated_to and delegated_to.id == user.id:
-            raise serializers.ValidationError({"delegated_to": "You cannot delegate your own leave request to yourself."})
+            raise serializers.ValidationError(
+                {"delegated_to": "You cannot delegate your own leave request to yourself."}
+            )
 
         if start and end:
             if start > end:
@@ -270,16 +277,14 @@ class LeaveRequestActionSerializer(serializers.Serializer):
 
 
 class LeaveRequestDelegationSerializer(serializers.Serializer):
-    delegated_to = serializers.PrimaryKeyRelatedField(queryset=User.objects.filter(is_active=True))
+    delegated_to = serializers.PrimaryKeyRelatedField(queryset=delegation_user_queryset())
     delegation_note = serializers.CharField(required=False, allow_blank=True)
 
 
 class HRManualLeaveRequestSerializer(serializers.ModelSerializer):
     employee_id = serializers.IntegerField(write_only=True)
     warning_messages = serializers.ListField(child=serializers.CharField(), read_only=True)
-    delegated_to = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.all(), allow_null=True, required=False
-    )
+    delegated_to = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), allow_null=True, required=False)
 
     class Meta:
         model = LeaveRequest
@@ -306,15 +311,7 @@ class HRManualLeaveRequestSerializer(serializers.ModelSerializer):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        request = self.context.get("request")
-        company = getattr(request, "_active_company", None) if request else None
-        if self.instance and getattr(self.instance, "company_id", None):
-            company = self.instance.company
-        if company is not None:
-            self.fields["delegated_to"].queryset = User.objects.filter(
-                is_active=True,
-                employee_profile__company=company,
-            )
+        self.fields["delegated_to"].queryset = delegation_user_queryset()
 
     @property
     def policy_warnings(self):
@@ -358,7 +355,9 @@ class HRManualLeaveRequestSerializer(serializers.ModelSerializer):
         delegated_to = attrs.get("delegated_to", getattr(self.instance, "delegated_to", None))
 
         if delegated_to and employee_profile.user_id and delegated_to.id == employee_profile.user_id:
-            raise serializers.ValidationError({"delegated_to": "You cannot delegate a leave request to the same employee."})
+            raise serializers.ValidationError(
+                {"delegated_to": "You cannot delegate a leave request to the same employee."}
+            )
 
         if start and end and start > end:
             raise serializers.ValidationError({"end_date": "End date must be after start date."})

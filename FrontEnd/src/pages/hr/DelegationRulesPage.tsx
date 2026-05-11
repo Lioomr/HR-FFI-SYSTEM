@@ -23,8 +23,11 @@ import PageHeader from "../../components/ui/PageHeader";
 import LoadingState from "../../components/ui/LoadingState";
 import ErrorState from "../../components/ui/ErrorState";
 import Unauthorized403Page from "../Unauthorized403Page";
-import { isApiError, type UserDto } from "../../services/api/apiTypes";
-import { listUsers } from "../../services/api/usersApi";
+import { isApiError } from "../../services/api/apiTypes";
+import {
+  listDelegationCandidates,
+  type DelegationCandidate,
+} from "../../services/api/employeesApi";
 import {
   createDelegationRule,
   deleteDelegationRule,
@@ -45,8 +48,14 @@ type FormValues = {
 
 type UiMode = "loading" | "error" | "ok";
 
-function formatUser(user: { full_name?: string; email: string }) {
-  return user.full_name ? `${user.full_name} (${user.email})` : user.email;
+function formatCandidate(candidate: DelegationCandidate) {
+  const name =
+    candidate.full_name_en || candidate.full_name || candidate.employee_id;
+  const company = candidate.company_name ? ` - ${candidate.company_name}` : "";
+  const disabledReason = candidate.disabled_reason
+    ? ` - ${candidate.disabled_reason}`
+    : "";
+  return `${name} (${candidate.employee_id})${company}${disabledReason}`;
 }
 
 export default function DelegationRulesPage() {
@@ -58,26 +67,29 @@ export default function DelegationRulesPage() {
   const [saving, setSaving] = useState(false);
   const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<DelegationRuleDto[]>([]);
-  const [users, setUsers] = useState<UserDto[]>([]);
+  const [candidates, setCandidates] = useState<DelegationCandidate[]>([]);
 
   const loadData = useCallback(async () => {
     setMode("loading");
     setError(null);
     setUnauthorized(false);
     try {
-      const [rulesRes, usersRes] = await Promise.all([listDelegationRules(), listUsers({ page_size: 200 })]);
+      const [rulesRes, candidatesRes] = await Promise.all([
+        listDelegationRules(),
+        listDelegationCandidates({ scope: "all" }),
+      ]);
       if (isApiError(rulesRes)) {
         setError(rulesRes.message || "Failed to load delegation rules.");
         setMode("error");
         return;
       }
-      if (isApiError(usersRes)) {
-        setError(usersRes.message || "Failed to load users.");
+      if (isApiError(candidatesRes)) {
+        setError(candidatesRes.message || "Failed to load users.");
         setMode("error");
         return;
       }
       setRows(rulesRes.data.items || []);
-      setUsers(usersRes.data.items || []);
+      setCandidates(candidatesRes.data || []);
       setMode("ok");
     } catch (err: any) {
       if (err?.response?.status === 403) {
@@ -95,11 +107,13 @@ export default function DelegationRulesPage() {
 
   const userOptions = useMemo(
     () =>
-      users.map((user) => ({
-        label: formatUser(user),
-        value: Number(user.id),
+      candidates.map((candidate) => ({
+        label: formatCandidate(candidate),
+        value:
+          candidate.id ?? `employee-profile-${candidate.employee_profile_id}`,
+        disabled: !candidate.can_delegate,
       })),
-    [users]
+    [candidates],
   );
 
   const columns: ColumnsType<DelegationRuleDto> = [
@@ -109,8 +123,12 @@ export default function DelegationRulesPage() {
       key: "from_user",
       render: (_, record) => (
         <div>
-          <div style={{ fontWeight: 600 }}>{record.from_user.full_name || record.from_user.email}</div>
-          <div style={{ color: "#64748b", fontSize: 12 }}>{record.from_user.email}</div>
+          <div style={{ fontWeight: 600 }}>
+            {record.from_user.full_name || record.from_user.email}
+          </div>
+          <div style={{ color: "#64748b", fontSize: 12 }}>
+            {record.from_user.email}
+          </div>
         </div>
       ),
     },
@@ -120,8 +138,12 @@ export default function DelegationRulesPage() {
       key: "to_user",
       render: (_, record) => (
         <div>
-          <div style={{ fontWeight: 600 }}>{record.to_user.full_name || record.to_user.email}</div>
-          <div style={{ color: "#64748b", fontSize: 12 }}>{record.to_user.email}</div>
+          <div style={{ fontWeight: 600 }}>
+            {record.to_user.full_name || record.to_user.email}
+          </div>
+          <div style={{ color: "#64748b", fontSize: 12 }}>
+            {record.to_user.email}
+          </div>
         </div>
       ),
     },
@@ -132,7 +154,9 @@ export default function DelegationRulesPage() {
         <div>
           <div>{dayjs(record.start_at).format("YYYY-MM-DD HH:mm")}</div>
           <div style={{ color: "#64748b", fontSize: 12 }}>
-            {record.end_at ? dayjs(record.end_at).format("YYYY-MM-DD HH:mm") : t("common.noEndDate", "No end date")}
+            {record.end_at
+              ? dayjs(record.end_at).format("YYYY-MM-DD HH:mm")
+              : t("common.noEndDate", "No end date")}
           </div>
         </div>
       ),
@@ -143,18 +167,24 @@ export default function DelegationRulesPage() {
       key: "is_active",
       render: (isActive: boolean, record) => (
         <Space>
-          <Tag color={isActive ? "green" : "default"}>{isActive ? t("status.active") : t("status.inactive")}</Tag>
+          <Tag color={isActive ? "green" : "default"}>
+            {isActive ? t("status.active") : t("status.inactive")}
+          </Tag>
           <Switch
             size="small"
             checked={isActive}
             onChange={async (checked) => {
               try {
-                const res = await updateDelegationRule(record.id, { is_active: checked });
+                const res = await updateDelegationRule(record.id, {
+                  is_active: checked,
+                });
                 if (isApiError(res)) {
                   message.error(res.message || t("error.generic"));
                   return;
                 }
-                setRows((prev) => prev.map((item) => (item.id === record.id ? res.data : item)));
+                setRows((prev) =>
+                  prev.map((item) => (item.id === record.id ? res.data : item)),
+                );
               } catch (err: any) {
                 message.error(err?.message || t("error.generic"));
               }
@@ -167,7 +197,12 @@ export default function DelegationRulesPage() {
       title: t("common.reason", "Reason"),
       dataIndex: "reason",
       key: "reason",
-      render: (reason?: string) => reason || <span style={{ color: "#94a3b8" }}>{t("common.notAvailable", "Not provided")}</span>,
+      render: (reason?: string) =>
+        reason || (
+          <span style={{ color: "#94a3b8" }}>
+            {t("common.notAvailable", "Not provided")}
+          </span>
+        ),
     },
     {
       title: t("common.actions"),
@@ -176,7 +211,10 @@ export default function DelegationRulesPage() {
       render: (_, record) => (
         <Popconfirm
           title={t("common.delete", "Delete")}
-          description={t("delegation.deleteConfirm", "Remove this alternative employee option?")}
+          description={t(
+            "delegation.deleteConfirm",
+            "Remove this alternative employee option?",
+          )}
           onConfirm={async () => {
             try {
               const res = await deleteDelegationRule(record.id);
@@ -215,7 +253,9 @@ export default function DelegationRulesPage() {
       setRows((prev) => [res.data, ...prev]);
       setOpen(false);
       form.resetFields();
-      message.success(t("delegation.createSuccess", "Alternative employee option created."));
+      message.success(
+        t("delegation.createSuccess", "Alternative employee option created."),
+      );
     } catch (err: any) {
       message.error(err?.message || t("error.generic"));
     } finally {
@@ -224,11 +264,19 @@ export default function DelegationRulesPage() {
   }
 
   if (unauthorized) return <Unauthorized403Page />;
-  if (mode === "loading") return <LoadingState title={t("delegation.loading", "Loading alternative employee options")} />;
+  if (mode === "loading")
+    return (
+      <LoadingState
+        title={t("delegation.loading", "Loading alternative employee options")}
+      />
+    );
   if (mode === "error") {
     return (
       <ErrorState
-        title={t("delegation.loadFailed", "Alternative employee options unavailable")}
+        title={t(
+          "delegation.loadFailed",
+          "Alternative employee options unavailable",
+        )}
         description={error || t("delegation.tryAgain", "Please try again.")}
         onRetry={loadData}
       />
@@ -239,9 +287,16 @@ export default function DelegationRulesPage() {
     <div>
       <PageHeader
         title={t("delegation.title", "Alternative Employee Option")}
-        subtitle={t("delegation.subtitle", "Reassign workflow responsibilities during absence or temporary coverage.")}
+        subtitle={t(
+          "delegation.subtitle",
+          "Reassign workflow responsibilities during absence or temporary coverage.",
+        )}
         actions={
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => setOpen(true)}
+          >
             {t("delegation.create", "New alternative employee")}
           </Button>
         }
@@ -249,11 +304,13 @@ export default function DelegationRulesPage() {
 
       <Card style={{ borderRadius: 16 }}>
         <Space direction="vertical" size={4} style={{ marginBottom: 16 }}>
-          <Typography.Text strong>{t("delegation.summaryTitle", "Active approval handovers")}</Typography.Text>
+          <Typography.Text strong>
+            {t("delegation.summaryTitle", "Active approval handovers")}
+          </Typography.Text>
           <Typography.Text type="secondary">
             {t(
               "delegation.summaryBody",
-              "Options here are applied by the shared workflow engine to manager and role-based approval assignments."
+              "Options here are applied by the shared workflow engine to manager and role-based approval assignments.",
             )}
           </Typography.Text>
         </Space>
@@ -263,7 +320,12 @@ export default function DelegationRulesPage() {
           columns={columns}
           dataSource={rows}
           pagination={{ pageSize: 10, hideOnSinglePage: true }}
-          locale={{ emptyText: t("delegation.empty", "No alternative employee options yet.") }}
+          locale={{
+            emptyText: t(
+              "delegation.empty",
+              "No alternative employee options yet.",
+            ),
+          }}
           scroll={{ x: 900 }}
         />
       </Card>
@@ -285,21 +347,42 @@ export default function DelegationRulesPage() {
           <Form.Item
             name="from_user_id"
             label={t("common.from", "From")}
-            rules={[{ required: true, message: t("delegation.fromRequired", "Choose the original approver.") }]}
+            rules={[
+              {
+                required: true,
+                message: t(
+                  "delegation.fromRequired",
+                  "Choose the original approver.",
+                ),
+              },
+            ]}
           >
             <Select showSearch options={userOptions} optionFilterProp="label" />
           </Form.Item>
           <Form.Item
             name="to_user_id"
             label={t("common.to", "To")}
-            rules={[{ required: true, message: t("delegation.toRequired", "Choose the alternative employee.") }]}
+            rules={[
+              {
+                required: true,
+                message: t(
+                  "delegation.toRequired",
+                  "Choose the alternative employee.",
+                ),
+              },
+            ]}
           >
             <Select showSearch options={userOptions} optionFilterProp="label" />
           </Form.Item>
           <Form.Item
             name="start_at"
             label={t("common.startDate", "Start")}
-            rules={[{ required: true, message: t("delegation.startRequired", "Choose a start date.") }]}
+            rules={[
+              {
+                required: true,
+                message: t("delegation.startRequired", "Choose a start date."),
+              },
+            ]}
           >
             <DatePicker showTime style={{ width: "100%" }} />
           </Form.Item>
@@ -309,7 +392,11 @@ export default function DelegationRulesPage() {
           <Form.Item name="reason" label={t("common.reason", "Reason")}>
             <Input.TextArea rows={3} maxLength={500} />
           </Form.Item>
-          <Form.Item name="is_active" valuePropName="checked" label={t("common.status")}>
+          <Form.Item
+            name="is_active"
+            valuePropName="checked"
+            label={t("common.status")}
+          >
             <Switch />
           </Form.Item>
         </Form>

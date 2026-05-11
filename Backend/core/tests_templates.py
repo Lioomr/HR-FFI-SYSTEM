@@ -1,4 +1,5 @@
 import os
+import tempfile
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -6,7 +7,7 @@ from django.test import TestCase, override_settings
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from core.views_templates import TEMPLATE_CATALOG, TEMPLATES_DIR
+from core.views_templates import TEMPLATE_CATALOG, TEMPLATES_DIR, get_template_search_dirs, resolve_template_path
 
 
 User = get_user_model()
@@ -62,6 +63,15 @@ class TemplateLibraryTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response["Content-Type"], "application/pdf")
         self.assertIn("attachment", response["Content-Disposition"])
+
+    def test_empty_external_templates_dir_falls_back_to_bundled_templates(self):
+        with tempfile.TemporaryDirectory() as tmpdir, override_settings(HR_TEMPLATES_DIR=tmpdir):
+            search_dirs = get_template_search_dirs()
+            path = resolve_template_path("leave_request_blank.pdf")
+
+        self.assertEqual(search_dirs[0], tmpdir)
+        self.assertTrue(path.endswith(os.path.join("static", "pdf_templates", "leave_request_blank.pdf")))
+        self.assertTrue(os.path.exists(path))
 
     def test_download_forbidden_for_non_hr(self):
         self.client.force_authenticate(user=self.employee)

@@ -159,17 +159,32 @@ class EmployeeProfileReadSerializer(serializers.ModelSerializer):
     def get_employment_status(self, obj):
         if getattr(obj, "effective_employment_status", None):
             return obj.effective_employment_status
-        if getattr(obj, "active_leave_today", False) and obj.employment_status == EmployeeProfile.EmploymentStatus.ACTIVE:
+        if (
+            getattr(obj, "active_leave_today", False)
+            and obj.employment_status == EmployeeProfile.EmploymentStatus.ACTIVE
+        ):
             return "ON_LEAVE"
         return obj.employment_status
 
 
 class DelegationCandidateSerializer(serializers.ModelSerializer):
-    id = serializers.IntegerField(source="user.id", read_only=True)
+    id = serializers.IntegerField(source="user.id", read_only=True, allow_null=True)
     employee_profile_id = serializers.IntegerField(source="pk", read_only=True)
-    email = serializers.EmailField(source="user.email", read_only=True)
+    email = serializers.EmailField(source="user.email", read_only=True, allow_null=True)
     company_id = serializers.IntegerField(read_only=True)
     company_name = serializers.CharField(source="company.name", read_only=True)
+    can_delegate = serializers.SerializerMethodField()
+    disabled_reason = serializers.SerializerMethodField()
+
+    def get_can_delegate(self, obj):
+        return bool(obj.user_id and obj.user and obj.user.is_active)
+
+    def get_disabled_reason(self, obj):
+        if not obj.user_id:
+            return "No login account"
+        if obj.user and not obj.user.is_active:
+            return "Inactive login account"
+        return ""
 
     class Meta:
         model = EmployeeProfile
@@ -183,14 +198,24 @@ class DelegationCandidateSerializer(serializers.ModelSerializer):
             "email",
             "company_id",
             "company_name",
+            "can_delegate",
+            "disabled_reason",
         ]
 
 
 class EmployeeProfileWriteSerializer(serializers.ModelSerializer):
-    department_id = serializers.PrimaryKeyRelatedField(queryset=Department.objects.none(), source="department_ref", required=True)
-    position_id = serializers.PrimaryKeyRelatedField(queryset=Position.objects.none(), source="position_ref", required=True)
-    task_group_id = serializers.PrimaryKeyRelatedField(queryset=TaskGroup.objects.none(), source="task_group_ref", required=False, allow_null=True)
-    sponsor_id = serializers.PrimaryKeyRelatedField(queryset=Sponsor.objects.none(), source="sponsor_ref", required=False, allow_null=True)
+    department_id = serializers.PrimaryKeyRelatedField(
+        queryset=Department.objects.none(), source="department_ref", required=True
+    )
+    position_id = serializers.PrimaryKeyRelatedField(
+        queryset=Position.objects.none(), source="position_ref", required=True
+    )
+    task_group_id = serializers.PrimaryKeyRelatedField(
+        queryset=TaskGroup.objects.none(), source="task_group_ref", required=False, allow_null=True
+    )
+    sponsor_id = serializers.PrimaryKeyRelatedField(
+        queryset=Sponsor.objects.none(), source="sponsor_ref", required=False, allow_null=True
+    )
     join_date = serializers.DateField(source="hire_date", required=True)
     user_id = serializers.PrimaryKeyRelatedField(
         queryset=User.objects.all(),
@@ -198,7 +223,9 @@ class EmployeeProfileWriteSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True,
     )
-    manager_profile_id = serializers.PrimaryKeyRelatedField(queryset=EmployeeProfile.objects.none(), source="manager_profile", required=False, allow_null=True)
+    manager_profile_id = serializers.PrimaryKeyRelatedField(
+        queryset=EmployeeProfile.objects.none(), source="manager_profile", required=False, allow_null=True
+    )
 
     class Meta:
         model = EmployeeProfile
@@ -373,7 +400,9 @@ class EmployeeDeletionRequestCreateSerializer(serializers.ModelSerializer):
         super().__init__(*args, **kwargs)
         request = self.context.get("request")
         if request is not None:
-            self.fields["employee_profile_id"].queryset = EmployeeProfile.objects.filter(company=getattr(request, "_active_company", None))
+            self.fields["employee_profile_id"].queryset = EmployeeProfile.objects.filter(
+                company=getattr(request, "_active_company", None)
+            )
 
     def validate_reason(self, value):
         value = (value or "").strip()

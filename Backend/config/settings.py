@@ -188,6 +188,8 @@ TEMPLATES = [
 ]
 WSGI_APPLICATION = "config.wsgi.application"
 
+HR_TEMPLATES_DIR = os.environ.get("HR_TEMPLATES_DIR", "").strip()
+
 
 DATABASES = {
     "default": {

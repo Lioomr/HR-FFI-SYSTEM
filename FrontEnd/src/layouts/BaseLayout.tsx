@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Layout, Menu, Dropdown, Typography, Avatar, Drawer, Grid, Button, Select, Badge } from "antd";
+import { Layout, Menu, Dropdown, Typography, Avatar, Drawer, Grid, Button, Select, Badge, Tooltip } from "antd";
 import {
   DashboardOutlined,
   TeamOutlined,
@@ -398,7 +398,7 @@ export default function BaseLayout() {
   const isMobile = !screens.md;
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('ffi_sidebar_collapsed') === 'true');
   const [isFinanceApprover, setIsFinanceApprover] = useState(false);
   const [isCFOApprover, setIsCFOApprover] = useState(false);
   const [isCEOApprover, setIsCEOApprover] = useState(false);
@@ -411,6 +411,7 @@ export default function BaseLayout() {
     if (pathKeys.length > 0) {
       setOpenMenuKeys((prev) => Array.from(new Set([...prev, ...pathKeys])));
     }
+    setMobileMenuOpen(false);
   }, [location.pathname]);
 
   const role = user?.role;
@@ -878,6 +879,7 @@ export default function BaseLayout() {
         <Menu
           mode="inline"
           theme="dark"
+          inlineCollapsed={collapsed}
           selectedKeys={[getSelectedKey(location.pathname, menuItems)]}
           openKeys={openMenuKeys}
           onOpenChange={setOpenMenuKeys}
@@ -902,19 +904,25 @@ export default function BaseLayout() {
           transition: "padding 0.25s cubic-bezier(0.4,0,0.2,1)",
         }}
       >
-        <Avatar
-          size={32}
-          icon={<UserOutlined />}
-          style={{
-            background: `linear-gradient(135deg, ${roleColor(role)}, ${roleColor(role)}88)`,
-            fontSize: 13,
-            fontWeight: 700,
-            flexShrink: 0,
-            boxShadow: `0 0 0 2px ${sbTheme.bg}, 0 0 0 4px ${sbTheme.accent}44`,
-          }}
+        <Tooltip
+          title={collapsed ? `${displayName} · ${getRoleLabel(role)}` : undefined}
+          placement="right"
         >
-          {displayName.charAt(0).toUpperCase()}
-        </Avatar>
+          <Avatar
+            size={32}
+            icon={<UserOutlined />}
+            style={{
+              background: `linear-gradient(135deg, ${roleColor(role)}, ${roleColor(role)}88)`,
+              fontSize: 13,
+              fontWeight: 700,
+              flexShrink: 0,
+              boxShadow: `0 0 0 2px ${sbTheme.bg}, 0 0 0 4px ${sbTheme.accent}44`,
+              cursor: "default",
+            }}
+          >
+            {displayName.charAt(0).toUpperCase()}
+          </Avatar>
+        </Tooltip>
         {!collapsed && (
           <div style={{ minWidth: 0, overflow: "hidden" }}>
             <div style={{ fontWeight: 600, fontSize: 12.5, color: "rgba(255,255,255,0.82)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
@@ -938,7 +946,11 @@ export default function BaseLayout() {
           width={240}
           collapsible
           collapsed={collapsed}
-          onCollapse={(value) => setCollapsed(value)}
+          collapsedWidth={64}
+          onCollapse={(value) => {
+            setCollapsed(value);
+            localStorage.setItem('ffi_sidebar_collapsed', String(value));
+          }}
           style={{
             ...sidebarCSSVars,
             background: sbTheme.bg,

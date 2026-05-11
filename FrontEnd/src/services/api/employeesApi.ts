@@ -85,15 +85,17 @@ export interface ListEmployeesParams {
 }
 
 export interface DelegationCandidate {
-  id: number;
+  id: number | null;
   employee_profile_id: number;
   employee_id: string;
   full_name: string;
   full_name_en?: string;
   full_name_ar?: string;
-  email: string;
+  email?: string | null;
   company_id?: number;
   company_name?: string;
+  can_delegate: boolean;
+  disabled_reason?: string;
 }
 
 /**
@@ -110,21 +112,30 @@ export interface EmployeeListResponse {
  * List all employees with optional filters
  */
 export async function listEmployees(
-  params?: ListEmployeesParams
+  params?: ListEmployeesParams,
 ): Promise<ApiResponse<EmployeeListResponse>> {
   const { data } = await api.get<ApiResponse<EmployeeListResponse>>(
     "/employees",
-    { params }
+    { params },
   );
   return data;
 }
 
-export async function listDelegationCandidates(): Promise<ApiResponse<DelegationCandidate[]>> {
-  const { data } = await api.get<ApiResponse<DelegationCandidate[]>>("/api/employees/delegation-candidates/");
+export async function listDelegationCandidates(params?: {
+  scope?: "all";
+}): Promise<ApiResponse<DelegationCandidate[]>> {
+  const { data } = await api.get<ApiResponse<DelegationCandidate[]>>(
+    "/api/employees/delegation-candidates/",
+    {
+      params,
+    },
+  );
   return data;
 }
 
-export async function exportEmployees(params?: ListEmployeesParams): Promise<Blob> {
+export async function exportEmployees(
+  params?: ListEmployeesParams,
+): Promise<Blob> {
   const response = await api.get("/employees/export", {
     params,
     responseType: "blob",
@@ -136,11 +147,9 @@ export async function exportEmployees(params?: ListEmployeesParams): Promise<Blo
  * Get a single employee by ID
  */
 export async function getEmployee(
-  id: string | number
+  id: string | number,
 ): Promise<ApiResponse<Employee>> {
-  const { data } = await api.get<ApiResponse<Employee>>(
-    `/employees/${id}`
-  );
+  const { data } = await api.get<ApiResponse<Employee>>(`/employees/${id}`);
   return data;
 }
 
@@ -149,9 +158,9 @@ export async function getEmployee(
  */
 export interface CreateEmployeeDto {
   // Personal Info (bilingual)
-  full_name_en: string;   // English full name (primary)
-  full_name_ar?: string;  // Arabic full name
-  is_saudi?: boolean;     // Saudi citizen flag
+  full_name_en: string; // English full name (primary)
+  full_name_ar?: string; // Arabic full name
+  is_saudi?: boolean; // Saudi citizen flag
   employee_number?: string;
   nationality?: string;
   passport_no?: string;
@@ -191,12 +200,9 @@ export interface CreateEmployeeDto {
  * Create a new employee
  */
 export async function createEmployee(
-  payload: CreateEmployeeDto
+  payload: CreateEmployeeDto,
 ): Promise<ApiResponse<Employee>> {
-  const { data } = await api.post<ApiResponse<Employee>>(
-    "/employees",
-    payload
-  );
+  const { data } = await api.post<ApiResponse<Employee>>("/employees", payload);
   return data;
 }
 
@@ -205,21 +211,24 @@ export async function createEmployee(
  */
 export async function updateEmployee(
   id: string | number,
-  payload: CreateEmployeeDto
+  payload: CreateEmployeeDto,
 ): Promise<ApiResponse<Employee>> {
   const { data } = await api.patch<ApiResponse<Employee>>(
     `/employees/${id}`,
-    payload
+    payload,
   );
   return data;
 }
 
-
-
 /**
  * Import Status: Aligning with Backend Enum
  */
-export type ImportStatus = "pending" | "processing" | "success" | "failed" | string;
+export type ImportStatus =
+  | "pending"
+  | "processing"
+  | "success"
+  | "failed"
+  | string;
 
 /**
  * Import Result Detail (Matches EmployeeImportSerializer)
@@ -251,7 +260,9 @@ export interface ImportHistoryItem {
  * Upload employees Excel file
  * Endpoint: POST /employees/import/excel
  */
-export async function importEmployees(file: File): Promise<ApiResponse<{ inserted_rows: number }>> {
+export async function importEmployees(
+  file: File,
+): Promise<ApiResponse<{ inserted_rows: number }>> {
   const formData = new FormData();
   formData.append("file", file);
 
@@ -262,7 +273,7 @@ export async function importEmployees(file: File): Promise<ApiResponse<{ inserte
       headers: {
         "Content-Type": "multipart/form-data",
       },
-    }
+    },
   );
   return data;
 }
@@ -270,8 +281,12 @@ export async function importEmployees(file: File): Promise<ApiResponse<{ inserte
 /**
  * Get status of a specific import
  */
-export async function getImportStatus(id: string): Promise<ApiResponse<ImportResult>> {
-  const { data } = await api.get<ApiResponse<ImportResult>>(`/imports/employees/${id}`);
+export async function getImportStatus(
+  id: string,
+): Promise<ApiResponse<ImportResult>> {
+  const { data } = await api.get<ApiResponse<ImportResult>>(
+    `/imports/employees/${id}`,
+  );
   return data;
 }
 
@@ -284,11 +299,24 @@ export async function getImportHistory(params?: {
   status?: string;
   date_from?: string;
   date_to?: string;
-}): Promise<ApiResponse<{ items: ImportHistoryItem[]; count: number; page?: number; page_size?: number; total_pages?: number }>> {
-  const { data } = await api.get<ApiResponse<{ items: ImportHistoryItem[]; count: number; page?: number; page_size?: number; total_pages?: number }>>(
-    "/imports/employees/history",
-    { params }
-  );
+}): Promise<
+  ApiResponse<{
+    items: ImportHistoryItem[];
+    count: number;
+    page?: number;
+    page_size?: number;
+    total_pages?: number;
+  }>
+> {
+  const { data } = await api.get<
+    ApiResponse<{
+      items: ImportHistoryItem[];
+      count: number;
+      page?: number;
+      page_size?: number;
+      total_pages?: number;
+    }>
+  >("/imports/employees/history", { params });
   return data;
 }
 
@@ -337,14 +365,21 @@ export interface ExpiringEmployeesResponse {
   total_pages: number;
 }
 
-export async function getExpiringEmployees(days = 30, page = 1, pageSize = 25): Promise<ApiResponse<ExpiringEmployeesResponse>> {
-  const { data } = await api.get<ApiResponse<ExpiringEmployeesResponse>>("/employees/expiries", {
-    params: {
-      days,
-      page,
-      page_size: pageSize,
+export async function getExpiringEmployees(
+  days = 30,
+  page = 1,
+  pageSize = 25,
+): Promise<ApiResponse<ExpiringEmployeesResponse>> {
+  const { data } = await api.get<ApiResponse<ExpiringEmployeesResponse>>(
+    "/employees/expiries",
+    {
+      params: {
+        days,
+        page,
+        page_size: pageSize,
+      },
     },
-  });
+  );
   return data;
 }
 
@@ -356,9 +391,12 @@ export interface NotifyExpiryPayload {
 
 export async function notifyExpiringEmployee(
   employeeProfileId: number,
-  payload: NotifyExpiryPayload
+  payload: NotifyExpiryPayload,
 ): Promise<ApiResponse<any>> {
-  const { data } = await api.post<ApiResponse<any>>(`/employees/${employeeProfileId}/notify-expiry`, payload);
+  const { data } = await api.post<ApiResponse<any>>(
+    `/employees/${employeeProfileId}/notify-expiry`,
+    payload,
+  );
   return data;
 }
 
@@ -435,23 +473,23 @@ export interface EmployeeDeletionRequestListResponse {
 
 const DELETION_BASE = "/api/employees/deletion-requests";
 
-export async function requestEmployeeDeletion(
-  payload: { employee_profile_id: number; reason: string }
-): Promise<ApiResponse<EmployeeDeletionRequest>> {
+export async function requestEmployeeDeletion(payload: {
+  employee_profile_id: number;
+  reason: string;
+}): Promise<ApiResponse<EmployeeDeletionRequest>> {
   const { data } = await api.post<ApiResponse<EmployeeDeletionRequest>>(
     `${DELETION_BASE}/`,
-    payload
+    payload,
   );
   return data;
 }
 
 export async function listEmployeeDeletionRequests(
-  params?: ListEmployeeDeletionRequestsParams
+  params?: ListEmployeeDeletionRequestsParams,
 ): Promise<ApiResponse<EmployeeDeletionRequestListResponse>> {
-  const { data } = await api.get<ApiResponse<any>>(
-    `${DELETION_BASE}/`,
-    { params }
-  );
+  const { data } = await api.get<ApiResponse<any>>(`${DELETION_BASE}/`, {
+    params,
+  });
   if (data && (data as ApiResponse<any>).status === "success") {
     const payload = (data as ApiSuccess<any>).data || {};
     const items: EmployeeDeletionRequest[] = Array.isArray(payload.items)
@@ -472,30 +510,30 @@ export async function listEmployeeDeletionRequests(
 }
 
 export async function getEmployeeDeletionRequest(
-  id: number | string
+  id: number | string,
 ): Promise<ApiResponse<EmployeeDeletionRequest>> {
   const { data } = await api.get<ApiResponse<EmployeeDeletionRequest>>(
-    `${DELETION_BASE}/${id}/`
+    `${DELETION_BASE}/${id}/`,
   );
   return data;
 }
 
 export async function approveEmployeeDeletionRequest(
-  id: number | string
+  id: number | string,
 ): Promise<ApiResponse<EmployeeDeletionRequest>> {
   const { data } = await api.post<ApiResponse<EmployeeDeletionRequest>>(
-    `${DELETION_BASE}/${id}/approve/`
+    `${DELETION_BASE}/${id}/approve/`,
   );
   return data;
 }
 
 export async function rejectEmployeeDeletionRequest(
   id: number | string,
-  reason: string
+  reason: string,
 ): Promise<ApiResponse<EmployeeDeletionRequest>> {
   const { data } = await api.post<ApiResponse<EmployeeDeletionRequest>>(
     `${DELETION_BASE}/${id}/reject/`,
-    { reason }
+    { reason },
   );
   return data;
 }

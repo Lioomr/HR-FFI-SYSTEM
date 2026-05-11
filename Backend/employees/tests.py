@@ -383,6 +383,55 @@ class EmployeeProfileTests(TestCase):
         self.assertEqual(candidates[0]["employee_id"], "EMP-DELEGATE")
         self.assertNotIn(requester_profile.id, [item["employee_profile_id"] for item in candidates])
 
+    def test_employee_can_list_all_company_delegation_candidates_with_no_login_disabled(self):
+        company = OrganizationNode.objects.create(
+            code="ALL_CO",
+            name="All Co",
+            node_type=OrganizationNode.NodeType.COMPANY,
+        )
+        other_company = OrganizationNode.objects.create(
+            code="ALL_OTHER_CO",
+            name="All Other Co",
+            node_type=OrganizationNode.NodeType.COMPANY,
+        )
+        EmployeeProfile.objects.create(
+            user=self.employee_user,
+            company=company,
+            employee_id="EMP-ALL-DELEGATOR",
+            full_name="All Delegator",
+            hire_date="2024-01-01",
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        )
+        other_user = User.objects.create_user(email="delegate-all-other@ffi.com", password="password")
+        other_profile = EmployeeProfile.objects.create(
+            user=other_user,
+            company=other_company,
+            employee_id="EMP-ALL-OTHER",
+            full_name="Other Company Delegate",
+            hire_date="2024-01-01",
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        )
+        no_login_profile = EmployeeProfile.objects.create(
+            company=other_company,
+            employee_id="EMP-ALL-NOLOGIN",
+            full_name="No Login Delegate",
+            hire_date="2024-01-01",
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        )
+
+        self.client.force_authenticate(user=self.employee_user)
+        response = self.client.get("/api/employees/delegation-candidates/?scope=all")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        candidates_by_profile = {item["employee_profile_id"]: item for item in response.data["data"]}
+        self.assertIn(other_profile.id, candidates_by_profile)
+        self.assertEqual(candidates_by_profile[other_profile.id]["id"], other_user.id)
+        self.assertTrue(candidates_by_profile[other_profile.id]["can_delegate"])
+        self.assertIn(no_login_profile.id, candidates_by_profile)
+        self.assertIsNone(candidates_by_profile[no_login_profile.id]["id"])
+        self.assertFalse(candidates_by_profile[no_login_profile.id]["can_delegate"])
+        self.assertEqual(candidates_by_profile[no_login_profile.id]["disabled_reason"], "No login account")
+
     def test_hr_can_export_filtered_employees_as_xlsx(self):
         EmployeeProfile.objects.create(
             user=self.employee_user,
@@ -654,11 +703,15 @@ class EmployeeDeletionWorkflowTests(TestCase):
         self.hr_user.groups.add(self.hr_group)
         UserOrganizationAccess.objects.create(user=self.hr_user, organization=self.company)
 
-        self.ceo_user = User.objects.create_user(email="ceo-delete@test.com", password="password", full_name="CEO Delete")
+        self.ceo_user = User.objects.create_user(
+            email="ceo-delete@test.com", password="password", full_name="CEO Delete"
+        )
         self.ceo_user.groups.add(self.ceo_group)
         UserOrganizationAccess.objects.create(user=self.ceo_user, organization=self.other_company)
 
-        self.cfo_user = User.objects.create_user(email="cfo-delete@test.com", password="password", full_name="CFO Delete")
+        self.cfo_user = User.objects.create_user(
+            email="cfo-delete@test.com", password="password", full_name="CFO Delete"
+        )
         self.cfo_user.groups.add(self.cfo_group)
         UserOrganizationAccess.objects.create(user=self.cfo_user, organization=self.other_company)
 
@@ -694,7 +747,9 @@ class EmployeeDeletionWorkflowTests(TestCase):
         request_obj = EmployeeDeletionRequest.objects.get()
         self.assertEqual(request_obj.status, EmployeeDeletionRequest.Status.PENDING_CEO)
         self.assertEqual(request_obj.request_snapshot["employee_id"], "DEL-001")
-        self.assertTrue(AuditLog.objects.filter(action="employee_hard_delete_requested", entity_id=request_obj.id).exists())
+        self.assertTrue(
+            AuditLog.objects.filter(action="employee_hard_delete_requested", entity_id=request_obj.id).exists()
+        )
 
     def test_global_ceo_can_approve_and_hard_delete_across_companies(self):
         request_obj = EmployeeDeletionRequest.objects.create(
