@@ -668,12 +668,82 @@ class LeaveBalanceTests(TestCase):
         from leaves.utils import calculate_leave_balance
 
         year = date.today().year
-        balances = calculate_leave_balance(self.emp1, year)
+        balances = calculate_leave_balance(self.emp1, year, as_of=date(year, 12, 31))
 
         # Find annual leave
         annual_bal = next(b for b in balances if b["leave_type_id"] == self.annual.id)
         self.assertEqual(float(annual_bal["remaining_days"]), 21.0)
         self.assertEqual(float(annual_bal["used_days"]), 0.0)
+        self.assertEqual(float(annual_bal["available_annual_year_days"]), 21.0)
+
+    def test_annual_accrual_for_started_months(self):
+        from leaves.utils import calculate_leave_balance, get_annual_accrued_days
+
+        self.profile1.hire_date = date(2024, 1, 1)
+        self.profile1.save()
+
+        self.assertEqual(get_annual_accrued_days(self.profile1, 2026, as_of=date(2026, 5, 17)), 8.75)
+
+        balances = calculate_leave_balance(self.emp1, 2026, as_of=date(2026, 5, 17))
+        annual_bal = next(b for b in balances if b["leave_type_id"] == self.annual.id)
+        self.assertEqual(float(annual_bal["available_annual_year_days"]), 8.75)
+        self.assertEqual(float(annual_bal["remaining_days"]), 8.75)
+
+    def test_annual_accrual_caps_at_full_year(self):
+        from leaves.utils import get_annual_accrued_days
+
+        self.profile1.hire_date = date(2024, 1, 1)
+        self.profile1.save()
+
+        self.assertEqual(get_annual_accrued_days(self.profile1, 2026, as_of=date(2026, 12, 31)), 21.0)
+
+    def test_annual_accrual_starts_from_hire_month(self):
+        from leaves.utils import get_annual_accrued_days
+
+        self.profile1.hire_date = date(2026, 3, 20)
+        self.profile1.save()
+
+        self.assertEqual(get_annual_accrued_days(self.profile1, 2026, as_of=date(2026, 5, 17)), 5.25)
+
+    def test_annual_remaining_uses_accrued_days_minus_usage(self):
+        self.profile1.hire_date = date(2024, 1, 1)
+        self.profile1.save()
+
+        LeaveRequest.objects.create(
+            employee=self.emp1,
+            leave_type=self.annual,
+            start_date=date(2026, 3, 1),
+            end_date=date(2026, 3, 2),
+            status="approved",
+            decided_by=self.hr,
+        )
+
+        from leaves.utils import calculate_leave_balance
+
+        balances = calculate_leave_balance(self.emp1, 2026, as_of=date(2026, 5, 17))
+        annual_bal = next(b for b in balances if b["leave_type_id"] == self.annual.id)
+        self.assertEqual(float(annual_bal["used_days"]), 2.0)
+        self.assertEqual(float(annual_bal["remaining_days"]), 6.75)
+
+    def test_emergency_availability_uses_accrued_annual_balance(self):
+        self.profile1.hire_date = date(2024, 1, 1)
+        self.profile1.save()
+        emergency = LeaveType.objects.create(name="Emergency Leave", code="EMERGENCY")
+
+        LeaveRequest.objects.create(
+            employee=self.emp1,
+            leave_type=self.annual,
+            start_date=date(2026, 3, 1),
+            end_date=date(2026, 3, 5),
+            status="approved",
+            decided_by=self.hr,
+        )
+
+        from leaves.utils import calculate_leave_balance
+
+        balances = calculate_leave_balance(self.emp1, 2026, as_of=date(2026, 5, 17))
+        emergency_bal = next(b for b in balances if b["leave_type_id"] == emergency.id)
+        self.assertEqual(float(emergency_bal["remaining_days"]), 3.75)
 
     def test_balance_usage(self):
         year = date.today().year
@@ -691,7 +761,7 @@ class LeaveBalanceTests(TestCase):
 
         from leaves.utils import calculate_leave_balance
 
-        balances = calculate_leave_balance(self.emp1, year)
+        balances = calculate_leave_balance(self.emp1, year, as_of=date(year, 12, 31))
         annual_bal = next(b for b in balances if b["leave_type_id"] == self.annual.id)
 
         # 21 - 2 = 19
@@ -713,7 +783,7 @@ class LeaveBalanceTests(TestCase):
 
         from leaves.utils import calculate_leave_balance
 
-        balances = calculate_leave_balance(self.emp1, year)
+        balances = calculate_leave_balance(self.emp1, year, as_of=date(year, 12, 31))
         annual_bal = next(b for b in balances if b["leave_code"] == "ANNUAL")
         unpaid_bal = next(b for b in balances if b["leave_code"] == "UNPAID")
 
@@ -743,6 +813,27 @@ class LeaveBalanceTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["data"]["payment_status"], "unpaid")
+
+    def test_annual_leave_request_rejects_over_accrued_annual_plus_unpaid(self):
+        self.client.force_authenticate(user=self.emp1)
+        self.profile1.hire_date = date(2024, 1, 1)
+        self.profile1.save()
+
+        with patch("leaves.utils.date") as mocked_date:
+            mocked_date.today.return_value = date(2026, 5, 17)
+            mocked_date.side_effect = lambda *args, **kwargs: date(*args, **kwargs)
+            response = self.client.post(
+                "/api/leaves/leave-requests/",
+                {
+                    "leave_type": self.annual.id,
+                    "start_date": "2026-07-01",
+                    "end_date": "2026-09-20",
+                    "reason": "Beyond accrued annual plus unpaid",
+                },
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Annual leave exceeds available balance", str(response.data))
 
     def test_carry_over_logic(self):
         year = date.today().year
@@ -788,7 +879,8 @@ class LeaveBalanceTests(TestCase):
         data = response.data["data"]
         # Match structure
         self.assertTrue(isinstance(data, list))
-        self.assertTrue(any(item["leave_type"] == "Annual Leave" for item in data))
+        annual = next(item for item in data if item["leave_type"] == "Annual Leave")
+        self.assertIn("available_annual_year_days", annual)
 
     def test_employee_cannot_access_global_list(self):
         self.client.force_authenticate(user=self.emp1)
