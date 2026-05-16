@@ -18,14 +18,26 @@ export default function EmployeeLeaveBalances({ employeeId }: EmployeeLeaveBalan
     const [submitting, setSubmitting] = useState(false);
     const [form] = Form.useForm();
 
-    const formatWholeNumber = (value: unknown) => Math.round(Number(value || 0)).toString();
+    const formatLeaveDays = (value: unknown) => {
+        const num = Number(value || 0);
+        if (Number.isInteger(num)) return String(num);
+        return num.toFixed(2).replace(/\.?0+$/, "");
+    };
+
+    const getNormalizedLeaveCode = (record: LeaveBalance) =>
+        String(record.leave_code || record.leave_type || "")
+            .trim()
+            .toUpperCase()
+            .replace(/\s+/g, "_");
+
+    const isAnnualLeave = (record: LeaveBalance) =>
+        ["ANNUAL", "ANNUAL_LEAVE"].includes(getNormalizedLeaveCode(record));
 
     const getDisplayUsedDays = (record: LeaveBalance) => {
         const used = Number(record.used_days || 0);
         const total = Number(record.total_days || 0);
-        const normalizedType = String(record.leave_type || "").trim().toUpperCase().replace(/\s+/g, "_");
 
-        if (normalizedType === "ANNUAL_LEAVE" || normalizedType === "ANNUAL") {
+        if (isAnnualLeave(record)) {
             return Math.min(used, total);
         }
 
@@ -102,14 +114,23 @@ export default function EmployeeLeaveBalances({ employeeId }: EmployeeLeaveBalan
             title: t("hr.employees.balances.totalQuota"),
             dataIndex: "total_days",
             key: "total_days",
-            render: (val: any) => formatWholeNumber(val)
+            render: (val: any) => formatLeaveDays(val)
+        },
+        {
+            title: t("hr.employees.balances.availableAnnualYearDays", "Available Annual Year Days"),
+            dataIndex: "available_annual_year_days",
+            key: "available_annual_year_days",
+            render: (val: any, record: LeaveBalance) => {
+                if (!isAnnualLeave(record)) return "-";
+                return formatLeaveDays(val);
+            }
         },
         {
             title: t("hr.employees.balances.used"),
             dataIndex: "used_days",
             key: "used_days",
             render: (_val: any, record: LeaveBalance) => (
-                <span style={{ color: "orange" }}>{formatWholeNumber(getDisplayUsedDays(record))}</span>
+                <span style={{ color: "orange" }}>{formatLeaveDays(getDisplayUsedDays(record))}</span>
             )
         },
         {
@@ -120,7 +141,7 @@ export default function EmployeeLeaveBalances({ employeeId }: EmployeeLeaveBalan
                 const num = Number(val || 0);
                 return (
                     <span style={{ color: num < 0 ? "red" : "green", fontWeight: "bold" }}>
-                        {formatWholeNumber(num)}
+                        {formatLeaveDays(num)}
                     </span>
                 );
             }
