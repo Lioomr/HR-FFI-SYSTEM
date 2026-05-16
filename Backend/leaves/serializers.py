@@ -50,6 +50,7 @@ class LeaveBalanceSerializer(serializers.Serializer):
     leave_type_id = serializers.IntegerField()
     leave_type = serializers.CharField()
     leave_code = serializers.CharField(required=False)
+    available_annual_year_days = serializers.DecimalField(max_digits=6, decimal_places=2, required=False)
     total_days = serializers.DecimalField(max_digits=6, decimal_places=2)
     used_days = serializers.DecimalField(max_digits=6, decimal_places=2)
     remaining_days = serializers.DecimalField(max_digits=6, decimal_places=2)

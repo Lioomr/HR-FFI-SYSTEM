@@ -77,6 +77,8 @@ export interface LeaveRequest {
 export interface LeaveBalance {
   leave_type_id: number;
   leave_type: string;
+  leave_code?: string;
+  available_annual_year_days?: number | string;
   total_days: number;
   used_days: number;
   remaining_days: number;
