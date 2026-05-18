@@ -212,7 +212,7 @@ export default function PayrollDashboardPage() {
                     columns={columns}
                     rowKey="id"
                     loading={loading}
-                    scroll={{ x: 720 }}
+                    scroll={{ x: "max-content" }}
                     size={isMobile ? "small" : "middle"}
                     pagination={{
                         current: page,

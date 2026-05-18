@@ -182,6 +182,8 @@ export default function AnnouncementsManagementPage() {
                 pagination={pagination}
                 loading={loading}
                 onChange={handleTableChange}
+                size="small"
+                scroll={{ x: "max-content" }}
                 bordered
             />
         </div>

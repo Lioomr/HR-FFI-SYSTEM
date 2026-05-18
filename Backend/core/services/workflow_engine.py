@@ -59,6 +59,14 @@ WORKFLOW_TEMPLATES = {
             {"key": "ceo", "title": "CEO Review", "approver_role": "ceo", "order": 3, "is_optional": True},
         ],
     },
+    "attendance_correction_request": {
+        "name": "Attendance Correction Workflow",
+        "module_key": "attendance",
+        "stages": [
+            {"key": "manager", "title": "Manager Review", "approver_role": "manager", "order": 1, "is_optional": True},
+            {"key": "hr", "title": "HR Review", "approver_role": "hr", "order": 2},
+        ],
+    },
     "employee_deletion_request": {
         "name": "Employee Deletion Workflow",
         "module_key": "employees",
@@ -98,6 +106,8 @@ def _build_action_url_path(workflow_key: str, role: str, object_id: int) -> str:
         ("attendance_request", "manager"): "/manager/team-requests?tab=attendance",
         ("attendance_request", "hr"): "/hr/attendance",
         ("attendance_request", "ceo"): "/ceo/attendance",
+        ("attendance_correction_request", "manager"): "/manager/team-requests?tab=attendance-corrections",
+        ("attendance_correction_request", "hr"): "/hr/attendance-correction-requests",
         ("asset_return_request", "manager"): "/manager/team-requests?tab=asset-returns",
         ("asset_return_request", "hr"): "/hr/assets",
         ("asset_return_request", "ceo"): "/ceo/assets/return-requests",
@@ -669,6 +679,126 @@ def _legacy_events_for_attendance(instance) -> list[WorkflowEvent]:
     return events
 
 
+def _legacy_status_snapshot_for_attendance_correction(instance):
+    from attendance.models import AttendanceCorrectionRequest
+
+    current_map = {
+        AttendanceCorrectionRequest.Status.PENDING_MANAGER: ("manager", "manager"),
+        AttendanceCorrectionRequest.Status.PENDING_HR: ("hr", "hr"),
+    }
+    current_stage, current_role = current_map.get(instance.status, ("", ""))
+    status = WorkflowInstance.Status.IN_REVIEW
+    terminal_at = None
+
+    if instance.status == AttendanceCorrectionRequest.Status.DRAFT:
+        status = WorkflowInstance.Status.DRAFT
+    elif instance.status == AttendanceCorrectionRequest.Status.PENDING_MANAGER:
+        status = WorkflowInstance.Status.SUBMITTED
+    elif instance.status == AttendanceCorrectionRequest.Status.APPROVED:
+        status = WorkflowInstance.Status.APPROVED
+        terminal_at = instance.decided_at or instance.hr_decision_at or instance.updated_at
+    elif instance.status == AttendanceCorrectionRequest.Status.REJECTED:
+        status = WorkflowInstance.Status.REJECTED
+        terminal_at = instance.decided_at or instance.hr_decision_at or instance.manager_decision_at or instance.updated_at
+    elif instance.status == AttendanceCorrectionRequest.Status.CANCELLED:
+        status = WorkflowInstance.Status.CANCELLED
+        terminal_at = instance.cancelled_at or instance.updated_at
+
+    return {
+        "status": status,
+        "current_stage": current_stage,
+        "current_role": current_role,
+        "current_actor_user": _resolve_current_actor(current_role, instance) if current_role else None,
+        "submitted_by": getattr(instance.employee_profile, "user", None),
+        "submitted_at": instance.submitted_at or instance.created_at,
+        "decided_at": terminal_at if status in {WorkflowInstance.Status.APPROVED, WorkflowInstance.Status.REJECTED} else None,
+        "cancelled_at": terminal_at if status == WorkflowInstance.Status.CANCELLED else None,
+    }
+
+
+def _legacy_events_for_attendance_correction(instance) -> list[WorkflowEvent]:
+    from attendance.models import AttendanceCorrectionRequest
+
+    events = []
+    if instance.submitted_at:
+        events.append(
+            WorkflowEvent(
+                signature=f"attendance-correction:submitted:{instance.id}:{instance.submitted_at.isoformat()}",
+                action=WorkflowAction.Action.SUBMIT,
+                approver_role="",
+                from_status="draft",
+                to_status="submitted",
+                from_stage="",
+                to_stage="manager"
+                if instance.status == AttendanceCorrectionRequest.Status.PENDING_MANAGER or instance.manager_decision_at
+                else "hr",
+                actor=instance.created_by or getattr(instance.employee_profile, "user", None),
+                note=instance.reason or "",
+                at=instance.submitted_at,
+                metadata={"legacy_signature": "submitted", "workflow_key": "attendance_correction_request"},
+            )
+        )
+    if instance.manager_decision_at:
+        events.append(
+            WorkflowEvent(
+                signature=f"attendance-correction:manager:{instance.id}:{instance.manager_decision_at.isoformat()}",
+                action=WorkflowAction.Action.REJECT
+                if instance.status == AttendanceCorrectionRequest.Status.REJECTED and not instance.hr_decision_at
+                else WorkflowAction.Action.ADVANCE,
+                approver_role="manager",
+                from_status="submitted",
+                to_status="rejected"
+                if instance.status == AttendanceCorrectionRequest.Status.REJECTED and not instance.hr_decision_at
+                else "in_review",
+                from_stage="manager",
+                to_stage=""
+                if instance.status == AttendanceCorrectionRequest.Status.REJECTED and not instance.hr_decision_at
+                else "hr",
+                actor=instance.manager_decision_by,
+                note=instance.manager_decision_note or "",
+                at=instance.manager_decision_at,
+                metadata={"legacy_signature": "manager", "workflow_key": "attendance_correction_request"},
+            )
+        )
+    if instance.hr_decision_at:
+        events.append(
+            WorkflowEvent(
+                signature=f"attendance-correction:hr:{instance.id}:{instance.hr_decision_at.isoformat()}",
+                action=WorkflowAction.Action.REJECT
+                if instance.status == AttendanceCorrectionRequest.Status.REJECTED
+                else WorkflowAction.Action.APPROVE,
+                approver_role="hr",
+                from_status="in_review",
+                to_status="rejected"
+                if instance.status == AttendanceCorrectionRequest.Status.REJECTED
+                else "approved",
+                from_stage="hr",
+                to_stage="",
+                actor=instance.hr_decision_by,
+                note=instance.hr_decision_note or "",
+                at=instance.hr_decision_at,
+                metadata={"legacy_signature": "hr", "workflow_key": "attendance_correction_request"},
+            )
+        )
+    if instance.cancelled_at:
+        events.append(
+            WorkflowEvent(
+                signature=f"attendance-correction:cancelled:{instance.id}:{instance.cancelled_at.isoformat()}",
+                action=WorkflowAction.Action.CANCEL,
+                approver_role="",
+                from_status="submitted",
+                to_status="cancelled",
+                from_stage="",
+                to_stage="",
+                actor=instance.updated_by,
+                note="",
+                at=instance.cancelled_at,
+                metadata={"legacy_signature": "cancelled", "workflow_key": "attendance_correction_request"},
+            )
+        )
+    return events
+
+
 def _legacy_status_snapshot_for_asset_return(instance):
     from assets.models import AssetReturnRequest
 
@@ -880,6 +1010,12 @@ def _adapter_for_instance(instance):
         return "loan_request", _legacy_status_snapshot_for_loan, _legacy_events_for_loan
     if class_name == "AttendanceRecord":
         return "attendance_request", _legacy_status_snapshot_for_attendance, _legacy_events_for_attendance
+    if class_name == "AttendanceCorrectionRequest":
+        return (
+            "attendance_correction_request",
+            _legacy_status_snapshot_for_attendance_correction,
+            _legacy_events_for_attendance_correction,
+        )
     if class_name == "AssetReturnRequest":
         return "asset_return_request", _legacy_status_snapshot_for_asset_return, _legacy_events_for_asset_return
     if class_name == "EmployeeDeletionRequest":
@@ -1073,6 +1209,7 @@ def build_pending_approval_item(workflow: WorkflowInstance) -> dict[str, Any] | 
         "leave_request": "Leave",
         "loan_request": "Loan",
         "attendance_request": "Attendance",
+        "attendance_correction_request": "Attendance Correction",
         "asset_return_request": "Asset Return",
         "employee_deletion_request": "Employee Deletion",
     }
@@ -1095,6 +1232,12 @@ def build_pending_approval_item(workflow: WorkflowInstance) -> dict[str, Any] | 
         asset = getattr(obj, "asset", None)
         action = f"Asset Return: {getattr(asset, 'asset_code', obj.pk)}"
         request_type = "ASSET"
+    elif workflow_key == "attendance_correction_request":
+        profile = getattr(obj, "employee_profile", None)
+        user = getattr(profile, "user", None)
+        name = getattr(profile, "full_name", "") or getattr(user, "email", f"Request #{obj.pk}")
+        action = f"Attendance correction: {getattr(obj, 'date', '')}"
+        request_type = "ATTENDANCE"
     elif workflow_key == "employee_deletion_request":
         snapshot = getattr(obj, "request_snapshot", {}) or {}
         name = snapshot.get("full_name") or snapshot.get("employee_id") or f"Request #{obj.pk}"

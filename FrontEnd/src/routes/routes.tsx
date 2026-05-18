@@ -94,6 +94,9 @@ import CFODashboardPage from "../pages/cfo/CFODashboardPage";
 import CFOLoanRequestsPage from "../pages/cfo/CFOLoanRequestsPage";
 import CFOLoanRequestDetailsPage from "../pages/cfo/CFOLoanRequestDetailsPage";
 import AttendanceMaintenancePage from "../pages/shared/AttendanceMaintenancePage";
+import EmployeeAttendanceCorrectionRequestsPage from "../pages/employee/attendance/AttendanceCorrectionRequestsPage";
+import ManagerAttendanceCorrectionRequestsPage from "../pages/manager/ManagerAttendanceCorrectionRequestsPage";
+import HRAttendanceCorrectionRequestsPage from "../pages/hr/attendance/AttendanceCorrectionRequestsPage";
 
 import RouteErrorBoundary from "./RouteErrorBoundary";
 import PendingInboxPage from "../pages/shared/PendingInboxPage";
@@ -203,6 +206,7 @@ export const routes = [
 
               // Existing pages
               { path: "hr/attendance", element: <AttendanceMaintenancePage titleKey="layout.attendanceApprovals" backPath="/hr/dashboard" /> },
+              { path: "hr/attendance-correction-requests", element: <HRAttendanceCorrectionRequestsPage /> },
               { path: "hr/leave-balances", element: <HrLeaveBalancesPage /> },
             ],
           },
@@ -217,6 +221,7 @@ export const routes = [
               { path: "employee/dashboard", element: <DashboardPage /> },
               { path: "employee/profile", element: <MyProfilePage /> },
               { path: "employee/attendance", element: <AttendanceMaintenancePage titleKey="attendance.myAttendance" backPath="/employee/dashboard" /> },
+              { path: "employee/attendance-corrections", element: <EmployeeAttendanceCorrectionRequestsPage /> },
               { path: "employee/leaves", element: <EmployeeLeavesPage /> },
               { path: "employee/payslips", element: <EmployeePayslipsListPage /> },
               { path: "employee/payslips/:id", element: <EmployeePayslipDetailsPage /> },
@@ -245,6 +250,7 @@ export const routes = [
               { path: "manager", element: <Navigate to="/manager/dashboard" replace /> },
               { path: "manager/dashboard", element: <ManagerDashboardPage /> },
               { path: "manager/team-requests", element: <ManagerTeamRequestsPage /> },
+              { path: "manager/attendance-corrections", element: <ManagerAttendanceCorrectionRequestsPage /> },
               { path: "manager/team", element: <ManagerTeamPage /> },
               { path: "manager/leave/requests/:id", element: <ManagerLeaveRequestDetailsPage /> },
               { path: "manager/loan-requests", element: <ManagerLoanRequestsPage /> },

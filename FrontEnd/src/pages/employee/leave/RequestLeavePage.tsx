@@ -386,12 +386,12 @@ export default function RequestLeavePage() {
           )}
 
           <Row gutter={16}>
-            <Col span={12}>
+            <Col xs={24} md={12}>
               <Form.Item label={t("leave.dateOfRejoin")} name="date_of_rejoin">
                 <DatePicker style={{ width: "100%" }} />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} md={12}>
               <Form.Item label={t("leave.poBox")} name="po_box">
                 <Input />
               </Form.Item>
@@ -403,7 +403,7 @@ export default function RequestLeavePage() {
           </Form.Item>
 
           <Row gutter={16}>
-            <Col span={12}>
+            <Col xs={24} md={12}>
               <Form.Item
                 label={t("leave.airplaneTicketPayer")}
                 name="airplane_ticket_payer"
@@ -418,7 +418,7 @@ export default function RequestLeavePage() {
                 </Select>
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} md={12}>
               <Form.Item
                 label={t("leave.airplaneTicketAddress")}
                 name="airplane_ticket_address"

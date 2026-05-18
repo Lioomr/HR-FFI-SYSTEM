@@ -219,6 +219,8 @@ export default function ExpiringDocumentsPage() {
           loading={loading}
           columns={columns}
           dataSource={items}
+          size="small"
+          scroll={{ x: "max-content" }}
           pagination={{
             current: page,
             pageSize,

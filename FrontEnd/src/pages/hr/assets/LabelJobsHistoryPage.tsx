@@ -173,7 +173,7 @@ export default function LabelJobsHistoryPage() {
               setPageSize(nextSize);
             },
           }}
-          scroll={{ x: 900 }}
+          scroll={{ x: "max-content" }}
         />
       </Card>
     </div>

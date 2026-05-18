@@ -211,6 +211,8 @@ const HRAttendancePage: React.FC = () => {
                     columns={columns}
                     rowKey="id"
                     loading={loading}
+                    size="small"
+                    scroll={{ x: "max-content" }}
                     pagination={{
                         current: pagination.current,
                         pageSize: pagination.pageSize,
@@ -229,6 +231,8 @@ const HRAttendancePage: React.FC = () => {
                 okText={t("common.reject")}
                 okButtonProps={{ danger: true }}
                 cancelText={t("common.cancel")}
+                width="min(520px, 96vw)"
+                style={{ top: 16 }}
             >
                 <Typography.Text>{t("hr.attendance.rejectReasonLabel")}</Typography.Text>
                 <TextArea

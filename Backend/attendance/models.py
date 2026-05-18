@@ -74,6 +74,85 @@ class AttendanceRecord(models.Model):
     def __str__(self):
         return f"{self.employee_profile} - {self.date} ({self.status})"
 
+
+class AttendanceCorrectionRequest(models.Model):
+    class Status(models.TextChoices):
+        DRAFT = "draft", _("Draft")
+        PENDING_MANAGER = "pending_manager", _("Pending Manager")
+        PENDING_HR = "pending_hr", _("Pending HR")
+        APPROVED = "approved", _("Approved")
+        REJECTED = "rejected", _("Rejected")
+        CANCELLED = "cancelled", _("Cancelled")
+
+    employee_profile = models.ForeignKey(
+        "employees.EmployeeProfile",
+        on_delete=models.PROTECT,
+        related_name="attendance_correction_requests",
+    )
+    attendance_record = models.ForeignKey(
+        AttendanceRecord,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="correction_requests",
+    )
+    date = models.DateField()
+    requested_check_in_at = models.DateTimeField(null=True, blank=True)
+    requested_check_out_at = models.DateTimeField(null=True, blank=True)
+    requested_status = models.CharField(max_length=20, choices=AttendanceRecord.Status.choices, blank=True)
+    reason = models.TextField()
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+
+    manager_decision_at = models.DateTimeField(null=True, blank=True)
+    manager_decision_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="manager_decided_attendance_corrections",
+    )
+    manager_decision_note = models.TextField(blank=True)
+    hr_decision_at = models.DateTimeField(null=True, blank=True)
+    hr_decision_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="hr_decided_attendance_corrections",
+    )
+    hr_decision_note = models.TextField(blank=True)
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="attendance_corrections_created",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="attendance_corrections_updated",
+    )
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    decided_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["employee_profile", "date"], name="att_corr_emp_date_idx"),
+            models.Index(fields=["status", "created_at"], name="att_corr_status_created_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.employee_profile} - {self.date} correction ({self.status})"
+
+
 class BioTimeConfig(models.Model):
     server_ip = models.CharField(max_length=100, help_text=_("IP address or domain of the BioTime server (e.g. 192.168.1.100)"))
     server_port = models.CharField(max_length=10, default="8090", help_text=_("Port for BioTime server (e.g. 8090)"))

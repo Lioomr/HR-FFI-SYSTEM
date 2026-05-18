@@ -67,6 +67,7 @@ export default function EmployeePayslipsListPage() {
         {
             title: t("payslips.list.colPeriod"),
             key: "period",
+            width: 160,
             render: (_, r) => {
                 const monthName = new Date(0, r.month - 1).toLocaleString(language === 'ar' ? 'ar-EG' : 'en-US', { month: 'long' });
                 return <span>{monthName} {r.year}</span>;
@@ -77,12 +78,15 @@ export default function EmployeePayslipsListPage() {
             dataIndex: "net_salary",
             key: "net_salary",
             align: 'right',
+            width: 140,
             render: (val) => <AmountWithSAR amount={val} />,
         },
         {
             title: t("payslips.list.colPaymentMode"),
             dataIndex: "payment_mode",
             key: "payment_mode",
+            width: 140,
+            responsive: ["md"],
             render: (val) => {
                 if (!val) return "-";
                 // Map backend strings like "Bank Transfer" or "Cash" to translation keys
@@ -97,6 +101,7 @@ export default function EmployeePayslipsListPage() {
             title: t("payslips.list.colStatus"),
             dataIndex: "status",
             key: "status",
+            width: 110,
             render: (status) => {
                 const s = (status || '').toLowerCase();
                 return (
@@ -110,6 +115,7 @@ export default function EmployeePayslipsListPage() {
             title: t("common.actions"),
             key: "actions",
             align: 'center',
+            width: 110,
             render: (_, record) => (
                 <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
                     <Tooltip title={t("payslips.list.viewDetails")}>
@@ -145,7 +151,8 @@ export default function EmployeePayslipsListPage() {
                     columns={columns}
                     rowKey="id"
                     loading={loading}
-                    scroll={{ x: 800 }}
+                    size="small"
+                    scroll={{ x: "max-content" }}
                     pagination={{
                         current: page,
                         pageSize,

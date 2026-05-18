@@ -1021,7 +1021,7 @@ export default function HRAssetsPage() {
               setAssetPageSize(pageSize);
             },
           }}
-          scroll={{ x: 900 }}
+          scroll={{ x: "max-content" }}
           onRow={(record) => ({
             onClick: () => {
               setActiveAsset(record);
@@ -1055,11 +1055,12 @@ export default function HRAssetsPage() {
             {t("common.close")}
           </Button>,
         ]}
-        width={900}
+        width="min(900px, 96vw)"
+        style={{ top: 16 }}
       >
         {activeAsset && (
           <Space direction="vertical" size="large" style={{ width: "100%" }}>
-            <Descriptions bordered size="small" column={2}>
+            <Descriptions bordered size="small" column={{ xs: 1, sm: 2 }}>
               <Descriptions.Item label={t("assets.assetCode")}>{activeAsset.asset_code}</Descriptions.Item>
               <Descriptions.Item label={t("common.name")}>{language === "ar" ? (activeAsset.name_ar || activeAsset.name_en || "-") : (activeAsset.name_en || "-")}</Descriptions.Item>
               <Descriptions.Item label={t("common.type")}>{activeAsset.type || "-"}</Descriptions.Item>
@@ -1154,6 +1155,8 @@ export default function HRAssetsPage() {
                       dataSource={damageReports}
                       loading={requestHistoryLoading}
                       pagination={false}
+                      size="small"
+                      scroll={{ x: "max-content" }}
                       locale={{ emptyText: t("hr.assets.noDamageReports", "No damage reports for this asset.") }}
                     />
                   ),
@@ -1168,6 +1171,8 @@ export default function HRAssetsPage() {
                       dataSource={returnRequests}
                       loading={requestHistoryLoading}
                       pagination={false}
+                      size="small"
+                      scroll={{ x: "max-content" }}
                       expandable={{
                         expandedRowRender: (record) => <AssetReturnApprovalMap request={record} t={t} />,
                       }}
@@ -1192,23 +1197,24 @@ export default function HRAssetsPage() {
         onOk={handleCreateAsset}
         okText={editingAsset ? t("hr.assets.saveChanges") : t("hr.assets.create")}
         confirmLoading={submitting}
-        width={760}
+        width="min(760px, 96vw)"
+        style={{ top: 16 }}
       >
         <Form form={createForm} layout="vertical">
           <Row gutter={12}>
-            <Col span={12}>
+            <Col xs={24} md={12}>
               <Form.Item name="name_en" label={t("common.name")} rules={[{ required: true, message: t("hr.assets.nameReq") }]}>
                 <Input placeholder="Name (English)" />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} md={12}>
               <Form.Item name="name_ar" label={t("common.nameAr", "Name (Arabic)")}>
                 <Input placeholder="Name (Arabic)" />
               </Form.Item>
             </Col>
           </Row>
           <Row gutter={12}>
-            <Col span={12}>
+            <Col xs={24} md={12}>
               <Form.Item name="type" label={t("common.type")} rules={[{ required: true, message: t("hr.assets.typeReq") }]}>
                 <Select
                   options={[
@@ -1222,12 +1228,12 @@ export default function HRAssetsPage() {
           </Row>
 
           <Row gutter={12}>
-            <Col span={12}>
+            <Col xs={24} md={12}>
               <Form.Item name="vendor" label={t("assets.vendor")}>
                 <Input />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} md={12}>
               <Form.Item name="asset_value" label={t("hr.assets.assetValue")}>
                 <InputNumber style={{ width: "100%" }} min={0} precision={2} />
               </Form.Item>
@@ -1235,12 +1241,12 @@ export default function HRAssetsPage() {
           </Row>
 
           <Row gutter={12}>
-            <Col span={12}>
+            <Col xs={24} md={12}>
               <Form.Item name="purchase_date" label={t("assets.purchaseDate")}>
                 <DatePicker style={{ width: "100%" }} format="YYYY-MM-DD" />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} md={12}>
               <Form.Item name="warranty_expiry" label={t("assets.warrantyExpiry")}>
                 <DatePicker style={{ width: "100%" }} format="YYYY-MM-DD" />
               </Form.Item>
@@ -1260,24 +1266,24 @@ export default function HRAssetsPage() {
           {selectedType === "VEHICLE" && (
             <>
               <Row gutter={12}>
-                <Col span={12}>
+                <Col xs={24} md={12}>
                   <Form.Item name="plate_number" label={t("assets.plateNumber")} rules={[{ required: true, message: t("hr.assets.plateReq") }]}>
                     <Input />
                   </Form.Item>
                 </Col>
-                <Col span={12}>
+                <Col xs={24} md={12}>
                   <Form.Item name="chassis_number" label={t("assets.chassisNumber")} rules={[{ required: true, message: t("hr.assets.chassisReq") }]}>
                     <Input />
                   </Form.Item>
                 </Col>
               </Row>
               <Row gutter={12}>
-                <Col span={12}>
+                <Col xs={24} md={12}>
                   <Form.Item name="engine_number" label={t("assets.engineNumber")} rules={[{ required: true, message: t("hr.assets.engineReq") }]}>
                     <Input />
                   </Form.Item>
                 </Col>
-                <Col span={12}>
+                <Col xs={24} md={12}>
                   <Form.Item name="fuel_type" label={t("assets.fuelType")} rules={[{ required: true, message: t("hr.assets.fuelReq") }]}>
                     <Input />
                   </Form.Item>
@@ -1289,24 +1295,24 @@ export default function HRAssetsPage() {
           {selectedType === "LAPTOP" && (
             <>
               <Row gutter={12}>
-                <Col span={12}>
+                <Col xs={24} md={12}>
                   <Form.Item name="cpu" label={t("assets.cpu")} rules={[{ required: true, message: t("hr.assets.cpuReq") }]}>
                     <Input />
                   </Form.Item>
                 </Col>
-                <Col span={12}>
+                <Col xs={24} md={12}>
                   <Form.Item name="ram" label={t("assets.ram")} rules={[{ required: true, message: t("hr.assets.ramReq") }]}>
                     <Input />
                   </Form.Item>
                 </Col>
               </Row>
               <Row gutter={12}>
-                <Col span={12}>
+                <Col xs={24} md={12}>
                   <Form.Item name="storage" label={t("assets.storage")} rules={[{ required: true, message: t("hr.assets.storageReq") }]}>
                     <Input />
                   </Form.Item>
                 </Col>
-                <Col span={12}>
+                <Col xs={24} md={12}>
                   <Form.Item name="mac_address" label={t("hr.assets.macAddress")} rules={[{ required: true, message: t("hr.assets.macReq") }]}>
                     <Input />
                   </Form.Item>

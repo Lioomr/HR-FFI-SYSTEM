@@ -302,6 +302,8 @@ export default function EmployeeLeaveRequestDetailsPage() {
         okText={t("leave.rejectBtn")}
         okType="danger"
         confirmLoading={processing}
+        width="min(520px, 96vw)"
+        style={{ top: 16 }}
       >
         <TextArea
           rows={4}
