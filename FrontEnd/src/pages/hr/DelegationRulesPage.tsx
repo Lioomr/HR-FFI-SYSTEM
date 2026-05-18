@@ -326,7 +326,7 @@ export default function DelegationRulesPage() {
               "No alternative employee options yet.",
             ),
           }}
-          scroll={{ x: 900 }}
+          scroll={{ x: "max-content" }}
         />
       </Card>
 
@@ -337,6 +337,8 @@ export default function DelegationRulesPage() {
         onOk={() => form.submit()}
         confirmLoading={saving}
         okText={t("common.save")}
+        width="min(520px, 96vw)"
+        style={{ top: 16 }}
       >
         <Form<FormValues>
           form={form}

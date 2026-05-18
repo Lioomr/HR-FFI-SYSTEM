@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Card, Modal, Table, Tag, Tooltip, notification } from "antd";
+import { Button, Card, Grid, Modal, Table, Tag, Tooltip, notification } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { CloseCircleOutlined, EyeOutlined, PlusOutlined } from "@ant-design/icons";
 
@@ -13,6 +13,7 @@ import { getDetailedApiMessage, getDetailedHttpErrorMessage } from "../../../ser
 import LoanApprovalMap from "../../../components/loans/LoanApprovalMap";
 
 const { confirm } = Modal;
+const { useBreakpoint } = Grid;
 
 function statusColor(status: LoanStatus) {
   switch (status) {
@@ -44,6 +45,8 @@ function statusColor(status: LoanStatus) {
 export default function MyLoanRequestsPage() {
   const navigate = useNavigate();
   const { t } = useI18n();
+  const screens = useBreakpoint();
+  const isMobile = !screens.md;
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<LoanRequest[]>([]);
   const [total, setTotal] = useState(0);
@@ -102,6 +105,7 @@ export default function MyLoanRequestsPage() {
     {
       title: t("loans.list.colAmount"),
       key: "requested_amount",
+      width: 140,
       render: (_, record) => <AmountWithSAR amount={record.requested_amount || 0} />,
     },
     {
@@ -109,11 +113,14 @@ export default function MyLoanRequestsPage() {
       key: "reason",
       dataIndex: "reason",
       ellipsis: true,
+      width: 220,
+      responsive: ["lg"],
     },
     {
       title: t("loans.list.colStatus"),
       key: "status",
       dataIndex: "status",
+      width: 160,
       render: (status: LoanStatus) => {
         const statusMap: Record<string, string> = {
           submitted: "status.submitted",
@@ -136,11 +143,16 @@ export default function MyLoanRequestsPage() {
       title: t("loans.list.colCreated"),
       key: "created_at",
       dataIndex: "created_at",
+      width: 130,
+      responsive: ["md"],
       render: (value?: string) => (value ? new Date(value).toLocaleDateString() : "-"),
     },
     {
       title: t("common.actions"),
       key: "actions",
+      align: "center",
+      width: 110,
+      fixed: screens.lg ? "right" : undefined,
       render: (_, record) => {
         const isPending =
           record.status === "submitted" ||
@@ -177,7 +189,7 @@ export default function MyLoanRequestsPage() {
         title={t("loans.myRequests.title")}
         subtitle={t("loans.myRequests.subtitle")}
         actions={
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate("/employee/loans/request")}>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate("/employee/loans/request")} block={isMobile}>
             {t("loans.myRequests.newRequest")}
           </Button>
         }
@@ -188,6 +200,8 @@ export default function MyLoanRequestsPage() {
           loading={loading}
           columns={columns}
           dataSource={items}
+          size={isMobile ? "small" : "middle"}
+          scroll={{ x: "max-content" }}
           expandable={{
             expandedRowRender: (record) => <LoanApprovalMap request={record} t={t} />,
           }}

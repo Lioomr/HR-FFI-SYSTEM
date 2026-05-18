@@ -522,8 +522,8 @@ export default function LeaveInboxPage() {
 
       <Card style={{ marginBottom: 16, borderRadius: 16 }}>
         <Form form={form} layout="vertical" onValuesChange={handleFilterChange}>
-          <Row gutter={16}>
-            <Col span={8}>
+          <Row gutter={[16, 8]}>
+            <Col xs={24} md={12} lg={8}>
               <Form.Item label={t("common.status")} name="status">
                 <Select
                   placeholder={t("employees.list.statusPlaceholder")}
@@ -544,7 +544,7 @@ export default function LeaveInboxPage() {
                 </Select>
               </Form.Item>
             </Col>
-            <Col span={8}>
+            <Col xs={24} md={12} lg={8}>
               <Form.Item
                 label={t("leave.startDate") + " - " + t("leave.endDate")}
                 name="dates"
@@ -594,6 +594,8 @@ export default function LeaveInboxPage() {
         onOk={handleSubmitManual}
         confirmLoading={manualModalLoading}
         okText={editingRecord ? t("common.save") : t("common.create")}
+        width="min(720px, 96vw)"
+        style={{ top: 16 }}
       >
         <Form form={manualForm} layout="vertical">
           <Form.Item
@@ -687,12 +689,12 @@ export default function LeaveInboxPage() {
           )}
 
           <Row gutter={16}>
-            <Col span={12}>
+            <Col xs={24} md={12}>
               <Form.Item label={t("leave.dateOfRejoin")} name="date_of_rejoin">
                 <DatePicker style={{ width: "100%" }} />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} md={12}>
               <Form.Item label={t("leave.poBox")} name="po_box">
                 <Input />
               </Form.Item>
@@ -704,7 +706,7 @@ export default function LeaveInboxPage() {
           </Form.Item>
 
           <Row gutter={16}>
-            <Col span={12}>
+            <Col xs={24} md={12}>
               <Form.Item
                 label={t("leave.airplaneTicketPayer")}
                 name="airplane_ticket_payer"
@@ -719,7 +721,7 @@ export default function LeaveInboxPage() {
                 </Select>
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} md={12}>
               <Form.Item
                 label={t("leave.airplaneTicketAddress")}
                 name="airplane_ticket_address"

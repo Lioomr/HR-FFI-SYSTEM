@@ -300,6 +300,8 @@ export default function LeaveRequestDetailsPage() {
                 okText={t("leave.rejectBtn")}
                 okType="danger"
                 confirmLoading={processing}
+                width="min(520px, 96vw)"
+                style={{ top: 16 }}
             >
                 <Alert
                     type="warning"

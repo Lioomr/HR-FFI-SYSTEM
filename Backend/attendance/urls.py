@@ -1,12 +1,21 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from .views import AttendanceRecordViewSet, CEOAttendanceViewSet, ManagerAttendanceViewSet
-
-from .biotime_views import BioTimeConfigViewSet, BioTimeActionsViewSet, BioTimeEmployeeMapViewSet
+from .biotime_views import BioTimeActionsViewSet, BioTimeConfigViewSet, BioTimeEmployeeMapViewSet
+from .views import (
+    AttendanceCorrectionRequestViewSet,
+    AttendanceRecordViewSet,
+    CEOAttendanceViewSet,
+    ManagerAttendanceViewSet,
+)
 
 router = DefaultRouter()
 router.register(r"attendance", AttendanceRecordViewSet, basename="attendance")
+router.register(
+    r"attendance-correction-requests",
+    AttendanceCorrectionRequestViewSet,
+    basename="attendance-correction-requests",
+)
 router.register(r"manager/attendance", ManagerAttendanceViewSet, basename="manager-attendance")
 router.register(r"ceo/attendance", CEOAttendanceViewSet, basename="ceo-attendance")
 router.register(r"biotime-mappings", BioTimeEmployeeMapViewSet, basename="biotime-mappings")

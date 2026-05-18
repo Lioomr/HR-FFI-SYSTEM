@@ -687,6 +687,7 @@ class LeaveBalanceTests(TestCase):
         balances = calculate_leave_balance(self.emp1, 2026, as_of=date(2026, 5, 17))
         annual_bal = next(b for b in balances if b["leave_type_id"] == self.annual.id)
         self.assertEqual(float(annual_bal["available_annual_year_days"]), 8.75)
+        self.assertEqual(float(annual_bal["total_days"]), 21.0)
         self.assertEqual(float(annual_bal["remaining_days"]), 8.75)
 
     def test_annual_accrual_caps_at_full_year(self):
@@ -722,6 +723,7 @@ class LeaveBalanceTests(TestCase):
 
         balances = calculate_leave_balance(self.emp1, 2026, as_of=date(2026, 5, 17))
         annual_bal = next(b for b in balances if b["leave_type_id"] == self.annual.id)
+        self.assertEqual(float(annual_bal["total_days"]), 21.0)
         self.assertEqual(float(annual_bal["used_days"]), 2.0)
         self.assertEqual(float(annual_bal["remaining_days"]), 6.75)
 
@@ -743,6 +745,7 @@ class LeaveBalanceTests(TestCase):
 
         balances = calculate_leave_balance(self.emp1, 2026, as_of=date(2026, 5, 17))
         emergency_bal = next(b for b in balances if b["leave_type_id"] == emergency.id)
+        self.assertEqual(float(emergency_bal["total_days"]), 10.0)
         self.assertEqual(float(emergency_bal["remaining_days"]), 3.75)
 
     def test_balance_usage(self):

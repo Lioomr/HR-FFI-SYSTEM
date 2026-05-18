@@ -99,12 +99,14 @@ const EmployeeAttendancePage: React.FC = () => {
             title: t("attendance.date"),
             dataIndex: "date",
             key: "date",
+            width: 130,
             render: (val: string) => dayjs(val).format("MMM D, YYYY"),
         },
         {
             title: t("common.status"),
             dataIndex: "status",
             key: "status",
+            width: 110,
             render: (status: AttendanceStatus) => (
                 <Tag color={getStatusColor(status)}>{status}</Tag>
             ),
@@ -113,28 +115,34 @@ const EmployeeAttendancePage: React.FC = () => {
             title: t("attendance.checkInTime"),
             dataIndex: "check_in_at",
             key: "check_in_at",
+            width: 120,
+            responsive: ["sm" as const],
             render: (val: string | null) => val ? dayjs(val).format("hh:mm A") : "-",
         },
         {
             title: t("attendance.checkOutTime"),
             dataIndex: "check_out_at",
             key: "check_out_at",
+            width: 120,
+            responsive: ["sm" as const],
             render: (val: string | null) => val ? dayjs(val).format("hh:mm A") : "-",
         },
         {
             title: t("attendance.notes"),
             dataIndex: "notes",
             key: "notes",
+            ellipsis: true,
+            responsive: ["lg" as const],
         },
     ];
 
     return (
         <div>
-            <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
-                <Col>
-                    <Title level={2}>{t("attendance.myAttendance")}</Title>
+            <Row justify="space-between" align="middle" gutter={[12, 12]} style={{ marginBottom: 16 }}>
+                <Col xs={24} md="auto">
+                    <Title level={2} style={{ margin: 0 }}>{t("attendance.myAttendance")}</Title>
                 </Col>
-                <Col>
+                <Col xs={24} md="auto">
                     <Button icon={<ReloadOutlined />} onClick={fetchData}>{t("common.refresh")}</Button>
                 </Col>
             </Row>
@@ -183,7 +191,8 @@ const EmployeeAttendancePage: React.FC = () => {
                 columns={columns}
                 rowKey="id"
                 loading={loading}
-                scroll={{ x: 800 }}
+                size="small"
+                scroll={{ x: "max-content" }}
                 pagination={{
                     current: pagination.current,
                     pageSize: pagination.pageSize,

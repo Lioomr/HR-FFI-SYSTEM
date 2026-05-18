@@ -247,7 +247,7 @@ export default function DelegatedLeaveInboxPage() {
           rowKey="id"
           loading={loading}
           size={isMobile ? "small" : "middle"}
-          scroll={{ x: 900 }}
+          scroll={{ x: "max-content" }}
           locale={{
             emptyText: (
               <Text type="secondary">

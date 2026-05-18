@@ -173,7 +173,7 @@ const ImportHistoryPage: React.FC = () => {
                 dataSource={data}
                 rowKey="id"
                 loading={loading}
-                scroll={{ x: 700 }}
+                scroll={{ x: "max-content" }}
                 pagination={{
                     current: page,
                     pageSize: pageSize,

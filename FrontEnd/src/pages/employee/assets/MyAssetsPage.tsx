@@ -172,34 +172,38 @@ export default function MyAssetsPage() {
 
   const damageColumns: ColumnsType<AssetDamageReport> = [
     { title: t("assets.assetCode"), dataIndex: "asset_code", key: "asset_code", width: 140 },
-    { title: t("common.details"), dataIndex: "description", key: "description" },
+    { title: t("common.details"), dataIndex: "description", key: "description", ellipsis: true, responsive: ["md"] },
     {
       title: t("common.status"),
       dataIndex: "status",
       key: "status",
-      width: 150,
+      width: 140,
       render: (value: string) => <Tag color={requestStatusColorMap[value] || "default"}>{value}</Tag>,
     },
     {
       title: t("assets.lastUpdated", "Decision"),
       key: "decision",
+      ellipsis: true,
+      responsive: ["lg"],
       render: (_, record) => record.ceo_decision_note || record.hr_decision_note || "-",
     },
   ];
 
   const returnColumns: ColumnsType<AssetReturnRequest> = [
     { title: t("assets.assetCode"), dataIndex: "asset_code", key: "asset_code", width: 140 },
-    { title: t("common.notes"), dataIndex: "note", key: "note" },
+    { title: t("common.notes"), dataIndex: "note", key: "note", ellipsis: true, responsive: ["md"] },
     {
       title: t("common.status"),
       dataIndex: "status",
       key: "status",
-      width: 150,
+      width: 140,
       render: (value: string) => <Tag color={requestStatusColorMap[value] || "default"}>{value}</Tag>,
     },
     {
       title: t("assets.lastUpdated", "Decision"),
       key: "decision",
+      ellipsis: true,
+      responsive: ["lg"],
       render: (_, record) => record.ceo_decision_note || record.hr_decision_note || record.manager_decision_note || "-",
     },
   ];
@@ -239,12 +243,12 @@ export default function MyAssetsPage() {
         </Button>
       ),
     },
-    { title: t("common.type"), dataIndex: "type", key: "type", width: 120 },
+    { title: t("common.type"), dataIndex: "type", key: "type", width: 120, responsive: ["md"] },
     {
       title: t("common.status"),
       dataIndex: "status",
       key: "status",
-      width: 180,
+      width: 160,
       render: (status: string) => <Tag color={statusColorMap[status] || "default"}>{status}</Tag>,
     },
     {
@@ -252,6 +256,7 @@ export default function MyAssetsPage() {
       dataIndex: "serial_number",
       key: "serial_number",
       width: 180,
+      responsive: ["lg"],
       render: (value?: string) => value || "-",
     },
     {
@@ -259,6 +264,7 @@ export default function MyAssetsPage() {
       dataIndex: "warranty_expiry",
       key: "warranty_expiry",
       width: 160,
+      responsive: ["xl"],
       render: (value?: string | null) => value || "-",
     },
     {
@@ -434,7 +440,8 @@ export default function MyAssetsPage() {
             columns={columns}
             dataSource={dataSource}
             loading={assetLoading}
-            scroll={{ x: 1000 }}
+            size="small"
+            scroll={{ x: "max-content" }}
             pagination={{
               current: assetPage,
               pageSize: assetPageSize,
@@ -491,6 +498,8 @@ export default function MyAssetsPage() {
                     columns={damageColumns}
                     dataSource={damageReports}
                     loading={requestLoading}
+                    size="small"
+                    scroll={{ x: "max-content" }}
                     pagination={{
                       current: damagePage,
                       pageSize: damagePageSize,
@@ -513,6 +522,8 @@ export default function MyAssetsPage() {
                     columns={returnColumns}
                     dataSource={returnRequests}
                     loading={requestLoading}
+                    size="small"
+                    scroll={{ x: "max-content" }}
                     pagination={{
                       current: returnPage,
                       pageSize: returnPageSize,
@@ -549,10 +560,11 @@ export default function MyAssetsPage() {
             {t("common.close")}
           </Button>,
         ]}
-        width={860}
+        width="min(860px, 96vw)"
+        style={{ top: 16 }}
       >
         {selectedAsset && (
-          <Descriptions bordered size="small" column={2}>
+          <Descriptions bordered size="small" column={{ xs: 1, sm: 2 }}>
             <Descriptions.Item label={t("assets.assetCode")}>{selectedAsset.asset_code}</Descriptions.Item>
             <Descriptions.Item label={t("common.name")}>{getAssetDisplayName(selectedAsset)}</Descriptions.Item>
             <Descriptions.Item label={t("common.type")}>{selectedAsset.type || "-"}</Descriptions.Item>
@@ -620,6 +632,8 @@ export default function MyAssetsPage() {
         onOk={() => void handleSubmitIssue()}
         okText={t("assets.submitReport")}
         confirmLoading={reporting}
+        width="min(520px, 96vw)"
+        style={{ top: 16 }}
       >
         <Form form={reportForm} layout="vertical">
           <Form.Item
@@ -656,6 +670,8 @@ export default function MyAssetsPage() {
         onOk={() => void handleReturnRequest()}
         okText={t("assets.returnRequest", "Return Request")}
         confirmLoading={returning}
+        width="min(520px, 96vw)"
+        style={{ top: 16 }}
       >
         <Form form={returnForm} layout="vertical">
           <Form.Item

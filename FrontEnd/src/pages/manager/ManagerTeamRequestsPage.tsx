@@ -22,6 +22,8 @@ import { useI18n } from "../../i18n/useI18n";
 import LeaveApprovalMap from "../../components/leaves/LeaveApprovalMap";
 import AssetReturnApprovalMap from "../../components/assets/AssetReturnApprovalMap";
 import AttendanceMaintenanceNotice from "../../components/attendance/AttendanceMaintenanceNotice";
+import AttendanceCorrectionsApproverTable from "../../components/attendance/AttendanceCorrectionsApproverTable";
+import AttendanceMaintenanceBanner from "../../components/attendance/AttendanceMaintenanceBanner";
 
 export default function ManagerTeamRequestsPage() {
     const [searchParams, setSearchParams] = useSearchParams();
@@ -37,6 +39,11 @@ export default function ManagerTeamRequestsPage() {
                 items={[
                     { key: "leave", label: t("manager.requests.leaveTab"), children: <LeaveRequestsTab /> },
                     { key: "attendance", label: t("manager.requests.attendanceTab"), children: <AttendanceMaintenanceTab /> },
+                    {
+                        key: "attendance-corrections",
+                        label: t("attendanceCorrections.page.tabLabel", "Attendance Corrections"),
+                        children: <AttendanceCorrectionsTab />,
+                    },
                     { key: "asset-returns", label: t("assets.returnRequests", "Asset Return Requests"), children: <AssetReturnRequestsTab /> },
                     { key: "team", label: t("manager.requests.teamTab"), children: <TeamTab /> },
                 ]}
@@ -211,6 +218,25 @@ function AttendanceMaintenanceTab() {
                 "We are fixing this part right now for all users. Attendance requests and approvals will be back soon."
             )}
         />
+    );
+}
+
+function AttendanceCorrectionsTab() {
+    const { t } = useI18n();
+    return (
+        <div>
+            <AttendanceMaintenanceBanner
+                description={t(
+                    "attendanceCorrections.maintenance.managerDescription",
+                    "The attendance module is under maintenance. You can still approve correction requests here so the records are updated once it is back."
+                )}
+            />
+            <AttendanceCorrectionsApproverTable
+                approverRole="manager"
+                defaultStatus="pending_manager"
+                statusOptions={["pending_manager", "pending_hr", "approved", "rejected", "cancelled"]}
+            />
+        </div>
     );
 }
 
