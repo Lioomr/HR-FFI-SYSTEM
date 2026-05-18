@@ -334,7 +334,7 @@ export default function PayrollRunDetailsPage() {
                                         columns={columns}
                                         rowKey="id"
                                         loading={loading}
-                                        scroll={{ x: 1100 }}
+                                        scroll={{ x: "max-content" }}
                                         size={isMobile ? "small" : "middle"}
                                         pagination={{
                                             current: page,

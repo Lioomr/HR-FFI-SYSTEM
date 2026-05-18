@@ -227,7 +227,7 @@ export default function HRDashboardPage() {
                         <Table
                             dataSource={(summary?.recent_activity || []).slice(0, 5)}
                             pagination={false}
-                            scroll={{ x: 600 }}
+                            scroll={{ x: "max-content" }}
                             size="small"
                             columns={[
                                 {

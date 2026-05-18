@@ -389,7 +389,7 @@ def get_payment_breakdown(
             annual_balance = _find_balance_by_code(balances, "ANNUAL", "ANNUAL_LEAVE")
             unpaid_balance = _find_balance_by_code(balances, "UNPAID", "UNPAID_LEAVE")
 
-            annual_total = float(annual_balance["total_days"]) if annual_balance else 0.0
+            annual_total = float(annual_balance.get("usable_days", annual_balance["total_days"])) if annual_balance else 0.0
             annual_used_current = float(annual_balance["used_days"]) if annual_balance else float(used_days_before)
             paid_remaining = max(0.0, annual_total - float(used_days_before))
 
@@ -610,12 +610,15 @@ def calculate_leave_balance(user, year, profile=None, company=None, as_of: date 
 
         # Quota
         configured_quota = float(lt.annual_quota or 0.0)
+        display_quota = None
         if _is_annual(code):
             quota = get_annual_accrued_days(profile, year, as_of=as_of)
+            display_quota = ANNUAL_ACCRUAL_MAX_DAYS
         elif _is_sick(code):
             quota = configured_quota if configured_quota > 0 else float(SICK_MAX_DAYS_PER_YEAR)
         elif _is_emergency(code):
             quota = configured_quota if configured_quota > 0 else float(EMERGENCY_MAX_DAYS_PER_YEAR)
+            display_quota = quota
         elif _is_unpaid(code):
             quota = configured_quota if configured_quota > 0 else float(UNPAID_MAX_DAYS_PER_YEAR)
         elif _is_marriage(code):
@@ -684,7 +687,8 @@ def calculate_leave_balance(user, year, profile=None, company=None, as_of: date 
                 "available_annual_year_days": get_annual_accrued_days(profile, year, as_of=as_of)
                 if _is_annual(code)
                 else 0.0,
-                "total_days": float(opening + quota + adjustments),
+                "total_days": float(opening + (display_quota if display_quota is not None else quota) + adjustments),
+                "usable_days": float(opening + quota + adjustments),
                 "used_days": float(used),
                 "remaining_days": float(remaining),
                 "adjustments": adjustments,  # Useful for UI
@@ -695,7 +699,7 @@ def calculate_leave_balance(user, year, profile=None, company=None, as_of: date 
     unpaid_balance = _find_balance_by_code(balances, "UNPAID", "UNPAID_LEAVE")
 
     if annual_balance and unpaid_balance:
-        annual_overflow = max(0.0, float(annual_balance["used_days"]) - float(annual_balance["total_days"]))
+        annual_overflow = max(0.0, float(annual_balance["used_days"]) - float(annual_balance["usable_days"]))
         unpaid_balance["used_days"] = float(unpaid_balance["used_days"]) + annual_overflow
         unpaid_balance["remaining_days"] = max(0.0, float(unpaid_balance["total_days"]) - float(unpaid_balance["used_days"]))
 

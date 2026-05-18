@@ -8,6 +8,8 @@ import {
     Button,
     message,
     Space,
+    Row,
+    Col,
 } from "antd";
 import { SearchOutlined, ReloadOutlined } from "@ant-design/icons";
 import LeaveBalanceTable from "../../components/leaves/LeaveBalanceTable";
@@ -64,47 +66,53 @@ const HrLeaveBalancesPage: React.FC = () => {
                 <Space direction="vertical" size="large" style={{ width: "100%" }}>
                     <Title level={3}>{t("hr.leaveBalances.title")}</Title>
 
-                    <Form layout="inline" onFinish={handleSearch}>
-                        <Form.Item label={t("hr.leaveBalances.employeeId")} required>
-                            <InputNumber
-                                placeholder={t("hr.leaveBalances.enterEmployeeId")}
-                                value={employeeId}
-                                onChange={(val) => setEmployeeId(val || undefined)}
-                                min={1}
-                                style={{ width: 200 }}
-                            />
-                        </Form.Item>
+                    <Form layout="vertical" onFinish={handleSearch}>
+                        <Row gutter={[16, 8]} align="bottom">
+                            <Col xs={24} sm={12} md={8}>
+                                <Form.Item label={t("hr.leaveBalances.employeeId")} required style={{ marginBottom: 0 }}>
+                                    <InputNumber
+                                        placeholder={t("hr.leaveBalances.enterEmployeeId")}
+                                        value={employeeId}
+                                        onChange={(val) => setEmployeeId(val || undefined)}
+                                        min={1}
+                                        style={{ width: "100%" }}
+                                    />
+                                </Form.Item>
+                            </Col>
 
-                        <Form.Item label={t("hr.leaveBalances.year")}>
-                            <Select
-                                value={year}
-                                onChange={(val) => setYear(val)}
-                                style={{ width: 120 }}
-                            >
-                                {years.map((y) => (
-                                    <Option key={y} value={y}>
-                                        {y}
-                                    </Option>
-                                ))}
-                            </Select>
-                        </Form.Item>
+                            <Col xs={24} sm={12} md={6}>
+                                <Form.Item label={t("hr.leaveBalances.year")} style={{ marginBottom: 0 }}>
+                                    <Select
+                                        value={year}
+                                        onChange={(val) => setYear(val)}
+                                        style={{ width: "100%" }}
+                                    >
+                                        {years.map((y) => (
+                                            <Option key={y} value={y}>
+                                                {y}
+                                            </Option>
+                                        ))}
+                                    </Select>
+                                </Form.Item>
+                            </Col>
 
-                        <Form.Item>
-                            <Space>
-                                <Button
-                                    type="primary"
-                                    icon={<SearchOutlined />}
-                                    onClick={handleSearch}
-                                    loading={loading}
-                                    htmlType="submit"
-                                >
-                                    {t("common.search")}
-                                </Button>
-                                <Button icon={<ReloadOutlined />} onClick={handleReset}>
-                                    {t("common.refresh")}
-                                </Button>
-                            </Space>
-                        </Form.Item>
+                            <Col xs={24} md="auto">
+                                <Space wrap>
+                                    <Button
+                                        type="primary"
+                                        icon={<SearchOutlined />}
+                                        onClick={handleSearch}
+                                        loading={loading}
+                                        htmlType="submit"
+                                    >
+                                        {t("common.search")}
+                                    </Button>
+                                    <Button icon={<ReloadOutlined />} onClick={handleReset}>
+                                        {t("common.refresh")}
+                                    </Button>
+                                </Space>
+                            </Col>
+                        </Row>
                     </Form>
 
                     <LeaveBalanceTable balances={balances} loading={loading} />

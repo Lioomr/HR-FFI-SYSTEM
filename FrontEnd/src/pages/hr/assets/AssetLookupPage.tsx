@@ -299,6 +299,7 @@ export default function AssetLookupPage() {
               columns={damageColumns}
               dataSource={result.recent_damage_reports}
               pagination={false}
+              scroll={{ x: "max-content" }}
               locale={{ emptyText: t("hr.assets.noDamageReports", "No damage reports for this asset.") }}
             />
           </Card>
@@ -310,6 +311,7 @@ export default function AssetLookupPage() {
               columns={returnColumns}
               dataSource={result.recent_return_requests}
               pagination={false}
+              scroll={{ x: "max-content" }}
               locale={{ emptyText: t("hr.assets.noReturnRequests", "No return requests for this asset.") }}
             />
           </Card>

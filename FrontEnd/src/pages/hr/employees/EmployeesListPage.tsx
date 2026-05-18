@@ -904,7 +904,7 @@ export default function EmployeesListPage() {
                             onClick: () => handleRowClick(record),
                             style: { cursor: 'pointer' }
                         })}
-                        scroll={{ x: 1000 }}
+                        scroll={{ x: "max-content" }}
                     />
                 )}
             </Card>
@@ -921,6 +921,8 @@ export default function EmployeesListPage() {
                 closable={!deletionSubmitting}
                 maskClosable={!deletionSubmitting}
                 destroyOnClose
+                width="min(520px, 96vw)"
+                style={{ top: 16 }}
             >
                 {deletionTarget && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>

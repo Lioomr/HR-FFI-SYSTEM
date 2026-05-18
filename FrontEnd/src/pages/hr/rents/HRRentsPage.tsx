@@ -583,7 +583,7 @@ export default function HRRentsPage() {
           columns={columns}
           dataSource={items}
           loading={loading}
-          scroll={{ x: 980 }}
+          scroll={{ x: "max-content" }}
           locale={{ emptyText: <Empty description={t("hr.rents.empty", "No rent records found.")} /> }}
           pagination={{
             current: page,
@@ -608,11 +608,12 @@ export default function HRRentsPage() {
             {t("common.close", "Close")}
           </Button>,
         ]}
-        width={900}
+        width="min(900px, 96vw)"
+        style={{ top: 16 }}
       >
         {viewing && (
           <Space direction="vertical" size="large" style={{ width: "100%" }}>
-            <Descriptions bordered size="small" column={2}>
+            <Descriptions bordered size="small" column={{ xs: 1, sm: 2 }}>
               <Descriptions.Item label={t("hr.rents.colRentType", "Rent Type")}>
                 {language === "ar"
                   ? (viewing.rent_type?.name_ar || viewing.rent_type?.name_en || "-")
@@ -685,7 +686,7 @@ export default function HRRentsPage() {
                       size="small"
                       pagination={false}
                       dataSource={viewing.payment_records || []}
-                      scroll={{ x: 520 }}
+                      scroll={{ x: "max-content" }}
                       locale={{ emptyText: <Empty description={t("hr.rents.payments.empty", "No payment records yet.")} /> }}
                       columns={[
                         {

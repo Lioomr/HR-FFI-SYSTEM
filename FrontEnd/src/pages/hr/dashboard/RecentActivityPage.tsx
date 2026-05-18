@@ -215,7 +215,7 @@ export default function RecentActivityPage() {
                         showSizeChanger: true,
                         showTotal: (total) => t("common.totalItems", { total: total.toString() }),
                     }}
-                    scroll={{ x: 800 }}
+                    scroll={{ x: "max-content" }}
                 />
             </Card>
         </div>

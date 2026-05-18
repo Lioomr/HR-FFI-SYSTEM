@@ -119,7 +119,7 @@ export default function EmployeeForm({ form, loadingRefs, refOptions }: Employee
                                                 </Col>
 
                                                 {/* English Name */}
-                                                <Col span={12}>
+                                                <Col xs={24} md={12}>
                                                     <Form.Item
                                                         label={t("employees.form.fullNameEn")}
                                                         name="full_name_en"
@@ -130,7 +130,7 @@ export default function EmployeeForm({ form, loadingRefs, refOptions }: Employee
                                                 </Col>
 
                                                 {/* Arabic Name */}
-                                                <Col span={12}>
+                                                <Col xs={24} md={12}>
                                                     <Form.Item
                                                         label={t("employees.form.fullNameAr")}
                                                         name="full_name_ar"
@@ -139,12 +139,12 @@ export default function EmployeeForm({ form, loadingRefs, refOptions }: Employee
                                                     </Form.Item>
                                                 </Col>
 
-                                                <Col span={12}>
+                                                <Col xs={24} md={12}>
                                                     <Form.Item label={t("employees.form.dateOfBirth")} name="date_of_birth">
                                                         <DatePicker style={{ width: "100%" }} size="large" format="YYYY-MM-DD" />
                                                     </Form.Item>
                                                 </Col>
-                                                <Col span={12}>
+                                                <Col xs={24} md={12}>
                                                     {/* Nationality only shown for non-Saudi */}
                                                     {!isSaudi ? (
                                                         <Form.Item label={t("employees.form.nationality")} name="nationality">
@@ -187,7 +187,7 @@ export default function EmployeeForm({ form, loadingRefs, refOptions }: Employee
                                                         </Form.Item>
                                                     )}
                                                 </Col>
-                                                <Col span={12}>
+                                                <Col xs={24} md={12}>
                                                     <Form.Item label={t("employees.form.mobile")} required>
                                                         <Space.Compact style={{ width: "100%" }}>
                                                             <Form.Item name="mobile_country_code" noStyle initialValue="+966">
@@ -212,7 +212,7 @@ export default function EmployeeForm({ form, loadingRefs, refOptions }: Employee
                                                         </Space.Compact>
                                                     </Form.Item>
                                                 </Col>
-                                                <Col span={12}>
+                                                <Col xs={24} md={12}>
                                                     <Form.Item label={t("employees.form.empNumber")} name="employee_number">
                                                         <Input size="large" placeholder={t("employees.form.empNumberPlaceholder")} />
                                                     </Form.Item>
@@ -232,7 +232,7 @@ export default function EmployeeForm({ form, loadingRefs, refOptions }: Employee
                                     children: (
                                         <div style={{ paddingTop: 16 }}>
                                             <Row gutter={16}>
-                                                <Col span={12}>
+                                                <Col xs={24} md={12}>
                                                     <Form.Item
                                                         label={t("employees.form.department")}
                                                         name="department_id"
@@ -243,7 +243,7 @@ export default function EmployeeForm({ form, loadingRefs, refOptions }: Employee
                                                         </Select>
                                                     </Form.Item>
                                                 </Col>
-                                                <Col span={12}>
+                                                <Col xs={24} md={12}>
                                                     <Form.Item
                                                         label={t("employees.form.position")}
                                                         name="position_id"
@@ -254,14 +254,14 @@ export default function EmployeeForm({ form, loadingRefs, refOptions }: Employee
                                                         </Select>
                                                     </Form.Item>
                                                 </Col>
-                                                <Col span={12}>
+                                                <Col xs={24} md={12}>
                                                     <Form.Item label={t("employees.form.taskGroup")} name="task_group_id">
                                                         <Select size="large" placeholder={t("employees.form.taskGroupPlaceholder")} loading={loadingRefs} showSearch optionFilterProp="children">
                                                             {taskGroups.map((tg) => <Select.Option key={tg.id} value={tg.id}>{tg.name}</Select.Option>)}
                                                         </Select>
                                                     </Form.Item>
                                                 </Col>
-                                                <Col span={12}>
+                                                <Col xs={24} md={12}>
                                                     <Form.Item label={t("employees.form.sponsor")} name="sponsor_id">
                                                         <Select size="large" placeholder={t("employees.form.sponsorPlaceholder")} loading={loadingRefs} showSearch optionFilterProp="children">
                                                             {sponsors.map((sp) => <Select.Option key={sp.id} value={sp.id}>{sp.code} {sp.name ? `- ${sp.name}` : ""}</Select.Option>)}
@@ -300,27 +300,27 @@ export default function EmployeeForm({ form, loadingRefs, refOptions }: Employee
                                                     <Divider style={{ margin: '12px 0' }} />
                                                 </Col>
 
-                                                <Col span={12}>
+                                                <Col xs={24} md={12}>
                                                     <Form.Item label={t("employees.form.joiningDate")} name="join_date" rules={[{ required: true, message: t("employees.form.requiredJoinDate") }]}>
                                                         <DatePicker style={{ width: "100%" }} size="large" />
                                                     </Form.Item>
                                                 </Col>
-                                                <Col span={12}>
+                                                <Col xs={24} md={12}>
                                                     <Form.Item label={t("employees.form.jobOffer")} name="job_offer">
                                                         <Input size="large" placeholder={t("employees.form.jobOfferPlaceholder")} />
                                                     </Form.Item>
                                                 </Col>
-                                                <Col span={12}>
+                                                <Col xs={24} md={12}>
                                                     <Form.Item label={t("employees.form.contractDate")} name="contract_date">
                                                         <DatePicker style={{ width: "100%" }} size="large" />
                                                     </Form.Item>
                                                 </Col>
-                                                <Col span={12}>
+                                                <Col xs={24} md={12}>
                                                     <Form.Item label={t("employees.form.contractExpiry")} name="contract_expiry">
                                                         <DatePicker style={{ width: "100%" }} size="large" />
                                                     </Form.Item>
                                                 </Col>
-                                                <Col span={12}>
+                                                <Col xs={24} md={12}>
                                                     <Form.Item label={t("employees.form.allowedOvertime")} name="allowed_overtime">
                                                         <InputNumber style={{ width: "100%" }} size="large" min={0} />
                                                     </Form.Item>
@@ -340,12 +340,12 @@ export default function EmployeeForm({ form, loadingRefs, refOptions }: Employee
                                     children: (
                                         <div style={{ paddingTop: 16 }}>
                                             <Row gutter={16}>
-                                                <Col span={12}>
+                                                <Col xs={24} md={12}>
                                                     <Form.Item label={t("employees.form.basicSalary")} name="basic_salary">
                                                         <InputNumber style={{ width: "100%" }} size="large" min={0} precision={2} prefix={<SARIcon size={14} />} />
                                                     </Form.Item>
                                                 </Col>
-                                                <Col span={12}>
+                                                <Col xs={24} md={12}>
                                                     <Form.Item label={t("employees.form.totalSalary")} name="total_salary">
                                                         <InputNumber style={{ width: "100%" }} size="large" min={0} precision={2} prefix={<SARIcon size={14} />} />
                                                     </Form.Item>
@@ -355,27 +355,27 @@ export default function EmployeeForm({ form, loadingRefs, refOptions }: Employee
                                                     <Typography.Title level={5} style={{ marginTop: 0 }}>{t("employees.form.allowances")}</Typography.Title>
                                                 </Col>
 
-                                                <Col span={8}>
+                                                <Col xs={24} sm={12} md={8}>
                                                     <Form.Item label={t("employees.form.transportation")} name="transportation_allowance">
                                                         <InputNumber style={{ width: "100%" }} size="large" min={0} precision={2} />
                                                     </Form.Item>
                                                 </Col>
-                                                <Col span={8}>
+                                                <Col xs={24} sm={12} md={8}>
                                                     <Form.Item label={t("employees.form.accommodation")} name="accommodation_allowance">
                                                         <InputNumber style={{ width: "100%" }} size="large" min={0} precision={2} />
                                                     </Form.Item>
                                                 </Col>
-                                                <Col span={8}>
+                                                <Col xs={24} sm={12} md={8}>
                                                     <Form.Item label={t("employees.form.telephone")} name="telephone_allowance">
                                                         <InputNumber style={{ width: "100%" }} size="large" min={0} precision={2} />
                                                     </Form.Item>
                                                 </Col>
-                                                <Col span={8}>
+                                                <Col xs={24} sm={12} md={8}>
                                                     <Form.Item label={t("employees.form.petrol")} name="petrol_allowance">
                                                         <InputNumber style={{ width: "100%" }} size="large" min={0} precision={2} />
                                                     </Form.Item>
                                                 </Col>
-                                                <Col span={8}>
+                                                <Col xs={24} sm={12} md={8}>
                                                     <Form.Item label={t("employees.form.other")} name="other_allowance">
                                                         <InputNumber style={{ width: "100%" }} size="large" min={0} precision={2} />
                                                     </Form.Item>

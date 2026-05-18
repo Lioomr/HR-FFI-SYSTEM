@@ -168,6 +168,7 @@ export default function EmployeeLeaveBalances({ employeeId }: EmployeeLeaveBalan
                 pagination={false}
                 loading={loading}
                 size="small"
+                scroll={{ x: "max-content" }}
                 bordered
             />
 
@@ -176,6 +177,8 @@ export default function EmployeeLeaveBalances({ employeeId }: EmployeeLeaveBalan
                 open={isModalOpen}
                 onCancel={() => setIsModalOpen(false)}
                 footer={null}
+                width="min(520px, 96vw)"
+                style={{ top: 16 }}
             >
                 <Form layout="vertical" form={form} onFinish={handleAdjust}>
                     <Form.Item

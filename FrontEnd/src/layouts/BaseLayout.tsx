@@ -176,6 +176,9 @@ function getTitle(pathname: string, t: (key: string, fallback?: string) => strin
   if (pathname.startsWith("/employee/loans")) return t("layout.loanRequests", "Loan Requests");
   if (pathname.startsWith("/employee/delegated-approvals")) return t("layout.delegatedApprovals", "Delegated Approvals");
   if (pathname.startsWith("/employee/assets")) return t("layout.myAssets", "My Assets");
+  if (pathname.startsWith("/employee/attendance-corrections")) return t("layout.attendanceCorrections", "Attendance Corrections");
+  if (pathname.startsWith("/manager/attendance-corrections")) return t("layout.attendanceCorrections", "Attendance Corrections");
+  if (pathname.startsWith("/hr/attendance-correction-requests")) return t("layout.attendanceCorrections", "Attendance Corrections");
   if (pathname.startsWith("/pending-inbox")) return t("layout.pendingInbox", "Pending Inbox");
   if (pathname.startsWith("/employee")) return t("layout.employeeSelfService");
   if (pathname.startsWith("/change-password")) return t("layout.changePassword");
@@ -184,17 +187,26 @@ function getTitle(pathname: string, t: (key: string, fallback?: string) => strin
 
 function getOpenKeysForPath(pathname: string): string[] {
   const opens: string[] = [];
+  const isEmployeeRequestPath =
+    pathname.startsWith("/employee/leave") || pathname.startsWith("/employee/loans");
+  const isHrInboxPath =
+    pathname.startsWith("/hr/leave/requests") || pathname.startsWith("/hr/loan-requests");
+
   // HR sidebar sub-menus
   if (pathname.startsWith("/hr/assets")) opens.push("hr-assets-sub");
   if (pathname.startsWith("/hr/rents") || pathname.startsWith("/hr/rent-types")) opens.push("hr-rents-sub");
   if (pathname.startsWith("/hr/announcements")) opens.push("hr-announcements-sub");
-  if (pathname.startsWith("/employee/loans")) opens.push("hr-loans-sub");
+  if (isHrInboxPath) opens.push("hr-inbox-sub");
+  if (isEmployeeRequestPath) opens.push("hr-emp-requests-sub");
+  if (pathname.startsWith("/hr/attendance") || pathname.startsWith("/hr/attendance-correction-requests")) opens.push("hr-attendance-sub");
+  if (pathname.startsWith("/employee/attendance") || pathname.startsWith("/employee/attendance-corrections")) opens.push("hr-emp-attendance-sub");
   // Employee sidebar sub-menus
-  if (pathname.startsWith("/employee/leave")) opens.push("emp-leave-sub");
+  if (isEmployeeRequestPath) opens.push("emp-requests-sub");
+  if (pathname.startsWith("/employee/attendance") || pathname.startsWith("/employee/attendance-corrections")) opens.push("emp-attendance-sub");
   // Manager sidebar sub-menus
-  if (pathname.startsWith("/employee/leave")) opens.push("mgr-leave-sub");
-  if (pathname.startsWith("/employee/loans")) opens.push("mgr-loans-sub");
+  if (isEmployeeRequestPath) opens.push("mgr-requests-sub");
   if (pathname.startsWith("/manager/announcements") || pathname.startsWith("/employee/announcements")) opens.push("mgr-announcements-sub");
+  if (pathname.startsWith("/employee/attendance") || pathname.startsWith("/employee/attendance-corrections")) opens.push("mgr-attendance-sub");
   // CEO sidebar sub-menus
   if (pathname.startsWith("/ceo/assets")) opens.push("ceo-assets-sub");
   if (pathname.startsWith("/ceo/announcements")) opens.push("ceo-announcements-sub");
@@ -527,9 +539,24 @@ export default function BaseLayout() {
       label: sectionLabel(t("layout.menu.workInbox", "Work Inbox"), t("layout.menu.approvals", "Approvals")),
       children: [
         { key: "/pending-inbox", icon: <InboxOutlined />, label: <Link to="/pending-inbox">{t("layout.pendingInbox", "Pending Inbox")}</Link> },
-        { key: "/hr/leave/requests", icon: <CalendarOutlined />, label: <Link to="/hr/leave/requests">{t("layout.leaveInbox")}</Link> },
-        { key: "/hr/loan-requests", icon: <DollarOutlined />, label: <Link to="/hr/loan-requests">{t("layout.loanInbox", "Loan Inbox")}</Link> },
-        { key: "/hr/attendance", icon: <ClockCircleOutlined />, label: <Link to="/hr/attendance">{t("layout.attendance")}</Link> },
+        {
+          key: "hr-inbox-sub",
+          icon: <InboxOutlined />,
+          label: t("layout.inbox", "Inbox"),
+          children: [
+            { key: "/hr/leave/requests", label: <Link to="/hr/leave/requests">{t("layout.leaveInbox")}</Link> },
+            { key: "/hr/loan-requests", label: <Link to="/hr/loan-requests">{t("layout.loanInbox", "Loan Inbox")}</Link> },
+          ],
+        },
+        {
+          key: "hr-attendance-sub",
+          icon: <ClockCircleOutlined />,
+          label: t("layout.attendance"),
+          children: [
+            { key: "/hr/attendance", label: <Link to="/hr/attendance">{t("layout.attendanceRecords", "Records")}</Link> },
+            { key: "/hr/attendance-correction-requests", label: <Link to="/hr/attendance-correction-requests">{t("layout.attendanceCorrections", "Attendance Corrections")}</Link> },
+          ],
+        },
         { key: "/hr/workflow/delegations", icon: <UserSwitchOutlined />, label: <Link to="/hr/workflow/delegations">{t("layout.delegationRules", "Delegation Rules")}</Link> },
       ],
     },
@@ -537,20 +564,28 @@ export default function BaseLayout() {
       type: "group",
       label: sectionLabel(t("layout.menu.myRequests", "My Requests"), t("layout.employeeSelfService")),
       children: [
-        { key: "/employee/leave/request", icon: <CalendarOutlined />, label: <Link to="/employee/leave/request">{t("layout.requestLeave", "Request Leave")}</Link> },
-        { key: "/employee/leave/requests", icon: <FileSearchOutlined />, label: <Link to="/employee/leave/requests">{t("layout.myLeaveRequests", "My Leave Requests")}</Link> },
-        { key: "/employee/delegated-approvals", icon: <UserSwitchOutlined />, label: <Link to="/employee/delegated-approvals">{t("layout.delegatedApprovals", "Delegated Approvals")}</Link> },
-        { key: "/employee/attendance", icon: <ClockCircleOutlined />, label: <Link to="/employee/attendance">{t("layout.attendance")}</Link> },
-        { key: "/employee/assets", icon: <AppstoreOutlined />, label: <Link to="/employee/assets">{t("layout.myAssets", "My Assets")}</Link> },
         {
-          key: "hr-loans-sub",
-          icon: <DollarOutlined />,
-          label: t("layout.loans", "Loans"),
+          key: "hr-emp-requests-sub",
+          icon: <FileSearchOutlined />,
+          label: t("layout.requests", "Requests"),
           children: [
+            { key: "/employee/leave/request", label: <Link to="/employee/leave/request">{t("layout.requestLeave", "Request Leave")}</Link> },
+            { key: "/employee/leave/requests", label: <Link to="/employee/leave/requests">{t("layout.myLeaveRequests", "My Leave Requests")}</Link> },
             { key: "/employee/loans/request", label: <Link to="/employee/loans/request">{t("layout.newLoan", "New Loan")}</Link> },
             { key: "/employee/loans", label: <Link to="/employee/loans">{t("layout.myLoans", "My Loans")}</Link> },
           ],
         },
+        { key: "/employee/delegated-approvals", icon: <UserSwitchOutlined />, label: <Link to="/employee/delegated-approvals">{t("layout.delegatedApprovals", "Delegated Approvals")}</Link> },
+        {
+          key: "hr-emp-attendance-sub",
+          icon: <ClockCircleOutlined />,
+          label: t("layout.attendance"),
+          children: [
+            { key: "/employee/attendance", label: <Link to="/employee/attendance">{t("layout.attendanceRecords", "Records")}</Link> },
+            { key: "/employee/attendance-corrections", label: <Link to="/employee/attendance-corrections">{t("layout.attendanceCorrections", "Attendance Corrections")}</Link> },
+          ],
+        },
+        { key: "/employee/assets", icon: <AppstoreOutlined />, label: <Link to="/employee/assets">{t("layout.myAssets", "My Assets")}</Link> },
       ],
     },
     {
@@ -616,19 +651,27 @@ export default function BaseLayout() {
       type: "group",
       label: sectionLabel(t("layout.menu.myRequests", "My Requests"), t("layout.employeeSelfService")),
       children: [
-        { key: "/employee/attendance", icon: <ClockCircleOutlined />, label: <Link to="/employee/attendance">{t("layout.attendance")}</Link> },
         {
-          key: "emp-leave-sub",
-          icon: <CalendarOutlined />,
-          label: t("layout.leave", "Leave"),
+          key: "emp-attendance-sub",
+          icon: <ClockCircleOutlined />,
+          label: t("layout.attendance"),
+          children: [
+            { key: "/employee/attendance", label: <Link to="/employee/attendance">{t("layout.attendanceRecords", "Records")}</Link> },
+            { key: "/employee/attendance-corrections", label: <Link to="/employee/attendance-corrections">{t("layout.attendanceCorrections", "Attendance Corrections")}</Link> },
+          ],
+        },
+        {
+          key: "emp-requests-sub",
+          icon: <FileSearchOutlined />,
+          label: t("layout.requests", "Requests"),
           children: [
             { key: "/employee/leave/balance", label: <Link to="/employee/leave/balance">{t("layout.leaveBalance")}</Link> },
             { key: "/employee/leave/requests", label: <Link to="/employee/leave/requests">{t("layout.myLeaveRequests", "My Leave Requests")}</Link> },
+            { key: "/employee/loans", label: <Link to="/employee/loans">{t("layout.myLoans", "My Loans")}</Link> },
           ],
         },
         { key: "/employee/delegated-approvals", icon: <UserSwitchOutlined />, label: <Link to="/employee/delegated-approvals">{t("layout.delegatedApprovals", "Delegated Approvals")}</Link> },
         { key: "/employee/assets", icon: <AppstoreOutlined />, label: <Link to="/employee/assets">{t("layout.myAssets", "My Assets")}</Link> },
-        { key: "/employee/loans", icon: <DollarOutlined />, label: <Link to="/employee/loans">{t("layout.loans", "Loans")}</Link> },
         { key: "/employee/payslips", icon: <FileTextOutlined />, label: <Link to="/employee/payslips">{t("layout.myPayslips")}</Link> },
       ],
     },
@@ -643,6 +686,7 @@ export default function BaseLayout() {
               ? [
                 { key: "/manager/dashboard", icon: <DashboardOutlined />, label: <Link to="/manager/dashboard">{t("layout.managerDashboard", "Manager Dashboard")}</Link> },
                 { key: "/manager/team-requests", icon: <FileSearchOutlined />, label: <Link to="/manager/team-requests">{t("layout.teamRequests", "Team Requests")}</Link> },
+                { key: "/manager/attendance-corrections", icon: <ClockCircleOutlined />, label: <Link to="/manager/attendance-corrections">{t("layout.attendanceCorrections", "Attendance Corrections")}</Link> },
                 { key: "/manager/loan-requests", icon: <DollarOutlined />, label: <Link to="/manager/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
                 { key: "/manager/team", icon: <TeamOutlined />, label: <Link to="/manager/team">{t("layout.myTeam", "My Team")}</Link> },
               ]
@@ -682,28 +726,29 @@ export default function BaseLayout() {
       type: "group",
       label: sectionLabel(t("layout.menu.myRequests", "My Requests"), t("layout.employeeSelfService")),
       children: [
-        { key: "/employee/attendance", icon: <ClockCircleOutlined />, label: <Link to="/employee/attendance">{t("layout.attendance")}</Link> },
         {
-          key: "mgr-leave-sub",
-          icon: <CalendarOutlined />,
-          label: t("layout.leave", "Leave"),
+          key: "mgr-attendance-sub",
+          icon: <ClockCircleOutlined />,
+          label: t("layout.attendance"),
+          children: [
+            { key: "/employee/attendance", label: <Link to="/employee/attendance">{t("layout.attendanceRecords", "Records")}</Link> },
+            { key: "/employee/attendance-corrections", label: <Link to="/employee/attendance-corrections">{t("layout.attendanceCorrections", "Attendance Corrections")}</Link> },
+          ],
+        },
+        {
+          key: "mgr-requests-sub",
+          icon: <FileSearchOutlined />,
+          label: t("layout.requests", "Requests"),
           children: [
             { key: "/employee/leave/balance", label: <Link to="/employee/leave/balance">{t("layout.leaveBalance")}</Link> },
             { key: "/employee/leave/request", label: <Link to="/employee/leave/request">{t("layout.requestLeave", "Request Leave")}</Link> },
             { key: "/employee/leave/requests", label: <Link to="/employee/leave/requests">{t("layout.myLeaveRequests", "My Leave Requests")}</Link> },
-          ],
-        },
-        { key: "/employee/delegated-approvals", icon: <UserSwitchOutlined />, label: <Link to="/employee/delegated-approvals">{t("layout.delegatedApprovals", "Delegated Approvals")}</Link> },
-        { key: "/employee/assets", icon: <AppstoreOutlined />, label: <Link to="/employee/assets">{t("layout.myAssets", "My Assets")}</Link> },
-        {
-          key: "mgr-loans-sub",
-          icon: <DollarOutlined />,
-          label: t("layout.loans", "Loans"),
-          children: [
             { key: "/employee/loans/request", label: <Link to="/employee/loans/request">{t("layout.newLoan", "New Loan")}</Link> },
             { key: "/employee/loans", label: <Link to="/employee/loans">{t("layout.myLoans", "My Loans")}</Link> },
           ],
         },
+        { key: "/employee/delegated-approvals", icon: <UserSwitchOutlined />, label: <Link to="/employee/delegated-approvals">{t("layout.delegatedApprovals", "Delegated Approvals")}</Link> },
+        { key: "/employee/assets", icon: <AppstoreOutlined />, label: <Link to="/employee/assets">{t("layout.myAssets", "My Assets")}</Link> },
         { key: "/employee/payslips", icon: <FileTextOutlined />, label: <Link to="/employee/payslips">{t("layout.myPayslips")}</Link> },
       ],
     },
@@ -714,6 +759,7 @@ export default function BaseLayout() {
         { key: "/pending-inbox", icon: <InboxOutlined />, label: <Link to="/pending-inbox">{t("layout.pendingInbox", "Pending Inbox")}</Link> },
         { key: "/manager/dashboard", icon: <DashboardOutlined />, label: <Link to="/manager/dashboard">{t("layout.managerDashboard", "Manager Dashboard")}</Link> },
         { key: "/manager/team-requests", icon: <FileSearchOutlined />, label: <Link to="/manager/team-requests">{t("layout.teamRequests", "Team Requests")}</Link> },
+        { key: "/manager/attendance-corrections", icon: <ClockCircleOutlined />, label: <Link to="/manager/attendance-corrections">{t("layout.attendanceCorrections", "Attendance Corrections")}</Link> },
         { key: "/manager/loan-requests", icon: <DollarOutlined />, label: <Link to="/manager/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
         { key: "/manager/team", icon: <TeamOutlined />, label: <Link to="/manager/team">{t("layout.myTeam", "My Team")}</Link> },
       ],

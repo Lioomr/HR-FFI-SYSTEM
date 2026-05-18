@@ -242,6 +242,8 @@ const HrAttendancePage: React.FC = () => {
                 columns={columns}
                 rowKey="id"
                 loading={loading}
+                size="small"
+                scroll={{ x: "max-content" }}
                 pagination={{
                     current: pagination.current,
                     pageSize: pagination.pageSize,

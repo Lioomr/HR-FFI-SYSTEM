@@ -117,6 +117,8 @@ export default function MyLeaveBalancePage() {
                     columns={columns}
                     rowKey="leave_type_id"
                     pagination={false}
+                    size="small"
+                    scroll={{ x: "max-content" }}
                     locale={{ emptyText: t("common.noData") }}
                 />
             </Card>

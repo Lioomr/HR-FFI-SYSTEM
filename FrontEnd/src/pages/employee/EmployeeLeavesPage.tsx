@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { Card, DatePicker, Row, Col, Typography, message, Button, Modal, Form, Select, Input, Upload } from "antd";
+import { Card, DatePicker, Row, Col, Typography, message, Button, Modal, Form, Select, Input, Upload, Space } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import leavesApi from "../../services/api/leavesApi";
@@ -88,26 +88,27 @@ const EmployeeLeavesPage: React.FC = () => {
 
     return (
         <div>
-            <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
-                <Col>
-                    <Title level={2}>{t("leaves.myBalances")}</Title>
+            <Row justify="space-between" align="middle" gutter={[12, 12]} style={{ marginBottom: 16 }}>
+                <Col xs={24} md="auto">
+                    <Title level={2} style={{ margin: 0 }}>{t("leaves.myBalances")}</Title>
                 </Col>
-                <Col>
-                    <Button
-                        type="primary"
-                        icon={<PlusOutlined />}
-                        onClick={handleRequestLeave}
-                        style={{ marginInlineEnd: 16 }}
-                    >
-                        {t("leaves.requestLeave")}
-                    </Button>
-                    <span style={{ marginInlineEnd: 8, fontWeight: 500 }}>{t("leaves.selectYear")}</span>
-                    <DatePicker
-                        picker="year"
-                        value={year}
-                        onChange={(val) => val && setYear(val)}
-                        allowClear={false}
-                    />
+                <Col xs={24} md="auto">
+                    <Space wrap>
+                        <Button
+                            type="primary"
+                            icon={<PlusOutlined />}
+                            onClick={handleRequestLeave}
+                        >
+                            {t("leaves.requestLeave")}
+                        </Button>
+                        <span style={{ fontWeight: 500 }}>{t("leaves.selectYear")}</span>
+                        <DatePicker
+                            picker="year"
+                            value={year}
+                            onChange={(val) => val && setYear(val)}
+                            allowClear={false}
+                        />
+                    </Space>
                 </Col>
             </Row>
 
@@ -131,7 +132,8 @@ const EmployeeLeavesPage: React.FC = () => {
                 onOk={() => form.submit()}
                 confirmLoading={submitting}
                 okText={t("common.submit")}
-                width={600}
+                width="min(600px, 96vw)"
+                style={{ top: 16 }}
             >
                 <Form
                     form={form}

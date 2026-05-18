@@ -14,7 +14,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from assets.models import AssetReturnRequest
-from attendance.models import AttendanceRecord
+from attendance.models import AttendanceCorrectionRequest, AttendanceRecord
 from audit.models import AuditLog
 from audit.utils import audit
 from audit.views import AuditPagination, apply_filters
@@ -130,6 +130,20 @@ def _sync_pending_request_workflows_for_request(request, *, limit_per_type: int 
         field_name="employee_profile__company_id",
     ).filter(status__in=attendance_statuses)[:limit_per_type]:
         sync_workflow(record, actor=request.user)
+
+    correction_statuses = [
+        AttendanceCorrectionRequest.Status.PENDING_MANAGER,
+        AttendanceCorrectionRequest.Status.PENDING_HR,
+        AttendanceCorrectionRequest.Status.APPROVED,
+        AttendanceCorrectionRequest.Status.REJECTED,
+        AttendanceCorrectionRequest.Status.CANCELLED,
+    ]
+    for correction in filter_queryset_by_company_scope(
+        AttendanceCorrectionRequest.objects.all(),
+        request,
+        field_name="employee_profile__company_id",
+    ).filter(status__in=correction_statuses)[:limit_per_type]:
+        sync_workflow(correction, actor=request.user)
 
     loan_statuses = [
         LoanRequest.RequestStatus.SUBMITTED,

@@ -138,12 +138,14 @@ export default function MyLeaveRequestsPage() {
             dataIndex: "start_date",
             key: "start_date",
             width: 120,
+            responsive: ["sm"],
         },
         {
             title: t("leave.endDate"),
             dataIndex: "end_date",
             key: "end_date",
             width: 120,
+            responsive: ["sm"],
         },
         {
             title: t("leave.days"),
@@ -269,7 +271,7 @@ export default function MyLeaveRequestsPage() {
                     rowKey="id"
                     loading={loading}
                     size={isMobile ? "small" : "middle"}
-                    scroll={{ x: 760 }}
+                    scroll={{ x: "max-content" }}
                     pagination={{
                         current: page,
                         pageSize,
