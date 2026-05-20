@@ -1,8 +1,8 @@
 import { Card, Col, Descriptions, Row, Space, Typography } from "antd";
-import dayjs from "dayjs";
 
 import { useI18n } from "../../i18n/useI18n";
 import type { AttendanceCorrectionRequest } from "../../services/api/attendanceCorrectionsApi";
+import { formatDateTime as formatAppDateTime, formatTimeOnly } from "../../utils/dateTime";
 import AttendanceCorrectionStatusTag from "./AttendanceCorrectionStatusTag";
 import AttendanceCorrectionTimeline from "./AttendanceCorrectionTimeline";
 
@@ -10,14 +10,12 @@ const { Text } = Typography;
 
 function formatDateTime(value: string | null): string {
   if (!value) return "—";
-  const d = dayjs(value);
-  return d.isValid() ? d.format("YYYY-MM-DD HH:mm") : value;
+  return formatAppDateTime(value, "â€”");
 }
 
 function formatTime(value: string | null): string {
   if (!value) return "—";
-  const d = dayjs(value);
-  return d.isValid() ? d.format("HH:mm") : value;
+  return formatTimeOnly(value, "â€”");
 }
 
 function translateStatusValue(value: string | null | undefined, t: (k: string, f?: string) => string): string {

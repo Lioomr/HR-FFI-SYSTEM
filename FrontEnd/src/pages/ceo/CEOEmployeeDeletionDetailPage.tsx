@@ -14,7 +14,6 @@ import {
   message,
 } from "antd";
 import { ArrowLeftOutlined, CheckOutlined, CloseOutlined } from "@ant-design/icons";
-import dayjs from "dayjs";
 
 import PageHeader from "../../components/ui/PageHeader";
 import LoadingState from "../../components/ui/LoadingState";
@@ -33,6 +32,7 @@ import { isApiError } from "../../services/api/apiTypes";
 import { isForbidden, isNotFound } from "../../services/api/httpErrors";
 import { getFirstApiErrorMessage } from "../../utils/formErrors";
 import { useI18n } from "../../i18n/useI18n";
+import { formatDateTimeShort } from "../../utils/dateTime";
 
 const { Text, Paragraph } = Typography;
 
@@ -229,7 +229,7 @@ export default function CEOEmployeeDeletionDetailPage() {
           style={{ marginBottom: 16, borderRadius: 12 }}
           message={t("employees.removalDetail.executedTitle")}
           description={t("employees.removalDetail.executedDescription", {
-            at: data.executed_at ? dayjs(data.executed_at).format("MMM DD, YYYY HH:mm") : "-",
+            at: formatDateTimeShort(data.executed_at),
             by: data.approved_by_name || "-",
           })}
         />
@@ -246,7 +246,7 @@ export default function CEOEmployeeDeletionDetailPage() {
               <div>
                 {t("employees.removalDetail.rejectedBy", {
                   by: data.rejected_by_name || "-",
-                  at: data.rejected_at ? dayjs(data.rejected_at).format("MMM DD, YYYY HH:mm") : "-",
+                  at: formatDateTimeShort(data.rejected_at),
                 })}
               </div>
               {data.rejection_reason && (
@@ -300,7 +300,7 @@ export default function CEOEmployeeDeletionDetailPage() {
             {data.requested_by_name || "-"}
           </Descriptions.Item>
           <Descriptions.Item label={t("employees.removalDetail.createdAt")}>
-            {data.created_at ? dayjs(data.created_at).format("MMM DD, YYYY HH:mm") : "-"}
+            {formatDateTimeShort(data.created_at)}
           </Descriptions.Item>
           <Descriptions.Item label={t("employees.removalDetail.reason")}>
             <Paragraph style={{ marginBottom: 0, whiteSpace: "pre-wrap" }}>

@@ -26,6 +26,7 @@ import AmountWithSAR from "../../../components/ui/AmountWithSAR";
 import { useI18n } from "../../../i18n/useI18n";
 import { useAuthStore } from "../../../auth/authStore";
 import { isHeadOfficeOrganization } from "../../../utils/organizationContext";
+import { formatDateTime } from "../../../utils/dateTime";
 
 export default function HRDashboardPage() {
     const navigate = useNavigate();
@@ -348,7 +349,7 @@ export default function HRDashboardPage() {
                                                     <div style={{ flex: 1 }}>
                                                         <div style={{ display: "flex", justifyContent: "space-between" }}>
                                                             <span style={{ fontWeight: 600, fontSize: 13 }}>{item.name}</span>
-                                                            <span style={{ fontSize: 11, color: "#94a3b8" }}>{item.time}</span>
+                                                            <span style={{ fontSize: 11, color: "#94a3b8" }}>{formatDateTime(item.time)}</span>
                                                         </div>
                                                         <div style={{ marginTop: 4 }}>
                                                             <Tag color={item.request_type === "ATTENDANCE" ? "gold" : item.request_type === "LOAN" ? "geekblue" : "purple"} style={{ borderRadius: 20, fontSize: 11 }}>

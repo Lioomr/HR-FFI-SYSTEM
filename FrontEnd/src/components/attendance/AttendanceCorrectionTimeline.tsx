@@ -1,10 +1,10 @@
 import { Card, Timeline, Typography } from "antd";
-import dayjs from "dayjs";
 import type {
   AttendanceCorrectionRequest,
   AttendanceCorrectionWorkflowHistoryEntry,
 } from "../../services/api/attendanceCorrectionsApi";
 import { useI18n } from "../../i18n/useI18n";
+import { formatDateTime } from "../../utils/dateTime";
 
 const { Text } = Typography;
 
@@ -51,7 +51,7 @@ export default function AttendanceCorrectionTimeline({
       <Timeline
         items={history.map((entry) => {
           const actor = formatActor(entry);
-          const at = entry.at ? dayjs(entry.at).format("YYYY-MM-DD HH:mm") : "";
+          const at = entry.at ? formatDateTime(entry.at) : "";
           const stageLabel = entry.approver_role || entry.stage || "";
           return {
             color: actionColor(entry.action),

@@ -368,6 +368,22 @@ class PendingRequestsApiTests(APITestCase):
             hire_date=date(2024, 1, 1),
             company=self.company,
         )
+        self.other_hr_user = self.user_model.objects.create_user(
+            email="pending-other-hr@test.com",
+            password="StrongPass123!",
+            full_name="Other Pending HR",
+        )
+        self.other_hr_user.groups.add(self.hr_group)
+        EmployeeProfile.objects.create(
+            user=self.other_hr_user,
+            employee_id="EMP-PENDING-OTHER-HR",
+            full_name="Other Pending HR",
+            basic_salary=Decimal("10000.00"),
+            department_ref=self.department,
+            position_ref=self.position,
+            hire_date=date(2024, 1, 1),
+            company=self.company,
+        )
 
         self.ceo_user = self.user_model.objects.create_user(
             email="pending-ceo@test.com",
@@ -484,6 +500,30 @@ class PendingRequestsApiTests(APITestCase):
         )
         self.assertEqual([item["request_type"] for item in search_response.data["data"]["items"]], ["LOAN"])
 
+    def test_pending_request_time_uses_request_submission_timestamp(self):
+        leave = LeaveRequest.objects.create(
+            employee=self.employee,
+            employee_profile=self.employee_profile,
+            company=self.company,
+            leave_type=self.leave_type,
+            start_date=date(2026, 5, 20),
+            end_date=date(2026, 5, 22),
+            reason="Old annual leave",
+            status=LeaveRequest.RequestStatus.PENDING_HR,
+        )
+        submitted_at = timezone.datetime(2026, 5, 7, 8, 30, tzinfo=timezone.get_current_timezone())
+        LeaveRequest.objects.filter(pk=leave.pk).update(created_at=submitted_at)
+        leave.refresh_from_db()
+        sync_workflow(leave)
+        self.client.force_authenticate(user=self.hr_user)
+
+        response = self.client.get("/api/core/pending-requests/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id))
+
+        self.assertEqual(response.status_code, 200)
+        [item] = response.data["data"]["items"]
+        self.assertEqual(item["request_type"], "LEAVE")
+        self.assertTrue(item["time"].startswith("2026-05-07T08:30:00"))
+
     def test_ceo_pending_requests_include_employee_deletion(self):
         EmployeeDeletionRequest.objects.create(
             company=self.company,
@@ -575,6 +615,71 @@ class PendingRequestsApiTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["data"]["count"], 5)
         self.assertIn(self.other_company.name, {item["company_name"] for item in response.data["data"]["items"]})
+
+    def test_pending_requests_resync_clears_stale_single_hr_assignment(self):
+        loan_request = LoanRequest.objects.create(
+            employee=self.employee,
+            employee_profile=self.employee_profile,
+            company=self.company,
+            requested_amount=Decimal("2750.00"),
+            reason="Stale HR assignment",
+            status=LoanRequest.RequestStatus.PENDING_HR,
+        )
+        workflow = sync_workflow(loan_request, actor=self.hr_user)
+        workflow.current_actor_user = self.hr_user
+        workflow.save(update_fields=["current_actor_user", "updated_at"])
+
+        self.client.force_authenticate(user=self.other_hr_user)
+        response = self.client.get("/api/core/pending-requests/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id))
+
+        self.assertEqual(response.status_code, 200)
+        items = response.data["data"]["items"]
+        self.assertIn(loan_request.id, [item["id"] for item in items if item["request_type"] == "LOAN"])
+
+        workflow.refresh_from_db()
+        self.assertIsNone(workflow.current_actor_user_id)
+        self.assertEqual(workflow.current_approver_role, "hr")
+
+    def test_pending_requests_exclude_completed_requests_with_stale_workflow(self):
+        loan_request = LoanRequest.objects.create(
+            employee=self.employee,
+            employee_profile=self.employee_profile,
+            company=self.company,
+            requested_amount=Decimal("3000.00"),
+            reason="Completed request",
+            status=LoanRequest.RequestStatus.PENDING_HR,
+        )
+        workflow = sync_workflow(loan_request, actor=self.hr_user)
+        LoanRequest.objects.filter(pk=loan_request.pk).update(status=LoanRequest.RequestStatus.APPROVED)
+        workflow.status = "in_review"
+        workflow.current_approver_role = "hr"
+        workflow.save(update_fields=["status", "current_approver_role", "updated_at"])
+
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.get("/api/core/pending-requests/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id))
+
+        self.assertEqual(response.status_code, 200)
+        items = response.data["data"]["items"]
+        self.assertNotIn(loan_request.id, [item["id"] for item in items if item["request_type"] == "LOAN"])
+
+    def test_pending_requests_syncs_more_than_default_legacy_limit(self):
+        for index in range(105):
+            LeaveRequest.objects.create(
+                employee=self.employee,
+                employee_profile=self.employee_profile,
+                company=self.company,
+                leave_type=self.leave_type,
+                start_date=date(2026, 6, 1),
+                end_date=date(2026, 6, 2),
+                reason=f"Bulk pending leave {index}",
+                status=LeaveRequest.RequestStatus.PENDING_HR,
+            )
+
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.get("/api/core/pending-requests/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"]["count"], 105)
 
 
 class DelegationRuleApiTests(APITestCase):

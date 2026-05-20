@@ -26,6 +26,8 @@ import {
     MailOutlined,
     CalendarOutlined,
     CopyOutlined,
+    ScheduleOutlined,
+    InboxOutlined,
 } from "@ant-design/icons";
 import { getCountryFlag } from "../../utils/countries";
 import LoadingState from "../../components/ui/LoadingState";
@@ -33,6 +35,8 @@ import ErrorState from "../../components/ui/ErrorState";
 import { getEmployee } from "../../services/api/employeesApi";
 import { getMe } from "../../services/api/usersApi";
 import type { Employee } from "../../services/api/employeesApi";
+import LeaveBalanceTable from "../../components/leaves/LeaveBalanceTable";
+import EmployeeDocumentArchive from "../../components/employees/EmployeeDocumentArchive";
 import type { UserDto } from "../../services/api/apiTypes";
 import { isApiError } from "../../services/api/apiTypes";
 import { formatNumber } from "../../utils/currency";
@@ -110,7 +114,8 @@ export default function UserProfilePage() {
         setUser(null);
 
         try {
-            const empResponse = await getEmployee("me");
+            const currentYear = new Date().getFullYear();
+            const empResponse = await getEmployee("me", { leave_balance_year: currentYear });
 
             if (!isApiError(empResponse)) {
                 setEmployee(empResponse.data);
@@ -285,6 +290,28 @@ export default function UserProfilePage() {
                                                 </Descriptions>
                                             </div>
                                         ),
+                                    },
+                                    ...(employee.leave_balances != null ? [{
+                                        key: '4',
+                                        label: <span><ScheduleOutlined /> {t("profile.leaveBalances", "Leave Balances")}</span>,
+                                        children: (
+                                            <div style={{ marginTop: 16 }}>
+                                                {employee.leave_balance_year && (
+                                                    <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
+                                                        {t("profile.leaveBalanceYear", "Year")}: <strong>{employee.leave_balance_year}</strong>
+                                                    </Typography.Text>
+                                                )}
+                                                <LeaveBalanceTable
+                                                    balances={employee.leave_balances.length > 0 ? employee.leave_balances : []}
+                                                    loading={false}
+                                                />
+                                            </div>
+                                        ),
+                                    }] : []),
+                                    {
+                                        key: '5',
+                                        label: <span><InboxOutlined /> {t("archive.tabLabel", "Document Archive")}</span>,
+                                        children: <EmployeeDocumentArchive employeeId={employee.id} readonly={false} />,
                                     },
                                 ]}
                             />

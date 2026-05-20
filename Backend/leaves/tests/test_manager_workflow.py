@@ -1,4 +1,5 @@
 from datetime import date
+from pathlib import Path
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -8,7 +9,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from core.models import DelegationRule
-from employees.models import EmployeeProfile
+from employees.models import EmployeeDocument, EmployeeProfile
 from leaves.models import LeaveRequest, LeaveType
 
 User = get_user_model()
@@ -249,12 +250,13 @@ class ManagerWorkflowTests(APITestCase):
         self.assertEqual(lr.manager_decision_by, self.manager_user)
         self.assertEqual(lr.manager_decision_note, "Enjoy!")
 
-    def test_hr_approval_finalizes(self):
+    def test_hr_approval_sends_to_ceo(self):
         """
-        HR approval transitions PENDING_HR to APPROVED
+        HR approval transitions PENDING_HR to PENDING_CEO.
         """
         lr = LeaveRequest.objects.create(
             employee=self.employee_user,
+            employee_profile=self.employee_profile,
             leave_type=self.leave_type,
             start_date=date(2026, 6, 1),
             end_date=date(2026, 6, 5),
@@ -266,7 +268,7 @@ class ManagerWorkflowTests(APITestCase):
         response = self.client.post(url, {"comment": "Final Approve"}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["data"]["status"], LeaveRequest.RequestStatus.APPROVED)
+        self.assertEqual(response.data["data"]["status"], LeaveRequest.RequestStatus.PENDING_CEO)
 
     def test_delegated_hr_can_approve_leave_request(self):
         DelegationRule.objects.create(
@@ -293,7 +295,7 @@ class ManagerWorkflowTests(APITestCase):
             format="json",
         )
         self.assertEqual(approve_response.status_code, status.HTTP_200_OK)
-        self.assertEqual(approve_response.data["data"]["status"], LeaveRequest.RequestStatus.APPROVED)
+        self.assertEqual(approve_response.data["data"]["status"], LeaveRequest.RequestStatus.PENDING_CEO)
 
     def test_manager_can_preview_leave_document(self):
         lr = LeaveRequest.objects.create(
@@ -391,6 +393,72 @@ class ManagerWorkflowTests(APITestCase):
             {"comment": "Delegated CEO approval"},
             format="json",
         )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"]["status"], LeaveRequest.RequestStatus.PENDING_HR_COMPLETION)
+
+    def test_non_saudi_hr_completion_requires_visa_document(self):
+        request_obj = LeaveRequest.objects.create(
+            employee=self.employee_user,
+            employee_profile=self.employee_profile,
+            leave_type=self.leave_type,
+            start_date=date(2026, 10, 8),
+            end_date=date(2026, 10, 9),
+            status=LeaveRequest.RequestStatus.PENDING_HR_COMPLETION,
+        )
+
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.post(f"{self.requests_url}{request_obj.id}/complete/", {"comment": "Done"})
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+    def test_non_saudi_hr_completion_extracts_uploaded_visa_document(self):
+        request_obj = LeaveRequest.objects.create(
+            employee=self.employee_user,
+            employee_profile=self.employee_profile,
+            leave_type=self.leave_type,
+            start_date=date(2026, 10, 8),
+            end_date=date(2026, 10, 9),
+            status=LeaveRequest.RequestStatus.PENDING_HR_COMPLETION,
+        )
+        repo_root = Path(__file__).resolve().parents[3]
+        pdf_path = next(path for path in repo_root.glob("*.pdf") if not path.name.isascii())
+        upload = SimpleUploadedFile(
+            "visa.pdf",
+            pdf_path.read_bytes(),
+            content_type="application/pdf",
+        )
+
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.post(
+            f"{self.requests_url}{request_obj.id}/complete/",
+            {"comment": "Visa uploaded", "visa_document": upload},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["data"]["status"], LeaveRequest.RequestStatus.APPROVED)
+        document = EmployeeDocument.objects.get(leave_request=request_obj)
+        self.assertEqual(document.document_type, EmployeeDocument.DocumentType.VISA)
+        self.assertEqual(document.visa_number, "209605081")
+        self.assertEqual(document.exit_before_raw, "16/8/2026")
+        self.assertEqual(document.exit_before, date(2026, 8, 16))
+        self.assertEqual(document.visa_duration, 60)
+
+    def test_saudi_hr_completion_does_not_require_visa_document(self):
+        self.employee_profile.is_saudi = True
+        self.employee_profile.save(update_fields=["is_saudi", "updated_at"])
+        request_obj = LeaveRequest.objects.create(
+            employee=self.employee_user,
+            employee_profile=self.employee_profile,
+            leave_type=self.leave_type,
+            start_date=date(2026, 10, 8),
+            end_date=date(2026, 10, 9),
+            status=LeaveRequest.RequestStatus.PENDING_HR_COMPLETION,
+        )
+
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.post(f"{self.requests_url}{request_obj.id}/complete/", {"comment": "Done"})
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["data"]["status"], LeaveRequest.RequestStatus.APPROVED)

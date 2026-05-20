@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button, Card, Descriptions, Space, Modal, Select, message, Tooltip, Avatar, Row, Col, Tabs, Tag, Typography, Divider } from "antd";
-import { ArrowLeftOutlined, EditOutlined, UserAddOutlined, DisconnectOutlined, UserOutlined, ContainerOutlined, DollarOutlined, FolderOpenOutlined, MailOutlined, PhoneOutlined, SafetyCertificateOutlined } from "@ant-design/icons";
+import { ArrowLeftOutlined, EditOutlined, UserAddOutlined, DisconnectOutlined, UserOutlined, ContainerOutlined, DollarOutlined, FolderOpenOutlined, MailOutlined, PhoneOutlined, SafetyCertificateOutlined, InboxOutlined } from "@ant-design/icons";
 import { getCountryFlag } from "../../../utils/countries";
 import EmployeeLeaveBalances from "./components/EmployeeLeaveBalances";
+import EmployeeDocumentArchive from "../../../components/employees/EmployeeDocumentArchive";
 import PageHeader from "../../../components/ui/PageHeader";
 import LoadingState from "../../../components/ui/LoadingState";
 import EmptyState from "../../../components/ui/EmptyState";
@@ -483,6 +484,16 @@ export default function ViewEmployeePage() {
                                             </span>
                                         ),
                                         children: <EmployeeLeaveBalances employeeId={Number(id)} />
+                                    },
+                                    {
+                                        key: '5',
+                                        label: (
+                                            <span>
+                                                <InboxOutlined />
+                                                {t("archive.tabLabel", "Document Archive")}
+                                            </span>
+                                        ),
+                                        children: <EmployeeDocumentArchive employeeId={Number(id)} />,
                                     },
                                 ]}
                             />

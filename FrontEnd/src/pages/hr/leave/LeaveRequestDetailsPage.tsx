@@ -1,19 +1,23 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Button, Card, Descriptions, Divider, Alert, Tag, Modal, Input, notification } from "antd";
-import { ArrowLeftOutlined, CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, DownloadOutlined, ExportOutlined } from "@ant-design/icons";
+import { Button, Card, Descriptions, Divider, Alert, Tag, Modal, Input, Upload, Space, Table, Typography, notification } from "antd";
+import { ArrowLeftOutlined, CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, DownloadOutlined, ExportOutlined, FilePdfOutlined, CheckOutlined } from "@ant-design/icons";
+import type { UploadFile } from "antd/es/upload/interface";
 
 import PageHeader from "../../../components/ui/PageHeader";
 import LoadingState from "../../../components/ui/LoadingState";
 import ErrorState from "../../../components/ui/ErrorState";
-import { getLeaveRequest, approveLeaveRequest, rejectLeaveRequest, sendLeaveRequestToCEO, getLeaveRequestDocumentBlob, type LeaveRequest } from "../../../services/api/leaveApi";
+import { getLeaveRequest, approveLeaveRequest, rejectLeaveRequest, sendLeaveRequestToCEO, completeLeaveRequest, getLeaveRequestDocumentBlob, type LeaveRequest } from "../../../services/api/leaveApi";
+import { downloadEmployeeDocument } from "../../../services/api/employeesApi";
 import { isApiError } from "../../../services/api/apiTypes";
 import { useI18n } from "../../../i18n/useI18n";
 import LeaveApprovalMap from "../../../components/leaves/LeaveApprovalMap";
 import RequestObligationsPanel from "../../../components/requests/RequestObligationsPanel";
+import { formatDateTime } from "../../../utils/dateTime";
 
 const { confirm } = Modal;
 const { TextArea } = Input;
+const { Text } = Typography;
 
 export default function LeaveRequestDetailsPage() {
     const { id } = useParams<{ id: string }>();
@@ -38,6 +42,15 @@ export default function LeaveRequestDetailsPage() {
     const [rejectModalVisible, setRejectModalVisible] = useState(false);
     const [rejectionReason, setRejectionReason] = useState("");
 
+    // Visa download state
+    const [visaDownloadingId, setVisaDownloadingId] = useState<number | null>(null);
+
+    // HR Completion States
+    const [completeComment, setCompleteComment] = useState("");
+    const [visaFile, setVisaFile] = useState<File | null>(null);
+    const [visaFileList, setVisaFileList] = useState<UploadFile[]>([]);
+    const [extractionWarnings, setExtractionWarnings] = useState<string[]>([]);
+
     const loadData = useCallback(async () => {
         if (!id) return;
         setLoading(true);
@@ -53,7 +66,7 @@ export default function LeaveRequestDetailsPage() {
         } finally {
             setLoading(false);
         }
-    }, [id]);
+    }, [id, t]);
 
     useEffect(() => {
         loadData();
@@ -77,7 +90,7 @@ export default function LeaveRequestDetailsPage() {
                         notification.success({ message: t("leave.approveSuccess") });
                         loadData();
                     }
-                } catch (e) {
+                } catch {
                     notification.error({ message: t("common.error"), description: t("leave.approveError") });
                 } finally {
                     setProcessing(false);
@@ -104,8 +117,8 @@ export default function LeaveRequestDetailsPage() {
                         notification.success({ message: t("leave.sendSuccess") });
                         loadData();
                     }
-                } catch {
-                    notification.error({ message: t("common.error"), description: t("leave.sendError") });
+                } catch (e: any) {
+                    notification.error({ message: t("common.error"), description: e?.message || t("leave.sendError") });
                 } finally {
                     setProcessing(false);
                 }
@@ -137,6 +150,26 @@ export default function LeaveRequestDetailsPage() {
         }
     };
 
+    const handleVisaDownload = async (docId: number, filename?: string) => {
+        if (!request?.employee?.id) return;
+        setVisaDownloadingId(docId);
+        try {
+            const blob = await downloadEmployeeDocument(request.employee.id, docId);
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = filename || `visa_${docId}`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(() => window.URL.revokeObjectURL(url), 5000);
+        } catch {
+            notification.error({ message: t("common.error"), description: t("common.tryAgain") });
+        } finally {
+            setVisaDownloadingId(null);
+        }
+    };
+
     const handleReject = async () => {
         if (!request || !rejectionReason.trim()) {
             notification.error({ message: t("leave.reasonReqTitle"), description: t("leave.reasonReqDesc") });
@@ -154,8 +187,38 @@ export default function LeaveRequestDetailsPage() {
                 setRejectionReason("");
                 loadData();
             }
-        } catch (e) {
+        } catch {
             notification.error({ message: t("common.error"), description: t("leave.rejectError") });
+        } finally {
+            setProcessing(false);
+        }
+    };
+
+    const handleComplete = async () => {
+        if (!request) return;
+        if (request.requires_hr_completion_visa && !visaFile) {
+            notification.error({ message: t("leave.visaRequired", "Visa document is required for non-Saudi employees.") });
+            return;
+        }
+        setProcessing(true);
+        try {
+            const res = await completeLeaveRequest(request.id, {
+                comment: completeComment.trim() || undefined,
+                visa_document: visaFile ?? undefined,
+            });
+            if (isApiError(res)) {
+                notification.error({ message: t("leave.completeFail", "Completion failed"), description: res.message });
+            } else {
+                const warnings: string[] = (res as any).data?.extraction_warnings ?? [];
+                if (warnings.length > 0) setExtractionWarnings(warnings);
+                notification.success({ message: t("leave.completeSuccess", "Leave request completed and approved.") });
+                setCompleteComment("");
+                setVisaFile(null);
+                setVisaFileList([]);
+                loadData();
+            }
+        } catch (e: any) {
+            notification.error({ message: t("common.error"), description: e?.message });
         } finally {
             setProcessing(false);
         }
@@ -170,6 +233,7 @@ export default function LeaveRequestDetailsPage() {
     const canAction = request.status?.toLowerCase() === 'submitted' ||
         request.status?.toLowerCase() === 'pending_hr';
     const canSendToCEO = canAction;
+    const canComplete = request.status?.toLowerCase() === 'pending_hr_completion';
 
     const statusLabel = (() => {
         const statusKey = `leave.status.${(request.status || '').toLowerCase()}`;
@@ -185,6 +249,7 @@ export default function LeaveRequestDetailsPage() {
         if (s === 'rejected') return 'red';
         if (s === 'pending_ceo') return 'volcano';
         if (s === 'pending_hr') return 'purple';
+        if (s === 'pending_hr_completion') return 'cyan';
         if (s === 'pending_delegate') return 'gold';
         if (s === 'pending_manager') return 'orange';
         return 'blue';
@@ -231,7 +296,7 @@ export default function LeaveRequestDetailsPage() {
                             "-"
                         )}
                     </Descriptions.Item>
-                    <Descriptions.Item label={t("common.submittedOn")}>{request.created_at ? new Date(request.created_at).toLocaleDateString() : '-'}</Descriptions.Item>
+                    <Descriptions.Item label={t("common.submittedOn")}>{formatDateTime(request.created_at)}</Descriptions.Item>
                     {request.source === "hr_manual" && (
                         <Descriptions.Item label={t("leave.manual.recordSource")}>
                             <Tag color="cyan">{t("leave.manual.badge")}</Tag>
@@ -252,6 +317,11 @@ export default function LeaveRequestDetailsPage() {
                     {request.status === 'pending_ceo' && (
                         <Descriptions.Item label={t("leave.statusNote")} contentStyle={{ color: '#d4380d' }}>
                             {t("leave.ceoApprovalWait")}
+                        </Descriptions.Item>
+                    )}
+                    {request.status === 'pending_hr_completion' && (
+                        <Descriptions.Item label={t("leave.statusNote")} contentStyle={{ color: '#08979c' }}>
+                            {t("leave.hrCompletionWait", "CEO has approved. HR must complete the request to finalize.")}
                         </Descriptions.Item>
                     )}
                 </Descriptions>
@@ -288,7 +358,179 @@ export default function LeaveRequestDetailsPage() {
                         </div>
                     </>
                 )}
+
+                {canComplete && (
+                    <>
+                        <Divider />
+                        <div>
+                            <Alert
+                                type="info"
+                                showIcon
+                                message={t("leave.hrCompletionRequired", "HR Completion Required")}
+                                description={t("leave.hrCompletionDesc", "CEO has approved this request. Complete it below to finalize.")}
+                                style={{ marginBottom: 16 }}
+                            />
+                            {extractionWarnings.length > 0 && (
+                                <Alert
+                                    type="warning"
+                                    showIcon
+                                    message={t("leave.extractionWarnings", "Extraction Warnings")}
+                                    description={<ul style={{ margin: 0, paddingLeft: 16 }}>{extractionWarnings.map((w, i) => <li key={i}>{w}</li>)}</ul>}
+                                    style={{ marginBottom: 16 }}
+                                    closable
+                                    onClose={() => setExtractionWarnings([])}
+                                />
+                            )}
+                            <Space direction="vertical" style={{ width: '100%' }} size={12}>
+                                {request.requires_hr_completion_visa && (
+                                    <div>
+                                        <div style={{ marginBottom: 6, fontWeight: 500 }}>
+                                            {t("leave.visaDocument", "Visa Document (PDF)")}
+                                            <span style={{ color: '#ff4d4f', marginLeft: 4 }}>*</span>
+                                        </div>
+                                        <Upload
+                                            accept=".pdf,.PDF"
+                                            maxCount={1}
+                                            fileList={visaFileList}
+                                            beforeUpload={(file) => {
+                                                setVisaFile(file);
+                                                setVisaFileList([{ uid: file.uid || '-1', name: file.name, status: 'done' }]);
+                                                return false;
+                                            }}
+                                            onRemove={() => { setVisaFile(null); setVisaFileList([]); }}
+                                        >
+                                            <Button icon={<FilePdfOutlined />}>
+                                                {t("leave.selectVisaPdf", "Select Visa PDF")}
+                                            </Button>
+                                        </Upload>
+                                    </div>
+                                )}
+                                {!request.requires_hr_completion_visa && (
+                                    <div>
+                                        <div style={{ marginBottom: 6, fontWeight: 500 }}>
+                                            {t("leave.visaDocumentOptional", "Visa Document (optional)")}
+                                        </div>
+                                        <Upload
+                                            accept=".pdf,.PDF"
+                                            maxCount={1}
+                                            fileList={visaFileList}
+                                            beforeUpload={(file) => {
+                                                setVisaFile(file);
+                                                setVisaFileList([{ uid: file.uid || '-1', name: file.name, status: 'done' }]);
+                                                return false;
+                                            }}
+                                            onRemove={() => { setVisaFile(null); setVisaFileList([]); }}
+                                        >
+                                            <Button icon={<FilePdfOutlined />}>
+                                                {t("leave.selectVisaPdf", "Select Visa PDF")}
+                                            </Button>
+                                        </Upload>
+                                    </div>
+                                )}
+                                <Input.TextArea
+                                    rows={3}
+                                    placeholder={t("leave.completionComment", "Optional comment...")}
+                                    value={completeComment}
+                                    onChange={e => setCompleteComment(e.target.value)}
+                                />
+                                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                    <Button
+                                        type="primary"
+                                        icon={<CheckOutlined />}
+                                        loading={processing}
+                                        onClick={handleComplete}
+                                    >
+                                        {t("leave.completeBtn", "Complete & Approve")}
+                                    </Button>
+                                </div>
+                            </Space>
+                        </div>
+                    </>
+                )}
             </Card>
+
+            {/* Visa Details Card */}
+            {(() => {
+                const allDocs = request.employee_documents ?? [];
+                const visaDocs = allDocs
+                    .filter(d => d.document_type === "VISA")
+                    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+                return (
+                    <Card
+                        style={{ borderRadius: 16 }}
+                        title={t("leave.visaDetails", "Visa Details")}
+                    >
+                        {visaDocs.length === 0 ? (
+                            <Alert
+                                type={request.status === "pending_hr_completion" ? "warning" : "info"}
+                                showIcon
+                                message={
+                                    request.status === "pending_hr_completion"
+                                        ? t("leave.noVisaUploaded", "No visa document uploaded yet.")
+                                        : t("leave.noVisaForRequest", "No visa document is associated with this leave request.")
+                                }
+                            />
+                        ) : (
+                            <Table
+                                dataSource={visaDocs}
+                                rowKey="id"
+                                size="small"
+                                pagination={false}
+                                columns={[
+                                    {
+                                        title: t("leave.visaNumber", "Visa No."),
+                                        dataIndex: "visa_number",
+                                        render: (v: string) => v || <Text type="secondary">—</Text>,
+                                    },
+                                    {
+                                        title: t("leave.exitBefore", "Exit Before"),
+                                        dataIndex: "exit_before",
+                                        render: (v: string) => v ? String(v).split("T")[0] : <Text type="secondary">—</Text>,
+                                    },
+                                    {
+                                        title: t("leave.visaDuration", "Duration"),
+                                        dataIndex: "visa_duration",
+                                        render: (v: string) => v || <Text type="secondary">—</Text>,
+                                    },
+                                    {
+                                        title: t("leave.extractionStatus", "Extraction"),
+                                        dataIndex: "extraction_status",
+                                        render: (v: string) => {
+                                            const color: Record<string, string> = { pending: "default", success: "success", partial: "warning", failed: "error" };
+                                            return <Tag color={color[v] ?? "default"}>{v ? v.charAt(0).toUpperCase() + v.slice(1) : "—"}</Tag>;
+                                        },
+                                    },
+                                    {
+                                        title: t("archive.uploadedBy", "Uploaded By"),
+                                        dataIndex: "uploaded_by_name",
+                                        render: (v: string) => v || <Text type="secondary">—</Text>,
+                                    },
+                                    {
+                                        title: t("archive.uploadedAt", "Date"),
+                                        dataIndex: "created_at",
+                                        render: (v: string) => v ? String(v).split("T")[0] : "—",
+                                    },
+                                    {
+                                        title: t("common.actions"),
+                                        key: "actions",
+                                        render: (_: unknown, r) => (
+                                            <Button
+                                                size="small"
+                                                icon={<DownloadOutlined />}
+                                                loading={visaDownloadingId === r.id}
+                                                onClick={() => handleVisaDownload(r.id, r.original_filename)}
+                                            >
+                                                {t("common.download")}
+                                            </Button>
+                                        ),
+                                    },
+                                ]}
+                            />
+                        )}
+                    </Card>
+                );
+            })()}
             </div>
 
             {/* Reject Modal */}

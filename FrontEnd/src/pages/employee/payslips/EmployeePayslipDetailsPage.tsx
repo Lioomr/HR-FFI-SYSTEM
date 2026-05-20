@@ -10,6 +10,7 @@ import { getMyPayslip, downloadMyPayslipPdf, type EmployeePayslip } from "../../
 import { isApiError } from "../../../services/api/apiTypes";
 import AmountWithSAR from "../../../components/ui/AmountWithSAR";
 import { useI18n } from "../../../i18n/useI18n";
+import { formatDateOnly } from "../../../utils/dateTime";
 
 export default function EmployeePayslipDetailsPage() {
     const { id } = useParams<{ id: string }>();
@@ -108,7 +109,7 @@ export default function EmployeePayslipDetailsPage() {
                             })()}
                         </Descriptions.Item>
                     )}
-                    <Descriptions.Item label={t("payslips.details.generatedDate")}>{payslip.generated_at ? new Date(payslip.generated_at).toLocaleDateString() : '-'}</Descriptions.Item>
+                    <Descriptions.Item label={t("payslips.details.generatedDate")}>{formatDateOnly(payslip.generated_at)}</Descriptions.Item>
                 </Descriptions>
 
                 <Divider />

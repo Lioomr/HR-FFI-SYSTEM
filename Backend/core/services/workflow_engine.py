@@ -24,7 +24,13 @@ WORKFLOW_TEMPLATES = {
         "name": "Leave Request Workflow",
         "module_key": "leaves",
         "stages": [
-            {"key": "delegate", "title": "Alternative Employee Review", "approver_role": "delegate", "order": 0, "is_optional": True},
+            {
+                "key": "delegate",
+                "title": "Alternative Employee Review",
+                "approver_role": "delegate",
+                "order": 0,
+                "is_optional": True,
+            },
             {"key": "manager", "title": "Manager Review", "approver_role": "manager", "order": 1},
             {"key": "hr", "title": "HR Review", "approver_role": "hr", "order": 2},
             {"key": "ceo", "title": "CEO Review", "approver_role": "ceo", "order": 3, "is_optional": True},
@@ -132,7 +138,11 @@ def get_or_create_workflow_definition(workflow_key: str) -> WorkflowDefinition:
             "is_active": True,
         },
     )
-    if definition.name != template["name"] or definition.module_key != template["module_key"] or not definition.is_active:
+    if (
+        definition.name != template["name"]
+        or definition.module_key != template["module_key"]
+        or not definition.is_active
+    ):
         definition.name = template["name"]
         definition.module_key = template["module_key"]
         definition.is_active = True
@@ -218,10 +228,17 @@ def _legacy_status_snapshot_for_leave(instance):
         terminal_at = instance.decided_at or instance.updated_at
     elif instance.status == LeaveRequest.RequestStatus.APPROVED:
         status = WorkflowInstance.Status.APPROVED
-        terminal_at = instance.ceo_decision_at or instance.decided_at or instance.updated_at
+        terminal_at = (
+            getattr(instance, "hr_completed_at", None)
+            or instance.ceo_decision_at
+            or instance.decided_at
+            or instance.updated_at
+        )
     elif instance.status == LeaveRequest.RequestStatus.REJECTED:
         status = WorkflowInstance.Status.REJECTED
-        terminal_at = instance.ceo_decision_at or instance.decided_at or instance.manager_decision_at or instance.updated_at
+        terminal_at = (
+            instance.ceo_decision_at or instance.decided_at or instance.manager_decision_at or instance.updated_at
+        )
     elif instance.status == LeaveRequest.RequestStatus.CANCELLED:
         status = WorkflowInstance.Status.CANCELLED
         terminal_at = instance.updated_at
@@ -234,10 +251,17 @@ def _legacy_status_snapshot_for_leave(instance):
     elif instance.status in {LeaveRequest.RequestStatus.SUBMITTED, LeaveRequest.RequestStatus.PENDING_HR}:
         current_stage = "hr"
         current_role = "hr"
-        status = WorkflowInstance.Status.SUBMITTED if instance.status == LeaveRequest.RequestStatus.SUBMITTED else WorkflowInstance.Status.IN_REVIEW
+        status = (
+            WorkflowInstance.Status.SUBMITTED
+            if instance.status == LeaveRequest.RequestStatus.SUBMITTED
+            else WorkflowInstance.Status.IN_REVIEW
+        )
     elif instance.status == LeaveRequest.RequestStatus.PENDING_CEO:
         current_stage = "ceo"
         current_role = "ceo"
+    elif instance.status == LeaveRequest.RequestStatus.PENDING_HR_COMPLETION:
+        current_stage = "hr_completion"
+        current_role = "hr"
 
     return {
         "status": status,
@@ -246,7 +270,9 @@ def _legacy_status_snapshot_for_leave(instance):
         "current_actor_user": _resolve_current_actor(current_role, instance) if current_role else None,
         "submitted_by": instance.employee,
         "submitted_at": instance.created_at,
-        "decided_at": terminal_at if status in {WorkflowInstance.Status.APPROVED, WorkflowInstance.Status.REJECTED} else None,
+        "decided_at": terminal_at
+        if status in {WorkflowInstance.Status.APPROVED, WorkflowInstance.Status.REJECTED}
+        else None,
         "cancelled_at": terminal_at if status == WorkflowInstance.Status.CANCELLED else None,
     }
 
@@ -280,16 +306,22 @@ def _legacy_events_for_leave(instance) -> list[WorkflowEvent]:
             WorkflowEvent(
                 signature=f"leave:delegate:{instance.id}:{instance.delegate_decision_at.isoformat()}",
                 action=WorkflowAction.Action.REJECT
-                if instance.status == LeaveRequest.RequestStatus.REJECTED and not instance.decided_at and not instance.ceo_decision_at
+                if instance.status == LeaveRequest.RequestStatus.REJECTED
+                and not instance.decided_at
+                and not instance.ceo_decision_at
                 else WorkflowAction.Action.APPROVE,
                 approver_role="delegate",
                 from_status="in_review",
                 to_status="rejected"
-                if instance.status == LeaveRequest.RequestStatus.REJECTED and not instance.decided_at and not instance.ceo_decision_at
+                if instance.status == LeaveRequest.RequestStatus.REJECTED
+                and not instance.decided_at
+                and not instance.ceo_decision_at
                 else "in_review",
                 from_stage="delegate",
                 to_stage=""
-                if instance.status == LeaveRequest.RequestStatus.REJECTED and not instance.decided_at and not instance.ceo_decision_at
+                if instance.status == LeaveRequest.RequestStatus.REJECTED
+                and not instance.decided_at
+                and not instance.ceo_decision_at
                 else "hr",
                 actor=instance.delegate_decision_by,
                 note=instance.delegate_decision_note or "",
@@ -302,10 +334,14 @@ def _legacy_events_for_leave(instance) -> list[WorkflowEvent]:
         events.append(
             WorkflowEvent(
                 signature=f"leave:manager:{instance.id}:{instance.manager_decision_at.isoformat()}",
-                action=WorkflowAction.Action.REJECT if instance.status == LeaveRequest.RequestStatus.REJECTED and not instance.decided_at else WorkflowAction.Action.APPROVE,
+                action=WorkflowAction.Action.REJECT
+                if instance.status == LeaveRequest.RequestStatus.REJECTED and not instance.decided_at
+                else WorkflowAction.Action.APPROVE,
                 approver_role="manager",
                 from_status="in_review",
-                to_status="rejected" if instance.status == LeaveRequest.RequestStatus.REJECTED and not instance.decided_at else "in_review",
+                to_status="rejected"
+                if instance.status == LeaveRequest.RequestStatus.REJECTED and not instance.decided_at
+                else "in_review",
                 from_stage="manager",
                 to_stage=next_stage,
                 actor=instance.manager_decision_by,
@@ -344,16 +380,34 @@ def _legacy_events_for_leave(instance) -> list[WorkflowEvent]:
         events.append(
             WorkflowEvent(
                 signature=f"leave:ceo:{instance.id}:{instance.ceo_decision_at.isoformat()}",
-                action=WorkflowAction.Action.REJECT if instance.status == LeaveRequest.RequestStatus.REJECTED else WorkflowAction.Action.APPROVE,
+                action=WorkflowAction.Action.REJECT
+                if instance.status == LeaveRequest.RequestStatus.REJECTED
+                else WorkflowAction.Action.APPROVE,
                 approver_role="ceo",
                 from_status="in_review",
-                to_status="rejected" if instance.status == LeaveRequest.RequestStatus.REJECTED else "approved",
+                to_status="rejected" if instance.status == LeaveRequest.RequestStatus.REJECTED else "in_review",
                 from_stage="ceo",
-                to_stage="",
+                to_stage="" if instance.status == LeaveRequest.RequestStatus.REJECTED else "hr_completion",
                 actor=instance.ceo_decision_by,
                 note=instance.ceo_decision_note or "",
                 at=instance.ceo_decision_at,
                 metadata={"legacy_signature": "ceo", "workflow_key": "leave_request"},
+            )
+        )
+    if getattr(instance, "hr_completed_at", None):
+        events.append(
+            WorkflowEvent(
+                signature=f"leave:hr-completion:{instance.id}:{instance.hr_completed_at.isoformat()}",
+                action=WorkflowAction.Action.APPROVE,
+                approver_role="hr",
+                from_status="in_review",
+                to_status="approved",
+                from_stage="hr_completion",
+                to_stage="",
+                actor=instance.hr_completed_by,
+                note=instance.hr_completion_note or "",
+                at=instance.hr_completed_at,
+                metadata={"legacy_signature": "hr_completion", "workflow_key": "leave_request"},
             )
         )
     if instance.status == LeaveRequest.RequestStatus.CANCELLED:
@@ -398,11 +452,18 @@ def _legacy_status_snapshot_for_loan(instance):
         LoanRequest.RequestStatus.DEDUCTED,
     }:
         status = WorkflowInstance.Status.APPROVED
-        terminal_at = instance.deducted_at or instance.disbursed_at or instance.ceo_decision_at or instance.cfo_decision_at
+        terminal_at = (
+            instance.deducted_at or instance.disbursed_at or instance.ceo_decision_at or instance.cfo_decision_at
+        )
         current_stage, current_role = "", ""
     elif instance.status == LoanRequest.RequestStatus.REJECTED:
         status = WorkflowInstance.Status.REJECTED
-        terminal_at = instance.ceo_decision_at or instance.cfo_decision_at or instance.finance_decision_at or instance.manager_decision_at
+        terminal_at = (
+            instance.ceo_decision_at
+            or instance.cfo_decision_at
+            or instance.finance_decision_at
+            or instance.manager_decision_at
+        )
         current_stage, current_role = "", ""
     elif instance.status == LoanRequest.RequestStatus.CANCELLED:
         status = WorkflowInstance.Status.CANCELLED
@@ -416,7 +477,9 @@ def _legacy_status_snapshot_for_loan(instance):
         "current_actor_user": current_actor_user,
         "submitted_by": instance.employee,
         "submitted_at": instance.created_at,
-        "decided_at": terminal_at if status in {WorkflowInstance.Status.APPROVED, WorkflowInstance.Status.REJECTED} else None,
+        "decided_at": terminal_at
+        if status in {WorkflowInstance.Status.APPROVED, WorkflowInstance.Status.REJECTED}
+        else None,
         "cancelled_at": terminal_at if status == WorkflowInstance.Status.CANCELLED else None,
     }
 
@@ -506,7 +569,9 @@ def _legacy_events_for_loan(instance) -> list[WorkflowEvent]:
         events.append(
             WorkflowEvent(
                 signature=f"loan:ceo:{instance.id}:{instance.ceo_decision_at.isoformat()}",
-                action=WorkflowAction.Action.REJECT if instance.status == LoanRequest.RequestStatus.REJECTED else WorkflowAction.Action.APPROVE,
+                action=WorkflowAction.Action.REJECT
+                if instance.status == LoanRequest.RequestStatus.REJECTED
+                else WorkflowAction.Action.APPROVE,
                 approver_role="ceo",
                 from_status="in_review",
                 to_status="rejected" if instance.status == LoanRequest.RequestStatus.REJECTED else "in_review",
@@ -699,7 +764,9 @@ def _legacy_status_snapshot_for_attendance_correction(instance):
         terminal_at = instance.decided_at or instance.hr_decision_at or instance.updated_at
     elif instance.status == AttendanceCorrectionRequest.Status.REJECTED:
         status = WorkflowInstance.Status.REJECTED
-        terminal_at = instance.decided_at or instance.hr_decision_at or instance.manager_decision_at or instance.updated_at
+        terminal_at = (
+            instance.decided_at or instance.hr_decision_at or instance.manager_decision_at or instance.updated_at
+        )
     elif instance.status == AttendanceCorrectionRequest.Status.CANCELLED:
         status = WorkflowInstance.Status.CANCELLED
         terminal_at = instance.cancelled_at or instance.updated_at
@@ -711,7 +778,9 @@ def _legacy_status_snapshot_for_attendance_correction(instance):
         "current_actor_user": _resolve_current_actor(current_role, instance) if current_role else None,
         "submitted_by": getattr(instance.employee_profile, "user", None),
         "submitted_at": instance.submitted_at or instance.created_at,
-        "decided_at": terminal_at if status in {WorkflowInstance.Status.APPROVED, WorkflowInstance.Status.REJECTED} else None,
+        "decided_at": terminal_at
+        if status in {WorkflowInstance.Status.APPROVED, WorkflowInstance.Status.REJECTED}
+        else None,
         "cancelled_at": terminal_at if status == WorkflowInstance.Status.CANCELLED else None,
     }
 
@@ -769,9 +838,7 @@ def _legacy_events_for_attendance_correction(instance) -> list[WorkflowEvent]:
                 else WorkflowAction.Action.APPROVE,
                 approver_role="hr",
                 from_status="in_review",
-                to_status="rejected"
-                if instance.status == AttendanceCorrectionRequest.Status.REJECTED
-                else "approved",
+                to_status="rejected" if instance.status == AttendanceCorrectionRequest.Status.REJECTED else "approved",
                 from_stage="hr",
                 to_stage="",
                 actor=instance.hr_decision_by,
@@ -815,18 +882,12 @@ def _legacy_status_snapshot_for_asset_return(instance):
     elif instance.status in {AssetReturnRequest.RequestStatus.APPROVED, AssetReturnRequest.RequestStatus.PROCESSED}:
         status = WorkflowInstance.Status.APPROVED
         terminal_at = (
-            instance.processed_at
-            or instance.ceo_decision_at
-            or instance.hr_decision_at
-            or instance.updated_at
+            instance.processed_at or instance.ceo_decision_at or instance.hr_decision_at or instance.updated_at
         )
     elif instance.status == AssetReturnRequest.RequestStatus.REJECTED:
         status = WorkflowInstance.Status.REJECTED
         terminal_at = (
-            instance.ceo_decision_at
-            or instance.hr_decision_at
-            or instance.manager_decision_at
-            or instance.updated_at
+            instance.ceo_decision_at or instance.hr_decision_at or instance.manager_decision_at or instance.updated_at
         )
     current_actor_user = _resolve_current_actor(current_role, instance) if current_role else None
     return {
@@ -836,7 +897,9 @@ def _legacy_status_snapshot_for_asset_return(instance):
         "current_actor_user": current_actor_user,
         "submitted_by": getattr(instance.employee, "user", None),
         "submitted_at": instance.requested_at,
-        "decided_at": terminal_at if status in {WorkflowInstance.Status.APPROVED, WorkflowInstance.Status.REJECTED} else None,
+        "decided_at": terminal_at
+        if status in {WorkflowInstance.Status.APPROVED, WorkflowInstance.Status.REJECTED}
+        else None,
         "cancelled_at": None,
     }
 
@@ -869,12 +932,24 @@ def _legacy_events_for_asset_return(instance) -> list[WorkflowEvent]:
         events.append(
             WorkflowEvent(
                 signature=f"asset-return:manager:{instance.id}:{instance.manager_decision_at.isoformat()}",
-                action=WorkflowAction.Action.REJECT if instance.status == AssetReturnRequest.RequestStatus.REJECTED and not instance.hr_decision_at and not instance.ceo_decision_at else WorkflowAction.Action.ADVANCE,
+                action=WorkflowAction.Action.REJECT
+                if instance.status == AssetReturnRequest.RequestStatus.REJECTED
+                and not instance.hr_decision_at
+                and not instance.ceo_decision_at
+                else WorkflowAction.Action.ADVANCE,
                 approver_role="manager",
                 from_status="in_review",
-                to_status="rejected" if instance.status == AssetReturnRequest.RequestStatus.REJECTED and not instance.hr_decision_at and not instance.ceo_decision_at else "in_review",
+                to_status="rejected"
+                if instance.status == AssetReturnRequest.RequestStatus.REJECTED
+                and not instance.hr_decision_at
+                and not instance.ceo_decision_at
+                else "in_review",
                 from_stage="manager",
-                to_stage="" if instance.status == AssetReturnRequest.RequestStatus.REJECTED and not instance.hr_decision_at and not instance.ceo_decision_at else "hr",
+                to_stage=""
+                if instance.status == AssetReturnRequest.RequestStatus.REJECTED
+                and not instance.hr_decision_at
+                and not instance.ceo_decision_at
+                else "hr",
                 actor=instance.manager_decision_by,
                 note=instance.manager_decision_note or "",
                 at=instance.manager_decision_at,
@@ -885,10 +960,14 @@ def _legacy_events_for_asset_return(instance) -> list[WorkflowEvent]:
         events.append(
             WorkflowEvent(
                 signature=f"asset-return:hr:{instance.id}:{instance.hr_decision_at.isoformat()}",
-                action=WorkflowAction.Action.REJECT if instance.status == AssetReturnRequest.RequestStatus.REJECTED and not instance.ceo_decision_at else WorkflowAction.Action.APPROVE,
+                action=WorkflowAction.Action.REJECT
+                if instance.status == AssetReturnRequest.RequestStatus.REJECTED and not instance.ceo_decision_at
+                else WorkflowAction.Action.APPROVE,
                 approver_role="hr",
                 from_status="in_review",
-                to_status="rejected" if instance.status == AssetReturnRequest.RequestStatus.REJECTED and not instance.ceo_decision_at else "approved",
+                to_status="rejected"
+                if instance.status == AssetReturnRequest.RequestStatus.REJECTED and not instance.ceo_decision_at
+                else "approved",
                 from_stage="hr",
                 to_stage="",
                 actor=instance.hr_decision_by,
@@ -901,7 +980,9 @@ def _legacy_events_for_asset_return(instance) -> list[WorkflowEvent]:
         events.append(
             WorkflowEvent(
                 signature=f"asset-return:ceo:{instance.id}:{instance.ceo_decision_at.isoformat()}",
-                action=WorkflowAction.Action.REJECT if instance.status == AssetReturnRequest.RequestStatus.REJECTED else WorkflowAction.Action.APPROVE,
+                action=WorkflowAction.Action.REJECT
+                if instance.status == AssetReturnRequest.RequestStatus.REJECTED
+                else WorkflowAction.Action.APPROVE,
                 approver_role="ceo",
                 from_status="in_review",
                 to_status="rejected" if instance.status == AssetReturnRequest.RequestStatus.REJECTED else "approved",
@@ -942,7 +1023,9 @@ def _legacy_status_snapshot_for_employee_deletion(instance):
         "current_actor_user": _resolve_current_actor(current_role, instance) if current_role else None,
         "submitted_by": instance.requested_by,
         "submitted_at": instance.created_at,
-        "decided_at": terminal_at if status in {WorkflowInstance.Status.APPROVED, WorkflowInstance.Status.REJECTED} else None,
+        "decided_at": terminal_at
+        if status in {WorkflowInstance.Status.APPROVED, WorkflowInstance.Status.REJECTED}
+        else None,
         "cancelled_at": None,
     }
 
@@ -1060,9 +1143,7 @@ def sync_workflow(instance, *, actor=None, workflow_key: str | None = None) -> W
     }
     workflow.save()
 
-    existing_signatures = {
-        (action.metadata or {}).get("legacy_signature"): action for action in workflow.actions.all()
-    }
+    existing_signatures = {(action.metadata or {}).get("legacy_signature"): action for action in workflow.actions.all()}
     for event in events_builder(instance):
         signature_key = (event.metadata or {}).get("legacy_signature")
         if signature_key in existing_signatures:
@@ -1097,7 +1178,11 @@ def sync_workflow(instance, *, actor=None, workflow_key: str | None = None) -> W
                 "from_stage": created.from_stage,
                 "to_stage": created.to_stage,
                 "acting_user_id": created.actor_id,
-                "delegated": bool(workflow.current_actor_user_id and created.actor_id and workflow.current_actor_user_id != created.actor_id),
+                "delegated": bool(
+                    workflow.current_actor_user_id
+                    and created.actor_id
+                    and workflow.current_actor_user_id != created.actor_id
+                ),
             },
             actor=created.actor or actor,
         )
@@ -1162,7 +1247,10 @@ def get_workflow_snapshot(instance, *, actor=None) -> dict[str, Any]:
 def get_pending_approvals_for_role(role: str, *, limit: int | None = 10) -> list[WorkflowInstance]:
     qs = (
         WorkflowInstance.objects.select_related("definition", "current_actor_user", "submitted_by")
-        .filter(status__in=[WorkflowInstance.Status.SUBMITTED, WorkflowInstance.Status.IN_REVIEW], current_approver_role=role)
+        .filter(
+            status__in=[WorkflowInstance.Status.SUBMITTED, WorkflowInstance.Status.IN_REVIEW],
+            current_approver_role=role,
+        )
         .order_by("-updated_at", "-id")
     )
     if limit is not None:
@@ -1200,6 +1288,17 @@ def normalize_role_for_pending_approvals(user) -> str:
     return ""
 
 
+def _pending_item_submitted_time(workflow: WorkflowInstance, obj) -> str:
+    value = (
+        getattr(obj, "submitted_at", None)
+        or getattr(obj, "requested_at", None)
+        or workflow.submitted_at
+        or getattr(obj, "created_at", None)
+        or workflow.created_at
+    )
+    return value.isoformat() if hasattr(value, "isoformat") else str(value or "")
+
+
 def build_pending_approval_item(workflow: WorkflowInstance) -> dict[str, Any] | None:
     obj = workflow.content_object
     if obj is None:
@@ -1216,7 +1315,9 @@ def build_pending_approval_item(workflow: WorkflowInstance) -> dict[str, Any] | 
     review_path = _build_action_url_path(workflow_key, workflow.current_approver_role, obj.pk)
     if workflow_key == "leave_request":
         profile = getattr(getattr(obj, "employee", None), "employee_profile", None)
-        name = getattr(profile, "full_name", "") or getattr(getattr(obj, "employee", None), "email", f"Request #{obj.pk}")
+        name = getattr(profile, "full_name", "") or getattr(
+            getattr(obj, "employee", None), "email", f"Request #{obj.pk}"
+        )
         action = f"Leave: {getattr(getattr(obj, 'leave_type', None), 'name', 'Request')}"
         request_type = "LEAVE"
     elif workflow_key == "loan_request":
@@ -1256,7 +1357,7 @@ def build_pending_approval_item(workflow: WorkflowInstance) -> dict[str, Any] | 
         "request_type": request_type,
         "request_type_label": label_map.get(workflow_key, "Request"),
         "action": action,
-        "time": workflow.updated_at.strftime("%Y-%m-%d"),
+        "time": _pending_item_submitted_time(workflow, obj),
         "avatar": "",
         "review_path": review_path,
         "current_approver_role": workflow.current_approver_role,

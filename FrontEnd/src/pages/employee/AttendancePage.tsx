@@ -5,6 +5,7 @@ import dayjs from "dayjs";
 import { useEmployeeAttendanceStore } from "../../stores/attendanceStore";
 import type { AttendanceStatus } from "../../types/attendance";
 import { useI18n } from "../../i18n/useI18n";
+import { formatDateOnly, formatTimeOnly12 } from "../../utils/dateTime";
 
 const { Title } = Typography;
 const { RangePicker } = DatePicker;
@@ -100,7 +101,7 @@ const EmployeeAttendancePage: React.FC = () => {
             dataIndex: "date",
             key: "date",
             width: 130,
-            render: (val: string) => dayjs(val).format("MMM D, YYYY"),
+            render: (val: string) => formatDateOnly(val),
         },
         {
             title: t("common.status"),
@@ -117,7 +118,7 @@ const EmployeeAttendancePage: React.FC = () => {
             key: "check_in_at",
             width: 120,
             responsive: ["sm" as const],
-            render: (val: string | null) => val ? dayjs(val).format("hh:mm A") : "-",
+            render: (val: string | null) => formatTimeOnly12(val),
         },
         {
             title: t("attendance.checkOutTime"),
@@ -125,7 +126,7 @@ const EmployeeAttendancePage: React.FC = () => {
             key: "check_out_at",
             width: 120,
             responsive: ["sm" as const],
-            render: (val: string | null) => val ? dayjs(val).format("hh:mm A") : "-",
+            render: (val: string | null) => formatTimeOnly12(val),
         },
         {
             title: t("attendance.notes"),

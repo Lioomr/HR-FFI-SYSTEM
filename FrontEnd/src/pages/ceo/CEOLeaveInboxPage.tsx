@@ -89,7 +89,7 @@ export default function CEOLeaveInboxPage() {
                     if (isApiError(res)) {
                         notification.error({ message: t("common.error"), description: res.message });
                     } else {
-                        notification.success({ message: t("leave.approved") });
+                        notification.success({ message: t("leave.ceoApproveSuccess", "Approved and sent to HR for completion.") });
                         loadData(page);
                     }
                 } catch {

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button, Card, Segmented, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import dayjs from "dayjs";
 
 import PageHeader from "../../components/ui/PageHeader";
 import LoadingState from "../../components/ui/LoadingState";
@@ -17,6 +16,7 @@ import {
 import { isApiError } from "../../services/api/apiTypes";
 import { isForbidden } from "../../services/api/httpErrors";
 import { useI18n } from "../../i18n/useI18n";
+import { formatDateTimeShort } from "../../utils/dateTime";
 
 const { Text } = Typography;
 
@@ -136,7 +136,7 @@ export default function CEOEmployeeDeletionInboxPage() {
       dataIndex: "created_at",
       key: "created_at",
       width: 160,
-      render: (value: string) => (value ? dayjs(value).format("MMM DD, YYYY HH:mm") : "-"),
+      render: (value: string) => formatDateTimeShort(value),
     },
     {
       title: t("employees.removalInbox.colStatus"),

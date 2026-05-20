@@ -1,5 +1,6 @@
 import { api } from "./apiClient";
-import type { ApiResponse, ApiSuccess } from "./apiTypes";
+import type { ApiResponse, ApiSuccess, LeaveBalance } from "./apiTypes";
+export type { LeaveBalance };
 
 /**
  * Employee data type
@@ -66,6 +67,8 @@ export interface Employee {
   total_salary?: number;
   created_at?: string;
   updated_at?: string;
+  leave_balance_year?: number | null;
+  leave_balances?: LeaveBalance[] | null;
 }
 
 /**
@@ -148,8 +151,9 @@ export async function exportEmployees(
  */
 export async function getEmployee(
   id: string | number,
+  params?: Record<string, string | number>,
 ): Promise<ApiResponse<Employee>> {
-  const { data } = await api.get<ApiResponse<Employee>>(`/employees/${id}`);
+  const { data } = await api.get<ApiResponse<Employee>>(`/employees/${id}`, { params });
   return data;
 }
 
@@ -523,6 +527,89 @@ export async function approveEmployeeDeletionRequest(
 ): Promise<ApiResponse<EmployeeDeletionRequest>> {
   const { data } = await api.post<ApiResponse<EmployeeDeletionRequest>>(
     `${DELETION_BASE}/${id}/approve/`,
+  );
+  return data;
+}
+
+// ── Employee Document Archive ─────────────────────────────────────────────────
+
+export type DocumentType = "IQAMA" | "PASSPORT" | "VISA" | "SAUDI_ID" | "OTHER";
+export type ExtractionStatus = "pending" | "success" | "partial" | "failed";
+
+export interface EmployeeDocument {
+  id: number;
+  employee_profile_id: number;
+  company_id?: number;
+  leave_request?: number | null;
+  document_type: DocumentType;
+  custom_name?: string | null;
+  display_name: string;
+  original_filename: string;
+  visa_number?: string | null;
+  exit_before?: string | null;
+  exit_before_raw?: string | null;
+  visa_duration?: string | null;
+  visa_duration_raw?: string | null;
+  extracted_fields?: Record<string, unknown> | null;
+  extraction_status: ExtractionStatus;
+  extraction_error?: string | null;
+  extraction_warnings?: string[] | null;
+  uploaded_by?: number | null;
+  uploaded_by_name?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UploadEmployeeDocumentPayload {
+  document_type: DocumentType;
+  file: File;
+  custom_name?: string;
+}
+
+export async function getEmployeeDocuments(
+  employeeId: number | string
+): Promise<ApiResponse<EmployeeDocument[]>> {
+  const { data } = await api.get<ApiResponse<EmployeeDocument[]>>(
+    `/api/employees/${employeeId}/documents/`
+  );
+  return data;
+}
+
+export async function uploadEmployeeDocument(
+  employeeId: number | string,
+  payload: UploadEmployeeDocumentPayload
+): Promise<ApiResponse<EmployeeDocument>> {
+  const form = new FormData();
+  form.append("document_type", payload.document_type);
+  form.append("file", payload.file);
+  if (payload.custom_name) form.append("custom_name", payload.custom_name);
+  const { data } = await api.post<ApiResponse<EmployeeDocument>>(
+    `/api/employees/${employeeId}/documents/`,
+    form,
+    { headers: { "Content-Type": "multipart/form-data" } }
+  );
+  return data;
+}
+
+export async function patchEmployeeDocument(
+  employeeId: number | string,
+  documentId: number | string,
+  payload: Partial<Pick<EmployeeDocument, "document_type" | "custom_name">>
+): Promise<ApiResponse<EmployeeDocument>> {
+  const { data } = await api.patch<ApiResponse<EmployeeDocument>>(
+    `/api/employees/${employeeId}/documents/${documentId}/`,
+    payload
+  );
+  return data;
+}
+
+export async function downloadEmployeeDocument(
+  employeeId: number | string,
+  documentId: number | string
+): Promise<Blob> {
+  const { data } = await api.get(
+    `/api/employees/${employeeId}/documents/${documentId}/download/`,
+    { responseType: "blob" }
   );
   return data;
 }

@@ -9,6 +9,7 @@ import PageHeader from "../ui/PageHeader";
 import { isApiError } from "../../services/api/apiTypes";
 import type { LoanRequest } from "../../services/api/loanApi";
 import { formatNumber } from "../../utils/currency";
+import { formatDateTimeShort } from "../../utils/dateTime";
 import { useI18n } from "../../i18n/useI18n";
 import LoanApprovalMap from "../loans/LoanApprovalMap";
 
@@ -282,7 +283,7 @@ export default function LoanRequestDetailsPage({
                             <Text style={{ fontSize: 11, color: '#64748b' }}>{entry.actor_email || "System"}</Text>
                           </div>
                           <Text type="secondary" style={{ fontSize: 10, whiteSpace: 'nowrap' }}>
-                            {entry.at ? new Date(entry.at).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ""}
+                            {formatDateTimeShort(entry.at, "")}
                           </Text>
                         </div>
                         {entry.note && (

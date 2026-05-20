@@ -36,6 +36,7 @@ import {
   type DelegationRuleDto,
 } from "../../services/api/delegationApi";
 import { useI18n } from "../../i18n/useI18n";
+import { formatDateTime } from "../../utils/dateTime";
 
 type FormValues = {
   from_user_id: number;
@@ -152,10 +153,10 @@ export default function DelegationRulesPage() {
       key: "period",
       render: (_, record) => (
         <div>
-          <div>{dayjs(record.start_at).format("YYYY-MM-DD HH:mm")}</div>
+          <div>{formatDateTime(record.start_at)}</div>
           <div style={{ color: "#64748b", fontSize: 12 }}>
             {record.end_at
-              ? dayjs(record.end_at).format("YYYY-MM-DD HH:mm")
+              ? formatDateTime(record.end_at)
               : t("common.noEndDate", "No end date")}
           </div>
         </div>

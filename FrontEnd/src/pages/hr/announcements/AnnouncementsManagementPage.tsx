@@ -6,6 +6,7 @@ import { getAllAnnouncements, deleteAnnouncement, type AnnouncementListItem } fr
 import { useI18n } from '../../../i18n/useI18n';
 import { useAuthStore } from '../../../auth/authStore';
 import { isHeadOfficeOrganization } from '../../../utils/organizationContext';
+import { formatDateOnly } from '../../../utils/dateTime';
 
 export default function AnnouncementsManagementPage() {
     const navigate = useNavigate();
@@ -118,7 +119,7 @@ export default function AnnouncementsManagementPage() {
             title: t('common.date'),
             dataIndex: 'created_at',
             key: 'created_at',
-            render: (date: string) => new Date(date).toLocaleDateString(),
+            render: (date: string) => formatDateOnly(date),
         },
         {
             title: t('common.actions'),

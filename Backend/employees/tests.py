@@ -1,3 +1,4 @@
+from datetime import date
 from io import BytesIO
 
 from django.contrib.auth import get_user_model
@@ -5,8 +6,7 @@ from django.contrib.auth.models import Group
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.utils import timezone
-from openpyxl import Workbook
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -15,7 +15,7 @@ from hr_reference.models import Department, Position
 from leaves.models import LeaveRequest, LeaveType
 from organization.models import OrganizationNode, UserOrganizationAccess
 
-from .models import EmployeeDeletionRequest, EmployeeProfile
+from .models import EmployeeDeletionRequest, EmployeeDocument, EmployeeProfile
 
 User = get_user_model()
 
@@ -111,6 +111,24 @@ class EmployeeProfileTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["data"]["employee_id"], "EMP-TEST-ME")
 
+    def test_hr_me_endpoint_includes_own_leave_balances(self):
+        EmployeeProfile.objects.create(
+            user=self.hr_user,
+            department="HR",
+            job_title="HR Manager",
+            hire_date=date(2024, 1, 1),
+            employee_id="EMP-HR-ME",
+        )
+        self.client.force_authenticate(user=self.hr_user)
+
+        response = self.client.get("/api/employees/me/", {"year": 2026})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"]["employee_id"], "EMP-HR-ME")
+        self.assertEqual(response.data["data"]["leave_balance_year"], 2026)
+        self.assertIsInstance(response.data["data"]["leave_balances"], list)
+        self.assertTrue(any(balance["leave_code"] == "ANNUAL" for balance in response.data["data"]["leave_balances"]))
+
     def test_employee_update_profile_forbidden(self):
         # Create profile first
         profile = EmployeeProfile.objects.create(
@@ -164,6 +182,54 @@ class EmployeeProfileTests(TestCase):
 
         # Should be 404 because of queryset filtering (or 403 if obj perm fails first, but typically queryset runs first)
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_hr_can_upload_list_and_download_employee_document(self):
+        profile = EmployeeProfile.objects.create(
+            user=self.employee_user,
+            department="Engineering",
+            job_title="Dev",
+            hire_date="2024-01-01",
+            employee_id="EMP-DOC-01",
+        )
+        upload = SimpleUploadedFile("note.pdf", b"%PDF-1.4\ncontent", content_type="application/pdf")
+
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.post(
+            f"/api/employees/{profile.id}/documents/",
+            {"document_type": EmployeeDocument.DocumentType.OTHER, "custom_name": "Work Permit", "file": upload},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        document_id = response.data["data"]["id"]
+        self.assertEqual(response.data["data"]["display_name"], "Work Permit")
+
+        list_response = self.client.get(f"/api/employees/{profile.id}/documents/")
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(list_response.data["data"]), 1)
+
+        download_response = self.client.get(f"/api/employees/{profile.id}/documents/{document_id}/download/")
+        self.assertEqual(download_response.status_code, status.HTTP_200_OK)
+        self.assertIn("attachment", download_response.get("Content-Disposition", "").lower())
+
+    def test_other_employee_document_requires_custom_name(self):
+        profile = EmployeeProfile.objects.create(
+            user=self.employee_user,
+            department="Engineering",
+            job_title="Dev",
+            hire_date="2024-01-01",
+            employee_id="EMP-DOC-02",
+        )
+        upload = SimpleUploadedFile("note.pdf", b"%PDF-1.4\ncontent", content_type="application/pdf")
+
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.post(
+            f"/api/employees/{profile.id}/documents/",
+            {"document_type": EmployeeDocument.DocumentType.OTHER, "file": upload},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
 
     def test_hard_delete_forbidden(self):
         profile = EmployeeProfile.objects.create(
@@ -299,6 +365,63 @@ class EmployeeProfileTests(TestCase):
         results = response.data["data"]["results"]
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["employee_id"], "EMP-REP-EMP")
+
+    def test_direct_manager_can_view_report_profile_detail(self):
+        manager_profile = EmployeeProfile.objects.create(
+            user=self.employee_user,
+            employee_id="EMP-MGR-DETAIL",
+            department_ref=self.dept,
+            department=self.dept.name,
+            position_ref=self.pos_senior,
+            job_title=self.pos_senior.name,
+            hire_date="2024-01-01",
+            full_name="Employee Manager",
+        )
+        report_profile = EmployeeProfile.objects.create(
+            user=self.employee_user_2,
+            employee_id="EMP-REP-DETAIL",
+            department_ref=self.dept,
+            department=self.dept.name,
+            position_ref=self.pos,
+            job_title=self.pos.name,
+            hire_date="2024-02-01",
+            full_name="Direct Report",
+            manager_profile=manager_profile,
+        )
+
+        self.client.force_authenticate(user=self.employee_user)
+        response = self.client.get(f"/api/employees/{report_profile.id}/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"]["employee_id"], "EMP-REP-DETAIL")
+        self.assertEqual(response.data["data"]["manager_profile_id"], manager_profile.id)
+
+    def test_direct_manager_cannot_view_non_report_profile_detail(self):
+        EmployeeProfile.objects.create(
+            user=self.employee_user,
+            employee_id="EMP-MGR-NONREPORT",
+            department_ref=self.dept,
+            department=self.dept.name,
+            position_ref=self.pos_senior,
+            job_title=self.pos_senior.name,
+            hire_date="2024-01-01",
+            full_name="Employee Manager",
+        )
+        non_report_profile = EmployeeProfile.objects.create(
+            user=self.employee_user_2,
+            employee_id="EMP-NONREPORT",
+            department_ref=self.dept,
+            department=self.dept.name,
+            position_ref=self.pos,
+            job_title=self.pos.name,
+            hire_date="2024-02-01",
+            full_name="Not My Report",
+        )
+
+        self.client.force_authenticate(user=self.employee_user)
+        response = self.client.get(f"/api/employees/{non_report_profile.id}/")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_employee_manager_access_probe_returns_false_without_403(self):
         self.client.force_authenticate(user=self.employee_user)

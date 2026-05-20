@@ -3,8 +3,8 @@ from datetime import timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from django.core.exceptions import ImproperlyConfigured
 from corsheaders.defaults import default_headers
+from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -118,7 +118,8 @@ MIDDLEWARE = [
 # Email / Bird
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
 BACKEND_PUBLIC_URL = os.environ.get("BACKEND_PUBLIC_URL", "")
-EMAIL_DISPLAY_TIME_ZONE = os.environ.get("EMAIL_DISPLAY_TIME_ZONE", "")
+APP_TIME_ZONE = os.environ.get("APP_TIME_ZONE") or os.environ.get("TIME_ZONE") or "Asia/Riyadh"
+EMAIL_DISPLAY_TIME_ZONE = os.environ.get("EMAIL_DISPLAY_TIME_ZONE", APP_TIME_ZONE)
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "no-reply@fficontracting.com")
 NOTIFICATION_HTTP_TIMEOUT_SECONDS = int(os.environ.get("NOTIFICATION_HTTP_TIMEOUT_SECONDS", "10"))
 PASSWORD_RESET_TOKEN_TTL_SECONDS = int(os.environ.get("PASSWORD_RESET_TOKEN_TTL_SECONDS", "3600"))
@@ -230,7 +231,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = "en-us"
 
-TIME_ZONE = "UTC"
+TIME_ZONE = APP_TIME_ZONE
 
 USE_I18N = True
 

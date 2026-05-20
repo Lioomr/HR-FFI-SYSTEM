@@ -120,7 +120,7 @@ def shape_ar(text: object) -> str:
     value = str(text or "").strip()
     if not value:
         return ""
-    if arabic_reshaper and get_display and any("\u0600" <= ch <= "\u06FF" for ch in value):
+    if arabic_reshaper and get_display and any("\u0600" <= ch <= "\u06ff" for ch in value):
         try:
             return get_display(arabic_reshaper.reshape(value))
         except Exception:
@@ -615,7 +615,15 @@ def watermark_for_status(status: str | None) -> str:
     if not status:
         return ""
     key = str(status).upper()
-    if key in {"DRAFT", "PENDING_HR", "PENDING_MANAGER", "PENDING_FINANCE", "PENDING_CFO", "PENDING_CEO"}:
+    if key in {
+        "DRAFT",
+        "PENDING_HR",
+        "PENDING_MANAGER",
+        "PENDING_FINANCE",
+        "PENDING_CFO",
+        "PENDING_CEO",
+        "PENDING_HR_COMPLETION",
+    }:
         return "DRAFT"
     if key in {"REJECTED", "CANCELLED", "CANCELED"}:
         return key.replace("CANCELED", "CANCELLED")

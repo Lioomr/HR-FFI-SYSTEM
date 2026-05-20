@@ -6,6 +6,7 @@ import { useHrAttendanceStore } from "../../stores/attendanceStore";
 import type { AttendanceRecord, AttendanceStatus } from "../../types/attendance";
 import AttendanceOverrideModal from "../../components/hr/AttendanceOverrideModal";
 import { useI18n } from "../../i18n/useI18n";
+import { formatDateOnly, formatTimeOnly } from "../../utils/dateTime";
 
 const { Title } = Typography;
 const { RangePicker } = DatePicker;
@@ -107,7 +108,7 @@ const HrAttendancePage: React.FC = () => {
             title: t("common.date"),
             dataIndex: "date",
             key: "date",
-            render: (val: string) => dayjs(val).format("YYYY-MM-DD"),
+            render: (val: string) => formatDateOnly(val),
         },
         {
             title: t("common.status"),
@@ -129,13 +130,13 @@ const HrAttendancePage: React.FC = () => {
             title: t("attendance.checkIn"),
             dataIndex: "check_in_at",
             key: "check_in_at",
-            render: (val: string | null) => val ? dayjs(val).format("HH:mm") : "-",
+            render: (val: string | null) => formatTimeOnly(val),
         },
         {
             title: t("attendance.checkOut"),
             dataIndex: "check_out_at",
             key: "check_out_at",
-            render: (val: string | null) => val ? dayjs(val).format("HH:mm") : "-",
+            render: (val: string | null) => formatTimeOnly(val),
         },
         {
             title: t("hr.attendance.source"),
