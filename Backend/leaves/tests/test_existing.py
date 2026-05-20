@@ -138,7 +138,7 @@ class LeaveManagementTests(TestCase):
         response = self.client.post(f"/api/leaves/leave-requests/{req_id}/approve/", {"decision_reason": "Enjoy"})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         req.refresh_from_db()
-        self.assertEqual(req.status, "approved")
+        self.assertEqual(req.status, LeaveRequest.RequestStatus.PENDING_CEO)
         self.assertEqual(req.decided_by, self.hr)
 
     def test_hr_manager_self_request_starts_pending_ceo(self):
@@ -154,6 +154,23 @@ class LeaveManagementTests(TestCase):
         response = self.client.post("/api/leaves/leave-requests/", data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["data"]["status"], LeaveRequest.RequestStatus.PENDING_CEO)
+
+    def test_hr_can_send_hr_manager_origin_request_to_ceo(self):
+        request = LeaveRequest.objects.create(
+            employee=self.hr,
+            leave_type=self.annual_leave,
+            start_date=date.today() + timedelta(days=2),
+            end_date=date.today() + timedelta(days=3),
+            reason="HR leave",
+            status=LeaveRequest.RequestStatus.PENDING_HR,
+        )
+
+        self.client.force_authenticate(user=self.hr)
+        response = self.client.post(f"/api/leaves/leave-requests/{request.id}/send-to-ceo/", {})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        request.refresh_from_db()
+        self.assertEqual(request.status, LeaveRequest.RequestStatus.PENDING_CEO)
 
     def test_hr_manager_self_request_without_profile_uses_leave_type_company(self):
         company = OrganizationNode.objects.create(

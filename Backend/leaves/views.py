@@ -28,7 +28,6 @@ from core.pagination import StandardPagination
 from core.pdf import merge_pdfs
 from core.permissions import IsDepartmentCEOApprover, IsHRWorkflowApprover, get_role
 from core.responses import error, success
-from core.views_templates import resolve_template_path
 from core.services import (
     can_user_act_on_instance,
     get_ceo_approver_users,
@@ -40,7 +39,9 @@ from core.services import (
     waive_open_blocking_obligations,
 )
 from core.services.request_obligations import is_business_trip_leave
-from employees.models import EmployeeProfile
+from core.views_templates import resolve_template_path
+from employees.document_extraction import extract_visa_fields
+from employees.models import EmployeeDocument, EmployeeProfile
 from employees.permissions import IsHRManagerOrAdmin
 from organization.models import OrganizationNode
 from organization.services import (
@@ -68,6 +69,7 @@ from .serializers import (
     LeaveBalanceAdjustmentSerializer,
     LeaveBalanceSerializer,
     LeaveRequestActionSerializer,
+    LeaveRequestCompleteSerializer,
     LeaveRequestCreateSerializer,
     LeaveRequestDelegationSerializer,
     LeaveRequestSerializer,
@@ -161,12 +163,12 @@ def _serve_leave_document(instance, request):
     try:
         as_attachment = _to_bool(request.query_params.get("download", "0"))
         filename = instance.document.name.split("/")[-1] or f"leave_document_{instance.id}"
-        
+
         # Guess the content type so the browser can preview PDFs/images inline
         content_type, _ = mimetypes.guess_type(filename)
         if not content_type:
             content_type = "application/octet-stream"
-            
+
         return FileResponse(
             instance.document.open("rb"),
             as_attachment=as_attachment,
@@ -201,13 +203,20 @@ def _approval_path_rows(instance: LeaveRequest):
 
     if instance.source == LeaveRequest.RequestSource.HR_MANUAL:
         rows.append(
-            ("HR Manual Entry", instance.decided_at, instance.manual_entry_reason or "Recorded by HR", _display_user(instance.entered_by or instance.decided_by))
+            (
+                "HR Manual Entry",
+                instance.decided_at,
+                instance.manual_entry_reason or "Recorded by HR",
+                _display_user(instance.entered_by or instance.decided_by),
+            )
         )
         return rows
 
     profile = _leave_profile(instance)
     needs_manager = bool(getattr(profile, "manager_id", None) or getattr(profile, "manager_profile_id", None))
-    needs_ceo = bool(getattr(instance.leave_type, "requires_ceo_approval", False) or _is_hr_manager_origin_request(instance))
+    needs_ceo = bool(
+        getattr(instance.leave_type, "requires_ceo_approval", False) or _is_hr_manager_origin_request(instance)
+    )
 
     if instance.delegated_to_id or instance.delegate_decision_at:
         rows.append(
@@ -225,7 +234,8 @@ def _approval_path_rows(instance: LeaveRequest):
                 "Manager Review",
                 instance.manager_decision_at,
                 instance.manager_decision_note or instance.status,
-                _display_user_or_none(instance.manager_decision_by) or _display_manager(getattr(instance, "employee", None)),
+                _display_user_or_none(instance.manager_decision_by)
+                or _display_manager(getattr(instance, "employee", None)),
             )
         )
     else:
@@ -241,7 +251,24 @@ def _approval_path_rows(instance: LeaveRequest):
     )
 
     if needs_ceo or instance.status == LeaveRequest.RequestStatus.PENDING_CEO or instance.ceo_decision_at:
-        rows.append(("CEO Review", instance.ceo_decision_at, instance.ceo_decision_note or instance.status, _display_user(instance.ceo_decision_by)))
+        rows.append(
+            (
+                "CEO Review",
+                instance.ceo_decision_at,
+                instance.ceo_decision_note or instance.status,
+                _display_user(instance.ceo_decision_by),
+            )
+        )
+
+    if instance.hr_completed_at or instance.status == LeaveRequest.RequestStatus.PENDING_HR_COMPLETION:
+        rows.append(
+            (
+                "HR Completion",
+                instance.hr_completed_at,
+                instance.hr_completion_note or instance.status,
+                _display_user(instance.hr_completed_by),
+            )
+        )
 
     return rows
 
@@ -285,6 +312,7 @@ _LEAVE_STATUS_LABELS = {
     LeaveRequest.RequestStatus.PENDING_MANAGER: ("Pending Manager", "بانتظار المدير"),
     LeaveRequest.RequestStatus.PENDING_HR: ("Pending HR", "بانتظار الموارد البشرية"),
     LeaveRequest.RequestStatus.PENDING_CEO: ("Pending CEO", "بانتظار المدير التنفيذي"),
+    LeaveRequest.RequestStatus.PENDING_HR_COMPLETION: ("Pending HR Completion", "بانتظار إكمال الموارد البشرية"),
     LeaveRequest.RequestStatus.APPROVED: ("Approved", "معتمد"),
     LeaveRequest.RequestStatus.REJECTED: ("Rejected", "مرفوض"),
     LeaveRequest.RequestStatus.CANCELLED: ("Cancelled", "ملغي"),
@@ -297,6 +325,7 @@ _LEAVE_STAGE_LABELS = {
     "Manager Review": ("Manager Review", "مراجعة المدير"),
     "HR Review": ("HR Review", "مراجعة الموارد البشرية"),
     "CEO Review": ("CEO Review", "مراجعة المدير التنفيذي"),
+    "HR Completion": ("HR Completion", "إكمال الموارد البشرية"),
 }
 
 
@@ -413,7 +442,7 @@ def _build_leave_request_pdf(instance: LeaveRequest):
         value = str(text or "").strip()
         if not value:
             return ""
-        if arabic_reshaper and get_display and any("\u0600" <= ch <= "\u06FF" for ch in value):
+        if arabic_reshaper and get_display and any("\u0600" <= ch <= "\u06ff" for ch in value):
             return get_display(arabic_reshaper.reshape(value))
         return value
 
@@ -633,6 +662,7 @@ def _build_leave_request_pdf(instance: LeaveRequest):
             "Manager": LeaveRequest.RequestStatus.PENDING_MANAGER,
             "HR": LeaveRequest.RequestStatus.PENDING_HR,
             "CEO": LeaveRequest.RequestStatus.PENDING_CEO,
+            "HR Completion": LeaveRequest.RequestStatus.PENDING_HR_COMPLETION,
         }
         if instance.status == pending_map.get(stage):
             return "Pending"
@@ -668,14 +698,11 @@ def _build_leave_request_pdf(instance: LeaveRequest):
     actual_departure_date = instance.start_date
     actual_return_date = instance.date_of_rejoin or instance.end_date
     destination = instance.airplane_ticket_address or instance.other_leave_description or ""
-    address_parts = [
-        part for part in [instance.full_address, instance.po_box, getattr(profile, "mobile", "")] if part
-    ]
+    address_parts = [part for part in [instance.full_address, instance.po_box, getattr(profile, "mobile", "")] if part]
     address_during_leave = " | ".join(address_parts) if address_parts else ""
     leave_type_en, leave_type_ar = _leave_type_labels(instance.leave_type)
-    other_leave_label = (
-        instance.other_leave_description
-        or (f"{leave_type_en} / {leave_type_ar}" if flags["other"] else "")
+    other_leave_label = instance.other_leave_description or (
+        f"{leave_type_en} / {leave_type_ar}" if flags["other"] else ""
     )
 
     # Column x-centers and safe widths (avoid overlap with English/Arabic labels)
@@ -691,16 +718,28 @@ def _build_leave_request_pdf(instance: LeaveRequest):
 
     def L(y, text, *, size=8.6, font=None, bold=False):
         _draw_text(
-            pdf, LEFT_X, y, text,
-            size=size, font=font or (bold_font if bold else regular_font),
-            max_width=LEFT_W, align="center", max_lines=1,
+            pdf,
+            LEFT_X,
+            y,
+            text,
+            size=size,
+            font=font or (bold_font if bold else regular_font),
+            max_width=LEFT_W,
+            align="center",
+            max_lines=1,
         )
 
     def R(y, text, *, size=8.6, font=None, bold=False):
         _draw_text(
-            pdf, RIGHT_X, y, text,
-            size=size, font=font or (bold_font if bold else regular_font),
-            max_width=RIGHT_W, align="center", max_lines=1,
+            pdf,
+            RIGHT_X,
+            y,
+            text,
+            size=size,
+            font=font or (bold_font if bold else regular_font),
+            max_width=RIGHT_W,
+            align="center",
+            max_lines=1,
         )
 
     def _mask_input_lines(pdf, line_specs):
@@ -712,17 +751,27 @@ def _build_leave_request_pdf(instance: LeaveRequest):
     _mask_input_lines(
         pdf,
         [
-            (38, 752, 260), (308, 752, 260),
-            (38, 690, 260), (308, 690, 260),
-            (38, 662, 260), (308, 662, 260),
-            (38, 634, 260), (308, 634, 260),
-            (38, 606, 260), (308, 606, 260),
+            (38, 752, 260),
+            (308, 752, 260),
+            (38, 690, 260),
+            (308, 690, 260),
+            (38, 662, 260),
+            (308, 662, 260),
+            (38, 634, 260),
+            (308, 634, 260),
+            (38, 606, 260),
+            (308, 606, 260),
             (420, 550, 146),
-            (38, 512, 260), (308, 512, 260),
-            (38, 485, 260), (308, 485, 260),
-            (38, 458, 260), (308, 458, 260),
-            (38, 431, 260), (308, 431, 260),
-            (38, 404, 260), (308, 404, 260),
+            (38, 512, 260),
+            (308, 512, 260),
+            (38, 485, 260),
+            (308, 485, 260),
+            (38, 458, 260),
+            (308, 458, 260),
+            (38, 431, 260),
+            (308, 431, 260),
+            (38, 404, 260),
+            (308, 404, 260),
             (38, 310, 530),
             (38, 278, 530),
         ],
@@ -753,8 +802,14 @@ def _build_leave_request_pdf(instance: LeaveRequest):
     _draw_checkbox(pdf, 326, 551, flags["other"])
     # Specify (line top=292, next top=317) → center 304 → y=537
     _draw_text(
-        pdf, 524, 548, other_leave_label if flags["other"] else "",
-        size=8.2, max_width=76, align="center", max_lines=1,
+        pdf,
+        524,
+        548,
+        other_leave_label if flags["other"] else "",
+        size=8.2,
+        max_width=76,
+        align="center",
+        max_lines=1,
     )
 
     # Leave Duration / Substitute Employee (line top=330, next top=344) → center 337 → y=505
@@ -779,14 +834,27 @@ def _build_leave_request_pdf(instance: LeaveRequest):
 
     # Address & tel during leave (line top=532, next label top=549) → center 540 → y=301
     _draw_text(
-        pdf, width / 2, 306, address_during_leave,
-        size=8.2, max_width=480, align="center", max_lines=1,
+        pdf,
+        width / 2,
+        306,
+        address_during_leave,
+        size=8.2,
+        max_width=480,
+        align="center",
+        max_lines=1,
     )
 
     # Employee Signature (line top=564, free space below) → value top=580 → y=261
     _draw_text(
-        pdf, width / 2, 274, employee_name,
-        size=8.4, max_width=480, align="center", max_lines=1, font=bold_font,
+        pdf,
+        width / 2,
+        274,
+        employee_name,
+        size=8.4,
+        max_width=480,
+        align="center",
+        max_lines=1,
+        font=bold_font,
     )
 
     pdf.save()
@@ -806,11 +874,16 @@ def _build_leave_request_pdf(instance: LeaveRequest):
         _mask_input_lines(
             pdf,
             [
-                (38, 412, 260), (308, 412, 260),
-                (38, 385, 260), (308, 385, 260),
-                (38, 358, 260), (308, 358, 260),
-                (38, 331, 260), (308, 331, 260),
-                (38, 304, 260), (308, 304, 260),
+                (38, 412, 260),
+                (308, 412, 260),
+                (38, 385, 260),
+                (308, 385, 260),
+                (38, 358, 260),
+                (308, 358, 260),
+                (38, 331, 260),
+                (308, 331, 260),
+                (38, 304, 260),
+                (308, 304, 260),
             ],
         )
 
@@ -828,10 +901,25 @@ def _build_leave_request_pdf(instance: LeaveRequest):
             _draw_text(pdf, 90, 654, employee_name, size=6.5, max_width=80, align="center", max_lines=1)
             _draw_text(pdf, 165, 654, "Self", size=6.5, max_width=50, align="center", max_lines=1)
             _draw_text(pdf, 235, 654, destination, size=6.5, max_width=64, align="center", max_lines=1)
-            _draw_text(pdf, 302, 654, _format_date(actual_departure_date), size=6.5, max_width=60, align="center", max_lines=1)
-            _draw_text(pdf, 365, 654, _format_date(actual_return_date), size=6.5, max_width=58, align="center", max_lines=1)
-            _draw_text(pdf, 430, 654, getattr(profile, "passport_no", ""), size=6.5, max_width=60, align="center", max_lines=1)
-            _draw_text(pdf, 510, 654, _format_date(getattr(profile, "passport_expiry", None)), size=6.5, max_width=72, align="center", max_lines=1)
+            _draw_text(
+                pdf, 302, 654, _format_date(actual_departure_date), size=6.5, max_width=60, align="center", max_lines=1
+            )
+            _draw_text(
+                pdf, 365, 654, _format_date(actual_return_date), size=6.5, max_width=58, align="center", max_lines=1
+            )
+            _draw_text(
+                pdf, 430, 654, getattr(profile, "passport_no", ""), size=6.5, max_width=60, align="center", max_lines=1
+            )
+            _draw_text(
+                pdf,
+                510,
+                654,
+                _format_date(getattr(profile, "passport_expiry", None)),
+                size=6.5,
+                max_width=72,
+                align="center",
+                max_lines=1,
+            )
 
         # Approval table (Line Manager + Dept Manager rows)
         manager_status = _stage_label("Manager", instance.manager_decision_at)
@@ -851,29 +939,67 @@ def _build_leave_request_pdf(instance: LeaveRequest):
         manager_row_y = 506
         department_row_y = 481
         _draw_text(
-            pdf, approval_name_x, manager_row_y, manager_name,
-            size=7.0, font=bold_font, max_width=112, align="center", max_lines=1,
+            pdf,
+            approval_name_x,
+            manager_row_y,
+            manager_name,
+            size=7.0,
+            font=bold_font,
+            max_width=112,
+            align="center",
+            max_lines=1,
         )
         _draw_text(
-            pdf, approval_signature_x, manager_row_y, manager_status,
-            size=7.0, max_width=100, align="center", max_lines=1,
+            pdf,
+            approval_signature_x,
+            manager_row_y,
+            manager_status,
+            size=7.0,
+            max_width=100,
+            align="center",
+            max_lines=1,
         )
         _draw_text(
-            pdf, approval_date_x, manager_row_y, _format_date(instance.manager_decision_at),
-            size=7.0, max_width=68, align="center", max_lines=1,
+            pdf,
+            approval_date_x,
+            manager_row_y,
+            _format_date(instance.manager_decision_at),
+            size=7.0,
+            max_width=68,
+            align="center",
+            max_lines=1,
         )
 
         _draw_text(
-            pdf, approval_name_x, department_row_y, ceo_name,
-            size=7.0, font=bold_font, max_width=112, align="center", max_lines=1,
+            pdf,
+            approval_name_x,
+            department_row_y,
+            ceo_name,
+            size=7.0,
+            font=bold_font,
+            max_width=112,
+            align="center",
+            max_lines=1,
         )
         _draw_text(
-            pdf, approval_signature_x, department_row_y, ceo_status,
-            size=7.0, max_width=100, align="center", max_lines=1,
+            pdf,
+            approval_signature_x,
+            department_row_y,
+            ceo_status,
+            size=7.0,
+            max_width=100,
+            align="center",
+            max_lines=1,
         )
         _draw_text(
-            pdf, approval_date_x, department_row_y, _format_date(instance.ceo_decision_at),
-            size=7.0, max_width=68, align="center", max_lines=1,
+            pdf,
+            approval_date_x,
+            department_row_y,
+            _format_date(instance.ceo_decision_at),
+            size=7.0,
+            max_width=68,
+            align="center",
+            max_lines=1,
         )
 
         # HR Department Use section
@@ -881,34 +1007,86 @@ def _build_leave_request_pdf(instance: LeaveRequest):
         latest = _latest_decision()
         latest_note = (latest[3] if latest else "") or instance.decision_reason or instance.reason or ""
         ticket_status = (
-            "Company" if instance.airplane_ticket_payer == "company"
-            else "Employee" if instance.airplane_ticket_payer == "employee" else ""
+            "Company"
+            if instance.airplane_ticket_payer == "company"
+            else "Employee"
+            if instance.airplane_ticket_payer == "employee"
+            else ""
         )
         hr_status = _stage_label("HR", instance.decided_at)
 
         # HR section — values centered in space below each underline
         # Annual Entitlement / Date of Return From Last Vacation
         # (line top=430, next label top=444) → center 437 → y=405
-        _draw_text(pdf, LEFT_X, 409, _format_date(getattr(profile, "hire_date", None)), size=8.2, max_width=LEFT_W, align="center", max_lines=1)
-        _draw_text(pdf, RIGHT_X, 409, _format_date(getattr(last_leave, "date_of_rejoin", None) or getattr(last_leave, "end_date", None)), size=8.2, max_width=RIGHT_W, align="center", max_lines=1)
+        _draw_text(
+            pdf,
+            LEFT_X,
+            409,
+            _format_date(getattr(profile, "hire_date", None)),
+            size=8.2,
+            max_width=LEFT_W,
+            align="center",
+            max_lines=1,
+        )
+        _draw_text(
+            pdf,
+            RIGHT_X,
+            409,
+            _format_date(getattr(last_leave, "date_of_rejoin", None) or getattr(last_leave, "end_date", None)),
+            size=8.2,
+            max_width=RIGHT_W,
+            align="center",
+            max_lines=1,
+        )
         # Leave Balance / Last Leave Type (line top=457, next 471) → center 464 → y=378
         _draw_text(pdf, LEFT_X, 382, _find_balance(profile), size=8.2, max_width=LEFT_W, align="center", max_lines=1)
-        _draw_text(pdf, RIGHT_X, 382, getattr(getattr(last_leave, "leave_type", None), "name", ""), size=8.2, max_width=RIGHT_W, align="center", max_lines=1)
+        _draw_text(
+            pdf,
+            RIGHT_X,
+            382,
+            getattr(getattr(last_leave, "leave_type", None), "name", ""),
+            size=8.2,
+            max_width=RIGHT_W,
+            align="center",
+            max_lines=1,
+        )
         # Last Ticket / Ticket Request Status (line top=484, next 498) → center 491 → y=351
         _draw_text(pdf, LEFT_X, 355, "", size=8.2, max_width=LEFT_W, align="center", max_lines=1)
-        _draw_text(pdf, RIGHT_X, 355, "Requested" if ticket_requested else "Not requested", size=8.2, max_width=RIGHT_W, align="center", max_lines=1)
+        _draw_text(
+            pdf,
+            RIGHT_X,
+            355,
+            "Requested" if ticket_requested else "Not requested",
+            size=8.2,
+            max_width=RIGHT_W,
+            align="center",
+            max_lines=1,
+        )
         # Visa Charge / Custody (line top=511, next 525) → center 518 → y=324
         _draw_text(pdf, LEFT_X, 328, ticket_status, size=8.2, max_width=LEFT_W, align="center", max_lines=1)
         _draw_text(pdf, RIGHT_X, 328, "", size=8.2, max_width=RIGHT_W, align="center", max_lines=1)
         # Notes / HR Approval (line top=538, next ~552) → center 545 → y=297
-        _draw_text(pdf, LEFT_X, 301, latest_note or f"Status: {instance.get_status_display()}", size=7.6, max_width=LEFT_W + 20, align="center", max_lines=1)
-        _draw_text(pdf, RIGHT_X, 301, hr_status, size=8.2, font=bold_font, max_width=RIGHT_W, align="center", max_lines=1)
+        _draw_text(
+            pdf,
+            LEFT_X,
+            301,
+            latest_note or f"Status: {instance.get_status_display()}",
+            size=7.6,
+            max_width=LEFT_W + 20,
+            align="center",
+            max_lines=1,
+        )
+        _draw_text(
+            pdf, RIGHT_X, 301, hr_status, size=8.2, font=bold_font, max_width=RIGHT_W, align="center", max_lines=1
+        )
 
         # Human Resources Approval table body row:
         # first column 32-202, name 202-322, position 322-432, signature 432-532.
         hr_body_y = 232
         _draw_text(pdf, 262, hr_body_y, hr_name, size=7.4, font=bold_font, max_width=104, align="center", max_lines=1)
-        _draw_text(pdf, 377, hr_body_y, "HR Manager" if hr_name else "", size=7.4, max_width=96, align="center", max_lines=1)
+        _draw_text(
+            pdf, 377, hr_body_y, "HR Manager" if hr_name else "", size=7.4, max_width=96, align="center", max_lines=1
+        )
         signature_text = f"{hr_status} - {_format_date(instance.decided_at)}".strip(" -")
         _draw_text(pdf, 482, hr_body_y, signature_text, size=6.9, max_width=86, align="center", max_lines=1)
 
@@ -983,7 +1161,9 @@ class LeaveTypeViewSet(viewsets.ModelViewSet):
         audit(self.request, "leave_type_updated", entity="leave_type", entity_id=instance.id, metadata=serializer.data)
 
     def destroy(self, request, *args, **kwargs):
-        instance = filter_queryset_by_accessible_companies(self.get_queryset(), request).filter(pk=kwargs.get("pk")).first()
+        instance = (
+            filter_queryset_by_accessible_companies(self.get_queryset(), request).filter(pk=kwargs.get("pk")).first()
+        )
         if not instance:
             return error("Not found", errors=["Not found."], status=404)
         self.perform_destroy(instance)
@@ -1003,7 +1183,9 @@ class LeaveTypeViewSet(viewsets.ModelViewSet):
 
     # Wrap responses
     def retrieve(self, request, *args, **kwargs):
-        instance = filter_queryset_by_accessible_companies(self.get_queryset(), request).filter(pk=kwargs.get("pk")).first()
+        instance = (
+            filter_queryset_by_accessible_companies(self.get_queryset(), request).filter(pk=kwargs.get("pk")).first()
+        )
         if not instance:
             return error("Not found", errors=["Not found."], status=404)
         return success(self.get_serializer(instance).data)
@@ -1013,7 +1195,9 @@ class LeaveTypeViewSet(viewsets.ModelViewSet):
         return success(response.data, status=response.status_code)
 
     def update(self, request, *args, **kwargs):
-        instance = filter_queryset_by_accessible_companies(self.get_queryset(), request).filter(pk=kwargs.get("pk")).first()
+        instance = (
+            filter_queryset_by_accessible_companies(self.get_queryset(), request).filter(pk=kwargs.get("pk")).first()
+        )
         if not instance:
             return error("Not found", errors=["Not found."], status=404)
         serializer = self.get_serializer(instance, data=request.data)
@@ -1022,7 +1206,9 @@ class LeaveTypeViewSet(viewsets.ModelViewSet):
         return success(serializer.data)
 
     def partial_update(self, request, *args, **kwargs):
-        instance = filter_queryset_by_accessible_companies(self.get_queryset(), request).filter(pk=kwargs.get("pk")).first()
+        instance = (
+            filter_queryset_by_accessible_companies(self.get_queryset(), request).filter(pk=kwargs.get("pk")).first()
+        )
         if not instance:
             return error("Not found", errors=["Not found."], status=404)
         serializer = self.get_serializer(instance, data=request.data, partial=True)
@@ -1042,6 +1228,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         return LeaveRequest.objects.filter(is_active=True).select_related(
             "employee",
             "employee__employee_profile",
+            "employee_profile",
             "leave_type",
             "decided_by",
             "manager_decision_by",
@@ -1114,6 +1301,9 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
 
         if self.action in ["approve", "reject"]:
             return [IsAuthenticated(), IsHRWorkflowApprover()]
+
+        if self.action == "complete":
+            return [IsAuthenticated(), IsHRManagerOrAdmin()]
 
         if self.action in ["delegate_approve", "delegate_reject"]:
             return [IsAuthenticated()]
@@ -1226,14 +1416,18 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             LeaveRequest.RequestStatus.PENDING_HR,
             LeaveRequest.RequestStatus.PENDING_CEO,
         ]:
-            return error("Validation error", errors=["Delegate can only be updated while the request is pending."], status=422)
+            return error(
+                "Validation error", errors=["Delegate can only be updated while the request is pending."], status=422
+            )
 
         serializer = LeaveRequestDelegationSerializer(data=request.data)
         if not serializer.is_valid():
             return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
         delegated_to = serializer.validated_data["delegated_to"]
         if delegated_to.id == instance.employee_id:
-            return error("Validation error", errors=["You cannot delegate the request to the same employee."], status=422)
+            return error(
+                "Validation error", errors=["You cannot delegate the request to the same employee."], status=422
+            )
 
         instance.delegated_to = delegated_to
         instance.delegation_note = serializer.validated_data.get("delegation_note", instance.delegation_note)
@@ -1416,11 +1610,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         note = s.validated_data.get("comment", "")
         instance.hr_decision_note = note
 
-        # Check if CEO approval is required
-        if instance.leave_type.requires_ceo_approval:
-            instance.status = LeaveRequest.RequestStatus.PENDING_CEO
-        else:
-            instance.status = LeaveRequest.RequestStatus.APPROVED
+        instance.status = LeaveRequest.RequestStatus.PENDING_CEO
 
         instance.save()
         sync_workflow(instance, actor=request.user)
@@ -1450,10 +1640,6 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
                 "approval_status": instance.status,
             },
         )
-        try:
-            notify_leave_approved(instance)
-        except Exception:
-            pass
         if instance.status == LeaveRequest.RequestStatus.PENDING_CEO:
             try:
                 notify_users_for_pending_status(
@@ -1514,18 +1700,101 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             pass
         return success(LeaveRequestSerializer(instance, context={"request": request}).data)
 
-    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsHRWorkflowApprover], url_path="send-to-ceo")
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsHRManagerOrAdmin])
+    def complete(self, request, pk=None):
+        try:
+            instance = (
+                self._unscoped_queryset().select_related("employee_profile", "employee__employee_profile").get(pk=pk)
+            )
+        except LeaveRequest.DoesNotExist:
+            return error("Not found", errors=["Not found."], status=404)
+
+        if instance.status != LeaveRequest.RequestStatus.PENDING_HR_COMPLETION:
+            return error("Validation error", errors=["Request is not waiting for HR completion."], status=422)
+
+        serializer = LeaveRequestCompleteSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error("Validation error", errors=serializer.errors, status=422)
+
+        profile = instance.employee_profile or resolve_employee_profile(instance.employee)
+        if not profile:
+            return error("Validation error", errors=["Employee profile not found."], status=422)
+
+        visa_file = serializer.validated_data.get("visa_document")
+        requires_visa = not profile.is_saudi
+        if requires_visa and not visa_file:
+            return error("Validation error", errors=["visa_document is required for non-Saudi employees."], status=422)
+
+        document = None
+        extraction_warnings = []
+        if visa_file:
+            document = EmployeeDocument.objects.create(
+                employee_profile=profile,
+                company=instance.company or profile.company,
+                leave_request=instance,
+                document_type=EmployeeDocument.DocumentType.VISA,
+                file=visa_file,
+                original_filename=getattr(visa_file, "name", ""),
+                uploaded_by=request.user,
+            )
+            extraction_warnings = extract_visa_fields(document)
+            audit(
+                request,
+                "employee_document_uploaded",
+                entity="employee_document",
+                entity_id=document.id,
+                metadata={
+                    "employee_profile_id": profile.id,
+                    "leave_request_id": instance.id,
+                    "document_type": document.document_type,
+                    "extraction_status": document.extraction_status,
+                    "warnings": extraction_warnings,
+                },
+            )
+
+        instance.status = LeaveRequest.RequestStatus.APPROVED
+        instance.hr_completed_by = request.user
+        instance.hr_completed_at = timezone.now()
+        instance.hr_completion_note = serializer.validated_data.get("comment", "")
+        instance.save(
+            update_fields=["status", "hr_completed_by", "hr_completed_at", "hr_completion_note", "updated_at"]
+        )
+        sync_workflow(instance, actor=request.user)
+        sync_leave_obligations(instance, actor=request.user)
+
+        audit(
+            request,
+            "complete_hr",
+            entity="LeaveRequest",
+            entity_id=instance.id,
+            metadata={
+                "employee_profile_id": profile.id,
+                "visa_document_id": document.id if document else None,
+                "visa_required": requires_visa,
+                "extraction_warnings": extraction_warnings,
+            },
+        )
+        try:
+            notify_leave_approved(instance)
+        except Exception:
+            pass
+
+        data = LeaveRequestSerializer(instance, context={"request": request}).data
+        data["completion_document_id"] = document.id if document else None
+        data["extraction_warnings"] = extraction_warnings
+        return success(data)
+
+    @action(
+        detail=True,
+        methods=["post"],
+        permission_classes=[IsAuthenticated, IsHRWorkflowApprover],
+        url_path="send-to-ceo",
+    )
     def send_to_ceo(self, request, pk=None):
         try:
             instance = self._unscoped_queryset().get(pk=pk)
         except LeaveRequest.DoesNotExist:
             return error("Not found", errors=["Not found."], status=404)
-        if _is_hr_manager_origin_request(instance):
-            return error(
-                "Validation error",
-                errors=["Request is already under CEO workflow."],
-                status=422,
-            )
 
         allowed_statuses = [
             LeaveRequest.RequestStatus.SUBMITTED,
@@ -1633,7 +1902,9 @@ class HRManualLeaveRequestViewSet(viewsets.ModelViewSet):
     queryset = LeaveRequest.objects.filter(
         is_active=True,
         source=LeaveRequest.RequestSource.HR_MANUAL,
-    ).select_related("employee", "leave_type", "employee__employee_profile", "employee_profile", "employee_profile__user")
+    ).select_related(
+        "employee", "leave_type", "employee__employee_profile", "employee_profile", "employee_profile__user"
+    )
     serializer_class = HRManualLeaveRequestSerializer
     http_method_names = ["post", "patch", "delete", "get", "head", "options"]
 
@@ -2119,7 +2390,7 @@ class CEOLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
                 )
             waive_open_blocking_obligations(instance, actor=request.user, reason=waiver_reason, request=request)
 
-        instance.status = LeaveRequest.RequestStatus.APPROVED
+        instance.status = LeaveRequest.RequestStatus.PENDING_HR_COMPLETION
         instance.ceo_decision_by = request.user
         instance.ceo_decision_at = timezone.now()
         instance.ceo_decision_note = s.validated_data.get("comment", "")
@@ -2129,7 +2400,15 @@ class CEOLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
         audit(request, "approve_ceo", entity="LeaveRequest", entity_id=instance.id)
         try:
-            notify_leave_approved(instance)
+            notify_users_for_pending_status(
+                users=get_hr_approver_users(),
+                request_type="Leave Request",
+                request_id=instance.id,
+                requester_name=_leave_employee_name(instance),
+                status_label=instance.status,
+                details=[f"Leave Type: {instance.leave_type.name}", f"Employee: {_leave_employee_email(instance)}"],
+                action_path=f"/hr/leave/requests/{instance.id}",
+            )
         except Exception:
             pass
         return success(LeaveRequestSerializer(instance, context={"request": request}).data)

@@ -40,8 +40,15 @@ from organization.services import (
 )
 from payroll.models import PayrollRun
 
-from .models import DelegationRule, RequestObligation, UserPreference
+from .models import DelegationRule, RequestObligation, UserPreference, WorkflowInstance
 from .permissions import get_role
+
+
+def _display_datetime(value):
+    if not value:
+        return None
+    tzinfo = getattr(settings, "EMAIL_DISPLAY_TZINFO", None)
+    return timezone.localtime(value, tzinfo) if tzinfo else timezone.localtime(value)
 
 
 class PendingRequestsPagination(PageNumberPagination):
@@ -100,20 +107,26 @@ def _safe_send_delegation_emails(rule: DelegationRule):
             pass
 
 
-def _sync_pending_request_workflows_for_request(request, *, limit_per_type: int = 100) -> None:
+def _sync_pending_request_workflows_for_request(request, *, limit_per_type: int | None = None) -> None:
+    def _maybe_limit(queryset):
+        if limit_per_type is None:
+            return queryset.iterator(chunk_size=200)
+        return queryset[:limit_per_type]
+
     leave_statuses = [
         LeaveRequest.RequestStatus.SUBMITTED,
         LeaveRequest.RequestStatus.PENDING_DELEGATE,
         LeaveRequest.RequestStatus.PENDING_MANAGER,
         LeaveRequest.RequestStatus.PENDING_HR,
         LeaveRequest.RequestStatus.PENDING_CEO,
-        LeaveRequest.RequestStatus.APPROVED,
-        LeaveRequest.RequestStatus.REJECTED,
-        LeaveRequest.RequestStatus.CANCELLED,
+        LeaveRequest.RequestStatus.PENDING_HR_COMPLETION,
     ]
-    for leave_req in filter_queryset_by_company_scope(LeaveRequest.objects.all(), request).filter(
-        status__in=leave_statuses
-    )[:limit_per_type]:
+    leave_qs = (
+        filter_queryset_by_company_scope(LeaveRequest.objects.all(), request)
+        .filter(status__in=leave_statuses)
+        .order_by("-updated_at", "-id")
+    )
+    for leave_req in _maybe_limit(leave_qs):
         sync_workflow(leave_req, actor=request.user)
 
     attendance_statuses = [
@@ -121,28 +134,33 @@ def _sync_pending_request_workflows_for_request(request, *, limit_per_type: int 
         AttendanceRecord.Status.PENDING_MANAGER,
         AttendanceRecord.Status.PENDING_HR,
         AttendanceRecord.Status.PENDING_CEO,
-        AttendanceRecord.Status.PRESENT,
-        AttendanceRecord.Status.REJECTED,
     ]
-    for record in filter_queryset_by_company_scope(
-        AttendanceRecord.objects.all(),
-        request,
-        field_name="employee_profile__company_id",
-    ).filter(status__in=attendance_statuses)[:limit_per_type]:
+    attendance_qs = (
+        filter_queryset_by_company_scope(
+            AttendanceRecord.objects.all(),
+            request,
+            field_name="employee_profile__company_id",
+        )
+        .filter(status__in=attendance_statuses)
+        .order_by("-updated_at", "-id")
+    )
+    for record in _maybe_limit(attendance_qs):
         sync_workflow(record, actor=request.user)
 
     correction_statuses = [
         AttendanceCorrectionRequest.Status.PENDING_MANAGER,
         AttendanceCorrectionRequest.Status.PENDING_HR,
-        AttendanceCorrectionRequest.Status.APPROVED,
-        AttendanceCorrectionRequest.Status.REJECTED,
-        AttendanceCorrectionRequest.Status.CANCELLED,
     ]
-    for correction in filter_queryset_by_company_scope(
-        AttendanceCorrectionRequest.objects.all(),
-        request,
-        field_name="employee_profile__company_id",
-    ).filter(status__in=correction_statuses)[:limit_per_type]:
+    correction_qs = (
+        filter_queryset_by_company_scope(
+            AttendanceCorrectionRequest.objects.all(),
+            request,
+            field_name="employee_profile__company_id",
+        )
+        .filter(status__in=correction_statuses)
+        .order_by("-updated_at", "-id")
+    )
+    for correction in _maybe_limit(correction_qs):
         sync_workflow(correction, actor=request.user)
 
     loan_statuses = [
@@ -153,38 +171,42 @@ def _sync_pending_request_workflows_for_request(request, *, limit_per_type: int 
         LoanRequest.RequestStatus.PENDING_CFO,
         LoanRequest.RequestStatus.PENDING_CEO,
         LoanRequest.RequestStatus.PENDING_DISBURSEMENT,
-        LoanRequest.RequestStatus.APPROVED,
-        LoanRequest.RequestStatus.REJECTED,
-        LoanRequest.RequestStatus.CANCELLED,
-        LoanRequest.RequestStatus.DEDUCTED,
     ]
-    for loan_req in filter_queryset_by_company_scope(LoanRequest.objects.all(), request).filter(
-        status__in=loan_statuses
-    )[:limit_per_type]:
+    loan_qs = (
+        filter_queryset_by_company_scope(LoanRequest.objects.all(), request)
+        .filter(status__in=loan_statuses)
+        .order_by("-updated_at", "-id")
+    )
+    for loan_req in _maybe_limit(loan_qs):
         sync_workflow(loan_req, actor=request.user)
 
     asset_return_statuses = [
         AssetReturnRequest.RequestStatus.PENDING_MANAGER,
         AssetReturnRequest.RequestStatus.PENDING,
         AssetReturnRequest.RequestStatus.PENDING_CEO,
-        AssetReturnRequest.RequestStatus.APPROVED,
-        AssetReturnRequest.RequestStatus.PROCESSED,
-        AssetReturnRequest.RequestStatus.REJECTED,
     ]
-    for return_req in filter_queryset_by_company_scope(
-        AssetReturnRequest.objects.select_related("asset"),
-        request,
-        field_name="asset__company_id",
-    ).filter(status__in=asset_return_statuses)[:limit_per_type]:
+    asset_return_qs = (
+        filter_queryset_by_company_scope(
+            AssetReturnRequest.objects.select_related("asset"),
+            request,
+            field_name="asset__company_id",
+        )
+        .filter(status__in=asset_return_statuses)
+        .order_by("-updated_at", "-id")
+    )
+    for return_req in _maybe_limit(asset_return_qs):
         sync_workflow(return_req, actor=request.user)
 
-    for deletion_req in filter_queryset_by_company_scope(EmployeeDeletionRequest.objects.all(), request).filter(
-        status__in=[
-            EmployeeDeletionRequest.Status.PENDING_CEO,
-            EmployeeDeletionRequest.Status.REJECTED,
-            EmployeeDeletionRequest.Status.EXECUTED,
-        ]
-    )[:limit_per_type]:
+    deletion_qs = (
+        filter_queryset_by_company_scope(EmployeeDeletionRequest.objects.all(), request)
+        .filter(
+            status__in=[
+                EmployeeDeletionRequest.Status.PENDING_CEO,
+            ]
+        )
+        .order_by("-updated_at", "-id")
+    )
+    for deletion_req in _maybe_limit(deletion_qs):
         sync_workflow(deletion_req, actor=request.user)
 
 
@@ -206,11 +228,15 @@ def _build_pending_request_items_for_request(request, *, limit: int | None = Non
         content_object = workflow.content_object
         if content_object is None or not _is_dashboard_object_in_active_scope(content_object, request):
             continue
+        workflow = sync_workflow(content_object, actor=request.user)
+        if workflow.status not in {WorkflowInstance.Status.SUBMITTED, WorkflowInstance.Status.IN_REVIEW}:
+            continue
         item = build_pending_approval_item(workflow)
         if not item:
             continue
         item["company_name"] = _get_company_name_for_dashboard_object(content_object)
         items.append(item)
+    items.sort(key=lambda item: item.get("time") or "", reverse=True)
     return items
 
 
@@ -329,7 +355,7 @@ class HrSummaryView(APIView):
                     "key": f"audit_{log.id}",
                     "employee": actor_name,
                     "action": log.action,
-                    "date": log.created_at.strftime("%b %d, %I:%M %p"),
+                    "date": _display_datetime(log.created_at).strftime("%b %d, %I:%M %p"),
                     "status": details_str,
                     "statusColor": status_color,
                     "company_name": getattr(getattr(profile, "company", None), "name", None) if log.actor else None,
@@ -433,7 +459,7 @@ class HrRecentActivityView(APIView):
                     "key": f"audit_{log.id}",
                     "employee": actor_name,
                     "action": log.action,
-                    "date": log.created_at.strftime("%b %d, %I:%M %p"),
+                    "date": _display_datetime(log.created_at).strftime("%b %d, %I:%M %p"),
                     "status": details_str,
                     "statusColor": status_color,
                     "company_name": getattr(getattr(profile, "company", None), "name", None) if log.actor else None,

@@ -5,6 +5,7 @@ import { getImportHistory, downloadImportErrors } from "../../../services/api/em
 import type { ImportHistoryItem } from "../../../services/api/employeesApi";
 import { unwrapEnvelope } from "../../../utils/dataUtils";
 import { useI18n } from "../../../i18n/useI18n";
+import { formatDateTime } from "../../../utils/dateTime";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 
@@ -84,7 +85,7 @@ const ImportHistoryPage: React.FC = () => {
             title: t("common.date"),
             dataIndex: "created_at",
             key: "created_at",
-            render: (val: string) => dayjs(val).format("YYYY-MM-DD HH:mm"),
+            render: (val: string) => formatDateTime(val),
         },
         {
             title: t("import.history.uploadedBy"),

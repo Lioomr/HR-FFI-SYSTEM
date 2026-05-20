@@ -229,6 +229,81 @@ class EmployeeImport(models.Model):
         verbose_name_plural = _("Employee Imports")
 
 
+class EmployeeDocument(models.Model):
+    class DocumentType(models.TextChoices):
+        IQAMA = "IQAMA", _("Iqama")
+        PASSPORT = "PASSPORT", _("Passport")
+        VISA = "VISA", _("Visa")
+        SAUDI_ID = "SAUDI_ID", _("Saudi ID")
+        OTHER = "OTHER", _("Other")
+
+    class ExtractionStatus(models.TextChoices):
+        PENDING = "pending", _("Pending")
+        SUCCESS = "success", _("Success")
+        PARTIAL = "partial", _("Partial")
+        FAILED = "failed", _("Failed")
+
+    employee_profile = models.ForeignKey(
+        EmployeeProfile,
+        on_delete=models.CASCADE,
+        related_name="documents",
+    )
+    company = models.ForeignKey(
+        OrganizationNode,
+        on_delete=models.PROTECT,
+        related_name="employee_documents",
+        null=True,
+        blank=True,
+    )
+    leave_request = models.ForeignKey(
+        "leaves.LeaveRequest",
+        on_delete=models.SET_NULL,
+        related_name="employee_documents",
+        null=True,
+        blank=True,
+    )
+    document_type = models.CharField(max_length=20, choices=DocumentType.choices)
+    custom_name = models.CharField(max_length=100, blank=True)
+    file = models.FileField(
+        storage=PrivateUploadStorage(),
+        upload_to="employee_documents/",
+    )
+    original_filename = models.CharField(max_length=255, blank=True)
+    visa_number = models.CharField(max_length=50, blank=True)
+    exit_before = models.DateField(null=True, blank=True)
+    exit_before_raw = models.CharField(max_length=50, blank=True)
+    visa_duration = models.PositiveIntegerField(null=True, blank=True)
+    visa_duration_raw = models.CharField(max_length=50, blank=True)
+    extracted_fields = models.JSONField(default=dict, blank=True)
+    extraction_status = models.CharField(
+        max_length=20,
+        choices=ExtractionStatus.choices,
+        default=ExtractionStatus.PENDING,
+    )
+    extraction_error = models.TextField(blank=True)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="uploaded_employee_documents",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["employee_profile", "document_type"], name="emp_doc_profile_type_idx"),
+            models.Index(fields=["company", "document_type"], name="emp_doc_company_type_idx"),
+            models.Index(fields=["leave_request"], name="emp_doc_leave_request_idx"),
+        ]
+
+    def __str__(self):
+        label = self.custom_name if self.document_type == self.DocumentType.OTHER else self.get_document_type_display()
+        return f"{self.employee_profile_id} - {label}"
+
+
 class EmployeeDeletionRequest(models.Model):
     class Status(models.TextChoices):
         PENDING_CEO = "PENDING_CEO", _("Pending CEO")

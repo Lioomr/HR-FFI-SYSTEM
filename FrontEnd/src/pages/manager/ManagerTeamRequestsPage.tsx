@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Tabs, Table, Tag, Button, Space, notification, Typography, Avatar, Tooltip } from "antd";
 import { CheckOutlined, CloseOutlined, EyeOutlined, UserOutlined, CalendarOutlined } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import dayjs from "dayjs";
 
 import PageHeader from "../../components/ui/PageHeader";
 import {
@@ -24,6 +23,7 @@ import AssetReturnApprovalMap from "../../components/assets/AssetReturnApprovalM
 import AttendanceMaintenanceNotice from "../../components/attendance/AttendanceMaintenanceNotice";
 import AttendanceCorrectionsApproverTable from "../../components/attendance/AttendanceCorrectionsApproverTable";
 import AttendanceMaintenanceBanner from "../../components/attendance/AttendanceMaintenanceBanner";
+import { formatDateTime } from "../../utils/dateTime";
 
 export default function ManagerTeamRequestsPage() {
     const [searchParams, setSearchParams] = useSearchParams();
@@ -342,7 +342,7 @@ function AssetReturnRequestsTab() {
             dataIndex: "requested_at",
             key: "requested_at",
             width: 180,
-            render: (value: string) => (value ? dayjs(value).format("YYYY-MM-DD HH:mm") : "—"),
+            render: (value: string) => formatDateTime(value, "—"),
         },
         {
             title: t("common.actions"),

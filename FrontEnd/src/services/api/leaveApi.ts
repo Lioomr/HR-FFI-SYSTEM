@@ -2,6 +2,7 @@ import { api } from "./apiClient";
 import type { ApiResponse, PaginatedResponse } from "./apiTypes";
 import type { WorkflowSnapshot } from "../../types/workflow";
 import type { RequestObligationSummary } from "./requestObligationsApi";
+import type { EmployeeDocument } from "./employeesApi";
 
 /**
  * Leave Type DTO
@@ -37,7 +38,8 @@ export interface LeaveRequest {
   // Frontend had 'days_requested'. I should use 'days' to match backend.
   reason: string;
   document?: string | null;
-  status: "submitted" | "pending_delegate" | "pending_manager" | "pending_hr" | "pending_ceo" | "approved" | "rejected" | "cancelled";
+  status: "submitted" | "pending_delegate" | "pending_manager" | "pending_hr" | "pending_ceo" | "pending_hr_completion" | "approved" | "rejected" | "cancelled";
+  requires_hr_completion_visa?: boolean;
   source?: "employee" | "hr_manual";
   manual_entry_reason?: string;
   source_document_ref?: string;
@@ -60,6 +62,7 @@ export interface LeaveRequest {
   updated_at?: string;
   workflow?: WorkflowSnapshot;
   obligations_summary?: RequestObligationSummary;
+  employee_documents?: EmployeeDocument[];
   // Travel & delegation fields
   other_leave_description?: string;
   date_of_rejoin?: string | null;
@@ -251,6 +254,21 @@ export async function rejectLeaveRequest(
   const { data } = await api.post<ApiResponse<LeaveRequest>>(
     `/api/leaves/leave-requests/${id}/reject/`,
     { comment }
+  );
+  return data;
+}
+
+export async function completeLeaveRequest(
+  id: string | number,
+  payload: { comment?: string; visa_document?: File }
+): Promise<ApiResponse<LeaveRequest>> {
+  const form = new FormData();
+  if (payload.comment) form.append("comment", payload.comment);
+  if (payload.visa_document) form.append("visa_document", payload.visa_document);
+  const { data } = await api.post<ApiResponse<LeaveRequest>>(
+    `/api/leaves/leave-requests/${id}/complete/`,
+    form,
+    { headers: { "Content-Type": "multipart/form-data" } }
   );
   return data;
 }

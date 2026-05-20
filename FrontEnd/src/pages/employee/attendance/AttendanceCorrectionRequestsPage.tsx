@@ -6,7 +6,6 @@ import {
   PlusOutlined,
   SendOutlined,
 } from "@ant-design/icons";
-import dayjs from "dayjs";
 
 import PageHeader from "../../../components/ui/PageHeader";
 import LoadingState from "../../../components/ui/LoadingState";
@@ -24,6 +23,7 @@ import {
 } from "../../../services/api/attendanceCorrectionsApi";
 import { isApiError } from "../../../services/api/apiTypes";
 import { useI18n } from "../../../i18n/useI18n";
+import { formatDateOnly, formatTimeOnly } from "../../../utils/dateTime";
 import {
   getDetailedApiMessage,
   getDetailedHttpErrorMessage,
@@ -150,21 +150,21 @@ export default function AttendanceCorrectionRequestsPage() {
         key: "date",
         dataIndex: "date",
         width: 130,
-        render: (value: string) => (value ? dayjs(value).format("YYYY-MM-DD") : "—"),
+        render: (value: string) => formatDateOnly(value, "—"),
       },
       {
         title: t("attendanceCorrections.fields.requestedCheckIn", "Requested check-in"),
         key: "in",
         dataIndex: "requested_check_in_at",
         width: 150,
-        render: (value: string | null) => (value ? dayjs(value).format("HH:mm") : "—"),
+        render: (value: string | null) => formatTimeOnly(value, "—"),
       },
       {
         title: t("attendanceCorrections.fields.requestedCheckOut", "Requested check-out"),
         key: "out",
         dataIndex: "requested_check_out_at",
         width: 160,
-        render: (value: string | null) => (value ? dayjs(value).format("HH:mm") : "—"),
+        render: (value: string | null) => formatTimeOnly(value, "—"),
       },
       {
         title: t("attendanceCorrections.fields.requestedStatus", "Requested status"),

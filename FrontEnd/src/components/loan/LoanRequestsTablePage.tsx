@@ -9,6 +9,7 @@ import type { ApiResponse, PaginatedResponse } from "../../services/api/apiTypes
 import { isApiError } from "../../services/api/apiTypes";
 import type { LoanRequest, LoanStatus } from "../../services/api/loanApi";
 import { formatNumber } from "../../utils/currency";
+import { formatDateOnly } from "../../utils/dateTime";
 import { useI18n } from "../../i18n/useI18n";
 import LoanApprovalMap from "../loans/LoanApprovalMap";
 import { useAuthStore } from "../../auth/authStore";
@@ -127,7 +128,7 @@ export default function LoanRequestsTablePage({
       title: t("loans.list.colCreated"),
       key: "created_at",
       dataIndex: "created_at",
-      render: (value?: string) => (value ? new Date(value).toLocaleDateString() : "-"),
+      render: (value?: string) => formatDateOnly(value),
     },
     {
       title: t("common.actions"),

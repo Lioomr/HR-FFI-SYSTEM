@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Avatar, Button, Select, Space, Table, Tooltip, notification } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { CheckOutlined, CloseOutlined, UserOutlined } from "@ant-design/icons";
-import dayjs from "dayjs";
 
 import LoadingState from "../ui/LoadingState";
 import ErrorState from "../ui/ErrorState";
@@ -20,6 +19,7 @@ import {
 } from "../../services/api/attendanceCorrectionsApi";
 import { isApiError } from "../../services/api/apiTypes";
 import { useI18n } from "../../i18n/useI18n";
+import { formatDateOnly, formatTimeOnly } from "../../utils/dateTime";
 import {
   getDetailedApiMessage,
   getDetailedHttpErrorMessage,
@@ -174,14 +174,14 @@ export default function AttendanceCorrectionsApproverTable({
         key: "date",
         dataIndex: "date",
         width: 130,
-        render: (value: string) => (value ? dayjs(value).format("YYYY-MM-DD") : "—"),
+        render: (value: string) => formatDateOnly(value, "—"),
       },
       {
         title: t("attendanceCorrections.fields.requested", "Requested"),
         key: "requested",
         render: (_: unknown, record) => {
-          const inAt = record.requested_check_in_at ? dayjs(record.requested_check_in_at).format("HH:mm") : "—";
-          const outAt = record.requested_check_out_at ? dayjs(record.requested_check_out_at).format("HH:mm") : "—";
+          const inAt = formatTimeOnly(record.requested_check_in_at, "—");
+          const outAt = formatTimeOnly(record.requested_check_out_at, "—");
           const statusValue = record.requested_status
             ? t(`attendanceCorrections.statusValue.${record.requested_status}`, record.requested_status)
             : "—";
@@ -202,8 +202,8 @@ export default function AttendanceCorrectionsApproverTable({
         title: t("attendanceCorrections.fields.current", "Current"),
         key: "current",
         render: (_: unknown, record) => {
-          const inAt = record.current_check_in_at ? dayjs(record.current_check_in_at).format("HH:mm") : "—";
-          const outAt = record.current_check_out_at ? dayjs(record.current_check_out_at).format("HH:mm") : "—";
+          const inAt = formatTimeOnly(record.current_check_in_at, "—");
+          const outAt = formatTimeOnly(record.current_check_out_at, "—");
           const statusValue = record.current_status
             ? t(`attendanceCorrections.statusValue.${String(record.current_status).toUpperCase()}`, String(record.current_status))
             : "—";

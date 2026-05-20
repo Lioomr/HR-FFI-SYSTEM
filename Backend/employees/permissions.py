@@ -32,6 +32,26 @@ class IsEmployeeOwner(BasePermission):
         return obj.user == request.user and request.method in ["GET", "HEAD", "OPTIONS"]
 
 
+class IsManagerOfEmployee(BasePermission):
+    """
+    Allows read-only access for a direct manager to a team member's profile.
+    """
+
+    def has_permission(self, request, view):
+        if request.method not in ["GET", "HEAD", "OPTIONS"]:
+            return False
+        return request.user and request.user.is_authenticated
+
+    def has_object_permission(self, request, view, obj):
+        if request.method not in ["GET", "HEAD", "OPTIONS"]:
+            return False
+        if obj.manager_id == request.user.id:
+            return True
+
+        manager_profile = getattr(request.user, "employee_profile", None)
+        return bool(manager_profile and obj.manager_profile_id == manager_profile.id)
+
+
 class IsHRManagerOnly(BasePermission):
     """
     Allows access only to HRManager.

@@ -13,6 +13,7 @@ import { useI18n } from "../../../i18n/useI18n";
 import LoanApprovalMap from "../../../components/loans/LoanApprovalMap";
 import ApprovalTimeline from "../../../components/requests/ApprovalTimeline";
 import PendingActionBanner from "../../../components/requests/PendingActionBanner";
+import { formatDateTime, formatDateTimeShort } from "../../../utils/dateTime";
 
 function statusColor(status: LoanStatus) {
   switch (status) {
@@ -160,7 +161,7 @@ export default function EmployeeLoanRequestDetailsPage() {
               </Descriptions.Item>
               <Descriptions.Item label={t("loans.list.colReason")} span={2}>{item.reason || "-"}</Descriptions.Item>
               <Descriptions.Item label={t("loans.list.colCreated")}>
-                {item.created_at ? new Date(item.created_at).toLocaleString() : "-"}
+                {formatDateTime(item.created_at)}
               </Descriptions.Item>
               {item.approved_amount && (
                 <Descriptions.Item label={t("loans.details.approvedAmount") || "Approved Amount"}>
@@ -218,7 +219,7 @@ export default function EmployeeLoanRequestDetailsPage() {
                           <Text style={{ fontSize: 11, color: '#64748b' }}>{entry.actor_email || "System"}</Text>
                         </div>
                         <Text type="secondary" style={{ fontSize: 10, whiteSpace: 'nowrap' }}>
-                          {entry.at ? new Date(entry.at).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ""}
+                          {formatDateTimeShort(entry.at, "")}
                         </Text>
                       </div>
                       {entry.note && (

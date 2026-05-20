@@ -69,6 +69,7 @@ import ManagerTeamPage from "../pages/manager/ManagerTeamPage";
 import CreateTeamAnnouncementPage from "../pages/manager/CreateTeamAnnouncementPage";
 import ManagerLoanRequestsPage from "../pages/manager/ManagerLoanRequestsPage";
 import ManagerLoanRequestDetailsPage from "../pages/manager/ManagerLoanRequestDetailsPage";
+import ManagerEmployeeProfilePage from "../pages/manager/ManagerEmployeeProfilePage";
 
 import MyProfilePage from "../pages/employee/MyProfilePage";
 import UserProfilePage from "../pages/shared/UserProfilePage";
@@ -252,6 +253,7 @@ export const routes = [
               { path: "manager/team-requests", element: <ManagerTeamRequestsPage /> },
               { path: "manager/attendance-corrections", element: <ManagerAttendanceCorrectionRequestsPage /> },
               { path: "manager/team", element: <ManagerTeamPage /> },
+              { path: "manager/team/:id", element: <ManagerEmployeeProfilePage /> },
               { path: "manager/leave/requests/:id", element: <ManagerLeaveRequestDetailsPage /> },
               { path: "manager/loan-requests", element: <ManagerLoanRequestsPage /> },
               { path: "manager/loan-requests/:id", element: <ManagerLoanRequestDetailsPage /> },

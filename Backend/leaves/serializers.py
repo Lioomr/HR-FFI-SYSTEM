@@ -67,6 +67,8 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
     deducted_from_leave_type = serializers.SerializerMethodField()
     workflow = serializers.SerializerMethodField()
     obligations_summary = serializers.SerializerMethodField()
+    requires_hr_completion_visa = serializers.SerializerMethodField()
+    employee_documents = serializers.SerializerMethodField()
     company_id = serializers.PrimaryKeyRelatedField(source="company", read_only=True)
     company_name = serializers.CharField(source="company.name", read_only=True)
 
@@ -154,6 +156,16 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
             return sync_leave_obligations(obj, actor=actor)
         except Exception:
             return get_obligations_summary(obj)
+
+    def get_requires_hr_completion_visa(self, obj):
+        profile = obj.employee_profile or resolve_employee_profile(obj.employee)
+        return bool(profile and not profile.is_saudi and obj.status == LeaveRequest.RequestStatus.PENDING_HR_COMPLETION)
+
+    def get_employee_documents(self, obj):
+        from employees.serializers import EmployeeDocumentSerializer
+
+        documents = obj.employee_documents.select_related("uploaded_by", "company", "leave_request")
+        return EmployeeDocumentSerializer(documents, many=True, context=self.context).data
 
 
 class LeaveRequestCreateSerializer(serializers.ModelSerializer):
@@ -262,6 +274,21 @@ class LeaveRequestCreateSerializer(serializers.ModelSerializer):
 class LeaveRequestActionSerializer(serializers.Serializer):
     comment = serializers.CharField(required=False, allow_blank=True)
     waiver_reason = serializers.CharField(required=False, allow_blank=True)
+
+
+class LeaveRequestCompleteSerializer(serializers.Serializer):
+    comment = serializers.CharField(required=False, allow_blank=True)
+    visa_document = serializers.FileField(required=False, allow_null=True)
+
+    def validate_visa_document(self, value):
+        if not value:
+            return value
+        extension = Path(value.name).suffix.lower()
+        if extension != ".pdf":
+            raise serializers.ValidationError("Visa document must be a PDF.")
+        if value.size > LEAVE_MAX_UPLOAD_SIZE:
+            raise serializers.ValidationError("File size exceeds maximum limit.")
+        return value
 
 
 class LeaveRequestDelegationSerializer(serializers.Serializer):

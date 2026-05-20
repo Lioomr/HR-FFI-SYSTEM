@@ -60,6 +60,7 @@ class LeaveRequest(models.Model):
         PENDING_MANAGER = "pending_manager", _("Pending Manager")
         PENDING_HR = "pending_hr", _("Pending HR")
         PENDING_CEO = "pending_ceo", _("Pending CEO")
+        PENDING_HR_COMPLETION = "pending_hr_completion", _("Pending HR Completion")
         APPROVED = "approved", _("Approved")
         REJECTED = "rejected", _("Rejected")
         CANCELLED = "cancelled", _("Cancelled")
@@ -99,7 +100,7 @@ class LeaveRequest(models.Model):
         help_text=_("Supporting document for leave request."),
     )
 
-    status = models.CharField(max_length=20, choices=RequestStatus.choices, default=RequestStatus.SUBMITTED)
+    status = models.CharField(max_length=30, choices=RequestStatus.choices, default=RequestStatus.SUBMITTED)
     source = models.CharField(max_length=20, choices=RequestSource.choices, default=RequestSource.EMPLOYEE)
     manual_entry_reason = models.TextField(blank=True, help_text=_("Reason entered by HR for manual records."))
     source_document_ref = models.CharField(
@@ -156,6 +157,17 @@ class LeaveRequest(models.Model):
 
     # Existing generic field, assume it maps to HR reason for now unless we migrate it.
     decision_reason = models.TextField(blank=True, help_text=_("Reason for rejection or approval note (Legacy/HR)."))
+
+    # Final HR completion after CEO approval.
+    hr_completed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="hr_completed_leaves",
+    )
+    hr_completed_at = models.DateTimeField(null=True, blank=True)
+    hr_completion_note = models.TextField(blank=True)
 
     # Travel & leave details
     other_leave_description = models.CharField(max_length=255, blank=True)

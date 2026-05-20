@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Avatar, Button, Card, Col, Empty, Form, Input, Row, Select, Table, Tag, notification } from "antd";
+import { Avatar, Badge, Button, Card, Col, Empty, Form, Input, Row, Select, Space, Table, Tag, Typography, notification } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { EyeOutlined } from "@ant-design/icons";
-import dayjs from "dayjs";
-import relativeTime from "dayjs/plugin/relativeTime";
+import { EyeOutlined, ReloadOutlined } from "@ant-design/icons";
 
 import PageHeader from "../../components/ui/PageHeader";
 import {
@@ -16,8 +14,7 @@ import { isApiError } from "../../services/api/apiTypes";
 import { useI18n } from "../../i18n/useI18n";
 import { useAuthStore } from "../../auth/authStore";
 import { isHeadOfficeOrganization } from "../../utils/organizationContext";
-
-dayjs.extend(relativeTime);
+import { formatDateTime } from "../../utils/dateTime";
 
 const TYPE_COLORS: Record<PendingRequestType, string> = {
   LEAVE: "blue",
@@ -74,6 +71,15 @@ export default function PendingInboxPage() {
 
   useEffect(() => {
     loadData();
+  }, [loadData]);
+
+  // Refetch when tab becomes visible again
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") loadData();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, [loadData]);
 
   const handleValuesChange = (_changed: Partial<Filters>, all: Filters) => {
@@ -143,7 +149,7 @@ export default function PendingInboxPage() {
       title: t("pendingInbox.col.time"),
       dataIndex: "time",
       key: "time",
-      render: (val: string) => (val ? dayjs(val).fromNow() : "-"),
+      render: (val: string) => formatDateTime(val),
     },
     {
       title: t("common.actions"),
@@ -163,7 +169,15 @@ export default function PendingInboxPage() {
 
   return (
     <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-      <PageHeader title={t("pendingInbox.title")} subtitle={t("pendingInbox.subtitle")} />
+      <PageHeader
+        title={t("pendingInbox.title")}
+        subtitle={t("pendingInbox.subtitle")}
+        actions={
+          <Button icon={<ReloadOutlined />} onClick={loadData} loading={loading}>
+            {t("common.refresh", "Refresh")}
+          </Button>
+        }
+      />
 
       <Card style={{ marginBottom: 16, borderRadius: 16 }}>
         <Form form={form} layout="vertical" onValuesChange={handleValuesChange}>
@@ -193,7 +207,19 @@ export default function PendingInboxPage() {
         </Form>
       </Card>
 
-      <Card style={{ borderRadius: 16 }}>
+      <Card
+        style={{ borderRadius: 16 }}
+        title={
+          <Space>
+            <Typography.Text strong>{t("pendingInbox.title")}</Typography.Text>
+            <Badge
+              count={total}
+              overflowCount={999}
+              style={{ backgroundColor: total > 0 ? "#f97316" : "#94a3b8" }}
+            />
+          </Space>
+        }
+      >
         <Table
           dataSource={data}
           columns={columns}
