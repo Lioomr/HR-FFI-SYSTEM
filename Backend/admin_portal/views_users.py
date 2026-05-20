@@ -9,17 +9,17 @@ from django.contrib.auth.models import Group
 from django.core.cache import cache
 from django.db.models import Q
 from django.template.loader import render_to_string
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.views import APIView
 
+from accounts.password_policy import get_password_policy
 from audit.utils import audit
 from core.pagination import StandardPagination
 from core.permissions import IsHRManagerOrAdmin, IsSystemAdmin
 from core.responses import error, success
 from core.services.bird_email_service import _load_logo_base64
 from core.services.email_service import EmailService
-
-from accounts.password_policy import get_password_policy
 
 from .serializers import (
     CreateUserSerializer,
@@ -91,6 +91,11 @@ def _send_password_reset_material(user: User, *, subject: str, html_content: str
         html_content=html_content,
         fallback_text=fallback_text,
     )
+
+
+def _display_datetime(value):
+    tzinfo = getattr(settings, "EMAIL_DISPLAY_TZINFO", None)
+    return timezone.localtime(value, tzinfo) if tzinfo else timezone.localtime(value)
 
 
 class UsersListCreateView(APIView):
@@ -258,6 +263,7 @@ class UserResetPasswordView(APIView):
         s.is_valid(raise_exception=True)
 
         mode = s.validated_data["mode"]
+        requested_at = _display_datetime(timezone.now()).strftime("%Y-%m-%d %I:%M %p %Z")
 
         if mode == "temporary_password":
             temp_password = generate_temp_password()
@@ -275,6 +281,7 @@ class UserResetPasswordView(APIView):
                 "reset_instructions": "Use the temporary password below to log in. You will be prompted to change it immediately.",
                 "reset_instructions_ar": "استخدم كلمة المرور المؤقتة أدناه لتسجيل الدخول. سيُطلب منك تغييرها على الفور.",
                 "temp_password": temp_password,
+                "requested_at": requested_at,
             }
             html = render_to_string("emails/password_reset_email.html", context)
             
@@ -305,6 +312,7 @@ class UserResetPasswordView(APIView):
             "reset_instructions": "Click the button below to set a new password. This link is only valid once.",
             "reset_instructions_ar": "انقر على الزر أدناه لتعيين كلمة مرور جديدة. هذا الرابط صالح للاستخدام مرة واحدة فقط.",
             "reset_link": reset_link,
+            "requested_at": requested_at,
         }
         html = render_to_string("emails/password_reset_email.html", context)
         

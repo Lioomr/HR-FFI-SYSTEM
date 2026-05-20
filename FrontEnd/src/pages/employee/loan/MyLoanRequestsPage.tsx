@@ -11,6 +11,7 @@ import AmountWithSAR from "../../../components/ui/AmountWithSAR";
 import { useI18n } from "../../../i18n/useI18n";
 import { getDetailedApiMessage, getDetailedHttpErrorMessage } from "../../../services/api/userErrorMessages";
 import LoanApprovalMap from "../../../components/loans/LoanApprovalMap";
+import { formatDateOnly } from "../../../utils/dateTime";
 
 const { confirm } = Modal;
 const { useBreakpoint } = Grid;
@@ -145,7 +146,7 @@ export default function MyLoanRequestsPage() {
       dataIndex: "created_at",
       width: 130,
       responsive: ["md"],
-      render: (value?: string) => (value ? new Date(value).toLocaleDateString() : "-"),
+      render: (value?: string) => formatDateOnly(value),
     },
     {
       title: t("common.actions"),

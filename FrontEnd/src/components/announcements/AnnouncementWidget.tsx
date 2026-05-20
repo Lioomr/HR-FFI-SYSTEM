@@ -10,6 +10,7 @@ import {
 import { BellOutlined, ArrowRightOutlined, FilePdfOutlined, DownloadOutlined, EyeOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useI18n } from '../../i18n/useI18n';
+import { formatDateOnly, formatDateTime } from '../../utils/dateTime';
 
 const { Text, Paragraph } = Typography;
 
@@ -95,8 +96,7 @@ export default function AnnouncementWidget({ role }: { role?: string }) {
     };
 
     const formatDate = (dateString: string) => {
-        const date = new Date(dateString);
-        return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date);
+        return formatDateOnly(dateString);
     };
 
     const isImportant = (title: string, content: string) => {
@@ -184,7 +184,7 @@ export default function AnnouncementWidget({ role }: { role?: string }) {
                             <Tag color={isImportant(detail.title, detail.content) ? "red" : "green"}>
                                 {isImportant(detail.title, detail.content) ? t("announcements.widget.important") : t("announcements.widget.normal")}
                             </Tag>
-                            <Tag>{new Date(detail.created_at).toLocaleString()}</Tag>
+                            <Tag>{formatDateTime(detail.created_at)}</Tag>
                         </div>
                         <Paragraph style={{ whiteSpace: 'pre-wrap' }}>
                             {detail.content}

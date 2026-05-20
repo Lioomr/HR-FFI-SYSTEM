@@ -53,6 +53,7 @@ import {
 import LeaveApprovalMap from "../../../components/leaves/LeaveApprovalMap";
 import { useAuthStore } from "../../../auth/authStore";
 import { isHeadOfficeOrganization } from "../../../utils/organizationContext";
+import { formatDateOnly } from "../../../utils/dateTime";
 
 const { Option } = Select;
 const { RangePicker } = DatePicker;
@@ -299,7 +300,7 @@ export default function LeaveInboxPage() {
       title: t("common.createdAt"),
       dataIndex: "created_at",
       key: "created_at",
-      render: (val) => (val ? new Date(val).toLocaleDateString() : "-"),
+      render: (val) => formatDateOnly(val),
     },
     {
       title: t("common.actions"),

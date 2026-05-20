@@ -100,6 +100,8 @@ function buildStages(request: LeaveRequest, t: TranslateFn): ApprovalFlowStage[]
           ? "current"
           : "upcoming";
 
+  const isPendingHrCompletion = request.status === "pending_hr_completion";
+
   const hrState: ApprovalFlowStage["state"] = finalCancelled
     ? request.decided_at || request.hr_decision_note || request.decision_reason
       ? "completed"
@@ -110,7 +112,7 @@ function buildStages(request: LeaveRequest, t: TranslateFn): ApprovalFlowStage[]
     ? "rejected"
     : request.status === "pending_hr"
       ? "current"
-      : request.status === "pending_ceo" || request.status === "approved" || Boolean(request.decided_at || request.hr_decision_note)
+      : request.status === "pending_ceo" || isPendingHrCompletion || request.status === "approved" || Boolean(request.decided_at || request.hr_decision_note)
         ? "completed"
         : (needsDelegate && !request.delegate_decision_at) || (needsManager && !request.manager_decision_at)
           ? "upcoming"
@@ -124,8 +126,18 @@ function buildStages(request: LeaveRequest, t: TranslateFn): ApprovalFlowStage[]
         ? "completed"
       : request.status === "pending_ceo"
         ? "current"
-        : request.ceo_decision_at || request.status === "approved"
+        : request.ceo_decision_at || request.status === "approved" || isPendingHrCompletion
           ? "completed"
+          : "upcoming";
+
+  const hrCompletionState: ApprovalFlowStage["state"] = !needsCeo
+    ? "skipped"
+    : isPendingHrCompletion
+      ? "current"
+      : request.status === "approved"
+        ? "completed"
+        : finalRejected
+          ? "skipped"
           : "upcoming";
 
   const stages: ApprovalFlowStage[] = [
@@ -191,6 +203,20 @@ function buildStages(request: LeaveRequest, t: TranslateFn): ApprovalFlowStage[]
           ? t("leave.approvalMap.notRequired")
           : request.ceo_decision_note || t(`leave.approvalMap.${ceoState}`),
       at: request.ceo_decision_at,
+    },
+    {
+      key: "hr_completion",
+      title: t("leave.approvalMap.hrCompletion", "HR Completion"),
+      state: hrCompletionState,
+      note:
+        hrCompletionState === "skipped"
+          ? t("leave.approvalMap.notRequired")
+          : hrCompletionState === "current"
+            ? t("leave.approvalMap.hrCompletionPending", "Waiting for HR to upload visa and complete the request.")
+            : hrCompletionState === "completed"
+              ? t("leave.approvalMap.completed")
+              : t("leave.approvalMap.upcoming"),
+      at: hrCompletionState === "completed" ? (request.decided_at || request.updated_at) : undefined,
     },
   ];
 

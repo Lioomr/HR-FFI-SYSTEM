@@ -12,6 +12,7 @@ from django.http import FileResponse
 from django.utils import timezone
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -35,13 +36,15 @@ from organization.services import (
     get_active_company_for_request,
 )
 
+from .document_extraction import extract_visa_fields
 from .models import EmployeeDeletionRequest, EmployeeImport, EmployeeProfile
 from .notifications import send_document_expiry_whatsapp
-from .permissions import IsEmployeeOwner, IsHRManagerOnly, IsHRManagerOrAdmin
+from .permissions import IsEmployeeOwner, IsHRManagerOnly, IsHRManagerOrAdmin, IsManagerOfEmployee
 from .serializers import (
     DelegationCandidateSerializer,
     EmployeeDeletionRequestCreateSerializer,
     EmployeeDeletionRequestReadSerializer,
+    EmployeeDocumentSerializer,
     EmployeeImportSerializer,
     EmployeeProfileReadSerializer,
     EmployeeProfileWriteSerializer,
@@ -271,14 +274,19 @@ def _generate_unique_employee_id(existing_ids, max_attempts=10):
 class EmployeeProfileViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     pagination_class = EmployeePagination
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_permissions(self):
         if self.action == "import_excel":
             permission_classes = [IsAuthenticated, IsHRManagerOnly]
         elif self.action in ["manager_access", "manager_team", "delegation_candidates"]:
             permission_classes = [IsAuthenticated]
-        elif self.action in ["retrieve", "me"]:
+        elif self.action == "retrieve":
+            permission_classes = [IsAuthenticated, IsHRManagerOrAdmin | IsEmployeeOwner | IsManagerOfEmployee]
+        elif self.action == "me":
             permission_classes = [IsAuthenticated, IsHRManagerOrAdmin | IsEmployeeOwner]
+        elif self.action in ["documents", "download_document", "update_document"]:
+            permission_classes = [IsAuthenticated]
         else:
             permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
         return [permission() for permission in permission_classes]
@@ -306,11 +314,20 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
                 scoped_qs = filter_queryset_by_accessible_companies(base_qs.all(), self.request)
             return scoped_qs | base_qs.filter(company__isnull=True)
 
+        if self.action == "retrieve":
+            manager_profile = getattr(user, "employee_profile", None)
+            manager_match = Q(manager=user)
+            if manager_profile:
+                manager_match = manager_match | Q(manager_profile=manager_profile)
+            return base_qs.filter(Q(user=user) | manager_match).distinct()
+
         return base_qs.filter(user=user)
 
     def get_serializer_class(self):
         if self.action == "delegation_candidates":
             return DelegationCandidateSerializer
+        if self.action == "documents":
+            return EmployeeDocumentSerializer
         if self.action in ["list", "retrieve", "me"]:
             return EmployeeProfileReadSerializer
         return EmployeeProfileWriteSerializer
@@ -433,14 +450,160 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         response = super().retrieve(request, *args, **kwargs)
         return success(response.data)
 
+    def _document_profile_for_request(self, request, pk):
+        profile = None
+        if str(pk) == "me":
+            profile = EmployeeProfile.objects.select_related("user", "company").filter(user=request.user).first()
+        else:
+            profile = EmployeeProfile.objects.select_related("user", "company").filter(pk=pk).first()
+        if profile is None:
+            return None, error("Not found", errors=["Not found."], status=404)
+
+        role = get_role(request.user)
+        if role in ["SystemAdmin", "HRManager"]:
+            scoped = filter_queryset_by_accessible_companies(
+                EmployeeProfile.objects.filter(pk=profile.pk), request, include_null=True
+            )
+            if profile.company_id is None or scoped.exists():
+                return profile, None
+        elif request.method in ["GET", "HEAD", "OPTIONS"] and profile.user_id == request.user.id:
+            return profile, None
+
+        return None, error("Not found", errors=["Not found."], status=404)
+
+    @action(detail=True, methods=["get", "post"], url_path="documents")
+    def documents(self, request, pk=None):
+        profile, error_response = self._document_profile_for_request(request, pk)
+        if error_response:
+            return error_response
+
+        if request.method == "GET":
+            qs = profile.documents.select_related("uploaded_by", "company", "leave_request")
+            serializer = EmployeeDocumentSerializer(qs, many=True, context={"request": request})
+            return success(serializer.data)
+
+        role = get_role(request.user)
+        if role not in ["SystemAdmin", "HRManager"]:
+            return error("Forbidden", errors=["Forbidden."], status=status.HTTP_403_FORBIDDEN)
+
+        serializer = EmployeeDocumentSerializer(data=request.data, context={"request": request})
+        if not serializer.is_valid():
+            return error("Validation error", errors=serializer.errors, status=422)
+
+        try:
+            ensure_company_write_allowed(request)
+        except ValueError as exc:
+            return error("Validation error", errors=[str(exc)], status=422)
+        document = serializer.save(
+            employee_profile=profile,
+            company=profile.company,
+            uploaded_by=request.user,
+            original_filename=getattr(serializer.validated_data.get("file"), "name", ""),
+        )
+        warnings = extract_visa_fields(document)
+        document.extraction_warnings = warnings
+
+        audit(
+            request,
+            "employee_document_uploaded",
+            entity="employee_document",
+            entity_id=document.id,
+            metadata={
+                "employee_profile_id": profile.id,
+                "document_type": document.document_type,
+                "extraction_status": document.extraction_status,
+                "warnings": warnings,
+            },
+        )
+        return success(
+            EmployeeDocumentSerializer(document, context={"request": request}).data, status=status.HTTP_201_CREATED
+        )
+
+    @action(detail=True, methods=["get"], url_path=r"documents/(?P<document_id>[^/.]+)/download")
+    def download_document(self, request, pk=None, document_id=None):
+        profile, error_response = self._document_profile_for_request(request, pk)
+        if error_response:
+            return error_response
+
+        document = profile.documents.filter(pk=document_id).first()
+        if document is None:
+            return error("Not found", errors=["Not found."], status=404)
+
+        try:
+            filename = (
+                document.original_filename or document.file.name.split("/")[-1] or f"employee_document_{document.id}"
+            )
+            return FileResponse(
+                document.file.open("rb"),
+                as_attachment=True,
+                filename=filename,
+            )
+        except FileNotFoundError:
+            return error("Not found", errors=["Document file is missing from storage."], status=404)
+
+    @action(detail=True, methods=["patch"], url_path=r"documents/(?P<document_id>[^/.]+)")
+    def update_document(self, request, pk=None, document_id=None):
+        profile, error_response = self._document_profile_for_request(request, pk)
+        if error_response:
+            return error_response
+
+        role = get_role(request.user)
+        if role not in ["SystemAdmin", "HRManager"]:
+            return error("Forbidden", errors=["Forbidden."], status=status.HTTP_403_FORBIDDEN)
+
+        document = profile.documents.filter(pk=document_id).first()
+        if document is None:
+            return error("Not found", errors=["Not found."], status=404)
+
+        serializer = EmployeeDocumentSerializer(document, data=request.data, partial=True, context={"request": request})
+        if not serializer.is_valid():
+            return error("Validation error", errors=serializer.errors, status=422)
+        document = serializer.save()
+        audit(
+            request,
+            "employee_document_updated",
+            entity="employee_document",
+            entity_id=document.id,
+            metadata={"employee_profile_id": profile.id, "document_type": document.document_type},
+        )
+        return success(EmployeeDocumentSerializer(document, context={"request": request}).data)
+
     @action(detail=False, methods=["get"], url_path="me")
     def me(self, request):
         try:
-            profile = EmployeeProfile.objects.get(user=request.user)
+            profile = EmployeeProfile.objects.select_related(
+                "user",
+                "manager",
+                "manager_profile",
+                "manager_profile__user",
+                "department_ref",
+                "position_ref",
+                "task_group_ref",
+                "sponsor_ref",
+                "company",
+            ).get(user=request.user)
         except EmployeeProfile.DoesNotExist:
             return error("Profile not found.", status=status.HTTP_404_NOT_FOUND)
 
-        serializer = self.get_serializer(profile)
+        year_param = request.query_params.get("leave_balance_year") or request.query_params.get("year")
+        if year_param:
+            try:
+                leave_balance_year = int(year_param)
+            except ValueError:
+                return error("Validation error", errors=["year must be a valid integer."], status=422)
+        else:
+            leave_balance_year = timezone.localdate().year
+
+        active_company = get_active_company_for_request(request)
+        serializer = self.get_serializer(
+            profile,
+            context={
+                **self.get_serializer_context(),
+                "include_leave_balances": True,
+                "leave_balance_year": leave_balance_year,
+                "active_company": active_company,
+            },
+        )
         return success(serializer.data)
 
     @action(

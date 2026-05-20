@@ -1,5 +1,6 @@
 import { ClockCircleOutlined, CheckCircleFilled, CloseCircleFilled, MinusCircleOutlined } from "@ant-design/icons";
 import { Card, Space, Tag, Typography } from "antd";
+import { formatDateTime } from "../../utils/dateTime";
 
 const { Paragraph, Text } = Typography;
 
@@ -153,7 +154,7 @@ export default function ApprovalFlowMap({
                 ) : null}
                 <Paragraph style={{ marginBottom: 0, color: "#475569", minHeight: 44 }}>{stage.note}</Paragraph>
                 <Text type="secondary" style={{ fontSize: 12 }}>
-                  {stage.at ? new Date(stage.at).toLocaleString() : t("leave.approvalMap.noDate")}
+                  {stage.at ? formatDateTime(stage.at) : t("leave.approvalMap.noDate")}
                 </Text>
               </Space>
             </div>

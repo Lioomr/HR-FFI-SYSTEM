@@ -682,30 +682,58 @@ export default function BaseLayout() {
           label: sectionLabel(t("layout.menu.workInbox", "Work Inbox"), t("layout.menu.approvals", "Approvals")),
           children: [
             { key: "/pending-inbox", icon: <InboxOutlined />, label: <Link to="/pending-inbox">{t("layout.pendingInbox", "Pending Inbox")}</Link> },
-            ...(hasManagerAccess
-              ? [
-                { key: "/manager/dashboard", icon: <DashboardOutlined />, label: <Link to="/manager/dashboard">{t("layout.managerDashboard", "Manager Dashboard")}</Link> },
-                { key: "/manager/team-requests", icon: <FileSearchOutlined />, label: <Link to="/manager/team-requests">{t("layout.teamRequests", "Team Requests")}</Link> },
-                { key: "/manager/attendance-corrections", icon: <ClockCircleOutlined />, label: <Link to="/manager/attendance-corrections">{t("layout.attendanceCorrections", "Attendance Corrections")}</Link> },
-                { key: "/manager/loan-requests", icon: <DollarOutlined />, label: <Link to="/manager/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
-                { key: "/manager/team", icon: <TeamOutlined />, label: <Link to="/manager/team">{t("layout.myTeam", "My Team")}</Link> },
-              ]
-              : []),
-            ...(isFinanceApprover
-              ? [{ key: "/finance/loan-requests", icon: <DollarOutlined />, label: <Link to="/finance/loan-requests">{t("layout.loanInbox", "Loan Inbox")}</Link> }]
-              : []),
-            ...(isCFOApprover
-              ? [{ key: "/cfo/loan-requests", icon: <DollarOutlined />, label: <Link to="/cfo/loan-requests">{t("layout.cfoLoanInbox", "CFO Loan Inbox")}</Link> }]
-              : []),
-            ...(isCEOApprover
-              ? [
-                { key: "/ceo/loan-requests", icon: <DollarOutlined />, label: <Link to="/ceo/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
-                { key: "/ceo/attendance", icon: <ClockCircleOutlined />, label: <Link to="/ceo/attendance">{t("layout.attendance")}</Link> },
-                { key: "/ceo/assets/damage-reports", icon: <AppstoreOutlined />, label: <Link to="/ceo/assets/damage-reports">{t("assets.damageReports", "Damage Reports")}</Link> },
-                { key: "/ceo/assets/return-requests", icon: <AppstoreOutlined />, label: <Link to="/ceo/assets/return-requests">{t("assets.returnRequests", "Return Requests")}</Link> },
-                { key: "/ceo/employees/deletion-requests", icon: <TeamOutlined />, label: <Link to="/ceo/employees/deletion-requests">{t("employees.removalInbox.menu", "Employee Removals")}</Link> },
-              ]
-              : []),
+          ],
+        },
+      ]
+      : []),
+    ...(hasManagerAccess
+      ? [
+        {
+          type: "group" as const,
+          label: sectionLabel(t("layout.menu.manager", "Manager"), t("layout.menu.teamManagement", "Team Management")),
+          children: [
+            { key: "/manager/dashboard", icon: <DashboardOutlined />, label: <Link to="/manager/dashboard">{t("layout.managerDashboard", "Manager Dashboard")}</Link> },
+            { key: "/manager/team", icon: <TeamOutlined />, label: <Link to="/manager/team">{t("layout.myTeam", "My Team")}</Link> },
+            { key: "/manager/team-requests", icon: <FileSearchOutlined />, label: <Link to="/manager/team-requests">{t("layout.teamRequests", "Team Requests")}</Link> },
+            { key: "/manager/attendance-corrections", icon: <ClockCircleOutlined />, label: <Link to="/manager/attendance-corrections">{t("layout.attendanceCorrections", "Attendance Corrections")}</Link> },
+            { key: "/manager/loan-requests", icon: <DollarOutlined />, label: <Link to="/manager/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
+          ],
+        },
+      ]
+      : []),
+    ...(isFinanceApprover
+      ? [
+        {
+          type: "group" as const,
+          label: sectionLabel(t("layout.menu.finance", "Finance"), t("layout.menu.approvals", "Approvals")),
+          children: [
+            { key: "/finance/loan-requests", icon: <DollarOutlined />, label: <Link to="/finance/loan-requests">{t("layout.loanInbox", "Loan Inbox")}</Link> },
+          ],
+        },
+      ]
+      : []),
+    ...(isCFOApprover
+      ? [
+        {
+          type: "group" as const,
+          label: sectionLabel(t("layout.menu.cfo", "CFO"), t("layout.menu.finance", "Finance")),
+          children: [
+            { key: "/cfo/loan-requests", icon: <DollarOutlined />, label: <Link to="/cfo/loan-requests">{t("layout.cfoLoanInbox", "CFO Loan Inbox")}</Link> },
+          ],
+        },
+      ]
+      : []),
+    ...(isCEOApprover
+      ? [
+        {
+          type: "group" as const,
+          label: sectionLabel(t("layout.menu.ceo", "CEO"), t("layout.menu.approvals", "Approvals")),
+          children: [
+            { key: "/ceo/loan-requests", icon: <DollarOutlined />, label: <Link to="/ceo/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
+            { key: "/ceo/attendance", icon: <ClockCircleOutlined />, label: <Link to="/ceo/attendance">{t("layout.attendance")}</Link> },
+            { key: "/ceo/assets/damage-reports", icon: <AppstoreOutlined />, label: <Link to="/ceo/assets/damage-reports">{t("assets.damageReports", "Damage Reports")}</Link> },
+            { key: "/ceo/assets/return-requests", icon: <AppstoreOutlined />, label: <Link to="/ceo/assets/return-requests">{t("assets.returnRequests", "Return Requests")}</Link> },
+            { key: "/ceo/employees/deletion-requests", icon: <TeamOutlined />, label: <Link to="/ceo/employees/deletion-requests">{t("employees.removalInbox.menu", "Employee Removals")}</Link> },
           ],
         },
       ]
@@ -757,11 +785,17 @@ export default function BaseLayout() {
       label: sectionLabel(t("layout.menu.workInbox", "Work Inbox"), t("layout.menu.approvals", "Approvals")),
       children: [
         { key: "/pending-inbox", icon: <InboxOutlined />, label: <Link to="/pending-inbox">{t("layout.pendingInbox", "Pending Inbox")}</Link> },
+      ],
+    },
+    {
+      type: "group",
+      label: sectionLabel(t("layout.menu.manager", "Manager"), t("layout.menu.teamManagement", "Team Management")),
+      children: [
         { key: "/manager/dashboard", icon: <DashboardOutlined />, label: <Link to="/manager/dashboard">{t("layout.managerDashboard", "Manager Dashboard")}</Link> },
+        { key: "/manager/team", icon: <TeamOutlined />, label: <Link to="/manager/team">{t("layout.myTeam", "My Team")}</Link> },
         { key: "/manager/team-requests", icon: <FileSearchOutlined />, label: <Link to="/manager/team-requests">{t("layout.teamRequests", "Team Requests")}</Link> },
         { key: "/manager/attendance-corrections", icon: <ClockCircleOutlined />, label: <Link to="/manager/attendance-corrections">{t("layout.attendanceCorrections", "Attendance Corrections")}</Link> },
         { key: "/manager/loan-requests", icon: <DollarOutlined />, label: <Link to="/manager/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
-        { key: "/manager/team", icon: <TeamOutlined />, label: <Link to="/manager/team">{t("layout.myTeam", "My Team")}</Link> },
       ],
     },
     {
@@ -790,6 +824,12 @@ export default function BaseLayout() {
       label: sectionLabel(t("layout.menu.workInbox", "Work Inbox"), t("layout.menu.approvals", "Approvals")),
       children: [
         { key: "/pending-inbox", icon: <InboxOutlined />, label: <Link to="/pending-inbox">{t("layout.pendingInbox", "Pending Inbox")}</Link> },
+      ],
+    },
+    {
+      type: "group",
+      label: sectionLabel(t("layout.menu.ceo", "CEO"), t("layout.menu.approvals", "Approvals")),
+      children: [
         { key: "/ceo/leave/requests", icon: <CalendarOutlined />, label: <Link to="/ceo/leave/requests">{t("layout.ceoLeaveApprovals", "Leave Approvals")}</Link> },
         { key: "/ceo/team-requests", icon: <FileSearchOutlined />, label: <Link to="/ceo/team-requests">{t("layout.teamRequests", "Team Requests")}</Link> },
         { key: "/ceo/loan-requests", icon: <DollarOutlined />, label: <Link to="/ceo/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
@@ -808,13 +848,19 @@ export default function BaseLayout() {
     },
     {
       type: "group",
+      label: sectionLabel(t("layout.menu.manager", "Manager"), t("layout.menu.teamManagement", "Team Management")),
+      children: [
+        { key: "/manager/dashboard", icon: <DashboardOutlined />, label: <Link to="/manager/dashboard">{t("layout.managerDashboard", "Manager Dashboard")}</Link> },
+        { key: "/manager/team", icon: <TeamOutlined />, label: <Link to="/manager/team">{t("layout.myTeam", "My Team")}</Link> },
+        { key: "/manager/team-requests", icon: <FileSearchOutlined />, label: <Link to="/manager/team-requests">{t("layout.teamRequests", "Team Requests")}</Link> },
+        { key: "/manager/loan-requests", icon: <DollarOutlined />, label: <Link to="/manager/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
+      ],
+    },
+    {
+      type: "group",
       label: sectionLabel(t("layout.myTeam", "My Team"), t("layout.leadership", "Leadership")),
       children: [
         { key: "/ceo/team", icon: <TeamOutlined />, label: <Link to="/ceo/team">{t("layout.ceoTeam", "Leadership Team")}</Link> },
-        { key: "/manager/dashboard", icon: <DashboardOutlined />, label: <Link to="/manager/dashboard">{t("layout.managerDashboard", "Manager Dashboard")}</Link> },
-        { key: "/manager/team-requests", icon: <FileSearchOutlined />, label: <Link to="/manager/team-requests">{t("layout.teamRequests", "Team Requests")}</Link> },
-        { key: "/manager/loan-requests", icon: <DollarOutlined />, label: <Link to="/manager/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
-        { key: "/manager/team", icon: <TeamOutlined />, label: <Link to="/manager/team">{t("layout.myTeam", "My Team")}</Link> },
       ],
     },
     {
@@ -842,17 +888,23 @@ export default function BaseLayout() {
       label: sectionLabel(t("layout.menu.workInbox", "Work Inbox"), t("layout.menu.approvals", "Approvals")),
       children: [
         { key: "/pending-inbox", icon: <InboxOutlined />, label: <Link to="/pending-inbox">{t("layout.pendingInbox", "Pending Inbox")}</Link> },
+      ],
+    },
+    {
+      type: "group",
+      label: sectionLabel(t("layout.menu.cfo", "CFO"), t("layout.menu.finance", "Finance")),
+      children: [
         { key: "/cfo/loan-requests", icon: <DollarOutlined />, label: <Link to="/cfo/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
       ],
     },
     {
       type: "group",
-      label: sectionLabel(t("layout.myTeam", "My Team"), t("layout.leadership", "Leadership")),
+      label: sectionLabel(t("layout.menu.manager", "Manager"), t("layout.menu.teamManagement", "Team Management")),
       children: [
         { key: "/manager/dashboard", icon: <DashboardOutlined />, label: <Link to="/manager/dashboard">{t("layout.managerDashboard", "Manager Dashboard")}</Link> },
+        { key: "/manager/team", icon: <TeamOutlined />, label: <Link to="/manager/team">{t("layout.myTeam", "My Team")}</Link> },
         { key: "/manager/team-requests", icon: <FileSearchOutlined />, label: <Link to="/manager/team-requests">{t("layout.teamRequests", "Team Requests")}</Link> },
         { key: "/manager/loan-requests", icon: <DollarOutlined />, label: <Link to="/manager/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
-        { key: "/manager/team", icon: <TeamOutlined />, label: <Link to="/manager/team">{t("layout.myTeam", "My Team")}</Link> },
       ],
     },
     {

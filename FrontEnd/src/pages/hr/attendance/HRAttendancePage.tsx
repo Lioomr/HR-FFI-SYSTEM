@@ -3,8 +3,8 @@ import { Table, Button, Card, Tag, message, Typography, Tabs, Space, Tooltip, Mo
 import { CheckCircleOutlined, CloseCircleOutlined, ReloadOutlined } from "@ant-design/icons";
 import { useHrAttendanceStore } from "../../../stores/attendanceStore";
 import type { AttendanceRecord, AttendanceStatus } from "../../../types/attendance";
-import dayjs from "dayjs";
 import { useI18n } from "../../../i18n/useI18n";
+import { formatDateOnly, formatTimeOnly } from "../../../utils/dateTime";
 
 const { Title } = Typography;
 const { TextArea } = Input;
@@ -109,19 +109,19 @@ const HRAttendancePage: React.FC = () => {
             title: t("common.date"),
             dataIndex: "date",
             key: "date",
-            render: (val: string) => dayjs(val).format("MMM D, YYYY"),
+            render: (val: string) => formatDateOnly(val),
         },
         {
             title: t("attendance.checkIn"),
             dataIndex: "check_in_at",
             key: "check_in_at",
-            render: (val: string) => val ? dayjs(val).format("HH:mm") : "—",
+            render: (val: string) => formatTimeOnly(val, "—"),
         },
         {
             title: t("attendance.checkOut"),
             dataIndex: "check_out_at",
             key: "check_out_at",
-            render: (val: string) => val ? dayjs(val).format("HH:mm") : "—",
+            render: (val: string) => formatTimeOnly(val, "—"),
         },
         {
             title: t("common.status"),

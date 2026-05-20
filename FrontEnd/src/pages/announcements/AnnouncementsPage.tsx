@@ -11,6 +11,7 @@ import { useAuthStore } from "../../auth/authStore";
 import { useNavigate } from "react-router-dom";
 import { useI18n } from "../../i18n/useI18n";
 import { CalendarOutlined, DownloadOutlined, EyeOutlined, FilePdfOutlined, GoogleOutlined, VideoCameraOutlined } from "@ant-design/icons";
+import { formatDateOnly, formatDateTime } from "../../utils/dateTime";
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -48,11 +49,7 @@ export default function AnnouncementsPage() {
   }, []);
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
+    return formatDateOnly(dateString);
   };
 
   const isImportant = (title: string, content: string) => {
@@ -211,7 +208,7 @@ export default function AnnouncementsPage() {
                       <Space direction="vertical" size={6}>
                         {item.meeting_starts_at && (
                           <Text type="secondary">
-                            <CalendarOutlined /> {new Date(item.meeting_starts_at).toLocaleString()}
+                            <CalendarOutlined /> {formatDateTime(item.meeting_starts_at)}
                           </Text>
                         )}
                         {renderMeetingButtons(item)}
@@ -259,7 +256,7 @@ export default function AnnouncementsPage() {
                   ? t("announcements.widget.important")
                   : t("announcements.widget.normal")}
               </Tag>
-              <Tag>{new Date(detail.created_at).toLocaleString()}</Tag>
+              <Tag>{formatDateTime(detail.created_at)}</Tag>
               {detail.announcement_type === "MEETING" && <Tag icon={<CalendarOutlined />} color="blue">{t("announcements.meeting.tag")}</Tag>}
             </div>
             <Paragraph style={{ whiteSpace: "pre-wrap" }}>{detail.content}</Paragraph>
@@ -267,7 +264,7 @@ export default function AnnouncementsPage() {
               <div style={{ marginTop: 16, marginBottom: 16, padding: 12, background: "#fafafa", borderRadius: 8 }}>
                 <Space direction="vertical" size={8} style={{ width: "100%" }}>
                   {detail.meeting_starts_at && (
-                    <Text><strong>{t("announcements.meeting.startsAt")}:</strong> {new Date(detail.meeting_starts_at).toLocaleString()}</Text>
+                    <Text><strong>{t("announcements.meeting.startsAt")}:</strong> {formatDateTime(detail.meeting_starts_at)}</Text>
                   )}
                   {detail.meeting_duration_minutes && (
                     <Text><strong>{t("announcements.meeting.duration")}:</strong> {detail.meeting_duration_minutes} {t("announcements.meeting.minutes")}</Text>

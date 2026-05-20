@@ -21,6 +21,7 @@ import {
 } from "../../../services/api/leaveApi";
 import { getHttpStatus } from "../../../services/api/httpErrors";
 import { useI18n } from "../../../i18n/useI18n";
+import { formatDateTime } from "../../../utils/dateTime";
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -82,6 +83,8 @@ export default function EmployeeLeaveRequestDetailsPage() {
         return "purple";
       case "pending_ceo":
         return "volcano";
+      case "pending_hr_completion":
+        return "cyan";
       case "cancelled":
         return "default";
       default:
@@ -248,7 +251,7 @@ export default function EmployeeLeaveRequestDetailsPage() {
               {request.days} {t("leaves.days")}
             </Descriptions.Item>
             <Descriptions.Item label={t("common.submittedOn")}>
-              {request.created_at ? new Date(request.created_at).toLocaleString() : "-"}
+              {formatDateTime(request.created_at)}
             </Descriptions.Item>
             <Descriptions.Item label={t("leave.requestSource")}>
               {request.source === "hr_manual" ? t("leave.manual.badge") : t("leave.approvalMap.employeeRequest")}

@@ -1,14 +1,19 @@
+from pathlib import Path
+
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import models
+from django.utils import timezone
 from rest_framework import serializers
 
 from core.permissions import get_role
-from hr_reference.models import Department, Position, Sponsor, TaskGroup
-from organization.models import OrganizationNode
-
 from core.services import get_workflow_snapshot
+from hr_reference.models import Department, Position, Sponsor, TaskGroup
 
-from .models import EmployeeDeletionRequest, EmployeeImport, EmployeeProfile
+from .models import EmployeeDeletionRequest, EmployeeDocument, EmployeeImport, EmployeeProfile
+
+EMPLOYEE_DOCUMENT_ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png"}
+EMPLOYEE_DOCUMENT_MAX_SIZE = int(getattr(settings, "MAX_EMPLOYEE_DOCUMENT_SIZE_BYTES", 5 * 1024 * 1024))
 
 User = get_user_model()
 
@@ -44,6 +49,8 @@ class EmployeeProfileReadSerializer(serializers.ModelSerializer):
     sponsor_id = serializers.PrimaryKeyRelatedField(source="sponsor_ref", read_only=True)
     company_id = serializers.PrimaryKeyRelatedField(source="company", read_only=True)
     company_name = serializers.CharField(source="company.name", read_only=True)
+    leave_balance_year = serializers.SerializerMethodField()
+    leave_balances = serializers.SerializerMethodField()
 
     class Meta:
         model = EmployeeProfile
@@ -84,6 +91,8 @@ class EmployeeProfileReadSerializer(serializers.ModelSerializer):
             "sponsor_id",
             "company_id",
             "company_name",
+            "leave_balance_year",
+            "leave_balances",
             "job_title",
             "job_offer",
             "hire_date",
@@ -165,6 +174,30 @@ class EmployeeProfileReadSerializer(serializers.ModelSerializer):
         ):
             return "ON_LEAVE"
         return obj.employment_status
+
+    def _include_leave_balances(self):
+        return bool(self.context.get("include_leave_balances"))
+
+    def get_leave_balance_year(self, obj):
+        if not self._include_leave_balances():
+            return None
+        return self.context.get("leave_balance_year") or timezone.localdate().year
+
+    def get_leave_balances(self, obj):
+        if not self._include_leave_balances():
+            return None
+
+        from leaves.serializers import LeaveBalanceSerializer
+        from leaves.utils import calculate_leave_balance
+
+        year = self.get_leave_balance_year(obj)
+        balances = calculate_leave_balance(
+            obj.user,
+            year,
+            profile=obj,
+            company=self.context.get("active_company") or obj.company,
+        )
+        return LeaveBalanceSerializer(balances, many=True).data
 
 
 class DelegationCandidateSerializer(serializers.ModelSerializer):
@@ -431,3 +464,76 @@ class EmployeeDeletionRequestCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("A pending deletion request already exists for this employee.")
 
         return attrs
+
+
+class EmployeeDocumentSerializer(serializers.ModelSerializer):
+    employee_profile_id = serializers.IntegerField(read_only=True)
+    company_id = serializers.IntegerField(read_only=True)
+    uploaded_by_name = serializers.CharField(source="uploaded_by.full_name", read_only=True)
+    display_name = serializers.SerializerMethodField()
+    extraction_warnings = serializers.ListField(child=serializers.CharField(), read_only=True, required=False)
+
+    class Meta:
+        model = EmployeeDocument
+        fields = [
+            "id",
+            "employee_profile_id",
+            "company_id",
+            "leave_request",
+            "document_type",
+            "custom_name",
+            "display_name",
+            "file",
+            "original_filename",
+            "visa_number",
+            "exit_before",
+            "exit_before_raw",
+            "visa_duration",
+            "visa_duration_raw",
+            "extracted_fields",
+            "extraction_status",
+            "extraction_error",
+            "extraction_warnings",
+            "uploaded_by",
+            "uploaded_by_name",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "employee_profile_id",
+            "company_id",
+            "leave_request",
+            "original_filename",
+            "extraction_status",
+            "extraction_error",
+            "extraction_warnings",
+            "uploaded_by",
+            "uploaded_by_name",
+            "created_at",
+            "updated_at",
+        ]
+        extra_kwargs = {"file": {"write_only": True}}
+
+    def get_display_name(self, obj):
+        if obj.document_type == EmployeeDocument.DocumentType.OTHER:
+            return obj.custom_name
+        return obj.get_document_type_display()
+
+    def validate(self, attrs):
+        document_type = attrs.get("document_type", getattr(self.instance, "document_type", None))
+        custom_name = attrs.get("custom_name", getattr(self.instance, "custom_name", ""))
+        if document_type == EmployeeDocument.DocumentType.OTHER and not (custom_name or "").strip():
+            raise serializers.ValidationError({"custom_name": "custom_name is required for OTHER documents."})
+        if document_type != EmployeeDocument.DocumentType.OTHER:
+            attrs["custom_name"] = ""
+        return attrs
+
+    def validate_file(self, value):
+        if not value:
+            return value
+        extension = Path(value.name).suffix.lower()
+        if extension not in EMPLOYEE_DOCUMENT_ALLOWED_EXTENSIONS:
+            raise serializers.ValidationError("Unsupported file type.")
+        if value.size > EMPLOYEE_DOCUMENT_MAX_SIZE:
+            raise serializers.ValidationError("File size exceeds maximum limit.")
+        return value
