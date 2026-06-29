@@ -18,6 +18,7 @@ import {
   listDelegationCandidates,
   type DelegationCandidate,
 } from "../../services/api/employeesApi";
+import { formatDelegationCandidateLabel } from "../../utils/delegationCandidates";
 import { isApiError } from "../../services/api/apiTypes";
 import {
   setLeaveRequestDelegate,
@@ -101,7 +102,7 @@ export default function RequestObligationsPanel({
       candidates.map((candidate) => ({
         value:
           candidate.id ?? `employee-profile-${candidate.employee_profile_id}`,
-        label: `${candidate.full_name_en || candidate.full_name || candidate.employee_id} (${candidate.employee_id})${candidate.company_name ? ` - ${candidate.company_name}` : ""}${candidate.disabled_reason ? ` - ${candidate.disabled_reason}` : ""}`,
+        label: formatDelegationCandidateLabel(candidate),
         disabled: !candidate.can_delegate,
       })),
     [candidates],

@@ -150,17 +150,42 @@ def notify_users_for_pending_status(
 ) -> dict:
     sent = 0
     failed = 0
+    whatsapp_sent = 0
+    whatsapp_failed = 0
+    whatsapp_skipped = 0
     errors: list[str] = []
+    whatsapp_errors: list[str] = []
     seen = set()
+    whatsapp_seen = set()
+
+    from .whatsapp_notifications import send_pending_approval_whatsapp
 
     for user in users:
         email = (getattr(user, "email", "") or "").strip().lower()
-        if not email or email in seen:
+        if email and email not in seen:
+            seen.add(email)
+            result = send_pending_approval_email(
+                to_email=email,
+                approver_name=getattr(user, "full_name", "") or email,
+                request_type=request_type,
+                request_id=request_id,
+                requester_name=requester_name,
+                status_label=status_label,
+                details=details,
+                action_path=action_path,
+            )
+            if result.get("success"):
+                sent += 1
+            else:
+                failed += 1
+                errors.append(f"{email}: {result.get('error')}")
+
+        user_key = getattr(user, "id", None) or email
+        if user_key in whatsapp_seen:
             continue
-        seen.add(email)
-        result = send_pending_approval_email(
-            to_email=email,
-            approver_name=getattr(user, "full_name", "") or email,
+        whatsapp_seen.add(user_key)
+        whatsapp_result = send_pending_approval_whatsapp(
+            user=user,
             request_type=request_type,
             request_id=request_id,
             requester_name=requester_name,
@@ -168,14 +193,32 @@ def notify_users_for_pending_status(
             details=details,
             action_path=action_path,
         )
-        if result.get("success"):
-            sent += 1
+        if whatsapp_result.get("success"):
+            whatsapp_sent += 1
+        elif whatsapp_result.get("skipped"):
+            whatsapp_skipped += 1
         else:
-            failed += 1
-            errors.append(f"{email}: {result.get('error')}")
+            whatsapp_failed += 1
+            whatsapp_errors.append(f"{getattr(user, 'id', email)}: {whatsapp_result.get('error')}")
 
     logger.info(
         "pending_status_notified",
-        extra={"request_type": request_type, "request_id": str(request_id), "sent": sent, "failed": failed},
+        extra={
+            "request_type": request_type,
+            "request_id": str(request_id),
+            "sent": sent,
+            "failed": failed,
+            "whatsapp_sent": whatsapp_sent,
+            "whatsapp_failed": whatsapp_failed,
+            "whatsapp_skipped": whatsapp_skipped,
+        },
     )
-    return {"sent": sent, "failed": failed, "errors": errors}
+    return {
+        "sent": sent,
+        "failed": failed,
+        "errors": errors,
+        "whatsapp_sent": whatsapp_sent,
+        "whatsapp_failed": whatsapp_failed,
+        "whatsapp_skipped": whatsapp_skipped,
+        "whatsapp_errors": whatsapp_errors,
+    }

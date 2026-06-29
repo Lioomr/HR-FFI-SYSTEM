@@ -1,10 +1,10 @@
 from datetime import date, datetime
 
-from core.whatsapp_service import BirdWhatsAppTemplateService
+from core.services.whatsapp_service import WhatsAppService
 from employees.models import EmployeeProfile
 
 
-def _normalize_phone_for_bird(raw_mobile: str | None) -> str:
+def _normalize_phone(raw_mobile: str | None) -> str:
     mobile = (raw_mobile or "").strip()
     if not mobile:
         return ""
@@ -14,7 +14,6 @@ def _normalize_phone_for_bird(raw_mobile: str | None) -> str:
         return ""
     if cleaned.startswith("+"):
         return cleaned
-    # Bird requires E.164; assume missing '+' only.
     return f"+{cleaned}"
 
 
@@ -32,45 +31,83 @@ def _format_expiry_date(value) -> str:
     return text
 
 
+def _delivery_failure(reason: str) -> dict:
+    return {
+        "sent": False,
+        "success": False,
+        "provider": "evolution_whatsapp",
+        "status_code": None,
+        "message_id": None,
+        "error": reason,
+        "reason": reason,
+    }
+
+
+def _delivery_from_provider_result(result: dict) -> dict:
+    error = result.get("error")
+    sent = bool(result.get("success"))
+    return {
+        "sent": sent,
+        "success": sent,
+        "provider": result.get("provider", "evolution_whatsapp"),
+        "status_code": result.get("status_code"),
+        "message_id": result.get("message_id"),
+        "error": error,
+        "reason": error,
+        "template_key": "document_expiry_reminder",
+    }
+
+
 def send_document_expiry_whatsapp(profile: EmployeeProfile, documents: list[dict], language: str = "en") -> dict:
     if not profile.mobile:
-        return {"sent": False, "provider": "bird_whatsapp", "reason": "No mobile number on employee profile."}
+        return _delivery_failure("No mobile number on employee profile.")
 
     if not documents:
-        return {"sent": False, "provider": "bird_whatsapp", "reason": "No expiring documents payload supplied."}
+        return _delivery_failure("No expiring documents payload supplied.")
 
-    service = BirdWhatsAppTemplateService()
+    service = WhatsAppService()
     employee_name = profile.full_name or profile.employee_id or "Employee"
-    phone_number = _normalize_phone_for_bird(profile.mobile)
+    phone_number = _normalize_phone(profile.mobile)
     if not phone_number:
-        return {"sent": False, "provider": "bird_whatsapp", "reason": "Invalid employee mobile number."}
+        return _delivery_failure("Invalid employee mobile number.")
     results = []
 
     for document in documents:
-        result = service.send_template(
+        result = service.send_template_message(
             phone_number=phone_number,
-            template_key=None,
+            template_name="document_expiry_reminder",
             language=language,
-            variables={
+            template_variables={
                 "employee_name": employee_name,
                 "document_type": document.get("label") or document.get("doc_type") or "Document",
                 "expiry_date": _format_expiry_date(document.get("expiry_date")),
             },
-            context={
-                "event": "document_expiry_reminder",
-                "employee_profile_id": profile.id,
-                "document_type": document.get("doc_type"),
-            },
         )
-        results.append(result)
+        results.append(_delivery_from_provider_result(result))
 
     sent_count = sum(1 for r in results if r.get("sent"))
+    if len(results) == 1:
+        return {
+            **results[0],
+            "count": sent_count,
+            "total": 1,
+            "results": results,
+        }
+
     if sent_count == len(results):
-        return {"sent": True, "provider": "bird_whatsapp", "count": sent_count}
+        return {
+            "sent": True,
+            "success": True,
+            "provider": "evolution_whatsapp",
+            "count": sent_count,
+            "total": len(results),
+            "results": results,
+        }
 
     return {
         "sent": sent_count > 0,
-        "provider": "bird_whatsapp",
+        "success": sent_count > 0,
+        "provider": "evolution_whatsapp",
         "count": sent_count,
         "total": len(results),
         "results": results,

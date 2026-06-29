@@ -47,7 +47,7 @@ Loan flow: **Employee → Manager → HRManager → CFO → CEO**
 3. Each approval action creates a `WorkflowAction` record.
 4. Emit an `AuditLog` entry at each stage transition.
 5. On final approval/rejection, update the parent request `status` field.
-6. Notify the next approver (via Bird notification service if configured).
+6. Notify the next approver (email via Bird when configured, WhatsApp via Evolution when a valid mobile exists).
 
 ## Key Service Functions
 

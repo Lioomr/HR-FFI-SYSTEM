@@ -10,6 +10,15 @@ Use when working with loan requests, approval stages, disbursement, or payroll d
 | `Backend/loans/views.py` | ViewSets per actor (Employee, Manager, HR, CFO, CEO, Finance) |
 | `Backend/loans/serializers.py` | Create/read/action serializers |
 
+## Loan PDF Download
+
+Before changing loan PDF generation, read `.agents/context/pdf_template_library.md`.
+
+Current rule: `_build_loan_request_pdf` must use `loan_request_blank.pdf` from the HR template library (`/hr/templates` in production, bundled fallback in `Backend/static/pdf_templates`) and overlay values onto the original blank form. Keep `_build_loan_request_pdf_fallback` only for missing-template fallback.
+
+Regression check:
+`docker exec ffi_hr_backend pytest loans/tests_pdf.py -q`
+
 ## LoanRequest Status Machine
 
 ```

@@ -15,7 +15,8 @@ Scan this file first. Each row lists the file, size, and the exact keywords that
 | `api_design.md` | ~2.5K | REST envelope, pagination, error shape, kebab-case URLs |
 | `file_uploads.md` | ~3K | `PrivateUploadStorage`, `private_uploads/`, signed URL, attachments |
 | `i18n.md` | ~1.8K | `useI18n`, `translations.ts`, `name_en`/`name_ar`, bilingual |
-| `notifications.md` | ~5.1K | Bird, email, WhatsApp, template, `notify_users_for_pending_status` |
+| `notifications.md` | ~5.1K | notifications, Bird email, Evolution WhatsApp, TextBee SMS, template, `notify_users_for_pending_status` |
+| `pdf_template_library.md` | ~2.2K | PDF templates, `/hr/templates`, blank forms, leave/loan PDF download, template overlay |
 | `workflow_engine.md` | ~4K | `WorkflowDefinition`, approval chain, `DelegationRule`, `RequestObligation`, `advance_workflow` |
 | `biotime_integration.md` | ~2.8K | BioTime, ZKTeme 8.5, `biotime_client.py`, `sync_biotime`, singleton |
 | `deployment.md` | ~3K | env vars, staging, prod, Gunicorn, Nginx |

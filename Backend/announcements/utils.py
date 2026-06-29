@@ -1,5 +1,6 @@
 import logging
-from datetime import timedelta, timezone as datetime_timezone
+from datetime import timedelta
+from datetime import timezone as datetime_timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.conf import settings
@@ -10,6 +11,7 @@ from django.utils import timezone
 from core.permissions import get_role
 from core.services.bird_email_service import send_announcement_notification_email, send_meeting_notification_email
 from core.services.whatsapp_service import WhatsAppService
+
 from .models import Announcement
 
 User = get_user_model()
@@ -193,7 +195,7 @@ def send_announcement_email(announcement):
 
 
 def send_announcement_whatsapp(announcement):
-    if not announcement.publish_to_sms:
+    if not announcement.publish_to_whatsapp:
         return
 
     if getattr(announcement, "target_user_id", None):

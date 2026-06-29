@@ -1,5 +1,6 @@
-from datetime import date
+from datetime import date, timedelta
 from io import BytesIO
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -230,6 +231,123 @@ class EmployeeProfileTests(TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+    def _document_notify_profile(self, *, mobile="+201013530963"):
+        return EmployeeProfile.objects.create(
+            user=self.employee_user,
+            department="Engineering",
+            job_title="Dev",
+            hire_date="2024-01-01",
+            employee_id=f"EMP-DOC-NOTIFY-{EmployeeProfile.objects.count() + 1}",
+            full_name="Document Employee",
+            mobile=mobile,
+        )
+
+    def _document_for_notify(self, profile, *, exit_before, document_type=EmployeeDocument.DocumentType.PASSPORT):
+        return EmployeeDocument.objects.create(
+            employee_profile=profile,
+            document_type=document_type,
+            custom_name="",
+            file=SimpleUploadedFile("document.pdf", b"%PDF-1.4\ncontent", content_type="application/pdf"),
+            exit_before=exit_before,
+            uploaded_by=self.hr_user,
+        )
+
+    @patch("employees.notifications.WhatsAppService.send_template_message")
+    def test_expired_employee_document_can_be_notified(self, whatsapp_send):
+        whatsapp_send.return_value = {
+            "success": True,
+            "provider": "evolution_whatsapp",
+            "status_code": 201,
+            "message_id": "wamid-expired",
+            "error": None,
+        }
+        profile = self._document_notify_profile()
+        document = self._document_for_notify(profile, exit_before=timezone.localdate() - timedelta(days=1))
+
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.post(f"/api/employees/{profile.id}/documents/{document.id}/notify-expiry/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        delivery = response.data["data"]["delivery"]
+        self.assertTrue(delivery["sent"])
+        self.assertTrue(delivery["success"])
+        self.assertEqual(delivery["message_id"], "wamid-expired")
+        whatsapp_send.assert_called_once()
+        self.assertEqual(whatsapp_send.call_args.kwargs["template_name"], "document_expiry_reminder")
+
+    @patch("employees.notifications.WhatsAppService.send_template_message")
+    def test_employee_document_expiring_within_45_days_can_be_notified(self, whatsapp_send):
+        whatsapp_send.return_value = {
+            "success": True,
+            "provider": "evolution_whatsapp",
+            "status_code": 201,
+            "message_id": "wamid-window",
+            "error": None,
+        }
+        profile = self._document_notify_profile()
+        document = self._document_for_notify(profile, exit_before=timezone.localdate() + timedelta(days=45))
+
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.post(f"/api/employees/{profile.id}/documents/{document.id}/notify-expiry/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["data"]["document"]["days_left"], 45)
+        self.assertTrue(response.data["data"]["delivery"]["sent"])
+        whatsapp_send.assert_called_once()
+
+    @patch("employees.notifications.WhatsAppService.send_template_message")
+    def test_employee_document_expiring_after_45_days_is_rejected(self, whatsapp_send):
+        profile = self._document_notify_profile()
+        document = self._document_for_notify(profile, exit_before=timezone.localdate() + timedelta(days=46))
+
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.post(f"/api/employees/{profile.id}/documents/{document.id}/notify-expiry/")
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        whatsapp_send.assert_not_called()
+
+    @patch("employees.notifications.WhatsAppService.send_template_message")
+    def test_employee_document_without_expiry_date_is_rejected(self, whatsapp_send):
+        profile = self._document_notify_profile()
+        document = self._document_for_notify(profile, exit_before=None)
+
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.post(f"/api/employees/{profile.id}/documents/{document.id}/notify-expiry/")
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        whatsapp_send.assert_not_called()
+
+    def test_employee_document_notify_invalid_mobile_returns_controlled_delivery_failure(self):
+        profile = self._document_notify_profile(mobile="123")
+        document = self._document_for_notify(profile, exit_before=timezone.localdate() + timedelta(days=10))
+
+        self.client.force_authenticate(user=self.hr_user)
+        with self.settings(
+            EVOLUTION_API_BASE_URL="http://evolution-api:8080",
+            EVOLUTION_API_KEY="evolution-key",
+            EVOLUTION_INSTANCE_NAME="ffi-staging",
+        ):
+            response = self.client.post(f"/api/employees/{profile.id}/documents/{document.id}/notify-expiry/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        delivery = response.data["data"]["delivery"]
+        self.assertFalse(delivery["sent"])
+        self.assertFalse(delivery["success"])
+        self.assertEqual(delivery["provider"], "evolution_whatsapp")
+        self.assertIsNone(delivery["message_id"])
+        self.assertIn("E.164", delivery["error"])
+
+    @patch("employees.notifications.WhatsAppService.send_template_message")
+    def test_employee_document_notify_requires_hr_or_admin(self, whatsapp_send):
+        profile = self._document_notify_profile()
+        document = self._document_for_notify(profile, exit_before=timezone.localdate() + timedelta(days=10))
+
+        self.client.force_authenticate(user=self.employee_user)
+        response = self.client.post(f"/api/employees/{profile.id}/documents/{document.id}/notify-expiry/")
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        whatsapp_send.assert_not_called()
 
     def test_hard_delete_forbidden(self):
         profile = EmployeeProfile.objects.create(

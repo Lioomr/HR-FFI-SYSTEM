@@ -53,5 +53,64 @@ services:
     ports:
       - "5173:80"
 
+  evolution-db:
+    image: postgres:16-alpine
+    container_name: ffi_hr_evolution_db
+    restart: unless-stopped
+    profiles: ["messaging-trial"]
+    environment:
+      POSTGRES_DB: evolution
+      POSTGRES_USER: evolution
+      POSTGRES_PASSWORD: evolution
+    volumes:
+      - evolution_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evolution -d evolution"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  evolution-redis:
+    image: redis:7-alpine
+    container_name: ffi_hr_evolution_redis
+    restart: unless-stopped
+    profiles: ["messaging-trial"]
+    volumes:
+      - evolution_redis_data:/data
+
+  evolution-api:
+    image: atendai/evolution-api:latest
+    container_name: ffi_hr_evolution_api
+    restart: unless-stopped
+    profiles: ["messaging-trial"]
+    environment:
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:-change-me}
+      DEL_INSTANCE_ON_DISCONNECT: "false"
+      QRCODE_LIMIT: "30"
+      CONFIG_SESSION_PHONE_CLIENT: Evolution API
+      CONFIG_SESSION_PHONE_NAME: Chrome
+      CONFIG_SESSION_PHONE_VERSION: 2.3000.1041554264
+      WEB_VERSION: 2.3000.1041554264
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://evolution:evolution@evolution-db:5432/evolution
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://evolution-redis:6379/0
+      SERVER_URL: http://localhost:8080
+    volumes:
+      - evolution_store:/evolution/store
+      - evolution_instances:/evolution/instances
+    depends_on:
+      evolution-db:
+        condition: service_healthy
+      evolution-redis:
+        condition: service_started
+    ports:
+      - "8080:8080"
+
 volumes:
   postgres_data:
+  evolution_postgres_data:
+  evolution_redis_data:
+  evolution_store:
+  evolution_instances:

@@ -24,6 +24,7 @@ from core.permissions import get_role, has_direct_reports
 from core.responses import error, success
 from core.services import (
     get_ceo_approver_users,
+    notify_profile_request_status_whatsapp,
     notify_users_for_pending_status,
     send_document_expiry_reminder_email,
 )
@@ -37,7 +38,7 @@ from organization.services import (
 )
 
 from .document_extraction import extract_visa_fields
-from .models import EmployeeDeletionRequest, EmployeeImport, EmployeeProfile
+from .models import EmployeeDeletionRequest, EmployeeDocument, EmployeeImport, EmployeeProfile
 from .notifications import send_document_expiry_whatsapp
 from .permissions import IsEmployeeOwner, IsHRManagerOnly, IsHRManagerOrAdmin, IsManagerOfEmployee
 from .serializers import (
@@ -287,6 +288,8 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             permission_classes = [IsAuthenticated, IsHRManagerOrAdmin | IsEmployeeOwner]
         elif self.action in ["documents", "download_document", "update_document"]:
             permission_classes = [IsAuthenticated]
+        elif self.action == "notify_document_expiry":
+            permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
         else:
             permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
         return [permission() for permission in permission_classes]
@@ -567,6 +570,96 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             metadata={"employee_profile_id": profile.id, "document_type": document.document_type},
         )
         return success(EmployeeDocumentSerializer(document, context={"request": request}).data)
+
+    @staticmethod
+    def _document_notification_label(document: EmployeeDocument) -> str:
+        if document.document_type == EmployeeDocument.DocumentType.OTHER:
+            return document.custom_name or "Document"
+        return document.get_document_type_display()
+
+    @staticmethod
+    def _whatsapp_delivery_exception(exc: Exception) -> dict:
+        return {
+            "sent": False,
+            "success": False,
+            "provider": "evolution_whatsapp",
+            "status_code": None,
+            "message_id": None,
+            "error": str(exc),
+            "reason": str(exc),
+        }
+
+    @action(detail=True, methods=["post"], url_path=r"documents/(?P<document_id>[^/.]+)/notify-expiry")
+    def notify_document_expiry(self, request, pk=None, document_id=None):
+        profile, error_response = self._document_profile_for_request(request, pk)
+        if error_response:
+            return error_response
+
+        role = get_role(request.user)
+        if role not in ["SystemAdmin", "HRManager"]:
+            return error("Forbidden", errors=["Forbidden."], status=status.HTTP_403_FORBIDDEN)
+
+        document = profile.documents.filter(pk=document_id).first()
+        if document is None:
+            return error("Not found", errors=["Not found."], status=404)
+
+        if not document.exit_before:
+            return error(
+                "Validation error",
+                errors={"expiry_date": ["Document has no expiry date."]},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+
+        today = timezone.localdate()
+        days_left = (document.exit_before - today).days
+        if days_left > 45:
+            return error(
+                "Validation error",
+                errors={"expiry_date": ["Document is not expired or expiring within 45 days."]},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+
+        document_payload = {
+            "doc_type": document.document_type,
+            "label": self._document_notification_label(document),
+            "expiry_date": document.exit_before,
+            "days_left": days_left,
+        }
+
+        try:
+            delivery = send_document_expiry_whatsapp(profile, [document_payload])
+        except Exception as exc:
+            delivery = self._whatsapp_delivery_exception(exc)
+
+        try:
+            audit(
+                request,
+                action="employee_document_expiry_whatsapp_sent",
+                entity="employee_document",
+                entity_id=document.id,
+                metadata={
+                    "employee_profile_id": profile.id,
+                    "document_type": document.document_type,
+                    "expiry_date": document.exit_before.isoformat(),
+                    "days_left": days_left,
+                    "delivery": delivery,
+                },
+            )
+        except Exception:
+            pass
+
+        return success(
+            {
+                "document": {
+                    "id": document.id,
+                    "document_type": document.document_type,
+                    "display_name": document_payload["label"],
+                    "expiry_date": document.exit_before.isoformat(),
+                    "days_left": days_left,
+                },
+                "delivery": delivery,
+            }
+        )
 
     @action(detail=False, methods=["get"], url_path="me")
     def me(self, request):
@@ -932,7 +1025,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
                 whatsapp_result = send_document_expiry_whatsapp(profile, documents)
                 delivery["whatsapp"] = whatsapp_result
             except Exception as exc:
-                delivery["whatsapp"] = {"sent": False, "provider": "bird_whatsapp", "reason": str(exc)}
+                delivery["whatsapp"] = {"sent": False, "provider": "evolution_whatsapp", "reason": str(exc)}
 
         if "announcement" in channels:
             try:
@@ -1201,6 +1294,19 @@ class EmployeeDeletionRequestViewSet(viewsets.ModelViewSet):
                 "approved_by": request.user.id,
             },
         )
+        try:
+            notify_profile_request_status_whatsapp(
+                profile=getattr(instance.requested_by, "employee_profile", None),
+                request_type="Employee Deletion",
+                request_id=instance.id,
+                status_label="Executed",
+                details=[
+                    f"Employee: {execution_snapshot.get('full_name') or execution_snapshot.get('employee_id')}",
+                ],
+                action_path="/hr/employees",
+            )
+        except Exception:
+            pass
         data = EmployeeDeletionRequestReadSerializer(instance, context=self.get_serializer_context()).data
         return success(data)
 
@@ -1230,6 +1336,20 @@ class EmployeeDeletionRequestViewSet(viewsets.ModelViewSet):
             entity_id=instance.id,
             metadata={"request_id": instance.id, "reason": reason, "employee": instance.request_snapshot},
         )
+        try:
+            notify_profile_request_status_whatsapp(
+                profile=getattr(instance.requested_by, "employee_profile", None),
+                request_type="Employee Deletion",
+                request_id=instance.id,
+                status_label="Rejected",
+                reason=reason,
+                details=[
+                    f"Employee: {instance.request_snapshot.get('full_name') or instance.request_snapshot.get('employee_id')}",
+                ],
+                action_path="/hr/employees",
+            )
+        except Exception:
+            pass
         data = EmployeeDeletionRequestReadSerializer(instance, context=self.get_serializer_context()).data
         return success(data)
 

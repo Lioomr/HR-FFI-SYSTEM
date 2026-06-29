@@ -192,7 +192,7 @@ def _sync_pending_request_workflows_for_request(request, *, limit_per_type: int 
             field_name="asset__company_id",
         )
         .filter(status__in=asset_return_statuses)
-        .order_by("-updated_at", "-id")
+        .order_by("-requested_at", "-id")
     )
     for return_req in _maybe_limit(asset_return_qs):
         sync_workflow(return_req, actor=request.user)

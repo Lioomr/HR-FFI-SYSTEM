@@ -1661,12 +1661,6 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             instance = self._unscoped_queryset().get(pk=pk)
         except LeaveRequest.DoesNotExist:
             return error("Not found", errors=["Not found."], status=404)
-        if _is_hr_manager_origin_request(instance):
-            return error(
-                "Validation error",
-                errors=["HR manager requests must be approved by CEO."],
-                status=422,
-            )
 
         # HR can reject at any pending stage? Or only pending HR?
         # Let's allow rejecting from PENDING_HR or SUBMITTED

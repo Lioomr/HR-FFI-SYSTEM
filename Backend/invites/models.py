@@ -12,7 +12,21 @@ class Invite(models.Model):
         REVOKED = "revoked", "Revoked"
         EXPIRED = "expired", "Expired"
 
-    email = models.EmailField(db_index=True)
+    class Channel(models.TextChoices):
+        EMAIL = "email", "Email"
+        WHATSAPP = "whatsapp", "WhatsApp"
+
+    class DeliveryStatus(models.TextChoices):
+        UNKNOWN = "unknown", "Unknown"
+        QUEUED = "queued", "Queued"
+        SENT = "sent", "Sent"
+        DELIVERED = "delivered", "Delivered"
+        READ = "read", "Read"
+        FAILED = "failed", "Failed"
+
+    email = models.EmailField(db_index=True, null=True, blank=True)
+    phone_number = models.CharField(max_length=32, db_index=True, null=True, blank=True)
+    channel = models.CharField(max_length=16, choices=Channel.choices, default=Channel.EMAIL)
     role = models.CharField(max_length=32)  # SystemAdmin | HRManager | Employee
     token = models.CharField(max_length=64, unique=True, db_index=True)
 
@@ -37,6 +51,22 @@ class Invite(models.Model):
 
     resend_count = models.PositiveIntegerField(default=0)
     last_resent_at = models.DateTimeField(null=True, blank=True)
+
+    last_delivery_channel = models.CharField(max_length=16, choices=Channel.choices, blank=True)
+    last_delivery_sent = models.BooleanField(null=True, blank=True)
+    last_delivery_provider = models.CharField(max_length=64, blank=True)
+    last_delivery_status_code = models.PositiveIntegerField(null=True, blank=True)
+    last_delivery_message_id = models.CharField(max_length=255, blank=True)
+    last_delivery_error = models.CharField(max_length=500, blank=True)
+    last_delivery_at = models.DateTimeField(null=True, blank=True)
+    provider_submitted = models.BooleanField(null=True, blank=True)
+    provider_status = models.CharField(max_length=64, blank=True)
+    delivery_status = models.CharField(
+        max_length=16,
+        choices=DeliveryStatus.choices,
+        default=DeliveryStatus.UNKNOWN,
+    )
+    external_message_id = models.CharField(max_length=255, blank=True)
 
     class Meta:
         ordering = ["-sent_at"]
