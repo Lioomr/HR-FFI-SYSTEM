@@ -45,6 +45,7 @@ import {
   type DelegationCandidate,
   type Employee,
 } from "../../../services/api/employeesApi";
+import { formatDelegationCandidateLabel } from "../../../utils/delegationCandidates";
 import { useI18n } from "../../../i18n/useI18n";
 import {
   apply422ToForm,
@@ -740,7 +741,7 @@ export default function LeaveInboxPage() {
               placeholder="-"
               options={delegationCandidates.map((e) => ({
                 value: e.id ?? `employee-profile-${e.employee_profile_id}`,
-                label: `${e.full_name_en || e.full_name || e.employee_id} (${e.employee_id})${e.company_name ? ` - ${e.company_name}` : ""}${e.disabled_reason ? ` - ${e.disabled_reason}` : ""}`,
+                label: formatDelegationCandidateLabel(e),
                 disabled: !e.can_delegate,
               }))}
             />

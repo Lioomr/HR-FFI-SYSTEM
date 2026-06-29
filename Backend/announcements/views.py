@@ -1,6 +1,6 @@
+import logging
 import os
 import re
-import logging
 
 from django.contrib.auth import get_user_model
 from django.core import signing
@@ -20,7 +20,6 @@ from core.permissions import get_role
 from core.responses import error, success
 from employees.models import EmployeeProfile
 from employees.permissions import IsHRManagerOrAdmin
-from organization.models import OrganizationNode
 from organization.services import (
     ensure_company_write_allowed,
     filter_queryset_by_accessible_companies,
@@ -30,8 +29,7 @@ from organization.services import (
 
 from .models import Announcement
 from .serializers import AnnouncementCreateSerializer, AnnouncementListSerializer, AnnouncementSerializer
-from .utils import ANNOUNCEMENT_ATTACHMENT_SALT
-from .utils import send_announcement_email, send_announcement_whatsapp
+from .utils import ANNOUNCEMENT_ATTACHMENT_SALT, send_announcement_email, send_announcement_whatsapp
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -317,7 +315,7 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
                     "announcement_email_unhandled_exception",
                     extra={"announcement_id": announcement.id},
                 )
-            if announcement.publish_to_sms:
+            if announcement.publish_to_whatsapp:
                 try:
                     send_announcement_whatsapp(announcement)
                 except Exception:

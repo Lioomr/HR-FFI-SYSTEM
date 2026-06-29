@@ -12,7 +12,10 @@ export interface Announcement {
     target_user_email?: string | null;
     publish_to_dashboard: boolean;
     publish_to_email: boolean;
-    publish_to_sms: boolean;
+    /** Preferred WhatsApp delivery flag (delivery goes through WhatsApp/Evolution). */
+    publish_to_whatsapp?: boolean;
+    /** @deprecated compatibility alias for publish_to_whatsapp. */
+    publish_to_sms?: boolean;
     attachment?: string | null;
     attachment_name?: string | null;
     attachment_size?: number | null;
@@ -64,7 +67,10 @@ export interface CreateAnnouncementData {
     target_user_ids?: number[];
     publish_to_dashboard: boolean;
     publish_to_email: boolean;
-    publish_to_sms: boolean;
+    /** Preferred WhatsApp delivery flag (delivery goes through WhatsApp/Evolution). */
+    publish_to_whatsapp?: boolean;
+    /** @deprecated compatibility alias for publish_to_whatsapp. */
+    publish_to_sms?: boolean;
     meeting_starts_at?: string | null;
     meeting_duration_minutes?: number | null;
     meeting_location?: string;
@@ -90,6 +96,9 @@ function toAnnouncementFormData(data: Partial<CreateAnnouncementData>) {
     }
     if (data.publish_to_email !== undefined) {
         formData.append("publish_to_email", String(data.publish_to_email));
+    }
+    if (data.publish_to_whatsapp !== undefined) {
+        formData.append("publish_to_whatsapp", String(data.publish_to_whatsapp));
     }
     if (data.publish_to_sms !== undefined) {
         formData.append("publish_to_sms", String(data.publish_to_sms));

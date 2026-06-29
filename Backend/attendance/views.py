@@ -20,6 +20,7 @@ from core.services import (
     get_ceo_approver_users,
     get_direct_manager_user,
     get_hr_approver_users,
+    notify_profile_request_status_whatsapp,
     notify_users_for_pending_status,
     sync_workflow,
 )
@@ -539,6 +540,17 @@ class AttendanceCorrectionRequestViewSet(viewsets.ModelViewSet):
                 self._apply_correction(instance, request.user, note)
                 sync_workflow(instance, actor=request.user)
             audit(request, "attendance_correction.hr_approved", entity="AttendanceCorrectionRequest", entity_id=instance.id)
+            try:
+                notify_profile_request_status_whatsapp(
+                    profile=instance.employee_profile,
+                    request_type="Attendance Correction",
+                    request_id=instance.id,
+                    status_label="Approved",
+                    details=[f"Date: {instance.date}"],
+                    action_path="/employee/attendance",
+                )
+            except Exception:
+                pass
             return success(self._serialize(instance))
 
         return error("Request is not in an approvable state.", status=status.HTTP_422_UNPROCESSABLE_ENTITY)
@@ -571,6 +583,18 @@ class AttendanceCorrectionRequestViewSet(viewsets.ModelViewSet):
         instance.save()
         sync_workflow(instance, actor=request.user)
         audit(request, "attendance_correction.rejected", entity="AttendanceCorrectionRequest", entity_id=instance.id)
+        try:
+            notify_profile_request_status_whatsapp(
+                profile=instance.employee_profile,
+                request_type="Attendance Correction",
+                request_id=instance.id,
+                status_label="Rejected",
+                reason=note,
+                details=[f"Date: {instance.date}"],
+                action_path="/employee/attendance",
+            )
+        except Exception:
+            pass
         return success(self._serialize(instance))
 
     @action(detail=True, methods=["post"])
@@ -751,6 +775,18 @@ class ManagerAttendanceViewSet(AttendanceMaintenanceMixin, viewsets.ReadOnlyMode
         sync_workflow(instance, actor=request.user)
 
         audit(request, "reject", entity="AttendanceRecord", entity_id=instance.id)
+        try:
+            notify_profile_request_status_whatsapp(
+                profile=instance.employee_profile,
+                request_type="Attendance Request",
+                request_id=instance.id,
+                status_label="Rejected",
+                reason=note,
+                details=[f"Date: {instance.date}", "Rejected by manager"],
+                action_path="/employee/attendance",
+            )
+        except Exception:
+            pass
         return success(AttendanceRecordSerializer(instance).data)
 
 
@@ -792,6 +828,17 @@ class CEOAttendanceViewSet(AttendanceMaintenanceMixin, viewsets.ReadOnlyModelVie
         )
         sync_workflow(instance, actor=request.user)
         audit(request, "approve_ceo", entity="AttendanceRecord", entity_id=instance.id)
+        try:
+            notify_profile_request_status_whatsapp(
+                profile=instance.employee_profile,
+                request_type="Attendance Request",
+                request_id=instance.id,
+                status_label="Approved",
+                details=[f"Date: {instance.date}", "Approved by CEO"],
+                action_path="/employee/attendance",
+            )
+        except Exception:
+            pass
         return success(AttendanceRecordSerializer(instance).data)
 
     @action(detail=True, methods=["post"])
@@ -821,4 +868,16 @@ class CEOAttendanceViewSet(AttendanceMaintenanceMixin, viewsets.ReadOnlyModelVie
         )
         sync_workflow(instance, actor=request.user)
         audit(request, "reject_ceo", entity="AttendanceRecord", entity_id=instance.id)
+        try:
+            notify_profile_request_status_whatsapp(
+                profile=instance.employee_profile,
+                request_type="Attendance Request",
+                request_id=instance.id,
+                status_label="Rejected",
+                reason=note,
+                details=[f"Date: {instance.date}", "Rejected by CEO"],
+                action_path="/employee/attendance",
+            )
+        except Exception:
+            pass
         return success(AttendanceRecordSerializer(instance).data)

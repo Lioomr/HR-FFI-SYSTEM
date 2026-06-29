@@ -37,6 +37,7 @@ import {
 } from "../../services/api/delegationApi";
 import { useI18n } from "../../i18n/useI18n";
 import { formatDateTime } from "../../utils/dateTime";
+import { formatDelegationCandidateLabel } from "../../utils/delegationCandidates";
 
 type FormValues = {
   from_user_id: number;
@@ -48,16 +49,6 @@ type FormValues = {
 };
 
 type UiMode = "loading" | "error" | "ok";
-
-function formatCandidate(candidate: DelegationCandidate) {
-  const name =
-    candidate.full_name_en || candidate.full_name || candidate.employee_id;
-  const company = candidate.company_name ? ` - ${candidate.company_name}` : "";
-  const disabledReason = candidate.disabled_reason
-    ? ` - ${candidate.disabled_reason}`
-    : "";
-  return `${name} (${candidate.employee_id})${company}${disabledReason}`;
-}
 
 export default function DelegationRulesPage() {
   const { t } = useI18n();
@@ -109,7 +100,7 @@ export default function DelegationRulesPage() {
   const userOptions = useMemo(
     () =>
       candidates.map((candidate) => ({
-        label: formatCandidate(candidate),
+        label: formatDelegationCandidateLabel(candidate),
         value:
           candidate.id ?? `employee-profile-${candidate.employee_profile_id}`,
         disabled: !candidate.can_delegate,

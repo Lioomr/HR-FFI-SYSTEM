@@ -8,7 +8,7 @@ from core.services.bird_email_service import (
     send_leave_rejected_email,
     send_leave_request_submitted_email,
 )
-from core.whatsapp_service import BirdWhatsAppTemplateService
+from core.services.whatsapp_service import WhatsAppService
 from leaves.models import LeaveRequest
 from leaves.utils import get_leave_days
 
@@ -34,6 +34,35 @@ def _employee_email(user) -> str:
 
 def _frontend_url() -> str:
     return getattr(settings, "FRONTEND_URL", "").rstrip("/")
+
+
+def _send_whatsapp_template(
+    *,
+    phone_number: str,
+    template_name: str,
+    variables: dict,
+    language: str = "en",
+) -> dict:
+    result = WhatsAppService().send_template_message(
+        phone_number=phone_number,
+        template_name=template_name,
+        template_variables=variables,
+        language=language,
+    )
+    if result.get("success"):
+        return {
+            "sent": True,
+            "provider": result.get("provider", "evolution_whatsapp"),
+            "status_code": result.get("status_code"),
+            "template_key": template_name,
+        }
+    return {
+        "sent": False,
+        "provider": result.get("provider", "evolution_whatsapp"),
+        "status_code": result.get("status_code"),
+        "reason": result.get("error"),
+        "template_key": template_name,
+    }
 
 
 def _notify_user(*, user, email_fn, whatsapp_fn) -> dict:
@@ -75,10 +104,9 @@ def notify_leave_submitted(leave_request: LeaveRequest) -> None:
             )
 
         def _manager_whatsapp():
-            service = BirdWhatsAppTemplateService()
-            return service.send_template(
+            return _send_whatsapp_template(
                 phone_number=_employee_phone(manager),
-                template_key="leave_request_submitted_v1",
+                template_name="leave_request_submitted_v1",
                 language="en",
                 variables={
                     "manager_name": _employee_name(manager),
@@ -88,7 +116,6 @@ def notify_leave_submitted(leave_request: LeaveRequest) -> None:
                     "end_date": leave_request.end_date.isoformat(),
                     "total_days": days,
                 },
-                context={"event": "leave_request_submitted", "leave_request_id": leave_request.id},
             )
 
         _notify_user(user=manager, email_fn=_manager_email, whatsapp_fn=_manager_whatsapp)
@@ -106,10 +133,9 @@ def notify_leave_submitted(leave_request: LeaveRequest) -> None:
         )
 
     def _employee_whatsapp():
-        service = BirdWhatsAppTemplateService()
-        return service.send_template(
+        return _send_whatsapp_template(
             phone_number=_employee_phone(employee),
-            template_key="leave_request_submitted_v1",
+            template_name="leave_request_submitted_v1",
             language="en",
             variables={
                 "manager_name": _employee_name(employee),
@@ -119,7 +145,6 @@ def notify_leave_submitted(leave_request: LeaveRequest) -> None:
                 "end_date": leave_request.end_date.isoformat(),
                 "total_days": days,
             },
-            context={"event": "leave_request_submitted_employee", "leave_request_id": leave_request.id},
         )
 
     _notify_user(user=employee, email_fn=_employee_email_fn, whatsapp_fn=_employee_whatsapp)
@@ -146,10 +171,9 @@ def notify_leave_approved(leave_request: LeaveRequest) -> dict:
         )
 
     def _whatsapp():
-        service = BirdWhatsAppTemplateService()
-        return service.send_template(
+        return _send_whatsapp_template(
             phone_number=_employee_phone(employee),
-            template_key="leave_request_approved_v1",
+            template_name="leave_request_approved_v1",
             language="en",
             variables={
                 "employee_name": _employee_name(employee),
@@ -158,7 +182,6 @@ def notify_leave_approved(leave_request: LeaveRequest) -> dict:
                 "end_date": leave_request.end_date.isoformat(),
                 "total_days": days,
             },
-            context={"event": "leave_request_approved", "leave_request_id": leave_request.id},
         )
 
     return _notify_user(user=employee, email_fn=_email, whatsapp_fn=_whatsapp)
@@ -185,10 +208,9 @@ def notify_leave_rejected(leave_request: LeaveRequest, rejection_reason: str) ->
         )
 
     def _whatsapp():
-        service = BirdWhatsAppTemplateService()
-        return service.send_template(
+        return _send_whatsapp_template(
             phone_number=_employee_phone(employee),
-            template_key="leave_request_rejected_v1",
+            template_name="leave_request_rejected_v1",
             language="en",
             variables={
                 "employee_name": _employee_name(employee),
@@ -197,7 +219,6 @@ def notify_leave_rejected(leave_request: LeaveRequest, rejection_reason: str) ->
                 "end_date": leave_request.end_date.isoformat(),
                 "rejection_reason": reason,
             },
-            context={"event": "leave_request_rejected", "leave_request_id": leave_request.id},
         )
 
     return _notify_user(user=employee, email_fn=_email, whatsapp_fn=_whatsapp)
@@ -230,10 +251,9 @@ def notify_delegation_assigned(leave_request: LeaveRequest) -> dict:
         phone = _employee_phone(delegate)
         if not phone:
             return {"sent": False, "reason": "Delegated user has no phone number."}
-        service = BirdWhatsAppTemplateService()
-        return service.send_template(
+        return _send_whatsapp_template(
             phone_number=phone,
-            template_key="leave_delegation_assigned_v1",
+            template_name="leave_delegation_assigned_v1",
             language="en",
             variables={
                 "delegate_name": _employee_name(delegate),
@@ -243,7 +263,6 @@ def notify_delegation_assigned(leave_request: LeaveRequest) -> dict:
                 "end_date": leave_request.end_date.isoformat(),
                 "total_days": get_leave_days(leave_request.start_date, leave_request.end_date),
             },
-            context={"event": "leave_delegation_assigned", "leave_request_id": leave_request.id},
         )
 
     result = _whatsapp()

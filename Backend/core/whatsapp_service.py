@@ -1,53 +1,4 @@
-from core.services.whatsapp_service import (
-    WHATSAPP_TEMPLATE_REGISTRY,
-    WhatsAppService,
-    resolve_template_key,
-)
-
-
-class BirdWhatsAppTemplateService(WhatsAppService):
-    def send_template(
-        self,
-        *,
-        phone_number: str,
-        template_key: str | None = None,
-        variables: dict,
-        language: str = "en",
-        context: dict | None = None,
-    ) -> dict:
-        resolved_template = resolve_template_key(
-            template_name=template_key,
-            event=(context or {}).get("event"),
-            template_variables=variables,
-        )
-        if not resolved_template:
-            return {
-                "sent": False,
-                "provider": "bird_whatsapp",
-                "status_code": None,
-                "reason": "No matching WhatsApp template found for the provided payload.",
-            }
-
-        result = self.send_template_message(
-            phone_number=phone_number,
-            template_name=resolved_template,
-            template_variables=variables,
-            language=language,
-        )
-        if result.get("success"):
-            return {
-                "sent": True,
-                "provider": "bird_whatsapp",
-                "status_code": result.get("status_code"),
-                "template_key": resolved_template,
-            }
-        return {
-            "sent": False,
-            "provider": "bird_whatsapp",
-            "status_code": result.get("status_code"),
-            "reason": result.get("error"),
-            "template_key": resolved_template,
-        }
+from core.services.whatsapp_service import WHATSAPP_TEMPLATE_REGISTRY, WhatsAppService
 
 
 def send_whatsapp_notification(
@@ -60,14 +11,14 @@ def send_whatsapp_notification(
     if not spec:
         return {
             "sent": False,
-            "provider": "bird_whatsapp",
+            "provider": "evolution_whatsapp",
             "reason": f"Unknown WhatsApp template key: {template_name}",
         }
 
     if len(template_params) != len(spec.variable_order):
         return {
             "sent": False,
-            "provider": "bird_whatsapp",
+            "provider": "evolution_whatsapp",
             "reason": (
                 f"Template '{template_name}' expects {len(spec.variable_order)} params, got {len(template_params)}."
             ),
@@ -81,10 +32,10 @@ def send_whatsapp_notification(
         language=language,
     )
     if result.get("success"):
-        return {"sent": True, "provider": "bird_whatsapp", "status_code": result.get("status_code")}
+        return {"sent": True, "provider": result.get("provider", "evolution_whatsapp"), "status_code": result.get("status_code")}
     return {
         "sent": False,
-        "provider": "bird_whatsapp",
+        "provider": result.get("provider", "evolution_whatsapp"),
         "status_code": result.get("status_code"),
         "reason": result.get("error"),
     }

@@ -48,7 +48,7 @@ export default function CreateTeamAnnouncementPage() {
         target_roles: [],
         publish_to_dashboard: true,
         publish_to_email: values.publish_to_email,
-        publish_to_sms: values.publish_to_sms,
+        publish_to_whatsapp: values.publish_to_whatsapp,
         attachment: attachmentFile,
       };
 
@@ -82,7 +82,7 @@ export default function CreateTeamAnnouncementPage() {
           onFinish={onFinish}
           initialValues={{
             publish_to_email: false,
-            publish_to_sms: false,
+            publish_to_whatsapp: false,
           }}
         >
           <Form.Item name="title" label={t("hr.announcements.titleLabel")} rules={[{ required: true, message: t("hr.announcements.titleRequired") }]}>
@@ -151,8 +151,8 @@ export default function CreateTeamAnnouncementPage() {
             <Form.Item name="publish_to_email" valuePropName="checked" style={{ marginBottom: 12 }}>
               <Switch /> {t("announcements.emailNotif")}
             </Form.Item>
-            <Form.Item name="publish_to_sms" valuePropName="checked" style={{ marginBottom: 0 }}>
-              <Switch /> {t("announcements.smsNotif")}
+            <Form.Item name="publish_to_whatsapp" valuePropName="checked" style={{ marginBottom: 0 }}>
+              <Switch /> {t("announcements.whatsappNotif")}
             </Form.Item>
           </div>
 

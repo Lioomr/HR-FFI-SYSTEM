@@ -53,7 +53,7 @@ export default function CreateAnnouncementPage() {
                 target_user_ids: isMeeting ? values.target_user_ids : undefined,
                 publish_to_dashboard: values.publish_to_dashboard,
                 publish_to_email: values.publish_to_email,
-                publish_to_sms: values.publish_to_sms,
+                publish_to_whatsapp: values.publish_to_whatsapp,
                 meeting_starts_at: values.meeting_starts_at?.toISOString?.() || null,
                 meeting_duration_minutes: values.meeting_duration_minutes ?? null,
                 meeting_location: values.meeting_location || '',
@@ -99,7 +99,7 @@ export default function CreateAnnouncementPage() {
                         announcement_type: 'GENERAL',
                         publish_to_dashboard: true,
                         publish_to_email: false,
-                        publish_to_sms: false,
+                        publish_to_whatsapp: false,
                     }}
                 >
                     <Form.Item name="announcement_type" label={t('hr.announcements.typeLabel')}>
@@ -270,12 +270,12 @@ export default function CreateAnnouncementPage() {
                             </Col>
 
                             <Col span={24}>
-                                <Form.Item name="publish_to_sms" valuePropName="checked" noStyle>
+                                <Form.Item name="publish_to_whatsapp" valuePropName="checked" noStyle>
                                     <Switch />
                                 </Form.Item>
                                 <Space direction="vertical" size={0} style={{ marginLeft: 8, verticalAlign: 'top' }}>
-                                    <Text strong>{t('hr.announcements.smsLabel')}</Text>
-                                    <Text type="secondary" style={{ fontSize: 12 }}>{t('hr.announcements.smsDesc')}</Text>
+                                    <Text strong>{t('hr.announcements.whatsappLabel')}</Text>
+                                    <Text type="secondary" style={{ fontSize: 12 }}>{t('hr.announcements.whatsappDesc')}</Text>
                                 </Space>
                             </Col>
                         </Row>
