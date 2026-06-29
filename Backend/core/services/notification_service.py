@@ -32,7 +32,7 @@ class NotificationService:
             )
         return {
             "success": False,
-            "provider": "bird",
+            "provider": "notification_service",
             "status_code": None,
             "message_id": None,
             "error": f"Unsupported notification type: {type}",

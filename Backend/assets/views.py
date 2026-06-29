@@ -21,6 +21,7 @@ from core.services import (
     get_ceo_approver_users,
     get_direct_manager_user,
     get_hr_approver_users,
+    notify_profile_request_status_whatsapp,
     notify_users_for_pending_status,
     send_request_submission_email,
     sync_leave_obligations,
@@ -825,6 +826,17 @@ class AssetViewSet(viewsets.ModelViewSet):
         )
         sync_workflow(instance, actor=request.user)
         audit(request, "asset_return_request_approved_hr", entity="AssetReturnRequest", entity_id=instance.id)
+        try:
+            notify_profile_request_status_whatsapp(
+                profile=instance.employee,
+                request_type="Asset Return Request",
+                request_id=instance.id,
+                status_label="Approved",
+                details=[f"Asset: {self._asset_display_name(instance.asset)} ({instance.asset.asset_code})"],
+                action_path="/employee/assets",
+            )
+        except Exception:
+            pass
         return success(AssetReturnRequestSerializer(instance, context={"request": request}).data)
 
     @action(detail=False, methods=["post"], url_path=r"return-requests/(?P<request_id>[^/.]+)/reject")
@@ -863,6 +875,18 @@ class AssetViewSet(viewsets.ModelViewSet):
         )
         sync_workflow(instance, actor=request.user)
         audit(request, "asset_return_request_rejected_hr", entity="AssetReturnRequest", entity_id=instance.id)
+        try:
+            notify_profile_request_status_whatsapp(
+                profile=instance.employee,
+                request_type="Asset Return Request",
+                request_id=instance.id,
+                status_label="Rejected",
+                reason=comment,
+                details=[f"Asset: {self._asset_display_name(instance.asset)} ({instance.asset.asset_code})"],
+                action_path="/employee/assets",
+            )
+        except Exception:
+            pass
         return success(AssetReturnRequestSerializer(instance, context={"request": request}).data)
 
     @action(detail=False, methods=["get"], url_path="my-damage-reports")
@@ -1224,6 +1248,17 @@ class CEOAssetDamageReportViewSet(viewsets.ReadOnlyModelViewSet):
             update_fields=["status", "ceo_decision_by", "ceo_decision_at", "ceo_decision_note"]
         )
         audit(request, "asset_damage_report_approved_ceo", entity="AssetDamageReport", entity_id=instance.id)
+        try:
+            notify_profile_request_status_whatsapp(
+                profile=instance.employee,
+                request_type="Asset Damage Report",
+                request_id=instance.id,
+                status_label="Approved",
+                details=[f"Asset: {instance.asset.name_en or instance.asset.asset_code} ({instance.asset.asset_code})"],
+                action_path="/employee/assets",
+            )
+        except Exception:
+            pass
         return success(self.get_serializer(instance).data)
 
     @action(detail=True, methods=["post"])
@@ -1249,6 +1284,18 @@ class CEOAssetDamageReportViewSet(viewsets.ReadOnlyModelViewSet):
             update_fields=["status", "ceo_decision_by", "ceo_decision_at", "ceo_decision_note"]
         )
         audit(request, "asset_damage_report_rejected_ceo", entity="AssetDamageReport", entity_id=instance.id)
+        try:
+            notify_profile_request_status_whatsapp(
+                profile=instance.employee,
+                request_type="Asset Damage Report",
+                request_id=instance.id,
+                status_label="Rejected",
+                reason=comment,
+                details=[f"Asset: {instance.asset.name_en or instance.asset.asset_code} ({instance.asset.asset_code})"],
+                action_path="/employee/assets",
+            )
+        except Exception:
+            pass
         return success(self.get_serializer(instance).data)
 
 
@@ -1361,6 +1408,18 @@ class ManagerAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
         )
         sync_workflow(instance, actor=request.user)
         audit(request, "asset_return_request_rejected_manager", entity="AssetReturnRequest", entity_id=instance.id)
+        try:
+            notify_profile_request_status_whatsapp(
+                profile=instance.employee,
+                request_type="Asset Return Request",
+                request_id=instance.id,
+                status_label="Rejected",
+                reason=comment,
+                details=[f"Asset: {instance.asset.name_en or instance.asset.asset_code} ({instance.asset.asset_code})"],
+                action_path="/employee/assets",
+            )
+        except Exception:
+            pass
         return success(self.get_serializer(instance).data)
 
 
@@ -1404,6 +1463,17 @@ class CEOAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
         )
         sync_workflow(instance, actor=request.user)
         audit(request, "asset_return_request_approved_ceo", entity="AssetReturnRequest", entity_id=instance.id)
+        try:
+            notify_profile_request_status_whatsapp(
+                profile=instance.employee,
+                request_type="Asset Return Request",
+                request_id=instance.id,
+                status_label="Approved",
+                details=[f"Asset: {instance.asset.name_en or instance.asset.asset_code} ({instance.asset.asset_code})"],
+                action_path="/employee/assets",
+            )
+        except Exception:
+            pass
         return success(self.get_serializer(instance).data)
 
     @action(detail=True, methods=["post"])
@@ -1430,4 +1500,16 @@ class CEOAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
         )
         sync_workflow(instance, actor=request.user)
         audit(request, "asset_return_request_rejected_ceo", entity="AssetReturnRequest", entity_id=instance.id)
+        try:
+            notify_profile_request_status_whatsapp(
+                profile=instance.employee,
+                request_type="Asset Return Request",
+                request_id=instance.id,
+                status_label="Rejected",
+                reason=comment,
+                details=[f"Asset: {instance.asset.name_en or instance.asset.asset_code} ({instance.asset.asset_code})"],
+                action_path="/employee/assets",
+            )
+        except Exception:
+            pass
         return success(self.get_serializer(instance).data)

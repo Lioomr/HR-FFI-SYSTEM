@@ -5,8 +5,8 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core import signing
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import override_settings
 from django.template.loader import render_to_string
+from django.test import override_settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -160,6 +160,54 @@ class MeetingAnnouncementTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
         self.assertEqual(email.call_count, 2)
         whatsapp.assert_not_called()
+
+    def test_publish_to_whatsapp_alias_triggers_whatsapp_delivery(self):
+        self.client.force_authenticate(self.hr)
+        payload = {
+            "title": "Policy Update",
+            "content": "Please review the policy update.",
+            "target_roles": ["EMPLOYEE"],
+            "publish_to_dashboard": True,
+            "publish_to_email": False,
+            "publish_to_whatsapp": True,
+        }
+
+        with patch("announcements.views.send_announcement_email") as email, patch(
+            "announcements.views.send_announcement_whatsapp"
+        ) as whatsapp:
+            response = self.client.post(
+                self.url,
+                payload,
+                format="json",
+                HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+        announcement = Announcement.objects.get(title="Policy Update")
+        self.assertTrue(announcement.publish_to_sms)
+        self.assertTrue(response.data["data"]["announcement"]["publish_to_whatsapp"])
+        self.assertTrue(response.data["data"]["announcement"]["publish_to_sms"])
+        email.assert_called_once()
+        whatsapp.assert_called_once()
+
+    def test_conflicting_whatsapp_and_deprecated_sms_aliases_are_rejected(self):
+        self.client.force_authenticate(self.hr)
+        payload = {
+            "title": "Policy Update",
+            "content": "Please review the policy update.",
+            "target_roles": ["EMPLOYEE"],
+            "publish_to_sms": False,
+            "publish_to_whatsapp": True,
+        }
+
+        response = self.client.post(
+            self.url,
+            payload,
+            format="json",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
 
     def test_meeting_requires_selected_recipients(self):
         self.client.force_authenticate(self.hr)

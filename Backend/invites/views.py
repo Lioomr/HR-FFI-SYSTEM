@@ -1,13 +1,14 @@
 # invites/views.py
 
 import logging
+import secrets
 from datetime import timedelta
 from typing import Any
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import status
@@ -19,10 +20,16 @@ from admin_portal.models import SystemSettings  # ✅ uses /settings default_inv
 from audit.utils import audit
 from core.permissions import IsHRManagerOrAdmin
 from core.responses import error, success
-from core.services import send_user_invite_email
+from core.services import WhatsAppService, send_user_invite_email, send_user_invite_whatsapp
+from employees.models import EmployeeProfile
 
 from .models import Invite
-from .serializers import InviteAcceptSerializer, InviteCreateSerializer, InviteSerializer
+from .serializers import (
+    InviteAcceptSerializer,
+    InviteCreateSerializer,
+    InviteSerializer,
+    WhatsAppProviderTestSerializer,
+)
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -32,18 +39,233 @@ def _normalize_email_delivery_result(result: dict[str, Any] | None) -> dict[str,
     if not result:
         return {
             "sent": False,
+            "provider_submitted": False,
             "provider": "bird",
+            "provider_status": "",
+            "delivery_status": Invite.DeliveryStatus.FAILED,
             "status_code": None,
             "message_id": None,
+            "external_message_id": None,
             "error": "Unknown email delivery error.",
         }
+    sent = bool(result.get("success") or result.get("sent"))
+    message_id = result.get("message_id")
     return {
-        "sent": bool(result.get("success")),
+        "sent": sent,
+        "provider_submitted": sent,
         "provider": "bird",
+        "provider_status": _extract_provider_status(result),
+        "delivery_status": Invite.DeliveryStatus.SENT if sent else Invite.DeliveryStatus.FAILED,
         "status_code": result.get("status_code"),
-        "message_id": result.get("message_id"),
-        "error": result.get("error"),
+        "message_id": message_id,
+        "external_message_id": result.get("external_message_id") or message_id,
+        "error": result.get("error") or result.get("reason"),
     }
+
+
+def _normalize_whatsapp_delivery_result(result: dict[str, Any] | None) -> dict[str, Any]:
+    if not result:
+        return {
+            "sent": False,
+            "provider_submitted": False,
+            "provider": "evolution_whatsapp",
+            "provider_status": "",
+            "delivery_status": Invite.DeliveryStatus.UNKNOWN,
+            "status_code": None,
+            "message_id": None,
+            "external_message_id": None,
+            "error": "Unknown WhatsApp delivery error.",
+        }
+    provider_submitted = bool(result.get("success") or result.get("sent"))
+    provider_status = _extract_provider_status(result)
+    delivery_status = _whatsapp_delivery_status(provider_submitted=provider_submitted, provider_status=provider_status)
+    message_id = result.get("message_id")
+    return {
+        "sent": delivery_status in {
+            Invite.DeliveryStatus.SENT,
+            Invite.DeliveryStatus.DELIVERED,
+            Invite.DeliveryStatus.READ,
+        },
+        "provider_submitted": provider_submitted,
+        "provider": result.get("provider", "evolution_whatsapp"),
+        "provider_status": provider_status,
+        "delivery_status": delivery_status,
+        "status_code": result.get("status_code"),
+        "message_id": message_id,
+        "external_message_id": result.get("external_message_id") or message_id,
+        "error": result.get("error") or result.get("reason"),
+    }
+
+
+def _extract_provider_status(result: dict[str, Any] | None) -> str:
+    if not result:
+        return ""
+
+    direct_keys = ("provider_status", "message_status", "messageStatus", "delivery_status", "deliveryStatus", "status")
+    for key in direct_keys:
+        value = result.get(key)
+        if value not in (None, ""):
+            return str(value).strip()
+
+    for key in ("message", "data", "response"):
+        nested = result.get(key)
+        if isinstance(nested, dict):
+            nested_status = _extract_provider_status(nested)
+            if nested_status:
+                return nested_status
+
+    return ""
+
+
+def _whatsapp_delivery_status(*, provider_submitted: bool, provider_status: str) -> str:
+    if not provider_submitted:
+        return Invite.DeliveryStatus.FAILED
+
+    normalized = provider_status.strip().lower().replace("-", "_").replace(" ", "_")
+    failed_statuses = {"0", "error", "failed"}
+    if normalized in failed_statuses:
+        return Invite.DeliveryStatus.FAILED
+    return Invite.DeliveryStatus.QUEUED
+
+
+def _inviter_name(user) -> str:
+    return getattr(user, "full_name", "") or getattr(user, "email", "") or ""
+
+
+def _send_invite_delivery(
+    *,
+    invite: Invite,
+    invite_link: str,
+    expires_in_hours: int,
+    inviter_name: str,
+    is_reminder: bool = False,
+) -> dict[str, Any]:
+    if invite.channel == Invite.Channel.WHATSAPP:
+        try:
+            return send_user_invite_whatsapp(
+                phone_number=invite.phone_number or "",
+                role=invite.role,
+                invite_link=invite_link,
+                expires_in_hours=expires_in_hours,
+                inviter_name=inviter_name,
+            )
+        except Exception as exc:  # pragma: no cover - defensive guard around external delivery
+            logger.exception(
+                "invite_whatsapp_send_unhandled_exception",
+                extra={"invite_id": invite.id, "channel": invite.channel},
+            )
+            return {"success": False, "provider": "evolution_whatsapp", "error": str(exc)}
+
+    try:
+        return send_user_invite_email(
+            to_email=invite.email or "",
+            role=invite.role,
+            invite_link=invite_link,
+            expires_in_hours=expires_in_hours,
+            inviter_name=inviter_name,
+            is_reminder=is_reminder,
+        )
+    except Exception as exc:  # pragma: no cover - defensive guard around external delivery
+        logger.exception(
+            "invite_email_send_unhandled_exception",
+            extra={"invite_id": invite.id, "channel": invite.channel},
+        )
+        return {"success": False, "provider": "bird", "error": str(exc)}
+
+
+def _normalize_delivery_result(channel: str, result: dict[str, Any] | None) -> dict[str, Any]:
+    if channel == Invite.Channel.WHATSAPP:
+        return _normalize_whatsapp_delivery_result(result)
+    return _normalize_email_delivery_result(result)
+
+
+def _truncate_delivery_text(value: Any, max_length: int) -> str:
+    return str(value or "").strip()[:max_length]
+
+
+def _coerce_status_code(value: Any) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalize_whatsapp_test_result(result: dict[str, Any] | None) -> dict[str, Any]:
+    delivery = _normalize_whatsapp_delivery_result(result)
+    return {
+        "sent": delivery["sent"],
+        "provider_submitted": delivery.get("provider_submitted"),
+        "provider": delivery.get("provider") or "evolution_whatsapp",
+        "provider_status": delivery.get("provider_status") or None,
+        "delivery_status": delivery.get("delivery_status"),
+        "status_code": delivery.get("status_code") or None,
+        "message_id": delivery.get("message_id"),
+        "external_message_id": delivery.get("external_message_id"),
+        "error": delivery.get("error"),
+    }
+
+
+def _record_invite_delivery(*, invite: Invite, channel: str, result: dict[str, Any] | None) -> dict[str, Any]:
+    delivery = _normalize_delivery_result(channel, result)
+    invite.last_delivery_channel = channel
+    invite.last_delivery_sent = bool(delivery["sent"])
+    invite.last_delivery_provider = _truncate_delivery_text(delivery.get("provider"), 64)
+    invite.last_delivery_status_code = _coerce_status_code(delivery.get("status_code"))
+    invite.last_delivery_message_id = _truncate_delivery_text(delivery.get("message_id"), 255)
+    invite.last_delivery_error = _truncate_delivery_text(delivery.get("error"), 500)
+    invite.last_delivery_at = timezone.now()
+    invite.provider_submitted = delivery.get("provider_submitted")
+    invite.provider_status = _truncate_delivery_text(delivery.get("provider_status"), 64)
+    invite.delivery_status = delivery.get("delivery_status") or Invite.DeliveryStatus.UNKNOWN
+    invite.external_message_id = _truncate_delivery_text(delivery.get("external_message_id"), 255)
+    invite.save(
+        update_fields=[
+            "last_delivery_channel",
+            "last_delivery_sent",
+            "last_delivery_provider",
+            "last_delivery_status_code",
+            "last_delivery_message_id",
+            "last_delivery_error",
+            "last_delivery_at",
+            "provider_submitted",
+            "provider_status",
+            "delivery_status",
+            "external_message_id",
+        ]
+    )
+    return delivery
+
+
+def _generate_invite_employee_id() -> str:
+    for _ in range(20):
+        candidate = f"FFI-{secrets.token_hex(3).upper()}"
+        if not EmployeeProfile.objects.filter(employee_id=candidate).exists():
+            return candidate
+    raise IntegrityError("Failed to generate unique employee_id for invite acceptance.")
+
+
+def _ensure_invited_employee_profile(*, user, full_name: str, phone_number: str) -> EmployeeProfile:
+    profile, created = EmployeeProfile.objects.get_or_create(
+        user=user,
+        defaults={
+            "employee_id": _generate_invite_employee_id(),
+            "full_name": full_name or getattr(user, "full_name", "") or "",
+            "mobile": phone_number or "",
+        },
+    )
+    update_fields = []
+    if not created:
+        if full_name and not profile.full_name:
+            profile.full_name = full_name
+            update_fields.append("full_name")
+        if phone_number:
+            profile.mobile = phone_number
+            update_fields.append("mobile")
+        if update_fields:
+            profile.save(update_fields=update_fields)
+    return profile
 
 
 class InvitesPagination(PageNumberPagination):
@@ -105,7 +327,9 @@ class InvitesListCreateView(APIView):
         if not s.is_valid():
             return error("Validation error", errors=s.errors, status=422)
 
-        email = s.validated_data["email"]
+        email = s.validated_data.get("email")
+        phone_number = s.validated_data.get("phone_number")
+        channel = s.validated_data["channel"]
         role = s.validated_data["role"]
         expires_in_hours = s.validated_data.get("expires_in_hours")
         if not expires_in_hours:
@@ -113,7 +337,7 @@ class InvitesListCreateView(APIView):
             expires_in_hours = settings_obj.default_invite_expiry_hours
 
         # Prevent inviting an already registered user (Phase 1-friendly)
-        if User.objects.filter(email__iexact=email).exists():
+        if email and User.objects.filter(email__iexact=email).exists():
             return error("Validation error", errors={"email": ["Email is already registered."]}, status=422)
 
         now = timezone.now()
@@ -121,6 +345,8 @@ class InvitesListCreateView(APIView):
 
         invite = Invite.objects.create(
             email=email,
+            phone_number=phone_number,
+            channel=channel,
             role=role,
             token=Invite.generate_token(),
             status=Invite.Status.SENT,
@@ -136,28 +362,54 @@ class InvitesListCreateView(APIView):
             entity_id=invite.id,
             metadata={
                 "email": email,
+                "phone_number": phone_number,
+                "channel": channel,
                 "role": role,
                 "expires_at": invite.expires_at.isoformat(),
             },
         )
 
         link = f"{settings.FRONTEND_URL}/register?token={invite.token}"
-        email_result = send_user_invite_email(
-            to_email=email,
-            role=role,
+        delivery_result = _send_invite_delivery(
+            invite=invite,
             invite_link=link,
             expires_in_hours=expires_in_hours,
-            inviter_name=getattr(request.user, "full_name", "") or request.user.email,
+            inviter_name=_inviter_name(request.user),
         )
-        if not email_result.get("success"):
+        delivery = _record_invite_delivery(invite=invite, channel=invite.channel, result=delivery_result)
+        if not delivery.get("provider_submitted"):
             logger.warning(
-                "invite_email_send_failed",
-                extra={"invite_id": invite.id, "to_email": email, "error": email_result.get("error")},
+                "invite_delivery_failed",
+                extra={
+                    "invite_id": invite.id,
+                    "channel": invite.channel,
+                    "error": delivery.get("error"),
+                },
             )
 
-        response_data = InviteSerializer(invite).data
-        response_data["email_delivery"] = _normalize_email_delivery_result(email_result)
-        return success(response_data, status=status.HTTP_201_CREATED)
+        return success(InviteSerializer(invite).data, status=status.HTTP_201_CREATED)
+
+
+class InviteWhatsAppProviderTestView(APIView):
+    permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
+
+    def post(self, request):
+        serializer = WhatsAppProviderTestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error("Validation error", errors=serializer.errors, status=422)
+
+        phone_number = serializer.validated_data["phone_number"]
+        try:
+            result = WhatsAppService().send_template_message(
+                phone_number=phone_number,
+                template_name="whatsapp_provider_test",
+                template_variables={"provider_name": "Evolution"},
+            )
+        except Exception as exc:  # pragma: no cover - defensive guard around external provider checks
+            logger.exception("whatsapp_provider_test_unhandled_exception")
+            result = {"success": False, "provider": "evolution_whatsapp", "error": str(exc)}
+
+        return success(_normalize_whatsapp_test_result(result))
 
 
 class InviteResendView(APIView):
@@ -205,6 +457,8 @@ class InviteResendView(APIView):
             entity_id=invite.id,
             metadata={
                 "email": invite.email,
+                "phone_number": invite.phone_number,
+                "channel": invite.channel,
                 "role": invite.role,
                 "expires_at": invite.expires_at.isoformat(),
             },
@@ -212,23 +466,25 @@ class InviteResendView(APIView):
 
         link = f"{settings.FRONTEND_URL}/register?token={invite.token}"
         remaining_hours = max(1, int((invite.expires_at - now).total_seconds() // 3600))
-        email_result = send_user_invite_email(
-            to_email=invite.email,
-            role=invite.role,
+        delivery_result = _send_invite_delivery(
+            invite=invite,
             invite_link=link,
             expires_in_hours=remaining_hours,
-            inviter_name=getattr(request.user, "full_name", "") or request.user.email,
+            inviter_name=_inviter_name(request.user),
             is_reminder=True,
         )
-        if not email_result.get("success"):
+        delivery = _record_invite_delivery(invite=invite, channel=invite.channel, result=delivery_result)
+        if not delivery.get("provider_submitted"):
             logger.warning(
-                "invite_email_resend_failed",
-                extra={"invite_id": invite.id, "to_email": invite.email, "error": email_result.get("error")},
+                "invite_resend_delivery_failed",
+                extra={
+                    "invite_id": invite.id,
+                    "channel": invite.channel,
+                    "error": delivery.get("error"),
+                },
             )
 
-        response_data = InviteSerializer(invite).data
-        response_data["email_delivery"] = _normalize_email_delivery_result(email_result)
-        return success(response_data)
+        return success(InviteSerializer(invite).data)
 
 
 class InviteRevokeView(APIView):
@@ -284,6 +540,8 @@ class InviteAcceptView(APIView):
         return success(
             {
                 "email": invite.email,
+                "channel": invite.channel,
+                "phone_number": invite.phone_number,
                 "role": invite.role,
                 "expires_at": invite.expires_at.isoformat(),
             }
@@ -296,14 +554,16 @@ class InviteAcceptView(APIView):
             return error("Validation error", errors=s.errors, status=422)
 
         invite: Invite = s.validated_data["invite"]
+        email: str = s.validated_data["email"]
+        phone_number: str = s.validated_data.get("phone_number", "")
         password: str = s.validated_data["password"]
         full_name: str = (s.validated_data.get("full_name") or "").strip()
 
-        if User.objects.filter(email__iexact=invite.email).exists():
+        if User.objects.filter(email__iexact=email).exists():
             return error("Validation error", errors={"email": ["Email is already registered."]}, status=422)
 
         user = User.objects.create_user(
-            email=invite.email,
+            email=email,
             password=password,
             full_name=full_name,
             is_active=True,
@@ -311,16 +571,27 @@ class InviteAcceptView(APIView):
         group, _ = Group.objects.get_or_create(name=invite.role)
         user.groups.clear()
         user.groups.add(group)
+        profile = _ensure_invited_employee_profile(user=user, full_name=full_name, phone_number=phone_number)
 
         invite.status = Invite.Status.ACCEPTED
-        invite.save(update_fields=["status"])
+        if not invite.email:
+            invite.email = email
+            invite.save(update_fields=["status", "email"])
+        else:
+            invite.save(update_fields=["status"])
 
         audit(
             request,
             action="invite_accepted",
             entity="invite",
             entity_id=invite.id,
-            metadata={"email": invite.email, "role": invite.role, "user_id": user.id},
+            metadata={
+                "email": invite.email,
+                "phone_number": phone_number or None,
+                "role": invite.role,
+                "user_id": user.id,
+                "employee_profile_id": profile.id,
+            },
         )
 
         return success({"email": user.email, "role": invite.role}, status=201)

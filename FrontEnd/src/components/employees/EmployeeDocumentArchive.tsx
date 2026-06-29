@@ -4,12 +4,13 @@ import {
     Modal, Alert, Tooltip, notification, Typography,
 } from "antd";
 import {
-    UploadOutlined, DownloadOutlined, ReloadOutlined, PlusOutlined,
+    UploadOutlined, DownloadOutlined, ReloadOutlined, PlusOutlined, BellOutlined,
 } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import type { UploadFile } from "antd/es/upload/interface";
 import {
     getEmployeeDocuments, uploadEmployeeDocument, downloadEmployeeDocument,
+    notifyEmployeeDocumentExpiry,
     type EmployeeDocument, type DocumentType,
 } from "../../services/api/employeesApi";
 import { isApiError } from "../../services/api/apiTypes";
@@ -32,6 +33,45 @@ const extractionStatusColor: Record<string, string> = {
     failed: "error",
 };
 
+/**
+ * Days until a document's expiry date (`exit_before`). Negative when expired.
+ * Returns null when there is no valid expiry date.
+ */
+function getDaysLeft(exitBefore?: string | null): number | null {
+    if (!exitBefore) return null;
+    const expiry = new Date(exitBefore);
+    if (Number.isNaN(expiry.getTime())) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    expiry.setHours(0, 0, 0, 0);
+    return Math.round((expiry.getTime() - today.getTime()) / 86400000);
+}
+
+/**
+ * Notify is offered only for documents that have an expiry date and are either
+ * already expired or expiring within 45 days (matching backend validation).
+ */
+function canNotifyExpiry(exitBefore?: string | null): boolean {
+    const days = getDaysLeft(exitBefore);
+    return days !== null && days <= 45;
+}
+
+/** Pull a human-readable message out of an API error envelope (array or map form). */
+function extractApiErrorMessage(data: any): string | null {
+    if (!data) return null;
+    const errs = data.errors;
+    if (Array.isArray(errs) && errs.length > 0) {
+        const first = errs[0];
+        if (typeof first === "string") return first;
+        if (first && typeof first.message === "string") return first.message;
+    } else if (errs && typeof errs === "object") {
+        const firstVal = Object.values(errs)[0];
+        if (Array.isArray(firstVal) && firstVal.length > 0) return String(firstVal[0]);
+        if (typeof firstVal === "string") return firstVal;
+    }
+    return typeof data.message === "string" ? data.message : null;
+}
+
 interface Props {
     employeeId: number | string;
     readonly?: boolean;
@@ -44,6 +84,7 @@ export default function EmployeeDocumentArchive({ employeeId, readonly = false }
     const [uploadModalOpen, setUploadModalOpen] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [downloadingId, setDownloadingId] = useState<number | null>(null);
+    const [notifyingId, setNotifyingId] = useState<number | null>(null);
 
     const [form] = Form.useForm();
     const [docType, setDocType] = useState<DocumentType | null>(null);
@@ -79,6 +120,35 @@ export default function EmployeeDocumentArchive({ employeeId, readonly = false }
             notification.error({ message: t("common.error"), description: t("common.tryAgain") });
         } finally {
             setDownloadingId(null);
+        }
+    };
+
+    const handleNotify = async (doc: EmployeeDocument) => {
+        setNotifyingId(doc.id);
+        try {
+            const res = await notifyEmployeeDocumentExpiry(employeeId, doc.id);
+            if (isApiError(res)) {
+                notification.warning({ message: t("archive.notifyFailed"), description: res.message });
+                return;
+            }
+            const delivery = res.data?.delivery;
+            if (delivery?.sent === true || delivery?.success === true) {
+                notification.success({ message: t("archive.notifySent"), description: doc.display_name });
+            } else {
+                notification.warning({
+                    message: t("archive.notifyFailed"),
+                    description: delivery?.error || t("common.tryAgain"),
+                });
+            }
+        } catch (e: any) {
+            const validationMsg = extractApiErrorMessage(e?.response?.data);
+            if (validationMsg) {
+                notification.warning({ message: t("archive.notifyFailed"), description: validationMsg });
+            } else {
+                notification.error({ message: t("common.error"), description: e?.message || t("common.tryAgain") });
+            }
+        } finally {
+            setNotifyingId(null);
         }
     };
 
@@ -187,16 +257,30 @@ export default function EmployeeDocumentArchive({ employeeId, readonly = false }
         {
             title: t("common.actions"),
             key: "actions",
-            width: 80,
+            width: 150,
             render: (_, r) => (
-                <Tooltip title={t("common.download")}>
-                    <Button
-                        size="small"
-                        icon={<DownloadOutlined />}
-                        loading={downloadingId === r.id}
-                        onClick={() => handleDownload(r)}
-                    />
-                </Tooltip>
+                <Space size={4}>
+                    <Tooltip title={t("common.download")}>
+                        <Button
+                            size="small"
+                            icon={<DownloadOutlined />}
+                            loading={downloadingId === r.id}
+                            onClick={() => handleDownload(r)}
+                        />
+                    </Tooltip>
+                    {canNotifyExpiry(r.exit_before) && (
+                        <Tooltip title={t("archive.whatsappNotification")}>
+                            <Button
+                                size="small"
+                                icon={<BellOutlined />}
+                                loading={notifyingId === r.id}
+                                onClick={() => handleNotify(r)}
+                            >
+                                {notifyingId === r.id ? t("archive.notifySending") : t("archive.notify")}
+                            </Button>
+                        </Tooltip>
+                    )}
+                </Space>
             ),
         },
     ];

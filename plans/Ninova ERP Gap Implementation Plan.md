@@ -39,7 +39,7 @@ Close the highest-value gaps between the current HR system and the audited Ninov
 ## Phase 1: Foundation And Control Layer
 **Timeline:** Weeks 1-4  
 **Priority:** Critical  
-**Status:** `processing`
+**Status:** `done`
 
 ### Objectives
 
@@ -59,8 +59,8 @@ Close the highest-value gaps between the current HR system and the audited Ninov
 | Approval comments and action log | `done` | Implemented through workflow history and action records |
 | Delegation module | `done` | CRUD, role-aware reassignment, email notifications, and Docker-verified approval delegation are implemented |
 | Audit trail across requests | `done` | Workflow actions now emit audit events and structured history |
-| Reusable export layer (Excel first) | `none` | Still pending |
-| Saved table filters / columns | `none` | Still pending |
+| Reusable export layer (Excel first) | `done` | Shared export helpers and Excel exports are implemented |
+| Saved table filters / columns | `done` | Per-user table preferences are implemented and used on key tables |
 | Dashboard pending-task widgets by role | `done` | HR summary now reads workflow-backed pending approvals |
 
 ### Deliverables
@@ -75,7 +75,7 @@ Close the highest-value gaps between the current HR system and the audited Ninov
 ## Phase 2: HR Operations Expansion
 **Timeline:** Weeks 5-8  
 **Priority:** Critical  
-**Status:** `none`
+**Status:** `processing`
 
 ### Objectives
 
@@ -86,7 +86,7 @@ Close the highest-value gaps between the current HR system and the audited Ninov
 
 | Item | Status | Why Important |
 |---|---|---|
-| Attendance correction requests | `none` | Common HR/manager workflow |
+| Attendance correction requests | `done` | Backend request model, APIs, workflow, audit, tests, and frontend screens are implemented |
 | Employee transfer requests | `none` | Important for multi-project organizations |
 | Document renewal requests | `none` | Strong compliance value |
 | Joining forms / onboarding workflow | `none` | Improves employee onboarding control |
@@ -94,9 +94,9 @@ Close the highest-value gaps between the current HR system and the audited Ninov
 | Resignation requests | `none` | Formalizes employee exits |
 | Termination requests | `none` | Required for controlled HR actions |
 | Notice / warning letters | `none` | Improves disciplinary workflow |
-| Task groups | `none` | Links employees to operational assignments |
+| Task groups | `done` | HR reference CRUD exists and employees can be linked to task groups |
 | Accommodations | `none` | Important for construction/field workforce |
-| Sponsors | `none` | Important for visa/work-permit management |
+| Sponsors | `done` | HR reference CRUD exists and employees can be linked to sponsors |
 
 ### Deliverables
 
@@ -272,11 +272,6 @@ A phase should move from `processing` to `done` only when:
 ## Next Execution Recommendation
 
 Start immediately with:
-
-- Phase 1 `Audit trail`
-- Phase 1 `Export and saved table preferences`
-
-Then move directly into:
 
 - Phase 2 `Attendance correction`
 - Phase 2 `Document renewal`
