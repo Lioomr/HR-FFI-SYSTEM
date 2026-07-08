@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Alert, Button, Checkbox, Form, Input, Select } from "antd";
+import { Alert, Button, Card, Checkbox, Form, Input, Select } from "antd";
 import { LockOutlined, MailOutlined, ApartmentOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../auth/authStore";
@@ -87,124 +87,79 @@ export default function LoginPage() {
     }
   }
 
+  const languageSelect = (
+    <Select
+      size="small"
+      value={language}
+      onChange={(value) => setLanguage(value as AppLanguage)}
+      options={[
+        { value: "en", label: t("language.english") },
+        { value: "ar", label: t("language.arabic") },
+      ]}
+      variant="borderless"
+      style={{ minWidth: 88 }}
+    />
+  );
+
   return (
     <div
       style={{
         minHeight: "100vh",
         display: "flex",
         direction,
-        background: "#f8faff",
+        background: "#f8f9fb",
       }}
     >
-      {/* ── Left Panel: Brand (hidden on mobile) ── */}
-      <div
-        style={{
-          display: "none",
-          flex: "0 0 45%",
-          background: "linear-gradient(145deg, #1a1a1a 0%, #2a2a2a 40%, #1f1f1f 70%, #333333 100%)",
-          padding: "60px 48px",
-          flexDirection: "column",
-          justifyContent: "space-between",
-          position: "relative",
-          overflow: "hidden",
-        }}
-        className="login-left-panel"
-      >
-        {/* Background decorative circles */}
-        <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
-          {[
-            { w: 400, h: 400, top: -100, right: -100, op: 0.06 },
-            { w: 300, h: 300, bottom: -80, left: -80, op: 0.05 },
-            { w: 200, h: 200, top: "40%", left: "60%", op: 0.04 },
-          ].map((c, i) => (
-            <div
-              key={i}
-              style={{
-                position: "absolute",
-                width: c.w,
-                height: c.h,
-                top: c.top,
-                bottom: c.bottom,
-                left: c.left,
-                right: c.right,
-                borderRadius: "50%",
-                background: "rgba(251,146,60," + c.op + ")",
-                border: "1px solid rgba(251,146,60,0.1)",
-              }}
-            />
-          ))}
-        </div>
-
-        {/* Logo */}
-        <div style={{ position: "relative", zIndex: 1 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 60 }}>
+      {/* ── Brand panel (desktop only) ── */}
+      <div className="login-brand-panel" style={{ display: "none", flex: "0 0 40%", background: "#0d1117" }}>
+        <div
+          style={{
+            height: "100%",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            padding: "56px 56px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div
               style={{
-                width: 46,
-                height: 46,
-                background: "linear-gradient(135deg, #f97316, #fb923c)",
+                width: 44,
+                height: 44,
                 borderRadius: 12,
+                background: "linear-gradient(135deg, #f97316, #fb923c)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: "white",
-                fontSize: 22,
-                boxShadow: "0 8px 24px rgba(249,115,22,0.5)",
+                color: "#fff",
+                fontSize: 20,
+                flexShrink: 0,
               }}
             >
               <ApartmentOutlined />
             </div>
             <div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: "white", letterSpacing: "-0.02em", fontFamily: "'Outfit', 'Inter', sans-serif" }}>
-                FFISYS
-              </div>
-              <div style={{ fontSize: 12, color: "rgba(165,180,252,0.7)", marginTop: 1 }}>
-                HR & Payroll Platform
+              <div style={{ fontSize: 18, fontWeight: 700, color: "#fff", letterSpacing: "-0.01em" }}>FFISYS</div>
+              <div style={{ fontSize: 12.5, color: "rgba(255,255,255,0.55)", marginTop: 1 }}>
+                {t("layout.hrPayroll")}
               </div>
             </div>
           </div>
 
-          {/* Headline */}
-          <div style={{ color: "white", fontSize: 36, fontWeight: 800, lineHeight: 1.2, letterSpacing: "-0.03em", marginBottom: 20 }}>
-            Manage your workforce smarter
-          </div>
-          <div style={{ color: "rgba(251,146,60,0.75)", fontSize: 16, lineHeight: 1.7, maxWidth: 340 }}>
-            A unified platform for HR operations, payroll, leave management, and employee self-service.
-          </div>
-        </div>
-
-        {/* Feature pills */}
-        <div style={{ position: "relative", zIndex: 1 }}>
-          {[
-            "⚡ Real-time Payroll Processing",
-            "📅 Smart Leave Management",
-            "🔐 Role-based Access Control",
-            "🌐 Arabic & English Support",
-          ].map((feat, i) => (
-            <div
-              key={i}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 8,
-                background: "rgba(255,255,255,0.06)",
-                border: "1px solid rgba(255,255,255,0.08)",
-                borderRadius: 10,
-                padding: "10px 16px",
-                marginRight: 8,
-                marginBottom: 8,
-                color: "rgba(255,255,255,0.7)",
-                fontSize: 13,
-                backdropFilter: "blur(4px)",
-              }}
-            >
-              {feat}
+          <div>
+            <div style={{ width: 28, height: 3, background: "#f97316", borderRadius: 2, marginBottom: 16 }} />
+            <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 13.5, lineHeight: 1.7, maxWidth: 280 }}>
+              {t("auth.internalSystemNotice")}
             </div>
-          ))}
+          </div>
+
+          <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 12 }}>
+            &copy; {new Date().getFullYear()} FFISYS
+          </div>
         </div>
       </div>
 
-      {/* ── Right Panel: Login Form ── */}
+      {/* ── Form panel ── */}
       <div
         style={{
           flex: 1,
@@ -216,63 +171,42 @@ export default function LoginPage() {
           minHeight: "100vh",
         }}
       >
-        <div
-          style={{
-            width: "100%",
-            maxWidth: 440,
-            animation: "fadeInUp 0.5s ease both",
-          }}
-        >
-          {/* Mobile logo */}
-          <div style={{ marginBottom: 40, textAlign: "center" }}>
+        <div style={{ width: "100%", maxWidth: 400 }}>
+          {/* Mobile brand mark */}
+          <div className="login-mobile-brand" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 28 }}>
             <div
               style={{
-                width: 56,
-                height: 56,
+                width: 40,
+                height: 40,
+                borderRadius: 10,
                 background: "linear-gradient(135deg, #f97316, #fb923c)",
-                borderRadius: 16,
-                display: "inline-flex",
+                display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: "white",
-                fontSize: 26,
-                boxShadow: "0 8px 24px rgba(249,115,22,0.35)",
-                marginBottom: 16,
+                color: "#fff",
+                fontSize: 18,
+                flexShrink: 0,
               }}
             >
               <ApartmentOutlined />
             </div>
-            <div style={{ fontSize: 28, fontWeight: 800, color: "#0f172a", letterSpacing: "-0.03em", marginBottom: 6, fontFamily: "'Outfit', 'Inter', sans-serif" }}>
-              Welcome back
-            </div>
-            <div style={{ color: "#64748b", fontSize: 15 }}>
-              {t("auth.signInToContinue")}
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "#0f172a" }}>FFISYS</div>
+              <div style={{ fontSize: 12, color: "#64748b" }}>{t("layout.hrPayroll")}</div>
             </div>
           </div>
 
-          {/* Language toggle */}
-          <div style={{ display: "flex", justifyContent: direction === "rtl" ? "flex-start" : "flex-end", marginBottom: 20 }}>
-            <Select
-              size="small"
-              value={language}
-              onChange={(value) => setLanguage(value as AppLanguage)}
-              options={[
-                { value: "en", label: t("language.english") },
-                { value: "ar", label: t("language.arabic") },
-              ]}
-              variant="outlined"
-              style={{ minWidth: 120, borderRadius: 8 }}
-            />
-          </div>
-
-          {/* Form card */}
-          <div
-            className="glass"
-            style={{
-              borderRadius: 20,
-              padding: 32,
-              boxShadow: "0 12px 40px rgba(0,0,0,0.08)",
-            }}
+          <Card
+            style={{ borderRadius: 16 }}
+            title={
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: "#0f172a" }}>{t("auth.signIn")}</div>
+                <div style={{ fontSize: 13, fontWeight: 400, color: "#64748b", marginTop: 2 }}>
+                  {t("auth.signInToContinue")}
+                </div>
+              </div>
+            }
+            extra={languageSelect}
           >
             {error && (
               <Alert
@@ -292,25 +226,23 @@ export default function LoginPage() {
               requiredMark={false}
             >
               <Form.Item
-                label={<span style={{ fontWeight: 600, color: "#374151" }}>{t("auth.email")}</span>}
+                label={t("auth.email")}
                 name="email"
                 rules={[
                   { required: true, message: t("auth.emailRequired") },
                   { type: "email", message: t("auth.emailInvalid") },
                 ]}
-                style={{ marginBottom: 16 }}
               >
                 <Input
                   size="large"
                   prefix={<MailOutlined style={{ color: "#94a3b8" }} />}
                   placeholder="name@company.com"
                   autoComplete="email"
-                  style={{ borderRadius: 10 }}
                 />
               </Form.Item>
 
               <Form.Item
-                label={<span style={{ fontWeight: 600, color: "#374151" }}>{t("auth.password")}</span>}
+                label={t("auth.password")}
                 name="password"
                 rules={[{ required: true, message: t("auth.passwordRequired") }]}
                 style={{ marginBottom: 12 }}
@@ -320,49 +252,33 @@ export default function LoginPage() {
                   prefix={<LockOutlined style={{ color: "#94a3b8" }} />}
                   placeholder="••••••••"
                   autoComplete="current-password"
-                  style={{ borderRadius: 10 }}
                 />
               </Form.Item>
 
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-                <Form.Item name="remember" valuePropName="checked" style={{ margin: 0 }}>
-                  <Checkbox style={{ color: "#64748b", fontSize: 13 }}>{t("auth.rememberMe")}</Checkbox>
-                </Form.Item>
-              </div>
+              <Form.Item name="remember" valuePropName="checked" style={{ marginBottom: 20 }}>
+                <Checkbox>{t("auth.rememberMe")}</Checkbox>
+              </Form.Item>
 
-              <Button
-                type="primary"
-                htmlType="submit"
-                size="large"
-                loading={submitting}
-                block
-                style={{
-                  height: 48,
-                  borderRadius: 12,
-                  fontSize: 15,
-                  fontWeight: 700,
-                  background: "linear-gradient(135deg, #f97316, #ea580c)",
-                  border: "none",
-                  boxShadow: "0 6px 20px rgba(249,115,22,0.4)",
-                  letterSpacing: "0.01em",
-                }}
-              >
+              <Button type="primary" htmlType="submit" size="large" loading={submitting} block>
                 {t("auth.signIn")}
               </Button>
             </Form>
-          </div>
+          </Card>
 
-          <div style={{ textAlign: "center", marginTop: 24, color: "#94a3b8", fontSize: 12 }}>
-            &copy; {new Date().getFullYear()} FFISYS · All rights reserved
+          <div style={{ textAlign: "center", marginTop: 20, color: "#94a3b8", fontSize: 12 }}>
+            &copy; {new Date().getFullYear()} FFISYS
           </div>
         </div>
       </div>
 
-      {/* Responsive style for left panel */}
+      {/* Responsive: swap brand panel / mobile brand mark at the md breakpoint */}
       <style>{`
-        @media (min-width: 768px) {
-          .login-left-panel {
+        @media (min-width: 900px) {
+          .login-brand-panel {
             display: flex !important;
+          }
+          .login-mobile-brand {
+            display: none !important;
           }
         }
       `}</style>
