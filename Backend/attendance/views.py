@@ -3,7 +3,7 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
@@ -39,6 +39,17 @@ from .serializers import (
 User = get_user_model()
 
 ATTENDANCE_MAINTENANCE_MESSAGE = "Attendance is temporarily unavailable while we fix this part."
+
+
+def _apply_employee_search(queryset, search_param):
+    if not search_param:
+        return queryset
+    return queryset.filter(
+        Q(employee_profile__full_name_en__icontains=search_param)
+        | Q(employee_profile__full_name_ar__icontains=search_param)
+        | Q(employee_profile__full_name__icontains=search_param)
+        | Q(employee_profile__user__email__icontains=search_param)
+    )
 
 
 def _is_hr_manager_user(user):
@@ -83,7 +94,7 @@ class AttendanceMaintenanceMixin:
         return self.finalize_response(request, response, *args, **kwargs)
 
 
-class AttendanceRecordViewSet(AttendanceMaintenanceMixin, viewsets.ModelViewSet):
+class AttendanceRecordViewSet(viewsets.ModelViewSet):
     serializer_class = AttendanceRecordSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
@@ -138,6 +149,8 @@ class AttendanceRecordViewSet(AttendanceMaintenanceMixin, viewsets.ModelViewSet)
             thirty_days_ago = today - timedelta(days=30)
             queryset = queryset.filter(date__range=[thirty_days_ago, today])
 
+        queryset = _apply_employee_search(queryset, self.request.query_params.get("search"))
+
         if role in ["SystemAdmin", "HRManager"]:
             employee_id = self.request.query_params.get("employee_id")
             if employee_id:
@@ -179,10 +192,17 @@ class AttendanceRecordViewSet(AttendanceMaintenanceMixin, viewsets.ModelViewSet)
         if hasattr(self, "_date_filter_error"):
             return error(f"Invalid date filter: {self._date_filter_error}", status=status.HTTP_400_BAD_REQUEST)
 
+        summary = {
+            row["status"]: row["n"]
+            for row in self.filter_queryset(self.get_queryset()).values("status").annotate(n=Count("id"))
+        }
+
         response = super().list(request, *args, **kwargs)
 
         # Avoid double wrapping if pagination already added the envelope
         if isinstance(response.data, dict) and response.data.get("status") == "success":
+            if isinstance(response.data.get("data"), dict):
+                response.data["data"]["summary"] = summary
             return response
 
         return success(response.data)
@@ -194,7 +214,12 @@ class AttendanceRecordViewSet(AttendanceMaintenanceMixin, viewsets.ModelViewSet)
     def destroy(self, request, *args, **kwargs):
         return error("Attendance records cannot be deleted.", status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
+    def create(self, request, *args, **kwargs):
+        return error(ATTENDANCE_MAINTENANCE_MESSAGE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
     def partial_update(self, request, *args, **kwargs):
+        return error(ATTENDANCE_MAINTENANCE_MESSAGE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
         # HR Override logic (PATCH routes here)
         instance = self.get_object()
         if _is_hr_manager_origin_record(instance) and instance.status == AttendanceRecord.Status.PENDING_CEO:
@@ -240,6 +265,8 @@ class AttendanceRecordViewSet(AttendanceMaintenanceMixin, viewsets.ModelViewSet)
 
     @action(detail=False, methods=["post"], url_path="me/check-in", throttle_classes=[AttendanceThrottle])
     def me_check_in(self, request):
+        return error(ATTENDANCE_MAINTENANCE_MESSAGE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
         user = request.user
         today = timezone.localdate()
 
@@ -314,6 +341,8 @@ class AttendanceRecordViewSet(AttendanceMaintenanceMixin, viewsets.ModelViewSet)
 
     @action(detail=False, methods=["post"], url_path="me/check-out", throttle_classes=[AttendanceThrottle])
     def me_check_out(self, request):
+        return error(ATTENDANCE_MAINTENANCE_MESSAGE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
         user = request.user
         today = timezone.localdate()
 
@@ -340,6 +369,8 @@ class AttendanceRecordViewSet(AttendanceMaintenanceMixin, viewsets.ModelViewSet)
 
     @action(detail=False, methods=["get"], url_path="me")
     def me_list(self, request):
+        return error(ATTENDANCE_MAINTENANCE_MESSAGE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
         # Employee-scoped list (get_queryset already filters to own records)
         queryset = self.filter_queryset(self.get_queryset())
 
@@ -790,7 +821,7 @@ class ManagerAttendanceViewSet(AttendanceMaintenanceMixin, viewsets.ReadOnlyMode
         return success(AttendanceRecordSerializer(instance).data)
 
 
-class CEOAttendanceViewSet(AttendanceMaintenanceMixin, viewsets.ReadOnlyModelViewSet):
+class CEOAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = AttendanceRecordSerializer
     permission_classes = [IsAuthenticated, IsDepartmentCEOApprover]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
@@ -800,13 +831,42 @@ class CEOAttendanceViewSet(AttendanceMaintenanceMixin, viewsets.ReadOnlyModelVie
 
     def get_queryset(self):
         qs = AttendanceRecord.objects.select_related("employee_profile__user")
+        date_from_str = self.request.query_params.get("date_from")
+        date_to_str = self.request.query_params.get("date_to")
+        if date_from_str and date_to_str:
+            try:
+                date_from = date_type.fromisoformat(date_from_str)
+                date_to = date_type.fromisoformat(date_to_str)
+                qs = qs.filter(date__range=[date_from, date_to])
+            except (ValueError, TypeError):
+                return qs.none()
+
         status_param = self.request.query_params.get("status")
         if status_param:
-            return qs.filter(status=status_param)
-        return qs.filter(status=AttendanceRecord.Status.PENDING_CEO)
+            qs = qs.filter(status=status_param)
+
+        qs = _apply_employee_search(qs, self.request.query_params.get("search"))
+
+        return qs
+
+    def list(self, request, *args, **kwargs):
+        summary = {
+            row["status"]: row["n"]
+            for row in self.filter_queryset(self.get_queryset()).values("status").annotate(n=Count("id"))
+        }
+
+        response = super().list(request, *args, **kwargs)
+
+        if isinstance(response.data, dict) and response.data.get("status") == "success":
+            if isinstance(response.data.get("data"), dict):
+                response.data["data"]["summary"] = summary
+
+        return response
 
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
+        return error(ATTENDANCE_MAINTENANCE_MESSAGE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
         instance = self.get_object()
         if instance.status != AttendanceRecord.Status.PENDING_CEO:
             return error("Validation error", errors=["Request is not pending CEO approval."], status=422)
@@ -843,6 +903,8 @@ class CEOAttendanceViewSet(AttendanceMaintenanceMixin, viewsets.ReadOnlyModelVie
 
     @action(detail=True, methods=["post"])
     def reject(self, request, pk=None):
+        return error(ATTENDANCE_MAINTENANCE_MESSAGE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
         instance = self.get_object()
         if instance.status != AttendanceRecord.Status.PENDING_CEO:
             return error("Validation error", errors=["Request is not pending CEO approval."], status=422)

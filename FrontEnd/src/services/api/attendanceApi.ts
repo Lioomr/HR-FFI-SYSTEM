@@ -8,6 +8,8 @@ export interface AttendanceRecord {
   id: number;
   employee_profile: number;
   employee_name?: string;
+  employee_name_en?: string | null;
+  employee_name_ar?: string | null;
   employee_email?: string;
   date: string;
   check_in_at: string | null;
@@ -27,6 +29,7 @@ export interface AttendanceListResponse {
   count: number;
   page?: number;
   page_size?: number;
+  summary?: Partial<Record<AttendanceRecord["status"], number>>;
 }
 
 export interface OverrideAttendanceDto {
@@ -89,7 +92,7 @@ export async function overrideAttendance(
 }
 
 export async function getCEOAttendance(params?: AttendanceFilters): Promise<ApiResponse<AttendanceListResponse>> {
-  const { data } = await api.get<ApiResponse<AttendanceListResponse>>("/api/attendance/ceo/attendance/", { params });
+  const { data } = await api.get<ApiResponse<AttendanceListResponse>>("/api/ceo/attendance/", { params });
   return data;
 }
 
