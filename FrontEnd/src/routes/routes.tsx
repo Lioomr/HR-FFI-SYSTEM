@@ -95,6 +95,7 @@ import CFODashboardPage from "../pages/cfo/CFODashboardPage";
 import CFOLoanRequestsPage from "../pages/cfo/CFOLoanRequestsPage";
 import CFOLoanRequestDetailsPage from "../pages/cfo/CFOLoanRequestDetailsPage";
 import AttendanceMaintenancePage from "../pages/shared/AttendanceMaintenancePage";
+import AttendancePreviewPage from "../pages/shared/AttendancePreviewPage";
 import EmployeeAttendanceCorrectionRequestsPage from "../pages/employee/attendance/AttendanceCorrectionRequestsPage";
 import ManagerAttendanceCorrectionRequestsPage from "../pages/manager/ManagerAttendanceCorrectionRequestsPage";
 import HRAttendanceCorrectionRequestsPage from "../pages/hr/attendance/AttendanceCorrectionRequestsPage";
@@ -161,7 +162,7 @@ export const routes = [
               { path: "hr/dashboard", element: <HRDashboardPage /> },
               { path: "hr/activity", element: <RecentActivityPage /> },
               { path: "hr/profile", element: <UserProfilePage /> },
-              { path: "hr/attendance", element: <AttendanceMaintenancePage titleKey="layout.attendanceApprovals" backPath="/hr/dashboard" /> },
+              { path: "hr/attendance", element: <AttendancePreviewPage role="hr" /> },
               { path: "hr/invites", element: <AdminInvitesPage /> },
 
               // Employee Management
@@ -206,7 +207,7 @@ export const routes = [
               { path: "hr/announcements/:id/edit", element: <EditAnnouncementPage /> },
 
               // Existing pages
-              { path: "hr/attendance", element: <AttendanceMaintenancePage titleKey="layout.attendanceApprovals" backPath="/hr/dashboard" /> },
+              { path: "hr/attendance", element: <AttendancePreviewPage role="hr" /> },
               { path: "hr/attendance-correction-requests", element: <HRAttendanceCorrectionRequestsPage /> },
               { path: "hr/leave-balances", element: <HrLeaveBalancesPage /> },
             ],
@@ -292,7 +293,7 @@ export const routes = [
             children: [
               { path: "ceo/loan-requests", element: <CEOLoanRequestsPage /> },
               { path: "ceo/loan-requests/:id", element: <CEOLoanRequestDetailsPage /> },
-              { path: "ceo/attendance", element: <AttendanceMaintenancePage titleKey="layout.attendanceApprovals" backPath="/ceo/dashboard" /> },
+              { path: "ceo/attendance", element: <AttendancePreviewPage role="ceo" /> },
               { path: "ceo/assets/damage-reports", element: <CEOAssetDamageReportsPage /> },
               { path: "ceo/assets/return-requests", element: <CEOAssetReturnRequestsPage /> },
               { path: "ceo/employees/deletion-requests", element: <CEOEmployeeDeletionInboxPage /> },

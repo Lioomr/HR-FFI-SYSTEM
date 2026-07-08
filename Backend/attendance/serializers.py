@@ -6,7 +6,9 @@ from .models import AttendanceCorrectionRequest, AttendanceRecord, BioTimeConfig
 
 
 class AttendanceRecordSerializer(serializers.ModelSerializer):
-    employee_name = serializers.CharField(source="employee_profile.user.get_full_name", read_only=True)
+    employee_name = serializers.CharField(source="employee_profile.full_name", read_only=True)
+    employee_name_en = serializers.CharField(source="employee_profile.full_name_en", read_only=True)
+    employee_name_ar = serializers.CharField(source="employee_profile.full_name_ar", read_only=True)
     employee_email = serializers.EmailField(source="employee_profile.user.email", read_only=True)
     workflow = serializers.SerializerMethodField()
 
@@ -16,6 +18,8 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
             "id",
             "employee_profile",
             "employee_name",
+            "employee_name_en",
+            "employee_name_ar",
             "employee_email",
             "date",
             "check_in_at",
