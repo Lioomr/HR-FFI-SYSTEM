@@ -21,7 +21,10 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY . /app
 
 RUN sed -i 's/\r$//' /app/entrypoint.sh \
-    && chmod +x /app/entrypoint.sh
+    && chmod +x /app/entrypoint.sh \
+    && groupadd --system app \
+    && useradd --system --gid app --home-dir /app --no-create-home app \
+    && chown -R app:app /app
 
 EXPOSE 8000
 
