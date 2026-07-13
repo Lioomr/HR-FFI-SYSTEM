@@ -426,8 +426,14 @@ class NotificationApiTests(TestCase):
         UserOrganizationAccess.objects.create(user=self.user, organization=self.company_b)
         self.other_user = make_user("other@example.com", self.company_a)
         self.client = APIClient()
+        # Production enables SECURE_SSL_REDIRECT. Exercise API views using the
+        # HTTPS scheme that the reverse proxy supplies instead of accepting a
+        # middleware redirect as an API response.
         self.client.force_authenticate(self.user)
-        self.client.credentials(HTTP_X_ACTIVE_COMPANY_ID=str(self.company_a.id))
+        self.client.credentials(
+            HTTP_X_FORWARDED_PROTO="https",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company_a.id),
+        )
         self.owned = Notification.objects.create(
             recipient=self.user, company=self.company_a, event_key="one", title="Owned", category="system"
         )
@@ -471,6 +477,12 @@ class NotificationApiTests(TestCase):
         self.assertEqual(resolve("/api/notifications/unread-count/").url_name, "unread-count")
         self.assertEqual(resolve(f"/api/notifications/{self.owned.id}/read/").url_name, "read")
         self.assertEqual(resolve("/api/notifications/read-all/").url_name, "read-all")
+
+    @override_settings(SECURE_SSL_REDIRECT=True)
+    def test_production_https_requests_are_not_redirected(self):
+        response = self.client.get("/api/notifications/")
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(response.status_code, {301, 302, 307, 308})
 
     def test_list_is_paginated_and_isolated_by_owner_and_active_company(self):
         response = self.client.get("/api/notifications/?page_size=10")
@@ -655,6 +667,10 @@ class NotificationApiTests(TestCase):
 
     def test_unauthenticated_requests_are_rejected(self):
         self.client.force_authenticate(user=None)
+        self.client.credentials(
+            HTTP_X_FORWARDED_PROTO="https",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company_a.id),
+        )
         self.assertEqual(self.client.get("/api/notifications/").status_code, 401)
 
 
