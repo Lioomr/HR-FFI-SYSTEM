@@ -60,3 +60,6 @@ biotime_manual.txt
 cols.json
 output/
 scripts/
+graphify-out/
+Backend/graphify-out/
+exports/
