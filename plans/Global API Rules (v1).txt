@@ -307,3 +307,67 @@ GET /leave-requests/{id} (restricted to owner)
 My Leave Balance
 
 GET /employee/leave-balance?year=
+
+7) In-App Notification APIs (All Authenticated Users)
+
+List Notifications (recipient + active-company scoped)
+
+GET /api/notifications/?page=&page_size=&unread=true|false&category=
+
+Unread Count
+
+GET /api/notifications/unread-count/
+
+Mark One Read
+
+POST /api/notifications/{id}/read/
+
+Mark All Read (current active-company scope)
+
+POST /api/notifications/read-all/
+
+Real-Time Notification Stream
+
+WS /ws/notifications/?access_token=<JWT>
+
+Session cookies and Authorization: Bearer are also supported. Server event shape:
+{ "type": "notification.created", "notification": { ... }, "unread_count": 3 }
+
+Notification external delivery is WhatsApp-first through Evolution. Bird email is attempted only when WhatsApp definitively
+fails or is skipped. Notification objects returned by list/read and WebSocket events include a read-only `deliveries` array:
+
+{ "channel": "whatsapp|email", "status": "pending|sent|failed|skipped", "provider": "...",
+  "provider_message_id": "...", "error": null, "attempt_count": 1, "created_at": "...", "updated_at": "..." }
+
+WhatsApp entries precede email entries. Delivery records follow the parent notification's recipient/company scope. Raw
+provider payloads, credentials, full phone numbers, authorization tokens, and internal traces are never exposed.
+
+External delivery is asynchronous. The originating API transaction creates the in-app notification and pending WhatsApp
+delivery, then queues Celery only after commit; Evolution/Bird HTTP calls never run in the business request. Therefore the
+initial `notification.created` event normally contains WhatsApp `status: "pending"`. REST reads expose later stored outcomes.
+Temporary provider/network failures use exponential backoff with jitter for at most three retries. Email is never queued for
+sent, pending, or still-retrying WhatsApp delivery, and unique notification/channel rows prevent duplicate provider sends.
+
+Celery does not consume notification jobs until Redis is reachable and, when WhatsApp is enabled, the configured Evolution
+HTTP API responds. This readiness check does not require the WhatsApp account to be connected and does not change REST or
+WebSocket contracts.
+
+Notification Delivery Visibility (server-enforced)
+
+SystemAdmin and HRManager delivery shape:
+{ "channel": "whatsapp|email", "status": "pending|sent|failed|skipped", "provider": "...",
+  "provider_message_id": "...", "error": null, "attempt_count": 1, "created_at": "...", "updated_at": "..." }
+
+Employee, Manager, CEO, and CFO delivery shape:
+{ "channel": "whatsapp|email", "status": "pending|sent|failed|skipped" }
+
+The role-based shape is identical for notification list, mark-read, and `notification.created` WebSocket payloads. Ownership
+and active-company scoping continue to apply before serialization.
+
+WhatsApp Template and Integration Security
+
+Template listing/detail, reset, and preview retain SystemAdmin or HRManager access. Live test sending at
+POST /api/core/whatsapp-templates/{key}/test/ requires an authenticated SystemAdmin; rejected requests do not call the
+provider. Provider-integration status/connect/QR/logout/test responses are allowlisted and never include raw provider
+responses or raw exception details. Safe operational fields may include connected, connection_state, provider_status_code,
+and qr_available.

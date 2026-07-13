@@ -58,7 +58,7 @@ export default function EmployeeLeaveBalances({ employeeId }: EmployeeLeaveBalan
             if (typeRes.status === "success" && typeRes.data) {
                 setLeaveTypes(typeRes.data);
             }
-        } catch (error) {
+        } catch {
             message.error(t("hr.employees.balances.loadFailed"));
         } finally {
             setLoading(false);

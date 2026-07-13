@@ -4,8 +4,13 @@ from rest_framework.exceptions import AuthenticationFailed
 
 from audit.utils import audit
 
-from .password_policy import validate_password_against_policy
-from .security import clear_login_failures, get_client_ip, get_lockout_remaining_seconds, is_locked_out, record_login_failure
+from .security import (
+    clear_login_failures,
+    get_client_ip,
+    get_lockout_remaining_seconds,
+    is_locked_out,
+    record_login_failure,
+)
 
 User = get_user_model()
 
@@ -58,12 +63,3 @@ class LoginSerializer(serializers.Serializer):
 class ChangePasswordSerializer(serializers.Serializer):
     current_password = serializers.CharField()
     new_password = serializers.CharField()
-
-    def validate_new_password(self, value):
-        try:
-            validate_password_against_policy(value)
-        except serializers.ValidationError:
-            raise
-        except Exception as exc:
-            raise serializers.ValidationError(list(getattr(exc, "messages", [str(exc)])))
-        return value

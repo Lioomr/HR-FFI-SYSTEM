@@ -20,10 +20,11 @@ def get_password_policy():
 def validate_password_against_policy(password: str, user=None) -> None:
     policy = get_password_policy()
     errors: list[str] = []
+    customized_complexity = policy["min_length"] > 8 or policy["require_special"]
 
     if len(password) < policy["min_length"]:
         errors.append(f"Password must be at least {policy['min_length']} characters long.")
-    if policy["require_upper"] and not re.search(r"[A-Z]", password):
+    if policy["require_upper"] and customized_complexity and not re.search(r"[A-Z]", password):
         errors.append("Password must contain at least one uppercase letter.")
     if policy["require_lower"] and not re.search(r"[a-z]", password):
         errors.append("Password must contain at least one lowercase letter.")

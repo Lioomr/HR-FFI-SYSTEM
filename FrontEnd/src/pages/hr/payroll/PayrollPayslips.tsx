@@ -40,7 +40,7 @@ export default function PayrollPayslips({ runId, isFinalized, runStatus, onGener
                     await onGenerated();
                 }
             }
-        } catch (e) {
+        } catch {
             notification.error({ message: t("common.error"), description: t("payroll.runDetails.couldNotTriggerGeneration") });
         } finally {
             setGenerating(false);

@@ -88,7 +88,7 @@ function LeaveRequestsTab() {
 
             notification.success({ message: t("common.success") });
             fetchIds();
-        } catch (e) {
+        } catch {
             notification.error({ message: t("manager.requests.actionFailed") });
         }
     };

@@ -57,7 +57,7 @@ export default function EmployeePayslipDetailsPage() {
             link.click();
             link.remove();
             window.URL.revokeObjectURL(url);
-        } catch (err) {
+        } catch {
             // Notification or alert handled by UI if desired, here mainly silent or toast
         } finally {
             setDownloading(false);

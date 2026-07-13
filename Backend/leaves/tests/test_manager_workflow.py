@@ -1,10 +1,11 @@
 from datetime import date
-from pathlib import Path
+from io import BytesIO
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
+from reportlab.pdfgen import canvas
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -421,11 +422,15 @@ class ManagerWorkflowTests(APITestCase):
             end_date=date(2026, 10, 9),
             status=LeaveRequest.RequestStatus.PENDING_HR_COMPLETION,
         )
-        repo_root = Path(__file__).resolve().parents[3]
-        pdf_path = next(path for path in repo_root.glob("*.pdf") if not path.name.isascii())
+        pdf_buffer = BytesIO()
+        pdf = canvas.Canvas(pdf_buffer)
+        pdf.drawString(72, 750, "Visa Number: 209605081")
+        pdf.drawString(72, 730, "Exit Before: 16/8/2026")
+        pdf.drawString(72, 710, "Visa Duration: 60")
+        pdf.save()
         upload = SimpleUploadedFile(
             "visa.pdf",
-            pdf_path.read_bytes(),
+            pdf_buffer.getvalue(),
             content_type="application/pdf",
         )
 

@@ -71,6 +71,7 @@ def _render_announcement(variables: dict[str, Any]) -> str:
         "",
         "إعلان من نظام الموارد البشرية FFI",
         f"العنوان: {_value(variables, 'announcement_title')}",
+        _optional_line("رابط المرفق", variables.get("attachment_url")),
         "",
         "يرجى فتح نظام الموارد البشرية للاطلاع على التفاصيل الكاملة.",
         "",
@@ -78,6 +79,7 @@ def _render_announcement(variables: dict[str, Any]) -> str:
         "",
         "FFI HR announcement",
         f"Title: {_value(variables, 'announcement_title')}",
+        _optional_line("Attachment", variables.get("attachment_url")),
         "",
         "Please open the HR system for the full announcement details.",
     )
@@ -423,6 +425,96 @@ class EvolutionWhatsAppProvider:
 
         endpoint = f"{self.api_base_url}/message/sendText/{self.instance_name}"
         payload = {"number": normalized_phone.lstrip("+"), "text": text}
+        headers = {"apikey": self.api_key, "Content-Type": "application/json"}
+
+        try:
+            response = requests.post(endpoint, headers=headers, json=payload, timeout=self.timeout_seconds)
+        except requests.RequestException as exc:
+            return self._result(
+                phone_number=normalized_phone,
+                event=event,
+                success=False,
+                status_code=0,
+                error=str(exc),
+                started_at=started_at,
+            )
+
+        response_data = _safe_json(response)
+        message_id = _extract_message_id(response_data)
+        provider_status = _extract_message_status(response_data)
+        if 200 <= response.status_code < 300:
+            return self._result(
+                phone_number=normalized_phone,
+                event=event,
+                success=True,
+                status_code=response.status_code,
+                message_id=message_id,
+                provider_status=provider_status,
+                started_at=started_at,
+            )
+
+        error = _extract_error(response_data, response.text)
+        return self._result(
+            phone_number=normalized_phone,
+            event=event,
+            success=False,
+            status_code=response.status_code,
+            error=error,
+            started_at=started_at,
+        )
+
+    def send_document(
+        self,
+        *,
+        phone_number: str,
+        document_url: str,
+        file_name: str,
+        caption: str = "",
+        event: str = "",
+    ) -> dict[str, Any]:
+        normalized_phone = normalize_phone_number(phone_number)
+        started_at = time.monotonic()
+
+        if not self.is_configured():
+            return self._result(
+                phone_number=normalized_phone,
+                event=event,
+                success=False,
+                status_code=0,
+                error="Evolution WhatsApp provider is not configured.",
+                started_at=started_at,
+            )
+
+        if not is_e164(normalized_phone):
+            return self._result(
+                phone_number=normalized_phone,
+                event=event,
+                success=False,
+                status_code=0,
+                error="Phone number must be in E.164 format.",
+                started_at=started_at,
+            )
+
+        media_url = str(document_url or "").strip()
+        if not media_url:
+            return self._result(
+                phone_number=normalized_phone,
+                event=event,
+                success=False,
+                status_code=0,
+                error="Document URL is required.",
+                started_at=started_at,
+            )
+
+        endpoint = f"{self.api_base_url}/message/sendMedia/{self.instance_name}"
+        payload = {
+            "number": normalized_phone.lstrip("+"),
+            "mediatype": "document",
+            "mimetype": "application/pdf",
+            "caption": caption,
+            "media": media_url,
+            "fileName": file_name or "announcement.pdf",
+        }
         headers = {"apikey": self.api_key, "Content-Type": "application/json"}
 
         try:

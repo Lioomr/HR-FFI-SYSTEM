@@ -103,9 +103,7 @@ class MeetingAnnouncementTests(APITestCase):
 
     def test_hr_can_create_meeting_for_selected_active_employees(self):
         self.client.force_authenticate(self.hr)
-        with patch("announcements.views.send_announcement_email") as email, patch(
-            "announcements.views.send_announcement_whatsapp"
-        ) as whatsapp:
+        with patch("announcements.views.send_announcement_in_app") as dispatch:
             response = self.client.post(
                 self.url,
                 self._meeting_payload(),
@@ -115,8 +113,7 @@ class MeetingAnnouncementTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
         self.assertEqual(response.data["data"]["created_count"], 2)
-        self.assertEqual(email.call_count, 2)
-        self.assertEqual(whatsapp.call_count, 2)
+        self.assertEqual(dispatch.call_count, 2)
         self.assertEqual(
             set(Announcement.objects.values_list("target_user_id", flat=True)),
             {self.employee_one.id, self.employee_two.id},
@@ -147,9 +144,7 @@ class MeetingAnnouncementTests(APITestCase):
 
     def test_delivery_helpers_respect_selected_channels(self):
         self.client.force_authenticate(self.hr)
-        with patch("announcements.views.send_announcement_email") as email, patch(
-            "announcements.views.send_announcement_whatsapp"
-        ) as whatsapp:
+        with patch("announcements.views.send_announcement_in_app") as dispatch:
             response = self.client.post(
                 self.url,
                 self._meeting_payload(publish_to_email=True, publish_to_sms=False),
@@ -158,8 +153,7 @@ class MeetingAnnouncementTests(APITestCase):
             )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
-        self.assertEqual(email.call_count, 2)
-        whatsapp.assert_not_called()
+        self.assertEqual(dispatch.call_count, 2)
 
     def test_publish_to_whatsapp_alias_triggers_whatsapp_delivery(self):
         self.client.force_authenticate(self.hr)
@@ -172,9 +166,7 @@ class MeetingAnnouncementTests(APITestCase):
             "publish_to_whatsapp": True,
         }
 
-        with patch("announcements.views.send_announcement_email") as email, patch(
-            "announcements.views.send_announcement_whatsapp"
-        ) as whatsapp:
+        with patch("announcements.views.send_announcement_in_app") as dispatch:
             response = self.client.post(
                 self.url,
                 payload,
@@ -187,8 +179,7 @@ class MeetingAnnouncementTests(APITestCase):
         self.assertTrue(announcement.publish_to_sms)
         self.assertTrue(response.data["data"]["announcement"]["publish_to_whatsapp"])
         self.assertTrue(response.data["data"]["announcement"]["publish_to_sms"])
-        email.assert_called_once()
-        whatsapp.assert_called_once()
+        dispatch.assert_called_once()
 
     def test_conflicting_whatsapp_and_deprecated_sms_aliases_are_rejected(self):
         self.client.force_authenticate(self.hr)

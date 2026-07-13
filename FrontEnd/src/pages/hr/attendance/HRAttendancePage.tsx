@@ -67,7 +67,7 @@ const HRAttendancePage: React.FC = () => {
             });
             message.success(t("hr.attendance.approvedSuccess", { name: record.employee_name }));
             fetchData();
-        } catch (err) {
+        } catch {
             // Error handled by store
         }
     };
@@ -88,7 +88,7 @@ const HRAttendancePage: React.FC = () => {
             message.success(t("hr.attendance.rejectedSuccess"));
             setRejectModalVisible(false);
             fetchData();
-        } catch (err) {
+        } catch {
             // Handled
         }
     };

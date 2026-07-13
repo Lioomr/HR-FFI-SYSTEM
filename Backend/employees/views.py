@@ -26,7 +26,6 @@ from core.services import (
     get_ceo_approver_users,
     notify_profile_request_status_whatsapp,
     notify_users_for_pending_status,
-    send_document_expiry_reminder_email,
 )
 from leaves.models import LeaveRequest
 from loans.models import LoanRequest
@@ -39,7 +38,7 @@ from organization.services import (
 
 from .document_extraction import extract_visa_fields
 from .models import EmployeeDeletionRequest, EmployeeDocument, EmployeeImport, EmployeeProfile
-from .notifications import send_document_expiry_whatsapp
+from .notifications import notify_document_expiry_in_app
 from .permissions import IsEmployeeOwner, IsHRManagerOnly, IsHRManagerOrAdmin, IsManagerOfEmployee
 from .serializers import (
     DelegationCandidateSerializer,
@@ -620,16 +619,27 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             )
 
         document_payload = {
+            "id": document.id,
             "doc_type": document.document_type,
             "label": self._document_notification_label(document),
             "expiry_date": document.exit_before,
             "days_left": days_left,
         }
 
-        try:
-            delivery = send_document_expiry_whatsapp(profile, [document_payload])
-        except Exception as exc:
-            delivery = self._whatsapp_delivery_exception(exc)
+        dispatch = notify_document_expiry_in_app(profile, [document_payload])[0]
+        channel_delivery = dispatch.get("whatsapp") or {}
+        if channel_delivery.get("status") != "sent":
+            channel_delivery = dispatch.get("email") or channel_delivery
+        delivery = {
+            "sent": channel_delivery.get("status") == "sent",
+            "success": channel_delivery.get("status") == "sent",
+            "queued": channel_delivery.get("status") == "pending",
+            "status": channel_delivery.get("status"),
+            "provider": channel_delivery.get("provider"),
+            "message_id": channel_delivery.get("provider_message_id"),
+            "error": channel_delivery.get("error"),
+            "dispatch": {"whatsapp": dispatch.get("whatsapp"), "email": dispatch.get("email")},
+        }
 
         try:
             audit(
@@ -991,41 +1001,24 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
                 message="No expiring documents found in the selected window.",
             )
 
+        dispatches = notify_document_expiry_in_app(
+            profile,
+            documents,
+            whatsapp_enabled="whatsapp" in channels,
+            email_enabled="email" in channels or "whatsapp" in channels,
+        )
+
         delivery = {}
-
-        if "email" in channels:
-            try:
-                linked_email = profile.user.email if profile.user_id and getattr(profile.user, "email", "") else None
-                if not linked_email:
-                    delivery["email"] = {"sent": False, "reason": "No linked email on employee profile."}
-                else:
-                    email_results = []
-                    for doc in documents:
-                        result = send_document_expiry_reminder_email(
-                            to_email=linked_email,
-                            employee_name=profile.full_name or profile.employee_id,
-                            document_type=doc["label"],
-                            expiry_date=doc["expiry_date"],
-                            days_remaining=doc["days_left"],
-                        )
-                        email_results.append(result)
-                    sent_count = sum(1 for result in email_results if result.get("success"))
-                    delivery["email"] = {
-                        "sent": sent_count > 0,
-                        "count": sent_count,
-                        "total": len(email_results),
-                    }
-                    if sent_count < len(email_results):
-                        delivery["email"]["reason"] = "One or more emails failed to send."
-            except Exception as exc:
-                delivery["email"] = {"sent": False, "reason": f"Email delivery failed: {str(exc)}"}
-
-        if "whatsapp" in channels:
-            try:
-                whatsapp_result = send_document_expiry_whatsapp(profile, documents)
-                delivery["whatsapp"] = whatsapp_result
-            except Exception as exc:
-                delivery["whatsapp"] = {"sent": False, "provider": "evolution_whatsapp", "reason": str(exc)}
+        for channel in ("whatsapp", "email"):
+            channel_results = [item.get(channel) for item in dispatches if item.get(channel)]
+            if channel_results:
+                sent_count = sum(1 for item in channel_results if item.get("status") == "sent")
+                delivery[channel] = {
+                    "sent": sent_count > 0,
+                    "count": sent_count,
+                    "total": len(channel_results),
+                    "results": channel_results,
+                }
 
         if "announcement" in channels:
             try:
