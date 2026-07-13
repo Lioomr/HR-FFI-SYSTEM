@@ -128,7 +128,11 @@ class EvolutionTemplateRenderingTests(SimpleTestCase):
     def test_renders_announcement_template(self):
         message = render_template_message(
             "new_announcement_notification",
-            {"employee_name": "Sara", "announcement_title": "Policy Update"},
+            {
+                "employee_name": "Sara",
+                "announcement_title": "Policy Update",
+                "attachment_url": "https://api.example.com/attachment.pdf",
+            },
         )
 
         self.assertLess(message.find("مرحباً Sara"), message.find("Hello Sara"))
@@ -136,6 +140,31 @@ class EvolutionTemplateRenderingTests(SimpleTestCase):
         self.assertIn("Hello Sara", message)
         self.assertIn("FFI HR announcement", message)
         self.assertIn("Policy Update", message)
+        self.assertIn("https://api.example.com/attachment.pdf", message)
+
+    @override_settings(
+        EVOLUTION_API_BASE_URL="http://evolution-api:8080",
+        EVOLUTION_API_KEY="evolution-key",
+        EVOLUTION_INSTANCE_NAME="ffi-staging",
+    )
+    @patch("core.services.messaging_providers.requests.post")
+    def test_evolution_whatsapp_provider_sends_pdf_document(self, post):
+        post.return_value = Mock(status_code=201, text="", json=lambda: {"key": {"id": "doc-1"}, "status": "PENDING"})
+
+        result = WhatsAppService().send_document_message(
+            phone_number="+201013530963",
+            document_url="https://api.example.com/file.pdf",
+            file_name="policy.pdf",
+            caption="Policy PDF",
+        )
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["message_id"], "doc-1")
+        self.assertIn("/message/sendMedia/ffi-staging", post.call_args.args[0])
+        self.assertEqual(post.call_args.kwargs["json"]["mediatype"], "document")
+        self.assertEqual(post.call_args.kwargs["json"]["mimetype"], "application/pdf")
+        self.assertEqual(post.call_args.kwargs["json"]["media"], "https://api.example.com/file.pdf")
+        self.assertEqual(post.call_args.kwargs["json"]["fileName"], "policy.pdf")
 
     def test_renders_meeting_template_with_optional_links(self):
         message = render_template_message(
@@ -295,11 +324,12 @@ class EvolutionTemplateRenderingTests(SimpleTestCase):
 
 
 class PendingApprovalWhatsAppTests(SimpleTestCase):
-    @patch("core.services.pending_approval_email.send_pending_approval_email")
-    @patch("core.services.whatsapp_notifications.WhatsAppService.send_template_message")
-    def test_pending_approval_sends_whatsapp_alongside_email(self, whatsapp_send, email_send):
-        email_send.return_value = {"success": True}
-        whatsapp_send.return_value = {"success": True, "error": None}
+    @patch("in_app_notifications.integrations.dispatch_notification_channels")
+    def test_pending_approval_uses_whatsapp_first_dispatcher(self, dispatch):
+        dispatch.return_value = {
+            "whatsapp": {"status": "sent", "provider": "evolution_whatsapp"},
+            "email": None,
+        }
         user = SimpleNamespace(
             id=1,
             email="approver@example.com",
@@ -317,8 +347,7 @@ class PendingApprovalWhatsAppTests(SimpleTestCase):
             action_path="/hr/loan-requests/7",
         )
 
-        self.assertEqual(result["sent"], 1)
+        self.assertEqual(result["sent"], 0)
         self.assertEqual(result["whatsapp_sent"], 1)
-        email_send.assert_called_once()
-        whatsapp_send.assert_called_once()
-        self.assertEqual(whatsapp_send.call_args.kwargs["template_name"], "pending_approval")
+        dispatch.assert_called_once()
+        self.assertEqual(dispatch.call_args.kwargs["whatsapp_template"], "pending_approval")

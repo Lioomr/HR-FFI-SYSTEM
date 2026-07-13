@@ -17,3 +17,6 @@ gunicorn
 qrcode[pil]
 python-barcode[images]
 Pillow==12.1.1
+channels[daphne]>=4.1,<5
+channels-redis>=4.2,<5
+celery[redis]>=5.4,<6

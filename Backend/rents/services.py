@@ -7,7 +7,7 @@ from django.db import IntegrityError
 from django.utils import timezone
 
 from announcements.models import Announcement
-from core.services import send_announcement_notification_email
+from announcements.utils import send_announcement_in_app
 
 from .models import Rent, RentReminderLog
 
@@ -113,59 +113,39 @@ def _notify_via_announcement(*, rent: Rent, due_date: date, days_remaining: int)
         else (rent.property_name_en or rent.property_name_ar or "")
     )
     content = (
-        f"{rent.rent_type.name_en}: {source_name} is due on {due_date.isoformat()} "
-        f"({days_remaining} day(s) remaining)."
+        f"{rent.rent_type.name_en}: {source_name} is due on {due_date.isoformat()} ({days_remaining} day(s) remaining)."
     )
     creator = rent.updated_by or rent.created_by or get_hr_manager_users().first()
     if not creator:
         return {"sent": False, "reason": "No HR manager user available for announcement creation."}
 
     announcement = Announcement.objects.create(
+        company=rent.company,
         title=title,
         content=content,
         target_roles=["HR_MANAGER"],
         publish_to_dashboard=True,
-        publish_to_email=False,
+        publish_to_email=True,
         publish_to_sms=False,
+        publish_to_whatsapp=True,
         created_by=creator,
     )
-    return {"sent": True, "announcement_id": announcement.id}
+    dispatches = send_announcement_in_app(announcement)
+    return {"sent": True, "announcement_id": announcement.id, "dispatches": dispatches}
 
 
 def _notify_via_email(*, rent: Rent, due_date: date, days_remaining: int):
-    users = list(get_hr_manager_users())
-    if not users:
-        return {"sent": False, "reason": "No HR manager users found."}
-
-    sent_count = 0
-    for user in users:
-        if not user.email:
-            continue
-        result = send_announcement_notification_email(
-            to_email=user.email,
-            employee_name=user.full_name or user.email,
-            announcement_title="Rent Reminder",
-            message=(
-                f"{rent.rent_type.name_en} is due on {due_date.isoformat()} "
-                f"for {((rent.asset.name_en or rent.asset.name_ar) if rent.asset_id else (rent.property_name_en or rent.property_name_ar))} "
-                f"({days_remaining} day(s) remaining)."
-            ),
-            publisher_name="HR Rent Reminder",
-        )
-        if result.get("success"):
-            sent_count += 1
-
-    if sent_count == 0:
-        return {"sent": False, "reason": "No emails were delivered."}
-
-    return {"sent": True, "count": sent_count}
+    return {"sent": True, "reason": "Handled by the centralized WhatsApp-first announcement dispatcher."}
 
 
 def send_rent_notifications(rent: Rent, *, manual: bool = False, today: date | None = None):
     computed = compute_rent_state(rent, today=today)
     due_date = computed.next_due_date
     if due_date is None or computed.days_remaining is None:
-        return {"announcement": {"sent": False, "reason": "No due date available."}, "email": {"sent": False, "reason": "No due date available."}}
+        return {
+            "announcement": {"sent": False, "reason": "No due date available."},
+            "email": {"sent": False, "reason": "No due date available."},
+        }
 
     should_send = manual or computed.days_remaining <= rent.reminder_days
     if not should_send:

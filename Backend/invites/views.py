@@ -81,7 +81,8 @@ def _normalize_whatsapp_delivery_result(result: dict[str, Any] | None) -> dict[s
     delivery_status = _whatsapp_delivery_status(provider_submitted=provider_submitted, provider_status=provider_status)
     message_id = result.get("message_id")
     return {
-        "sent": delivery_status in {
+        "sent": delivery_status
+        in {
             Invite.DeliveryStatus.SENT,
             Invite.DeliveryStatus.DELIVERED,
             Invite.DeliveryStatus.READ,
@@ -195,7 +196,7 @@ def _coerce_status_code(value: Any) -> int | None:
 def _normalize_whatsapp_test_result(result: dict[str, Any] | None) -> dict[str, Any]:
     delivery = _normalize_whatsapp_delivery_result(result)
     return {
-        "sent": delivery["sent"],
+        "sent": bool(delivery.get("provider_submitted")),
         "provider_submitted": delivery.get("provider_submitted"),
         "provider": delivery.get("provider") or "evolution_whatsapp",
         "provider_status": delivery.get("provider_status") or None,
@@ -592,6 +593,20 @@ class InviteAcceptView(APIView):
                 "user_id": user.id,
                 "employee_profile_id": profile.id,
             },
+        )
+
+        from in_app_notifications.dispatcher import dispatch_notification_channels
+        from in_app_notifications.models import Notification
+
+        dispatch_notification_channels(
+            recipient=user,
+            event_key="invite.accepted",
+            title="Welcome to the FFI HR System",
+            message=f"Your {invite.role} account is ready.",
+            category=Notification.Category.INVITE,
+            action_url="/login",
+            related_object=invite,
+            deduplication_key=f"invite.accepted:{invite.id}",
         )
 
         return success({"email": user.email, "role": invite.role}, status=201)

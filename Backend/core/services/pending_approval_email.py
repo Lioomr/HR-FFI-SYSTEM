@@ -75,7 +75,10 @@ def get_cfo_approver_users():
 
 
 def get_ceo_approver_users():
-    return (_active_users_in_groups(["CEO", "SystemAdmin"]) | _active_profile_users_by_department(CEO_APPROVER_DEPARTMENT_ID)).distinct()
+    return (
+        _active_users_in_groups(["CEO", "SystemAdmin"])
+        | _active_profile_users_by_department(CEO_APPROVER_DEPARTMENT_ID)
+    ).distinct()
 
 
 def get_disbursement_approver_users():
@@ -122,7 +125,7 @@ def send_pending_approval_email(
         "action_text": "Review Request",
         "action_text_ar": "مراجعة الطلب",
     }
-    
+
     html = render_to_string("emails/pending_approval_email.html", context)
     details_list = [str(item) for item in (details or [])]
     details_text = "\n".join(f"- {item}" for item in details_list) if details_list else "-"
@@ -148,58 +151,43 @@ def notify_users_for_pending_status(
     details: Iterable[str] | None = None,
     action_path: str | None = None,
 ) -> dict:
+    users = list(users)
+    from in_app_notifications.integrations import notify_pending_approvers
+
+    dispatches = notify_pending_approvers(
+        users=users,
+        request_type=request_type,
+        request_id=request_id,
+        requester_name=requester_name,
+        status_label=status_label,
+        details=details,
+        action_path=action_path,
+    )
     sent = 0
     failed = 0
     whatsapp_sent = 0
     whatsapp_failed = 0
     whatsapp_skipped = 0
+    whatsapp_pending = 0
     errors: list[str] = []
     whatsapp_errors: list[str] = []
-    seen = set()
-    whatsapp_seen = set()
-
-    from .whatsapp_notifications import send_pending_approval_whatsapp
-
-    for user in users:
-        email = (getattr(user, "email", "") or "").strip().lower()
-        if email and email not in seen:
-            seen.add(email)
-            result = send_pending_approval_email(
-                to_email=email,
-                approver_name=getattr(user, "full_name", "") or email,
-                request_type=request_type,
-                request_id=request_id,
-                requester_name=requester_name,
-                status_label=status_label,
-                details=details,
-                action_path=action_path,
-            )
-            if result.get("success"):
-                sent += 1
-            else:
-                failed += 1
-                errors.append(f"{email}: {result.get('error')}")
-
-        user_key = getattr(user, "id", None) or email
-        if user_key in whatsapp_seen:
-            continue
-        whatsapp_seen.add(user_key)
-        whatsapp_result = send_pending_approval_whatsapp(
-            user=user,
-            request_type=request_type,
-            request_id=request_id,
-            requester_name=requester_name,
-            status_label=status_label,
-            details=details,
-            action_path=action_path,
-        )
-        if whatsapp_result.get("success"):
+    for dispatched in dispatches:
+        whatsapp = dispatched.get("whatsapp") or {}
+        email = dispatched.get("email") or {}
+        if whatsapp.get("status") == "sent":
             whatsapp_sent += 1
-        elif whatsapp_result.get("skipped"):
+        elif whatsapp.get("status") == "skipped":
             whatsapp_skipped += 1
-        else:
+        elif whatsapp.get("status") == "pending":
+            whatsapp_pending += 1
+        elif whatsapp:
             whatsapp_failed += 1
-            whatsapp_errors.append(f"{getattr(user, 'id', email)}: {whatsapp_result.get('error')}")
+            whatsapp_errors.append(whatsapp.get("error") or "WhatsApp delivery failed.")
+        if email.get("status") == "sent":
+            sent += 1
+        elif email.get("status") == "failed":
+            failed += 1
+            errors.append(email.get("error") or "Email delivery failed.")
 
     logger.info(
         "pending_status_notified",
@@ -211,6 +199,7 @@ def notify_users_for_pending_status(
             "whatsapp_sent": whatsapp_sent,
             "whatsapp_failed": whatsapp_failed,
             "whatsapp_skipped": whatsapp_skipped,
+            "whatsapp_pending": whatsapp_pending,
         },
     )
     return {
@@ -220,5 +209,6 @@ def notify_users_for_pending_status(
         "whatsapp_sent": whatsapp_sent,
         "whatsapp_failed": whatsapp_failed,
         "whatsapp_skipped": whatsapp_skipped,
+        "whatsapp_pending": whatsapp_pending,
         "whatsapp_errors": whatsapp_errors,
     }

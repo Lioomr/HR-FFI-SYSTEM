@@ -28,6 +28,8 @@ from core.services import (
     sync_workflow,
 )
 from employees.models import EmployeeProfile
+from in_app_notifications.dispatcher import dispatch_notification_channels
+from in_app_notifications.models import Notification
 from leaves.models import LeaveRequest
 from loans.permissions import IsManagerOrAdmin, get_active_workflow_config
 from organization.services import (
@@ -160,9 +162,7 @@ def _asset_employee_block(profile: EmployeeProfile | None):
         or getattr(user, "email", None)
         or "-"
     )
-    department = (
-        getattr(profile, "department_name_en", None) or getattr(profile, "department", None) or "-"
-    )
+    department = getattr(profile, "department_name_en", None) or getattr(profile, "department", None) or "-"
     job_title = getattr(profile, "job_title_en", None) or getattr(profile, "job_title", None) or "-"
     return EmployeeBlock(
         name=str(name),
@@ -221,9 +221,7 @@ def _build_damage_report_pdf(report: AssetDamageReport) -> bytes:
 
     extra = []
     if report.description:
-        extra.append(
-            ExtraSection(title_en="Damage Description", title_ar="وصف الضرر", body=str(report.description))
-        )
+        extra.append(ExtraSection(title_en="Damage Description", title_ar="وصف الضرر", body=str(report.description)))
 
     doc = RequestDocument(
         title_en="Asset Damage Report",
@@ -515,6 +513,17 @@ class AssetViewSet(viewsets.ModelViewSet):
                 "status_after": asset.status,
             },
         )
+        dispatch_notification_channels(
+            recipient=employee.user,
+            event_key="asset.assigned",
+            title="Asset assigned",
+            message=f"{self._asset_display_name(asset)} ({asset.asset_code}) was assigned to you.",
+            category=Notification.Category.ASSET,
+            action_url="/employee/assets",
+            related_object=assignment,
+            company=asset.company,
+            deduplication_key=f"asset.assigned:{assignment.id}",
+        )
         return success(self.get_serializer(asset).data)
 
     @action(detail=True, methods=["post"], url_path="return")
@@ -589,6 +598,17 @@ class AssetViewSet(viewsets.ModelViewSet):
                 "status_before": old_status,
                 "status_after": asset.status,
             },
+        )
+        dispatch_notification_channels(
+            recipient=assignment.employee.user,
+            event_key="asset.returned",
+            title="Asset returned",
+            message=f"{self._asset_display_name(asset)} ({asset.asset_code}) was marked as returned.",
+            category=Notification.Category.ASSET,
+            action_url="/employee/assets",
+            related_object=assignment,
+            company=asset.company,
+            deduplication_key=f"asset.returned:{assignment.id}",
         )
         return success(self.get_serializer(asset).data)
 
@@ -821,9 +841,7 @@ class AssetViewSet(viewsets.ModelViewSet):
         instance.hr_decision_by = request.user
         instance.hr_decision_at = timezone.now()
         instance.hr_decision_note = serializer.validated_data.get("comment", "")
-        instance.save(
-            update_fields=["status", "hr_decision_by", "hr_decision_at", "hr_decision_note"]
-        )
+        instance.save(update_fields=["status", "hr_decision_by", "hr_decision_at", "hr_decision_note"])
         sync_workflow(instance, actor=request.user)
         audit(request, "asset_return_request_approved_hr", entity="AssetReturnRequest", entity_id=instance.id)
         try:
@@ -870,9 +888,7 @@ class AssetViewSet(viewsets.ModelViewSet):
         instance.hr_decision_by = request.user
         instance.hr_decision_at = timezone.now()
         instance.hr_decision_note = comment
-        instance.save(
-            update_fields=["status", "hr_decision_by", "hr_decision_at", "hr_decision_note"]
-        )
+        instance.save(update_fields=["status", "hr_decision_by", "hr_decision_at", "hr_decision_note"])
         sync_workflow(instance, actor=request.user)
         audit(request, "asset_return_request_rejected_hr", entity="AssetReturnRequest", entity_id=instance.id)
         try:
@@ -899,7 +915,9 @@ class AssetViewSet(viewsets.ModelViewSet):
         if not profile:
             return error("Employee profile not found.", status=status.HTTP_404_NOT_FOUND)
 
-        queryset = AssetDamageReport.objects.select_related("asset", "employee", "employee__user").filter(employee=profile)
+        queryset = AssetDamageReport.objects.select_related("asset", "employee", "employee__user").filter(
+            employee=profile
+        )
         status_param = request.query_params.get("status")
         asset_id = request.query_params.get("asset")
         if status_param:
@@ -923,7 +941,9 @@ class AssetViewSet(viewsets.ModelViewSet):
         if not profile:
             return error("Employee profile not found.", status=status.HTTP_404_NOT_FOUND)
 
-        queryset = AssetReturnRequest.objects.select_related("asset", "employee", "employee__user").filter(employee=profile)
+        queryset = AssetReturnRequest.objects.select_related("asset", "employee", "employee__user").filter(
+            employee=profile
+        )
         status_param = request.query_params.get("status")
         asset_id = request.query_params.get("asset")
         if status_param:
@@ -987,8 +1007,16 @@ class AssetViewSet(viewsets.ModelViewSet):
         except Exception:
             pass
         try:
-            approvers = get_ceo_approver_users() if report.status == AssetDamageReport.RequestStatus.PENDING_CEO else get_hr_approver_users()
-            action_path = "/ceo/assets/damage-reports" if report.status == AssetDamageReport.RequestStatus.PENDING_CEO else "/hr/assets"
+            approvers = (
+                get_ceo_approver_users()
+                if report.status == AssetDamageReport.RequestStatus.PENDING_CEO
+                else get_hr_approver_users()
+            )
+            action_path = (
+                "/ceo/assets/damage-reports"
+                if report.status == AssetDamageReport.RequestStatus.PENDING_CEO
+                else "/hr/assets"
+            )
             notify_users_for_pending_status(
                 users=approvers,
                 request_type="Asset Damage Report",
@@ -1041,11 +1069,7 @@ class AssetViewSet(viewsets.ModelViewSet):
         requester_role = get_role(request.user)
         if is_hr_manager_request:
             initial_status = AssetReturnRequest.RequestStatus.PENDING_CEO
-        elif (
-            workflow_config.require_manager_stage
-            and requester_role != "Manager"
-            and manager_user
-        ):
+        elif workflow_config.require_manager_stage and requester_role != "Manager" and manager_user:
             initial_status = AssetReturnRequest.RequestStatus.PENDING_MANAGER
         else:
             initial_status = AssetReturnRequest.RequestStatus.PENDING
@@ -1169,9 +1193,7 @@ class AssetViewSet(viewsets.ModelViewSet):
             entity_id=report.id,
         )
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
-        filename = (
-            f"asset_damage_report_{report.id}_packet.pdf" if packet else f"asset_damage_report_{report.id}.pdf"
-        )
+        filename = f"asset_damage_report_{report.id}_packet.pdf" if packet else f"asset_damage_report_{report.id}.pdf"
         disposition = "attachment" if _to_bool(request.query_params.get("download", "1")) else "inline"
         response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
         return response
@@ -1201,9 +1223,7 @@ class AssetViewSet(viewsets.ModelViewSet):
             entity_id=req.id,
         )
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
-        filename = (
-            f"asset_return_request_{req.id}_packet.pdf" if packet else f"asset_return_request_{req.id}.pdf"
-        )
+        filename = f"asset_return_request_{req.id}_packet.pdf" if packet else f"asset_return_request_{req.id}.pdf"
         disposition = "attachment" if _to_bool(request.query_params.get("download", "1")) else "inline"
         response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
         return response
@@ -1244,9 +1264,7 @@ class CEOAssetDamageReportViewSet(viewsets.ReadOnlyModelViewSet):
         instance.ceo_decision_by = request.user
         instance.ceo_decision_at = timezone.now()
         instance.ceo_decision_note = s.validated_data.get("comment", "")
-        instance.save(
-            update_fields=["status", "ceo_decision_by", "ceo_decision_at", "ceo_decision_note"]
-        )
+        instance.save(update_fields=["status", "ceo_decision_by", "ceo_decision_at", "ceo_decision_note"])
         audit(request, "asset_damage_report_approved_ceo", entity="AssetDamageReport", entity_id=instance.id)
         try:
             notify_profile_request_status_whatsapp(
@@ -1280,9 +1298,7 @@ class CEOAssetDamageReportViewSet(viewsets.ReadOnlyModelViewSet):
         instance.ceo_decision_by = request.user
         instance.ceo_decision_at = timezone.now()
         instance.ceo_decision_note = comment
-        instance.save(
-            update_fields=["status", "ceo_decision_by", "ceo_decision_at", "ceo_decision_note"]
-        )
+        instance.save(update_fields=["status", "ceo_decision_by", "ceo_decision_at", "ceo_decision_note"])
         audit(request, "asset_damage_report_rejected_ceo", entity="AssetDamageReport", entity_id=instance.id)
         try:
             notify_profile_request_status_whatsapp(
@@ -1324,8 +1340,10 @@ class ManagerAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
             manager_match = manager_match | Q(employee__manager_profile=manager_profile)
         delegated_manager_ids = get_delegated_manager_user_ids(self.request.user)
         if delegated_manager_ids:
-            manager_match = manager_match | Q(employee__manager_id__in=delegated_manager_ids) | Q(
-                employee__manager_profile__user_id__in=delegated_manager_ids
+            manager_match = (
+                manager_match
+                | Q(employee__manager_id__in=delegated_manager_ids)
+                | Q(employee__manager_profile__user_id__in=delegated_manager_ids)
             )
 
         return base_qs.filter(manager_match | Q(manager_decision_by=self.request.user)).distinct()
@@ -1364,9 +1382,7 @@ class ManagerAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
         instance.manager_decision_by = request.user
         instance.manager_decision_at = timezone.now()
         instance.manager_decision_note = serializer.validated_data.get("comment", "")
-        instance.save(
-            update_fields=["status", "manager_decision_by", "manager_decision_at", "manager_decision_note"]
-        )
+        instance.save(update_fields=["status", "manager_decision_by", "manager_decision_at", "manager_decision_note"])
         sync_workflow(instance, actor=request.user)
         audit(request, "asset_return_request_approved_manager", entity="AssetReturnRequest", entity_id=instance.id)
         try:
@@ -1403,9 +1419,7 @@ class ManagerAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
         instance.manager_decision_by = request.user
         instance.manager_decision_at = timezone.now()
         instance.manager_decision_note = comment
-        instance.save(
-            update_fields=["status", "manager_decision_by", "manager_decision_at", "manager_decision_note"]
-        )
+        instance.save(update_fields=["status", "manager_decision_by", "manager_decision_at", "manager_decision_note"])
         sync_workflow(instance, actor=request.user)
         audit(request, "asset_return_request_rejected_manager", entity="AssetReturnRequest", entity_id=instance.id)
         try:
@@ -1458,9 +1472,7 @@ class CEOAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
         instance.ceo_decision_by = request.user
         instance.ceo_decision_at = timezone.now()
         instance.ceo_decision_note = s.validated_data.get("comment", "")
-        instance.save(
-            update_fields=["status", "ceo_decision_by", "ceo_decision_at", "ceo_decision_note"]
-        )
+        instance.save(update_fields=["status", "ceo_decision_by", "ceo_decision_at", "ceo_decision_note"])
         sync_workflow(instance, actor=request.user)
         audit(request, "asset_return_request_approved_ceo", entity="AssetReturnRequest", entity_id=instance.id)
         try:
@@ -1495,9 +1507,7 @@ class CEOAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
         instance.ceo_decision_by = request.user
         instance.ceo_decision_at = timezone.now()
         instance.ceo_decision_note = comment
-        instance.save(
-            update_fields=["status", "ceo_decision_by", "ceo_decision_at", "ceo_decision_note"]
-        )
+        instance.save(update_fields=["status", "ceo_decision_by", "ceo_decision_at", "ceo_decision_note"])
         sync_workflow(instance, actor=request.user)
         audit(request, "asset_return_request_rejected_ceo", entity="AssetReturnRequest", entity_id=instance.id)
         try:

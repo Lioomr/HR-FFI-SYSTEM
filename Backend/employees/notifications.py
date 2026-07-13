@@ -1,7 +1,10 @@
 from datetime import date, datetime
 
+from core.services.bird_email_service import send_document_expiry_reminder_email
 from core.services.whatsapp_service import WhatsAppService
 from employees.models import EmployeeProfile
+from in_app_notifications.dispatcher import dispatch_notification_channels
+from in_app_notifications.models import Notification
 
 
 def _normalize_phone(raw_mobile: str | None) -> str:
@@ -56,6 +59,51 @@ def _delivery_from_provider_result(result: dict) -> dict:
         "reason": error,
         "template_key": "document_expiry_reminder",
     }
+
+
+def notify_document_expiry_in_app(
+    profile: EmployeeProfile,
+    documents: list[dict],
+    *,
+    whatsapp_enabled: bool = True,
+    email_enabled: bool = True,
+) -> list:
+    dispatches = []
+    for document in documents:
+        expiry_date = str(document.get("expiry_date") or "")
+        dispatch = dispatch_notification_channels(
+            recipient=getattr(profile, "user", None),
+            company=profile.company,
+            event_key="document.expiring",
+            title="Document expiry reminder",
+            message=f"{document.get('label') or document.get('doc_type') or 'Document'} expires on {expiry_date}.",
+            category=Notification.Category.DOCUMENT,
+            action_url="/employee/profile",
+            related_object=profile,
+            metadata={
+                "document_type": document.get("doc_type"),
+                "expiry_date": expiry_date,
+                "days_left": document.get("days_left"),
+            },
+            deduplication_key=f"document.expiring:{profile.id}:{document.get('doc_type')}:{expiry_date}",
+            whatsapp_template="document_expiry_reminder",
+            whatsapp_variables={
+                "employee_name": profile.full_name or profile.employee_id or "Employee",
+                "document_type": document.get("label") or document.get("doc_type") or "Document",
+                "expiry_date": _format_expiry_date(document.get("expiry_date")),
+            },
+            email_template=send_document_expiry_reminder_email,
+            email_context={
+                "employee_name": profile.full_name or profile.employee_id,
+                "document_type": document.get("label") or document.get("doc_type") or "Document",
+                "expiry_date": document.get("expiry_date"),
+                "days_remaining": document.get("days_left"),
+            },
+            whatsapp_enabled=whatsapp_enabled,
+            email_enabled=email_enabled,
+        )
+        dispatches.append(dispatch)
+    return dispatches
 
 
 def send_document_expiry_whatsapp(profile: EmployeeProfile, documents: list[dict], language: str = "en") -> dict:

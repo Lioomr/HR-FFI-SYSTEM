@@ -135,11 +135,6 @@ function makeTag(color: string | undefined, label: string, provider: string | nu
 function whatsappDeliveryTag(delivery: DeliveryInfo, t: any) {
   const provider = providerLabel(delivery.provider);
 
-  // Immediate provider send failure.
-  if (delivery.deliveryStatus === "failed" || delivery.sent === false) {
-    return makeTag("red", t("admin.invites.deliveryFailed"), provider, safeDeliveryError(delivery, t));
-  }
-
   // Confirmed delivery (or read) is the only path that may claim "Delivered".
   if (delivery.deliveryStatus === "delivered" || delivery.deliveryStatus === "read") {
     return makeTag("green", t("admin.invites.deliveryDelivered"), provider);
@@ -158,6 +153,12 @@ function whatsappDeliveryTag(delivery: DeliveryInfo, t: any) {
     delivery.sent === true
   ) {
     return makeTag("blue", t("admin.invites.deliverySubmitted"), provider);
+  }
+
+  // Immediate provider send failure. For WhatsApp, `sent: false` can also mean
+  // "queued but not confirmed delivered", so only fail when it was not accepted.
+  if (delivery.deliveryStatus === "failed" || delivery.sent === false) {
+    return makeTag("red", t("admin.invites.deliveryFailed"), provider, safeDeliveryError(delivery, t));
   }
 
   // No delivery metadata available (older rows / not yet attempted).
@@ -279,7 +280,13 @@ export default function AdminInvitesPage() {
       }
 
       const delivery = channel === "whatsapp" ? res.data.whatsapp_delivery : res.data.email_delivery;
-      if (delivery && !delivery.sent) {
+      if (
+        delivery &&
+        !delivery.sent &&
+        delivery.provider_submitted !== true &&
+        delivery.delivery_status !== "queued" &&
+        delivery.delivery_status !== "sent"
+      ) {
         const channelLabel = channel === "whatsapp" ? "WhatsApp message" : "email";
         message.warning(
           `Invite created, but ${channelLabel} was not delivered${delivery.error ? `: ${delivery.error}` : "."}`
@@ -372,7 +379,12 @@ export default function AdminInvitesPage() {
 
       const channelLabel = invite.channel === "whatsapp" ? "WhatsApp message" : "email";
       const delivery = resolveDelivery(res.data);
-      if (delivery.sent === false) {
+      if (
+        delivery.sent === false &&
+        delivery.providerSubmitted !== true &&
+        delivery.deliveryStatus !== "queued" &&
+        delivery.deliveryStatus !== "sent"
+      ) {
         message.warning({
           content: `Invite updated, but ${channelLabel} was not delivered${delivery.error ? `: ${delivery.error}` : "."}`,
           key: `resend-${invite.id}`,

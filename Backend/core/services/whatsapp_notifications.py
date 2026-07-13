@@ -105,31 +105,27 @@ def notify_profile_request_status_whatsapp(
     action_path: str | None = None,
     reason: str | None = None,
 ) -> dict:
-    phone_number = get_profile_whatsapp_number(profile)
-    if not phone_number:
-        return {"success": False, "skipped": True, "error": "No valid WhatsApp phone number."}
+    from in_app_notifications.integrations import notify_request_status
 
-    result = WhatsAppService().send_template_message(
-        phone_number=phone_number,
-        template_name="request_status_update",
-        template_variables={
-            "employee_name": getattr(profile, "full_name", "") or "there",
-            "request_type": request_type,
-            "request_id": request_id,
-            "status_label": status_label,
-            "reason": reason or "",
-            "details": [str(item) for item in (details or [])],
-            "action_url": _build_action_url(action_path) or "",
-        },
+    dispatched = notify_request_status(
+        profile=profile,
+        request_type=request_type,
+        request_id=request_id,
+        status_label=status_label,
+        details=details,
+        action_path=action_path,
+        reason=reason,
     )
-    if not result.get("success"):
-        logger.warning(
-            "request_status_whatsapp_failed",
-            extra={
-                "request_type": request_type,
-                "request_id": str(request_id),
-                "recipient": mask_phone(phone_number),
-                "error": (result.get("error") or "")[:300],
-            },
-        )
-    return result
+    whatsapp = dispatched.get("whatsapp") if isinstance(dispatched, dict) else None
+    email = dispatched.get("email") if isinstance(dispatched, dict) else None
+    selected = whatsapp if whatsapp and whatsapp.get("status") == "sent" else email or whatsapp
+    if not selected:
+        return {"success": False, "skipped": True, "error": "No valid notification recipient."}
+    return {
+        "success": selected.get("status") == "sent",
+        "skipped": selected.get("status") == "skipped",
+        "provider": selected.get("provider"),
+        "message_id": selected.get("provider_message_id"),
+        "error": selected.get("error"),
+        "dispatch": dispatched,
+    }

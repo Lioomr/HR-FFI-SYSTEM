@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 from django.contrib.contenttypes.models import ContentType
@@ -1292,10 +1293,12 @@ def _pending_item_submitted_time(workflow: WorkflowInstance, obj) -> str:
     value = (
         getattr(obj, "submitted_at", None)
         or getattr(obj, "requested_at", None)
-        or workflow.submitted_at
         or getattr(obj, "created_at", None)
+        or workflow.submitted_at
         or workflow.created_at
     )
+    if isinstance(value, datetime) and timezone.is_aware(value):
+        value = timezone.localtime(value)
     return value.isoformat() if hasattr(value, "isoformat") else str(value or "")
 
 
@@ -1357,6 +1360,7 @@ def build_pending_approval_item(workflow: WorkflowInstance) -> dict[str, Any] | 
         "request_type": request_type,
         "request_type_label": label_map.get(workflow_key, "Request"),
         "action": action,
+        "details": str(getattr(obj, "reason", "") or ""),
         "time": _pending_item_submitted_time(workflow, obj),
         "avatar": "",
         "review_path": review_path,

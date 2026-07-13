@@ -36,7 +36,7 @@ const BioTimeSettingsPage: React.FC = () => {
             setLoadingConfig(true);
             const data = await bioTimeApi.getConfig();
             form.setFieldsValue(data);
-        } catch (error) {
+        } catch {
             message.error(t("bioTime.errors.loadConfig", "Failed to load BioTime configuration."));
         } finally {
             setLoadingConfig(false);
@@ -62,7 +62,7 @@ const BioTimeSettingsPage: React.FC = () => {
             setUnmappedUsers(extractArray(unmapped));
             setMappedUsers(extractArray(mapped));
             setSystemEmployees(extractArray(employeesRes));
-        } catch (error) {
+        } catch {
             message.error(t("bioTime.errors.loadMappings", "Failed to load mapping data."));
         } finally {
             setLoadingMappings(false);
@@ -75,7 +75,7 @@ const BioTimeSettingsPage: React.FC = () => {
             await bioTimeApi.updateConfig(values);
             message.success(t("bioTime.success.saveConfig", "Configuration saved successfully."));
             loadConfig();
-        } catch (error) {
+        } catch {
             message.error(t("bioTime.errors.saveConfig", "Failed to save configuration."));
         } finally {
             setSavingConfig(false);
@@ -88,7 +88,7 @@ const BioTimeSettingsPage: React.FC = () => {
             const values = form.getFieldsValue();
             await bioTimeApi.testConnection(values);
             message.success(t("bioTime.success.testConnection", "Connection successful!"));
-        } catch (error) {
+        } catch {
             message.error(t("bioTime.errors.testConnection", "Connection failed. Please check your settings."));
         } finally {
             setTestingConnection(false);
@@ -118,7 +118,7 @@ const BioTimeSettingsPage: React.FC = () => {
             setSelectedMappings(prev => ({ ...prev, [empCode]: undefined }));
             message.success(t("bioTime.success.map", "Employee mapped successfully."));
             await loadMappingsData();
-        } catch (error) {
+        } catch {
             message.error(t("bioTime.errors.map", "Failed to map employee."));
         } finally {
             setMappingSubmits(prev => ({ ...prev, [empCode]: false }));
@@ -130,7 +130,7 @@ const BioTimeSettingsPage: React.FC = () => {
             await bioTimeApi.deleteMapping(id);
             message.success(t("bioTime.success.unmap", "Mapping removed successfully."));
             await loadMappingsData();
-        } catch (error) {
+        } catch {
             message.error(t("bioTime.errors.unmap", "Failed to remove mapping."));
         }
     };

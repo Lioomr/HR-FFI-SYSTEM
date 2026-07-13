@@ -15,6 +15,7 @@ import AdminUsersListPage from "../pages/admin/AdminUsersListPage";
 import AdminUserCreatePage from "../pages/admin/AdminUserCreatePage";
 import AdminInvitesPage from "../pages/admin/AdminInvitesPage";
 import AdminAuditLogsPage from "../pages/admin/AdminAuditLogsPage";
+import AdminWhatsAppIntegrationPage from "../pages/admin/AdminWhatsAppIntegrationPage";
 
 import AdminSettingsPage from "../pages/admin/AdminSettingsPage";
 import BioTimeSettingsPage from "../pages/admin/BioTimeSettingsPage";
@@ -102,6 +103,7 @@ import HRAttendanceCorrectionRequestsPage from "../pages/hr/attendance/Attendanc
 
 import RouteErrorBoundary from "./RouteErrorBoundary";
 import PendingInboxPage from "../pages/shared/PendingInboxPage";
+import NotificationsPage from "../pages/shared/NotificationsPage";
 
 
 
@@ -149,6 +151,7 @@ export const routes = [
               { path: "admin/audit-logs", element: <AdminAuditLogsPage /> },
               { path: "admin/settings", element: <AdminSettingsPage /> },
               { path: "admin/biotime", element: <BioTimeSettingsPage /> },
+              { path: "admin/whatsapp", element: <AdminWhatsAppIntegrationPage /> },
               { path: "admin/workflow/delegations", element: <DelegationRulesPage /> },
               { path: "admin/profile", element: <UserProfilePage /> },
             ],
@@ -322,11 +325,12 @@ export const routes = [
             ],
           },
 
-          // Unified pending inbox (all authenticated roles)
+          // Unified pending inbox + notification inbox (all authenticated roles)
           {
             element: <RequireRole roles={["SystemAdmin", "HRManager", "Manager", "CEO", "CFO", "Employee"]} />,
             children: [
               { path: "pending-inbox", element: <PendingInboxPage /> },
+              { path: "notifications", element: <NotificationsPage /> },
             ],
           },
         ],

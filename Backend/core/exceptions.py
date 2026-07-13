@@ -54,5 +54,7 @@ def custom_exception_handler(exc, context):
         message = str(resp.data["detail"])
 
     msg = _translate_if_arabic(message)
-    return error(msg, status=resp.status_code)
+    response = error(msg, status=resp.status_code)
+    response.data["detail"] = msg
+    return response
 

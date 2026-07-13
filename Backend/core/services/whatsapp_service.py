@@ -5,7 +5,8 @@ from typing import Any
 
 from django.conf import settings
 
-from .messaging_providers import EvolutionWhatsAppProvider, render_template_message
+from .messaging_providers import EvolutionWhatsAppProvider
+from .whatsapp_template_library import render_configured_template_message
 
 logger = logging.getLogger(__name__)
 
@@ -128,8 +129,32 @@ class WhatsAppService:
 
         result = EvolutionWhatsAppProvider(timeout_seconds=self.timeout_seconds).send_text(
             phone_number=phone_number,
-            text=render_template_message(resolved_template, template_variables),
+            text=render_configured_template_message(resolved_template, template_variables),
             event=template_name,
+        )
+        return {
+            "success": result["success"],
+            "provider": result["provider"],
+            "status_code": result["status_code"],
+            "message_id": result["message_id"],
+            "provider_status": result.get("provider_status"),
+            "error": result["error"],
+        }
+
+    def send_document_message(
+        self,
+        *,
+        phone_number: str,
+        document_url: str,
+        file_name: str,
+        caption: str = "",
+    ) -> dict[str, Any]:
+        result = EvolutionWhatsAppProvider(timeout_seconds=self.timeout_seconds).send_document(
+            phone_number=phone_number,
+            document_url=document_url,
+            file_name=file_name,
+            caption=caption,
+            event="whatsapp_document",
         )
         return {
             "success": result["success"],
