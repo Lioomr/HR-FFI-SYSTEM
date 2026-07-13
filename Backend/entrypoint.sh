@@ -7,8 +7,17 @@ until python -c "import os, psycopg2; psycopg2.connect(host=os.getenv('DB_HOST',
   sleep 2
 done
 
+if [ "$#" -gt 0 ]; then
+  if [ "$1" = "celery" ]; then
+    echo "Checking notification worker dependencies..."
+    python -m config.worker_readiness
+  fi
+  echo "Starting command: $*"
+  exec "$@"
+fi
+
 echo "Running migrations..."
 python manage.py migrate --noinput
 
-echo "Starting Gunicorn..."
-exec gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120
+echo "Starting Daphne ASGI server..."
+exec daphne -b 0.0.0.0 -p 8000 config.asgi:application

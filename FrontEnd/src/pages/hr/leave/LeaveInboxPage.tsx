@@ -126,7 +126,7 @@ export default function LeaveInboxPage() {
         setData(res.data.items || []);
         setTotal(res.data.count || 0);
       }
-    } catch (err: any) {
+    } catch {
       notification.error({
         message: t("common.error"),
         description: t("leave.noRequests"),

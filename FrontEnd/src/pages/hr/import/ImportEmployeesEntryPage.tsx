@@ -170,7 +170,7 @@ const ImportEmployeesEntryPage: React.FC = () => {
                             window.URL.revokeObjectURL(url);
                             document.body.removeChild(a);
                             message.success(t("import.employees.templateSuccess"));
-                        } catch (e) {
+                        } catch {
                             message.error(t("import.employees.templateFail"));
                         }
                     }}

@@ -56,7 +56,7 @@ export default function EmployeePayslipsListPage() {
             link.click();
             link.remove();
             window.URL.revokeObjectURL(url);
-        } catch (err) {
+        } catch {
             notification.error({ message: t("payslips.list.downloadFailed"), description: t("payslips.list.couldNotDownloadPdf") });
         } finally {
             setDownloadingId(null);

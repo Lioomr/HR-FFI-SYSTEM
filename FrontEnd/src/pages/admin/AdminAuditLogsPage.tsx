@@ -282,28 +282,27 @@ export default function AdminAuditLogsPage() {
     }
   }
 
-  const allColumns: ColumnsType<AuditRow> = [
-    {
-      title: t("admin.dashboard.time"),
-      dataIndex: "timestamp",
-      key: "timestamp",
-      width: 220,
-      render: (v: string) => (
-        <Typography.Text title={v}>
-          {formatAuditTimestamp(v, language)}
-        </Typography.Text>
-      ),
-    },
-    { title: t("admin.dashboard.actor"), dataIndex: "actorEmail", key: "actorEmail", render: (v) => <Typography.Text strong>{v}</Typography.Text>, width: 200 },
-    { title: t("admin.dashboard.action"), dataIndex: "action", key: "action", render: (v) => <Tag>{t(`audit.action.${v}`, v)}</Tag>, width: 180 },
-    { title: "Target", dataIndex: "target", key: "target" },
-    { title: t("admin.dashboard.severity"), dataIndex: "severity", key: "severity", render: (v: AuditSeverity) => severityTag(v), width: 120 },
-    { title: "IP", dataIndex: "ip", key: "ip", width: 140 },
-  ];
-  const columns = useMemo(
-    () => allColumns.filter((column) => visibleColumnKeys.includes(String(column.key))),
-    [allColumns, visibleColumnKeys]
-  );
+  const columns = useMemo(() => {
+    const allColumns: ColumnsType<AuditRow> = [
+      {
+        title: t("admin.dashboard.time"),
+        dataIndex: "timestamp",
+        key: "timestamp",
+        width: 220,
+        render: (v: string) => (
+          <Typography.Text title={v}>
+            {formatAuditTimestamp(v, language)}
+          </Typography.Text>
+        ),
+      },
+      { title: t("admin.dashboard.actor"), dataIndex: "actorEmail", key: "actorEmail", render: (v) => <Typography.Text strong>{v}</Typography.Text>, width: 200 },
+      { title: t("admin.dashboard.action"), dataIndex: "action", key: "action", render: (v) => <Tag>{t(`audit.action.${v}`, v)}</Tag>, width: 180 },
+      { title: "Target", dataIndex: "target", key: "target" },
+      { title: t("admin.dashboard.severity"), dataIndex: "severity", key: "severity", render: (v: AuditSeverity) => severityTag(v), width: 120 },
+      { title: "IP", dataIndex: "ip", key: "ip", width: 140 },
+    ];
+    return allColumns.filter((column) => visibleColumnKeys.includes(String(column.key)));
+  }, [visibleColumnKeys, t, language]);
   const columnOptions = [
     { label: t("admin.dashboard.time"), value: "timestamp" },
     { label: t("admin.dashboard.actor"), value: "actorEmail" },

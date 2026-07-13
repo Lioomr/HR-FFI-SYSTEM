@@ -62,7 +62,7 @@ def is_hr_approver_user(user):
 
 class IsEmployeeOnly(BasePermission):
     def has_permission(self, request, view):
-        return request.user.is_authenticated and get_role(request.user) in ["Employee", "HRManager"]
+        return request.user.is_authenticated and get_role(request.user) in ["Employee", "Manager", "HRManager"]
 
 
 class IsManagerOrAdmin(BasePermission):

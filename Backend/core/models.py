@@ -284,3 +284,23 @@ class UserPreference(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user_id}:{self.scope}:{self.key}"
+
+
+class WhatsAppMessageTemplate(models.Model):
+    key = models.CharField(max_length=100, unique=True)
+    body = models.TextField()
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_whatsapp_message_templates",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["key"]
+
+    def __str__(self) -> str:
+        return self.key
