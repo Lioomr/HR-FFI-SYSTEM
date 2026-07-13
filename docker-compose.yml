@@ -69,6 +69,7 @@ services:
       context: ./Backend
     container_name: ffi_hr_notification_worker
     restart: unless-stopped
+    user: "app"
     command: ["celery", "-A", "config", "worker", "-B", "--loglevel=INFO"]
     env_file:
       - ./Backend/.env.docker
