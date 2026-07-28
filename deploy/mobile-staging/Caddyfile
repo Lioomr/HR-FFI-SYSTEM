@@ -1,0 +1,4 @@
+api-mobile-dev.asecopro.com {
+    encode zstd gzip
+    reverse_proxy backend:8000
+}
