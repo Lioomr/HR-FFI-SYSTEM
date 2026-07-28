@@ -2,22 +2,32 @@ import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { RefreshControl, StyleSheet, View } from 'react-native';
 
-import { useLocalization } from '@/i18n';
-import { useAuth } from '@/providers/AuthProvider';
-import { ApiError } from '@/services/api';
-import { colors, radii, spacing } from '@/design-system';
 import {
   AppText,
   AttendancePulse,
   Button,
   Card,
   EmptyState,
-  ErrorState,
-  LoadingState,
-  OfflineState,
+  ListRow,
   Screen,
-  SessionExpiredState,
+  ScreenHeader,
+  SectionHeader,
+  SkeletonCard,
+  SkeletonList,
+  StatusBadge,
 } from '@/components/ui';
+import { colors, radii, spacing } from '@/design-system';
+import { useLocalization } from '@/i18n';
+import { useAuth } from '@/providers/AuthProvider';
+import { ApiError } from '@/services/api';
+
+import {
+  attendanceStatusPresentation,
+  formatDateValue,
+  formatTimeValue,
+  localizedCount,
+  ResourceFailure,
+} from '../shared';
 
 import type {
   AnnouncementPreview,
@@ -27,79 +37,6 @@ import type {
 } from './types';
 import { useHomeDashboard } from './useHomeDashboard';
 
-type Translate = ReturnType<typeof useLocalization>['t'];
-
-function SectionHeading({ children }: { children: string }) {
-  return (
-    <AppText accessibilityRole="header" variant="title2">
-      {children}
-    </AppText>
-  );
-}
-
-function SectionFailure({ kind, retry, t }: { kind: string; retry: () => void; t: Translate }) {
-  const action = (
-    <Button
-      accessibilityHint={t('accessibility.retryHint')}
-      fullWidth
-      label={t('common.retry')}
-      onPress={retry}
-      size="compact"
-      variant="secondary"
-    />
-  );
-
-  if (kind === 'offline') {
-    return (
-      <OfflineState
-        action={action}
-        compact
-        message={t('state.offlineBody')}
-        title={t('state.offlineTitle')}
-      />
-    );
-  }
-  if (kind === 'session-expired') {
-    return (
-      <SessionExpiredState
-        compact
-        message={t('state.sessionExpiredBody')}
-        title={t('state.sessionExpiredTitle')}
-      />
-    );
-  }
-  return (
-    <ErrorState
-      action={action}
-      compact
-      message={t('state.errorBody')}
-      title={t('state.errorTitle')}
-    />
-  );
-}
-
-function safeFormat(
-  value: string | null,
-  formatter: (input: string) => string,
-  unavailable: string,
-): string {
-  if (!value) return unavailable;
-  try {
-    return formatter(value);
-  } catch {
-    return unavailable;
-  }
-}
-
-function localizedCount(
-  value: number,
-  key: 'leave.availableDays' | 'notifications.unreadCount',
-  t: Translate,
-  formatNumber: (input: number) => string,
-): string {
-  return t(key, { count: value }).replace(String(value), formatNumber(value));
-}
-
 function AttendanceCard({
   section,
   retry,
@@ -107,9 +44,11 @@ function AttendanceCard({
   section: HomeSection<AttendanceRecordPreview[]>;
   retry: () => void;
 }) {
-  const { directionHelpers, formatDate, formatTime, t } = useLocalization();
+  const localization = useLocalization();
+  const { directionHelpers, t } = localization;
+
   if (section.status === 'error') {
-    return <SectionFailure kind={section.kind} retry={retry} t={t} />;
+    return <ResourceFailure compact kind={section.kind} onRetry={retry} />;
   }
   if (section.data.length === 0) {
     return (
@@ -133,29 +72,35 @@ function AttendanceCard({
     <Card accessibilityLabel={`${t('dashboard.attendanceStatus')}: ${statusLabel}`} elevated>
       <View style={[styles.cardHeader, directionHelpers.row]}>
         <View style={styles.cardHeadingCopy}>
-          <SectionHeading>{t('dashboard.attendanceStatus')}</SectionHeading>
-          <AppText variant="headline">{statusLabel}</AppText>
+          <SectionHeader title={t('dashboard.attendanceStatus')} />
+          <AppText style={directionHelpers.text} variant="headline">
+            {statusLabel}
+          </AppText>
         </View>
         <AttendancePulse compact />
       </View>
       <View accessibilityRole="list" style={styles.timeline}>
-        {section.data.slice(0, 3).map((record, index) => (
-          <View
-            accessibilityRole="text"
-            key={String(record.id ?? `${record.date ?? 'record'}-${index}`)}
-            style={[styles.timelineRow, directionHelpers.row]}
-          >
-            <View style={styles.timelineMarker} />
-            <AppText style={[styles.timelineDate, directionHelpers.text]} variant="subhead">
-              {safeFormat(record.date, (date) => formatDate(date), t('common.notAvailable'))}
-            </AppText>
-            <AppText style={directionHelpers.text} tone="muted" variant="footnote">
-              {safeFormat(record.checkInAt, (time) => formatTime(time), t('common.notAvailable'))}
-              {' – '}
-              {safeFormat(record.checkOutAt, (time) => formatTime(time), t('common.notAvailable'))}
-            </AppText>
-          </View>
-        ))}
+        {section.data.slice(0, 3).map((record, index) => {
+          const status = attendanceStatusPresentation(record.status);
+          return (
+            <View
+              accessibilityRole="text"
+              key={String(record.id ?? `${record.date ?? 'record'}-${index}`)}
+              style={[styles.timelineRow, directionHelpers.row]}
+            >
+              <View style={styles.timelineMarker} />
+              <AppText style={[styles.timelineDate, directionHelpers.text]} variant="subhead">
+                {formatDateValue(localization, record.date)}
+              </AppText>
+              <AppText style={directionHelpers.text} tone="muted" variant="footnote">
+                {`${formatTimeValue(localization, record.checkInAt)} – ${formatTimeValue(localization, record.checkOutAt)}`}
+              </AppText>
+              {status ? (
+                <StatusBadge glyph={status.glyph} label={t(status.labelKey)} tone={status.tone} />
+              ) : null}
+            </View>
+          );
+        })}
       </View>
     </Card>
   );
@@ -168,30 +113,33 @@ function LeaveBalanceCard({
   section: HomeSection<LeaveBalancePreview[]>;
   retry: () => void;
 }) {
-  const { directionHelpers, formatNumber, t } = useLocalization();
+  const localization = useLocalization();
+  const { directionHelpers, t } = localization;
+
   if (section.status === 'error') {
-    return <SectionFailure kind={section.kind} retry={retry} t={t} />;
+    return <ResourceFailure compact kind={section.kind} onRetry={retry} />;
   }
   if (section.data.length === 0) {
     return (
       <EmptyState
         compact
         emoji="🌴"
-        message={t('state.emptyBody')}
+        message={t('leave.noBalances')}
         title={t('dashboard.leaveBalance')}
       />
     );
   }
+
   return (
     <Card>
-      <SectionHeading>{t('dashboard.leaveBalance')}</SectionHeading>
+      <SectionHeader title={t('dashboard.leaveBalance')} />
       <View accessibilityRole="list" style={styles.balanceList}>
         {section.data.map((balance, index) => {
           const leaveType = balance.leaveType ?? t('common.notAvailable');
           const remaining =
             balance.remainingDays === null
               ? t('common.notAvailable')
-              : localizedCount(balance.remainingDays, 'leave.availableDays', t, formatNumber);
+              : localizedCount(localization, 'leave.availableDays', balance.remainingDays);
           return (
             <View
               accessibilityLabel={`${leaveType}: ${remaining}`}
@@ -214,15 +162,19 @@ function LeaveBalanceCard({
 }
 
 function AnnouncementsCard({
+  onOpenAll,
   section,
   retry,
 }: {
+  onOpenAll: () => void;
   section: HomeSection<AnnouncementPreview[]>;
   retry: () => void;
 }) {
-  const { directionHelpers, formatDate, t } = useLocalization();
+  const localization = useLocalization();
+  const { t } = localization;
+
   if (section.status === 'error') {
-    return <SectionFailure kind={section.kind} retry={retry} t={t} />;
+    return <ResourceFailure compact kind={section.kind} onRetry={retry} />;
   }
   if (section.data.length === 0) {
     return (
@@ -234,29 +186,34 @@ function AnnouncementsCard({
       />
     );
   }
+
   return (
     <Card>
-      <SectionHeading>{t('dashboard.announcements')}</SectionHeading>
+      <SectionHeader
+        title={t('dashboard.announcements')}
+        trailing={
+          <Button
+            accessibilityHint={t('accessibility.opensScreenHint', {
+              screen: t('tabs.notifications'),
+            })}
+            label={t('common.seeAll')}
+            onPress={onOpenAll}
+            size="compact"
+            variant="ghost"
+          />
+        }
+      />
       <View accessibilityRole="list" style={styles.announcementList}>
         {section.data.map((announcement, index) => (
           <View
-            accessibilityRole="text"
             key={String(announcement.id ?? `${announcement.createdAt ?? 'announcement'}-${index}`)}
-            style={styles.announcement}
+            style={index > 0 ? styles.separated : undefined}
           >
-            <AppText style={directionHelpers.text} variant="headline">
-              {announcement.title ?? t('common.notAvailable')}
-            </AppText>
-            <AppText numberOfLines={2} style={directionHelpers.text} tone="muted" variant="subhead">
-              {announcement.contentPreview ?? t('common.notAvailable')}
-            </AppText>
-            <AppText style={directionHelpers.text} tone="muted" variant="caption">
-              {safeFormat(
-                announcement.createdAt,
-                (date) => formatDate(date),
-                t('common.notAvailable'),
-              )}
-            </AppText>
+            <ListRow
+              meta={formatDateValue(localization, announcement.createdAt)}
+              subtitle={announcement.contentPreview ?? undefined}
+              title={announcement.title ?? t('common.notAvailable')}
+            />
           </View>
         ))}
       </View>
@@ -276,7 +233,8 @@ function allSectionsFailed(snapshot: NonNullable<ReturnType<typeof useHomeDashbo
 export function HomeDashboardScreen() {
   const router = useRouter();
   const { handleApiError, user } = useAuth();
-  const { directionHelpers, formatNumber, t } = useLocalization();
+  const localization = useLocalization();
+  const { directionHelpers, t } = localization;
   const { isLoading, isRefreshing, refresh, retry, snapshot } = useHomeDashboard();
 
   useEffect(() => {
@@ -292,8 +250,9 @@ export function HomeDashboardScreen() {
 
   if (isLoading || !snapshot) {
     return (
-      <Screen>
-        <LoadingState message={t('state.loadingBody')} title={t('state.loadingTitle')} />
+      <Screen contentContainerStyle={styles.content} scroll>
+        <SkeletonCard testID="home-skeleton" />
+        <SkeletonList rows={3} />
       </Screen>
     );
   }
@@ -314,7 +273,7 @@ export function HomeDashboardScreen() {
         : 'unavailable';
     return (
       <Screen>
-        <SectionFailure kind={kind} retry={retry} t={t} />
+        <ResourceFailure kind={kind} onRetry={retry} />
       </Screen>
     );
   }
@@ -322,12 +281,7 @@ export function HomeDashboardScreen() {
   const name = user?.full_name?.trim() || user?.email || t('dashboard.welcome');
   const unread =
     snapshot.unreadNotifications.status === 'ready'
-      ? localizedCount(
-          snapshot.unreadNotifications.data,
-          'notifications.unreadCount',
-          t,
-          formatNumber,
-        )
+      ? localizedCount(localization, 'notifications.unreadCount', snapshot.unreadNotifications.data)
       : t('common.notAvailable');
 
   return (
@@ -348,12 +302,7 @@ export function HomeDashboardScreen() {
     >
       <View style={[styles.hero, directionHelpers.row]}>
         <View style={styles.heroCopy}>
-          <AppText accessibilityRole="header" style={directionHelpers.text} variant="title1">
-            {t('dashboard.greeting', { name })}
-          </AppText>
-          <AppText style={directionHelpers.text} tone="muted" variant="subhead">
-            {unread}
-          </AppText>
+          <ScreenHeader subtitle={unread} title={t('dashboard.greeting', { name })} />
         </View>
         <View
           accessibilityElementsHidden
@@ -373,7 +322,11 @@ export function HomeDashboardScreen() {
 
       <AttendanceCard retry={retry} section={snapshot.attendance} />
       <LeaveBalanceCard retry={retry} section={snapshot.leaveBalances} />
-      <AnnouncementsCard retry={retry} section={snapshot.announcements} />
+      <AnnouncementsCard
+        onOpenAll={() => router.push('/notifications')}
+        retry={retry}
+        section={snapshot.announcements}
+      />
     </Screen>
   );
 }
@@ -392,7 +345,6 @@ const styles = StyleSheet.create({
   },
   heroCopy: {
     flex: 1,
-    gap: spacing.xs,
   },
   orbit: {
     width: 58,
@@ -427,6 +379,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
     alignItems: 'center',
     gap: spacing.sm,
+    flexWrap: 'wrap',
   },
   timelineMarker: {
     width: 8,
@@ -456,10 +409,8 @@ const styles = StyleSheet.create({
   announcementList: {
     marginTop: spacing.lg,
   },
-  announcement: {
-    gap: spacing.xs,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-    paddingVertical: spacing.md,
+  separated: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
   },
 });
