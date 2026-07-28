@@ -1,3 +1,3 @@
-import { MoreScreen } from '@/features/shell';
+import { MoreScreen } from '@/features/more';
 
 export default MoreScreen;
