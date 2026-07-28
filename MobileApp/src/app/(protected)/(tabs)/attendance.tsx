@@ -1,5 +1,3 @@
-import { TabPlaceholderScreen } from '@/features/shell';
+import { AttendanceScreen } from '@/features/attendance';
 
-export default function AttendanceRoute() {
-  return <TabPlaceholderScreen emoji="⏱️" titleKey="attendance.title" />;
-}
+export default AttendanceScreen;
