@@ -1,5 +1,3 @@
-import { TabPlaceholderScreen } from '@/features/shell';
+import { LeaveScreen } from '@/features/leave';
 
-export default function LeaveRoute() {
-  return <TabPlaceholderScreen emoji="🌴" titleKey="leave.title" />;
-}
+export default LeaveScreen;
