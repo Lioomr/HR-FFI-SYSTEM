@@ -1,3 +1,3 @@
-import { NotificationsScreen } from '@/features/shell';
+import { NotificationsScreen } from '@/features/notifications';
 
 export default NotificationsScreen;
