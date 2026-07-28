@@ -68,6 +68,7 @@ export function StateView({
       */}
       {title || message ? (
         <View
+          accessible
           accessibilityLiveRegion={isLoading ? 'polite' : 'assertive'}
           accessibilityRole={isLoading ? 'progressbar' : 'summary'}
           style={styles.copy}

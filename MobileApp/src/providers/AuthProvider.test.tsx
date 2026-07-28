@@ -69,36 +69,62 @@ describe('AuthProvider', () => {
     expect(result.current.sessionNotice).toBeNull();
   });
 
-  it('does not let an older bootstrap retry overwrite newer authentication success', async () => {
-    const older = deferred<AuthUser>();
-    const newer = deferred<AuthUser>();
+  it('guards duplicate retries while a bootstrap request is in flight', async () => {
+    const retry = deferred<AuthUser>();
     const restoreSession = jest
       .fn<() => Promise<AuthUser | null>>()
       .mockRejectedValueOnce(new ApiError('network_unavailable'))
-      .mockImplementationOnce(() => older.promise)
-      .mockImplementationOnce(() => newer.promise);
+      .mockImplementationOnce(() => retry.promise);
     const client = fakeAuthService({ restoreSession });
     const { result } = await renderHook(() => useAuth(), { wrapper: wrapperFor(client) });
     await waitFor(() => expect(result.current.status).toBe('bootstrap-unreachable'));
 
-    let olderRetry!: Promise<void>;
-    let newerRetry!: Promise<void>;
+    let firstRetry!: Promise<void>;
+    let duplicateRetry!: Promise<void>;
     await act(async () => {
-      olderRetry = result.current.retryBootstrap();
-      newerRetry = result.current.retryBootstrap();
+      firstRetry = result.current.retryBootstrap();
+      duplicateRetry = result.current.retryBootstrap();
       await Promise.resolve();
     });
-    expect(restoreSession).toHaveBeenCalledTimes(3);
+    expect(result.current.status).toBe('bootstrapping');
+    expect(restoreSession).toHaveBeenCalledTimes(2);
 
     await act(async () => {
-      newer.resolve(user);
-      await newerRetry;
+      retry.resolve(user);
+      await firstRetry;
+      await duplicateRetry;
+    });
+    await waitFor(() => expect(result.current.status).toBe('authenticated'));
+    expect(restoreSession).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not let a stale bootstrap failure overwrite a successful retry', async () => {
+    const staleBootstrap = deferred<AuthUser>();
+    const retry = deferred<AuthUser>();
+    const restoreSession = jest
+      .fn<() => Promise<AuthUser | null>>()
+      .mockImplementationOnce(() => staleBootstrap.promise)
+      .mockImplementationOnce(() => retry.promise);
+    const client = fakeAuthService({ restoreSession });
+    const { result } = await renderHook(() => useAuth(), { wrapper: wrapperFor(client) });
+    await waitFor(() => expect(result.current.status).toBe('bootstrapping'));
+
+    let retryRequest!: Promise<void>;
+    await act(async () => {
+      retryRequest = result.current.retryBootstrap();
+      await Promise.resolve();
+    });
+    expect(restoreSession).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      retry.resolve(user);
+      await retryRequest;
     });
     await waitFor(() => expect(result.current.status).toBe('authenticated'));
 
     await act(async () => {
-      older.reject(new ApiError('network_unavailable'));
-      await olderRetry;
+      staleBootstrap.reject(new ApiError('network_unavailable'));
+      await staleBootstrap.promise.catch(() => undefined);
     });
     expect(result.current.status).toBe('authenticated');
     expect(result.current.user).toEqual(user);
