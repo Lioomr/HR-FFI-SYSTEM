@@ -12,6 +12,7 @@ jest.mock('@expo/ui/community/datetime-picker', () => {
   return {
     __esModule: true,
     default: ({
+      accentColor,
       display,
       locale,
       minimumDate,
@@ -19,6 +20,7 @@ jest.mock('@expo/ui/community/datetime-picker', () => {
       testID,
       value,
     }: {
+      accentColor?: string;
       display?: string;
       locale?: string;
       minimumDate?: Date;
@@ -27,6 +29,7 @@ jest.mock('@expo/ui/community/datetime-picker', () => {
       value: Date;
     }) => (
       <Pressable onPress={() => onValueChange({}, mockPickedDate.value)} testID={testID}>
+        <Text testID={`${testID}-accent`}>{accentColor ?? 'none'}</Text>
         <Text testID={`${testID}-display`}>{display ?? 'none'}</Text>
         <Text testID={`${testID}-locale`}>{locale ?? 'none'}</Text>
         <Text testID={`${testID}-value`}>{value.toISOString()}</Text>
@@ -49,7 +52,7 @@ describe('DateField', () => {
     expect(view.queryByTestId('start-picker')).toBeNull();
   });
 
-  it('opens the native calendar on press and reports the expanded state', async () => {
+  it('opens the native picker with the platform-default appearance', async () => {
     const view = await renderWithProviders(
       <DateField label="Start date" onChange={jest.fn()} testID="start" value="" />,
     );
@@ -58,7 +61,9 @@ describe('DateField', () => {
 
     expect(view.getByTestId('start-picker')).toBeTruthy();
     expect(view.getByTestId('start').props.accessibilityState.expanded).toBe(true);
-    expect(view.getByTestId('start-native-display').props.children).toBe('inline');
+    expect(view.getByTestId('start-picker').props.style).toBeUndefined();
+    expect(view.getByTestId('start-native-display').props.children).toBe('none');
+    expect(view.getByTestId('start-native-accent').props.children).toBe('none');
     expect(view.getByTestId('start-native-minimum').props.children).toBe('none');
   });
 

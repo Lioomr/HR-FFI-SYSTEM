@@ -1,6 +1,6 @@
 import NativeDateTimePicker from '@expo/ui/community/datetime-picker';
 import { useCallback, useMemo, useState } from 'react';
-import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/ui';
 import { colors, layout, radii, spacing } from '@/design-system';
@@ -21,10 +21,10 @@ export interface DateFieldProps {
 }
 
 /**
- * A calendar date field. Tapping it reveals the native iOS graphical date picker from
- * `@expo/ui`, so the employee never types a date. The value handed to the caller stays
- * the exact `YYYY-MM-DD` string the leave API expects; only the on-screen label is
- * locale-formatted.
+ * A calendar date field. Tapping it reveals the native date picker from `@expo/ui`
+ * without overriding the platform-default appearance. The value handed to the caller
+ * stays the exact `YYYY-MM-DD` string the leave API expects; only the on-screen label
+ * is locale-formatted.
  */
 export function DateField({
   error,
@@ -102,10 +102,8 @@ export function DateField({
       </Pressable>
 
       {expanded ? (
-        <View style={styles.picker} testID={testID ? `${testID}-picker` : undefined}>
+        <View testID={testID ? `${testID}-picker` : undefined}>
           <NativeDateTimePicker
-            accentColor={colors.primary}
-            display={Platform.OS === 'ios' ? 'inline' : 'default'}
             locale={localeTag}
             maximumDate={maximumDate}
             minimumDate={minimumDate}
@@ -165,12 +163,5 @@ const styles = StyleSheet.create({
   },
   triggerText: {
     flex: 1,
-  },
-  picker: {
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.cream,
-    padding: spacing.sm,
   },
 });
