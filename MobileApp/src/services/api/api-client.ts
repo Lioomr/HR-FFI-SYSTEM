@@ -1,4 +1,4 @@
-import { ApiError, safeApiError } from './api-error';
+import { ApiError, safeApiError, safeValidationDetails } from './api-error';
 import type {
   ApiRequestOptions,
   ApiSuccessEnvelope,
@@ -116,10 +116,14 @@ export class ApiClient {
       );
       if (replay.response.ok) return replay.data as T;
       if (replay.response.status === 401) await this.clearSessionSilently();
-      throw safeApiError(replay.response.status, true);
+      throw safeApiError(replay.response.status, true, replay.validationDetails);
     }
 
-    throw safeApiError(firstResponse.response.status, authenticated);
+    throw safeApiError(
+      firstResponse.response.status,
+      authenticated,
+      firstResponse.validationDetails,
+    );
   }
 
   async establishSession(credentials: SessionCredentials): Promise<void> {
@@ -231,7 +235,7 @@ export class ApiClient {
     options: ApiRequestOptions,
     credentials: SessionCredentials | null,
     authenticated: boolean,
-  ): Promise<{ response: Response; data?: T }> {
+  ): Promise<{ response: Response; data?: T; validationDetails: string[] }> {
     const headers: Record<string, string> = { Accept: 'application/json' };
     if (options.body !== undefined) headers['Content-Type'] = 'application/json';
     if (authenticated && credentials) {
@@ -252,7 +256,9 @@ export class ApiClient {
       throw new ApiError('network_unavailable');
     }
 
-    if (!response.ok) return { response };
+    if (!response.ok) {
+      return { response, validationDetails: await this.readValidationDetails(response) };
+    }
     let payload: unknown;
     try {
       payload = await response.json();
@@ -262,7 +268,24 @@ export class ApiClient {
     if (!isRecord(payload) || payload.status !== 'success' || !Object.hasOwn(payload, 'data')) {
       throw new ApiError('invalid_response');
     }
-    return { response, data: (payload as unknown as ApiSuccessEnvelope<T>).data };
+    return {
+      response,
+      data: (payload as unknown as ApiSuccessEnvelope<T>).data,
+      validationDetails: [],
+    };
+  }
+
+  /**
+   * Reads the documented error envelope only for validation statuses so that field-level
+   * server messages can be shown. Every other failure stays fully redacted.
+   */
+  private async readValidationDetails(response: Response): Promise<string[]> {
+    if (response.status !== 400 && response.status !== 422) return [];
+    try {
+      return safeValidationDetails(response.status, await response.json());
+    } catch {
+      return [];
+    }
   }
 
   private urlFor(path: `/${string}`): string {
