@@ -4,7 +4,8 @@ import { ApiClient } from './api-client';
 import { ExpoSecureCredentialStore } from './secure-credential-store';
 
 export { ApiClient, validateApiBaseUrl } from './api-client';
-export { ApiError } from './api-error';
+export { ApiError, safeApiError, safeValidationDetails, type ApiErrorCode } from './api-error';
+export * from './parse';
 export { ExpoSecureCredentialStore } from './secure-credential-store';
 export type * from './types';
 
