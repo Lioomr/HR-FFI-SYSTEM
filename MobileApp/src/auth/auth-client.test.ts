@@ -113,6 +113,59 @@ describe('AuthClient', () => {
     expect(secondHeaders['x-active-company-id']).toBe('7');
   });
 
+  it('preserves stored credentials when bootstrap cannot reach the server', async () => {
+    const store = new FakeCredentialStore();
+    store.value = { accessToken: access, refreshToken: refresh };
+    const api = new ApiClient({
+      baseUrl: 'https://hr.example.com',
+      credentialStore: store,
+      fetchImpl: jest.fn(async () => {
+        throw new TypeError('Network request failed');
+      }) as FetchLike,
+    });
+
+    await expect(new AuthClient(api).restoreSession()).rejects.toMatchObject({
+      code: 'network_unavailable',
+    });
+    expect(store.value).toEqual({ accessToken: access, refreshToken: refresh });
+    expect(store.clearCount).toBe(0);
+  });
+
+  it('preserves stored credentials when an expired access token cannot refresh offline', async () => {
+    const store = new FakeCredentialStore();
+    store.value = { accessToken: access, refreshToken: refresh };
+    const api = new ApiClient({
+      baseUrl: 'https://hr.example.com',
+      credentialStore: store,
+      fetchImpl: jest.fn(async (input: RequestInfo | URL) => {
+        if (String(input).endsWith('/auth/refresh')) {
+          throw new TypeError('Network request failed');
+        }
+        return response(401);
+      }) as FetchLike,
+    });
+
+    await expect(new AuthClient(api).restoreSession()).rejects.toMatchObject({
+      code: 'network_unavailable',
+    });
+    expect(store.value).toEqual({ accessToken: access, refreshToken: refresh });
+    expect(store.clearCount).toBe(0);
+  });
+
+  it('clears a stored session when the refresh token is actually revoked', async () => {
+    const store = new FakeCredentialStore();
+    store.value = { accessToken: access, refreshToken: refresh };
+    const api = new ApiClient({
+      baseUrl: 'https://hr.example.com',
+      credentialStore: store,
+      fetchImpl: jest.fn(async () => response(401)) as FetchLike,
+    });
+
+    await expect(new AuthClient(api).restoreSession()).resolves.toBeNull();
+    expect(store.value).toBeNull();
+    expect(store.clearCount).toBeGreaterThan(0);
+  });
+
   it('always clears credentials and memory after logout, including request failure', async () => {
     const store = new FakeCredentialStore();
     store.value = { accessToken: access, refreshToken: refresh };

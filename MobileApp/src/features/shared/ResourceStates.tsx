@@ -17,24 +17,33 @@ interface FailureProps {
   kind: ResourceFailureKind;
   onRetry?: () => void;
   compact?: boolean;
+  retrying?: boolean;
 }
 
 /**
  * One localized failure vocabulary for every Gate 3 screen. Forbidden and not-found stay
  * deliberately generic: the server already hides cross-company and cross-owner records.
  */
-export function ResourceFailure({ compact = false, kind, onRetry }: FailureProps) {
+export function ResourceFailure({
+  compact = false,
+  kind,
+  onRetry,
+  retrying = false,
+}: FailureProps) {
   const { t } = useLocalization();
-  const action = onRetry ? (
-    <Button
-      accessibilityHint={t('accessibility.retryHint')}
-      fullWidth
-      label={t('common.retry')}
-      onPress={onRetry}
-      size="compact"
-      variant="secondary"
-    />
-  ) : undefined;
+  const action =
+    onRetry && kind !== 'session-expired' ? (
+      <Button
+        accessibilityLabel={retrying ? t('common.retrying') : t('common.retry')}
+        accessibilityHint={t('accessibility.retryHint')}
+        fullWidth
+        label={retrying ? t('common.retrying') : t('common.retry')}
+        loading={retrying}
+        onPress={onRetry}
+        size="compact"
+        variant="secondary"
+      />
+    ) : undefined;
 
   if (kind === 'offline') {
     return (
@@ -58,6 +67,7 @@ export function ResourceFailure({ compact = false, kind, onRetry }: FailureProps
   if (kind === 'forbidden') {
     return (
       <StateView
+        action={action}
         compact={compact}
         emoji="🔒"
         kind="session-expired"

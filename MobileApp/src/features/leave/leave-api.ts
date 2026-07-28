@@ -14,6 +14,8 @@ import {
 
 import { resourceFrom, type Resource } from '../shared';
 
+import { isIsoCalendarDate } from './leave-dates';
+
 import type {
   LeaveBalance,
   LeaveDraftValidation,
@@ -30,7 +32,6 @@ export const LEAVE_TYPES_PATH = '/api/leaves/leave-types/' as const;
 export const LEAVE_SUBMIT_PATH = '/api/leaves/leave-requests/' as const;
 
 export const LEAVE_REQUEST_PAGE_SIZE = 25;
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
 
 export function parseLeaveBalance(value: unknown): LeaveBalance {
   const item = record(value);
@@ -109,10 +110,9 @@ export async function loadLeaveOverview(
   };
 }
 
+/** Single source of truth for the `YYYY-MM-DD` contract shared with the date picker. */
 export function isIsoDate(value: string): boolean {
-  if (!ISO_DATE.test(value)) return false;
-  const parsed = new Date(`${value}T00:00:00Z`);
-  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().startsWith(value);
+  return isIsoCalendarDate(value);
 }
 
 /** Client-side pre-checks only. The server remains the authority for leave policy. */

@@ -35,6 +35,16 @@ function wrapperFor(client: AuthService) {
   };
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, reject, resolve };
+}
+
 describe('AuthProvider', () => {
   it('bootstraps SecureStore-backed credentials through authClient restore and keeps identity in memory', async () => {
     const client = fakeAuthService({ restoreSession: jest.fn(async () => user) });
@@ -44,6 +54,54 @@ describe('AuthProvider', () => {
     expect(result.current.user).toEqual(user);
     expect(result.current.company).toEqual(user.accessible_organizations[0]);
     expect(client.restoreSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a transient bootstrap failure retryable instead of presenting login', async () => {
+    const client = fakeAuthService({
+      restoreSession: jest.fn(async () => {
+        throw new ApiError('network_unavailable');
+      }),
+    });
+    const { result } = await renderHook(() => useAuth(), { wrapper: wrapperFor(client) });
+
+    await waitFor(() => expect(result.current.status).toBe('bootstrap-unreachable'));
+    expect(result.current.user).toBeNull();
+    expect(result.current.sessionNotice).toBeNull();
+  });
+
+  it('does not let an older bootstrap retry overwrite newer authentication success', async () => {
+    const older = deferred<AuthUser>();
+    const newer = deferred<AuthUser>();
+    const restoreSession = jest
+      .fn<() => Promise<AuthUser | null>>()
+      .mockRejectedValueOnce(new ApiError('network_unavailable'))
+      .mockImplementationOnce(() => older.promise)
+      .mockImplementationOnce(() => newer.promise);
+    const client = fakeAuthService({ restoreSession });
+    const { result } = await renderHook(() => useAuth(), { wrapper: wrapperFor(client) });
+    await waitFor(() => expect(result.current.status).toBe('bootstrap-unreachable'));
+
+    let olderRetry!: Promise<void>;
+    let newerRetry!: Promise<void>;
+    await act(async () => {
+      olderRetry = result.current.retryBootstrap();
+      newerRetry = result.current.retryBootstrap();
+      await Promise.resolve();
+    });
+    expect(restoreSession).toHaveBeenCalledTimes(3);
+
+    await act(async () => {
+      newer.resolve(user);
+      await newerRetry;
+    });
+    await waitFor(() => expect(result.current.status).toBe('authenticated'));
+
+    await act(async () => {
+      older.reject(new ApiError('network_unavailable'));
+      await olderRetry;
+    });
+    expect(result.current.status).toBe('authenticated');
+    expect(result.current.user).toEqual(user);
   });
 
   it('always removes authenticated UI state when logout transport fails', async () => {

@@ -13,6 +13,8 @@ export interface ApiRequestOptions {
   body?: unknown;
   authenticated?: boolean;
   retryOnUnauthorized?: boolean;
+  /** Cancels this caller's request without disabling the client's own deadline. */
+  signal?: AbortSignal;
 }
 
 export interface SessionCredentials {

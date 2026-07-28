@@ -53,6 +53,7 @@ export function useResource<T>(load: () => Promise<T>): UseResourceResult<T> {
         isRefreshing: refreshing,
       }));
       const resource = await loadResource(load);
+      // A newer request has superseded this one, or the screen went away.
       if (!mounted.current || current !== sequence.current) return;
       settle(resource);
     },
@@ -68,9 +69,11 @@ export function useResource<T>(load: () => Promise<T>): UseResourceResult<T> {
     });
     return () => {
       mounted.current = false;
-      sequence.current += 1;
     };
   }, [load, settle]);
+
+  const refresh = useCallback(() => run(true), [run]);
+  const retry = useCallback(() => run(false), [run]);
 
   const replace = useCallback((updater: (current: T) => T) => {
     setState((previous) =>
@@ -83,8 +86,8 @@ export function useResource<T>(load: () => Promise<T>): UseResourceResult<T> {
   return {
     resource: state.resource,
     isRefreshing: state.isRefreshing,
-    refresh: () => run(true),
-    retry: () => run(false),
+    refresh,
+    retry,
     replace,
   };
 }

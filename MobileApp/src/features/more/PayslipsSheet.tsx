@@ -61,6 +61,8 @@ function PayslipDetailSheet({
   const localization = useLocalization();
   const { directionHelpers, t } = localization;
   const [detail, setDetail] = useState<Resource<PayslipDetail>>({ status: 'loading' });
+  /** Bumping this re-runs the effect, which is how retry issues a fresh request. */
+  const [attempt, setAttempt] = useState(0);
   const requestId = useRef(0);
   const payslipId = payslip.id;
 
@@ -77,7 +79,12 @@ function PayslipDetailSheet({
     return () => {
       requestId.current += 1;
     };
-  }, [handleApiError, payslipId]);
+  }, [attempt, handleApiError, payslipId]);
+
+  const retry = useCallback(() => {
+    setDetail({ status: 'loading' });
+    setAttempt((current) => current + 1);
+  }, []);
 
   const amount = (value: number | null) => formatCurrencyValue(localization, value);
 
@@ -90,7 +97,9 @@ function PayslipDetailSheet({
       visible
     >
       {detail.status === 'loading' ? <SkeletonCard testID="payslip-detail-skeleton" /> : null}
-      {detail.status === 'error' ? <ResourceFailure compact kind={detail.kind} /> : null}
+      {detail.status === 'error' ? (
+        <ResourceFailure compact kind={detail.kind} onRetry={retry} />
+      ) : null}
       {detail.status === 'ready' ? (
         <>
           <Card elevated>

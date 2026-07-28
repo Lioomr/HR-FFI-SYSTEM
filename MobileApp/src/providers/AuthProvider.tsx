@@ -18,7 +18,13 @@ import {
 } from '@/auth';
 import { ApiError, type ApiErrorCode } from '@/services/api/api-error';
 
-export type AuthStatus = 'bootstrapping' | 'authenticated' | 'unauthenticated';
+/**
+ * `bootstrap-unreachable` means stored credentials exist but the server could not be
+ * reached to confirm them. The session is deliberately kept so a transient outage does
+ * not sign the employee out; the entry screen offers a retry instead.
+ */
+export type AuthStatus =
+  'bootstrapping' | 'bootstrap-unreachable' | 'authenticated' | 'unauthenticated';
 export type SessionNotice = 'session-expired' | null;
 
 export type AuthService = Pick<
@@ -63,6 +69,7 @@ export function AuthProvider({ children, client = authClient }: AuthProviderProp
   const [company, setCompany] = useState<AuthContextValue['company']>(null);
   const [sessionNotice, setSessionNotice] = useState<SessionNotice>(null);
   const mounted = useRef(true);
+  const bootstrapSequence = useRef(0);
 
   const transitionToUnauthenticated = useCallback((notice: SessionNotice = null) => {
     setUser(null);
@@ -71,11 +78,34 @@ export function AuthProvider({ children, client = authClient }: AuthProviderProp
     setStatus('unauthenticated');
   }, []);
 
+  /**
+   * A revoked session signs the employee out; anything transient (offline, timeout,
+   * 5xx) parks on a retryable state without discarding the stored credentials.
+   */
+  const settleBootstrapFailure = useCallback(
+    (error: unknown) => {
+      const apiError = safeError(error);
+      if (apiError.code === 'session_expired') {
+        transitionToUnauthenticated('session-expired');
+        return;
+      }
+      if (apiError.code === 'authentication_failed') {
+        transitionToUnauthenticated();
+        return;
+      }
+      setUser(null);
+      setCompany(null);
+      setStatus('bootstrap-unreachable');
+    },
+    [transitionToUnauthenticated],
+  );
+
   const retryBootstrap = useCallback(async () => {
+    const attempt = ++bootstrapSequence.current;
     setStatus('bootstrapping');
     try {
       const restoredUser = await client.restoreSession();
-      if (!mounted.current) return;
+      if (!mounted.current || attempt !== bootstrapSequence.current) return;
       if (!restoredUser) {
         transitionToUnauthenticated();
         return;
@@ -85,18 +115,18 @@ export function AuthProvider({ children, client = authClient }: AuthProviderProp
       setSessionNotice(null);
       setStatus('authenticated');
     } catch (error) {
-      if (!mounted.current) return;
-      const apiError = safeError(error);
-      transitionToUnauthenticated(apiError.code === 'session_expired' ? 'session-expired' : null);
+      if (!mounted.current || attempt !== bootstrapSequence.current) return;
+      settleBootstrapFailure(error);
     }
-  }, [client, transitionToUnauthenticated]);
+  }, [client, settleBootstrapFailure, transitionToUnauthenticated]);
 
   useEffect(() => {
     mounted.current = true;
+    const attempt = ++bootstrapSequence.current;
     void client
       .restoreSession()
       .then((restoredUser) => {
-        if (!mounted.current) return;
+        if (!mounted.current || attempt !== bootstrapSequence.current) return;
         if (!restoredUser) {
           transitionToUnauthenticated();
           return;
@@ -107,14 +137,14 @@ export function AuthProvider({ children, client = authClient }: AuthProviderProp
         setStatus('authenticated');
       })
       .catch((error: unknown) => {
-        if (!mounted.current) return;
-        const apiError = safeError(error);
-        transitionToUnauthenticated(apiError.code === 'session_expired' ? 'session-expired' : null);
+        if (!mounted.current || attempt !== bootstrapSequence.current) return;
+        settleBootstrapFailure(error);
       });
     return () => {
       mounted.current = false;
+      bootstrapSequence.current += 1;
     };
-  }, [client, transitionToUnauthenticated]);
+  }, [client, settleBootstrapFailure, transitionToUnauthenticated]);
 
   const login = useCallback(
     async (input: LoginInput) => {

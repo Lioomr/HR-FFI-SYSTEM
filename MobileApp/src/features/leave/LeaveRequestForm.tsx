@@ -7,7 +7,9 @@ import { colors, layout, radii, spacing } from '@/design-system';
 import { useLocalization } from '@/i18n';
 import { useAuth } from '@/providers';
 
+import { DateField } from './DateField';
 import { submitLeaveRequest, validateLeaveDraft } from './leave-api';
+import { fromIsoDate } from './leave-dates';
 import type { LeaveDraftValidation, LeaveRequestDraft, LeaveType } from './types';
 
 interface LeaveRequestFormProps {
@@ -191,27 +193,25 @@ export function LeaveRequestForm({
         ) : null}
       </View>
 
-      <Field
-        autoCapitalize="none"
-        autoCorrect={false}
+      <DateField
         error={fieldErrors.startDate ? t(fieldErrors.startDate) : undefined}
-        helperText={t('leave.dateFormatHint')}
-        inputMode="numeric"
         label={t('leave.startDate')}
-        onChangeText={(value) => setDraft((current) => ({ ...current, startDate: value.trim() }))}
-        placeholder="2026-01-10"
+        onChange={(startDate) =>
+          setDraft((current) => ({
+            ...current,
+            startDate,
+            // Keep the range coherent: a later start pushes an earlier end along with it.
+            endDate: current.endDate && current.endDate < startDate ? startDate : current.endDate,
+          }))
+        }
         testID="leave-start-date"
         value={draft.startDate}
       />
-      <Field
-        autoCapitalize="none"
-        autoCorrect={false}
+      <DateField
         error={fieldErrors.endDate ? t(fieldErrors.endDate) : undefined}
-        helperText={t('leave.dateFormatHint')}
-        inputMode="numeric"
         label={t('leave.endDate')}
-        onChangeText={(value) => setDraft((current) => ({ ...current, endDate: value.trim() }))}
-        placeholder="2026-01-12"
+        minimumDate={fromIsoDate(draft.startDate) ?? undefined}
+        onChange={(endDate) => setDraft((current) => ({ ...current, endDate }))}
         testID="leave-end-date"
         value={draft.endDate}
       />

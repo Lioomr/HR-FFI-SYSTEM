@@ -38,9 +38,11 @@ import type {
 import { useHomeDashboard } from './useHomeDashboard';
 
 function AttendanceCard({
+  retrying,
   section,
   retry,
 }: {
+  retrying: boolean;
   section: HomeSection<AttendanceRecordPreview[]>;
   retry: () => void;
 }) {
@@ -48,7 +50,7 @@ function AttendanceCard({
   const { directionHelpers, t } = localization;
 
   if (section.status === 'error') {
-    return <ResourceFailure compact kind={section.kind} onRetry={retry} />;
+    return <ResourceFailure compact kind={section.kind} onRetry={retry} retrying={retrying} />;
   }
   if (section.data.length === 0) {
     return (
@@ -106,10 +108,25 @@ function AttendanceCard({
   );
 }
 
+/** Keep the backend's type order while collapsing the remaining rows into a count. */
+export function summarizeLeaveBalances(balances: LeaveBalancePreview[]): {
+  headline: LeaveBalancePreview | null;
+  otherTypes: number;
+} {
+  return {
+    headline: balances.find((balance) => balance.remainingDays !== null) ?? balances[0] ?? null,
+    otherTypes: Math.max(0, balances.length - 1),
+  };
+}
+
 function LeaveBalanceCard({
+  onOpenLeave,
+  retrying,
   section,
   retry,
 }: {
+  onOpenLeave: () => void;
+  retrying: boolean;
   section: HomeSection<LeaveBalancePreview[]>;
   retry: () => void;
 }) {
@@ -117,7 +134,7 @@ function LeaveBalanceCard({
   const { directionHelpers, t } = localization;
 
   if (section.status === 'error') {
-    return <ResourceFailure compact kind={section.kind} onRetry={retry} />;
+    return <ResourceFailure compact kind={section.kind} onRetry={retry} retrying={retrying} />;
   }
   if (section.data.length === 0) {
     return (
@@ -130,32 +147,59 @@ function LeaveBalanceCard({
     );
   }
 
+  const { headline, otherTypes } = summarizeLeaveBalances(section.data);
+  const leaveType = headline?.leaveType ?? t('common.notAvailable');
+  const remaining =
+    headline?.remainingDays === null || headline?.remainingDays === undefined
+      ? t('common.notAvailable')
+      : localizedCount(localization, 'leave.availableDays', headline.remainingDays);
+  const more =
+    otherTypes > 0 ? localizedCount(localization, 'dashboard.moreLeaveTypes', otherTypes) : null;
+
   return (
-    <Card>
-      <SectionHeader title={t('dashboard.leaveBalance')} />
-      <View accessibilityRole="list" style={styles.balanceList}>
-        {section.data.map((balance, index) => {
-          const leaveType = balance.leaveType ?? t('common.notAvailable');
-          const remaining =
-            balance.remainingDays === null
-              ? t('common.notAvailable')
-              : localizedCount(localization, 'leave.availableDays', balance.remainingDays);
-          return (
-            <View
-              accessibilityLabel={`${leaveType}: ${remaining}`}
-              accessibilityRole="text"
-              key={String(balance.leaveTypeId ?? `${leaveType}-${index}`)}
-              style={[styles.balanceRow, directionHelpers.row]}
-            >
-              <AppText style={[styles.balanceName, directionHelpers.text]} variant="callout">
-                {leaveType}
-              </AppText>
-              <AppText style={directionHelpers.text} variant="headline">
-                {remaining}
-              </AppText>
-            </View>
-          );
-        })}
+    <Card
+      accessibilityHint={t('accessibility.opensScreenHint', { screen: t('tabs.leave') })}
+      accessibilityLabel={[
+        t('dashboard.viewLeave'),
+        t('dashboard.leaveBalance'),
+        leaveType,
+        remaining,
+        more,
+      ]
+        .filter(Boolean)
+        .join('. ')}
+      onPress={onOpenLeave}
+      testID="home-leave-balance"
+    >
+      <View
+        style={[styles.balanceSummary, directionHelpers.row]}
+        testID="home-leave-balance-content"
+      >
+        <View style={styles.balanceSummaryCopy}>
+          <AppText style={directionHelpers.text} tone="muted" variant="footnote">
+            {t('dashboard.leaveBalance')}
+          </AppText>
+          <AppText style={directionHelpers.text} variant="title2">
+            {remaining}
+          </AppText>
+          <AppText style={directionHelpers.text} tone="muted" variant="footnote">
+            {[leaveType, more].filter(Boolean).join(' · ')}
+          </AppText>
+        </View>
+        <View style={[styles.balanceAction, directionHelpers.row]}>
+          <AppText style={directionHelpers.text} variant="callout">
+            {t('dashboard.viewLeave')}
+          </AppText>
+          <AppText
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            style={directionHelpers.directionalIcon}
+            tone="muted"
+            variant="title2"
+          >
+            ›
+          </AppText>
+        </View>
       </View>
     </Card>
   );
@@ -163,10 +207,12 @@ function LeaveBalanceCard({
 
 function AnnouncementsCard({
   onOpenAll,
+  retrying,
   section,
   retry,
 }: {
   onOpenAll: () => void;
+  retrying: boolean;
   section: HomeSection<AnnouncementPreview[]>;
   retry: () => void;
 }) {
@@ -174,7 +220,7 @@ function AnnouncementsCard({
   const { t } = localization;
 
   if (section.status === 'error') {
-    return <ResourceFailure compact kind={section.kind} onRetry={retry} />;
+    return <ResourceFailure compact kind={section.kind} onRetry={retry} retrying={retrying} />;
   }
   if (section.data.length === 0) {
     return (
@@ -235,7 +281,7 @@ export function HomeDashboardScreen() {
   const { handleApiError, user } = useAuth();
   const localization = useLocalization();
   const { directionHelpers, t } = localization;
-  const { isLoading, isRefreshing, refresh, retry, snapshot } = useHomeDashboard();
+  const { isLoading, isRefreshing, isRetrying, refresh, retry, snapshot } = useHomeDashboard();
 
   useEffect(() => {
     if (!snapshot) return;
@@ -273,7 +319,7 @@ export function HomeDashboardScreen() {
         : 'unavailable';
     return (
       <Screen>
-        <ResourceFailure kind={kind} onRetry={retry} />
+        <ResourceFailure kind={kind} onRetry={retry} retrying={isRetrying} />
       </Screen>
     );
   }
@@ -320,11 +366,17 @@ export function HomeDashboardScreen() {
         onPress={() => router.push('/leave')}
       />
 
-      <AttendanceCard retry={retry} section={snapshot.attendance} />
-      <LeaveBalanceCard retry={retry} section={snapshot.leaveBalances} />
+      <AttendanceCard retry={retry} retrying={isRetrying} section={snapshot.attendance} />
+      <LeaveBalanceCard
+        onOpenLeave={() => router.push('/leave')}
+        retry={retry}
+        retrying={isRetrying}
+        section={snapshot.leaveBalances}
+      />
       <AnnouncementsCard
         onOpenAll={() => router.push('/notifications')}
         retry={retry}
+        retrying={isRetrying}
         section={snapshot.announcements}
       />
     </Screen>
@@ -390,21 +442,22 @@ const styles = StyleSheet.create({
   timelineDate: {
     flex: 1,
   },
-  balanceList: {
-    gap: spacing.md,
-    marginTop: spacing.lg,
-  },
-  balanceRow: {
+  balanceSummary: {
     minHeight: 44,
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: spacing.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-    paddingBottom: spacing.sm,
+    gap: spacing.md,
+    flexWrap: 'wrap',
   },
-  balanceName: {
+  balanceSummaryCopy: {
     flex: 1,
+    gap: spacing.xxs,
+  },
+  balanceAction: {
+    minHeight: 44,
+    alignItems: 'center',
+    gap: spacing.xs,
+    flexShrink: 1,
   },
   announcementList: {
     marginTop: spacing.lg,

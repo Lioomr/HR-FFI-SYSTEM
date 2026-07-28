@@ -32,17 +32,22 @@ export function AnnouncementDetailSheet({ announcement, onClose }: AnnouncementD
    */
   const [loaded, setLoaded] = useState<{
     id: number | string | null;
+    attempt: number;
     resource: Resource<AnnouncementDetail>;
-  }>({ id: null, resource: { status: 'loading' } });
+  }>({ id: null, attempt: 0, resource: { status: 'loading' } });
+  /** Bumping this re-runs the effect, which is how retry issues a fresh request. */
+  const [attempt, setAttempt] = useState(0);
   const detail: Resource<AnnouncementDetail> =
-    loaded.id !== null && loaded.id === announcementId ? loaded.resource : { status: 'loading' };
+    loaded.id !== null && loaded.id === announcementId && loaded.attempt === attempt
+      ? loaded.resource
+      : { status: 'loading' };
 
   useEffect(() => {
     if (announcementId === null) return;
     let active = true;
     void loadResource(() => loadAnnouncementDetail(announcementId)).then((resource) => {
       if (!active) return;
-      setLoaded({ id: announcementId, resource });
+      setLoaded({ id: announcementId, attempt, resource });
       if (resource.status === 'error' && resource.kind === 'session-expired') {
         handleApiError(new ApiError('session_expired', 401));
       }
@@ -50,9 +55,13 @@ export function AnnouncementDetailSheet({ announcement, onClose }: AnnouncementD
     return () => {
       active = false;
     };
-  }, [announcementId, handleApiError]);
+  }, [announcementId, attempt, handleApiError]);
 
-  const close = useCallback(() => onClose(), [onClose]);
+  const retry = useCallback(() => setAttempt((current) => current + 1), []);
+  const close = useCallback(() => {
+    setAttempt(0);
+    onClose();
+  }, [onClose]);
 
   return (
     <DetailSheet
@@ -62,7 +71,9 @@ export function AnnouncementDetailSheet({ announcement, onClose }: AnnouncementD
       visible={announcement !== null}
     >
       {detail.status === 'loading' ? <SkeletonCard testID="announcement-detail-skeleton" /> : null}
-      {detail.status === 'error' ? <ResourceFailure compact kind={detail.kind} /> : null}
+      {detail.status === 'error' ? (
+        <ResourceFailure compact kind={detail.kind} onRetry={retry} />
+      ) : null}
       {detail.status === 'ready' ? (
         <>
           <View style={styles.meta}>

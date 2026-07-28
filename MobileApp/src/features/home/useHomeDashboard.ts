@@ -7,6 +7,7 @@ interface HomeDashboardState {
   snapshot: HomeDashboardSnapshot | null;
   isLoading: boolean;
   isRefreshing: boolean;
+  isRetrying: boolean;
 }
 
 export function useHomeDashboard() {
@@ -16,6 +17,7 @@ export function useHomeDashboard() {
     snapshot: null,
     isLoading: true,
     isRefreshing: false,
+    isRetrying: false,
   });
 
   const reload = useCallback(async (refreshing = false) => {
@@ -24,10 +26,11 @@ export function useHomeDashboard() {
       ...current,
       isLoading: refreshing ? current.isLoading : current.snapshot === null,
       isRefreshing: refreshing,
+      isRetrying: !refreshing,
     }));
     const snapshot = await loadHomeDashboard();
     if (!mounted.current || sequence !== requestSequence.current) return;
-    setState({ snapshot, isLoading: false, isRefreshing: false });
+    setState({ snapshot, isLoading: false, isRefreshing: false, isRetrying: false });
   }, []);
 
   useEffect(() => {
@@ -35,7 +38,7 @@ export function useHomeDashboard() {
     const sequence = ++requestSequence.current;
     void loadHomeDashboard().then((snapshot) => {
       if (!mounted.current || sequence !== requestSequence.current) return;
-      setState({ snapshot, isLoading: false, isRefreshing: false });
+      setState({ snapshot, isLoading: false, isRefreshing: false, isRetrying: false });
     });
     return () => {
       mounted.current = false;
@@ -43,9 +46,12 @@ export function useHomeDashboard() {
     };
   }, []);
 
+  const refresh = useCallback(() => reload(true), [reload]);
+  const retry = useCallback(() => reload(false), [reload]);
+
   return {
     ...state,
-    refresh: () => reload(true),
-    retry: () => reload(false),
+    refresh,
+    retry,
   };
 }

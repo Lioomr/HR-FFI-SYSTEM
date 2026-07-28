@@ -46,11 +46,7 @@ export function StateView({
   const displayedEmoji = emoji ?? stateEmoji[kind];
 
   return (
-    <View
-      accessibilityLiveRegion={isLoading ? 'polite' : 'assertive'}
-      accessibilityRole={isLoading ? 'progressbar' : 'summary'}
-      style={[styles.container, compact && styles.compact]}
-    >
+    <View style={[styles.container, compact && styles.compact]}>
       {icon ??
         (isLoading ? (
           <ActivityIndicator color={colors.text} size="small" />
@@ -65,15 +61,28 @@ export function StateView({
         ) : (
           <AttendancePulse compact />
         ))}
-      {title ? (
-        <AppText style={styles.centered} tone={stateTone[kind]} variant="headline">
-          {title}
-        </AppText>
-      ) : null}
-      {message ? (
-        <AppText style={styles.centered} tone="muted" variant="subhead">
-          {message}
-        </AppText>
+      {/*
+        The announced summary is scoped to the copy. Putting the role on the outer
+        container would turn the whole state into one accessibility element and hide
+        the recovery action from assistive technology.
+      */}
+      {title || message ? (
+        <View
+          accessibilityLiveRegion={isLoading ? 'polite' : 'assertive'}
+          accessibilityRole={isLoading ? 'progressbar' : 'summary'}
+          style={styles.copy}
+        >
+          {title ? (
+            <AppText style={styles.centered} tone={stateTone[kind]} variant="headline">
+              {title}
+            </AppText>
+          ) : null}
+          {message ? (
+            <AppText style={styles.centered} tone="muted" variant="subhead">
+              {message}
+            </AppText>
+          ) : null}
+        </View>
       ) : null}
       {action ? <View style={styles.action}>{action}</View> : null}
     </View>
@@ -115,6 +124,11 @@ const styles = StyleSheet.create({
     flex: 0,
     minHeight: 144,
     padding: spacing.lg,
+  },
+  copy: {
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   centered: {
     textAlign: 'center',
