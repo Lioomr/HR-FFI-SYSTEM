@@ -2,13 +2,28 @@ import { describe, expect, it, jest } from '@jest/globals';
 import { act, fireEvent, renderHook, waitFor } from '@testing-library/react-native';
 import { readFileSync, readdirSync } from 'node:fs';
 import { extname, join } from 'node:path';
-import { Pressable, Text } from 'react-native';
 
+import RootRoute from '@/app/index';
+import { AuthClient } from '@/auth';
 import { ResourceFailure, useResource } from '@/features/shared';
-import { useAuth } from '@/providers';
-import { ApiClient, ApiError, type CredentialStore, type FetchLike } from '@/services/api';
+import {
+  ApiClient,
+  type CredentialStore,
+  type FetchLike,
+  type SessionCredentials,
+} from '@/services/api';
 
-import { providerWrapper, renderWithProviders, stubAuthService } from './harness';
+import { providerWrapper, renderWithProviders, testUser } from './harness';
+
+jest.mock('expo-router', () => {
+  const React = jest.requireActual<typeof import('react')>('react');
+  const { Text } = jest.requireActual<typeof import('react-native')>('react-native');
+
+  return {
+    Redirect: ({ href }: { href: unknown }) =>
+      React.createElement(Text, { testID: 'root-redirect' }, String(href)),
+  };
+});
 
 const sourceRoot = join(__dirname, '..');
 
@@ -27,6 +42,37 @@ const credentialStore: CredentialStore = {
   replace: async () => undefined,
   clear: async () => undefined,
 };
+
+class TrackingCredentialStore implements CredentialStore {
+  clearCount = 0;
+  credentials: SessionCredentials | null = {
+    accessToken: 'stored-access',
+    refreshToken: 'stored-refresh',
+  };
+
+  async read() {
+    return this.credentials;
+  }
+
+  async replace(credentials: SessionCredentials) {
+    this.credentials = credentials;
+  }
+
+  async clear() {
+    this.clearCount += 1;
+    this.credentials = null;
+  }
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, reject, resolve };
+}
 
 function jsonResponse(data: unknown): Response {
   return new Response(JSON.stringify({ status: 'success', data }), {
@@ -255,60 +301,98 @@ describe('every shared error state offers recovery', () => {
   });
 });
 
-describe('transient failure never destroys a stored session', () => {
-  it('parks on a retryable offline state instead of signing the employee out', async () => {
-    const restoreSession = jest
-      .fn<() => Promise<null>>()
-      .mockRejectedValue(new ApiError('network_unavailable'));
-
-    const view = await renderWithProviders(<RootRouteProbe />, {
-      authService: stubAuthService({ restoreSession }),
+describe('bootstrap offline recovery', () => {
+  it('keeps credentials and the retryable route when retrying while still offline', async () => {
+    const retryTransport = deferred<Response>();
+    const fetchImpl = jest
+      .fn<(_input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>()
+      .mockRejectedValueOnce(new TypeError('Network request failed'))
+      .mockImplementationOnce(() => retryTransport.promise);
+    const store = new TrackingCredentialStore();
+    const client = new ApiClient({
+      baseUrl: 'https://api-mobile-dev.example.com',
+      credentialStore: store,
+      fetchImpl: fetchImpl as unknown as FetchLike,
+    });
+    const view = await renderWithProviders(<RootRoute />, {
+      authService: new AuthClient(client),
     });
 
-    await waitFor(() =>
-      expect(view.getByTestId('status')).toHaveTextContent('bootstrap-unreachable'),
-    );
-    expect(restoreSession).toHaveBeenCalledTimes(1);
+    const retry = await view.findByTestId('bootstrap-retry');
+    expect(view.queryByTestId('root-redirect')).toBeNull();
+    expect(store.credentials).toEqual({
+      accessToken: 'stored-access',
+      refreshToken: 'stored-refresh',
+    });
+    expect(store.clearCount).toBe(0);
+
+    await fireEvent.press(retry);
+
+    const loading = view.getByRole('progressbar');
+    expect(loading.props.accessibilityLiveRegion).toBe('polite');
+    expect(view.queryByTestId('bootstrap-retry')).toBeNull();
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      retryTransport.reject(new TypeError('Network request failed'));
+      await retryTransport.promise.catch(() => undefined);
+    });
+
+    await view.findByTestId('bootstrap-retry');
+    expect(view.queryByTestId('root-redirect')).toBeNull();
+    expect(store.credentials).toEqual({
+      accessToken: 'stored-access',
+      refreshToken: 'stored-refresh',
+    });
+    expect(store.clearCount).toBe(0);
   });
 
-  it('recovers the session when the retry succeeds', async () => {
-    const view = await renderWithProviders(<RootRouteProbe />, {
-      authService: stubAuthService({
-        restoreSession: jest
-          .fn<() => Promise<null>>()
-          .mockRejectedValueOnce(new ApiError('network_unavailable'))
-          .mockResolvedValue(null),
-      }),
+  it('navigates to Home after networking returns and a fresh retry succeeds', async () => {
+    let online = false;
+    const fetchImpl = jest.fn(async () => {
+      if (!online) throw new TypeError('Network request failed');
+      return jsonResponse(testUser);
+    });
+    const store = new TrackingCredentialStore();
+    const client = new ApiClient({
+      baseUrl: 'https://api-mobile-dev.example.com',
+      credentialStore: store,
+      fetchImpl: fetchImpl as unknown as FetchLike,
+    });
+    const view = await renderWithProviders(<RootRoute />, {
+      authService: new AuthClient(client),
     });
 
-    expect(await view.findByTestId('status')).toHaveTextContent('bootstrap-unreachable');
+    const retry = await view.findByTestId('bootstrap-retry');
+    expect(view.queryByText('/login')).toBeNull();
 
-    await fireEvent.press(view.getByTestId('probe-retry'));
+    online = true;
+    await fireEvent.press(retry);
 
-    await waitFor(() => expect(view.getByTestId('status')).toHaveTextContent('unauthenticated'));
+    expect(await view.findByTestId('root-redirect')).toHaveTextContent('/home');
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(store.clearCount).toBe(0);
+    expect(store.credentials).toEqual({
+      accessToken: 'stored-access',
+      refreshToken: 'stored-refresh',
+    });
   });
 
-  it('still signs the employee out when the server actually revokes the session', async () => {
-    const view = await renderWithProviders(<RootRouteProbe />, {
-      authService: stubAuthService({
-        restoreSession: jest
-          .fn<() => Promise<null>>()
-          .mockRejectedValue(new ApiError('session_expired', 401)),
-      }),
+  it('clears credentials and navigates to Login when the server revokes the session', async () => {
+    const fetchImpl = jest.fn(async () => new Response(null, { status: 401 }));
+    const store = new TrackingCredentialStore();
+    const client = new ApiClient({
+      baseUrl: 'https://api-mobile-dev.example.com',
+      credentialStore: store,
+      fetchImpl: fetchImpl as unknown as FetchLike,
+    });
+    const view = await renderWithProviders(<RootRoute />, {
+      authService: new AuthClient(client),
     });
 
-    await waitFor(() => expect(view.getByTestId('status')).toHaveTextContent('unauthenticated'));
+    expect(await view.findByTestId('root-redirect')).toHaveTextContent('/login');
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(store.credentials).toBeNull();
+    expect(store.clearCount).toBeGreaterThan(0);
   });
 });
-
-function RootRouteProbe() {
-  const { retryBootstrap, status } = useAuth();
-  return (
-    <>
-      <Text testID="status">{status}</Text>
-      <Pressable onPress={() => void retryBootstrap()} testID="probe-retry">
-        <Text>retry</Text>
-      </Pressable>
-    </>
-  );
-}
