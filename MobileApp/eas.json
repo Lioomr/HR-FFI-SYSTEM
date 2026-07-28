@@ -1,0 +1,40 @@
+{
+  "cli": {
+    "version": ">= 18.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "environment": "development",
+      "env": {
+        "FFI_REQUIRE_EXPLICIT_API_ORIGIN": "true"
+      }
+    },
+    "ios-simulator": {
+      "extends": "development",
+      "environment": "development",
+      "ios": {
+        "simulator": true
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "environment": "preview",
+      "env": {
+        "FFI_REQUIRE_EXPLICIT_API_ORIGIN": "true"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "environment": "production",
+      "env": {
+        "FFI_REQUIRE_EXPLICIT_API_ORIGIN": "true"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
