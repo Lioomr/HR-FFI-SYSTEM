@@ -70,6 +70,7 @@ export function AuthProvider({ children, client = authClient }: AuthProviderProp
   const [sessionNotice, setSessionNotice] = useState<SessionNotice>(null);
   const mounted = useRef(true);
   const bootstrapSequence = useRef(0);
+  const bootstrapRetryInFlight = useRef(false);
 
   const transitionToUnauthenticated = useCallback((notice: SessionNotice = null) => {
     setUser(null);
@@ -101,6 +102,11 @@ export function AuthProvider({ children, client = authClient }: AuthProviderProp
   );
 
   const retryBootstrap = useCallback(async () => {
+    if (bootstrapRetryInFlight.current) {
+      return;
+    }
+
+    bootstrapRetryInFlight.current = true;
     const attempt = ++bootstrapSequence.current;
     setStatus('bootstrapping');
     try {
@@ -117,11 +123,16 @@ export function AuthProvider({ children, client = authClient }: AuthProviderProp
     } catch (error) {
       if (!mounted.current || attempt !== bootstrapSequence.current) return;
       settleBootstrapFailure(error);
+    } finally {
+      if (attempt === bootstrapSequence.current) {
+        bootstrapRetryInFlight.current = false;
+      }
     }
   }, [client, settleBootstrapFailure, transitionToUnauthenticated]);
 
   useEffect(() => {
     mounted.current = true;
+    bootstrapRetryInFlight.current = false;
     const attempt = ++bootstrapSequence.current;
     void client
       .restoreSession()
@@ -142,6 +153,7 @@ export function AuthProvider({ children, client = authClient }: AuthProviderProp
       });
     return () => {
       mounted.current = false;
+      bootstrapRetryInFlight.current = false;
       bootstrapSequence.current += 1;
     };
   }, [client, settleBootstrapFailure, transitionToUnauthenticated]);
