@@ -43,6 +43,11 @@ export interface LocaleFactoryOptions {
   defaultCurrencyCode?: string;
   defaultRegionCode?: string;
   timeZone?: string;
+  /**
+   * Session-scoped in-app language choice. It overrides the device language and is
+   * never written to storage, so no user preference persists on a shared device.
+   */
+  language?: SupportedLanguage;
 }
 
 const DEFAULT_CURRENCY_CODE = 'EGP';
@@ -104,9 +109,11 @@ export function createLocalization(
   const preferredLocale = deviceLocales.find((locale) => isSupportedLanguage(languageFrom(locale)));
   const deviceLocale = preferredLocale ?? deviceLocales[0];
   const candidateLanguage = preferredLocale ? languageFrom(preferredLocale) : 'en';
-  const language: SupportedLanguage = isSupportedLanguage(candidateLanguage)
+  const deviceLanguage: SupportedLanguage = isSupportedLanguage(candidateLanguage)
     ? candidateLanguage
     : 'en';
+  const language: SupportedLanguage =
+    options.language && isSupportedLanguage(options.language) ? options.language : deviceLanguage;
   const regionCode =
     deviceLocale?.regionCode ??
     (deviceLocale ? regionFromTag(deviceLocale.languageTag) : null) ??
