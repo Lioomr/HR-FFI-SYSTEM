@@ -44,12 +44,33 @@ configured separately before those profiles are used.
 - `src/auth`: session state and secure credential lifecycle.
 - `src/config`: validated public runtime configuration.
 - `src/design-system`: tokens and reusable visual foundations.
-- `src/features`: feature-owned components, hooks, types, and API adapters.
+- `src/features`: feature-owned components, hooks, types, and API adapters
+  (`attendance`, `leave`, `notifications`, `more`, `home`, `shell`, plus
+  cross-feature helpers in `shared`).
 - `src/services`: shared platform and network services.
 - `src/components`: shared presentation primitives.
+- `src/qa`: independent security/accessibility invariant suites and the test harness.
 
 Screens must not call the network directly. Authentication credentials are stored
 only through Expo SecureStore; sensitive HR server data remains memory-only.
+
+## Feature conventions
+
+- Load data with `useResource(load)` from `@/features/shared` and pass a
+  `useCallback`-stable loader. Render failures with `<ResourceFailure />` so every
+  screen shares one offline / forbidden / not-found / session-expired vocabulary.
+- Show record detail in a `DetailSheet` driven by in-memory selection. Do not add
+  route parameters or `useLocalSearchParams` — the route surface is fixed at seven
+  token-free paths and `src/qa/gate3-security-invariants.test.ts` enforces it.
+- Render status with `<StatusBadge>`: a translated label plus a redundant
+  non-colour glyph. Register new server enums in `src/features/shared/status.ts`
+  and in both translation dictionaries.
+- Server text may reach the UI only through `ApiError.details`, which is populated
+  for HTTP 400/422 only and sanitized in `src/services/api/api-error.ts`.
+- Every callable endpoint is allowlisted in the Gate 3 invariant suite. Verify the
+  Django route and update `plans/API Route Status Matrix.md` before adding one.
+- Protected binary file download is intentionally not implemented; it would persist
+  decrypted HR data to the device. See the Gate 3 report for the deferral rationale.
 
 ## Quality checks
 
