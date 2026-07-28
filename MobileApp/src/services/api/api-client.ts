@@ -9,11 +9,20 @@ import type {
 
 const REFRESH_PATH = '/auth/refresh';
 
+/**
+ * iOS `NSURLSession` does not fail fast when the device has no route to the host: a
+ * request can stall for the system timeout instead of rejecting. Without an explicit
+ * deadline a screen opened offline stays on its loading state and a later retry queues
+ * behind the same dead connection, so recovery never appears to happen.
+ */
+const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
+
 interface ApiClientConfiguration {
   baseUrl: string;
   credentialStore: CredentialStore;
   fetchImpl?: FetchLike;
   allowInsecureDevelopment?: boolean;
+  requestTimeoutMs?: number;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -73,6 +82,7 @@ export class ApiClient {
   private readonly baseUrl: string;
   private readonly credentialStore: CredentialStore;
   private readonly fetchImpl: FetchLike;
+  private readonly requestTimeoutMs: number;
   private credentials: SessionCredentials | null | undefined;
   private credentialsLoad: Promise<SessionCredentials | null> | null = null;
   private refreshInFlight: Promise<SessionCredentials> | null = null;
@@ -85,10 +95,15 @@ export class ApiClient {
     credentialStore,
     fetchImpl = globalThis.fetch.bind(globalThis),
     allowInsecureDevelopment = false,
+    requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
   }: ApiClientConfiguration) {
     this.baseUrl = validateApiBaseUrl(baseUrl, allowInsecureDevelopment);
     this.credentialStore = credentialStore;
     this.fetchImpl = fetchImpl;
+    if (!Number.isFinite(requestTimeoutMs) || requestTimeoutMs <= 0) {
+      throw new Error('API request timeout must be a positive finite number.');
+    }
+    this.requestTimeoutMs = requestTimeoutMs;
   }
 
   async request<T>(path: `/${string}`, options: ApiRequestOptions = {}): Promise<T> {
@@ -119,11 +134,15 @@ export class ApiClient {
       throw safeApiError(replay.response.status, true, replay.validationDetails);
     }
 
-    throw safeApiError(
+    const failure = safeApiError(
       firstResponse.response.status,
       authenticated,
       firstResponse.validationDetails,
     );
+    if (authenticated && firstResponse.response.status === 401) {
+      await this.clearSessionSilently();
+    }
+    throw failure;
   }
 
   async establishSession(credentials: SessionCredentials): Promise<void> {
@@ -204,30 +223,41 @@ export class ApiClient {
     const current = await this.loadCredentials();
     if (!current) throw new ApiError('session_expired', 401);
 
-    try {
-      const result = await this.fetchEnvelope<unknown>(
-        REFRESH_PATH,
-        {
-          method: 'POST',
-          body: { refresh: current.refreshToken },
-          authenticated: false,
-          retryOnUnauthorized: false,
-        },
-        null,
-        false,
-      );
-      if (!result.response.ok) throw safeApiError(result.response.status, false);
-      const rotated = rotatedCredentials(result.data);
-      if (!rotated) throw new ApiError('invalid_response');
-      if (epoch !== this.sessionEpoch) throw new ApiError('session_expired', 401);
-      await this.mutateCredentialStore(() => this.credentialStore.replace(rotated));
-      if (epoch !== this.sessionEpoch) throw new ApiError('session_expired', 401);
-      this.credentials = rotated;
-      return rotated;
-    } catch {
-      if (epoch === this.sessionEpoch) await this.clearSessionSilently();
-      throw new ApiError('session_expired', 401);
+    const result = await this.fetchEnvelope<unknown>(
+      REFRESH_PATH,
+      {
+        method: 'POST',
+        body: { refresh: current.refreshToken },
+        authenticated: false,
+        retryOnUnauthorized: false,
+      },
+      null,
+      false,
+    );
+    if (!result.response.ok) {
+      const failure = safeApiError(result.response.status, false, result.validationDetails);
+      if (failure.code === 'authentication_failed') {
+        if (epoch === this.sessionEpoch) await this.clearSessionSilently();
+        throw new ApiError('session_expired', 401);
+      }
+      // A 5xx or other non-authentication response does not prove that the refresh
+      // credential is invalid, so the employee's stored session remains recoverable.
+      throw failure;
     }
+
+    const rotated = rotatedCredentials(result.data);
+    if (!rotated) throw new ApiError('invalid_response');
+    if (epoch !== this.sessionEpoch) throw new ApiError('session_expired', 401);
+    try {
+      await this.mutateCredentialStore(() => this.credentialStore.replace(rotated));
+    } catch {
+      // An atomic store failure is not an authentication rejection. The previous
+      // record remains in place and the bootstrap UI can offer a later retry.
+      throw new ApiError('secure_storage_unavailable');
+    }
+    if (epoch !== this.sessionEpoch) throw new ApiError('session_expired', 401);
+    this.credentials = rotated;
+    return rotated;
   }
 
   private async fetchEnvelope<T>(
@@ -243,36 +273,57 @@ export class ApiClient {
       if (this.activeCompanyId) headers['x-active-company-id'] = this.activeCompanyId;
     }
 
-    let response: Response;
+    const requestController = new AbortController();
+    const abortRequest = () => requestController.abort();
+    if (options.signal?.aborted) {
+      abortRequest();
+    } else {
+      options.signal?.addEventListener('abort', abortRequest, { once: true });
+    }
+    const timer = setTimeout(abortRequest, this.requestTimeoutMs);
+
     try {
-      response = await this.fetchImpl(this.urlFor(path), {
+      if (requestController.signal.aborted) throw new ApiError('network_unavailable');
+
+      const response = await this.fetchImpl(this.urlFor(path), {
         body: options.body === undefined ? undefined : JSON.stringify(options.body),
         credentials: 'omit',
         headers,
         method: options.method ?? 'GET',
         redirect: 'error',
+        signal: requestController.signal,
       });
-    } catch {
-      throw new ApiError('network_unavailable');
-    }
 
-    if (!response.ok) {
-      return { response, validationDetails: await this.readValidationDetails(response) };
+      if (!response.ok) {
+        const validationDetails = await this.readValidationDetails(response);
+        if (requestController.signal.aborted) throw new ApiError('network_unavailable');
+        return { response, validationDetails };
+      }
+
+      let payload: unknown;
+      try {
+        payload = await response.json();
+      } catch {
+        if (requestController.signal.aborted) throw new ApiError('network_unavailable');
+        throw new ApiError('invalid_response');
+      }
+      if (!isRecord(payload) || payload.status !== 'success' || !Object.hasOwn(payload, 'data')) {
+        throw new ApiError('invalid_response');
+      }
+      return {
+        response,
+        data: (payload as unknown as ApiSuccessEnvelope<T>).data,
+        validationDetails: [],
+      };
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      // A caller cancellation, deadline, and refused connection share the same safe UI
+      // state; native transport details are never retained.
+      throw new ApiError('network_unavailable');
+    } finally {
+      clearTimeout(timer);
+      options.signal?.removeEventListener('abort', abortRequest);
     }
-    let payload: unknown;
-    try {
-      payload = await response.json();
-    } catch {
-      throw new ApiError('invalid_response');
-    }
-    if (!isRecord(payload) || payload.status !== 'success' || !Object.hasOwn(payload, 'data')) {
-      throw new ApiError('invalid_response');
-    }
-    return {
-      response,
-      data: (payload as unknown as ApiSuccessEnvelope<T>).data,
-      validationDetails: [],
-    };
   }
 
   /**

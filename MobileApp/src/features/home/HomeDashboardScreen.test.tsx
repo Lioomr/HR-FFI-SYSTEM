@@ -1,12 +1,13 @@
-import { describe, expect, it, jest } from '@jest/globals';
+import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
-import { HomeDashboardScreen } from './HomeDashboardScreen';
+import { HomeDashboardScreen, summarizeLeaveBalances } from './HomeDashboardScreen';
 import type { HomeDashboardSnapshot } from './types';
 
 const mockPush = jest.fn();
 const mockHandleApiError = jest.fn();
 const mockLoadHomeDashboard = jest.fn<() => Promise<HomeDashboardSnapshot>>();
+let mockIsRTL = false;
 
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
 jest.mock('@/providers/AuthProvider', () => ({
@@ -18,17 +19,21 @@ jest.mock('@/providers/AuthProvider', () => ({
 jest.mock('@/i18n', () => ({
   useLocalization: () => ({
     directionHelpers: {
-      directionalIcon: {},
-      direction: 'ltr',
-      isRTL: false,
-      row: { flexDirection: 'row' },
-      text: { textAlign: 'left', writingDirection: 'ltr' },
+      directionalIcon: { transform: [{ scaleX: mockIsRTL ? -1 : 1 }] },
+      direction: mockIsRTL ? 'rtl' : 'ltr',
+      isRTL: mockIsRTL,
+      row: { flexDirection: mockIsRTL ? 'row-reverse' : 'row' },
+      text: {
+        textAlign: mockIsRTL ? 'right' : 'left',
+        writingDirection: mockIsRTL ? 'rtl' : 'ltr',
+      },
     },
     formatDate: (value: string) => `date:${value}`,
     formatNumber: (value: number) => String(value),
     formatTime: (value: string) => `time:${value}`,
     t: (key: string, values?: Record<string, string>) => {
       if (key === 'dashboard.greeting') return `Hello, ${values?.name}`;
+      if (key === 'dashboard.viewLeave') return mockIsRTL ? 'عرض الإجازات' : 'View leave';
       if (key === 'leave.availableDays') return `${values?.count} days available`;
       if (key === 'notifications.unreadCount') return `${values?.count} unread notifications`;
       return key;
@@ -62,6 +67,25 @@ const snapshot: HomeDashboardSnapshot = {
 };
 
 describe('HomeDashboardScreen', () => {
+  beforeEach(() => {
+    mockPush.mockClear();
+    mockHandleApiError.mockClear();
+    mockLoadHomeDashboard.mockReset();
+    mockIsRTL = false;
+  });
+
+  it('keeps the backend leave-type order when collapsing the balance summary', () => {
+    const balances = [
+      { leaveTypeId: 1, leaveType: 'Annual', remainingDays: 7 },
+      { leaveTypeId: 2, leaveType: 'Sick', remainingDays: 12 },
+    ];
+
+    expect(summarizeLeaveBalances(balances)).toEqual({
+      headline: balances[0],
+      otherTypes: 1,
+    });
+  });
+
   it('renders successful sections, safe placeholders, and a greeting from the authenticated user', async () => {
     mockLoadHomeDashboard.mockResolvedValue(snapshot);
     const { findAllByText, findByText } = await render(<HomeDashboardScreen />);
@@ -94,6 +118,60 @@ describe('HomeDashboardScreen', () => {
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/leave'));
     expect(mockPush).toHaveBeenCalledTimes(1);
+  });
+
+  it('navigates the compact Leave balance card action to the Leave tab', async () => {
+    mockLoadHomeDashboard.mockResolvedValue(snapshot);
+    const view = await render(<HomeDashboardScreen />);
+    const action = await view.findByTestId('home-leave-balance');
+
+    expect(action.props.accessibilityRole).toBe('button');
+    expect(action.props.accessibilityLabel).toContain('View leave');
+    expect(await view.findByText('View leave')).toBeTruthy();
+
+    fireEvent.press(action);
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/leave'));
+    expect(mockPush).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the Leave card action navigable and direction-aware in Arabic RTL', async () => {
+    mockIsRTL = true;
+    mockLoadHomeDashboard.mockResolvedValue(snapshot);
+    const view = await render(<HomeDashboardScreen />);
+    const action = await view.findByTestId('home-leave-balance');
+
+    expect(action.props.accessibilityLabel).toContain('عرض الإجازات');
+    expect(view.getByTestId('home-leave-balance-content').props.style.flat()).toContainEqual(
+      expect.objectContaining({ flexDirection: 'row-reverse' }),
+    );
+
+    fireEvent.press(action);
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/leave'));
+  });
+
+  it('marks a partial-section retry busy until the fresh dashboard request settles', async () => {
+    let resolveRetry!: (value: HomeDashboardSnapshot) => void;
+    const retry = new Promise<HomeDashboardSnapshot>((resolve) => {
+      resolveRetry = resolve;
+    });
+    mockLoadHomeDashboard
+      .mockResolvedValueOnce({
+        ...snapshot,
+        attendance: { status: 'error', kind: 'offline' },
+      })
+      .mockImplementationOnce(() => retry);
+    const view = await render(<HomeDashboardScreen />);
+    const retryButton = await view.findByRole('button', { name: 'common.retry' });
+
+    fireEvent.press(retryButton);
+
+    const busyButton = await view.findByRole('button', { name: 'common.retrying' });
+    expect(busyButton.props.accessibilityState).toMatchObject({ busy: true, disabled: true });
+
+    resolveRetry(snapshot);
+    await waitFor(() => expect(view.queryByRole('button', { name: 'common.retrying' })).toBeNull());
+    expect(await view.findByText('attendance.checkedIn')).toBeTruthy();
   });
 
   it('propagates a section session expiry to the authenticated route boundary', async () => {

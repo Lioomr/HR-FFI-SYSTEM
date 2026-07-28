@@ -83,6 +83,18 @@ describe('validateApiBaseUrl', () => {
     expect(validateApiBaseUrl('http://192.168.1.20:8000', true)).toBe('http://192.168.1.20:8000');
     expect(validateApiBaseUrl('http://127.0.0.1:8000')).toBe('http://127.0.0.1:8000');
   });
+
+  it('requires a finite positive request deadline', () => {
+    const store = new FakeCredentialStore();
+    expect(
+      () =>
+        new ApiClient({
+          baseUrl: 'https://hr.example.com',
+          credentialStore: store,
+          requestTimeoutMs: 0,
+        }),
+    ).toThrow('positive finite');
+  });
 });
 
 describe('ApiClient authentication lifecycle', () => {
@@ -259,6 +271,46 @@ describe('ApiClient authentication lifecycle', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it('preserves credentials when refresh fails because the network is unavailable', async () => {
+    const store = new FakeCredentialStore(oldSession);
+    const fetchMock = jest.fn(async (input: RequestInfo | URL) => {
+      if (String(input).endsWith('/auth/refresh')) {
+        throw new TypeError('Network request failed');
+      }
+      return response(401);
+    });
+    const api = new ApiClient({
+      baseUrl: 'https://hr.example.com',
+      credentialStore: store,
+      fetchImpl: fetchMock as FetchLike,
+    });
+
+    await expect(api.request('/auth/me')).rejects.toMatchObject({
+      code: 'network_unavailable',
+    });
+    expect(store.value).toEqual(oldSession);
+    expect(store.clearCount).toBe(0);
+  });
+
+  it('preserves credentials when the refresh service has a transient server failure', async () => {
+    const store = new FakeCredentialStore(oldSession);
+    const fetchMock = jest.fn(async (input: RequestInfo | URL) =>
+      String(input).endsWith('/auth/refresh') ? response(503) : response(401),
+    );
+    const api = new ApiClient({
+      baseUrl: 'https://hr.example.com',
+      credentialStore: store,
+      fetchImpl: fetchMock as FetchLike,
+    });
+
+    await expect(api.request('/auth/me')).rejects.toMatchObject({
+      code: 'network_unavailable',
+      status: 503,
+    });
+    expect(store.value).toEqual(oldSession);
+    expect(store.clearCount).toBe(0);
+  });
+
   it('does not enter an infinite refresh loop when the replay is unauthorized', async () => {
     const store = new FakeCredentialStore(oldSession);
     let refreshCalls = 0;
@@ -299,5 +351,41 @@ describe('ApiClient authentication lifecycle', () => {
     });
 
     await expect(api.request('/auth/me')).rejects.toEqual(new ApiError('network_unavailable'));
+  });
+
+  it('composes a caller AbortSignal with the internal request deadline', async () => {
+    const store = new FakeCredentialStore(oldSession);
+    const caller = new AbortController();
+    let receivedSignal: AbortSignal | null = null;
+    let requestStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      requestStarted = resolve;
+    });
+    const fetchMock = jest.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+        receivedSignal = init?.signal as AbortSignal;
+        requestStarted();
+        return await new Promise<Response>((_resolve, reject) => {
+          receivedSignal?.addEventListener('abort', () => reject(new Error('aborted')), {
+            once: true,
+          });
+        });
+      },
+    );
+    const api = new ApiClient({
+      baseUrl: 'https://hr.example.com',
+      credentialStore: store,
+      fetchImpl: fetchMock as FetchLike,
+    });
+
+    const pending = api.request('/auth/me', { signal: caller.signal });
+    await started;
+    caller.abort();
+
+    await expect(pending).rejects.toMatchObject({ code: 'network_unavailable' });
+    const linkedSignal = receivedSignal as unknown as AbortSignal;
+    expect(linkedSignal).not.toBe(caller.signal);
+    expect(linkedSignal.aborted).toBe(true);
+    expect(store.value).toEqual(oldSession);
   });
 });

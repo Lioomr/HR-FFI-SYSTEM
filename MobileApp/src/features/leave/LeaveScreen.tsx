@@ -36,12 +36,22 @@ import type { LeaveBalance, LeaveRequestSummary, LeaveType } from './types';
 
 type LeaveOverview = Awaited<ReturnType<typeof loadLeaveOverview>>;
 
-function BalanceCard({ section, year }: { section: Resource<LeaveBalance[]>; year: number }) {
+function BalanceCard({
+  onRetry,
+  section,
+  year,
+}: {
+  onRetry: () => void;
+  section: Resource<LeaveBalance[]>;
+  year: number;
+}) {
   const localization = useLocalization();
   const { directionHelpers, t } = localization;
 
   if (section.status === 'loading') return <SkeletonCard testID="leave-balance-skeleton" />;
-  if (section.status === 'error') return <ResourceFailure compact kind={section.kind} />;
+  if (section.status === 'error') {
+    return <ResourceFailure compact kind={section.kind} onRetry={onRetry} />;
+  }
   if (section.data.length === 0) {
     return (
       <EmptyState compact emoji="🌴" message={t('leave.noBalances')} title={t('leave.balance')} />
@@ -96,9 +106,11 @@ function BalanceCard({ section, year }: { section: Resource<LeaveBalance[]>; yea
 }
 
 function RequestList({
+  onRetry,
   onSelect,
   section,
 }: {
+  onRetry: () => void;
   onSelect: (request: LeaveRequestSummary) => void;
   section: Resource<LeaveRequestSummary[]>;
 }) {
@@ -107,7 +119,9 @@ function RequestList({
 
   if (section.status === 'loading')
     return <SkeletonList rows={3} testID="leave-requests-skeleton" />;
-  if (section.status === 'error') return <ResourceFailure compact kind={section.kind} />;
+  if (section.status === 'error') {
+    return <ResourceFailure compact kind={section.kind} onRetry={onRetry} />;
+  }
   if (section.data.length === 0) {
     return (
       <EmptyState
@@ -227,7 +241,11 @@ export function LeaveScreen() {
 
       {resource.status === 'ready' ? (
         <>
-          <BalanceCard section={resource.data.balances} year={resource.data.year} />
+          <BalanceCard
+            onRetry={() => void retry()}
+            section={resource.data.balances}
+            year={resource.data.year}
+          />
 
           <Button
             accessibilityHint={t('leave.newRequest')}
@@ -239,7 +257,11 @@ export function LeaveScreen() {
 
           <View style={styles.section}>
             <SectionHeader title={t('leave.myRequests')} />
-            <RequestList onSelect={setSelected} section={resource.data.requests} />
+            <RequestList
+              onRetry={() => void retry()}
+              onSelect={setSelected}
+              section={resource.data.requests}
+            />
           </View>
 
           <LeaveRequestForm
