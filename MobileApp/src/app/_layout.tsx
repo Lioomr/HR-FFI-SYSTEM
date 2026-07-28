@@ -10,7 +10,9 @@ import { AuthProvider, NotificationPollingProvider, useAuth } from '@/providers'
 function RootNavigator() {
   const { status } = useAuth();
   const isAuthenticated = status === 'authenticated';
-  const hasBootstrapped = status !== 'bootstrapping';
+  // An unreachable bootstrap is not "bootstrapped": neither group may take over the
+  // stack, so the entry route keeps rendering its retryable offline state.
+  const hasBootstrapped = status === 'authenticated' || status === 'unauthenticated';
 
   return (
     <Stack screenOptions={{ headerShown: false }}>

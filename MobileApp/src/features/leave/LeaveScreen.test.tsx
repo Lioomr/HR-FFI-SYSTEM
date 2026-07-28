@@ -14,6 +14,41 @@ const mockLoadOverview = jest.fn<() => Promise<Overview>>();
 const mockSubmit = jest.fn<() => Promise<LeaveMutationOutcome>>();
 const mockCancel = jest.fn<() => Promise<LeaveMutationOutcome>>();
 
+/** Dates the stubbed picker hands back, keyed by field. */
+const mockPickedDates: Record<string, string> = {};
+
+/**
+ * The native calendar is exercised in `DateField.test.tsx`. Here it is reduced to a
+ * press that emits an already-serialized API date, so these tests stay about the form.
+ */
+jest.mock('./DateField', () => {
+  const { Pressable, Text } = jest.requireActual<typeof import('react-native')>('react-native');
+  return {
+    DateField: ({
+      error,
+      label,
+      onChange,
+      testID,
+      value,
+    }: {
+      error?: string;
+      label: string;
+      onChange: (iso: string) => void;
+      testID?: string;
+      value: string;
+    }) => (
+      <Pressable
+        onPress={() => onChange(mockPickedDates[testID ?? ''] ?? '2026-09-01')}
+        testID={testID}
+      >
+        <Text>{label}</Text>
+        <Text testID={`${testID}-value`}>{value}</Text>
+        {error ? <Text>{error}</Text> : null}
+      </Pressable>
+    ),
+  };
+});
+
 jest.mock('./leave-api', () => {
   const actual = jest.requireActual<typeof import('./leave-api')>('./leave-api');
   return {
@@ -58,6 +93,7 @@ describe('LeaveScreen', () => {
     mockLoadOverview.mockReset();
     mockSubmit.mockReset();
     mockCancel.mockReset();
+    for (const key of Object.keys(mockPickedDates)) delete mockPickedDates[key];
   });
 
   it('renders the balance, entitlement breakdown, and the employee’s own requests', async () => {
@@ -87,13 +123,28 @@ describe('LeaveScreen', () => {
     const view = await renderWithProviders(<LeaveScreen />);
 
     await fireEvent.press(await view.findByTestId('leave-open-form'));
-    await fireEvent.changeText(await view.findByTestId('leave-start-date'), '2026-08-05');
-    await fireEvent.changeText(view.getByTestId('leave-end-date'), '2026-08-01');
-    await fireEvent.press(view.getByTestId('leave-submit'));
+    await fireEvent.press(await view.findByTestId('leave-submit'));
 
     expect(await view.findByText('Select a leave type.')).toBeTruthy();
-    expect(view.getByText('The end date must not be before the start date.')).toBeTruthy();
+    expect(view.getAllByText('Enter a valid date as YYYY-MM-DD.')).toHaveLength(2);
     expect(mockSubmit).not.toHaveBeenCalled();
+  });
+
+  it('keeps the range coherent when a start date lands after the chosen end date', async () => {
+    mockLoadOverview.mockResolvedValue(overview);
+    mockPickedDates['leave-end-date'] = '2026-09-02';
+    mockPickedDates['leave-start-date'] = '2026-09-10';
+    mockSubmit.mockResolvedValue({ status: 'success' });
+    const view = await renderWithProviders(<LeaveScreen />);
+
+    await fireEvent.press(await view.findByTestId('leave-open-form'));
+    await fireEvent.press(await view.findByTestId('leave-type-1'));
+    await fireEvent.press(view.getByTestId('leave-end-date'));
+    await fireEvent.press(view.getByTestId('leave-start-date'));
+
+    // The earlier end date is pulled forward instead of leaving an invalid range.
+    expect(view.getByTestId('leave-end-date-value').props.children).toBe('2026-09-10');
+    expect(view.getByTestId('leave-start-date-value').props.children).toBe('2026-09-10');
   });
 
   it('submits a valid request and reloads the list from the server', async () => {
@@ -103,8 +154,8 @@ describe('LeaveScreen', () => {
 
     await fireEvent.press(await view.findByTestId('leave-open-form'));
     await fireEvent.press(await view.findByTestId('leave-type-1'));
-    await fireEvent.changeText(view.getByTestId('leave-start-date'), '2026-09-01');
-    await fireEvent.changeText(view.getByTestId('leave-end-date'), '2026-09-03');
+    await fireEvent.press(view.getByTestId('leave-start-date'));
+    await fireEvent.press(view.getByTestId('leave-end-date'));
     await fireEvent.press(view.getByTestId('leave-submit'));
 
     await waitFor(() => expect(mockSubmit).toHaveBeenCalledTimes(1));
@@ -122,8 +173,8 @@ describe('LeaveScreen', () => {
 
     await fireEvent.press(await view.findByTestId('leave-open-form'));
     await fireEvent.press(await view.findByTestId('leave-type-1'));
-    await fireEvent.changeText(view.getByTestId('leave-start-date'), '2026-09-01');
-    await fireEvent.changeText(view.getByTestId('leave-end-date'), '2026-09-03');
+    await fireEvent.press(view.getByTestId('leave-start-date'));
+    await fireEvent.press(view.getByTestId('leave-end-date'));
     await fireEvent.press(view.getByTestId('leave-submit'));
 
     expect(await view.findByTestId('leave-form-error')).toBeTruthy();

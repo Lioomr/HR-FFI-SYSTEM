@@ -11,7 +11,12 @@ export const appRoutes = Object.freeze({
   notifications: '/notifications',
 } as const);
 
+/**
+ * `null` keeps the entry route mounted so it can render a pending or retryable state.
+ * An unreachable bootstrap must not fall through to the login screen: the stored
+ * session is still valid and is retried rather than discarded.
+ */
 export function initialRouteForAuthStatus(status: AuthStatus) {
-  if (status === 'bootstrapping') return null;
+  if (status === 'bootstrapping' || status === 'bootstrap-unreachable') return null;
   return status === 'authenticated' ? appRoutes.home : appRoutes.login;
 }

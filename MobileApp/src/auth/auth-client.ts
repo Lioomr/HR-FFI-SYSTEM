@@ -53,12 +53,21 @@ export class AuthClient {
     return result.user;
   }
 
+  /**
+   * Restores a stored session. Only a genuine authentication failure may purge the
+   * credentials: a transient network or server fault must leave the session intact so
+   * an employee who opens the app offline is not silently signed out and forced to
+   * re-authenticate once connectivity returns.
+   */
   async restoreSession(): Promise<AuthUser | null> {
     if (!(await this.api.hasSession())) return null;
     try {
-      const user = await this.me();
-      return user;
-    } catch {
+      return await this.me();
+    } catch (error) {
+      const revoked =
+        error instanceof ApiError &&
+        (error.code === 'session_expired' || error.code === 'authentication_failed');
+      if (!revoked) throw error;
       this.currentUser = null;
       await this.clearLocally();
       return null;

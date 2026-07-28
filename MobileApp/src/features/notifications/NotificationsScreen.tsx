@@ -119,9 +119,11 @@ function NotificationDetailSheet({
 }
 
 function NotificationList({
+  onRetry,
   onSelect,
   section,
 }: {
+  onRetry: () => void;
   onSelect: (notification: NotificationItem) => void;
   section: Resource<NotificationPage>;
 }) {
@@ -130,7 +132,9 @@ function NotificationList({
 
   if (section.status === 'loading')
     return <SkeletonList rows={4} testID="notifications-skeleton" />;
-  if (section.status === 'error') return <ResourceFailure kind={section.kind} />;
+  if (section.status === 'error') {
+    return <ResourceFailure kind={section.kind} onRetry={onRetry} />;
+  }
   if (section.data.items.length === 0) {
     return (
       <EmptyState
@@ -178,9 +182,11 @@ function NotificationList({
 }
 
 function AnnouncementList({
+  onRetry,
   onSelect,
   section,
 }: {
+  onRetry: () => void;
   onSelect: (announcement: AnnouncementItem) => void;
   section: Resource<AnnouncementItem[]>;
 }) {
@@ -189,7 +195,9 @@ function AnnouncementList({
 
   if (section.status === 'loading')
     return <SkeletonList rows={3} testID="announcements-skeleton" />;
-  if (section.status === 'error') return <ResourceFailure kind={section.kind} />;
+  if (section.status === 'error') {
+    return <ResourceFailure kind={section.kind} onRetry={onRetry} />;
+  }
   if (section.data.length === 0) {
     return (
       <EmptyState
@@ -352,10 +360,18 @@ export function NotificationsScreen() {
               variant="secondary"
             />
           ) : null}
-          <NotificationList onSelect={setSelectedNotification} section={notifications.resource} />
+          <NotificationList
+            onRetry={() => void notifications.retry()}
+            onSelect={setSelectedNotification}
+            section={notifications.resource}
+          />
         </>
       ) : (
-        <AnnouncementList onSelect={setSelectedAnnouncement} section={announcements.resource} />
+        <AnnouncementList
+          onRetry={() => void announcements.retry()}
+          onSelect={setSelectedAnnouncement}
+          section={announcements.resource}
+        />
       )}
 
       <NotificationDetailSheet

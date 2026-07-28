@@ -5,6 +5,7 @@ import { appRoutes, initialRouteForAuthStatus } from './routes';
 describe('protected navigation decisions', () => {
   it('keeps navigation pending while the secure session bootstraps', () => {
     expect(initialRouteForAuthStatus('bootstrapping')).toBeNull();
+    expect(initialRouteForAuthStatus('bootstrap-unreachable')).toBeNull();
   });
 
   it('routes only authenticated state into the protected home anchor', () => {
