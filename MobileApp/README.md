@@ -69,8 +69,11 @@ only through Expo SecureStore; sensitive HR server data remains memory-only.
   for HTTP 400/422 only and sanitized in `src/services/api/api-error.ts`.
 - Every callable endpoint is allowlisted in the Gate 3 invariant suite. Verify the
   Django route and update `plans/API Route Status Matrix.md` before adding one.
-- Protected binary file download is intentionally not implemented; it would persist
-  decrypted HR data to the device. See the Gate 3 report for the deferral rationale.
+- Protected binary files are web-app-only for the first mobile release. The app shows
+  structured payslip details, employee document metadata, and announcement metadata,
+  but must not fetch, render, persist, share, export, open a WebView, deep-link to, or
+  use signed URLs for protected binaries. Future mobile viewing requires a separate
+  security-reviewed design; this decision does not mark Gate 4 passed.
 
 ## Quality checks
 

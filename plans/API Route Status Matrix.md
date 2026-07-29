@@ -1,6 +1,6 @@
 # API Route Status Matrix
 
-**Last reviewed:** 2026-07-28  
+**Last reviewed:** 2026-07-30
 **Gate 1 status:** **Pass**; API/security blockers remediated and verified with Docker/PostgreSQL.  
 **Gate 3 status:** **Pass**; the employee mobile client now consumes these routes. No route, permission, or response contract was changed — the 2026-07-28 edits record verification only.  
 **Purpose:** reconciled mobile endpoint index. Django URL resolution, views, serializers, permissions, and tests are authoritative.
@@ -43,7 +43,7 @@
 - Loans, assets, agent memory, and all HR/admin/approval families are outside the first employee mobile release unless the master plan is changed explicitly.
 - `payroll.permissions.IsEmployeeOnly` requires exactly the `Employee` role, while `leaves.permissions.IsEmployeeOnly` also allows `Manager` and `HRManager`. A Manager therefore reaches leave and attendance self-service but receives 403 on payslips. This asymmetry is existing intentional backend behavior; the mobile client surfaces it as a generic access-unavailable state. Product confirmation is outstanding.
 - Announcement detail returns its payload wrapped as `data.announcement`, unlike the list route which returns the standard `data.items` page. Type both shapes separately.
-- Protected binary downloads (`payslips/{id}/download/`, `documents/{id}/download/`, `announcements/{id}/attachment/`) are **not** consumed by the mobile client. Gate 3 renders the authenticated JSON detail instead and states the download limitation in-app; a reviewed mobile file-handling design is Gate 4 work.
+- Protected binary downloads (`payslips/{id}/download/`, `documents/{id}/download/`, `announcements/{id}/attachment/`) remain current for the authenticated web application but are **not** consumed by `MobileApp` in the first release. Mobile renders authenticated structured payslip details, employee document metadata, and announcement/attachment metadata only. Mobile must not fetch, render, persist, share, export, use a WebView, deep-link, or use signed URLs for protected binaries. Any future mobile viewing requires a separate security-reviewed design. This approved product decision does not mark Gate 4 passed.
 
 ## Gate 1 evidence
 

@@ -1,9 +1,9 @@
 # FFI Employee Mobile App — Master Plan
 
-**Status:** Gate 3 passed on 2026-07-28 with one deferred item (protected binary file download → Gate 4)  
+**Status:** Gate 3 passed on 2026-07-28. Protected binary access is approved as web-app-only for the first mobile release; Gate 4 overall is not passed.
 
 **SDK restoration note (2026-07-24):** the temporary Expo SDK 54 Expo Go smoke-test pin was removed. `MobileApp/` is restored to the validated Expo SDK 57 baseline for EAS/native acceptance.
-**Last reviewed:** 2026-07-28  
+**Last reviewed:** 2026-07-30
 **Scope:** Secure employee self-service mobile application and required backend readiness.
 
 ## Source-of-truth hierarchy
@@ -40,8 +40,9 @@ If documents conflict with code, record the mismatch in `plans/API Route Status 
 | Gate 0 — documentation and truth inventory | **Complete (2026-07-20)** | Mandatory hierarchy read; live Django routes, serializers, permissions, web consumers, and tests audited; route matrix reconciled. |
 | Gate 1 — API and security readiness | **Passed (2026-07-20)** | Auth lifecycle/revocation, attendance, tenant isolation, protected attachments/documents/payslips, and realtime containment implemented and covered by Docker/PostgreSQL tests. |
 | Gate 2 — mobile foundation | **Passed (2026-07-28)** | SDK 57 EAS iOS Simulator build `a2c59ef1-877b-4b17-8ec2-3c12467a641a` launched on macOS against isolated staging; the project owner approved the native test. |
-| Gate 3 — employee MVP | **Passed (2026-07-28)** | Attendance, leave, notification/announcement, profile, payslip, and document workflows implemented on verified Gate 1 endpoints. 31 suites / 206 tests, TypeScript, zero-warning lint, Prettier, Expo Doctor 20/20, iOS export 1,865 modules. Protected binary file download deferred to Gate 4 under security review. See `plans/Gate 3 Employee Mobile Workflows and UI Report.md`. |
-| Gates 4-6 | Not started | Depend on the preceding gates. |
+| Gate 3 — employee MVP | **Passed (2026-07-28)** | Attendance, leave, notification/announcement, profile, payslip, and document workflows implemented on verified Gate 1 endpoints. 31 suites / 206 tests, TypeScript, zero-warning lint, Prettier, Expo Doctor 20/20, iOS export 1,865 modules. Protected binary access was deferred to Gate 4 and is now approved as web-app-only for the first mobile release. See `plans/Gate 3 Employee Mobile Workflows and UI Report.md`. |
+| Gate 4 — mobile security hardening | **Not passed; protected-binary decision approved (2026-07-30)** | `MobileApp` remains metadata/structured-detail only; actual protected binaries remain in the authenticated web app. See `plans/Gate 4 Protected Binary Access Decision.md`. Other Gate 4 acceptance work remains outstanding. |
+| Gates 5-6 | Not started | Depend on the preceding gates. |
 
 ## Gate 0 security disposition (historical findings)
 
@@ -133,7 +134,7 @@ Implement only employee self-service screens. Fetch sensitive profile, salary, i
 - Sensitive sheets mount only while open and discard their data on close. `parseProfile` deliberately projects no salary, allowance, passport, national-ID, or date-of-birth field.
 - UI/UX: shared `ListRow`, `StatusBadge` (text label plus non-colour glyph), motion-free skeletons, `DetailSheet` full-screen detail driven by in-memory selection, and a `ScreenHeader`/`SectionHeader`/`DetailRow` hierarchy. The route surface remains the same seven token-free paths.
 - Security posture improved: server validation text is surfaced only for HTTP 400/422 through a sanitizing channel that rejects credentials, JWT-shaped values, URLs, source paths, tracebacks, and markup; 403 and 404 now map to distinct generic access states.
-- Deferred: protected binary file download (payslip PDF, employee document, announcement attachment). Implementing it would require persisting decrypted HR content to device storage or an unreviewed WebView, both of which contradict current decisions. The limitation is stated honestly in-app in both languages and is a Gate 4 security decision.
+- Approved first-release boundary: protected binary files (payslip PDF, employee document PDF/image, announcement attachment) remain web-app-only. `MobileApp` renders authenticated structured details and metadata and must not fetch, render, persist, share, export, open in a WebView, deep-link to, or use signed URLs for protected binaries. See `plans/Gate 4 Protected Binary Access Decision.md`.
 
 ### 4. Mobile security hardening
 
@@ -194,6 +195,7 @@ Release iOS first with separate production secrets, App Store credentials, provi
 | 2026-07-28 | Communicate status with a text label plus a non-colour glyph, and render nothing for unmapped enums. | Status must survive greyscale and colour-blindness, and an unmapped server enum must never leak a raw internal identifier into the UI. |
 | 2026-07-28 | Switch language in session memory only, without `I18nManager.forceRTL`. | Avoids persisting a user preference on a shared device and avoids a forced process restart; direction-aware helpers already mirror text and rows. Native container mirroring remains a device-validation item. |
 | 2026-07-28 | Defer protected binary file download to Gate 4 and disclose the limitation in-app. | Downloading would persist decrypted HR content to device storage against the memory-only decision, and a browser/WebView flow cannot carry the bearer token and needs security review. Viewing is delivered through the authenticated JSON detail endpoints instead. |
+| 2026-07-30 | Keep protected binary files web-app-only for the first mobile release. | `MobileApp` shows authenticated structured payslip details, employee document metadata, and announcement metadata only. It must not fetch, render, persist, share, export, use a WebView, deep-link, or use signed URLs for protected binaries. Future mobile viewing requires a separate security-reviewed design. This decision does not mark Gate 4 passed. |
 
 ## Change checklist
 
@@ -210,5 +212,5 @@ Release iOS first with separate production secrets, App Store credentials, provi
 - [x] Gate 3 employee attendance, leave, notification/announcement, profile, payslip, and document workflows implemented on verified endpoints with full state, localization, and accessibility coverage.
 - [x] Gate 3 contract, authorization, session-expiry, RTL, accessibility, and interaction tests added (31 suites, 206 tests) plus an independent Gate 3 invariant suite.
 - [x] Gate 3 TypeScript, lint, format, test, Expo Doctor, iOS export, and audit evidence recorded, with the tooling-only `brace-expansion` advisory disclosed.
-- [ ] Gate 4 decision on protected mobile file handling (payslip PDF, employee document, announcement attachment).
+- [x] Gate 4 protected-binary product decision approved: web-app-only for the first mobile release; Gate 4 overall remains not passed.
 - [ ] Native iOS re-validation of the Gate 3 screens before a release candidate.
