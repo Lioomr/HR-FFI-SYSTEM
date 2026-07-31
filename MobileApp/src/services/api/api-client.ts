@@ -29,15 +29,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-function isLoopback(hostname: string): boolean {
-  return (
-    hostname === 'localhost' ||
-    hostname === '127.0.0.1' ||
-    hostname === '[::1]' ||
-    hostname === '::1'
-  );
-}
-
 export function validateApiBaseUrl(baseUrl: string, allowInsecureDevelopment = false): string {
   let url: URL;
   try {
@@ -47,8 +38,7 @@ export function validateApiBaseUrl(baseUrl: string, allowInsecureDevelopment = f
   }
 
   const secure = url.protocol === 'https:';
-  const permittedDevelopmentHttp =
-    url.protocol === 'http:' && (allowInsecureDevelopment || isLoopback(url.hostname));
+  const permittedDevelopmentHttp = url.protocol === 'http:' && allowInsecureDevelopment;
   if (!secure && !permittedDevelopmentHttp) throw new Error('API base URL must use HTTPS.');
   if (url.username || url.password || url.search || url.hash) {
     throw new Error('API base URL must not contain credentials, query parameters, or fragments.');
