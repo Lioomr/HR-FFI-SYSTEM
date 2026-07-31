@@ -69,19 +69,33 @@ describe('validateApiBaseUrl', () => {
     expect(validateApiBaseUrl('https://hr.example.com///')).toBe('https://hr.example.com');
   });
 
-  it('rejects insecure production origins and embedded URL data', () => {
-    expect(() => validateApiBaseUrl('http://hr.example.com')).toThrow('must use HTTPS');
+  it.each([
+    'http://localhost:8000',
+    'http://127.0.0.1:8000',
+    'http://[::1]:8000',
+    'http://hr.example.com',
+  ])('rejects HTTP in release mode: %s', (baseUrl) => {
+    expect(() => validateApiBaseUrl(baseUrl)).toThrow('must use HTTPS');
+  });
+
+  it('rejects an unbracketed IPv6 HTTP URL in release mode', () => {
+    expect(() => validateApiBaseUrl('http://::1')).toThrow('API base URL is invalid');
+  });
+
+  it('rejects malformed URLs and embedded URL data', () => {
+    expect(() => validateApiBaseUrl('not-an-origin')).toThrow('API base URL is invalid');
     expect(() => validateApiBaseUrl('https://user:pass@hr.example.com')).toThrow(
       'must not contain',
     );
     expect(() => validateApiBaseUrl('https://hr.example.com?access_token=secret')).toThrow(
       'must not contain',
     );
+    expect(() => validateApiBaseUrl('https://hr.example.com#fragment')).toThrow('must not contain');
   });
 
-  it('allows explicitly marked development HTTP and loopback HTTP only', () => {
+  it('allows HTTP only when development is explicit', () => {
+    expect(validateApiBaseUrl('http://localhost:8000', true)).toBe('http://localhost:8000');
     expect(validateApiBaseUrl('http://192.168.1.20:8000', true)).toBe('http://192.168.1.20:8000');
-    expect(validateApiBaseUrl('http://127.0.0.1:8000')).toBe('http://127.0.0.1:8000');
   });
 
   it('requires a finite positive request deadline', () => {
