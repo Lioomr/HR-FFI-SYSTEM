@@ -5,7 +5,12 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { LocalizationProvider } from '@/i18n';
-import { AuthProvider, NotificationPollingProvider, useAuth } from '@/providers';
+import {
+  AuthenticatedPrivacyProtection,
+  AuthProvider,
+  NotificationPollingProvider,
+  useAuth,
+} from '@/providers';
 
 function RootNavigator() {
   const { status } = useAuth();
@@ -29,8 +34,17 @@ function RootNavigator() {
 
 function AuthenticatedRuntime({ children }: PropsWithChildren) {
   const { status } = useAuth();
-  if (status !== 'authenticated') return children;
-  return <NotificationPollingProvider>{children}</NotificationPollingProvider>;
+  const isAuthenticated = status === 'authenticated';
+
+  return (
+    <AuthenticatedPrivacyProtection active={isAuthenticated}>
+      {isAuthenticated ? (
+        <NotificationPollingProvider>{children}</NotificationPollingProvider>
+      ) : (
+        children
+      )}
+    </AuthenticatedPrivacyProtection>
+  );
 }
 
 export default function RootLayout() {

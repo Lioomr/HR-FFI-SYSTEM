@@ -7,6 +7,10 @@ export {
   type SessionNotice,
 } from './AuthProvider';
 export {
+  AuthenticatedPrivacyProtection,
+  type ScreenCaptureController,
+} from './AuthenticatedPrivacyProtection';
+export {
   NotificationPollingProvider,
   useNotificationPolling,
   type AppStateSource,
