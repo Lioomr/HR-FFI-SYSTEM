@@ -1,7 +1,6 @@
 from datetime import date, timedelta
 from unittest.mock import patch
 
-import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.test import TestCase
@@ -13,14 +12,12 @@ from audit.models import AuditLog
 from core.models import DelegationRule
 from employees.models import EmployeeProfile
 from hr_reference.models import Department, Position
+from organization.models import OrganizationNode, UserOrganizationAccess
 
 from .models import AttendanceRecord, BioTimeConfig, BioTimeEmployeeMap
 from .services import SyncBioTimeService
 
 User = get_user_model()
-
-pytest.skip("Attendance feature temporarily frozen during maintenance.", allow_module_level=True)
-
 
 class AttendanceTests(TestCase):
     def setUp(self):
@@ -33,21 +30,45 @@ class AttendanceTests(TestCase):
         self.ceo_group, _ = Group.objects.get_or_create(name="CEO")
         self.cfo_group, _ = Group.objects.get_or_create(name="CFO")
 
+        self.company = OrganizationNode.objects.create(
+            code="ATTENDANCE_A",
+            name="Attendance Company A",
+            node_type=OrganizationNode.NodeType.COMPANY,
+        )
+        self.other_company = OrganizationNode.objects.create(
+            code="ATTENDANCE_B",
+            name="Attendance Company B",
+            node_type=OrganizationNode.NodeType.COMPANY,
+        )
+
         # HR User
         self.hr = User.objects.create_user(email="hr@ffi.com", password="password")
         self.hr.groups.add(self.hr_group)
+        UserOrganizationAccess.objects.create(user=self.hr, organization=self.company)
+        UserOrganizationAccess.objects.create(user=self.hr, organization=self.other_company)
         self.ceo_approver = User.objects.create_user(email="ceo-approver@ffi.com", password="password")
         self.ceo_approver.groups.add(self.ceo_group)
 
         self.ceo_dept = Department.objects.create(id=1, code="CEO", name="CEO Department")
         self.base_dept = Department.objects.create(id=11, code="ENG", name="Engineering Department")
         self.base_position = Position.objects.create(id=901, code="EMP", name="Employee")
+        self.hr_profile = EmployeeProfile.objects.create(
+            user=self.hr,
+            company=self.company,
+            employee_id="EMP000",
+            department="Human Resources",
+            job_title="HR Manager",
+            department_ref=self.base_dept,
+            position_ref=self.base_position,
+            hire_date=date.today(),
+        )
 
         # Employee 1
         self.emp1 = User.objects.create_user(email="emp1@ffi.com", password="password")
         self.emp1.groups.add(self.employee_group)
         self.profile1 = EmployeeProfile.objects.create(
             user=self.emp1,
+            company=self.company,
             employee_id="EMP001",
             department="Engineering",
             job_title="Software Engineer",
@@ -61,6 +82,7 @@ class AttendanceTests(TestCase):
         self.emp2.groups.add(self.employee_group)
         self.profile2 = EmployeeProfile.objects.create(
             user=self.emp2,
+            company=self.other_company,
             employee_id="EMP002",
             department="Engineering",
             job_title="Software Engineer",
@@ -70,6 +92,7 @@ class AttendanceTests(TestCase):
         )
         self.ceo_profile = EmployeeProfile.objects.create(
             user=self.ceo_approver,
+            company=self.company,
             employee_id="EMP003",
             department_ref=self.ceo_dept,
             position_ref=self.base_position,
@@ -80,6 +103,7 @@ class AttendanceTests(TestCase):
         self.cfo_user.groups.add(self.cfo_group)
         self.cfo_profile = EmployeeProfile.objects.create(
             user=self.cfo_user,
+            company=self.company,
             employee_id="EMP004",
             department_ref=self.base_dept,
             position_ref=self.base_position,
@@ -90,6 +114,7 @@ class AttendanceTests(TestCase):
         self.ceo_direct_user.groups.add(self.employee_group)
         self.ceo_direct_profile = EmployeeProfile.objects.create(
             user=self.ceo_direct_user,
+            company=self.company,
             employee_id="EMP005",
             department_ref=self.base_dept,
             position_ref=self.base_position,
@@ -100,6 +125,7 @@ class AttendanceTests(TestCase):
         self.cfo_direct_user.groups.add(self.employee_group)
         self.cfo_direct_profile = EmployeeProfile.objects.create(
             user=self.cfo_direct_user,
+            company=self.company,
             employee_id="EMP006",
             department_ref=self.base_dept,
             position_ref=self.base_position,
@@ -110,6 +136,7 @@ class AttendanceTests(TestCase):
         self.employee_manager_user.groups.add(self.employee_group)
         self.employee_manager_profile = EmployeeProfile.objects.create(
             user=self.employee_manager_user,
+            company=self.company,
             employee_id="EMP007",
             department_ref=self.base_dept,
             position_ref=self.base_position,
@@ -122,6 +149,7 @@ class AttendanceTests(TestCase):
         self.employee_manager_direct_user.groups.add(self.employee_group)
         self.employee_manager_direct_profile = EmployeeProfile.objects.create(
             user=self.employee_manager_direct_user,
+            company=self.company,
             employee_id="EMP008",
             department_ref=self.base_dept,
             position_ref=self.base_position,
@@ -133,6 +161,7 @@ class AttendanceTests(TestCase):
         self.manager_user.groups.add(self.manager_group)
         self.manager_profile = EmployeeProfile.objects.create(
             user=self.manager_user,
+            company=self.company,
             employee_id="EMP009",
             department_ref=self.base_dept,
             position_ref=self.base_position,
@@ -141,6 +170,7 @@ class AttendanceTests(TestCase):
         self.delegate_user = User.objects.create_user(email="attendance-delegate@ffi.com", password="password")
         self.delegate_profile = EmployeeProfile.objects.create(
             user=self.delegate_user,
+            company=self.company,
             employee_id="EMP010",
             department_ref=self.base_dept,
             position_ref=self.base_position,
@@ -163,6 +193,58 @@ class AttendanceTests(TestCase):
         self.client.post("/api/attendance/me/check-in/")  # First
         response = self.client.post("/api/attendance/me/check-in/")  # Duplicate
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            AttendanceRecord.objects.filter(employee_profile=self.profile1, date=timezone.localdate()).count(),
+            1,
+        )
+
+    def test_employee_without_profile_gets_safe_not_found_errors(self):
+        user = User.objects.create_user(email="attendance-no-profile@ffi.com", password="password")
+        user.groups.add(self.employee_group)
+        self.client.force_authenticate(user=user)
+
+        check_in_response = self.client.post("/api/attendance/me/check-in/")
+        check_out_response = self.client.post("/api/attendance/me/check-out/")
+
+        self.assertEqual(check_in_response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(check_out_response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(check_in_response.data["message"], "Employee profile not found.")
+
+    def test_employee_without_company_cannot_create_attendance(self):
+        user = User.objects.create_user(email="attendance-no-company@ffi.com", password="password")
+        user.groups.add(self.employee_group)
+        profile = EmployeeProfile.objects.create(
+            user=user,
+            employee_id="EMP-NO-COMPANY",
+            department_ref=self.base_dept,
+            position_ref=self.base_position,
+            hire_date=date.today(),
+        )
+        self.client.force_authenticate(user=user)
+
+        response = self.client.post("/api/attendance/me/check-in/")
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(AttendanceRecord.objects.filter(employee_profile=profile).exists())
+
+    def test_unauthenticated_employee_endpoints_are_rejected(self):
+        self.assertEqual(self.client.get("/api/attendance/me/").status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(self.client.post("/api/attendance/me/check-in/").status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(self.client.post("/api/attendance/me/check-out/").status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_cfo_cannot_use_employee_self_service(self):
+        self.client.force_authenticate(user=self.cfo_user)
+
+        self.assertEqual(self.client.get("/api/attendance/me/").status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.client.post("/api/attendance/me/check-in/").status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.client.post("/api/attendance/me/check-out/").status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_ceo_cannot_use_employee_self_service(self):
+        self.client.force_authenticate(user=self.ceo_approver)
+
+        self.assertEqual(self.client.get("/api/attendance/me/").status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.client.post("/api/attendance/me/check-in/").status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.client.post("/api/attendance/me/check-out/").status_code, status.HTTP_403_FORBIDDEN)
 
     def test_manager_can_use_attendance_self_service(self):
         self.client.force_authenticate(user=self.manager_user)
@@ -198,6 +280,16 @@ class AttendanceTests(TestCase):
         self.assertIsNotNone(record.check_out_at)
         # Audit
         self.assertTrue(AuditLog.objects.filter(action="attendance.check_out").exists())
+
+    def test_employee_check_out_duplicate_fail(self):
+        self.client.force_authenticate(user=self.emp1)
+        self.client.post("/api/attendance/me/check-in/")
+        first_response = self.client.post("/api/attendance/me/check-out/")
+        duplicate_response = self.client.post("/api/attendance/me/check-out/")
+
+        self.assertEqual(first_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(duplicate_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(AuditLog.objects.filter(action="attendance.check_out").count(), 1)
 
     def test_employee_cannot_list_all(self):
         self.client.force_authenticate(user=self.emp1)
@@ -263,6 +355,76 @@ class AttendanceTests(TestCase):
 
         self.assertEqual(len(results), 1)
 
+    def test_hr_list_is_limited_to_active_company(self):
+        own_company_record = AttendanceRecord.objects.create(
+            employee_profile=self.profile1,
+            date=timezone.localdate(),
+            status=AttendanceRecord.Status.PRESENT,
+        )
+        other_company_record = AttendanceRecord.objects.create(
+            employee_profile=self.profile2,
+            date=timezone.localdate(),
+            status=AttendanceRecord.Status.PRESENT,
+        )
+        self.client.force_authenticate(user=self.hr)
+
+        response = self.client.get(
+            "/api/attendance/",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        items = response.data["data"]["items"]
+        self.assertEqual([item["id"] for item in items], [own_company_record.id])
+        self.assertNotIn(other_company_record.id, [item["id"] for item in items])
+
+    def test_hr_cannot_retrieve_or_override_other_active_company_record(self):
+        other_company_record = AttendanceRecord.objects.create(
+            employee_profile=self.profile2,
+            date=timezone.localdate(),
+            status=AttendanceRecord.Status.ABSENT,
+        )
+        self.client.force_authenticate(user=self.hr)
+
+        retrieve_response = self.client.get(
+            f"/api/attendance/{other_company_record.id}/",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+        update_response = self.client.patch(
+            f"/api/attendance/{other_company_record.id}/",
+            {"status": AttendanceRecord.Status.PRESENT, "override_reason": "Correction"},
+            format="json",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+
+        self.assertEqual(retrieve_response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(update_response.status_code, status.HTTP_404_NOT_FOUND)
+        other_company_record.refresh_from_db()
+        self.assertEqual(other_company_record.status, AttendanceRecord.Status.ABSENT)
+
+    def test_hr_self_service_rejects_active_company_mismatch(self):
+        self.client.force_authenticate(user=self.hr)
+
+        response = self.client.post(
+            "/api/attendance/me/check-in/",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.other_company.id),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(AttendanceRecord.objects.filter(employee_profile=self.hr_profile).exists())
+
+    def test_direct_attendance_create_is_not_supported(self):
+        self.client.force_authenticate(user=self.hr)
+
+        response = self.client.post(
+            "/api/attendance/",
+            {"employee_profile": self.profile1.id},
+            format="json",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
     def test_hr_override(self):
         record = AttendanceRecord.objects.create(
             employee_profile=self.profile1, date=timezone.localdate(), status="ABSENT"
@@ -308,7 +470,7 @@ class AttendanceTests(TestCase):
         self.assertEqual(create_response.data["data"]["status"], "PENDING_CEO")
 
         self.client.force_authenticate(user=self.ceo_approver)
-        approve_response = self.client.post(f"/api/attendance/ceo/attendance/{record_id}/approve/", {"notes": "Approved"})
+        approve_response = self.client.post(f"/api/ceo/attendance/{record_id}/approve/", {"notes": "Approved"})
         self.assertEqual(approve_response.status_code, status.HTTP_200_OK)
         self.assertEqual(approve_response.data["data"]["status"], "PRESENT")
 
@@ -327,7 +489,7 @@ class AttendanceTests(TestCase):
 
         self.client.force_authenticate(user=self.delegate_user)
         response = self.client.post(
-            f"/api/attendance/ceo/attendance/{record.id}/approve/",
+            f"/api/ceo/attendance/{record.id}/approve/",
             {"notes": "Delegated CEO approval"},
         )
 
@@ -353,6 +515,33 @@ class AttendanceTests(TestCase):
         items = response.data["data"]["items"]
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0]["id"], own_record.id)
+
+    def test_manager_cannot_access_direct_report_in_another_company(self):
+        self.profile2.manager_profile = self.manager_profile
+        self.profile2.save(update_fields=["manager_profile"])
+        other_company_record = AttendanceRecord.objects.create(
+            employee_profile=self.profile2,
+            date=timezone.localdate(),
+            status=AttendanceRecord.Status.PENDING_MANAGER,
+        )
+        self.client.force_authenticate(user=self.manager_user)
+
+        list_response = self.client.get(
+            "/api/manager/attendance/",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+        approve_response = self.client.post(
+            f"/api/manager/attendance/{other_company_record.id}/approve/",
+            {"notes": "Should not apply"},
+            format="json",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(list_response.data["data"]["items"], [])
+        self.assertEqual(approve_response.status_code, status.HTTP_404_NOT_FOUND)
+        other_company_record.refresh_from_db()
+        self.assertEqual(other_company_record.status, AttendanceRecord.Status.PENDING_MANAGER)
 
     def test_ceo_can_approve_direct_report_attendance(self):
         record = AttendanceRecord.objects.create(
@@ -398,6 +587,7 @@ class BioTimeSyncTests(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.admin = User.objects.create_user(email="admin@ffi.com", password="password", is_staff=True)
+        self.admin.groups.add(Group.objects.get_or_create(name="SystemAdmin")[0])
         self.employee = User.objects.create_user(email="biotime-user@ffi.com", password="password")
         self.profile = EmployeeProfile.objects.create(
             user=self.employee,

@@ -1,4 +1,8 @@
 UI/UX To-Do Checklist (v1)
+Status: Active baseline (reviewed 2026-07-20)
+Applies to: Web frontend and future employee mobile client
+
+Design source of truth: this file. Mobile designs must use this palette and must not invent a replacement brand palette.
 1) UI Library
 
  Pick UI library: Ant Design
@@ -66,3 +70,9 @@ Empty: “No data available”
 Loading: spinner/skeleton
 
 Error: safe message + retry button
+
+6) Mobile design requirements
+
+Use the same palette, typography intent, English/Arabic translations, and status semantics as the web product. Support RTL, safe areas, touch targets of at least 44px, loading/empty/error/offline states, and privacy-safe presentation of payslips and employee documents.
+
+Mobile design tools may generate visual concepts only. Production React Native code, authentication, authorization, API behavior, and secure storage must follow `plans/Employee Mobile App Master Plan.md` and `SECURITY_POLICY.md`.

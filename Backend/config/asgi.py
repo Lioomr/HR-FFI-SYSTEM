@@ -16,12 +16,12 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 
 django_asgi_application = get_asgi_application()
 
-from in_app_notifications.auth import JwtOrSessionAuthMiddlewareStack  # noqa: E402
+from in_app_notifications.auth import DeferredRealtimeMiddlewareStack  # noqa: E402
 from in_app_notifications.routing import websocket_urlpatterns  # noqa: E402
 
 application = ProtocolTypeRouter(
     {
         "http": django_asgi_application,
-        "websocket": JwtOrSessionAuthMiddlewareStack(URLRouter(websocket_urlpatterns)),
+        "websocket": DeferredRealtimeMiddlewareStack(URLRouter(websocket_urlpatterns)),
     }
 )

@@ -1,5 +1,8 @@
 # Backend Agent Rules
 
+- The backend is the authority for authentication, authorization, ownership, organization scoping, validation, and audit logging. Never rely on frontend or mobile role checks.
+- Changes to tokens, uploads, notifications, WebSockets, security headers, or sensitive endpoints require security review and regression tests.
+
 Backend lives in `Backend/`. Django 5.2 + DRF + PostgreSQL.
 
 ## Before Editing

@@ -145,7 +145,7 @@ export default function RecentActivityPage() {
             }]
             : []),
         {
-            title: t("common.details", "Details"),
+            title: t("hr.dashboard.record"),
             dataIndex: "status",
             key: "status",
             render: (text: string, record: HrRecentActivityItem) => {

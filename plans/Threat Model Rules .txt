@@ -39,7 +39,7 @@ Add optional MFA for System Admin + HR Manager as soon as possible
 Sessions/Tokens
 Choose one approach and enforce it strictly:
 
-If JWT: short-lived access token + refresh token rotation + blacklist on logout
+If JWT: short-lived access token + refresh token rotation + blacklist on logout. Current backend settings are 15-minute access tokens and 14-day rotating refresh tokens.
 
 If cookies: HttpOnly + Secure + SameSite + CSRF tokens
 
@@ -73,7 +73,7 @@ Employee endpoints must always scope by current user:
 
 never accept employee_id to fetch “my data”
 
-use /employee/profile not /employees/{id} for Employee role
+Legacy guidance: use the implemented employee self-service route/action (currently under `/api/employees/me/`) rather than `/employees/{id}` for Employee role. Verify the ViewSet route before implementation.
 
 4) SQL Injection & ORM Safety
 

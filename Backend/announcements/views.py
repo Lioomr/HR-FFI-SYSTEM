@@ -2,17 +2,15 @@ import logging
 import os
 import re
 
-from django.contrib.auth import get_user_model
 from django.core import signing
 from django.core.files.base import ContentFile
 from django.db.models import Min, Q
 from django.db.models.functions import TruncMinute
 from django.http import FileResponse
-from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 
 from audit.utils import audit
 from core.pagination import StandardPagination
@@ -22,7 +20,6 @@ from employees.models import EmployeeProfile
 from employees.permissions import IsHRManagerOrAdmin
 from organization.services import (
     ensure_company_write_allowed,
-    filter_queryset_by_accessible_companies,
     filter_queryset_by_company_scope,
     get_active_company_for_request,
 )
@@ -34,7 +31,6 @@ from .utils import (
     send_announcement_in_app,
 )
 
-User = get_user_model()
 logger = logging.getLogger(__name__)
 
 
@@ -57,7 +53,7 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action == "attachment_public":
-            return [AllowAny()]
+            return [IsAuthenticated()]
         if self.action == "create":
             return [IsAuthenticated()]
         if self.action in ["update", "partial_update", "destroy"]:
@@ -69,6 +65,7 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         reports_qs = EmployeeProfile.objects.filter(manager=user)
         if manager_profile:
             reports_qs = EmployeeProfile.objects.filter(Q(manager=user) | Q(manager_profile=manager_profile))
+        reports_qs = filter_queryset_by_company_scope(reports_qs, self.request)
         return reports_qs.exclude(user__isnull=True).values_list("user_id", flat=True)
 
     def _ceo_team_user_ids(self, user):
@@ -77,19 +74,15 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         if ceo_profile:
             direct_reports_q = direct_reports_q | Q(manager_profile=ceo_profile)
 
-        leadership_user_ids = User.objects.filter(groups__name__in=["Manager", "HRManager"]).values_list(
-            "id", flat=True
+        team_profiles = EmployeeProfile.objects.filter(
+            Q(user__groups__name__in=["Manager", "HRManager"]) | direct_reports_q
         )
-        direct_report_user_ids = (
-            EmployeeProfile.objects.filter(direct_reports_q)
-            .exclude(user__isnull=True)
-            .values_list("user_id", flat=True)
-        )
-        return set(leadership_user_ids).union(set(direct_report_user_ids))
+        team_profiles = filter_queryset_by_company_scope(team_profiles, self.request)
+        return set(team_profiles.exclude(user__isnull=True).values_list("user_id", flat=True).distinct())
 
     def _collapse_broadcast_duplicates(self, queryset):
         grouped_ids = list(
-            Announcement.objects.filter(
+            queryset.filter(
                 is_active=True,
                 target_user__isnull=False,
                 target_roles=[],
@@ -111,6 +104,10 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        scoped_announcements = filter_queryset_by_company_scope(
+            Announcement.objects.filter(is_active=True),
+            self.request,
+        )
 
         # Determine user role from groups using core permissions logic
         user_group_role = get_role(user)
@@ -132,33 +129,46 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
 
         # HR Managers and Admins can see all announcements
         if user_role in ["ADMIN", "HR_MANAGER"]:
-            qs = Announcement.objects.filter(is_active=True)
-            if self.action == "list":
-                qs = filter_queryset_by_company_scope(qs, self.request)
-            else:
-                qs = filter_queryset_by_accessible_companies(qs, self.request)
-            return self._collapse_broadcast_duplicates(qs)
+            return self._collapse_broadcast_duplicates(scoped_announcements)
 
         # Managers can also see what they created for their team.
         if user_role == "MANAGER":
-            base_qs = Announcement.objects.filter(
-                is_active=True,
-            ).filter(Q(created_by=user) | Q(target_user=user) | Q(target_roles__contains=["MANAGER"]))
+            base_qs = scoped_announcements.filter(
+                Q(created_by=user) | Q(target_user=user) | Q(target_roles__contains=["MANAGER"])
+            )
             return self._collapse_broadcast_duplicates(base_qs)
 
         if user_role == "CEO":
-            base_qs = Announcement.objects.filter(
-                is_active=True,
-            ).filter(Q(created_by=user) | Q(target_user=user))
+            base_qs = scoped_announcements.filter(Q(created_by=user) | Q(target_user=user))
             return self._collapse_broadcast_duplicates(base_qs)
 
         # Other users only see announcements targeted to their role
         return self._collapse_broadcast_duplicates(
-            Announcement.objects.filter(
-                is_active=True,
-                publish_to_dashboard=True,
-            ).filter(Q(target_user=user) | Q(target_roles__contains=[user_role]))
+            scoped_announcements.filter(publish_to_dashboard=True).filter(
+                Q(target_user=user) | Q(target_roles__contains=[user_role])
+            )
         )
+
+    @staticmethod
+    def _attachment_response(announcement, *, deprecated=False):
+        filename = _download_filename(announcement.attachment.name)
+        try:
+            announcement.attachment.open("rb")
+        except FileNotFoundError:
+            logger.warning("announcement_attachment_missing", extra={"announcement_id": announcement.id})
+            return error("Attachment not found.", status=status.HTTP_404_NOT_FOUND)
+        response = FileResponse(
+            announcement.attachment,
+            content_type="application/octet-stream",
+            as_attachment=True,
+            filename=filename,
+        )
+        response["X-Content-Type-Options"] = "nosniff"
+        response["Cache-Control"] = "private, no-store"
+        if deprecated:
+            response["Deprecation"] = "true"
+            response["Link"] = f'</api/announcements/{announcement.id}/attachment/>; rel="successor-version"'
+        return response
 
     def get_serializer_class(self):
         if self.action == "list":
@@ -350,21 +360,14 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         announcement = self.get_object()
         if not announcement.attachment:
             return error("Attachment not found.", status=status.HTTP_404_NOT_FOUND)
-
-        filename = _download_filename(announcement.attachment.name)
-        disposition = "attachment" if request.query_params.get("download") == "1" else "inline"
-        try:
-            announcement.attachment.open("rb")
-        except FileNotFoundError:
-            logger.warning("announcement_attachment_missing", extra={"announcement_id": announcement.id})
-            return error("Attachment not found.", status=status.HTTP_404_NOT_FOUND)
-        response = FileResponse(announcement.attachment, content_type="application/pdf")
-        response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
+        response = self._attachment_response(announcement)
+        if isinstance(response, FileResponse):
+            audit(request, "announcement_attachment_downloaded", entity="Announcement", entity_id=announcement.id)
         return response
 
     @action(detail=True, methods=["get"], url_path="attachment-public")
     def attachment_public(self, request, *args, **kwargs):
-        announcement = get_object_or_404(Announcement.objects.filter(is_active=True), pk=kwargs.get("pk"))
+        announcement = self.get_object()
         if not announcement.attachment:
             return error("Attachment not found.", status=status.HTTP_404_NOT_FOUND)
 
@@ -386,15 +389,9 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         if payload.get("announcement_id") != announcement.id:
             return error("Unauthorized", status=status.HTTP_401_UNAUTHORIZED)
 
-        filename = _download_filename(announcement.attachment.name)
-        try:
-            announcement.attachment.open("rb")
-        except FileNotFoundError:
-            logger.warning("announcement_attachment_missing", extra={"announcement_id": announcement.id})
-            return error("Attachment not found.", status=status.HTTP_404_NOT_FOUND)
-        response = FileResponse(announcement.attachment, content_type="application/pdf")
-        disposition = "attachment" if request.query_params.get("download", "1") != "0" else "inline"
-        response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
+        response = self._attachment_response(announcement, deprecated=True)
+        if isinstance(response, FileResponse):
+            audit(request, "announcement_attachment_downloaded", entity="Announcement", entity_id=announcement.id)
         return response
 
     def update(self, request, *args, **kwargs):

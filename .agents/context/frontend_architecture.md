@@ -1,19 +1,19 @@
 # Frontend Architecture Context
 
 > **TL;DR (read this only if your task doesn't need the full map):**
-> React 18 + TS + Vite + Ant Design + React Router v6 + Zustand + Axios + Vitest. Folders: `components/`, `pages/<role>/`, `services/api/<domain>Api.ts`, `stores/`, `routes/routes.tsx`, `hooks/`, `i18n/`. All HTTP goes through `services/api/apiClient.ts` (JWT refresh + `x-active-company-id` injected). Roles: `SystemAdmin`, `HRManager`, `Manager`, `CEO`, `CFO`, `Employee`. Wrap role pages in `RequireRole`. Zustand only for cross-page state; local `useState` otherwise.
+> React 19 + TS + Vite + Ant Design + React Router v7 + Zustand + Axios + Vitest. Folders: `components/`, `pages/<role>/`, `services/api/<domain>Api.ts`, `stores/`, `routes/routes.tsx`, `hooks/`, `i18n/`. All HTTP goes through `services/api/apiClient.ts` (JWT + `x-active-company-id` injected). Roles: `SystemAdmin`, `HRManager`, `Manager`, `CEO`, `CFO`, `Employee`. Wrap role pages in `RequireRole`. Zustand only for cross-page state; local `useState` otherwise.
 
 ## Stack
 
 | Tool | Version / Notes |
 |---|---|
-| React | 18 |
+| React | 19 (installed frontend dependency) |
 | TypeScript | strict mode |
 | Vite | build tool + dev server (`npm run dev` on port 5173) |
 | Ant Design | UI component library — use existing patterns, do not introduce alternatives |
-| React Router | v6 — all routes in `FrontEnd/src/routes/routes.tsx` |
+| React Router | v7 (installed frontend dependency; definitions remain in `FrontEnd/src/routes/routes.tsx`) |
 | Zustand | lightweight global state — only for shared state that crosses component trees |
-| Axios | HTTP client — configured in `FrontEnd/src/services/api/apiClient.ts` with JWT auto-refresh interceptor |
+| Axios | HTTP client — configured in `FrontEnd/src/services/api/apiClient.ts` with JWT attachment and unauthorized cleanup |
 | Vitest + Testing Library | unit/component tests |
 | ESLint + Prettier | code quality (`npm run lint`, `npm run format:check`) |
 
@@ -30,7 +30,7 @@ FrontEnd/src/
 │   ├── ceo/          # CEO pages
 │   └── shared/       # Shared across roles (profile, announcements)
 ├── services/api/     # All backend communication
-│   ├── apiClient.ts  # Axios instance + JWT refresh interceptor
+│   ├── apiClient.ts  # Axios instance + JWT attachment/401 cleanup
 │   ├── apiTypes.ts   # Shared request/response types
 │   ├── apiHelpers.ts # Utility functions
 │   ├── tokenStorage.ts
@@ -60,7 +60,8 @@ FrontEnd/src/
 ## API Service Layer Rules
 
 - All backend calls go through `services/api/<domain>Api.ts` — never put raw Axios calls in pages or components.
-- The Axios interceptor in `apiClient.ts` handles JWT refresh automatically — do not duplicate refresh logic.
+- `apiClient.ts` attaches the current JWT and active-company header and performs global unauthorized cleanup. The backend now exposes tested `POST /auth/refresh`, but automatic web refresh is not yet implemented; mobile refresh handling belongs to Gate 2.
+- Notifications use `NotificationPollingManager` (immediate REST hydration, then every 20 seconds). The WebSocket compatibility path is deliberately unavailable with close code `4403`; no frontend notification code constructs a WebSocket URL or places JWTs in it.
 - Every API service function should type both request params and response using `apiTypes.ts` or local types.
 - The active company header (`x-active-company-id`) is injected by the Axios instance — do not manually add it in service functions.
 

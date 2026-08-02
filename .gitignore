@@ -10,6 +10,9 @@ Backend/.env
 !Backend/.env.example
 !Backend/.env.production.example
 !Backend/.env.docker.example
+FrontEnd/.env
+FrontEnd/.env.*
+!FrontEnd/.env.example
 
 # Private keys (never commit)
 ffi_hr_key.pem
@@ -62,4 +65,9 @@ output/
 scripts/
 graphify-out/
 Backend/graphify-out/
+Backend/private_uploads/
+recruiting_outputs/
+git_status.txt
+git_status_cmd.txt
+structure.txt
 exports/

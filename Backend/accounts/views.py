@@ -1,12 +1,10 @@
-from datetime import timedelta
-
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
-from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from admin_portal.models import SystemSettings
+from audit.utils import audit
 from core.responses import error, success
 from organization.services import (
     get_active_organization_for_request,
@@ -16,9 +14,11 @@ from organization.services import (
     user_has_all_company_access,
 )
 
-from .permissions import get_role
+from .authentication import RefreshEndpointAuthentication
 from .password_policy import validate_password_against_policy
-from .serializers import ChangePasswordSerializer, LoginSerializer
+from .permissions import get_role
+from .security import blacklist_outstanding_refresh_tokens
+from .serializers import ChangePasswordSerializer, LoginSerializer, VersionedTokenRefreshSerializer
 from .throttles import LoginRateThrottle
 
 
@@ -32,18 +32,16 @@ class LoginView(APIView):
 
         user = s.validated_data["user"]
         refresh = RefreshToken.for_user(user)
-        access_token = refresh.access_token
-        session_timeout_minutes = SystemSettings.get_solo().session_timeout_minutes
-        access_token.set_exp(lifetime=timedelta(minutes=session_timeout_minutes))
-        access = str(access_token)
-
-        from audit.utils import audit
+        refresh["token_version"] = user.auth_token_version
+        access = str(refresh.access_token)
 
         audit(
             request,
             action="login_success",
-            entity="auth",
+            entity="User",
+            entity_id=user.pk,
             metadata={"email": user.email},
+            actor=user,
         )
 
         accessible_orgs = get_user_accessible_organizations(user)
@@ -52,6 +50,8 @@ class LoginView(APIView):
         return success(
             {
                 "token": access,
+                "access": access,
+                "refresh": str(refresh),
                 "user": {
                     "id": str(user.id),
                     "email": user.email,
@@ -64,39 +64,64 @@ class LoginView(APIView):
         )
 
 
+class TokenRefreshView(APIView):
+    authentication_classes = [RefreshEndpointAuthentication]
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = VersionedTokenRefreshSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return success(serializer.validated_data)
+
+
 class ChangePasswordView(APIView):
     def post(self, request):
         s = ChangePasswordSerializer(data=request.data)
         s.is_valid(raise_exception=True)
 
-        user = request.user
-        if not user.check_password(s.validated_data["current_password"]):
-            return error("Invalid current password", status=422)
+        with transaction.atomic():
+            user = type(request.user).objects.select_for_update().get(pk=request.user.pk)
+            if not user.check_password(s.validated_data["current_password"]):
+                return error("Invalid current password", status=422)
 
-        try:
-            validate_password_against_policy(s.validated_data["new_password"], user=user)
-        except DjangoValidationError as e:
-            return error("Validation error", {"new_password": list(e.messages)}, status=422)
+            try:
+                validate_password_against_policy(s.validated_data["new_password"], user=user)
+            except DjangoValidationError as e:
+                return error("Validation error", {"new_password": list(e.messages)}, status=422)
 
-        user.set_password(s.validated_data["new_password"])
-        user.save(update_fields=["password"])
+            user.set_password(s.validated_data["new_password"])
+            user.auth_token_version += 1
+            user.save(update_fields=["password", "auth_token_version"])
+            blacklist_outstanding_refresh_tokens(user)
+
+        audit(
+            request,
+            action="password_changed",
+            entity="User",
+            entity_id=user.pk,
+            metadata={"revoked_all_sessions": True},
+            actor=user,
+        )
 
         return success({})
 
 
 class LogoutView(APIView):
-    """
-    If you only return access token from login, logout can still invalidate
-    ALL refresh tokens for this user (global logout).
-    """
-
     def post(self, request):
-        # blacklist all outstanding refresh tokens for the user
-        for t in OutstandingToken.objects.filter(user=request.user):
-            try:
-                BlacklistedToken.objects.get_or_create(token=t)
-            except Exception:
-                pass
+        with transaction.atomic():
+            user = type(request.user).objects.select_for_update().get(pk=request.user.pk)
+            user.auth_token_version += 1
+            user.save(update_fields=["auth_token_version"])
+            blacklist_outstanding_refresh_tokens(user)
+
+        audit(
+            request,
+            action="logout",
+            entity="User",
+            entity_id=user.pk,
+            metadata={"revoked_all_sessions": True},
+            actor=user,
+        )
         return success({})
 
 

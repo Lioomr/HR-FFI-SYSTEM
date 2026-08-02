@@ -50,6 +50,9 @@ services:
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/2
       CELERY_RESULT_BACKEND: redis://redis:6379/3
+      COGNEE_ENABLED: ${COGNEE_ENABLED:-false}
+      COGNEE_BASE_URL: ${COGNEE_BASE_URL:-http://cognee:8000}
+      COGNEE_API_KEY: ${COGNEE_API_KEY:-}
     depends_on:
       db:
         condition: service_healthy
@@ -63,6 +66,44 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+
+  cognee:
+    image: cognee/cognee:main
+    container_name: ffi_hr_cognee
+    restart: unless-stopped
+    profiles: ["memory"]
+    env_file:
+      - ./Backend/.env.docker
+    environment:
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      DB_PROVIDER: postgres
+      DB_HOST: cognee-db
+      DB_PORT: 5432
+      DB_USERNAME: cognee
+      DB_PASSWORD: cognee
+      DB_NAME: cognee
+    depends_on:
+      cognee-db:
+        condition: service_healthy
+    ports:
+      - "8001:8000"
+
+  cognee-db:
+    image: postgres:16-alpine
+    container_name: ffi_hr_cognee_db
+    restart: unless-stopped
+    profiles: ["memory"]
+    environment:
+      POSTGRES_DB: cognee
+      POSTGRES_USER: cognee
+      POSTGRES_PASSWORD: cognee
+    volumes:
+      - cognee_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cognee -d cognee"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   notification-worker:
     build:
@@ -186,3 +227,4 @@ volumes:
   evolution_redis_data:
   evolution_store:
   evolution_instances:
+  cognee_postgres_data:

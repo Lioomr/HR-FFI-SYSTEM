@@ -20,7 +20,7 @@ interface NotificationBellProps {
 /**
  * Header notification bell: real unread badge + compact recent dropdown.
  * Backed by the shared notification store, so it stays in sync with the
- * full inbox page and the live WebSocket feed.
+ * full inbox page and the authenticated REST polling runtime.
  */
 export default function NotificationBell({
   isMobile,
@@ -44,10 +44,10 @@ export default function NotificationBell({
   const bellLabel = t("notifications.bellLabel", "Notifications");
   const ariaLabel =
     unreadCount > 0
-      ? t("notifications.bellLabelUnread", "Notifications, {count} unread").replace(
-          "{count}",
-          String(unreadCount)
-        )
+      ? t(
+          "notifications.bellLabelUnread",
+          "Notifications, {count} unread",
+        ).replace("{count}", String(unreadCount))
       : bellLabel;
 
   const handleSelect = (n: NotificationDto) => {
@@ -56,7 +56,8 @@ export default function NotificationBell({
     navigateToNotification(n.action_url);
   };
 
-  const showConnState = connection === "connecting" || connection === "reconnecting";
+  const showConnState =
+    connection === "connecting" || connection === "reconnecting";
   const connLabel =
     connection === "connecting"
       ? t("notifications.connecting", "Connecting…")

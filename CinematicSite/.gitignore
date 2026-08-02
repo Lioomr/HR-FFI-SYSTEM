@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.vite/
+.playwright-cli/
+tmp/
+*.log
+.DS_Store
+Thumbs.db
+qa/screenshots/*.png
+!qa/screenshots/.gitkeep
+output/playwright/**/.playwright-cli/
+output/playwright/*.pid
+output/playwright/**/*.pid

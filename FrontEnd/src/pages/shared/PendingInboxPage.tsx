@@ -15,22 +15,7 @@ import { useI18n } from "../../i18n/useI18n";
 import { useAuthStore } from "../../auth/authStore";
 import { isHeadOfficeOrganization } from "../../utils/organizationContext";
 import { formatDateTime } from "../../utils/dateTime";
-
-const TYPE_COLORS: Record<PendingRequestType, string> = {
-  LEAVE: "blue",
-  LOAN: "gold",
-  ATTENDANCE: "orange",
-  ASSET: "purple",
-  EMPLOYEE_DELETION: "red",
-};
-
-const TYPE_LABEL_KEYS: Record<PendingRequestType, string> = {
-  LEAVE: "pendingInbox.requestType.LEAVE",
-  LOAN: "pendingInbox.requestType.LOAN",
-  ATTENDANCE: "pendingInbox.requestType.ATTENDANCE",
-  ASSET: "pendingInbox.requestType.ASSET",
-  EMPLOYEE_DELETION: "pendingInbox.requestType.EMPLOYEE_DELETION",
-};
+import { PENDING_TYPE_COLORS, PENDING_TYPE_LABEL_KEYS } from "../../utils/pendingRequests";
 
 interface Filters {
   request_type?: PendingRequestType;
@@ -119,8 +104,8 @@ export default function PendingInboxPage() {
       title: t("pendingInbox.col.requestType"),
       key: "request_type",
       render: (_, record) => (
-        <Tag color={TYPE_COLORS[record.request_type] ?? "default"}>
-          {t(TYPE_LABEL_KEYS[record.request_type], record.request_type_label)}
+        <Tag color={PENDING_TYPE_COLORS[record.request_type] ?? "default"}>
+          {t(PENDING_TYPE_LABEL_KEYS[record.request_type], record.request_type_label)}
         </Tag>
       ),
     },

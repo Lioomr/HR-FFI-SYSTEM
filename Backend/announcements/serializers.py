@@ -243,6 +243,24 @@ class AnnouncementCreateSerializer(serializers.ModelSerializer):
 
         return attrs
 
+    def validate_target_user(self, value):
+        if value is None:
+            return value
+        request = self.context.get("request")
+        if not request:
+            raise serializers.ValidationError("Request context is required.")
+        scoped_profiles = filter_queryset_by_company_scope(
+            EmployeeProfile.objects.filter(
+                user=value,
+                user__is_active=True,
+                employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+            ),
+            request,
+        )
+        if not scoped_profiles.exists():
+            raise serializers.ValidationError("Target user must be active and belong to the active company.")
+        return value
+
     def validate_target_user_ids(self, value):
         request = self.context.get("request")
         if not request:
@@ -273,5 +291,11 @@ class AnnouncementCreateSerializer(serializers.ModelSerializer):
         if value.size > max_size:
             max_size_mb = max_size / (1024 * 1024)
             raise serializers.ValidationError(f"PDF must be {max_size_mb:.0f} MB or smaller.")
+
+        position = value.tell()
+        signature = value.read(5)
+        value.seek(position)
+        if signature != b"%PDF-":
+            raise serializers.ValidationError("Attachment content is not a valid PDF file.")
 
         return value

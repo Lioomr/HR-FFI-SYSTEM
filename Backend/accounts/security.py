@@ -2,8 +2,15 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.utils import timezone
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 
 from .models import LoginAttempt
+
+
+def blacklist_outstanding_refresh_tokens(user):
+    outstanding_tokens = OutstandingToken.objects.select_for_update().filter(user=user)
+    for token in outstanding_tokens.iterator():
+        BlacklistedToken.objects.get_or_create(token=token)
 
 
 def get_client_ip(request):

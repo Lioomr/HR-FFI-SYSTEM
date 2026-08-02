@@ -98,7 +98,7 @@ export default function PageHeader({
               )}
             </Space>
             {(subtitle || secondarySubtitle) && (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: -2 }}>
+              <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, marginTop: -2 }}>
                 {subtitle && (
                   <Typography.Text
                     style={{ color: "#64748b", fontSize: 16, fontWeight: 500 }}

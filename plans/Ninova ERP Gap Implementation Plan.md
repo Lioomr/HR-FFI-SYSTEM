@@ -1,5 +1,7 @@
 # Ninova ERP Gap Implementation Plan
 
+> Documentation note (reviewed 2026-07-20): this is a delivery-gap backlog, not an API or security authority. Confirm current implementation and consult `SECURITY_POLICY.md`, `plans/Global API Rules (v1).txt`, and `plans/API Route Status Matrix.md` before executing an item.
+
 ## Status Legend
 
 - `done`: already implemented in the current HR system

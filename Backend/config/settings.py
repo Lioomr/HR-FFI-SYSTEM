@@ -103,6 +103,7 @@ INSTALLED_APPS = [
     "rents",
     "organization",
     "in_app_notifications",
+    "agent_memory",
 ]
 
 MIDDLEWARE = [
@@ -320,7 +321,7 @@ PAYROLL_GENERATE_PAYSLIPS_THROTTLE_RATE = "5/min"
 PAYROLL_EXPORT_THROTTLE_RATE = "10/min"
 
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": ("rest_framework_simplejwt.authentication.JWTAuthentication",),
+    "DEFAULT_AUTHENTICATION_CLASSES": ("accounts.authentication.VersionedJWTAuthentication",),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_FILTER_BACKENDS": ("django_filters.rest_framework.DjangoFilterBackend",),
     "DEFAULT_PAGINATION_CLASS": "core.pagination.StandardPagination",

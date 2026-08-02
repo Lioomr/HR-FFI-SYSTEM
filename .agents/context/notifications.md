@@ -115,7 +115,7 @@ NOTIFICATION_WORKER_READINESS_REQUEST_TIMEOUT_SECONDS
   - `PENDING_HR` -> HRManager/SystemAdmin groups
   - `PENDING_CEO` -> CEO approver users
 - WhatsApp numbers come from `EmployeeProfile.mobile`.
-- Provider calls run in the notification worker. Initial in-app/WebSocket delivery state is normally `pending`.
+- Provider calls run in the notification worker. Initial in-app delivery state is normally `pending`.
 - Temporary failures retry up to three times with exponential backoff and jitter; invalid recipient data is skipped.
 - Worker startup requires Redis and Evolution HTTP reachability when WhatsApp is enabled. A connected WhatsApp account is not
   required, and globally disabling WhatsApp skips Evolution readiness.
@@ -132,5 +132,5 @@ NOTIFICATION_WORKER_READINESS_REQUEST_TIMEOUT_SECONDS
 
 ## Frontend Notification UI
 
-- The persistent notification inbox consumes REST and `notification.created` WebSocket events.
+- The persistent notification inbox uses authenticated REST polling; WebSocket delivery is deferred and every handshake is rejected with `4403`.
 - Delivery status is read from the nested `deliveries` array; later worker outcomes are visible on REST refresh.

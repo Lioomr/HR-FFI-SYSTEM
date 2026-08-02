@@ -3,19 +3,16 @@ from unittest.mock import AsyncMock, patch
 
 from asgiref.sync import async_to_sync
 from celery.exceptions import Retry
-from channels.db import database_sync_to_async
-from channels.layers import get_channel_layer
 from channels.testing import WebsocketCommunicator
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.management import call_command
 from django.db import connection
-from django.test import Client, TestCase, TransactionTestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import resolve
 from django.utils import timezone
 from rest_framework.test import APIClient
-from rest_framework_simplejwt.tokens import AccessToken
 
 from announcements.models import Announcement
 from announcements.utils import send_announcement_in_app
@@ -30,7 +27,7 @@ from organization.models import OrganizationNode, UserOrganizationAccess
 from .dispatcher import dispatch_notification_channels
 from .models import Notification, NotificationDelivery
 from .serializers import NotificationSerializer
-from .services import create_notification, notification_group_name, with_delivery_details
+from .services import create_notification, with_delivery_details
 from .tasks import deliver_email_notification, deliver_whatsapp_notification
 
 User = get_user_model()
@@ -478,9 +475,15 @@ class NotificationApiTests(TestCase):
         self.assertEqual(resolve(f"/api/notifications/{self.owned.id}/read/").url_name, "read")
         self.assertEqual(resolve("/api/notifications/read-all/").url_name, "read-all")
 
-    @override_settings(SECURE_SSL_REDIRECT=True)
+    @override_settings(
+        SECURE_SSL_REDIRECT=True,
+        SECURE_PROXY_SSL_HEADER=("HTTP_X_FORWARDED_PROTO", "https"),
+    )
     def test_production_https_requests_are_not_redirected(self):
-        response = self.client.get("/api/notifications/")
+        response = self.client.get(
+            "/api/notifications/",
+            HTTP_X_FORWARDED_PROTO="https",
+        )
         self.assertEqual(response.status_code, 200)
         self.assertNotIn(response.status_code, {301, 302, 307, 308})
 
@@ -689,111 +692,30 @@ class NotificationCleanupTests(TestCase):
         self.assertTrue(Notification.objects.filter(pk=recent.pk).exists())
 
 
-@override_settings(CHANNEL_LAYERS=IN_MEMORY_CHANNELS)
-class NotificationWebSocketTests(TransactionTestCase):
-    reset_sequences = True
-
-    def setUp(self):
-        company = make_company("COMP-A")
-        self.user_one = make_user("ws-one@example.com", company)
-        self.user_two = make_user("ws-two@example.com", company)
-
-    def test_jwt_authentication_and_user_isolation(self):
+class NotificationWebSocketDeferredTests(SimpleTestCase):
+    def assert_realtime_deferred(self, path, headers=None):
         async def scenario():
-            token_one = str(AccessToken.for_user(self.user_one))
-            token_two = str(AccessToken.for_user(self.user_two))
-            socket_one = WebsocketCommunicator(application, f"/ws/notifications/?access_token={token_one}")
-            socket_two = WebsocketCommunicator(application, f"/ws/notifications/?access_token={token_two}")
-            self.assertTrue((await socket_one.connect())[0])
-            self.assertTrue((await socket_two.connect())[0])
-
-            await get_channel_layer().group_send(
-                notification_group_name(self.user_one.id),
-                {
-                    "type": "notification.created",
-                    "notification": {"id": 99, "title": "Private"},
-                    "unread_count": 3,
-                },
-            )
-            payload = await socket_one.receive_json_from()
-            self.assertEqual(payload["type"], "notification.created")
-            self.assertEqual(payload["unread_count"], 3)
-            self.assertTrue(await socket_two.receive_nothing(timeout=0.1))
-            await socket_one.disconnect()
-            await socket_two.disconnect()
-
-        async_to_sync(scenario)()
-
-    def test_missing_or_invalid_token_is_rejected(self):
-        async def scenario():
-            communicator = WebsocketCommunicator(application, "/ws/notifications/?access_token=invalid")
+            communicator = WebsocketCommunicator(application, path, headers=headers)
             connected, close_code = await communicator.connect()
             self.assertFalse(connected)
-            self.assertEqual(close_code, 4401)
+            self.assertEqual(close_code, 4403)
 
         async_to_sync(scenario)()
 
-    def test_notification_created_payload_includes_deliveries(self):
-        async def scenario():
-            token = str(AccessToken.for_user(self.user_one))
-            communicator = WebsocketCommunicator(application, f"/ws/notifications/?access_token={token}")
-            self.assertTrue((await communicator.connect())[0])
-            await database_sync_to_async(dispatch_notification_channels)(
-                recipient=self.user_one,
-                event_key="websocket.delivery",
-                title="WebSocket delivery",
-                message="Delivery details should be present.",
-                category=Notification.Category.SYSTEM,
-                deduplication_key="websocket.delivery:1",
-            )
-            payload = await communicator.receive_json_from()
-            deliveries = payload["notification"]["deliveries"]
-            self.assertEqual(deliveries[0]["channel"], "whatsapp")
-            self.assertEqual(deliveries[0]["status"], "pending")
-            self.assertEqual(deliveries[0]["provider_message_id"], "")
-            await communicator.disconnect()
+    def test_compatibility_path_is_preserved_but_unavailable(self):
+        self.assert_realtime_deferred("/ws/notifications/")
 
-        with patch("in_app_notifications.tasks.deliver_whatsapp_notification.delay") as delay:
-            async_to_sync(scenario)()
-        delay.assert_called_once()
+    def test_access_and_refresh_query_tokens_are_never_accepted(self):
+        self.assert_realtime_deferred("/ws/notifications/?access_token=header.payload.signature")
+        self.assert_realtime_deferred("/ws/notifications/?token=header.payload.signature")
+        self.assert_realtime_deferred("/ws/notifications/?refresh=header.payload.signature")
 
-    def test_employee_websocket_payload_only_includes_public_delivery_fields(self):
-        self.user_one.groups.clear()
-        self.user_one.groups.add(Group.objects.get_or_create(name="Employee")[0])
-
-        async def scenario():
-            token = str(AccessToken.for_user(self.user_one))
-            communicator = WebsocketCommunicator(application, f"/ws/notifications/?access_token={token}")
-            self.assertTrue((await communicator.connect())[0])
-            await database_sync_to_async(dispatch_notification_channels)(
-                recipient=self.user_one,
-                event_key="websocket.employee.delivery",
-                title="Employee WebSocket delivery",
-                message="Delivery details must remain public-only.",
-                category=Notification.Category.SYSTEM,
-                deduplication_key="websocket.employee.delivery:1",
-            )
-            payload = await communicator.receive_json_from()
-            delivery = payload["notification"]["deliveries"][0]
-            self.assertEqual(set(delivery), {"channel", "status"})
-            await communicator.disconnect()
-
-        with patch("in_app_notifications.tasks.deliver_whatsapp_notification.delay"):
-            async_to_sync(scenario)()
-
-    def test_session_authentication_is_accepted(self):
-        client = Client()
-        client.force_login(self.user_one)
-        cookie = client.cookies["sessionid"].value
-
-        async def scenario():
-            communicator = WebsocketCommunicator(
-                application,
-                "/ws/notifications/",
-                headers=[(b"cookie", f"sessionid={cookie}".encode("ascii"))],
-            )
-            connected, _ = await communicator.connect()
-            self.assertTrue(connected)
-            await communicator.disconnect()
-
-        async_to_sync(scenario)()
+    def test_authorization_header_and_session_cookie_do_not_enable_realtime(self):
+        self.assert_realtime_deferred(
+            "/ws/notifications/",
+            headers=[(b"authorization", b"Bearer header.payload.signature")],
+        )
+        self.assert_realtime_deferred(
+            "/ws/notifications/",
+            headers=[(b"cookie", b"sessionid=opaque-session")],
+        )

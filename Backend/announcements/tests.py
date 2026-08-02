@@ -11,6 +11,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from audit.models import AuditLog
 from employees.models import EmployeeProfile
 from organization.models import OrganizationNode, UserOrganizationAccess
 
@@ -248,13 +249,107 @@ class MeetingAnnouncementTests(APITestCase):
         )
         token = signing.dumps({"announcement_id": announcement.id}, salt=ANNOUNCEMENT_ATTACHMENT_SALT)
 
-        response = self.client.get(
+        anonymous_response = self.client.get(
             f"/api/announcements/{announcement.id}/attachment-public",
             {"token": token, "download": 1},
         )
+        self.assertEqual(anonymous_response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+        self.client.force_authenticate(self.employee_one)
+        response = self.client.get(
+            f"/api/announcements/{announcement.id}/attachment-public",
+            {"token": token, "download": 1},
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response["Content-Type"], "application/octet-stream")
         self.assertIn('attachment; filename="notice.pdf"', response["Content-Disposition"])
+        self.assertEqual(response["X-Content-Type-Options"], "nosniff")
+        self.assertEqual(response["Deprecation"], "true")
+        self.assertTrue(
+            AuditLog.objects.filter(
+                action="announcement_attachment_downloaded",
+                entity_id=str(announcement.id),
+                actor=self.employee_one,
+            ).exists()
+        )
+
+    def test_employee_list_detail_and_attachment_are_active_company_scoped(self):
+        own = Announcement.objects.create(
+            company=self.company,
+            title="Own company notice",
+            content="Visible",
+            target_roles=["EMPLOYEE"],
+            publish_to_dashboard=True,
+            created_by=self.hr,
+            attachment=SimpleUploadedFile("own.pdf", b"%PDF-1.4 own", content_type="application/pdf"),
+        )
+        foreign = Announcement.objects.create(
+            company=self.other_company,
+            title="Other company notice",
+            content="Hidden",
+            target_roles=["EMPLOYEE"],
+            publish_to_dashboard=True,
+            created_by=self.hr,
+            attachment=SimpleUploadedFile("foreign.pdf", b"%PDF-1.4 foreign", content_type="application/pdf"),
+        )
+        self.client.force_authenticate(self.employee_one)
+
+        list_response = self.client.get(self.url, HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id))
+        own_detail = self.client.get(f"{self.url}/{own.id}", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id))
+        foreign_detail = self.client.get(f"{self.url}/{foreign.id}", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id))
+        foreign_attachment = self.client.get(
+            f"{self.url}/{foreign.id}/attachment/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id)
+        )
+
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        serialized = str(list_response.data)
+        self.assertIn("Own company notice", serialized)
+        self.assertNotIn("Other company notice", serialized)
+        self.assertEqual(own_detail.status_code, status.HTTP_200_OK)
+        self.assertEqual(foreign_detail.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(foreign_attachment.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_authenticated_attachment_is_forced_download_with_security_headers(self):
+        announcement = Announcement.objects.create(
+            company=self.company,
+            title="Attachment",
+            content="Visible",
+            target_roles=["EMPLOYEE"],
+            publish_to_dashboard=True,
+            created_by=self.hr,
+            attachment=SimpleUploadedFile("notice.pdf", b"%PDF-1.4 test", content_type="application/pdf"),
+        )
+        self.client.force_authenticate(self.employee_one)
+
+        response = self.client.get(
+            f"{self.url}/{announcement.id}/attachment/",
+            {"download": 0},
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response["Content-Type"], "application/octet-stream")
+        self.assertIn("attachment", response["Content-Disposition"].lower())
+        self.assertEqual(response["X-Content-Type-Options"], "nosniff")
+        self.assertEqual(response["Cache-Control"], "private, no-store")
+
+    def test_attachment_rejects_pdf_extension_with_invalid_content(self):
+        self.client.force_authenticate(self.hr)
+        response = self.client.post(
+            self.url,
+            {
+                "title": "Invalid PDF",
+                "content": "Invalid",
+                "target_roles": ["EMPLOYEE"],
+                "attachment": SimpleUploadedFile("notice.pdf", b"not a pdf", content_type="application/pdf"),
+            },
+            format="multipart",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
 
     @override_settings(BACKEND_PUBLIC_URL="http://localhost:8000", FRONTEND_URL="http://localhost:5173")
     def test_attachment_email_link_uses_backend_public_url(self):

@@ -9,6 +9,7 @@ from rest_framework.test import APIClient
 from core.models import WorkflowInstance
 from employees.models import EmployeeProfile
 from hr_reference.models import Department, Position
+from organization.models import OrganizationNode, UserOrganizationAccess
 
 from .models import AttendanceCorrectionRequest, AttendanceRecord
 
@@ -22,11 +23,18 @@ class AttendanceCorrectionRequestTests(TestCase):
         self.manager_group, _ = Group.objects.get_or_create(name="Manager")
         self.hr_group, _ = Group.objects.get_or_create(name="HRManager")
 
+        self.company = OrganizationNode.objects.create(
+            code="ATTENDANCE_CORRECTIONS",
+            name="Attendance Corrections Company",
+            node_type=OrganizationNode.NodeType.COMPANY,
+        )
+
         self.department = Department.objects.create(code="ENG", name="Engineering")
         self.position = Position.objects.create(code="DEV", name="Developer")
 
         self.hr_user = User.objects.create_user(email="hr-corrections@ffi.com", password="password")
         self.hr_user.groups.add(self.hr_group)
+        UserOrganizationAccess.objects.create(user=self.hr_user, organization=self.company)
         self.manager_user = User.objects.create_user(email="manager-corrections@ffi.com", password="password")
         self.manager_user.groups.add(self.manager_group)
         self.employee_user = User.objects.create_user(email="employee-corrections@ffi.com", password="password")
@@ -36,6 +44,7 @@ class AttendanceCorrectionRequestTests(TestCase):
 
         self.manager_profile = EmployeeProfile.objects.create(
             user=self.manager_user,
+            company=self.company,
             employee_id="MGR-CORR",
             department_ref=self.department,
             position_ref=self.position,
@@ -43,6 +52,7 @@ class AttendanceCorrectionRequestTests(TestCase):
         )
         self.employee_profile = EmployeeProfile.objects.create(
             user=self.employee_user,
+            company=self.company,
             employee_id="EMP-CORR",
             department_ref=self.department,
             position_ref=self.position,
@@ -51,6 +61,7 @@ class AttendanceCorrectionRequestTests(TestCase):
         )
         self.no_manager_profile = EmployeeProfile.objects.create(
             user=self.no_manager_user,
+            company=self.company,
             employee_id="EMP-NOMGR-CORR",
             department_ref=self.department,
             position_ref=self.position,
