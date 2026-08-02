@@ -1,8 +1,10 @@
 # 🔐 HR-FFI-SYSTEM — Security Governance Policy
 
-Version: 1.0  
+Version: 2.0  
 Status: Enforced  
-Applies To: Backend (Django), Frontend (React), DevOps  
+Last Reviewed: 2026-07-20  
+Review Owner: Project maintainers  
+Applies To: Backend (Django), Web Frontend (React), Mobile Clients, DevOps  
 Mandatory For: Codex, Antigravity, All Contributors  
 
 ---
@@ -42,9 +44,13 @@ Violation Severity: CRITICAL
 - No plaintext passwords returned in API responses.
 - No reset tokens returned to frontend.
 - Tokens must never be logged.
-- Tokens must only be accessed through `tokenStorage.ts`.
+- Web tokens must only be accessed through `FrontEnd/src/services/api/tokenStorage.ts`; the current web implementation uses `sessionStorage` and clears legacy localStorage keys on logout.
+- Mobile tokens must use platform-protected Android Keystore/iOS Keychain storage, such as Expo SecureStore. Never use AsyncStorage, plain files, or browser localStorage for tokens.
 - Logout must purge all storage layers.
 - Idle timeout must remain active.
+- Access tokens expire after 15 minutes. Refresh tokens expire after 14 days, rotate on use, and the used token is blacklisted.
+- Login returns backward-compatible `token`/`access` values and a refresh token. Refresh, access, and audit payloads must never expose raw token details in errors or logs.
+- Logout and password change revoke every prior access and refresh token for the account through the server-enforced `token_version` claim and refresh blacklist. Tokens without the required version claim are rejected.
 
 Violation Severity: CRITICAL
 
@@ -65,9 +71,12 @@ Violation Severity: CRITICAL
 
 - Extension allowlist required.
 - Max file size required.
+- Claimed MIME type and file signature/content validation are required for protected employee and announcement uploads.
 - Files must never be executed.
 - Files must be served as `application/octet-stream`.
 - No inline rendering of uploaded content.
+- Private downloads require authentication, ownership/role authorization, active-company scope, `Content-Disposition: attachment`, `X-Content-Type-Options: nosniff`, private no-store caching, and a successful-download audit where the domain is sensitive.
+- Compatibility download links must never be anonymous by default. The deprecated announcement `attachment-public` route requires normal authentication, company scope, and its signed token.
 
 Violation Severity: HIGH
 
@@ -152,8 +161,6 @@ Every privilege-sensitive action must be validated server-side.
 These are allowed improvements:
 
 - Migration to HttpOnly cookies
-- Short-lived access tokens
-- Refresh token rotation enforcement
 - CSP via HTTP header instead of meta
 - Permissions-Policy header
 - AV scanning for uploads
@@ -178,3 +185,22 @@ the change must be rejected immediately.
 
 Approved By: Security Lead  
 Effective Immediately
+
+## Mobile Security Addendum
+
+- Mobile communicates with production APIs only over TLS.
+- Server-side authentication, authorization, ownership, and company scoping remain authoritative.
+- Do not put JWTs, salary, identity, medical, or document data in push payloads, URLs, analytics, logs, crash reports, or clipboard contents.
+- Sensitive screens and payslip/document access require authenticated requests; biometric/local re-authentication may be added but never replaces server authorization.
+- Do not expose sensitive content in screenshots, app-switcher previews, or uncontrolled public downloads where platform controls permit protection.
+- Deep links must be allowlisted and must never carry access tokens.
+- Avoid WebViews for authenticated HR content unless explicitly approved by security review.
+- Root/jailbreak and tampering signals are risk controls, not the authorization boundary.
+- Do not introduce JWTs in query strings. The notification WebSocket compatibility path is currently deferred and rejects every handshake pre-accept with code `4403`; it accepts no JWT or session authentication.
+- Web and mobile notifications use authenticated REST polling until a reviewed opaque, one-time, short-lived, company-bound realtime credential can enforce token expiry, logout/password revocation, and organization-change disconnects.
+- Push notifications must contain only privacy-safe summaries and must be revocable per device.
+
+## Change history
+
+- 2026-07-20: Added mobile scope, native secure storage, push privacy, realtime-token, and mobile platform controls; corrected web token-storage guidance.
+- 2026-07-20: Gate 1 fixed the 15-minute access/14-day rotating refresh lifecycle, immediate global logout/password revocation, legacy-token rejection, private upload/download controls, and deferred URL-token WebSockets in favor of REST polling.

@@ -1,4 +1,7 @@
 Recommended Full-Stack Tools (Production-ready)
+Status: Architecture baseline; current implementation takes precedence (reviewed 2026-07-20).
+
+Current choices: Django 5.2 + DRF + PostgreSQL 16; React 19 + TypeScript + Vite + Ant Design + React Router v7; JWT authentication; Docker; Redis/Channels/Celery where configured. Check `AGENTS.md` and `.agents/context/` before introducing alternatives.
 Backend (API + Admin)
 
 Python + Django
@@ -33,7 +36,7 @@ Pick one of these two paths:
 
 React + TypeScript (best for role-based dashboards)
 
-UI: MUI or Ant Design (fast enterprise UI)
+UI: Ant Design (current project choice; do not introduce MUI for existing modules)
 
 Forms: react-hook-form + zod/yup
 

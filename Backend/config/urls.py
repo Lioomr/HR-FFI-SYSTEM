@@ -39,6 +39,7 @@ urlpatterns = [
     path("api/", include("announcements.urls")),
     path("api/core/", include("core.urls")),
     path("api/notifications/", include("in_app_notifications.urls")),
+    path("api/agent-memory/", include("agent_memory.urls")),
     path("api/integrations/whatsapp/status/", WhatsAppIntegrationStatusView.as_view()),
     path("api/integrations/whatsapp/connect/", WhatsAppIntegrationConnectView.as_view()),
     path("api/integrations/whatsapp/qr/", WhatsAppIntegrationQrView.as_view()),

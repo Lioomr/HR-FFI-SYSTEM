@@ -11,11 +11,11 @@ import { unwrapEnvelope } from "../utils/dataUtils";
 export type NotificationFilter = "all" | "unread";
 
 /**
- * Live connection status for the notification transport.
- * - `connecting`   — first WebSocket attempt in flight
- * - `connected`    — WebSocket open, real-time delivery active
- * - `reconnecting` — WebSocket dropped, retrying with backoff (polling fallback active)
- * - `offline`      — transport stopped (logout / no auth); UI hidden in this state
+ * Runtime status for the authenticated REST polling transport.
+ * - `connecting`   — initial poll is in flight
+ * - `connected`    — polling is active
+ * - `reconnecting` — a poll failed and the next interval will retry
+ * - `offline`      — polling stopped (logout / no auth); UI hidden in this state
  */
 export type ConnectionStatus =
   | "connecting"
@@ -50,7 +50,10 @@ interface NotificationState {
   /** `${userId}:${companyId}` — guards against cross-scope data leaking. */
   scopeKey: string | null;
 
-  ensureScope: (userId: string | null, companyId: string | number | null) => void;
+  ensureScope: (
+    userId: string | null,
+    companyId: string | number | null,
+  ) => void;
   reset: () => void;
 
   fetchRecent: () => Promise<void>;
@@ -65,7 +68,7 @@ interface NotificationState {
   markRead: (id: number | string) => Promise<void>;
   markAllRead: () => Promise<void>;
 
-  /** Insert or update a notification arriving over the WebSocket (dedup by id). */
+  /** Insert or update a notification obtained by the polling runtime (dedup by id). */
   applyIncoming: (notification: NotificationDto, unreadCount?: number) => void;
   setConnection: (connection: ConnectionStatus) => void;
 }
@@ -92,7 +95,7 @@ const initialState = {
 /** Merge a list into an accumulator, de-duplicating by notification id. */
 function dedupeById(
   existing: NotificationDto[],
-  incoming: NotificationDto[]
+  incoming: NotificationDto[],
 ): NotificationDto[] {
   const byId = new Map<number, NotificationDto>();
   for (const n of existing) byId.set(n.id, n);
@@ -102,7 +105,10 @@ function dedupeById(
 
 function errorMessage(err: unknown, fallback: string): string {
   if (err && typeof err === "object") {
-    const anyErr = err as { message?: string; response?: { data?: { message?: string } } };
+    const anyErr = err as {
+      message?: string;
+      response?: { data?: { message?: string } };
+    };
     return anyErr.response?.data?.message || anyErr.message || fallback;
   }
   return fallback;
@@ -160,7 +166,9 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
       });
       const data = unwrapEnvelope(res);
       set((prev) => ({
-        items: append ? dedupeById(prev.items, data.items ?? []) : data.items ?? [],
+        items: append
+          ? dedupeById(prev.items, data.items ?? [])
+          : (data.items ?? []),
         page: data.page ?? page,
         totalPages: data.total_pages ?? 1,
         count: data.count ?? (data.items ?? []).length,
@@ -187,12 +195,14 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
         ? { ...n, is_read: true, read_at: n.read_at ?? nowIso }
         : n;
     const wasUnread = [...get().recent, ...get().items].some(
-      (n) => n.id === numericId && !n.is_read
+      (n) => n.id === numericId && !n.is_read,
     );
     set((prev) => ({
       recent: prev.recent.map(flip),
       items: prev.items.map(flip),
-      unreadCount: wasUnread ? Math.max(0, prev.unreadCount - 1) : prev.unreadCount,
+      unreadCount: wasUnread
+        ? Math.max(0, prev.unreadCount - 1)
+        : prev.unreadCount,
     }));
 
     try {
@@ -234,13 +244,12 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
         : [notification, ...prev.recent].slice(0, RECENT_LIMIT);
 
       // Only fold into the inbox list when it belongs to the active filter.
-      const belongsToFilter =
-        prev.filter === "all" || !notification.is_read;
+      const belongsToFilter = prev.filter === "all" || !notification.is_read;
       const existsInItems = prev.items.some((n) => n.id === notification.id);
       let items = prev.items;
       if (existsInItems) {
         items = prev.items.map((n) =>
-          n.id === notification.id ? notification : n
+          n.id === notification.id ? notification : n,
         );
       } else if (belongsToFilter && prev.page === 1) {
         items = [notification, ...prev.items];

@@ -38,6 +38,7 @@ class User(AbstractUser):
     username = None  # remove username
     email = models.EmailField(_("email address"), unique=True)
     full_name = models.CharField(max_length=255, blank=True)
+    auth_token_version = models.PositiveBigIntegerField(default=1, editable=False)
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []  # createsuperuser will only ask for email + password

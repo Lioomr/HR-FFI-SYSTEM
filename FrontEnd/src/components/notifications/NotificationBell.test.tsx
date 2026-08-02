@@ -20,7 +20,10 @@ vi.mock("../../services/api/notificationsApi", () => ({
     .mockResolvedValue({ status: "success", data: { unread_count: 0 } }),
   markAllNotificationsRead: vi
     .fn()
-    .mockResolvedValue({ status: "success", data: { updated_count: 0, unread_count: 0 } }),
+    .mockResolvedValue({
+      status: "success",
+      data: { updated_count: 0, unread_count: 0 },
+    }),
 }));
 
 import NotificationBell from "./NotificationBell";
@@ -28,7 +31,9 @@ import type { NotificationDto } from "../../services/api/notificationsApi";
 import { useNotificationStore } from "../../stores/notificationStore";
 import { useI18nStore } from "../../i18n/i18nStore";
 
-function makeNotification(overrides: Partial<NotificationDto> = {}): NotificationDto {
+function makeNotification(
+  overrides: Partial<NotificationDto> = {},
+): NotificationDto {
   return {
     id: 1,
     title: "Leave approved",
@@ -61,7 +66,7 @@ afterEach(() => {
 function openPanel() {
   // Language-agnostic: the bell is the only button that opens a dialog popup.
   const bell = document.querySelector(
-    'button[aria-haspopup="dialog"]'
+    'button[aria-haspopup="dialog"]',
   ) as HTMLButtonElement;
   fireEvent.click(bell);
 }
@@ -71,7 +76,7 @@ describe("NotificationBell", () => {
     useNotificationStore.setState({ unreadCount: 5 });
     render(<NotificationBell />);
     expect(
-      screen.getByRole("button", { name: /5 unread/i })
+      screen.getByRole("button", { name: /5 unread/i }),
     ).toBeInTheDocument();
   });
 
@@ -105,7 +110,9 @@ describe("NotificationBell", () => {
   it("marks an item read and navigates to its deep link", () => {
     const markRead = vi.fn();
     useNotificationStore.setState({
-      recent: [makeNotification({ id: 7, action_url: "/employee/leave/requests" })],
+      recent: [
+        makeNotification({ id: 7, action_url: "/employee/leave/requests" }),
+      ],
       markRead,
     });
     render(<NotificationBell />);
@@ -158,7 +165,9 @@ describe("NotificationBell", () => {
   it("activates a notification with the keyboard (native button)", () => {
     const markRead = vi.fn();
     useNotificationStore.setState({
-      recent: [makeNotification({ id: 11, action_url: "/employee/leave/requests" })],
+      recent: [
+        makeNotification({ id: 11, action_url: "/employee/leave/requests" }),
+      ],
       markRead,
     });
     render(<NotificationBell />);
@@ -203,7 +212,7 @@ describe("NotificationBell", () => {
     fireEvent.click(screen.getByRole("button", { name: /Suspicious link/i }));
     expect(navigateMock).not.toHaveBeenCalled();
     expect(
-      await screen.findByText(/blocked for your security/i)
+      await screen.findByText(/blocked for your security/i),
     ).toBeInTheDocument();
   });
 
@@ -222,7 +231,7 @@ describe("NotificationBell", () => {
     fireEvent.click(screen.getByRole("button", { name: /XSS attempt/i }));
     expect(navigateMock).not.toHaveBeenCalled();
     expect(
-      await screen.findByText(/blocked for your security/i)
+      await screen.findByText(/blocked for your security/i),
     ).toBeInTheDocument();
   });
 
@@ -238,7 +247,7 @@ describe("NotificationBell", () => {
     fireEvent.click(screen.getByRole("button", { name: /Leave approved/i }));
     expect(navigateMock).not.toHaveBeenCalled();
     expect(
-      await screen.findByText("تم حظر هذا الرابط للحفاظ على أمانك.")
+      await screen.findByText("تم حظر هذا الرابط للحفاظ على أمانك."),
     ).toBeInTheDocument();
   });
 
@@ -251,12 +260,12 @@ describe("NotificationBell", () => {
     fireEvent.click(screen.getByRole("button", { name: /Leave approved/i }));
     expect(navigateMock).not.toHaveBeenCalled();
     expect(
-      screen.queryByText(/blocked for your security/i)
+      screen.queryByText(/blocked for your security/i),
     ).not.toBeInTheDocument();
   });
 
-  it("renders delivery status from a WebSocket-shaped payload", () => {
-    // WebSocket `notification.created` frames may carry a partial delivery
+  it("renders delivery status from a partial delivery payload", () => {
+    // Historical REST records may carry a partial delivery shape.
     // (only channel + status). The bell must still render it.
     useNotificationStore.setState({
       recent: [

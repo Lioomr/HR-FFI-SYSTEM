@@ -1101,15 +1101,17 @@ export default function BaseLayout() {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: isMobile ? "0 16px" : "0 28px",
+            padding: isMobile ? "0 12px" : "0 28px",
+            gap: 12,
             height: 72,
             position: "sticky",
             top: 0,
             zIndex: 50,
           }}
         >
-          {/* Left: hamburger + page title */}
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          {/* Left: hamburger + page title. Shrinks (and truncates) before the
+              account pill so narrow viewports never scroll sideways. */}
+          <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 10 : 16, minWidth: 0, flexShrink: 1 }}>
             {isMobile && (
               <Button
                 icon={<MenuOutlined />}
@@ -1135,6 +1137,10 @@ export default function BaseLayout() {
                 letterSpacing: "0.02em",
                 textTransform: "uppercase",
                 fontFamily: "'Outfit', sans-serif",
+                minWidth: 0,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
               }}
             >
               {getTitle(location.pathname, t)}
@@ -1149,6 +1155,8 @@ export default function BaseLayout() {
               alignItems: "center",
               gap: isMobile ? 8 : 16,
               padding: isMobile ? "6px 10px" : "8px 16px",
+              minWidth: 0,
+              flexShrink: 1,
               borderRadius: 50,
               background: organizationTheme.shellBg,
               color: organizationTheme.text,
@@ -1164,7 +1172,9 @@ export default function BaseLayout() {
                   display: "flex",
                   alignItems: "center",
                   gap: 10,
-                  minWidth: isMobile ? 138 : 220,
+                  minWidth: 0,
+                  flex: "1 1 auto",
+                  maxWidth: isMobile ? undefined : 220,
                   padding: isMobile ? "4px 8px" : "6px 10px 6px 12px",
                   borderRadius: 18,
                   background: organizationTheme.selectBg,
@@ -1195,7 +1205,8 @@ export default function BaseLayout() {
                     label: org.node_type === "head_office" ? `${org.name} (Read only)` : org.name,
                   }))}
                   style={{
-                    minWidth: isMobile ? 110 : 172,
+                    minWidth: 0,
+                    flex: "1 1 auto",
                     fontWeight: 700,
                     fontSize: 13,
                     color: organizationTheme.text,
