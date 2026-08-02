@@ -71,3 +71,6 @@ git_status.txt
 git_status_cmd.txt
 structure.txt
 exports/
+
+# Leave PDF generated templates
+Backend/static/pdf_templates/

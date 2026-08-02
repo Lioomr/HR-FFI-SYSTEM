@@ -12,14 +12,22 @@ from rest_framework.test import APITestCase
 from core.models import DelegationRule
 from employees.models import EmployeeDocument, EmployeeProfile
 from leaves.models import LeaveRequest, LeaveType
+from organization.services import get_default_company
 
 User = get_user_model()
 
 
 class ManagerWorkflowTests(APITestCase):
     def setUp(self):
+        self.company = get_default_company()
+
         # Create Leave Type
-        self.leave_type = LeaveType.objects.create(name="Annual Leave", code="ANNUAL", is_active=True)
+        self.leave_type = LeaveType.objects.create(
+            company=self.company,
+            name="Annual Leave",
+            code="ANNUAL",
+            is_active=True,
+        )
 
         # Create Systems Admin Group
         self.admin_group = Group.objects.create(name="SystemAdmin")
@@ -33,6 +41,7 @@ class ManagerWorkflowTests(APITestCase):
         self.manager_user = User.objects.create_user(email="manager@example.com", password="password")
         self.manager_profile = EmployeeProfile.objects.create(
             user=self.manager_user,
+            company=self.company,
             employee_id="EMP-MGR",
             department="IT",
             job_title="Manager",
@@ -43,6 +52,7 @@ class ManagerWorkflowTests(APITestCase):
         self.employee_user = User.objects.create_user(email="employee@example.com", password="password")
         self.employee_profile = EmployeeProfile.objects.create(
             user=self.employee_user,
+            company=self.company,
             employee_id="EMP-001",
             department="IT",
             job_title="Developer",
@@ -301,6 +311,7 @@ class ManagerWorkflowTests(APITestCase):
     def test_manager_can_preview_leave_document(self):
         lr = LeaveRequest.objects.create(
             employee=self.employee_user,
+            company=self.company,
             leave_type=self.leave_type,
             start_date=date(2026, 6, 1),
             end_date=date(2026, 6, 5),
@@ -316,9 +327,28 @@ class ManagerWorkflowTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("manager_doc", response.get("Content-Disposition", ""))
 
+    def test_manager_can_download_leave_request_pdf(self):
+        lr = LeaveRequest.objects.create(
+            employee=self.employee_user,
+            company=self.company,
+            leave_type=self.leave_type,
+            start_date=date(2026, 6, 1),
+            end_date=date(2026, 6, 5),
+            status=LeaveRequest.RequestStatus.PENDING_MANAGER,
+            reason="Manager PDF",
+        )
+
+        self.client.force_authenticate(user=self.manager_user)
+        response = self.client.get(f"{self.manager_inbox_url}{lr.id}/pdf/?download=1")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertIn(f'leave_request_{lr.id}.pdf', response["Content-Disposition"])
+
     def test_hr_can_download_leave_document(self):
         lr = LeaveRequest.objects.create(
             employee=self.employee_user,
+            company=self.company,
             leave_type=self.leave_type,
             start_date=date(2026, 6, 1),
             end_date=date(2026, 6, 5),
@@ -333,6 +363,24 @@ class ManagerWorkflowTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("attachment", response.get("Content-Disposition", "").lower())
+
+    def test_hr_can_download_leave_request_pdf(self):
+        lr = LeaveRequest.objects.create(
+            employee=self.employee_user,
+            company=self.company,
+            leave_type=self.leave_type,
+            start_date=date(2026, 6, 1),
+            end_date=date(2026, 6, 5),
+            status=LeaveRequest.RequestStatus.PENDING_HR,
+            reason="HR PDF",
+        )
+
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.get(f"{self.requests_url}{lr.id}/pdf/?download=1")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertIn(f'leave_request_{lr.id}.pdf', response["Content-Disposition"])
 
     def test_ceo_manager_scope_is_direct_reports_only(self):
         direct_request = LeaveRequest.objects.create(

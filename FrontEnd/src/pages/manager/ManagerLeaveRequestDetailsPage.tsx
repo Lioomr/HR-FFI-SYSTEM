@@ -7,6 +7,7 @@ import {
     CloseCircleOutlined,
     DownloadOutlined,
     EyeOutlined,
+    FilePdfOutlined,
 } from "@ant-design/icons";
 
 import PageHeader from "../../components/ui/PageHeader";
@@ -18,6 +19,7 @@ import {
     approveLeaveRequestManager,
     getManagerLeaveRequest,
     getManagerLeaveRequestDocumentBlob,
+    getManagerLeaveRequestPdfBlob,
     rejectLeaveRequestManager,
     type ManagerLeaveRequest,
 } from "../../services/api/managerApi";
@@ -37,6 +39,7 @@ export default function ManagerLeaveRequestDetailsPage() {
     const [error, setError] = useState<string | null>(null);
     const [processing, setProcessing] = useState(false);
     const [documentLoading, setDocumentLoading] = useState(false);
+    const [pdfLoading, setPdfLoading] = useState(false);
     const [rejectModalVisible, setRejectModalVisible] = useState(false);
     const [rejectionReason, setRejectionReason] = useState("");
 
@@ -136,6 +139,26 @@ export default function ManagerLeaveRequestDetailsPage() {
         }
     };
 
+    const downloadPdf = async () => {
+        if (!request) return;
+        setPdfLoading(true);
+        try {
+            const blob = await getManagerLeaveRequestPdfBlob(request.id, true);
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `leave_request_${request.id}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(() => window.URL.revokeObjectURL(url), 5000);
+        } catch {
+            notification.error({ message: t("common.error"), description: t("leave.pdfDownloadFailed") });
+        } finally {
+            setPdfLoading(false);
+        }
+    };
+
     if (loading) return <LoadingState title={t("leave.loadingDetails")} />;
     if (error) return <ErrorState title={t("common.error")} description={error} onRetry={loadData} />;
     if (!request) return <ErrorState title={t("leave.notFound")} description={t("leave.notFoundDesc")} />;
@@ -157,6 +180,11 @@ export default function ManagerLeaveRequestDetailsPage() {
                     <Tag color={request.status?.toLowerCase() === "rejected" ? "red" : "orange"}>
                         {request.status?.replace("_", " ").toUpperCase()}
                     </Tag>
+                }
+                actions={
+                    <Button icon={<FilePdfOutlined />} onClick={downloadPdf} loading={pdfLoading}>
+                        {t("leave.downloadRequestPdf")}
+                    </Button>
                 }
             />
 
