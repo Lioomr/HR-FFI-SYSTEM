@@ -3,13 +3,14 @@
 ## Authentication
 
 - **Type**: JWT via `rest_framework_simplejwt`
-- **Access token lifetime**: 15 minutes
+- **Access token lifetime**: fixed at 15 minutes; login no longer expands it to the configurable UI session timeout
 - **Refresh token lifetime**: 14 days (rotated + blacklisted on use)
-- **Login endpoint**: `POST /auth/login` — returns `access` + `refresh` tokens
-- **Refresh endpoint**: `POST /auth/refresh`
-- **Logout**: blacklists refresh token
+- **Login endpoint**: `POST /auth/login` — preserves `data.token`, adds identical `data.access`, and returns rotating `data.refresh`
+- **Refresh endpoint**: `POST /auth/refresh` accepts `{refresh}` and returns `token`, `access`, and rotated `refresh`; used/revoked/reused tokens return a generic 401
+- **Revocation boundary**: JWTs carry `token_version`; `accounts.authentication.VersionedJWTAuthentication` compares it to `User.auth_token_version`. Tokens missing the claim are rejected.
+- **Logout/password change**: increment the account token version, blacklist every outstanding refresh token, emit audit events, and immediately invalidate all prior access/refresh tokens
 
-Frontend `FrontEnd/src/services/api/apiClient.ts` auto-refreshes tokens before expiry using an Axios interceptor.
+Frontend `FrontEnd/src/services/api/apiClient.ts` still clears authentication state after a non-login `401`; adding web automatic refresh is a separate client task. Mobile can use the approved refresh contract during Gate 2.
 
 ## Rate Limiting / Security
 
@@ -61,6 +62,7 @@ When a ViewSet overrides `get_permissions()`, every custom `@action` must be lis
 Login response includes:
 ```json
 {
+  "token": "...",
   "access": "...",
   "refresh": "...",
   "user": { ... },
@@ -73,4 +75,10 @@ All subsequent requests carry `x-active-company-id: <org_id>` header. Backend re
 
 ## Token Storage
 
-`FrontEnd/src/services/api/tokenStorage.ts` — manages access/refresh tokens in localStorage. Always clear on logout.
+`FrontEnd/src/services/api/tokenStorage.ts` — manages web authentication state in `sessionStorage` and clears legacy localStorage keys on logout. This is not a mobile storage pattern.
+
+Mobile clients must use platform-protected secure storage (Android Keystore/iOS Keychain, for example Expo SecureStore). Server-side permissions, ownership, and organization scoping remain authoritative.
+
+## Realtime
+
+`/ws/notifications/` is intentionally deferred and closes every handshake before acceptance with code `4403`. Notification clients use authenticated REST polling. Do not reintroduce JWT query/header or session WebSocket authentication; a future design requires a reviewed opaque company-bound ticket and connection-lifetime controls.

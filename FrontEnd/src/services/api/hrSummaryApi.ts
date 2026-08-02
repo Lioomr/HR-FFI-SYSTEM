@@ -1,5 +1,14 @@
 import { api } from "./apiClient";
 import type { ApiResponse, PaginatedResponse } from "./apiTypes";
+import type { PendingRequestItem } from "./pendingRequestsApi";
+
+/**
+ * Pending approval rows on the HR summary are produced by the same workflow
+ * builder as the pending inbox, plus a free-text reason.
+ */
+export interface HrPendingApprovalItem extends PendingRequestItem {
+  details?: string;
+}
 
 /**
  * HR Summary data structure
@@ -9,16 +18,7 @@ export interface HRSummary {
   active_employees: number;
   expiring_docs: number;
   pending_leaves: number;
-  pending_approvals: Array<{
-    id: number;
-    name: string;
-    request_type: "LEAVE" | "ATTENDANCE" | "LOAN" | "ASSET";
-    action: string;
-    time: string;
-    avatar: string;
-    review_path: string;
-    company_name?: string | null;
-  }>;
+  pending_approvals: HrPendingApprovalItem[];
   recent_activity: Array<{
     key: string;
     employee: string;

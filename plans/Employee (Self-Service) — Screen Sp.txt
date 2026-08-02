@@ -104,7 +104,7 @@ Optional: dashboard viewed
 
 API needs
 
-GET /employee/summary
+LEGACY ROUTE EXAMPLE — verify current implementation before use: GET /employee/summary
 
 4) My Profile (View Only)
 
@@ -157,7 +157,7 @@ Optional: profile viewed
 
 API needs
 
-GET /employee/profile
+LEGACY ROUTE EXAMPLE — verify current implementation before use: GET /employee/profile
 
 5) My Employment Status
 
@@ -186,7 +186,7 @@ Optional: status viewed
 
 API needs
 
-GET /employee/status
+LEGACY ROUTE EXAMPLE — verify current implementation before use: GET /employee/status
 
 6) My Payslips
 

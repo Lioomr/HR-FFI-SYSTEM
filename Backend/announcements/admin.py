@@ -12,7 +12,7 @@ class AnnouncementAdmin(admin.ModelAdmin):
         "is_active",
         "publish_to_dashboard",
         "publish_to_email",
-        "publish_to_sms",
+        "publish_to_whatsapp",
     ]
     list_filter = ["is_active", "publish_to_dashboard", "publish_to_email", "publish_to_sms", "created_at"]
     search_fields = ["title", "content"]
@@ -23,3 +23,7 @@ class AnnouncementAdmin(admin.ModelAdmin):
         ("Publishing Options", {"fields": ("publish_to_dashboard", "publish_to_email", "publish_to_sms")}),
         ("Metadata", {"fields": ("created_by", "is_active", "created_at", "updated_at")}),
     )
+
+    @admin.display(boolean=True, description="Publish to WhatsApp")
+    def publish_to_whatsapp(self, obj):
+        return obj.publish_to_whatsapp

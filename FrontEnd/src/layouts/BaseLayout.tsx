@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Layout, Menu, Dropdown, Typography, Avatar, Drawer, Grid, Button, Select, Badge, Tooltip } from "antd";
+import { Layout, Menu, Dropdown, Typography, Avatar, Drawer, Grid, Button, Select, Tooltip } from "antd";
 import {
   DashboardOutlined,
   TeamOutlined,
@@ -26,6 +26,7 @@ import {
   FileTextOutlined,
   HomeOutlined,
   InboxOutlined,
+  WhatsAppOutlined,
 } from "@ant-design/icons";
 import type { MenuProps } from "antd";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -40,6 +41,8 @@ import { isFinanceApproverEmployee } from "../utils/financeApprover";
 import { isCFOApproverEmployee } from "../utils/cfoApprover";
 import { isCEOApproverEmployee } from "../utils/ceoApprover";
 import { isHeadOfficeOrganization } from "../utils/organizationContext";
+import NotificationBell from "../components/notifications/NotificationBell";
+import { useNotificationsRuntime } from "../hooks/useNotificationsRuntime";
 
 const { Header, Sider, Content } = Layout;
 const { useBreakpoint } = Grid;
@@ -145,6 +148,7 @@ function getTitle(pathname: string, t: (key: string, fallback?: string) => strin
   if (pathname.startsWith("/admin/workflow/delegations")) return t("layout.delegationRules", "Delegation Rules");
   if (pathname.startsWith("/admin/settings")) return t("layout.systemSettings");
   if (pathname.startsWith("/admin/biotime")) return t("bioTime.pageTitle", "ZKTeco BioTime 8.5 Settings");
+  if (pathname.startsWith("/admin/whatsapp")) return t("layout.whatsappIntegration", "WhatsApp Integration");
   if (pathname.startsWith("/hr/dashboard")) return t("layout.dashboardOverview");
   if (pathname.startsWith("/hr/invites")) return t("layout.invites");
   if (pathname.startsWith("/hr/workflow/delegations")) return t("layout.delegationRules", "Delegation Rules");
@@ -180,6 +184,7 @@ function getTitle(pathname: string, t: (key: string, fallback?: string) => strin
   if (pathname.startsWith("/manager/attendance-corrections")) return t("layout.attendanceCorrections", "Attendance Corrections");
   if (pathname.startsWith("/hr/attendance-correction-requests")) return t("layout.attendanceCorrections", "Attendance Corrections");
   if (pathname.startsWith("/pending-inbox")) return t("layout.pendingInbox", "Pending Inbox");
+  if (pathname.startsWith("/notifications")) return t("notifications.title", "Notifications");
   if (pathname.startsWith("/employee")) return t("layout.employeeSelfService");
   if (pathname.startsWith("/change-password")) return t("layout.changePassword");
   return t("app.title");
@@ -406,6 +411,10 @@ export default function BaseLayout() {
   const logout = useAuthStore((s) => s.logout);
   const { t, language, setLanguage, direction } = useI18n();
 
+  // Real-time notifications: single WS connection + polling fallback for the
+  // whole authenticated shell (shared with the header bell and inbox page).
+  useNotificationsRuntime();
+
   const screens = useBreakpoint();
   const isMobile = !screens.md;
 
@@ -513,6 +522,7 @@ export default function BaseLayout() {
         { key: "/admin/workflow/delegations", icon: <UserSwitchOutlined />, label: <Link to="/admin/workflow/delegations">{t("layout.delegationRules", "Delegation Rules")}</Link> },
         { key: "/admin/settings", icon: <SettingOutlined />, label: <Link to="/admin/settings">{t("layout.settings")}</Link> },
         { key: "/admin/biotime", icon: <SettingOutlined />, label: <Link to="/admin/biotime">{t("bioTime.pageTitle", "BioTime Settings")}</Link> },
+        { key: "/admin/whatsapp", icon: <WhatsAppOutlined />, label: <Link to="/admin/whatsapp">{t("layout.whatsappIntegration", "WhatsApp Integration")}</Link> },
       ],
     },
     {
@@ -1091,15 +1101,17 @@ export default function BaseLayout() {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: isMobile ? "0 16px" : "0 28px",
+            padding: isMobile ? "0 12px" : "0 28px",
+            gap: 12,
             height: 72,
             position: "sticky",
             top: 0,
             zIndex: 50,
           }}
         >
-          {/* Left: hamburger + page title */}
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          {/* Left: hamburger + page title. Shrinks (and truncates) before the
+              account pill so narrow viewports never scroll sideways. */}
+          <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 10 : 16, minWidth: 0, flexShrink: 1 }}>
             {isMobile && (
               <Button
                 icon={<MenuOutlined />}
@@ -1125,6 +1137,10 @@ export default function BaseLayout() {
                 letterSpacing: "0.02em",
                 textTransform: "uppercase",
                 fontFamily: "'Outfit', sans-serif",
+                minWidth: 0,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
               }}
             >
               {getTitle(location.pathname, t)}
@@ -1139,6 +1155,8 @@ export default function BaseLayout() {
               alignItems: "center",
               gap: isMobile ? 8 : 16,
               padding: isMobile ? "6px 10px" : "8px 16px",
+              minWidth: 0,
+              flexShrink: 1,
               borderRadius: 50,
               background: organizationTheme.shellBg,
               color: organizationTheme.text,
@@ -1154,7 +1172,9 @@ export default function BaseLayout() {
                   display: "flex",
                   alignItems: "center",
                   gap: 10,
-                  minWidth: isMobile ? 138 : 220,
+                  minWidth: 0,
+                  flex: "1 1 auto",
+                  maxWidth: isMobile ? undefined : 220,
                   padding: isMobile ? "4px 8px" : "6px 10px 6px 12px",
                   borderRadius: 18,
                   background: organizationTheme.selectBg,
@@ -1185,7 +1205,8 @@ export default function BaseLayout() {
                     label: org.node_type === "head_office" ? `${org.name} (Read only)` : org.name,
                   }))}
                   style={{
-                    minWidth: isMobile ? 110 : 172,
+                    minWidth: 0,
+                    flex: "1 1 auto",
                     fontWeight: 700,
                     fontSize: 13,
                     color: organizationTheme.text,
@@ -1207,22 +1228,11 @@ export default function BaseLayout() {
             />
 
             {/* Notification Bell */}
-            <Badge count={0} showZero={false}>
-              <Button
-                icon={<BellOutlined />}
-                type="text"
-                style={{
-                  width: isMobile ? 30 : 36,
-                  height: isMobile ? 30 : 36,
-                  borderRadius: 10,
-                  color: organizationTheme.muted,
-                  background: organizationTheme.accentSoft,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              />
-            </Badge>
+            <NotificationBell
+              isMobile={isMobile}
+              color={organizationTheme.muted}
+              background={organizationTheme.accentSoft}
+            />
 
             {/* Divider */}
             {!isMobile && <div style={{ width: 1, height: 24, background: organizationTheme.divider }} />}

@@ -33,6 +33,8 @@ from core.pdf import (
 )
 from core.responses import error, success
 from employees.permissions import IsHRManagerOrAdmin
+from in_app_notifications.dispatcher import dispatch_notification_channels
+from in_app_notifications.models import Notification
 from organization.services import (
     ensure_company_write_allowed,
     filter_queryset_by_accessible_companies,
@@ -103,7 +105,7 @@ def _short_text(value, max_chars):
         return "-"
     if len(text) <= max_chars:
         return text
-    return f"{text[:max_chars - 3]}..."
+    return f"{text[: max_chars - 3]}..."
 
 
 def _build_payslip_pdf(payslip):
@@ -141,8 +143,18 @@ def _build_payslip_pdf(payslip):
 
     details_table = Table(
         [
-            ["Employee", Paragraph(_short_text(employee_name, 34), value_style), "Status", Paragraph(payslip.status, value_style)],
-            ["Payment Mode", Paragraph(str(payslip.payment_mode), value_style), "Payslip ID", Paragraph(str(payslip.id), value_style)],
+            [
+                "Employee",
+                Paragraph(_short_text(employee_name, 34), value_style),
+                "Status",
+                Paragraph(payslip.status, value_style),
+            ],
+            [
+                "Payment Mode",
+                Paragraph(str(payslip.payment_mode), value_style),
+                "Payslip ID",
+                Paragraph(str(payslip.id), value_style),
+            ],
         ],
         colWidths=[30 * mm, 58 * mm, 30 * mm, 58 * mm],
     )
@@ -284,7 +296,12 @@ def _build_payroll_report_pdf(run, items):
 
     metadata_table = Table(
         [
-            ["Run ID", Paragraph(str(run.id), meta_value_style), "Status", Paragraph(str(run.status), meta_value_style)],
+            [
+                "Run ID",
+                Paragraph(str(run.id), meta_value_style),
+                "Status",
+                Paragraph(str(run.status), meta_value_style),
+            ],
             [
                 "Employees",
                 Paragraph(str(run.total_employees), meta_value_style),
@@ -815,6 +832,19 @@ class PayrollRunViewSet(
                 run.status = PayrollRun.Status.PAID
                 run.save(update_fields=["status", "updated_at"])
 
+        for payslip in Payslip.objects.select_related("employee").filter(payroll_run=run, is_active=True):
+            dispatch_notification_channels(
+                recipient=payslip.employee,
+                company=run.company,
+                event_key="payroll.payslip_available",
+                title="Payslip available",
+                message=f"Your payslip for {run.year}-{run.month:02d} is available.",
+                category=Notification.Category.PAYROLL,
+                action_url=f"/employee/payslips/{payslip.id}",
+                related_object=payslip,
+                deduplication_key=f"payroll.payslip:{payslip.id}",
+            )
+
         audit(request, "payslips_generated", entity="PayrollRun", entity_id=run.id)
         return success(
             {
@@ -854,11 +884,15 @@ class EmployeePayslipViewSet(
     pagination_class = StandardPagination
 
     def get_queryset(self):
-        return Payslip.objects.select_related("payroll_run").filter(
+        queryset = Payslip.objects.select_related("payroll_run").filter(
             employee=self.request.user,
             is_active=True,
             payroll_run__status__in=[PayrollRun.Status.COMPLETED, PayrollRun.Status.PAID],
         )
+        active_company = get_active_company_for_request(self.request)
+        if active_company is not None:
+            return queryset.filter(payroll_run__company=active_company)
+        return filter_queryset_by_company_scope(queryset, self.request, field_name="payroll_run__company_id")
 
     def get_serializer_class(self):
         if self.action == "retrieve":
@@ -873,6 +907,29 @@ class EmployeePayslipViewSet(
                 status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
         qs = self.get_queryset()
+        year = request.query_params.get("year")
+        if year not in [None, ""]:
+            try:
+                year = int(year)
+            except (TypeError, ValueError):
+                return _error_list(
+                    "Validation error",
+                    ["year must be an integer."],
+                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                )
+            if year < 1900 or year > 2100:
+                return _error_list(
+                    "Validation error",
+                    ["year must be between 1900 and 2100."],
+                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                )
+            qs = qs.filter(year=year)
+        audit(
+            request,
+            "payslip_list_viewed",
+            entity="Payslip",
+            metadata={"year": year if year not in [None, ""] else None},
+        )
         page = self.paginate_queryset(qs)
         serializer = self.get_serializer(page if page is not None else qs, many=True)
         if page is not None:
@@ -913,5 +970,8 @@ class EmployeePayslipViewSet(
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="payslip_{payslip.id}.pdf"'
         response["Content-Length"] = str(len(pdf_bytes))
+        response["X-Content-Type-Options"] = "nosniff"
+        response["Cache-Control"] = "private, no-store"
+        response["Pragma"] = "no-cache"
         audit(request, "payslip_downloaded", entity="Payslip", entity_id=payslip.id)
         return response

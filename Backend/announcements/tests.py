@@ -5,12 +5,13 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core import signing
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import override_settings
 from django.template.loader import render_to_string
+from django.test import override_settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from audit.models import AuditLog
 from employees.models import EmployeeProfile
 from organization.models import OrganizationNode, UserOrganizationAccess
 
@@ -103,9 +104,7 @@ class MeetingAnnouncementTests(APITestCase):
 
     def test_hr_can_create_meeting_for_selected_active_employees(self):
         self.client.force_authenticate(self.hr)
-        with patch("announcements.views.send_announcement_email") as email, patch(
-            "announcements.views.send_announcement_whatsapp"
-        ) as whatsapp:
+        with patch("announcements.views.send_announcement_in_app") as dispatch:
             response = self.client.post(
                 self.url,
                 self._meeting_payload(),
@@ -115,8 +114,7 @@ class MeetingAnnouncementTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
         self.assertEqual(response.data["data"]["created_count"], 2)
-        self.assertEqual(email.call_count, 2)
-        self.assertEqual(whatsapp.call_count, 2)
+        self.assertEqual(dispatch.call_count, 2)
         self.assertEqual(
             set(Announcement.objects.values_list("target_user_id", flat=True)),
             {self.employee_one.id, self.employee_two.id},
@@ -147,9 +145,7 @@ class MeetingAnnouncementTests(APITestCase):
 
     def test_delivery_helpers_respect_selected_channels(self):
         self.client.force_authenticate(self.hr)
-        with patch("announcements.views.send_announcement_email") as email, patch(
-            "announcements.views.send_announcement_whatsapp"
-        ) as whatsapp:
+        with patch("announcements.views.send_announcement_in_app") as dispatch:
             response = self.client.post(
                 self.url,
                 self._meeting_payload(publish_to_email=True, publish_to_sms=False),
@@ -158,8 +154,52 @@ class MeetingAnnouncementTests(APITestCase):
             )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
-        self.assertEqual(email.call_count, 2)
-        whatsapp.assert_not_called()
+        self.assertEqual(dispatch.call_count, 2)
+
+    def test_publish_to_whatsapp_alias_triggers_whatsapp_delivery(self):
+        self.client.force_authenticate(self.hr)
+        payload = {
+            "title": "Policy Update",
+            "content": "Please review the policy update.",
+            "target_roles": ["EMPLOYEE"],
+            "publish_to_dashboard": True,
+            "publish_to_email": False,
+            "publish_to_whatsapp": True,
+        }
+
+        with patch("announcements.views.send_announcement_in_app") as dispatch:
+            response = self.client.post(
+                self.url,
+                payload,
+                format="json",
+                HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+        announcement = Announcement.objects.get(title="Policy Update")
+        self.assertTrue(announcement.publish_to_sms)
+        self.assertTrue(response.data["data"]["announcement"]["publish_to_whatsapp"])
+        self.assertTrue(response.data["data"]["announcement"]["publish_to_sms"])
+        dispatch.assert_called_once()
+
+    def test_conflicting_whatsapp_and_deprecated_sms_aliases_are_rejected(self):
+        self.client.force_authenticate(self.hr)
+        payload = {
+            "title": "Policy Update",
+            "content": "Please review the policy update.",
+            "target_roles": ["EMPLOYEE"],
+            "publish_to_sms": False,
+            "publish_to_whatsapp": True,
+        }
+
+        response = self.client.post(
+            self.url,
+            payload,
+            format="json",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
 
     def test_meeting_requires_selected_recipients(self):
         self.client.force_authenticate(self.hr)
@@ -209,13 +249,107 @@ class MeetingAnnouncementTests(APITestCase):
         )
         token = signing.dumps({"announcement_id": announcement.id}, salt=ANNOUNCEMENT_ATTACHMENT_SALT)
 
-        response = self.client.get(
+        anonymous_response = self.client.get(
             f"/api/announcements/{announcement.id}/attachment-public",
             {"token": token, "download": 1},
         )
+        self.assertEqual(anonymous_response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+        self.client.force_authenticate(self.employee_one)
+        response = self.client.get(
+            f"/api/announcements/{announcement.id}/attachment-public",
+            {"token": token, "download": 1},
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response["Content-Type"], "application/octet-stream")
         self.assertIn('attachment; filename="notice.pdf"', response["Content-Disposition"])
+        self.assertEqual(response["X-Content-Type-Options"], "nosniff")
+        self.assertEqual(response["Deprecation"], "true")
+        self.assertTrue(
+            AuditLog.objects.filter(
+                action="announcement_attachment_downloaded",
+                entity_id=str(announcement.id),
+                actor=self.employee_one,
+            ).exists()
+        )
+
+    def test_employee_list_detail_and_attachment_are_active_company_scoped(self):
+        own = Announcement.objects.create(
+            company=self.company,
+            title="Own company notice",
+            content="Visible",
+            target_roles=["EMPLOYEE"],
+            publish_to_dashboard=True,
+            created_by=self.hr,
+            attachment=SimpleUploadedFile("own.pdf", b"%PDF-1.4 own", content_type="application/pdf"),
+        )
+        foreign = Announcement.objects.create(
+            company=self.other_company,
+            title="Other company notice",
+            content="Hidden",
+            target_roles=["EMPLOYEE"],
+            publish_to_dashboard=True,
+            created_by=self.hr,
+            attachment=SimpleUploadedFile("foreign.pdf", b"%PDF-1.4 foreign", content_type="application/pdf"),
+        )
+        self.client.force_authenticate(self.employee_one)
+
+        list_response = self.client.get(self.url, HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id))
+        own_detail = self.client.get(f"{self.url}/{own.id}", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id))
+        foreign_detail = self.client.get(f"{self.url}/{foreign.id}", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id))
+        foreign_attachment = self.client.get(
+            f"{self.url}/{foreign.id}/attachment/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id)
+        )
+
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        serialized = str(list_response.data)
+        self.assertIn("Own company notice", serialized)
+        self.assertNotIn("Other company notice", serialized)
+        self.assertEqual(own_detail.status_code, status.HTTP_200_OK)
+        self.assertEqual(foreign_detail.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(foreign_attachment.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_authenticated_attachment_is_forced_download_with_security_headers(self):
+        announcement = Announcement.objects.create(
+            company=self.company,
+            title="Attachment",
+            content="Visible",
+            target_roles=["EMPLOYEE"],
+            publish_to_dashboard=True,
+            created_by=self.hr,
+            attachment=SimpleUploadedFile("notice.pdf", b"%PDF-1.4 test", content_type="application/pdf"),
+        )
+        self.client.force_authenticate(self.employee_one)
+
+        response = self.client.get(
+            f"{self.url}/{announcement.id}/attachment/",
+            {"download": 0},
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response["Content-Type"], "application/octet-stream")
+        self.assertIn("attachment", response["Content-Disposition"].lower())
+        self.assertEqual(response["X-Content-Type-Options"], "nosniff")
+        self.assertEqual(response["Cache-Control"], "private, no-store")
+
+    def test_attachment_rejects_pdf_extension_with_invalid_content(self):
+        self.client.force_authenticate(self.hr)
+        response = self.client.post(
+            self.url,
+            {
+                "title": "Invalid PDF",
+                "content": "Invalid",
+                "target_roles": ["EMPLOYEE"],
+                "attachment": SimpleUploadedFile("notice.pdf", b"not a pdf", content_type="application/pdf"),
+            },
+            format="multipart",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
 
     @override_settings(BACKEND_PUBLIC_URL="http://localhost:8000", FRONTEND_URL="http://localhost:5173")
     def test_attachment_email_link_uses_backend_public_url(self):

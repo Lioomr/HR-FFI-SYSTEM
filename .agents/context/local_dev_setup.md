@@ -1,6 +1,6 @@
 # Local Dev Setup Context
 
-The system runs fully in Docker. Three containers form the dev stack.
+The system runs fully in Docker. The notification worker waits for required infrastructure before consuming jobs.
 
 ## Containers (Dev)
 
@@ -11,6 +11,9 @@ The system runs fully in Docker. Three containers form the dev stack.
 | Frontend | `ffi_hr_frontend` | `5173:80` | React built → Nginx |
 
 Dev env file: `Backend/.env.docker` (debug=true, local DB config)
+
+The notification stack also includes `ffi_hr_redis`, `ffi_hr_notification_worker`, and the development Evolution services
+(`ffi_hr_evolution_db`, `ffi_hr_evolution_redis`, and `ffi_hr_evolution_api` on port 8080).
 
 ## Start / Stop
 
@@ -111,11 +114,20 @@ cd Backend && pytest
 docker compose -f docker-compose.dev.yml exec backend python manage.py sync_biotime --days 7
 ```
 
-## Backend Boot Sequence (entrypoint.sh)
+## Backend and Worker Boot Sequence (entrypoint.sh)
 
 1. Wait for PostgreSQL to accept connections (2 s polling loop)
 2. `python manage.py migrate --noinput`
-3. `gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120`
+3. Start Daphne with `config.asgi:application`.
+
+For a Celery command, the entrypoint waits for PostgreSQL and runs `python -m config.worker_readiness` before starting the
+worker. The readiness gate checks Celery Redis connectivity and, when WhatsApp is globally enabled, the configured Evolution
+HTTP API. It does not require the WhatsApp account to be connected. The default timeout is 60 seconds and failures contain
+only sanitized host-level details.
+
+Development Compose waits for PostgreSQL, Redis, the backend process, and healthy bundled Evolution. In tracked Compose,
+bundled Evolution remains under `--profile messaging-trial` and is an optional worker dependency. For an external provider,
+set `EVOLUTION_API_BASE_URL` to its URL. Set `NOTIFICATION_WHATSAPP_DELIVERY_ENABLED=false` to start without Evolution.
 
 ## Common Gotchas
 
@@ -127,6 +139,13 @@ docker compose -f docker-compose.dev.yml exec backend python manage.py sync_biot
 | `curl` prompts in PowerShell | PS alias conflict | Use `curl.exe` explicitly |
 | Slow first build | apt-get + pip install | Normal — 3–5 min first time |
 | New backend tests/code not visible in container | Backend source is baked into the image | Rebuild backend with `docker compose -f docker-compose.dev.yml up -d --build backend` before Docker validation |
+| Worker exits before Celery starts | Redis/Evolution readiness timed out | Check worker logs, DNS, and `EVOLUTION_API_BASE_URL` |
+| Evolution is healthy but WhatsApp is disconnected | API readiness and account connection are separate | Reconnect the instance; delivery retries/fallback remain active |
+
+## Notification Cleanup
+
+Run `python manage.py cleanup_notifications` daily through the existing production cron/deployment scheduler. Do not add a
+second scheduler solely for notification cleanup.
 
 ## URLs (Dev)
 

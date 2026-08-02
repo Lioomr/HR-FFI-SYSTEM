@@ -4,7 +4,9 @@ import { useAuthStore } from "../../auth/authStore";
 import { getFirstApiErrorMessage } from "../../utils/formErrors";
 
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000",
+  // Empty baseURL keeps browser requests same-origin; Docker Nginx proxies
+  // the explicit backend prefixes to the backend service.
+  baseURL: import.meta.env.VITE_API_BASE_URL || "",
   timeout: 20000,
   headers: { "Content-Type": "application/json" },
 });

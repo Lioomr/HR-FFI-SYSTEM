@@ -1,14 +1,18 @@
 0) Global API Rules (v1)
 
+STATUS: Gate 1 reconciled implementation contract (reviewed 2026-07-20)
+
+Before implementing an API consumer, consult `plans/API Route Status Matrix.md` and verify the Django URL/ViewSet. Older examples are legacy where they do not match the current route tree. Backend permissions, serializers, and tests are authoritative for behavior until a documented contract update is completed.
+
 Base
 
 All endpoints are JSON except upload/download.
 
-Auth required on all except login.
+Auth required on all except login and refresh. The deferred WebSocket compatibility path accepts no connection.
 
 Auth
 
-Authorization: Bearer <token> (or session cookie, your choice later)
+Authorization: Bearer <access token>
 
 Standard Responses
 
@@ -31,7 +35,21 @@ POST /auth/login
 
 body: { "email": "", "password": "" }
 
-returns: token/session + user role
+returns: { "status":"success", "data": { "token":"<access>", "access":"<access>", "refresh":"<refresh>", "user": {...} } }
+
+`token` is the backward-compatible alias of `access`. Access tokens expire after 15 minutes. Refresh tokens expire after
+14 days, rotate on every successful refresh, and the used refresh token is blacklisted. Tokens issued before the Gate 1
+version claim was introduced are rejected.
+
+Refresh Session
+
+POST /auth/refresh
+
+body: { "refresh": "" }
+
+returns: { "status":"success", "data": { "token":"<access>", "access":"<access>", "refresh":"<rotated_refresh>" } }
+
+Invalid, expired, revoked, or reused refresh tokens return the generic authentication error without token details.
 
 Change Password Screen
 
@@ -39,9 +57,15 @@ POST /auth/change-password
 
 body: { "current_password": "", "new_password": "" }
 
+On success, the password change is audited and immediately revokes every previously issued access and refresh token for
+the user. The user must log in again.
+
 Logout (Header Action)
 
 POST /auth/logout
+
+Logout is global for the account: it is audited, increments the server-enforced token version, blacklists every outstanding
+refresh token, and immediately rejects all previously issued access tokens.
 
 2) System Admin APIs (Per Screen)
 Admin Dashboard
@@ -274,36 +298,133 @@ GET /leave-balances?employee_id=&year=
 6) Employee Self-Service APIs (Per Screen)
 Employee Home (Dashboard)
 
-GET /employee/summary
+LEGACY EXAMPLE — verify current implementation before use: GET /employee/summary
 
 My Profile (View)
 
-GET /employee/profile
+LEGACY EXAMPLE — verify current implementation before use: GET /employee/profile
 
 My Employment Status
 
-GET /employee/status
+LEGACY EXAMPLE — verify current implementation before use: GET /employee/status
 
 My Payslips
 
-GET /employee/payslips?page=&page_size=
+GET /employee/payslips?year=&page=&page_size=
 
 GET /employee/payslips/{payslip_id}
 
 GET /employee/payslips/{payslip_id}/download (PDF)
 
+All three routes are owner-only, require a completed/paid payroll run, and are active-company scoped. Detail/download IDOR
+attempts return 404. Downloads are attachments with `nosniff` and private no-store headers and are audited.
+
+My Attendance
+
+GET /api/attendance/me/
+
+POST /api/attendance/me/check-in/
+
+POST /api/attendance/me/check-out/
+
+The server fixes ownership to the authenticated employee, requires the profile to match the active company, throttles
+check-in/check-out, prevents duplicate state transitions, and audits successful actions.
+
 Leave Request (Submit)
 
-POST /leave-requests
+POST /api/leaves/leave-requests/
 
-body: { "leave_type_id": 1, "start_date": "2026-01-10", "end_date":"2026-01-12", "reason": "" }
+body: { "leave_type": 1, "start_date": "2026-01-10", "end_date":"2026-01-12", "reason": "" }
 
 My Leave Requests
 
-GET /employee/leave-requests?page=&page_size=
+GET /api/leaves/employee/leave-requests/?page=&page_size=
 
-GET /leave-requests/{id} (restricted to owner)
+GET /api/leaves/employee/leave-requests/{id}/ (restricted to owner and active company)
 
 My Leave Balance
 
-GET /employee/leave-balance?year=
+GET /api/leaves/employee/leave-balance/?year=
+
+Announcements and protected employee documents
+
+GET /api/announcements/
+
+GET /api/announcements/{id}/
+
+GET /api/announcements/{id}/attachment/
+
+GET /api/employees/{employee_id}/documents/
+
+GET /api/employees/{employee_id}/documents/{document_id}/download/
+
+These routes enforce active-company scope and ownership/role permissions. Uploaded content is checked by extension, size,
+claimed MIME type, and file signature. Downloads are authenticated attachments served as `application/octet-stream` with
+`nosniff` and private no-store headers and are audited. The deprecated `attachment-public` compatibility path now also
+requires authentication, active-company access, and its signed token; anonymous access is rejected.
+
+7) In-App Notification APIs (All Authenticated Users)
+
+List Notifications (recipient + active-company scoped)
+
+GET /api/notifications/?page=&page_size=&unread=true|false&category=
+
+Unread Count
+
+GET /api/notifications/unread-count/
+
+Mark One Read
+
+POST /api/notifications/{id}/read/
+
+Mark All Read (current active-company scope)
+
+POST /api/notifications/read-all/
+
+Real-Time Notification Stream (deferred)
+
+WS /ws/notifications/
+
+The compatibility path remains routed but closes every handshake before acceptance with code `4403`. Query-string JWTs,
+Authorization-header JWTs, and session-cookie authentication are not accepted. Web and mobile clients use authenticated
+REST polling; the current web interval is 20 seconds. A future realtime design requires an approved opaque, one-time,
+short-lived, company-bound credential plus expiry and revocation disconnect controls.
+
+Notification external delivery is WhatsApp-first through Evolution. Bird email is attempted only when WhatsApp definitively
+fails or is skipped. Notification objects returned by REST list/read include a read-only `deliveries` array:
+
+{ "channel": "whatsapp|email", "status": "pending|sent|failed|skipped", "provider": "...",
+  "provider_message_id": "...", "error": null, "attempt_count": 1, "created_at": "...", "updated_at": "..." }
+
+WhatsApp entries precede email entries. Delivery records follow the parent notification's recipient/company scope. Raw
+provider payloads, credentials, full phone numbers, authorization tokens, and internal traces are never exposed.
+
+External delivery is asynchronous. The originating API transaction creates the in-app notification and pending WhatsApp
+delivery, then queues Celery only after commit; Evolution/Bird HTTP calls never run in the business request. Therefore the
+initial REST read normally contains WhatsApp `status: "pending"`. Later REST reads expose stored outcomes.
+Temporary provider/network failures use exponential backoff with jitter for at most three retries. Email is never queued for
+sent, pending, or still-retrying WhatsApp delivery, and unique notification/channel rows prevent duplicate provider sends.
+
+Celery does not consume notification jobs until Redis is reachable and, when WhatsApp is enabled, the configured Evolution
+HTTP API responds. This readiness check does not require the WhatsApp account to be connected and does not change the REST
+contract.
+
+Notification Delivery Visibility (server-enforced)
+
+SystemAdmin and HRManager delivery shape:
+{ "channel": "whatsapp|email", "status": "pending|sent|failed|skipped", "provider": "...",
+  "provider_message_id": "...", "error": null, "attempt_count": 1, "created_at": "...", "updated_at": "..." }
+
+Employee, Manager, CEO, and CFO delivery shape:
+{ "channel": "whatsapp|email", "status": "pending|sent|failed|skipped" }
+
+The role-based shape applies to notification list and mark-read REST responses. Ownership and active-company scoping
+continue to apply before serialization. WebSocket delivery is deferred and exposes no notification payload.
+
+WhatsApp Template and Integration Security
+
+Template listing/detail, reset, and preview retain SystemAdmin or HRManager access. Live test sending at
+POST /api/core/whatsapp-templates/{key}/test/ requires an authenticated SystemAdmin; rejected requests do not call the
+provider. Provider-integration status/connect/QR/logout/test responses are allowlisted and never include raw provider
+responses or raw exception details. Safe operational fields may include connected, connection_state, provider_status_code,
+and qr_available.

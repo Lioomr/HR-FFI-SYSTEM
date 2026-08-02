@@ -16,7 +16,7 @@ Read `.agents/context/workflow_engine.md` first.
 - [ ] Each stage transition emits an `AuditLog` entry (action: `<entity>_approved` / `<entity>_rejected`).
 - [ ] On final approval: update parent request `status` to APPROVED/REJECTED.
 - [ ] Delegation rules are checked when resolving next approver.
-- [ ] Notify next approver (Bird notification service if configured).
+- [ ] Notify next approver (email via Bird when configured, WhatsApp via Evolution when a valid mobile exists).
 
 ### State Machine
 

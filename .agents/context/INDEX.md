@@ -15,7 +15,8 @@ Scan this file first. Each row lists the file, size, and the exact keywords that
 | `api_design.md` | ~2.5K | REST envelope, pagination, error shape, kebab-case URLs |
 | `file_uploads.md` | ~3K | `PrivateUploadStorage`, `private_uploads/`, signed URL, attachments |
 | `i18n.md` | ~1.8K | `useI18n`, `translations.ts`, `name_en`/`name_ar`, bilingual |
-| `notifications.md` | ~5.1K | Bird, email, WhatsApp, template, `notify_users_for_pending_status` |
+| `notifications.md` | ~5.1K | notifications, Bird email, Evolution WhatsApp, TextBee SMS, template, `notify_users_for_pending_status` |
+| `pdf_template_library.md` | ~2.2K | PDF templates, `/hr/templates`, blank forms, leave/loan PDF download, template overlay |
 | `workflow_engine.md` | ~4K | `WorkflowDefinition`, approval chain, `DelegationRule`, `RequestObligation`, `advance_workflow` |
 | `biotime_integration.md` | ~2.8K | BioTime, ZKTeme 8.5, `biotime_client.py`, `sync_biotime`, singleton |
 | `deployment.md` | ~3K | env vars, staging, prod, Gunicorn, Nginx |
@@ -33,6 +34,7 @@ Scan this file first. Each row lists the file, size, and the exact keywords that
 | File | Size | Load when task mentions |
 |---|---:|---|
 | `testing_strategy.md` | ~0.6K | test plan, coverage expectations |
+| `mobile_app.md` | mobile app, Expo, React Native, SecureStore, push notifications, Android, iOS, biometric, mobile security |
 
 ## Load Discipline
 
@@ -45,4 +47,8 @@ Scan this file first. Each row lists the file, size, and the exact keywords that
 ## Domain Skills & Global Rules
 
 - **Skills (`.agents/skills/`)**: Contains workflow-specific guides (e.g., `approval_workflow.md`, `leave_management.md`, `payroll_processing.md`). Only read the specific skill file if your task involves that domain.
-- **Rules (`.agents/rules/`)**: Contains specific conventions (e.g., `api_conventions.md`, `code_style.md`, `security_auditor.md`). Reference these if you are unsure about formatting or project standards.
+- **Rules (`.agents/rules/`)**: Contains specific conventions (e.g., `api_conventions.md`, `backend_rules.md`, `frontend_rules.md`). For security reviews, also read `SECURITY_POLICY.md`, `auth_and_permissions.md`, and `audit_system.md`.
+
+## Documentation authority
+
+Use this hierarchy: `SECURITY_POLICY.md`, `plans/Employee Mobile App Master Plan.md`, `plans/Global API Rules (v1).txt`, `.agents/context/`, `.agents/rules/`, `.agents/skills/`, then `.agents/tasks/`. Check `plans/API Route Status Matrix.md` before relying on an endpoint example. If guidance and implementation disagree, record the mismatch and verify the implementation before coding.

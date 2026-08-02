@@ -2,8 +2,8 @@ from .bird_email_service import (
     BirdEmailService,
     example_email_usage,
     send_announcement_notification_email,
-    send_document_expiry_reminder_email,
     send_delegation_notification_email,
+    send_document_expiry_reminder_email,
     send_leave_approved_email,
     send_leave_rejected_email,
     send_leave_request_submitted_email,
@@ -19,7 +19,6 @@ from .pending_approval_email import (
     get_hr_approver_users,
     notify_users_for_pending_status,
 )
-from .request_submission_email import send_request_submission_email
 from .request_obligations import (
     BUSINESS_TRIP_CODE,
     ensure_leave_delegation_rule,
@@ -27,6 +26,9 @@ from .request_obligations import (
     sync_leave_obligations,
     waive_open_blocking_obligations,
 )
+from .request_submission_email import send_request_submission_email
+from .whatsapp_notifications import notify_profile_request_status_whatsapp, send_user_invite_whatsapp
+from .whatsapp_service import WHATSAPP_TEMPLATE_REGISTRY, WhatsAppService, get_template_info
 from .workflow_engine import (
     build_pending_approval_item,
     can_user_act_on_instance,
@@ -36,15 +38,15 @@ from .workflow_engine import (
     normalize_role_for_pending_approvals,
     sync_workflow,
 )
-from .whatsapp_service import WHATSAPP_TEMPLATE_REGISTRY, BirdWhatsAppService, WhatsAppService, get_template_info
 
 __all__ = [
     "EmailService",
     "send_example_transactional_email",
     "WhatsAppService",
-    "BirdWhatsAppService",
     "WHATSAPP_TEMPLATE_REGISTRY",
     "get_template_info",
+    "notify_profile_request_status_whatsapp",
+    "send_user_invite_whatsapp",
     "NotificationService",
     "get_direct_manager_user",
     "get_hr_approver_users",

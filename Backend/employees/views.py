@@ -1,6 +1,7 @@
 import csv
 import hashlib
 import io
+import os
 import random
 import string
 from datetime import datetime, timedelta
@@ -24,8 +25,8 @@ from core.permissions import get_role, has_direct_reports
 from core.responses import error, success
 from core.services import (
     get_ceo_approver_users,
+    notify_profile_request_status_whatsapp,
     notify_users_for_pending_status,
-    send_document_expiry_reminder_email,
 )
 from leaves.models import LeaveRequest
 from loans.models import LoanRequest
@@ -37,8 +38,8 @@ from organization.services import (
 )
 
 from .document_extraction import extract_visa_fields
-from .models import EmployeeDeletionRequest, EmployeeImport, EmployeeProfile
-from .notifications import send_document_expiry_whatsapp
+from .models import EmployeeDeletionRequest, EmployeeDocument, EmployeeImport, EmployeeProfile
+from .notifications import notify_document_expiry_in_app
 from .permissions import IsEmployeeOwner, IsHRManagerOnly, IsHRManagerOrAdmin, IsManagerOfEmployee
 from .serializers import (
     DelegationCandidateSerializer,
@@ -287,6 +288,8 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             permission_classes = [IsAuthenticated, IsHRManagerOrAdmin | IsEmployeeOwner]
         elif self.action in ["documents", "download_document", "update_document"]:
             permission_classes = [IsAuthenticated]
+        elif self.action == "notify_document_expiry":
+            permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
         else:
             permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
         return [permission() for permission in permission_classes]
@@ -451,25 +454,28 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         return success(response.data)
 
     def _document_profile_for_request(self, request, pk):
-        profile = None
+        profiles = filter_queryset_by_company_scope(
+            EmployeeProfile.objects.select_related("user", "company"),
+            request,
+        )
+        role = get_role(request.user)
         if str(pk) == "me":
-            profile = EmployeeProfile.objects.select_related("user", "company").filter(user=request.user).first()
+            profile = profiles.filter(user=request.user).first()
+        elif role in ["SystemAdmin", "HRManager"]:
+            profile = profiles.filter(pk=pk).first()
+        elif request.method in ["GET", "HEAD", "OPTIONS"]:
+            profile = profiles.filter(pk=pk, user=request.user).first()
         else:
-            profile = EmployeeProfile.objects.select_related("user", "company").filter(pk=pk).first()
+            profile = None
         if profile is None:
             return None, error("Not found", errors=["Not found."], status=404)
+        return profile, None
 
-        role = get_role(request.user)
-        if role in ["SystemAdmin", "HRManager"]:
-            scoped = filter_queryset_by_accessible_companies(
-                EmployeeProfile.objects.filter(pk=profile.pk), request, include_null=True
-            )
-            if profile.company_id is None or scoped.exists():
-                return profile, None
-        elif request.method in ["GET", "HEAD", "OPTIONS"] and profile.user_id == request.user.id:
-            return profile, None
-
-        return None, error("Not found", errors=["Not found."], status=404)
+    @staticmethod
+    def _documents_for_profile(profile):
+        return profile.documents.select_related("uploaded_by", "company", "leave_request").filter(
+            company_id=profile.company_id
+        )
 
     @action(detail=True, methods=["get", "post"], url_path="documents")
     def documents(self, request, pk=None):
@@ -478,7 +484,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             return error_response
 
         if request.method == "GET":
-            qs = profile.documents.select_related("uploaded_by", "company", "leave_request")
+            qs = self._documents_for_profile(profile)
             serializer = EmployeeDocumentSerializer(qs, many=True, context={"request": request})
             return success(serializer.data)
 
@@ -498,7 +504,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             employee_profile=profile,
             company=profile.company,
             uploaded_by=request.user,
-            original_filename=getattr(serializer.validated_data.get("file"), "name", ""),
+            original_filename=os.path.basename(getattr(serializer.validated_data.get("file"), "name", "")),
         )
         warnings = extract_visa_fields(document)
         document.extraction_warnings = warnings
@@ -525,7 +531,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         if error_response:
             return error_response
 
-        document = profile.documents.filter(pk=document_id).first()
+        document = self._documents_for_profile(profile).filter(pk=document_id).first()
         if document is None:
             return error("Not found", errors=["Not found."], status=404)
 
@@ -533,11 +539,22 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             filename = (
                 document.original_filename or document.file.name.split("/")[-1] or f"employee_document_{document.id}"
             )
-            return FileResponse(
+            response = FileResponse(
                 document.file.open("rb"),
+                content_type="application/octet-stream",
                 as_attachment=True,
-                filename=filename,
+                filename=os.path.basename(filename),
             )
+            response["X-Content-Type-Options"] = "nosniff"
+            response["Cache-Control"] = "private, no-store"
+            audit(
+                request,
+                "employee_document_downloaded",
+                entity="employee_document",
+                entity_id=document.id,
+                metadata={"employee_profile_id": profile.id, "document_type": document.document_type},
+            )
+            return response
         except FileNotFoundError:
             return error("Not found", errors=["Document file is missing from storage."], status=404)
 
@@ -551,7 +568,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         if role not in ["SystemAdmin", "HRManager"]:
             return error("Forbidden", errors=["Forbidden."], status=status.HTTP_403_FORBIDDEN)
 
-        document = profile.documents.filter(pk=document_id).first()
+        document = self._documents_for_profile(profile).filter(pk=document_id).first()
         if document is None:
             return error("Not found", errors=["Not found."], status=404)
 
@@ -567,6 +584,107 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             metadata={"employee_profile_id": profile.id, "document_type": document.document_type},
         )
         return success(EmployeeDocumentSerializer(document, context={"request": request}).data)
+
+    @staticmethod
+    def _document_notification_label(document: EmployeeDocument) -> str:
+        if document.document_type == EmployeeDocument.DocumentType.OTHER:
+            return document.custom_name or "Document"
+        return document.get_document_type_display()
+
+    @staticmethod
+    def _whatsapp_delivery_exception(exc: Exception) -> dict:
+        return {
+            "sent": False,
+            "success": False,
+            "provider": "evolution_whatsapp",
+            "status_code": None,
+            "message_id": None,
+            "error": str(exc),
+            "reason": str(exc),
+        }
+
+    @action(detail=True, methods=["post"], url_path=r"documents/(?P<document_id>[^/.]+)/notify-expiry")
+    def notify_document_expiry(self, request, pk=None, document_id=None):
+        profile, error_response = self._document_profile_for_request(request, pk)
+        if error_response:
+            return error_response
+
+        role = get_role(request.user)
+        if role not in ["SystemAdmin", "HRManager"]:
+            return error("Forbidden", errors=["Forbidden."], status=status.HTTP_403_FORBIDDEN)
+
+        document = self._documents_for_profile(profile).filter(pk=document_id).first()
+        if document is None:
+            return error("Not found", errors=["Not found."], status=404)
+
+        if not document.exit_before:
+            return error(
+                "Validation error",
+                errors={"expiry_date": ["Document has no expiry date."]},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+
+        today = timezone.localdate()
+        days_left = (document.exit_before - today).days
+        if days_left > 45:
+            return error(
+                "Validation error",
+                errors={"expiry_date": ["Document is not expired or expiring within 45 days."]},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+
+        document_payload = {
+            "id": document.id,
+            "doc_type": document.document_type,
+            "label": self._document_notification_label(document),
+            "expiry_date": document.exit_before,
+            "days_left": days_left,
+        }
+
+        dispatch = notify_document_expiry_in_app(profile, [document_payload])[0]
+        channel_delivery = dispatch.get("whatsapp") or {}
+        if channel_delivery.get("status") != "sent":
+            channel_delivery = dispatch.get("email") or channel_delivery
+        delivery = {
+            "sent": channel_delivery.get("status") == "sent",
+            "success": channel_delivery.get("status") == "sent",
+            "queued": channel_delivery.get("status") == "pending",
+            "status": channel_delivery.get("status"),
+            "provider": channel_delivery.get("provider"),
+            "message_id": channel_delivery.get("provider_message_id"),
+            "error": channel_delivery.get("error"),
+            "dispatch": {"whatsapp": dispatch.get("whatsapp"), "email": dispatch.get("email")},
+        }
+
+        try:
+            audit(
+                request,
+                action="employee_document_expiry_whatsapp_sent",
+                entity="employee_document",
+                entity_id=document.id,
+                metadata={
+                    "employee_profile_id": profile.id,
+                    "document_type": document.document_type,
+                    "expiry_date": document.exit_before.isoformat(),
+                    "days_left": days_left,
+                    "delivery": delivery,
+                },
+            )
+        except Exception:
+            pass
+
+        return success(
+            {
+                "document": {
+                    "id": document.id,
+                    "document_type": document.document_type,
+                    "display_name": document_payload["label"],
+                    "expiry_date": document.exit_before.isoformat(),
+                    "days_left": days_left,
+                },
+                "delivery": delivery,
+            }
+        )
 
     @action(detail=False, methods=["get"], url_path="me")
     def me(self, request):
@@ -898,41 +1016,24 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
                 message="No expiring documents found in the selected window.",
             )
 
+        dispatches = notify_document_expiry_in_app(
+            profile,
+            documents,
+            whatsapp_enabled="whatsapp" in channels,
+            email_enabled="email" in channels or "whatsapp" in channels,
+        )
+
         delivery = {}
-
-        if "email" in channels:
-            try:
-                linked_email = profile.user.email if profile.user_id and getattr(profile.user, "email", "") else None
-                if not linked_email:
-                    delivery["email"] = {"sent": False, "reason": "No linked email on employee profile."}
-                else:
-                    email_results = []
-                    for doc in documents:
-                        result = send_document_expiry_reminder_email(
-                            to_email=linked_email,
-                            employee_name=profile.full_name or profile.employee_id,
-                            document_type=doc["label"],
-                            expiry_date=doc["expiry_date"],
-                            days_remaining=doc["days_left"],
-                        )
-                        email_results.append(result)
-                    sent_count = sum(1 for result in email_results if result.get("success"))
-                    delivery["email"] = {
-                        "sent": sent_count > 0,
-                        "count": sent_count,
-                        "total": len(email_results),
-                    }
-                    if sent_count < len(email_results):
-                        delivery["email"]["reason"] = "One or more emails failed to send."
-            except Exception as exc:
-                delivery["email"] = {"sent": False, "reason": f"Email delivery failed: {str(exc)}"}
-
-        if "whatsapp" in channels:
-            try:
-                whatsapp_result = send_document_expiry_whatsapp(profile, documents)
-                delivery["whatsapp"] = whatsapp_result
-            except Exception as exc:
-                delivery["whatsapp"] = {"sent": False, "provider": "bird_whatsapp", "reason": str(exc)}
+        for channel in ("whatsapp", "email"):
+            channel_results = [item.get(channel) for item in dispatches if item.get(channel)]
+            if channel_results:
+                sent_count = sum(1 for item in channel_results if item.get("status") == "sent")
+                delivery[channel] = {
+                    "sent": sent_count > 0,
+                    "count": sent_count,
+                    "total": len(channel_results),
+                    "results": channel_results,
+                }
 
         if "announcement" in channels:
             try:
@@ -1201,6 +1302,19 @@ class EmployeeDeletionRequestViewSet(viewsets.ModelViewSet):
                 "approved_by": request.user.id,
             },
         )
+        try:
+            notify_profile_request_status_whatsapp(
+                profile=getattr(instance.requested_by, "employee_profile", None),
+                request_type="Employee Deletion",
+                request_id=instance.id,
+                status_label="Executed",
+                details=[
+                    f"Employee: {execution_snapshot.get('full_name') or execution_snapshot.get('employee_id')}",
+                ],
+                action_path="/hr/employees",
+            )
+        except Exception:
+            pass
         data = EmployeeDeletionRequestReadSerializer(instance, context=self.get_serializer_context()).data
         return success(data)
 
@@ -1230,6 +1344,20 @@ class EmployeeDeletionRequestViewSet(viewsets.ModelViewSet):
             entity_id=instance.id,
             metadata={"request_id": instance.id, "reason": reason, "employee": instance.request_snapshot},
         )
+        try:
+            notify_profile_request_status_whatsapp(
+                profile=getattr(instance.requested_by, "employee_profile", None),
+                request_type="Employee Deletion",
+                request_id=instance.id,
+                status_label="Rejected",
+                reason=reason,
+                details=[
+                    f"Employee: {instance.request_snapshot.get('full_name') or instance.request_snapshot.get('employee_id')}",
+                ],
+                action_path="/hr/employees",
+            )
+        except Exception:
+            pass
         data = EmployeeDeletionRequestReadSerializer(instance, context=self.get_serializer_context()).data
         return success(data)
 

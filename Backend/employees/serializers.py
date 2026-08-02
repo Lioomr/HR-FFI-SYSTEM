@@ -536,4 +536,26 @@ class EmployeeDocumentSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Unsupported file type.")
         if value.size > EMPLOYEE_DOCUMENT_MAX_SIZE:
             raise serializers.ValidationError("File size exceeds maximum limit.")
+
+        allowed_content_types = {
+            ".pdf": {"application/pdf"},
+            ".jpg": {"image/jpeg"},
+            ".jpeg": {"image/jpeg"},
+            ".png": {"image/png"},
+        }
+        claimed_content_type = (getattr(value, "content_type", "") or "").lower()
+        if claimed_content_type and claimed_content_type not in allowed_content_types[extension]:
+            raise serializers.ValidationError("File content type does not match its extension.")
+
+        position = value.tell()
+        signature = value.read(8)
+        value.seek(position)
+        valid_signature = {
+            ".pdf": signature.startswith(b"%PDF-"),
+            ".jpg": signature.startswith(b"\xff\xd8\xff"),
+            ".jpeg": signature.startswith(b"\xff\xd8\xff"),
+            ".png": signature == b"\x89PNG\r\n\x1a\n",
+        }[extension]
+        if not valid_signature:
+            raise serializers.ValidationError("File content does not match its extension.")
         return value

@@ -22,7 +22,7 @@ def _build_action_url(action_path: str | None) -> str | None:
     return f"{base}{path}"
 
 
-def send_request_submission_email(
+def _send_request_submission_email_provider(
     *,
     to_email: str | None,
     employee_name: str,
@@ -54,17 +54,12 @@ def send_request_submission_email(
         "action_text": "View Request",
         "action_text_ar": "عرض الطلب",
     }
-    
+
     html = render_to_string("emails/request_submission_email.html", context)
     details_list = [str(item) for item in (details or [])]
     details_text = "\n".join(f"- {item}" for item in details_list) if details_list else "-"
 
-    text = (
-        f"{request_type} submitted successfully.\n"
-        f"Request ID: {request_id}\n"
-        f"Status: {status_label}\n"
-        f"{details_text}\n"
-    )
+    text = f"{request_type} submitted successfully.\nRequest ID: {request_id}\nStatus: {status_label}\n{details_text}\n"
 
     service = EmailService()
     try:
@@ -100,3 +95,44 @@ def send_request_submission_email(
     except Exception as exc:
         logger.exception("request_submission_email_failed", extra={"to_email": to_email, "request_type": request_type})
         return {"success": False, "error": str(exc)}
+
+
+def send_request_submission_email(
+    *,
+    to_email: str | None,
+    employee_name: str,
+    request_type: str,
+    request_id: int | str,
+    status_label: str,
+    details: Iterable[str] | None = None,
+    action_path: str | None = None,
+) -> dict:
+    from in_app_notifications.integrations import notify_request_submitted_by_email
+
+    dispatched = notify_request_submitted_by_email(
+        to_email=to_email,
+        request_type=request_type,
+        request_id=request_id,
+        status_label=status_label,
+        details=details,
+        action_path=action_path,
+        email_template=_send_request_submission_email_provider,
+        email_context={
+            "employee_name": employee_name,
+            "request_type": request_type,
+            "request_id": request_id,
+            "status_label": status_label,
+            "details": details,
+            "action_path": action_path,
+        },
+    )
+    for channel in ("whatsapp", "email"):
+        delivery = dispatched.get(channel) if isinstance(dispatched, dict) else None
+        if delivery and delivery.get("status") == "sent":
+            return {
+                "success": True,
+                "provider": delivery.get("provider"),
+                "message_id": delivery.get("provider_message_id"),
+                "dispatch": dispatched,
+            }
+    return {"success": False, "provider": "notification_dispatcher", "dispatch": dispatched}

@@ -614,6 +614,41 @@ export async function downloadEmployeeDocument(
   return data;
 }
 
+export interface NotifyDocumentExpiryDelivery {
+  sent: boolean;
+  success: boolean;
+  provider?: string | null;
+  status_code?: number | null;
+  message_id?: string | null;
+  error?: string | null;
+  template_key?: string | null;
+}
+
+export interface NotifyDocumentExpiryResult {
+  document: {
+    id: number;
+    document_type: string;
+    display_name: string;
+    expiry_date: string;
+    days_left: number;
+  };
+  delivery: NotifyDocumentExpiryDelivery;
+}
+
+/**
+ * Send a WhatsApp expiry reminder for a single employee document.
+ * Backend allows expired documents or documents expiring within 45 days.
+ */
+export async function notifyEmployeeDocumentExpiry(
+  employeeId: number | string,
+  documentId: number | string,
+): Promise<ApiResponse<NotifyDocumentExpiryResult>> {
+  const { data } = await api.post<ApiResponse<NotifyDocumentExpiryResult>>(
+    `/api/employees/${employeeId}/documents/${documentId}/notify-expiry/`,
+  );
+  return data;
+}
+
 export async function rejectEmployeeDeletionRequest(
   id: number | string,
   reason: string,

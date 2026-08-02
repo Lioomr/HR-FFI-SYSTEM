@@ -1,5 +1,6 @@
 import logging
-from datetime import timedelta, timezone as datetime_timezone
+from datetime import timedelta
+from datetime import timezone as datetime_timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.conf import settings
@@ -10,6 +11,9 @@ from django.utils import timezone
 from core.permissions import get_role
 from core.services.bird_email_service import send_announcement_notification_email, send_meeting_notification_email
 from core.services.whatsapp_service import WhatsAppService
+from in_app_notifications.dispatcher import dispatch_notification_channels
+from in_app_notifications.models import Notification
+
 from .models import Announcement
 
 User = get_user_model()
@@ -28,6 +32,101 @@ ANNOUNCEMENT_ROLE_TO_GROUP = {
     "CFO": "CFO",
     "EMPLOYEE": "Employee",
 }
+
+
+def _announcement_users(announcement):
+    if getattr(announcement, "target_user_id", None):
+        return User.objects.filter(id=announcement.target_user_id, is_active=True)
+    expected_roles = {
+        ANNOUNCEMENT_ROLE_TO_GROUP[role]
+        for role in (announcement.target_roles or [])
+        if role in ANNOUNCEMENT_ROLE_TO_GROUP
+    }
+    queryset = User.objects.filter(
+        is_active=True,
+        organization_access_entries__organization=announcement.company,
+    ).distinct()
+    return [user for user in queryset if get_role(user) in expected_roles]
+
+
+def send_announcement_in_app(announcement):
+    if not announcement.publish_to_dashboard:
+        return []
+    is_meeting = announcement.announcement_type == Announcement.AnnouncementType.MEETING
+    publisher_name = announcement.created_by.full_name or announcement.created_by.email
+    meeting_date, meeting_time = _meeting_datetime_parts(announcement)
+    attachment_name = announcement.attachment.name.rsplit("/", 1)[-1] if announcement.attachment else None
+    attachment_url = _announcement_attachment_url(announcement)
+    dispatches = []
+    for user in _announcement_users(announcement):
+        profile = getattr(user, "employee_profile", None)
+        recipient_name = getattr(profile, "full_name", "") or getattr(user, "full_name", "") or user.email
+        if is_meeting:
+            email_template = send_meeting_notification_email
+            email_context = {
+                "employee_name": recipient_name,
+                "meeting_title": announcement.title,
+                "meeting_message": announcement.content,
+                "meeting_date": meeting_date,
+                "meeting_time": meeting_time,
+                "organizer_name": publisher_name,
+                "duration_minutes": announcement.meeting_duration_minutes,
+                "location": announcement.meeting_location,
+                "agenda": announcement.meeting_agenda,
+                "google_meet_url": announcement.google_meet_url,
+                "microsoft_teams_url": announcement.microsoft_teams_url,
+                "zoom_url": announcement.zoom_url,
+                "action_url": _announcement_action_url(user),
+            }
+            whatsapp_template = "meeting_notification_v1"
+            whatsapp_variables = {
+                "employee_name": recipient_name,
+                "meeting_title": announcement.title,
+                "meeting_date": meeting_date,
+                "meeting_time": meeting_time,
+                "organizer_name": publisher_name,
+                "google_meet_url": announcement.google_meet_url or "",
+                "microsoft_teams_url": announcement.microsoft_teams_url or "",
+                "zoom_url": announcement.zoom_url or "",
+            }
+        else:
+            email_template = send_announcement_notification_email
+            email_context = {
+                "employee_name": recipient_name,
+                "announcement_title": announcement.title,
+                "message": announcement.content,
+                "published_at": _format_announcement_published_at(announcement.created_at),
+                "publisher_name": publisher_name,
+                "action_url": _announcement_action_url(user),
+                "attachment_name": attachment_name,
+                "attachment_url": attachment_url,
+            }
+            whatsapp_template = "new_announcement_notification"
+            whatsapp_variables = {
+                "employee_name": recipient_name,
+                "announcement_title": announcement.title,
+                "attachment_url": attachment_url or "",
+            }
+        dispatches.append(
+            dispatch_notification_channels(
+                recipient=user,
+                event_key="meeting.created" if is_meeting else "announcement.created",
+                title=announcement.title,
+                message=announcement.content,
+                category=Notification.Category.MEETING if is_meeting else Notification.Category.ANNOUNCEMENT,
+                action_url="/employee/announcements",
+                related_object=announcement,
+                metadata={"announcement_type": announcement.announcement_type},
+                deduplication_key=f"announcement.created:{announcement.id}",
+                whatsapp_template=whatsapp_template,
+                whatsapp_variables=whatsapp_variables,
+                email_template=email_template,
+                email_context=email_context,
+                whatsapp_enabled=bool(announcement.publish_to_whatsapp),
+                email_enabled=bool(announcement.publish_to_email),
+            )
+        )
+    return dispatches
 
 
 def _announcement_action_url(user):
@@ -71,19 +170,25 @@ def _meeting_datetime_parts(announcement):
 
 
 def _email_localtime(value):
-    tzinfo = getattr(settings, "EMAIL_DISPLAY_TZINFO", None)
     timezone_name = getattr(settings, "EMAIL_DISPLAY_TIME_ZONE", "")
-    if not tzinfo and timezone_name:
+    tzinfo = None
+    if timezone_name:
         try:
             tzinfo = ZoneInfo(timezone_name)
         except ZoneInfoNotFoundError:
             tzinfo = EMAIL_TIME_ZONE_FALLBACKS.get(timezone_name)
+    if not tzinfo:
+        tzinfo = getattr(settings, "EMAIL_DISPLAY_TZINFO", None)
     return timezone.localtime(value, tzinfo) if tzinfo else timezone.localtime(value)
 
 
 def _format_announcement_published_at(value):
     if not value:
         return None
+    # Published timestamps are persisted as UTC. Normalize callers that pass a
+    # database-style timestamp carrying the application timezone instead.
+    if timezone.is_aware(value) and value.utcoffset() != timedelta(0):
+        value = value.replace(tzinfo=datetime_timezone.utc)
     localized = _email_localtime(value)
     return localized.strftime("%Y-%m-%d %I:%M %p %Z")
 
@@ -193,7 +298,7 @@ def send_announcement_email(announcement):
 
 
 def send_announcement_whatsapp(announcement):
-    if not announcement.publish_to_sms:
+    if not announcement.publish_to_whatsapp:
         return
 
     if getattr(announcement, "target_user_id", None):
@@ -210,8 +315,11 @@ def send_announcement_whatsapp(announcement):
 
     service = WhatsAppService()
     sent_count = 0
+    document_sent_count = 0
     organizer_name = announcement.created_by.full_name or announcement.created_by.email
     meeting_date, meeting_time = _meeting_datetime_parts(announcement)
+    attachment_url = _announcement_attachment_url(announcement)
+    attachment_name = announcement.attachment.name.rsplit("/", 1)[-1] if announcement.attachment else None
 
     for user in users:
         profile = getattr(user, "employee_profile", None)
@@ -242,15 +350,35 @@ def send_announcement_whatsapp(announcement):
                 template_variables={
                     "employee_name": employee_name,
                     "announcement_title": announcement.title,
+                    "attachment_url": attachment_url or "",
                 },
                 language="en",
             )
         if result.get("success"):
             sent_count += 1
+            if attachment_url and attachment_name:
+                document_result = service.send_document_message(
+                    phone_number=phone,
+                    document_url=attachment_url,
+                    file_name=attachment_name,
+                    caption=f"{announcement.title} - PDF attachment",
+                )
+                if document_result.get("success"):
+                    document_sent_count += 1
+                else:
+                    logger.warning(
+                        "announcement_whatsapp_document_failed",
+                        extra={
+                            "announcement_id": announcement.id,
+                            "phone": phone,
+                            "status_code": document_result.get("status_code"),
+                            "error": document_result.get("error"),
+                        },
+                    )
         else:
             print(f"Error sending announcement WhatsApp to {phone}: {result.get('error', 'Unknown error')}")
 
-    print(f"WhatsApp notifications sent: {sent_count}")
+    print(f"WhatsApp notifications sent: {sent_count}; documents sent: {document_sent_count}")
 
 
 def send_announcement_sms(announcement):

@@ -70,6 +70,9 @@ class PendingRequestsPagination(PageNumberPagination):
 
 
 def _safe_send_delegation_emails(rule: DelegationRule):
+    from in_app_notifications.dispatcher import dispatch_notification_channels
+    from in_app_notifications.models import Notification
+
     creator_role = get_role(rule.created_by) if rule.created_by else ""
     if creator_role == "SystemAdmin":
         role_route = "/admin/workflow/delegations"
@@ -87,24 +90,28 @@ def _safe_send_delegation_emails(rule: DelegationRule):
         (rule.to_user, "delegate"),
     ]
     for user, recipient_role in users:
-        email = (getattr(user, "email", "") or "").strip()
-        if not email:
-            continue
-        try:
-            send_delegation_notification_email(
-                to_email=email,
-                recipient_name=getattr(user, "full_name", "") or email,
-                from_user_name=getattr(rule.from_user, "full_name", "") or rule.from_user.email,
-                to_user_name=getattr(rule.to_user, "full_name", "") or rule.to_user.email,
-                start_at=timezone.localtime(rule.start_at).strftime("%Y-%m-%d %H:%M"),
-                end_at=timezone.localtime(rule.end_at).strftime("%Y-%m-%d %H:%M") if rule.end_at else None,
-                reason=rule.reason or None,
-                recipient_role=recipient_role,
-                action_url=action_url,
-            )
-        except Exception:
-            # Notifications should never break the delegation transaction.
-            pass
+        dispatch_notification_channels(
+            recipient=user,
+            event_key="delegation.assigned",
+            title="Workflow delegation updated",
+            message=f"Delegation from {rule.from_user} to {rule.to_user} is active.",
+            category=Notification.Category.DELEGATION,
+            action_url=role_route,
+            related_object=rule,
+            metadata={"recipient_role": recipient_role},
+            deduplication_key=f"delegation.assigned:{rule.id}:{recipient_role}",
+            email_template=send_delegation_notification_email,
+            email_context={
+                "recipient_name": getattr(user, "full_name", "") or getattr(user, "email", ""),
+                "from_user_name": getattr(rule.from_user, "full_name", "") or rule.from_user.email,
+                "to_user_name": getattr(rule.to_user, "full_name", "") or rule.to_user.email,
+                "start_at": timezone.localtime(rule.start_at).strftime("%Y-%m-%d %H:%M"),
+                "end_at": timezone.localtime(rule.end_at).strftime("%Y-%m-%d %H:%M") if rule.end_at else None,
+                "reason": rule.reason or None,
+                "recipient_role": recipient_role,
+                "action_url": action_url,
+            },
+        )
 
 
 def _sync_pending_request_workflows_for_request(request, *, limit_per_type: int | None = None) -> None:
@@ -192,7 +199,7 @@ def _sync_pending_request_workflows_for_request(request, *, limit_per_type: int 
             field_name="asset__company_id",
         )
         .filter(status__in=asset_return_statuses)
-        .order_by("-updated_at", "-id")
+        .order_by("-requested_at", "-id")
     )
     for return_req in _maybe_limit(asset_return_qs):
         sync_workflow(return_req, actor=request.user)
@@ -258,6 +265,7 @@ class PendingRequestsView(APIView):
                 if search in (item.get("name") or "").lower()
                 or search in (item.get("action") or "").lower()
                 or search in (item.get("request_type_label") or "").lower()
+                or search in (item.get("details") or "").lower()
             ]
 
         paginator = PendingRequestsPagination()
@@ -279,16 +287,16 @@ class HrSummaryView(APIView):
         payroll_qs = filter_queryset_by_company_scope(PayrollRun.objects.all(), request)
 
         if active_org and active_org.node_type == OrganizationNode.NodeType.HEAD_OFFICE:
-            hr_activity_filter = Q(actor__groups__name="HRManager", actor__employee_profile__company_id__in=accessible_company_ids)
+            hr_activity_filter = Q(
+                actor__groups__name="HRManager", actor__employee_profile__company_id__in=accessible_company_ids
+            )
         else:
             company_id = getattr(active_org, "id", None)
             hr_activity_filter = Q(actor__groups__name="HRManager", actor__employee_profile__company_id=company_id)
 
         # 1. Employee Stats
         total_employees = employee_qs.count()
-        active_employees = employee_qs.filter(
-            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE
-        ).count()
+        active_employees = employee_qs.filter(employment_status=EmployeeProfile.EmploymentStatus.ACTIVE).count()
 
         # 2. Expiring Documents (next 30 days)
         expiring_docs = employee_qs.filter(
@@ -309,12 +317,8 @@ class HrSummaryView(APIView):
 
         recent_activity = []
         # HR dashboard should only show HR manager activity, not system admin activity.
-        latest_logs = (
-            AuditLog.objects.filter(hr_activity_filter)
-            .select_related("actor")
-            .order_by("-created_at")[:10]
-        )
-        
+        latest_logs = AuditLog.objects.filter(hr_activity_filter).select_related("actor").order_by("-created_at")[:10]
+
         for log in latest_logs:
             # Determine the actor name
             actor_name = "System"
@@ -326,12 +330,17 @@ class HrSummaryView(APIView):
             # Determine a nice color and formatted status based on the action/entity
             status_color = "default"
             action_lower = log.action.lower()
-            
+
             if "create" in action_lower or "add" in action_lower or "new" in action_lower:
                 status_color = "blue"
             elif "approv" in action_lower or "accept" in action_lower or "success" in action_lower:
                 status_color = "green"
-            elif "reject" in action_lower or "decline" in action_lower or "fail" in action_lower or "error" in action_lower:
+            elif (
+                "reject" in action_lower
+                or "decline" in action_lower
+                or "fail" in action_lower
+                or "error" in action_lower
+            ):
                 status_color = "red"
             elif "updat" in action_lower or "edit" in action_lower or "modify" in action_lower:
                 status_color = "orange"
@@ -339,12 +348,12 @@ class HrSummaryView(APIView):
                 status_color = "volcano"
             elif "login" in action_lower:
                 status_color = "cyan"
-                
+
             # Construct a human-readable "status" or "details" string from entity/metadata
             details_str = log.entity
             if log.entity_id:
                 details_str += f" (#{log.entity_id})"
-            
+
             # If there's specific metadata we want to highlight, we could add it here
             # But let's keep it simple with just the entity name for now
             if not details_str:
@@ -439,7 +448,12 @@ class HrRecentActivityView(APIView):
                 status_color = "blue"
             elif "approv" in action_lower or "accept" in action_lower or "success" in action_lower:
                 status_color = "green"
-            elif "reject" in action_lower or "decline" in action_lower or "fail" in action_lower or "error" in action_lower:
+            elif (
+                "reject" in action_lower
+                or "decline" in action_lower
+                or "fail" in action_lower
+                or "error" in action_lower
+            ):
                 status_color = "red"
             elif "updat" in action_lower or "edit" in action_lower or "modify" in action_lower:
                 status_color = "orange"
@@ -528,13 +542,14 @@ class ReportErrorAPIView(APIView):
     Endpoint for frontend to report unhandled errors.
     This will send an email to the system admin.
     """
+
     permission_classes = [AllowAny]
 
     def post(self, request):
         message = request.data.get("message", "Unknown error")
         stack = request.data.get("stack", "No stack trace provided")
         url = request.data.get("url", "Unknown URL")
-        
+
         user_info = "Anonymous/Unauthenticated User"
         if request.user.is_authenticated:
             user_info = f"User: {request.user.email} (Role: {request.user.role})"
@@ -558,7 +573,7 @@ Stack Trace:
             admin_email = getattr(settings, "ADMIN_EMAIL", "admin@ffisystem.com")
             # If deploying, make sure you configure EMAIL_HOST_USER or DEFAULT_FROM_EMAIL
             from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "noreply@ffisystem.com")
-            
+
             send_mail(
                 subject=email_subject,
                 message=email_body,
@@ -568,7 +583,9 @@ Stack Trace:
             )
             return success({"detail": "Error reported successfully."})
         except Exception as e:
-            return Response({"detail": f"Failed to send error report: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"detail": f"Failed to send error report: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class DelegationRuleListCreateView(APIView):
@@ -582,6 +599,14 @@ class DelegationRuleListCreateView(APIView):
         return success({"items": data})
 
     def post(self, request):
+        if get_role(request.user) not in {"HRManager", "SystemAdmin"}:
+            try:
+                requested_from_user_id = int(request.data.get("from_user_id"))
+            except (TypeError, ValueError):
+                requested_from_user_id = None
+            if requested_from_user_id != request.user.id:
+                raise PermissionDenied("You can only create delegation rules for your own approvals.")
+
         serializer = DelegationRuleSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -602,7 +627,9 @@ class DelegationRuleListCreateView(APIView):
                     "is_active": rule.is_active,
                 },
             )
-            transaction.on_commit(lambda rule_id=rule.id: _safe_send_delegation_emails(DelegationRule.objects.get(pk=rule_id)))
+            transaction.on_commit(
+                lambda rule_id=rule.id: _safe_send_delegation_emails(DelegationRule.objects.get(pk=rule_id))
+            )
         return success(DelegationRuleSerializer(rule).data, status=201)
 
 
@@ -716,7 +743,11 @@ class RequestObligationWaiveView(APIView):
         reason = (request.data.get("reason") or request.data.get("waiver_reason") or "").strip()
         if not reason:
             return Response(
-                {"status": "error", "message": "waiver_reason is required.", "errors": [{"message": "waiver_reason is required."}]},
+                {
+                    "status": "error",
+                    "message": "waiver_reason is required.",
+                    "errors": [{"message": "waiver_reason is required."}],
+                },
                 status=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
         try:

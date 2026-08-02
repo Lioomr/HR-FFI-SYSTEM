@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Iterable
 
 from django.contrib.auth import get_user_model
+from django.db.models import Q
 
 from core.permissions import get_role
 
@@ -137,27 +138,29 @@ def ensure_company_write_allowed(request):
 def filter_queryset_by_company_scope(queryset, request, field_name: str = "company_id"):
     accessible_company_ids = get_user_accessible_company_ids(request.user)
     if not accessible_company_ids:
-        return queryset.none()
+        return queryset.filter(**{field_name: None})
 
     active_org = get_active_organization_for_request(request)
     query_key = request.query_params.get("company_id")
     if query_key and str(query_key).isdigit():
         requested_id = int(query_key)
         if requested_id in accessible_company_ids:
-            return queryset.filter(**{field_name: requested_id})
+            return queryset.filter(Q(**{field_name: requested_id}) | Q(**{field_name: None}))
         return queryset.none()
 
     if active_org and active_org.node_type == OrganizationNode.NodeType.HEAD_OFFICE:
-        return queryset.filter(**{f"{field_name}__in": list(accessible_company_ids)})
+        return queryset.filter(
+            Q(**{f"{field_name}__in": list(accessible_company_ids)}) | Q(**{field_name: None})
+        )
 
     active_company = get_active_company_for_request(request)
     if active_company:
-        return queryset.filter(**{field_name: active_company.id})
+        return queryset.filter(Q(**{field_name: active_company.id}) | Q(**{field_name: None}))
 
-    return queryset.filter(**{f"{field_name}__in": list(accessible_company_ids)})
+    return queryset.filter(Q(**{f"{field_name}__in": list(accessible_company_ids)}) | Q(**{field_name: None}))
 
 
-def filter_queryset_by_accessible_companies(queryset, request, field_name: str = "company_id", include_null: bool = False):
+def filter_queryset_by_accessible_companies(queryset, request, field_name: str = "company_id", include_null: bool = True):
     """
     Scope direct object lookups to every company the user can access.
 
@@ -169,7 +172,7 @@ def filter_queryset_by_accessible_companies(queryset, request, field_name: str =
     """
     accessible_company_ids = get_user_accessible_company_ids(request.user)
     if not accessible_company_ids:
-        return queryset.none()
+        return queryset.filter(**{field_name: None}) if include_null else queryset.none()
 
     scoped = queryset.filter(**{f"{field_name}__in": list(accessible_company_ids)})
     if include_null:

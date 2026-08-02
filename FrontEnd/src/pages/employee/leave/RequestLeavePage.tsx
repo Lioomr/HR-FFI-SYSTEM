@@ -30,6 +30,7 @@ import {
   listDelegationCandidates,
   type DelegationCandidate,
 } from "../../../services/api/employeesApi";
+import { formatDelegationCandidateLabel } from "../../../utils/delegationCandidates";
 import { isApiError } from "../../../services/api/apiTypes";
 import { getDetailedHttpErrorMessage } from "../../../services/api/userErrorMessages";
 
@@ -436,7 +437,7 @@ export default function RequestLeavePage() {
               placeholder="-"
               options={delegationCandidates.map((e) => ({
                 value: e.id ?? `employee-profile-${e.employee_profile_id}`,
-                label: `${e.full_name_en || e.full_name || e.employee_id} (${e.employee_id})${e.company_name ? ` - ${e.company_name}` : ""}${e.disabled_reason ? ` - ${e.disabled_reason}` : ""}`,
+                label: formatDelegationCandidateLabel(e),
                 disabled: !e.can_delegate,
               }))}
             />

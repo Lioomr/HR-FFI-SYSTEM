@@ -12,18 +12,27 @@ Use when working with leave types, requests, balances, carry-over, or the leave 
 | `Backend/leaves/serializers.py` | Create/read/action serializers |
 | `Backend/leaves/notifications.py` | Leave-specific notification helpers |
 
+## Leave PDF Download
+
+Before changing leave PDF generation, read `.agents/context/pdf_template_library.md`.
+
+Current rule: `_build_leave_request_pdf` must use `leave_request_blank.pdf` from the HR template library (`/hr/templates` in production, bundled fallback in `Backend/static/pdf_templates`) and overlay values onto the original two-page blank form. Do not replace it with a one-page clean/generated PDF. Keep `_build_leave_request_pdf_fallback` only for missing-template fallback.
+
+Regression check:
+`docker exec ffi_hr_backend python manage.py test leaves.tests.test_existing.LeaveManagementTests.test_employee_can_download_leave_request_pdf`
+
 ## LeaveRequest Status Machine
 
 ```
-submitted → pending_manager → pending_hr → [pending_ceo →] approved
-                ↓                 ↓              ↓
-            rejected          rejected        rejected
+submitted -> pending_manager -> pending_hr -> [pending_ceo ->] approved
+                |                  |              |
+             rejected           rejected       rejected
                                          (cancelled by employee, any pending stage)
 ```
 
 - `hr_manual` source: auto-approved on creation (no approval chain).
 - `requires_ceo_approval` on `LeaveType` gates the `pending_ceo` stage.
-- No direct status writes from clients — only via approve/reject actions.
+- No direct status writes from clients; only approve/reject actions should change workflow state.
 
 ## Approval Chain (views.py)
 
@@ -34,9 +43,9 @@ submitted → pending_manager → pending_hr → [pending_ceo →] approved
 | CEO | `CEOLeaveRequestViewSet` | `pending_ceo` only | `approved` |
 
 Initial status on creation (`perform_create`):
-- Employee has manager → `pending_manager`
-- Employee is HRManager → `pending_ceo`
-- Otherwise → `pending_hr`
+- Employee has manager -> `pending_manager`
+- Employee is HRManager -> `pending_ceo`
+- Otherwise -> `pending_hr`
 
 ## Balance Calculation (`leaves/utils.py`)
 
@@ -53,19 +62,19 @@ remaining = opening_balance + annual_quota + adjustments - used_days
 - Capped by `LeaveType.max_carry_over` (null = unlimited)
 
 **Service length tiers (Annual Leave)**:
-- < 1 year service: Proportional up to 21 days
-- 1–5 years: 21 days
-- ≥ 5 years: 30 days
+- Less than 1 year service: proportional up to 21 days
+- 1-5 years: 21 days
+- 5 or more years: 30 days
 
 **Used days**: `get_used_days_for_type()` sums approved requests in the year, accounting for official holidays (Feb 22, Sep 23 excluded).
 
-**Emergency Leave**: deducted from the employee's remaining Annual Leave balance — not an independent quota.
+**Emergency Leave**: deducted from the employee's remaining Annual Leave balance; not an independent quota.
 
 ## Leave Type Policy Defaults
 
 | Code | Days | Paid | Carry-over | Notes |
 |---|---|---|---|---|
-| ANNUAL | 21–30 (service-based) | Yes | Configurable | Prorated first year; emergency deducted here |
+| ANNUAL | 21-30 (service-based) | Yes | Configurable | Prorated first year; emergency deducted here |
 | SICK | 120 | Tiered (100%/50%/0%) | No | Requires attachment; 30/30/60 day pay tiers |
 | EMERGENCY | 10 | Yes | No | Deducted from ANNUAL balance |
 | UNPAID | 60 | No | No | Annual overflow flows here |
@@ -77,14 +86,14 @@ remaining = opening_balance + annual_quota + adjustments - used_days
 ## Policy Validation (`validate_leave_request_policy`)
 
 Called in `LeaveRequestCreateSerializer.validate()`. Checks:
-- Start date ≤ end date, at least 1 day
+- Start date <= end date, at least 1 day
 - Annual: 6-month service requirement, sufficient balance
 - Emergency: sufficient annual balance remaining
-- Sick: document required, ≤ 120 days/year
-- Unpaid: ≤ 60 days/year
+- Sick: document required, <= 120 days/year
+- Unpaid: <= 60 days/year
 - Marriage: only once per service lifetime
-- Death: ≤ 5 days, Birth: ≤ 3 days
-- Maternity extension: "extension" in reason, ≤ 30 days
+- Death: <= 5 days, Birth: <= 3 days
+- Maternity extension: "extension" in reason, <= 30 days
 
 ## Balance Snapshot (`LeaveBalanceSnapshot`)
 
@@ -96,22 +105,24 @@ HR can add/subtract days. Fields: `adjustment_days` (positive or negative), `rea
 
 ## Notifications (on every status change)
 
-- Submitted → WhatsApp to manager + email to employee (see `context/notifications.md`)
-- Approved → WhatsApp to employee
-- Rejected → WhatsApp + email to employee
-- Moved to PENDING_HR / PENDING_CEO → email to next approvers
+- Leave-specific helpers are email-first: if the recipient has an email, send email; if there is no email, send WhatsApp through Evolution.
+- Submitted -> manager and employee notification through the email-first/WhatsApp-if-no-email rule.
+- Approved -> employee notification through the email-first/WhatsApp-if-no-email rule.
+- Rejected -> employee notification through the email-first/WhatsApp-if-no-email rule.
+- Delegation assigned -> WhatsApp first, email fallback if WhatsApp does not send and email exists.
+- Moved to PENDING_HR / PENDING_CEO -> next approver notification through `notify_users_for_pending_status()`; this sends email and also attempts Evolution WhatsApp when a valid mobile exists.
 
-Always wrap notification calls in try/except — never let a failed notification block the approval action.
+Always wrap notification calls in try/except; never let a failed notification block the approval action.
 
 ## Frontend Checklist
 
 - [ ] `RequestLeavePage`: load leave types, show available balance, validate overlap client-side, enforce `requires_attachment` hint.
-- [ ] Balance display: use `leaveApi.getMyBalance(year)` — never calculate client-side.
+- [ ] Balance display: use `leaveApi.getMyBalance(year)`; never calculate client-side.
 - [ ] Inbox pages: filter by `status=pending_<role>` for the current user's role.
 - [ ] After approve/reject: re-fetch the request to reflect updated status.
 - [ ] Show full approval history (manager/HR/CEO decisions) in the detail view.
 - [ ] `HrLeaveBalancesPage`: search by employee + year, show per-type breakdown.
-- [ ] Handle `cancelled` state — employee can cancel their own pending request.
+- [ ] Handle `cancelled` state; employee can cancel their own pending request.
 
 ## Tests to Write
 

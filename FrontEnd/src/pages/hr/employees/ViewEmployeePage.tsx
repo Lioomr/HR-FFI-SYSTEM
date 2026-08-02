@@ -198,7 +198,7 @@ export default function ViewEmployeePage() {
                     // However, we need to be safe.
                     const userList = (response as any).data?.items || (response as any).data?.results || [];
                     setUsers(userList as any[]);
-                } catch (error) {
+                } catch {
                     message.error(t("hr.employees.loadUsersFailed"));
                 } finally {
                     setUsersLoading(false);
