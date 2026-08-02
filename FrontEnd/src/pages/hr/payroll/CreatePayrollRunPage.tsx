@@ -69,7 +69,7 @@ export default function CreatePayrollRunPage() {
                                 return;
                             }
                         }
-                    } catch (findErr) {
+                    } catch {
                         // Failed to find it silently, rely on manual error
                     }
 
@@ -124,7 +124,9 @@ export default function CreatePayrollRunPage() {
                             return;
                         }
                     }
-                } catch (e) { }
+                } catch {
+                    // Best-effort lookup of an existing run; ignore failures.
+                }
 
                 notification.warning({
                     message: t("payroll.alreadyExists"),

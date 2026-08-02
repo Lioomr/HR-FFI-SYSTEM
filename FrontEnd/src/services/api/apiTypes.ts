@@ -48,12 +48,32 @@ export type OrganizationNodeDto = {
   is_active: boolean;
 };
 
+// Confirmed delivery state reported by the provider/back-end.
+// "sent" here means submitted to the provider, NOT confirmed delivery.
+export type InviteDeliveryStatus = "unknown" | "queued" | "sent" | "delivered" | "read" | "failed";
+
 export type EmailDeliveryStatus = {
   sent: boolean;
   provider: string;
+  provider_submitted?: boolean | null;
+  provider_status?: string | null;
+  delivery_status?: InviteDeliveryStatus | null;
   status_code?: number | null;
   message_id?: string | null;
   error?: string | null;
+};
+
+export type LastDeliveryStatus = {
+  channel?: string | null;
+  sent: boolean;
+  provider?: string | null;
+  provider_submitted?: boolean | null;
+  provider_status?: string | null;
+  delivery_status?: InviteDeliveryStatus | null;
+  status_code?: number | null;
+  message_id?: string | null;
+  error?: string | null;
+  attempted_at?: string | null;
 };
 
 export type PaginatedResponse<T> = {
@@ -102,7 +122,9 @@ export type UserDto = {
 
 export type InviteDto = {
   id: number | string;
-  email: string;
+  email: string | null;
+  phone_number?: string | null;
+  channel?: string;
   role: Role;
   status: string;
   sent_at: string | null;
@@ -110,6 +132,8 @@ export type InviteDto = {
   resend_count: number;
   last_resent_at: string | null;
   email_delivery?: EmailDeliveryStatus;
+  whatsapp_delivery?: EmailDeliveryStatus;
+  last_delivery?: LastDeliveryStatus;
 };
 
 export type AuditLogDto = {

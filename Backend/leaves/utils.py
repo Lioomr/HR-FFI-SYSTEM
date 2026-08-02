@@ -575,7 +575,7 @@ def calculate_leave_balance(user, year, profile=None, company=None, as_of: date 
 
         # Opening Balance (Carry-over)
         opening = 0.0
-        if lt.allow_carry_over:
+        if lt.allow_carry_over and user is not None:
             # Check for snapshot first (MVP optimization/persistence)
             # For now, we compute dynamically as per prompt "Snapshots can be recomputed on demand"
             # But creating a snapshot would be good.
@@ -612,7 +612,11 @@ def calculate_leave_balance(user, year, profile=None, company=None, as_of: date 
         configured_quota = float(lt.annual_quota or 0.0)
         display_quota = None
         if _is_annual(code):
-            quota = get_annual_accrued_days(profile, year, as_of=as_of)
+            quota = (
+                float(ANNUAL_ACCRUAL_MAX_DAYS)
+                if user is None and profile is not None
+                else get_annual_accrued_days(profile, year, as_of=as_of)
+            )
             display_quota = ANNUAL_ACCRUAL_MAX_DAYS
         elif _is_sick(code):
             quota = configured_quota if configured_quota > 0 else float(SICK_MAX_DAYS_PER_YEAR)
@@ -677,6 +681,9 @@ def calculate_leave_balance(user, year, profile=None, company=None, as_of: date 
                 quota = 0.0
 
         remaining = opening + quota + adjustments - used
+        if user is None and profile is not None and _is_annual(code):
+            opening = 0.0
+            remaining = quota + adjustments - used
         remaining = max(0.0, remaining)
 
         balances.append(

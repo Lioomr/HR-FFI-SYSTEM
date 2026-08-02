@@ -18,14 +18,15 @@ from core.services import (
     get_direct_manager_user,
     get_disbursement_approver_users,
     get_hr_approver_users,
+    notify_profile_request_status_whatsapp,
     notify_users_for_pending_status,
     send_request_submission_email,
     sync_workflow,
 )
 from leaves.permissions import IsOwnerOrHR
+from organization.services import filter_queryset_by_accessible_companies, filter_queryset_by_company_scope
 
 from .models import LoanRequest
-from organization.services import filter_queryset_by_accessible_companies, filter_queryset_by_company_scope
 from .permissions import (
     IsCEOApproverOrAdmin,
     IsCFOApproverOrAdmin,
@@ -1086,6 +1087,18 @@ class CFOLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
         )
         sync_workflow(instance, actor=request.user)
         audit(request, "loan_request_rejected_cfo", entity="LoanRequest", entity_id=instance.id)
+        try:
+            notify_profile_request_status_whatsapp(
+                profile=instance.employee_profile,
+                request_type="Loan Request",
+                request_id=instance.id,
+                status_label="Rejected",
+                reason=comment,
+                details=[f"Requested Amount: {instance.requested_amount}", "Rejected by CFO"],
+                action_path="/employee/loans",
+            )
+        except Exception:
+            pass
         return success(LoanRequestReadSerializer(instance).data)
 
     @action(detail=True, methods=["post"], url_path="refer-to-ceo", permission_classes=[IsAuthenticated, IsCFOApproverOrAdmin])
@@ -1247,6 +1260,18 @@ class CEOLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
         )
         sync_workflow(instance, actor=request.user)
         audit(request, "loan_request_rejected_ceo", entity="LoanRequest", entity_id=instance.id)
+        try:
+            notify_profile_request_status_whatsapp(
+                profile=instance.employee_profile,
+                request_type="Loan Request",
+                request_id=instance.id,
+                status_label="Rejected",
+                reason=comment,
+                details=[f"Requested Amount: {instance.requested_amount}", "Rejected by CEO"],
+                action_path="/employee/loans",
+            )
+        except Exception:
+            pass
         return success(LoanRequestReadSerializer(instance).data)
 
 
@@ -1296,4 +1321,15 @@ class DisbursementLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
         )
         sync_workflow(instance, actor=request.user)
         audit(request, "loan_request_disbursed", entity="LoanRequest", entity_id=instance.id)
+        try:
+            notify_profile_request_status_whatsapp(
+                profile=instance.employee_profile,
+                request_type="Loan Request",
+                request_id=instance.id,
+                status_label="Approved and disbursed",
+                details=[f"Approved Amount: {instance.approved_amount or instance.requested_amount}"],
+                action_path="/employee/loans",
+            )
+        except Exception:
+            pass
         return success(LoanRequestReadSerializer(instance).data)

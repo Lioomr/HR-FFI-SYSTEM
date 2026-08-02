@@ -1,4 +1,3 @@
-from calendar import monthrange
 from decimal import Decimal
 
 from django.utils import timezone
@@ -174,9 +173,6 @@ class LoanRequestCreateSerializer(serializers.Serializer):
         if profile.employment_status != EmployeeProfile.EmploymentStatus.ACTIVE:
             raise serializers.ValidationError("Only active employees can request loans.")
 
-        if not profile.basic_salary or profile.basic_salary <= 0:
-            raise serializers.ValidationError("Basic salary is not configured for this employee.")
-
         loan_type = attrs.get("loan_type", LoanRequest.LoanType.OPEN)
         amount = attrs["amount"]
         installment_months = attrs.get("installment_months")
@@ -185,17 +181,17 @@ class LoanRequestCreateSerializer(serializers.Serializer):
             if installment_months:
                 raise serializers.ValidationError({"installment_months": "Installment months are only for installment loans."})
 
-            today = timezone.localdate()
-            days_in_month = monthrange(today.year, today.month)[1]
-            if today.day < (days_in_month - 9):
-                raise serializers.ValidationError("Open loan requests are only allowed in the last 10 days of the month.")
-
-            open_limit = profile.basic_salary * Decimal("0.25")
-            if amount > open_limit:
+            if profile.basic_salary and profile.basic_salary > 0:
+                open_limit = profile.basic_salary * Decimal("0.25")
+            else:
+                open_limit = None
+            if open_limit is not None and amount > open_limit:
                 raise serializers.ValidationError(
                     {"amount": f"Open loan amount cannot exceed 25% of basic salary ({open_limit})."}
                 )
         else:
+            if not profile.basic_salary or profile.basic_salary <= 0:
+                raise serializers.ValidationError("Basic salary is not configured for this employee.")
             if installment_months is None:
                 raise serializers.ValidationError({"installment_months": "Installment months are required for installment loans."})
 

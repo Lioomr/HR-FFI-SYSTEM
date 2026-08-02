@@ -1,5 +1,5 @@
-import os
 import json
+import os
 
 from django.conf import settings
 from rest_framework import serializers
@@ -16,6 +16,7 @@ class AnnouncementSerializer(serializers.ModelSerializer):
     attachment_name = serializers.SerializerMethodField()
     attachment_size = serializers.SerializerMethodField()
     has_attachment = serializers.SerializerMethodField()
+    publish_to_whatsapp = serializers.BooleanField(source="publish_to_sms", read_only=True)
     company_id = serializers.PrimaryKeyRelatedField(source="company", read_only=True)
     company_name = serializers.CharField(source="company.name", read_only=True)
 
@@ -31,6 +32,7 @@ class AnnouncementSerializer(serializers.ModelSerializer):
             "target_user_email",
             "publish_to_dashboard",
             "publish_to_email",
+            "publish_to_whatsapp",
             "publish_to_sms",
             "meeting_starts_at",
             "meeting_duration_minutes",
@@ -86,6 +88,7 @@ class AnnouncementListSerializer(serializers.ModelSerializer):
     target_user_email = serializers.SerializerMethodField()
     attachment_name = serializers.SerializerMethodField()
     has_attachment = serializers.SerializerMethodField()
+    publish_to_whatsapp = serializers.BooleanField(source="publish_to_sms", read_only=True)
     company_id = serializers.PrimaryKeyRelatedField(source="company", read_only=True)
     company_name = serializers.CharField(source="company.name", read_only=True)
 
@@ -99,6 +102,10 @@ class AnnouncementListSerializer(serializers.ModelSerializer):
             "target_roles",
             "target_user",
             "target_user_email",
+            "publish_to_dashboard",
+            "publish_to_email",
+            "publish_to_whatsapp",
+            "publish_to_sms",
             "meeting_starts_at",
             "meeting_duration_minutes",
             "meeting_location",
@@ -149,6 +156,7 @@ class AnnouncementCreateSerializer(serializers.ModelSerializer):
         required=False,
         allow_empty=False,
     )
+    publish_to_whatsapp = serializers.BooleanField(source="publish_to_sms", required=False)
 
     class Meta:
         model = Announcement
@@ -161,6 +169,7 @@ class AnnouncementCreateSerializer(serializers.ModelSerializer):
             "target_user_ids",
             "publish_to_dashboard",
             "publish_to_email",
+            "publish_to_whatsapp",
             "publish_to_sms",
             "meeting_starts_at",
             "meeting_duration_minutes",
@@ -171,6 +180,24 @@ class AnnouncementCreateSerializer(serializers.ModelSerializer):
             "zoom_url",
             "attachment",
         ]
+
+    def to_internal_value(self, data):
+        if "publish_to_whatsapp" not in data:
+            return super().to_internal_value(data)
+
+        mutable_data = data.copy()
+        boolean_field = serializers.BooleanField()
+        whatsapp_value = boolean_field.to_internal_value(mutable_data.get("publish_to_whatsapp"))
+        if "publish_to_sms" in mutable_data:
+            sms_value = boolean_field.to_internal_value(mutable_data.get("publish_to_sms"))
+            if sms_value != whatsapp_value:
+                raise serializers.ValidationError(
+                    {"publish_to_whatsapp": "Must match deprecated publish_to_sms when both are supplied."}
+                )
+
+        mutable_data["publish_to_sms"] = mutable_data.get("publish_to_whatsapp")
+        del mutable_data["publish_to_whatsapp"]
+        return super().to_internal_value(mutable_data)
 
     def validate_target_roles(self, value):
         """Validate that target_roles contains valid role names"""
@@ -216,6 +243,24 @@ class AnnouncementCreateSerializer(serializers.ModelSerializer):
 
         return attrs
 
+    def validate_target_user(self, value):
+        if value is None:
+            return value
+        request = self.context.get("request")
+        if not request:
+            raise serializers.ValidationError("Request context is required.")
+        scoped_profiles = filter_queryset_by_company_scope(
+            EmployeeProfile.objects.filter(
+                user=value,
+                user__is_active=True,
+                employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+            ),
+            request,
+        )
+        if not scoped_profiles.exists():
+            raise serializers.ValidationError("Target user must be active and belong to the active company.")
+        return value
+
     def validate_target_user_ids(self, value):
         request = self.context.get("request")
         if not request:
@@ -246,5 +291,11 @@ class AnnouncementCreateSerializer(serializers.ModelSerializer):
         if value.size > max_size:
             max_size_mb = max_size / (1024 * 1024)
             raise serializers.ValidationError(f"PDF must be {max_size_mb:.0f} MB or smaller.")
+
+        position = value.tell()
+        signature = value.read(5)
+        value.seek(position)
+        if signature != b"%PDF-":
+            raise serializers.ValidationError("Attachment content is not a valid PDF file.")
 
         return value

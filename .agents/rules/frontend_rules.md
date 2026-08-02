@@ -1,6 +1,10 @@
 # Frontend Agent Rules
 
-Frontend lives in `FrontEnd/`. React 18 + TypeScript + Vite + Ant Design.
+- Browser token storage follows `FrontEnd/src/services/api/tokenStorage.ts`; do not move tokens to long-lived localStorage.
+- Mobile clients must use platform secure storage and must not reuse browser storage assumptions.
+- UI role guards are for UX only; backend authorization is mandatory.
+
+Frontend lives in `FrontEnd/`. React 19 + TypeScript + Vite + Ant Design + React Router v7.
 
 ## Before Editing
 

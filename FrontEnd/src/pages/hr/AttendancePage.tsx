@@ -88,7 +88,7 @@ const HrAttendancePage: React.FC = () => {
             message.success(t("hr.attendance.recordUpdated"));
             setModalVisible(false);
             fetchData(); // Refresh list
-        } catch (_e) {
+        } catch {
             // Error handled by store
         }
     };

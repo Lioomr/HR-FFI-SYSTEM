@@ -2,7 +2,15 @@ from django.contrib import admin
 from django.http import HttpResponse
 from django.urls import include, path, re_path
 
-from core.views import HrSummaryView, HrRecentActivityView
+from core.views import HrRecentActivityView, HrSummaryView
+from core.views_health import HealthCheckView
+from core.views_whatsapp_integration import (
+    WhatsAppIntegrationConnectView,
+    WhatsAppIntegrationLogoutView,
+    WhatsAppIntegrationQrView,
+    WhatsAppIntegrationStatusView,
+    WhatsAppIntegrationTestView,
+)
 from payroll.views import PayrollRunExportView
 
 
@@ -16,11 +24,13 @@ def empty_no_content(_request):
 
 urlpatterns = [
     path("favicon.ico", empty_no_content),
+    path("healthz/", HealthCheckView.as_view(), name="healthz"),
     path("iclock/cdata", empty_ok),
     path("auth/", include("accounts.urls")),
     path("", include("admin_portal.urls")),
     path("", include("invites.urls")),
     path("", include("audit.urls")),
+    path("api/", include("audit.urls")),
     path("", include("employees.urls")),
     # Explicit payroll export route to avoid any include/router resolution edge cases.
     path("payroll-runs/<int:pk>/export/", PayrollRunExportView.as_view()),
@@ -28,6 +38,13 @@ urlpatterns = [
     path("", include("payroll.urls")),
     path("api/", include("announcements.urls")),
     path("api/core/", include("core.urls")),
+    path("api/notifications/", include("in_app_notifications.urls")),
+    path("api/agent-memory/", include("agent_memory.urls")),
+    path("api/integrations/whatsapp/status/", WhatsAppIntegrationStatusView.as_view()),
+    path("api/integrations/whatsapp/connect/", WhatsAppIntegrationConnectView.as_view()),
+    path("api/integrations/whatsapp/qr/", WhatsAppIntegrationQrView.as_view()),
+    path("api/integrations/whatsapp/logout/", WhatsAppIntegrationLogoutView.as_view()),
+    path("api/integrations/whatsapp/test/", WhatsAppIntegrationTestView.as_view()),
     path("api/", include("employees.urls")),
     path("api/hr/summary/", HrSummaryView.as_view()),
     path("api/hr/recent-activity/", HrRecentActivityView.as_view()),

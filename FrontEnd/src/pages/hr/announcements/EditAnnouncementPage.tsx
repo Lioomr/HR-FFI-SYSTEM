@@ -59,7 +59,8 @@ export default function EditAnnouncementPage() {
           target_roles: item.target_roles || [],
           publish_to_dashboard: item.publish_to_dashboard,
           publish_to_email: item.publish_to_email,
-          publish_to_sms: item.publish_to_sms,
+          // Prefer the new WhatsApp flag, fall back to the deprecated SMS alias.
+          publish_to_whatsapp: item.publish_to_whatsapp ?? item.publish_to_sms,
           meeting_starts_at: item.meeting_starts_at ? dayjs(item.meeting_starts_at) : null,
           meeting_duration_minutes: item.meeting_duration_minutes,
           meeting_location: item.meeting_location,
@@ -89,7 +90,7 @@ export default function EditAnnouncementPage() {
         announcement_type: announcement.announcement_type,
         publish_to_dashboard: values.publish_to_dashboard,
         publish_to_email: values.publish_to_email,
-        publish_to_sms: values.publish_to_sms,
+        publish_to_whatsapp: values.publish_to_whatsapp,
         attachment: attachmentFile,
       };
 
@@ -256,10 +257,10 @@ export default function EditAnnouncementPage() {
                 <Text strong>{t("hr.announcements.emailLabel")}</Text>
               </Space>
               <Space>
-                <Form.Item name="publish_to_sms" valuePropName="checked" noStyle>
+                <Form.Item name="publish_to_whatsapp" valuePropName="checked" noStyle>
                   <Switch />
                 </Form.Item>
-                <Text strong>{t("hr.announcements.smsLabel")}</Text>
+                <Text strong>{t("hr.announcements.whatsappLabel")}</Text>
               </Space>
             </Space>
           </div>

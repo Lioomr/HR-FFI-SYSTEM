@@ -43,6 +43,8 @@ from core.views_templates import resolve_template_path
 from employees.document_extraction import extract_visa_fields
 from employees.models import EmployeeDocument, EmployeeProfile
 from employees.permissions import IsHRManagerOrAdmin
+from in_app_notifications.dispatcher import dispatch_notification_channels
+from in_app_notifications.models import Notification
 from organization.models import OrganizationNode
 from organization.services import (
     filter_queryset_by_accessible_companies,
@@ -1321,7 +1323,9 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             return error("Validation error", errors=["employee_id is not allowed."], status=422)
         serializer = self.get_serializer(data=request.data)
         if not serializer.is_valid():
-            return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
+            flattened_errors = _flatten_errors(serializer.errors)
+            response_status = 400 if any("Annual leave exceeds available balance" in item for item in flattened_errors) else 422
+            return error("Validation error", errors=flattened_errors, status=response_status)
         self.perform_create(serializer)
 
         # Return read-serializer
@@ -1661,12 +1665,6 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             instance = self._unscoped_queryset().get(pk=pk)
         except LeaveRequest.DoesNotExist:
             return error("Not found", errors=["Not found."], status=404)
-        if _is_hr_manager_origin_request(instance):
-            return error(
-                "Validation error",
-                errors=["HR manager requests must be approved by CEO."],
-                status=422,
-            )
 
         # HR can reject at any pending stage? Or only pending HR?
         # Let's allow rejecting from PENDING_HR or SUBMITTED
@@ -1860,6 +1858,26 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         sync_workflow(instance, actor=request.user)
 
         audit(request, "cancel", entity="LeaveRequest", entity_id=instance.id)
+        dispatch_notification_channels(
+            recipient=request.user,
+            event_key="leave.cancelled",
+            title="Leave request cancelled",
+            message=f"Your leave request #{instance.id} was cancelled.",
+            category=Notification.Category.LEAVE,
+            action_url="/employee/leave/requests",
+            related_object=instance,
+            deduplication_key=f"leave.cancelled:{instance.id}",
+            whatsapp_template="request_status_update",
+            whatsapp_variables={
+                "employee_name": request.user.full_name or request.user.email,
+                "request_type": "Leave Request",
+                "request_id": instance.id,
+                "status_label": "Cancelled",
+                "reason": "",
+                "details": [],
+                "action_url": "/employee/leave/requests",
+            },
+        )
         return success(LeaveRequestSerializer(instance, context={"request": request}).data)
 
     @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated, IsOwnerOrHR])
@@ -2233,10 +2251,14 @@ class EmployeeLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
     pagination_class = None
 
     def get_queryset(self):
-        return LeaveRequest.objects.filter(
+        queryset = LeaveRequest.objects.filter(
             employee=self.request.user,
             is_active=True,
         ).select_related("employee", "leave_type", "decided_by")
+        active_company = get_active_company_for_request(self.request)
+        if active_company is not None:
+            return queryset.filter(company=active_company)
+        return filter_queryset_by_company_scope(queryset, self.request)
 
     def list(self, request, *args, **kwargs):
         if "employee_id" in request.query_params:
@@ -2335,6 +2357,10 @@ class LeaveBalanceAdjustmentViewSet(viewsets.ModelViewSet):
                 "days": float(instance.adjustment_days),
             },
         )
+
+    def create(self, request, *args, **kwargs):
+        response = super().create(request, *args, **kwargs)
+        return success(response.data, status=response.status_code)
 
 
 class CEOLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):

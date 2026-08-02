@@ -1,0 +1,193 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: ffi_hr_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ffi_hr_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ffi_hr_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: ffi_hr_redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./Backend
+    container_name: ffi_hr_backend
+    restart: unless-stopped
+    env_file:
+      - ./Backend/.env.docker
+    environment:
+      DB_ENGINE: django.db.backends.postgresql
+      DB_NAME: ffi_hr_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_HOST: db
+      DB_PORT: 5432
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
+      CORS_ALLOWED_ORIGINS: http://localhost:5173
+      CSRF_TRUSTED_ORIGINS: http://localhost:5173
+      FRONTEND_URL: http://localhost:5173
+      HR_TEMPLATES_DIR: /hr/templates
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/2
+      CELERY_RESULT_BACKEND: redis://redis:6379/3
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./Backend/static/pdf_templates:/hr/templates:ro
+      - private_uploads:/app/private_uploads
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz/', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  notification-worker:
+    build:
+      context: ./Backend
+    container_name: ffi_hr_notification_worker
+    restart: unless-stopped
+    user: "app"
+    command: ["celery", "-A", "config", "worker", "-B", "--loglevel=INFO"]
+    env_file:
+      - ./Backend/.env.docker
+    environment:
+      DB_ENGINE: django.db.backends.postgresql
+      DB_NAME: ffi_hr_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_HOST: db
+      DB_PORT: 5432
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/2
+      CELERY_RESULT_BACKEND: redis://redis:6379/3
+      EVOLUTION_API_BASE_URL: http://evolution-api:${EVOLUTION_API_PORT:-8080}
+    depends_on:
+      backend:
+        condition: service_started
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      evolution-api:
+        condition: service_healthy
+    volumes:
+      - ./Backend/static/pdf_templates:/hr/templates:ro
+      - private_uploads:/app/private_uploads
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A config inspect ping --timeout 5 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  frontend:
+    build:
+      context: ./FrontEnd
+      args:
+        VITE_API_BASE_URL: ""
+    container_name: ffi_hr_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+
+  evolution-db:
+    image: postgres:16-alpine
+    container_name: ffi_hr_evolution_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: evolution
+      POSTGRES_USER: evolution
+      POSTGRES_PASSWORD: evolution
+    volumes:
+      - evolution_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evolution -d evolution"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  evolution-redis:
+    image: redis:7-alpine
+    container_name: ffi_hr_evolution_redis
+    restart: unless-stopped
+    volumes:
+      - evolution_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  evolution-api:
+    image: atendai/evolution-api:latest
+    container_name: ffi_hr_evolution_api
+    restart: unless-stopped
+    environment:
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:-change-me}
+      DEL_INSTANCE_ON_DISCONNECT: "false"
+      QRCODE_LIMIT: "30"
+      CONFIG_SESSION_PHONE_CLIENT: Evolution API
+      CONFIG_SESSION_PHONE_NAME: Chrome
+      CONFIG_SESSION_PHONE_VERSION: 2.3000.1041554264
+      WEB_VERSION: 2.3000.1041554264
+      SERVER_PORT: ${EVOLUTION_API_PORT:-8080}
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://evolution:evolution@evolution-db:5432/evolution
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://evolution-redis:6379/0
+      SERVER_URL: http://localhost:${EVOLUTION_API_PORT:-8080}
+    volumes:
+      - evolution_store:/evolution/store
+      - evolution_instances:/evolution/instances
+    depends_on:
+      evolution-db:
+        condition: service_healthy
+      evolution-redis:
+        condition: service_healthy
+    ports:
+      - "${EVOLUTION_API_PORT:-8080}:${EVOLUTION_API_PORT:-8080}"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:$${SERVER_PORT:-8080}/ || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+
+volumes:
+  postgres_data:
+  private_uploads:
+  redis_data:
+  evolution_postgres_data:
+  evolution_redis_data:
+  evolution_store:
+  evolution_instances:

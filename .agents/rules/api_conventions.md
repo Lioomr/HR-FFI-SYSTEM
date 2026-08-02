@@ -1,6 +1,6 @@
 # API Conventions
 
-Source contract: `plans/Global API Rules (v1).txt` — authoritative for endpoint names and shapes.
+Source contract: `plans/Global API Rules (v1).txt`, reconciled with `plans/API Route Status Matrix.md` and implemented Django URLs/ViewSets. The route matrix flags legacy examples.
 
 ## Naming
 
@@ -36,7 +36,9 @@ Do not remove these without checking blast radius:
 
 ## Change Rules
 
-1. Check `plans/Global API Rules (v1).txt` before changing any endpoint shape.
+1. Check the route matrix and implemented Django route before changing any endpoint shape.
+2. Document authentication, permission, ownership, company scope, audit, throttling, and error behavior for sensitive endpoints.
+3. Add server-side authorization tests for every new employee-facing detail or download endpoint.
 2. If renaming a public route, add a compatibility route and note deprecation in the PR.
 3. Add/update backend tests for all behavior changes.
 4. Document deviations in the PR description and update the plan file.

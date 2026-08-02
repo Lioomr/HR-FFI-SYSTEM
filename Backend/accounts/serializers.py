@@ -1,13 +1,24 @@
 from django.contrib.auth import authenticate, get_user_model
 from rest_framework import serializers
 from rest_framework.exceptions import AuthenticationFailed
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer
+from rest_framework_simplejwt.settings import api_settings
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from audit.utils import audit
 
-from .password_policy import validate_password_against_policy
-from .security import clear_login_failures, get_client_ip, get_lockout_remaining_seconds, is_locked_out, record_login_failure
+from .security import (
+    clear_login_failures,
+    get_client_ip,
+    is_locked_out,
+    record_login_failure,
+)
 
 User = get_user_model()
+
+INVALID_CREDENTIALS_MESSAGE = "Unable to authenticate with the provided credentials."
+INVALID_TOKEN_MESSAGE = "Token is invalid or expired."
 
 
 class LoginSerializer(serializers.Serializer):
@@ -21,8 +32,6 @@ class LoginSerializer(serializers.Serializer):
         ip_address = get_client_ip(request) if request else ""
 
         if is_locked_out(email, ip_address):
-            remaining_seconds = get_lockout_remaining_seconds(email, ip_address)
-            remaining_minutes = max(1, (remaining_seconds + 59) // 60)
             if request:
                 audit(
                     request,
@@ -30,9 +39,7 @@ class LoginSerializer(serializers.Serializer):
                     entity="auth",
                     metadata={"email": email, "reason": "locked"},
                 )
-            raise AuthenticationFailed(
-                f"Too many failed login attempts. Try again in about {remaining_minutes} minute(s)."
-            )
+            raise AuthenticationFailed(INVALID_CREDENTIALS_MESSAGE)
 
         # Resolve canonical stored email case first, then authenticate.
         # Django auth lookup for USERNAME_FIELD is case-sensitive by default.
@@ -48,7 +55,7 @@ class LoginSerializer(serializers.Serializer):
                     entity="auth",
                     metadata={"email": email, "reason": "invalid_credentials"},
                 )
-            raise AuthenticationFailed("Invalid credentials")
+            raise AuthenticationFailed(INVALID_CREDENTIALS_MESSAGE)
 
         clear_login_failures(email, ip_address)
         attrs["user"] = user
@@ -59,11 +66,28 @@ class ChangePasswordSerializer(serializers.Serializer):
     current_password = serializers.CharField()
     new_password = serializers.CharField()
 
-    def validate_new_password(self, value):
+
+class VersionedTokenRefreshSerializer(TokenRefreshSerializer):
+    token_class = RefreshToken
+
+    def validate(self, attrs):
         try:
-            validate_password_against_policy(value)
-        except serializers.ValidationError:
-            raise
-        except Exception as exc:
-            raise serializers.ValidationError(list(getattr(exc, "messages", [str(exc)])))
-        return value
+            refresh = self.token_class(attrs["refresh"])
+            user_id = refresh.get(api_settings.USER_ID_CLAIM)
+            user = User.objects.only("is_active", "auth_token_version").get(
+                **{api_settings.USER_ID_FIELD: user_id}
+            )
+            token_version = refresh.get("token_version")
+            if (
+                type(token_version) is not int
+                or not user.is_active
+                or token_version != user.auth_token_version
+            ):
+                raise InvalidToken(INVALID_TOKEN_MESSAGE)
+
+            data = super().validate(attrs)
+        except (KeyError, TypeError, ValueError, User.DoesNotExist, TokenError):
+            raise InvalidToken(INVALID_TOKEN_MESSAGE) from None
+
+        data["token"] = data["access"]
+        return data

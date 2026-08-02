@@ -1,0 +1,381 @@
+/* ── Notification UI polish ──────────────────────────────────────────────────
+   Scoped styles for the header bell dropdown and the full inbox page.
+   Principles applied: concentric radii, soft shadows, tabular numbers, crisp
+   typography, balanced/pretty text wrapping, staggered entry + subtle exit,
+   interruptible animations, and full prefers-reduced-motion support. */
+
+/* Let our panel own its own padding/background inside the Popover shell. */
+.ffi-notif-popover .ant-popover-inner {
+  padding: 0;
+}
+
+.ffi-notif-panel {
+  width: 380px;
+  max-width: calc(100vw - 24px);
+  border-radius: 16px;
+  overflow: hidden;
+  background: #ffffff;
+  /* Soft, layered shadow instead of a hard border. */
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 12px 32px rgba(15, 23, 42, 0.12);
+  border: 1px solid rgba(226, 232, 240, 0.6);
+}
+
+.ffi-notif-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px 10px;
+}
+
+.ffi-notif-panel__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.ffi-notif-panel__list {
+  max-height: 380px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px;
+}
+
+.ffi-notif-panel__footer {
+  padding: 8px;
+  border-top: 1px solid rgba(226, 232, 240, 0.7);
+}
+
+/* ── Individual item ── */
+.ffi-notif-item {
+  display: flex;
+  gap: 12px;
+  padding: 10px 12px;
+  /* Concentric with the 16px panel minus 4px list padding. */
+  border-radius: 12px;
+  cursor: pointer;
+  text-align: start;
+  width: 100%;
+  border: none;
+  background: transparent;
+  transition:
+    background-color 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ffi-notif-item:hover,
+.ffi-notif-item:focus-visible {
+  background: rgba(249, 115, 22, 0.06);
+  outline: none;
+}
+
+.ffi-notif-item:focus-visible {
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.45);
+}
+
+.ffi-notif-item:active {
+  transform: scale(0.99);
+}
+
+.ffi-notif-item--unread {
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.ffi-notif-item__icon {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+}
+
+.ffi-notif-item__body {
+  min-width: 0;
+  flex: 1;
+}
+
+.ffi-notif-item__title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #0f172a;
+  line-height: 1.35;
+  text-wrap: pretty;
+}
+
+.ffi-notif-item--unread .ffi-notif-item__title {
+  font-weight: 700;
+}
+
+.ffi-notif-item__message {
+  font-size: 12.5px;
+  color: #64748b;
+  line-height: 1.4;
+  margin-top: 2px;
+  text-wrap: pretty;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.ffi-notif-item__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 5px;
+  font-size: 11.5px;
+  color: #94a3b8;
+}
+
+/* Time and counts should never shift width as digits change. */
+.ffi-notif-time,
+.ffi-notif-count {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+.ffi-notif-item__dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #3b82f6;
+  align-self: center;
+}
+
+/* ── Connection indicator ── */
+.ffi-notif-conn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: #94a3b8;
+}
+
+.ffi-notif-conn__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #f59e0b;
+}
+
+.ffi-notif-conn__dot--pulsing {
+  animation: ffi-notif-pulse 1.6s ease-in-out infinite;
+}
+
+/* ── Staggered entry ── */
+.ffi-notif-enter {
+  animation: ffi-notif-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes ffi-notif-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ffi-notif-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ── Full inbox page ── */
+.ffi-notif-page-row {
+  border-radius: 12px;
+  transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ffi-notif-page-row--unread {
+  background: rgba(59, 130, 246, 0.04);
+}
+
+/* ── Channel preferences ── */
+/* Responsive drawer width without the deprecated `width` prop. */
+.ffi-notif-pref-drawer .ant-drawer-content-wrapper {
+  width: min(420px, 100vw) !important;
+}
+
+.ffi-notif-pref-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  /* Concentric with the surrounding drawer/card. */
+  border-radius: 12px;
+  background: rgba(148, 163, 184, 0.06);
+}
+
+.ffi-notif-pref-row__icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+
+.ffi-notif-pref-row__body {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── Delivery status chips ── */
+.ffi-notif-delivery-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.ffi-notif-delivery {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  line-height: 18px;
+  padding: 0 8px;
+  border-radius: 8px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ffi-notif-delivery-row--compact .ffi-notif-delivery {
+  font-size: 10.5px;
+  line-height: 16px;
+  padding: 0 6px;
+}
+
+.ffi-notif-delivery__icon {
+  display: inline-flex;
+  font-size: 11px;
+  /* Optical alignment: nudge the glyph onto the text baseline. */
+  transform: translateY(0.5px);
+}
+
+/* ── Admin-only technical details (full page) ── */
+.ffi-notif-delivery-details {
+  margin-block: 2px 10px;
+  margin-inline: 58px 12px;
+}
+
+.ffi-notif-delivery-details__summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 600;
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ffi-notif-delivery-details__summary::-webkit-details-marker {
+  display: none;
+}
+
+.ffi-notif-delivery-details__summary::before {
+  content: "▸";
+  font-size: 10px;
+  transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ffi-notif-delivery-details[open] .ffi-notif-delivery-details__summary::before {
+  transform: rotate(90deg);
+}
+
+.ffi-notif-delivery-details__summary:hover {
+  background: rgba(148, 163, 184, 0.1);
+}
+
+.ffi-notif-delivery-details__summary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.45);
+}
+
+.ffi-notif-delivery-details__body {
+  padding: 6px 10px 2px;
+}
+
+.ffi-notif-delivery-details__row {
+  padding: 8px 0;
+  border-top: 1px solid rgba(226, 232, 240, 0.7);
+}
+
+.ffi-notif-delivery-details__row:first-child {
+  border-top: none;
+}
+
+.ffi-notif-delivery-details__label {
+  font-weight: 700;
+  font-size: 12.5px;
+  margin-bottom: 4px;
+  color: #0f172a;
+}
+
+.ffi-notif-delivery-details__grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 12px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.ffi-notif-delivery-details__grid dt {
+  color: #94a3b8;
+}
+
+.ffi-notif-delivery-details__grid dd {
+  margin: 0;
+  color: #475569;
+  text-wrap: pretty;
+  word-break: break-word;
+}
+
+.ffi-notif-delivery-details__mono {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-size: 11.5px;
+}
+
+/* ── Respect reduced-motion ── */
+@media (prefers-reduced-motion: reduce) {
+  .ffi-notif-item,
+  .ffi-notif-page-row {
+    transition: none;
+  }
+  .ffi-notif-enter {
+    animation: none;
+  }
+  .ffi-notif-conn__dot--pulsing {
+    animation: none;
+  }
+  .ffi-notif-item:active {
+    transform: none;
+  }
+  .ffi-notif-delivery-details__summary,
+  .ffi-notif-delivery-details__summary::before {
+    transition: none;
+  }
+}

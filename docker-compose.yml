@@ -17,6 +17,18 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    container_name: ffi_hr_redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: ./Backend
@@ -35,17 +47,105 @@ services:
       CORS_ALLOWED_ORIGINS: http://localhost:5173
       CSRF_TRUSTED_ORIGINS: http://localhost:5173
       FRONTEND_URL: http://localhost:5173
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/2
+      CELERY_RESULT_BACKEND: redis://redis:6379/3
+      COGNEE_ENABLED: ${COGNEE_ENABLED:-false}
+      COGNEE_BASE_URL: ${COGNEE_BASE_URL:-http://cognee:8000}
+      COGNEE_API_KEY: ${COGNEE_API_KEY:-}
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz/', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  cognee:
+    image: cognee/cognee:main
+    container_name: ffi_hr_cognee
+    restart: unless-stopped
+    profiles: ["memory"]
+    env_file:
+      - ./Backend/.env.docker
+    environment:
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      DB_PROVIDER: postgres
+      DB_HOST: cognee-db
+      DB_PORT: 5432
+      DB_USERNAME: cognee
+      DB_PASSWORD: cognee
+      DB_NAME: cognee
+    depends_on:
+      cognee-db:
+        condition: service_healthy
+    ports:
+      - "8001:8000"
+
+  cognee-db:
+    image: postgres:16-alpine
+    container_name: ffi_hr_cognee_db
+    restart: unless-stopped
+    profiles: ["memory"]
+    environment:
+      POSTGRES_DB: cognee
+      POSTGRES_USER: cognee
+      POSTGRES_PASSWORD: cognee
+    volumes:
+      - cognee_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cognee -d cognee"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  notification-worker:
+    build:
+      context: ./Backend
+    container_name: ffi_hr_notification_worker
+    restart: unless-stopped
+    user: "app"
+    command: ["celery", "-A", "config", "worker", "-B", "--loglevel=INFO"]
+    env_file:
+      - ./Backend/.env.docker
+    environment:
+      DB_ENGINE: django.db.backends.postgresql
+      DB_NAME: ffi_hr_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_HOST: db
+      DB_PORT: 5432
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/2
+      CELERY_RESULT_BACKEND: redis://redis:6379/3
+    depends_on:
+      backend:
+        condition: service_started
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      evolution-api:
+        condition: service_healthy
+        required: false
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A config inspect ping --timeout 5 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
 
   frontend:
     build:
       context: ./FrontEnd
       args:
-        VITE_API_BASE_URL: http://localhost:8000
+        VITE_API_BASE_URL: ""
     container_name: ffi_hr_frontend
     restart: unless-stopped
     depends_on:
@@ -53,5 +153,78 @@ services:
     ports:
       - "5173:80"
 
+  evolution-db:
+    image: postgres:16-alpine
+    container_name: ffi_hr_evolution_db
+    restart: unless-stopped
+    profiles: ["messaging-trial"]
+    environment:
+      POSTGRES_DB: evolution
+      POSTGRES_USER: evolution
+      POSTGRES_PASSWORD: evolution
+    volumes:
+      - evolution_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evolution -d evolution"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  evolution-redis:
+    image: redis:7-alpine
+    container_name: ffi_hr_evolution_redis
+    restart: unless-stopped
+    profiles: ["messaging-trial"]
+    volumes:
+      - evolution_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  evolution-api:
+    image: atendai/evolution-api:latest
+    container_name: ffi_hr_evolution_api
+    restart: unless-stopped
+    profiles: ["messaging-trial"]
+    environment:
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:-change-me}
+      DEL_INSTANCE_ON_DISCONNECT: "false"
+      QRCODE_LIMIT: "30"
+      CONFIG_SESSION_PHONE_CLIENT: Evolution API
+      CONFIG_SESSION_PHONE_NAME: Chrome
+      CONFIG_SESSION_PHONE_VERSION: 2.3000.1041554264
+      WEB_VERSION: 2.3000.1041554264
+      SERVER_PORT: ${EVOLUTION_API_PORT:-8080}
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://evolution:evolution@evolution-db:5432/evolution
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://evolution-redis:6379/0
+      SERVER_URL: http://localhost:${EVOLUTION_API_PORT:-8080}
+    volumes:
+      - evolution_store:/evolution/store
+      - evolution_instances:/evolution/instances
+    depends_on:
+      evolution-db:
+        condition: service_healthy
+      evolution-redis:
+        condition: service_healthy
+    ports:
+      - "${EVOLUTION_API_PORT:-8080}:${EVOLUTION_API_PORT:-8080}"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:$${SERVER_PORT:-8080}/ || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+
 volumes:
   postgres_data:
+  redis_data:
+  evolution_postgres_data:
+  evolution_redis_data:
+  evolution_store:
+  evolution_instances:
+  cognee_postgres_data:

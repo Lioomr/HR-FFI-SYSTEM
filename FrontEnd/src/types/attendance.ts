@@ -13,6 +13,8 @@ export interface AttendanceRecord {
   id: string | number;
   employee_profile?: number;
   employee_name?: string;
+  employee_name_en?: string | null;
+  employee_name_ar?: string | null;
   employee_email?: string;
   date: string; // YYYY-MM-DD
   check_in_at: string | null;
@@ -33,4 +35,5 @@ export interface AttendanceFilters {
   page_size?: number;
   status?: AttendanceStatus;
   employee_id?: number | string;
+  search?: string;
 }

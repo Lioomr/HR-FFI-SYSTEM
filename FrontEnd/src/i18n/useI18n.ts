@@ -10,8 +10,8 @@ export function useI18n() {
 
   const t = useMemo(
     () => (key: string, params?: Record<string, any> | string, fallback?: string) => {
-      let actualFallback = typeof params === "string" ? params : fallback;
-      let actualParams = typeof params === "object" ? params : undefined;
+      const actualFallback = typeof params === "string" ? params : fallback;
+      const actualParams = typeof params === "object" ? params : undefined;
 
       let translated = translations[language]?.[key] ?? actualFallback ?? key;
 

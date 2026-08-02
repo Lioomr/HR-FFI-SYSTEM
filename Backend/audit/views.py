@@ -2,6 +2,7 @@ from django.db.models import Q
 from django.utils.dateparse import parse_datetime
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.exporting import audit_export, csv_response, xlsx_response
@@ -139,4 +140,11 @@ class AuditLogsExportView(APIView):
         if export_format == "csv":
             audit_export(request, entity="AuditLog", export_format="csv")
             return csv_response(headers=headers, rows=rows, filename="audit_logs.csv")
-        return error("Validation error", errors={"file_format": ["Must be csv or xlsx."]}, status=422)
+        return Response(
+            {
+                "status": "error",
+                "message": "Validation error",
+                "errors": {"file_format": ["Must be csv or xlsx."]},
+            },
+            status=422,
+        )

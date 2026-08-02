@@ -86,6 +86,7 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
     "django_filters",
+    "channels",
     "core",
     "accounts",
     "admin_portal",
@@ -101,6 +102,8 @@ INSTALLED_APPS = [
     "loans",
     "rents",
     "organization",
+    "in_app_notifications",
+    "agent_memory",
 ]
 
 MIDDLEWARE = [
@@ -122,6 +125,11 @@ APP_TIME_ZONE = os.environ.get("APP_TIME_ZONE") or os.environ.get("TIME_ZONE") o
 EMAIL_DISPLAY_TIME_ZONE = os.environ.get("EMAIL_DISPLAY_TIME_ZONE", APP_TIME_ZONE)
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "no-reply@fficontracting.com")
 NOTIFICATION_HTTP_TIMEOUT_SECONDS = int(os.environ.get("NOTIFICATION_HTTP_TIMEOUT_SECONDS", "10"))
+NOTIFICATION_DELIVERY_TIMEOUT_SECONDS = int(
+    os.environ.get("NOTIFICATION_DELIVERY_TIMEOUT_SECONDS", str(NOTIFICATION_HTTP_TIMEOUT_SECONDS))
+)
+NOTIFICATION_WHATSAPP_DELIVERY_ENABLED = _env_bool("NOTIFICATION_WHATSAPP_DELIVERY_ENABLED", True)
+NOTIFICATION_EMAIL_FALLBACK_ENABLED = _env_bool("NOTIFICATION_EMAIL_FALLBACK_ENABLED", True)
 PASSWORD_RESET_TOKEN_TTL_SECONDS = int(os.environ.get("PASSWORD_RESET_TOKEN_TTL_SECONDS", "3600"))
 MAX_LEAVE_DOCUMENT_SIZE_BYTES = int(os.environ.get("MAX_LEAVE_DOCUMENT_SIZE_BYTES", str(5 * 1024 * 1024)))
 MAX_ASSET_INVOICE_SIZE_BYTES = int(os.environ.get("MAX_ASSET_INVOICE_SIZE_BYTES", str(5 * 1024 * 1024)))
@@ -129,17 +137,20 @@ MAX_ANNOUNCEMENT_ATTACHMENT_SIZE_BYTES = int(
     os.environ.get("MAX_ANNOUNCEMENT_ATTACHMENT_SIZE_BYTES", str(5 * 1024 * 1024))
 )
 
-# Bird (MessageBird) Channels API
+# Bird (MessageBird) Channels API for email. SMS uses TextBee; WhatsApp uses Evolution.
+MESSAGING_SMS_PROVIDER = os.environ.get("MESSAGING_SMS_PROVIDER", "textbee").strip().lower()
 BIRD_API_KEY = os.environ.get("BIRD_API_KEY", "")
 BIRD_CHANNEL_ID = os.environ.get("BIRD_CHANNEL_ID", "")
 BIRD_ACCESS_KEY = os.environ.get("BIRD_ACCESS_KEY", "")
 BIRD_WORKSPACE_ID = os.environ.get("BIRD_WORKSPACE_ID", "")
 BIRD_EMAIL_CHANNEL_ID = os.environ.get("BIRD_EMAIL_CHANNEL_ID", "")
-BIRD_SMS_CHANNEL_ID = os.environ.get("BIRD_SMS_CHANNEL_ID", "")
-BIRD_WHATSAPP_CHANNEL_ID = os.environ.get("BIRD_WHATSAPP_CHANNEL_ID", "")
-BIRD_WHATSAPP_MEETING_PROJECT_ID = os.environ.get("BIRD_WHATSAPP_MEETING_PROJECT_ID", "")
-BIRD_WHATSAPP_MEETING_VERSION_ID = os.environ.get("BIRD_WHATSAPP_MEETING_VERSION_ID", "")
 BIRD_API_BASE_URL = os.environ.get("BIRD_API_BASE_URL", "https://api.bird.com/workspaces")
+EVOLUTION_API_BASE_URL = os.environ.get("EVOLUTION_API_BASE_URL", "")
+EVOLUTION_API_KEY = os.environ.get("EVOLUTION_API_KEY", "")
+EVOLUTION_INSTANCE_NAME = os.environ.get("EVOLUTION_INSTANCE_NAME", "")
+TEXTBEE_API_BASE_URL = os.environ.get("TEXTBEE_API_BASE_URL", "https://api.textbee.dev")
+TEXTBEE_API_KEY = os.environ.get("TEXTBEE_API_KEY", "")
+TEXTBEE_DEVICE_ID = os.environ.get("TEXTBEE_DEVICE_ID", "")
 EMAIL_LOGO_PATH = os.environ.get("EMAIL_LOGO_PATH", "")
 EMAIL_LOGO_URL = os.environ.get("EMAIL_LOGO_URL", "")
 EMAIL_CONTACT_EMAIL = os.environ.get("EMAIL_CONTACT_EMAIL", "hr@fficontracting.com")
@@ -188,6 +199,40 @@ TEMPLATES = [
     },
 ]
 WSGI_APPLICATION = "config.wsgi.application"
+ASGI_APPLICATION = "config.asgi.application"
+
+REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {"hosts": [REDIS_URL]},
+    }
+}
+
+CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/2")
+CELERY_RESULT_BACKEND = os.environ.get("CELERY_RESULT_BACKEND", "redis://localhost:6379/3")
+CELERY_TASK_ALWAYS_EAGER = _env_bool("CELERY_TASK_ALWAYS_EAGER", False)
+CELERY_TASK_EAGER_PROPAGATES = _env_bool("CELERY_TASK_EAGER_PROPAGATES", False)
+CELERY_TASK_ACKS_LATE = _env_bool("CELERY_TASK_ACKS_LATE", True)
+CELERY_TASK_REJECT_ON_WORKER_LOST = _env_bool("CELERY_TASK_REJECT_ON_WORKER_LOST", True)
+CELERY_TASK_TRACK_STARTED = _env_bool("CELERY_TASK_TRACK_STARTED", True)
+CELERY_TASK_SERIALIZER = "json"
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = APP_TIME_ZONE
+NOTIFICATION_DELIVERY_MAX_RETRIES = int(os.environ.get("NOTIFICATION_DELIVERY_MAX_RETRIES", "3"))
+NOTIFICATION_DELIVERY_RETRY_BACKOFF_SECONDS = int(
+    os.environ.get("NOTIFICATION_DELIVERY_RETRY_BACKOFF_SECONDS", "2")
+)
+NOTIFICATION_WORKER_READINESS_TIMEOUT_SECONDS = int(
+    os.environ.get("NOTIFICATION_WORKER_READINESS_TIMEOUT_SECONDS", "60")
+)
+NOTIFICATION_WORKER_READINESS_INTERVAL_SECONDS = float(
+    os.environ.get("NOTIFICATION_WORKER_READINESS_INTERVAL_SECONDS", "2")
+)
+NOTIFICATION_WORKER_READINESS_REQUEST_TIMEOUT_SECONDS = float(
+    os.environ.get("NOTIFICATION_WORKER_READINESS_REQUEST_TIMEOUT_SECONDS", "5")
+)
 
 HR_TEMPLATES_DIR = os.environ.get("HR_TEMPLATES_DIR", "").strip()
 
@@ -276,7 +321,7 @@ PAYROLL_GENERATE_PAYSLIPS_THROTTLE_RATE = "5/min"
 PAYROLL_EXPORT_THROTTLE_RATE = "10/min"
 
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": ("rest_framework_simplejwt.authentication.JWTAuthentication",),
+    "DEFAULT_AUTHENTICATION_CLASSES": ("accounts.authentication.VersionedJWTAuthentication",),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_FILTER_BACKENDS": ("django_filters.rest_framework.DjangoFilterBackend",),
     "DEFAULT_PAGINATION_CLASS": "core.pagination.StandardPagination",

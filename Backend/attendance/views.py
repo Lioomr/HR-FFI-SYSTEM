@@ -2,8 +2,8 @@ from datetime import date as date_type
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
-from django.db import transaction
-from django.db.models import Q
+from django.db import IntegrityError, transaction
+from django.db.models import Count, Q
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
@@ -20,10 +20,12 @@ from core.services import (
     get_ceo_approver_users,
     get_direct_manager_user,
     get_hr_approver_users,
+    notify_profile_request_status_whatsapp,
     notify_users_for_pending_status,
     sync_workflow,
 )
 from employees.models import EmployeeProfile
+from organization.services import filter_queryset_by_company_scope, get_active_company_for_request
 
 from .models import AttendanceCorrectionRequest, AttendanceRecord
 from .permissions import IsAttendanceSelfServiceRole, IsDepartmentCEOApprover, IsHRManagerOrAdmin
@@ -37,7 +39,15 @@ from .serializers import (
 
 User = get_user_model()
 
-ATTENDANCE_MAINTENANCE_MESSAGE = "Attendance is temporarily unavailable while we fix this part."
+def _apply_employee_search(queryset, search_param):
+    if not search_param:
+        return queryset
+    return queryset.filter(
+        Q(employee_profile__full_name_en__icontains=search_param)
+        | Q(employee_profile__full_name_ar__icontains=search_param)
+        | Q(employee_profile__full_name__icontains=search_param)
+        | Q(employee_profile__user__email__icontains=search_param)
+    )
 
 
 def _is_hr_manager_user(user):
@@ -67,22 +77,23 @@ def _can_manager_act_on_correction(user, correction: AttendanceCorrectionRequest
     return AttendanceCorrectionRequest.objects.filter(pk=correction.pk).filter(_manager_scope_filter(user)).exists()
 
 
+def _scope_attendance_queryset(queryset, request):
+    queryset = filter_queryset_by_company_scope(queryset, request, field_name="employee_profile__company_id")
+    return queryset.filter(employee_profile__company_id__isnull=False)
+
+
+def _profile_matches_active_company(request, profile):
+    if profile.company_id is None:
+        return False
+    active_company = get_active_company_for_request(request)
+    return bool(active_company and active_company.id == profile.company_id)
+
+
 class AttendanceThrottle(UserRateThrottle):
     rate = "10/min"
 
 
-class AttendanceMaintenanceMixin:
-    def dispatch(self, request, *args, **kwargs):
-        request = self.initialize_request(request, *args, **kwargs)
-        self.request = request
-        self.args = args
-        self.kwargs = kwargs
-        self.headers = self.default_response_headers
-        response = error(ATTENDANCE_MAINTENANCE_MESSAGE, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        return self.finalize_response(request, response, *args, **kwargs)
-
-
-class AttendanceRecordViewSet(AttendanceMaintenanceMixin, viewsets.ModelViewSet):
+class AttendanceRecordViewSet(viewsets.ModelViewSet):
     serializer_class = AttendanceRecordSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
@@ -115,6 +126,7 @@ class AttendanceRecordViewSet(AttendanceMaintenanceMixin, viewsets.ModelViewSet)
 
         # Date Filter Logic (Default: Last 30 days)
         queryset = AttendanceRecord.objects.all().select_related("employee_profile__user")
+        queryset = _scope_attendance_queryset(queryset, self.request)
         date_from_str = self.request.query_params.get("date_from")
         date_to_str = self.request.query_params.get("date_to")
 
@@ -136,6 +148,8 @@ class AttendanceRecordViewSet(AttendanceMaintenanceMixin, viewsets.ModelViewSet)
             today = timezone.localdate()
             thirty_days_ago = today - timedelta(days=30)
             queryset = queryset.filter(date__range=[thirty_days_ago, today])
+
+        queryset = _apply_employee_search(queryset, self.request.query_params.get("search"))
 
         if role in ["SystemAdmin", "HRManager"]:
             employee_id = self.request.query_params.get("employee_id")
@@ -178,10 +192,17 @@ class AttendanceRecordViewSet(AttendanceMaintenanceMixin, viewsets.ModelViewSet)
         if hasattr(self, "_date_filter_error"):
             return error(f"Invalid date filter: {self._date_filter_error}", status=status.HTTP_400_BAD_REQUEST)
 
+        summary = {
+            row["status"]: row["n"]
+            for row in self.filter_queryset(self.get_queryset()).values("status").annotate(n=Count("id"))
+        }
+
         response = super().list(request, *args, **kwargs)
 
         # Avoid double wrapping if pagination already added the envelope
         if isinstance(response.data, dict) and response.data.get("status") == "success":
+            if isinstance(response.data.get("data"), dict):
+                response.data["data"]["summary"] = summary
             return response
 
         return success(response.data)
@@ -192,6 +213,9 @@ class AttendanceRecordViewSet(AttendanceMaintenanceMixin, viewsets.ModelViewSet)
 
     def destroy(self, request, *args, **kwargs):
         return error("Attendance records cannot be deleted.", status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def create(self, request, *args, **kwargs):
+        return error("Attendance records cannot be created directly.", status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
     def partial_update(self, request, *args, **kwargs):
         # HR Override logic (PATCH routes here)
@@ -247,8 +271,8 @@ class AttendanceRecordViewSet(AttendanceMaintenanceMixin, viewsets.ModelViewSet)
         except EmployeeProfile.DoesNotExist:
             return error("Employee profile not found.", status=status.HTTP_404_NOT_FOUND)
 
-        if AttendanceRecord.objects.filter(employee_profile=profile, date=today).exists():
-            return error("Check-in already exists for today.", status=status.HTTP_400_BAD_REQUEST)
+        if not _profile_matches_active_company(request, profile):
+            return error("Employee profile is not available in the active company.", status=status.HTTP_403_FORBIDDEN)
 
         # Check if user has a manager
         has_manager = False
@@ -261,18 +285,27 @@ class AttendanceRecordViewSet(AttendanceMaintenanceMixin, viewsets.ModelViewSet)
             status_value = AttendanceRecord.Status.PENDING_MANAGER if has_manager else AttendanceRecord.Status.PENDING_HR
         # Fallback/Legacy note: PENDING_HR maps to old 'PENDING' concept effectively
 
-        record = AttendanceRecord.objects.create(
-            employee_profile=profile,
-            date=today,
-            check_in_at=timezone.now(),
-            status=status_value,
-            source=AttendanceRecord.Source.EMPLOYEE,
-            created_by=user,
-            updated_by=user,
-        )
-        sync_workflow(record, actor=user)
-
-        audit(request, "attendance.check_in", entity="attendance_record", entity_id=record.id)
+        try:
+            with transaction.atomic():
+                record = AttendanceRecord.objects.create(
+                    employee_profile=profile,
+                    date=today,
+                    check_in_at=timezone.now(),
+                    status=status_value,
+                    source=AttendanceRecord.Source.EMPLOYEE,
+                    created_by=user,
+                    updated_by=user,
+                )
+                sync_workflow(record, actor=user)
+                audit(
+                    request,
+                    "attendance.check_in",
+                    entity="attendance_record",
+                    entity_id=record.id,
+                    metadata={"date": str(record.date), "company_id": profile.company_id},
+                )
+        except IntegrityError:
+            return error("Check-in already exists for today.", status=status.HTTP_400_BAD_REQUEST)
         try:
             requester_name = profile.full_name or user.email
             if record.status == AttendanceRecord.Status.PENDING_MANAGER:
@@ -321,20 +354,29 @@ class AttendanceRecordViewSet(AttendanceMaintenanceMixin, viewsets.ModelViewSet)
         except EmployeeProfile.DoesNotExist:
             return error("Employee profile not found.", status=status.HTTP_404_NOT_FOUND)
 
-        try:
-            record = AttendanceRecord.objects.get(employee_profile=profile, date=today)
-        except AttendanceRecord.DoesNotExist:
-            return error("No check-in record found for today.", status=status.HTTP_400_BAD_REQUEST)
+        if not _profile_matches_active_company(request, profile):
+            return error("Employee profile is not available in the active company.", status=status.HTTP_403_FORBIDDEN)
 
-        if record.check_out_at:
-            return error("Check-out already exists for today.", status=status.HTTP_400_BAD_REQUEST)
+        with transaction.atomic():
+            try:
+                record = AttendanceRecord.objects.select_for_update().get(employee_profile=profile, date=today)
+            except AttendanceRecord.DoesNotExist:
+                return error("No check-in record found for today.", status=status.HTTP_400_BAD_REQUEST)
 
-        record.check_out_at = timezone.now()
-        record.updated_by = user
-        record.save()
-        sync_workflow(record, actor=user)
+            if record.check_out_at:
+                return error("Check-out already exists for today.", status=status.HTTP_400_BAD_REQUEST)
 
-        audit(request, "attendance.check_out", entity="attendance_record", entity_id=record.id)
+            record.check_out_at = timezone.now()
+            record.updated_by = user
+            record.save(update_fields=["check_out_at", "updated_by", "updated_at"])
+            sync_workflow(record, actor=user)
+            audit(
+                request,
+                "attendance.check_out",
+                entity="attendance_record",
+                entity_id=record.id,
+                metadata={"date": str(record.date), "company_id": profile.company_id},
+            )
         return success(CheckOutResponseSerializer(record).data)
 
     @action(detail=False, methods=["get"], url_path="me")
@@ -369,6 +411,7 @@ class AttendanceCorrectionRequestViewSet(viewsets.ModelViewSet):
             "employee_profile__manager_profile__user",
             "attendance_record",
         )
+        qs = _scope_attendance_queryset(qs, self.request)
 
         if role in ["SystemAdmin", "HRManager"] or is_hr_workflow_approver_user(user):
             return qs
@@ -391,6 +434,9 @@ class AttendanceCorrectionRequestViewSet(viewsets.ModelViewSet):
                 raise PermissionDenied("Employee profile not found.")
         elif not profile:
             raise ValidationError({"employee_profile": "This field is required."})
+
+        if not _profile_matches_active_company(self.request, profile):
+            raise PermissionDenied("Employee profile is not available in the active company.")
 
         record = serializer.validated_data.get("attendance_record")
         if record and record.employee_profile_id != profile.id:
@@ -539,6 +585,17 @@ class AttendanceCorrectionRequestViewSet(viewsets.ModelViewSet):
                 self._apply_correction(instance, request.user, note)
                 sync_workflow(instance, actor=request.user)
             audit(request, "attendance_correction.hr_approved", entity="AttendanceCorrectionRequest", entity_id=instance.id)
+            try:
+                notify_profile_request_status_whatsapp(
+                    profile=instance.employee_profile,
+                    request_type="Attendance Correction",
+                    request_id=instance.id,
+                    status_label="Approved",
+                    details=[f"Date: {instance.date}"],
+                    action_path="/employee/attendance",
+                )
+            except Exception:
+                pass
             return success(self._serialize(instance))
 
         return error("Request is not in an approvable state.", status=status.HTTP_422_UNPROCESSABLE_ENTITY)
@@ -571,6 +628,18 @@ class AttendanceCorrectionRequestViewSet(viewsets.ModelViewSet):
         instance.save()
         sync_workflow(instance, actor=request.user)
         audit(request, "attendance_correction.rejected", entity="AttendanceCorrectionRequest", entity_id=instance.id)
+        try:
+            notify_profile_request_status_whatsapp(
+                profile=instance.employee_profile,
+                request_type="Attendance Correction",
+                request_id=instance.id,
+                status_label="Rejected",
+                reason=note,
+                details=[f"Date: {instance.date}"],
+                action_path="/employee/attendance",
+            )
+        except Exception:
+            pass
         return success(self._serialize(instance))
 
     @action(detail=True, methods=["post"])
@@ -637,7 +706,7 @@ class AttendanceCorrectionRequestViewSet(viewsets.ModelViewSet):
         instance.save()
 
 
-class ManagerAttendanceViewSet(AttendanceMaintenanceMixin, viewsets.ReadOnlyModelViewSet):
+class ManagerAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
     """
     Endpoints for managers to view and act on their direct reports' attendance.
     """
@@ -671,6 +740,7 @@ class ManagerAttendanceViewSet(AttendanceMaintenanceMixin, viewsets.ReadOnlyMode
     def get_queryset(self):
         role = get_role(self.request.user)
         base_qs = AttendanceRecord.objects.select_related("employee_profile__user", "employee_profile__manager_profile")
+        base_qs = _scope_attendance_queryset(base_qs, self.request)
         if role == "SystemAdmin":
             return base_qs
 
@@ -751,10 +821,22 @@ class ManagerAttendanceViewSet(AttendanceMaintenanceMixin, viewsets.ReadOnlyMode
         sync_workflow(instance, actor=request.user)
 
         audit(request, "reject", entity="AttendanceRecord", entity_id=instance.id)
+        try:
+            notify_profile_request_status_whatsapp(
+                profile=instance.employee_profile,
+                request_type="Attendance Request",
+                request_id=instance.id,
+                status_label="Rejected",
+                reason=note,
+                details=[f"Date: {instance.date}", "Rejected by manager"],
+                action_path="/employee/attendance",
+            )
+        except Exception:
+            pass
         return success(AttendanceRecordSerializer(instance).data)
 
 
-class CEOAttendanceViewSet(AttendanceMaintenanceMixin, viewsets.ReadOnlyModelViewSet):
+class CEOAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = AttendanceRecordSerializer
     permission_classes = [IsAuthenticated, IsDepartmentCEOApprover]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
@@ -764,10 +846,38 @@ class CEOAttendanceViewSet(AttendanceMaintenanceMixin, viewsets.ReadOnlyModelVie
 
     def get_queryset(self):
         qs = AttendanceRecord.objects.select_related("employee_profile__user")
+        qs = _scope_attendance_queryset(qs, self.request)
+        date_from_str = self.request.query_params.get("date_from")
+        date_to_str = self.request.query_params.get("date_to")
+        if date_from_str and date_to_str:
+            try:
+                date_from = date_type.fromisoformat(date_from_str)
+                date_to = date_type.fromisoformat(date_to_str)
+                qs = qs.filter(date__range=[date_from, date_to])
+            except (ValueError, TypeError):
+                return qs.none()
+
         status_param = self.request.query_params.get("status")
         if status_param:
-            return qs.filter(status=status_param)
-        return qs.filter(status=AttendanceRecord.Status.PENDING_CEO)
+            qs = qs.filter(status=status_param)
+
+        qs = _apply_employee_search(qs, self.request.query_params.get("search"))
+
+        return qs
+
+    def list(self, request, *args, **kwargs):
+        summary = {
+            row["status"]: row["n"]
+            for row in self.filter_queryset(self.get_queryset()).values("status").annotate(n=Count("id"))
+        }
+
+        response = super().list(request, *args, **kwargs)
+
+        if isinstance(response.data, dict) and response.data.get("status") == "success":
+            if isinstance(response.data.get("data"), dict):
+                response.data["data"]["summary"] = summary
+
+        return response
 
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
@@ -792,6 +902,17 @@ class CEOAttendanceViewSet(AttendanceMaintenanceMixin, viewsets.ReadOnlyModelVie
         )
         sync_workflow(instance, actor=request.user)
         audit(request, "approve_ceo", entity="AttendanceRecord", entity_id=instance.id)
+        try:
+            notify_profile_request_status_whatsapp(
+                profile=instance.employee_profile,
+                request_type="Attendance Request",
+                request_id=instance.id,
+                status_label="Approved",
+                details=[f"Date: {instance.date}", "Approved by CEO"],
+                action_path="/employee/attendance",
+            )
+        except Exception:
+            pass
         return success(AttendanceRecordSerializer(instance).data)
 
     @action(detail=True, methods=["post"])
@@ -821,4 +942,16 @@ class CEOAttendanceViewSet(AttendanceMaintenanceMixin, viewsets.ReadOnlyModelVie
         )
         sync_workflow(instance, actor=request.user)
         audit(request, "reject_ceo", entity="AttendanceRecord", entity_id=instance.id)
+        try:
+            notify_profile_request_status_whatsapp(
+                profile=instance.employee_profile,
+                request_type="Attendance Request",
+                request_id=instance.id,
+                status_label="Rejected",
+                reason=note,
+                details=[f"Date: {instance.date}", "Rejected by CEO"],
+                action_path="/employee/attendance",
+            )
+        except Exception:
+            pass
         return success(AttendanceRecordSerializer(instance).data)

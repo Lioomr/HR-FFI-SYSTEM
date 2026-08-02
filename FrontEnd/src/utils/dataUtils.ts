@@ -36,7 +36,7 @@ export function normalizeListData<T>(payload: any): ListResponse<T> {
   }
   if (typeof payload === "object") {
     if (Array.isArray(payload.items)) {
-      return { items: payload.items, total: payload.total ?? payload.items.length };
+      return { items: payload.items, total: payload.total ?? payload.count ?? payload.items.length };
     }
     if (Array.isArray(payload.results)) {
       return { items: payload.results, total: payload.count ?? payload.results.length };

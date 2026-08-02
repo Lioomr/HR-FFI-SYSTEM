@@ -78,3 +78,11 @@ class Announcement(models.Model):
 
     def __str__(self):
         return self.title
+
+    @property
+    def publish_to_whatsapp(self):
+        return self.publish_to_sms
+
+    @publish_to_whatsapp.setter
+    def publish_to_whatsapp(self, value):
+        self.publish_to_sms = value

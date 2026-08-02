@@ -15,6 +15,7 @@ import AdminUsersListPage from "../pages/admin/AdminUsersListPage";
 import AdminUserCreatePage from "../pages/admin/AdminUserCreatePage";
 import AdminInvitesPage from "../pages/admin/AdminInvitesPage";
 import AdminAuditLogsPage from "../pages/admin/AdminAuditLogsPage";
+import AdminWhatsAppIntegrationPage from "../pages/admin/AdminWhatsAppIntegrationPage";
 
 import AdminSettingsPage from "../pages/admin/AdminSettingsPage";
 import BioTimeSettingsPage from "../pages/admin/BioTimeSettingsPage";
@@ -95,12 +96,14 @@ import CFODashboardPage from "../pages/cfo/CFODashboardPage";
 import CFOLoanRequestsPage from "../pages/cfo/CFOLoanRequestsPage";
 import CFOLoanRequestDetailsPage from "../pages/cfo/CFOLoanRequestDetailsPage";
 import AttendanceMaintenancePage from "../pages/shared/AttendanceMaintenancePage";
+import AttendancePreviewPage from "../pages/shared/AttendancePreviewPage";
 import EmployeeAttendanceCorrectionRequestsPage from "../pages/employee/attendance/AttendanceCorrectionRequestsPage";
 import ManagerAttendanceCorrectionRequestsPage from "../pages/manager/ManagerAttendanceCorrectionRequestsPage";
 import HRAttendanceCorrectionRequestsPage from "../pages/hr/attendance/AttendanceCorrectionRequestsPage";
 
 import RouteErrorBoundary from "./RouteErrorBoundary";
 import PendingInboxPage from "../pages/shared/PendingInboxPage";
+import NotificationsPage from "../pages/shared/NotificationsPage";
 
 
 
@@ -148,6 +151,7 @@ export const routes = [
               { path: "admin/audit-logs", element: <AdminAuditLogsPage /> },
               { path: "admin/settings", element: <AdminSettingsPage /> },
               { path: "admin/biotime", element: <BioTimeSettingsPage /> },
+              { path: "admin/whatsapp", element: <AdminWhatsAppIntegrationPage /> },
               { path: "admin/workflow/delegations", element: <DelegationRulesPage /> },
               { path: "admin/profile", element: <UserProfilePage /> },
             ],
@@ -161,7 +165,7 @@ export const routes = [
               { path: "hr/dashboard", element: <HRDashboardPage /> },
               { path: "hr/activity", element: <RecentActivityPage /> },
               { path: "hr/profile", element: <UserProfilePage /> },
-              { path: "hr/attendance", element: <AttendanceMaintenancePage titleKey="layout.attendanceApprovals" backPath="/hr/dashboard" /> },
+              { path: "hr/attendance", element: <AttendancePreviewPage role="hr" /> },
               { path: "hr/invites", element: <AdminInvitesPage /> },
 
               // Employee Management
@@ -206,7 +210,7 @@ export const routes = [
               { path: "hr/announcements/:id/edit", element: <EditAnnouncementPage /> },
 
               // Existing pages
-              { path: "hr/attendance", element: <AttendanceMaintenancePage titleKey="layout.attendanceApprovals" backPath="/hr/dashboard" /> },
+              { path: "hr/attendance", element: <AttendancePreviewPage role="hr" /> },
               { path: "hr/attendance-correction-requests", element: <HRAttendanceCorrectionRequestsPage /> },
               { path: "hr/leave-balances", element: <HrLeaveBalancesPage /> },
             ],
@@ -292,7 +296,7 @@ export const routes = [
             children: [
               { path: "ceo/loan-requests", element: <CEOLoanRequestsPage /> },
               { path: "ceo/loan-requests/:id", element: <CEOLoanRequestDetailsPage /> },
-              { path: "ceo/attendance", element: <AttendanceMaintenancePage titleKey="layout.attendanceApprovals" backPath="/ceo/dashboard" /> },
+              { path: "ceo/attendance", element: <AttendancePreviewPage role="ceo" /> },
               { path: "ceo/assets/damage-reports", element: <CEOAssetDamageReportsPage /> },
               { path: "ceo/assets/return-requests", element: <CEOAssetReturnRequestsPage /> },
               { path: "ceo/employees/deletion-requests", element: <CEOEmployeeDeletionInboxPage /> },
@@ -321,11 +325,12 @@ export const routes = [
             ],
           },
 
-          // Unified pending inbox (all authenticated roles)
+          // Unified pending inbox + notification inbox (all authenticated roles)
           {
             element: <RequireRole roles={["SystemAdmin", "HRManager", "Manager", "CEO", "CFO", "Employee"]} />,
             children: [
               { path: "pending-inbox", element: <PendingInboxPage /> },
+              { path: "notifications", element: <NotificationsPage /> },
             ],
           },
         ],
