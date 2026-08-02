@@ -1,6 +1,7 @@
 import csv
 import hashlib
 import io
+import os
 import random
 import string
 from datetime import datetime, timedelta
@@ -453,25 +454,28 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         return success(response.data)
 
     def _document_profile_for_request(self, request, pk):
-        profile = None
+        profiles = filter_queryset_by_company_scope(
+            EmployeeProfile.objects.select_related("user", "company"),
+            request,
+        )
+        role = get_role(request.user)
         if str(pk) == "me":
-            profile = EmployeeProfile.objects.select_related("user", "company").filter(user=request.user).first()
+            profile = profiles.filter(user=request.user).first()
+        elif role in ["SystemAdmin", "HRManager"]:
+            profile = profiles.filter(pk=pk).first()
+        elif request.method in ["GET", "HEAD", "OPTIONS"]:
+            profile = profiles.filter(pk=pk, user=request.user).first()
         else:
-            profile = EmployeeProfile.objects.select_related("user", "company").filter(pk=pk).first()
+            profile = None
         if profile is None:
             return None, error("Not found", errors=["Not found."], status=404)
+        return profile, None
 
-        role = get_role(request.user)
-        if role in ["SystemAdmin", "HRManager"]:
-            scoped = filter_queryset_by_accessible_companies(
-                EmployeeProfile.objects.filter(pk=profile.pk), request, include_null=True
-            )
-            if profile.company_id is None or scoped.exists():
-                return profile, None
-        elif request.method in ["GET", "HEAD", "OPTIONS"] and profile.user_id == request.user.id:
-            return profile, None
-
-        return None, error("Not found", errors=["Not found."], status=404)
+    @staticmethod
+    def _documents_for_profile(profile):
+        return profile.documents.select_related("uploaded_by", "company", "leave_request").filter(
+            company_id=profile.company_id
+        )
 
     @action(detail=True, methods=["get", "post"], url_path="documents")
     def documents(self, request, pk=None):
@@ -480,7 +484,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             return error_response
 
         if request.method == "GET":
-            qs = profile.documents.select_related("uploaded_by", "company", "leave_request")
+            qs = self._documents_for_profile(profile)
             serializer = EmployeeDocumentSerializer(qs, many=True, context={"request": request})
             return success(serializer.data)
 
@@ -500,7 +504,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             employee_profile=profile,
             company=profile.company,
             uploaded_by=request.user,
-            original_filename=getattr(serializer.validated_data.get("file"), "name", ""),
+            original_filename=os.path.basename(getattr(serializer.validated_data.get("file"), "name", "")),
         )
         warnings = extract_visa_fields(document)
         document.extraction_warnings = warnings
@@ -527,7 +531,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         if error_response:
             return error_response
 
-        document = profile.documents.filter(pk=document_id).first()
+        document = self._documents_for_profile(profile).filter(pk=document_id).first()
         if document is None:
             return error("Not found", errors=["Not found."], status=404)
 
@@ -535,11 +539,22 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             filename = (
                 document.original_filename or document.file.name.split("/")[-1] or f"employee_document_{document.id}"
             )
-            return FileResponse(
+            response = FileResponse(
                 document.file.open("rb"),
+                content_type="application/octet-stream",
                 as_attachment=True,
-                filename=filename,
+                filename=os.path.basename(filename),
             )
+            response["X-Content-Type-Options"] = "nosniff"
+            response["Cache-Control"] = "private, no-store"
+            audit(
+                request,
+                "employee_document_downloaded",
+                entity="employee_document",
+                entity_id=document.id,
+                metadata={"employee_profile_id": profile.id, "document_type": document.document_type},
+            )
+            return response
         except FileNotFoundError:
             return error("Not found", errors=["Document file is missing from storage."], status=404)
 
@@ -553,7 +568,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         if role not in ["SystemAdmin", "HRManager"]:
             return error("Forbidden", errors=["Forbidden."], status=status.HTTP_403_FORBIDDEN)
 
-        document = profile.documents.filter(pk=document_id).first()
+        document = self._documents_for_profile(profile).filter(pk=document_id).first()
         if document is None:
             return error("Not found", errors=["Not found."], status=404)
 
@@ -598,7 +613,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         if role not in ["SystemAdmin", "HRManager"]:
             return error("Forbidden", errors=["Forbidden."], status=status.HTTP_403_FORBIDDEN)
 
-        document = profile.documents.filter(pk=document_id).first()
+        document = self._documents_for_profile(profile).filter(pk=document_id).first()
         if document is None:
             return error("Not found", errors=["Not found."], status=404)
 

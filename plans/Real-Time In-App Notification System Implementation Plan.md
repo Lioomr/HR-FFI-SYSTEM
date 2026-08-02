@@ -83,21 +83,21 @@ another user or outside the active company scope returns 404.
 Marks all unread notifications in the current recipient/company scope as read. Returns `updated_count` and
 `unread_count: 0`.
 
-## WebSocket API
+## WebSocket API (intentionally deferred at Gate 1)
+
+Security status: the compatibility route is preserved, but all WebSocket authentication and delivery are disabled. JWT query/header parsing and session-cookie authentication were removed so no client places an authentication credential in a WebSocket URL or opens an unbound long-lived connection. Web and mobile use authenticated REST polling.
 
 Endpoint: `ws(s)://<backend>/ws/notifications/`
 
-Authentication uses either the existing Django session cookie or an access JWT supplied as:
+Every connection, including attempts with query tokens, Authorization headers, or session cookies, is rejected before
+acceptance with ASGI close code `4403`. No socket joins a notification group. The web runtime polls notification REST
+endpoints immediately and every 20 seconds and tears the polling lifecycle down on logout, user change, or company change.
 
-- `?access_token=<JWT>` (preferred for browser clients)
-- `?token=<JWT>` (compatibility alias)
-- `Authorization: Bearer <JWT>` where the WebSocket client can set headers
+Re-enabling realtime requires a separate security-approved contract with an opaque one-time short-lived credential, active-
+company binding, access expiry enforcement, logout/password-change revocation disconnect, organization-change disconnect,
+and regression tests. Do not restore JWT query-string compatibility.
 
-Unauthenticated/invalid connections are rejected before acceptance (the ASGI consumer uses code `4401`; Daphne exposes the
-pre-accept rejection as an HTTP 403 handshake response). Each accepted socket joins only
-`notifications.user.<authenticated_user_id>`.
-
-Created event:
+Historical event shape (not currently emitted while realtime is deferred):
 
 ```json
 {
@@ -111,8 +111,9 @@ Created event:
 }
 ```
 
-Redis is the production channel layer (`REDIS_URL`, default `redis://localhost:6379/0`). WebSocket delivery failures are
-logged and never roll back the persisted notification or block the originating workflow.
+Redis remains available for the production channel layer (`REDIS_URL`, default `redis://localhost:6379/0`), but Gate 1
+does not publish notifications over WebSockets. Persisted notification and provider-delivery workflows are independent
+of the deferred socket path.
 
 ## Workflow coverage
 
@@ -154,8 +155,8 @@ is never resent. Temporary network/provider failures retry with exponential back
 total attempts); permanent 4xx/configuration/validation failures do not retry. A definitive WhatsApp failure queues one email
 fallback, whose task applies the same sent/terminal guards.
 
-Delivery tracking is exposed as the read-only nested `deliveries` field on notification list, mark-read, and
-`notification.created` WebSocket payloads. There is no standalone delivery endpoint. Stored statuses are returned unchanged:
+Delivery tracking is exposed as the read-only nested `deliveries` field on notification list and mark-read REST responses.
+There is no standalone delivery endpoint. Stored statuses are returned unchanged:
 `pending`, `sent`, `failed`, and `skipped`. Entries are ordered WhatsApp first and email second, then by creation time.
 
 Delivery records remain company- and recipient-isolated through the parent notification query. Provider credentials, raw
@@ -220,10 +221,10 @@ task scheduler; a second scheduler is not required.
 
 ## Security visibility and WhatsApp administration
 
-Delivery visibility is enforced server-side for notification list, mark-read, and `notification.created` WebSocket
-payloads. `SystemAdmin` and `HRManager` receive the full delivery audit shape. `Employee`, `Manager`, `CEO`, and `CFO`
+Delivery visibility is enforced server-side for notification list and mark-read REST responses. `SystemAdmin` and
+`HRManager` receive the full delivery audit shape. `Employee`, `Manager`, `CEO`, and `CFO`
 retain the additive `deliveries` array but receive only `channel` and `status`; provider, provider message ID, error, attempt
-count, and delivery timestamps are omitted. WebSocket serialization uses the recipient's server-resolved role.
+count, and delivery timestamps are omitted.
 
 WhatsApp template list, detail/update, reset, and preview retain their existing `SystemAdmin` or `HRManager` permission.
 Live template test sending (`POST /api/core/whatsapp-templates/{key}/test/`) requires both authentication and `SystemAdmin`.

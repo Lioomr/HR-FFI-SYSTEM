@@ -205,6 +205,34 @@ body.ltr textarea.ant-input {
   box-shadow: var(--shadow-lg) !important;
 }
 
+/* Dynamic numbers: prevent width jitter as values update */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tactile feedback on click — subtle 0.96 scale, never below 0.95.
+   Only the transform is transitioned (never `all`). */
+.press-scale {
+  transition: transform var(--transition-fast);
+}
+
+.press-scale:active {
+  transform: scale(0.96);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .press-scale:active {
+    transform: none;
+  }
+}
+
+/* Visible keyboard focus for custom interactive surfaces (cards, tiles).
+   Mouse users are unaffected — :focus-visible only fires for keyboard input. */
+.focus-ring:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+
 .gradient-text {
   background: linear-gradient(135deg, #f97316, #fb923c);
   -webkit-background-clip: text;

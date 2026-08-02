@@ -29,7 +29,7 @@ Use clear, domain-based names:
 - React components: PascalCase files (`AnnouncementWidget.tsx`)
 
 ## API Versioning & Route Prefix Policy
-Treat `plans/Global API Rules (v1).txt` as the source contract for endpoint names and request/response shape.  
+Treat `SECURITY_POLICY.md`, `plans/Employee Mobile App Master Plan.md`, `plans/Global API Rules (v1).txt`, and `plans/API Route Status Matrix.md` as the documentation hierarchy. Verify the actual Django URL/ViewSet before relying on endpoint names or request/response shape.  
 When adding or changing APIs:
 - Keep one consistent base prefix per module (avoid mixing unprefixed and `/api/...` variants for the same resource).
 - Preserve existing public paths; if a rename is required, add a compatibility route and deprecation note in the PR.

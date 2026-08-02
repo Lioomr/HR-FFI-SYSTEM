@@ -2251,10 +2251,14 @@ class EmployeeLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
     pagination_class = None
 
     def get_queryset(self):
-        return LeaveRequest.objects.filter(
+        queryset = LeaveRequest.objects.filter(
             employee=self.request.user,
             is_active=True,
         ).select_related("employee", "leave_type", "decided_by")
+        active_company = get_active_company_for_request(self.request)
+        if active_company is not None:
+            return queryset.filter(company=active_company)
+        return filter_queryset_by_company_scope(queryset, self.request)
 
     def list(self, request, *args, **kwargs):
         if "employee_id" in request.query_params:

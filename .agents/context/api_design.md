@@ -1,6 +1,6 @@
 # API Design Context
 
-Source contract: `plans/Global API Rules (v1).txt` — this file is authoritative for endpoint names and request/response shapes.
+Source contract: `plans/Global API Rules (v1).txt`, reconciled with `plans/API Route Status Matrix.md`. The matrix flags legacy examples; verify Django routes before implementation.
 
 ## URL Routing Overview
 
@@ -8,7 +8,7 @@ All endpoints live under the root Django router. Key prefixes:
 
 | Prefix | Domain |
 |---|---|
-| `/auth/` | login, logout, refresh, change-password |
+| `/auth/` | login, refresh, logout, change-password, and me; refresh rotates/blacklists and uses the standard envelope |
 | `/users/`, `/invites/` | user management (SystemAdmin) |
 | `/audit-logs/` | audit log read + export (SystemAdmin) |
 | `/employees/`, `/departments/`, `/positions/`, `/task-groups/`, `/sponsors/` | HR data |
@@ -21,6 +21,7 @@ All endpoints live under the root Django router. Key prefixes:
 | `/rents/`, `/rent-types/` | rents |
 | `/api/core/` | workflow delegation, preferences |
 | `/api/hr/` | HR summary, recent activity |
+| `/api/agent-memory/` | optional Cognee-backed agent memory status/recall/remember |
 
 ## Response Envelope
 
@@ -63,6 +64,10 @@ Before changing any API behavior:
 3. If renaming a public route, add a compatibility route and note deprecation in the PR.
 4. Add/update backend tests for any behavior change.
 5. Document deviations from the plan in the PR description and update the plan file.
+
+## Agent memory security
+
+`/api/agent-memory/` is an optional authenticated integration. Never send employee PII, payroll, passport, medical data, credentials, tokens, or confidential HR records to Cognee. Any future expansion must enforce company scope, redact sensitive content, protect the API key, and document whether access is internal/admin-only.
 
 ## Naming Conventions
 

@@ -5,16 +5,19 @@ import { getUserPreference, saveUserPreference } from "./preferencesApi";
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 export type NotificationDeliveryChannel = "whatsapp" | "email";
-export type NotificationDeliveryStatus = "pending" | "sent" | "failed" | "skipped";
+export type NotificationDeliveryStatus =
+  | "pending"
+  | "sent"
+  | "failed"
+  | "skipped";
 
 /**
  * Read-only per-channel delivery record nested on a notification.
  * WhatsApp is attempted first; email is the fallback. The backend already
  * privacy-filters `error` down to a single redacted line (or `null`).
  *
- * Only `channel` and `status` are guaranteed — WebSocket `notification.created`
- * frames may carry a partial delivery, and historical rows omit them entirely
- * (`deliveries: []`), so every other field is optional.
+ * Only `channel` and `status` are guaranteed. Historical rows can omit delivery
+ * details entirely (`deliveries: []`), so every other field is optional.
  */
 export interface NotificationDelivery {
   channel: NotificationDeliveryChannel;
@@ -89,7 +92,7 @@ export interface MarkAllReadData {
 
 /** `GET /api/notifications/` — paginated, newest-first list. */
 export async function listNotifications(
-  params: NotificationListParams = {}
+  params: NotificationListParams = {},
 ): Promise<ApiResponse<NotificationListData>> {
   const query: Record<string, unknown> = {};
   if (params.page != null) query.page = params.page;
@@ -99,7 +102,7 @@ export async function listNotifications(
 
   const { data } = await api.get<ApiResponse<NotificationListData>>(
     "/api/notifications/",
-    { params: query }
+    { params: query },
   );
   return data;
 }
@@ -109,18 +112,18 @@ export async function getUnreadNotificationCount(): Promise<
   ApiResponse<UnreadCountData>
 > {
   const { data } = await api.get<ApiResponse<UnreadCountData>>(
-    "/api/notifications/unread-count/"
+    "/api/notifications/unread-count/",
   );
   return data;
 }
 
 /** `POST /api/notifications/{id}/read/` — idempotent single mark-as-read. */
 export async function markNotificationRead(
-  id: number | string
+  id: number | string,
 ): Promise<ApiResponse<MarkReadData>> {
   const { data } = await api.post<ApiResponse<MarkReadData>>(
     `/api/notifications/${id}/read/`,
-    {}
+    {},
   );
   return data;
 }
@@ -131,7 +134,7 @@ export async function markAllNotificationsRead(): Promise<
 > {
   const { data } = await api.post<ApiResponse<MarkAllReadData>>(
     "/api/notifications/read-all/",
-    {}
+    {},
   );
   return data;
 }
@@ -147,9 +150,8 @@ export async function markAllNotificationsRead(): Promise<
 // can never override a globally-disabled channel or a missing WhatsApp number).
 //
 // NOTE: per-notification delivery *status* (whatsapp/email sent/failed/skipped) is
-// tracked server-side in `NotificationDelivery` but is NOT exposed by
-// `NotificationSerializer` or any REST/WebSocket endpoint, so it cannot be shown
-// in the frontend yet. See the final report for the missing contract.
+// tracked server-side in `NotificationDelivery` and exposed through the
+// privacy-filtered nested `deliveries` array on notification REST responses.
 
 export const NOTIFICATION_PREF_SCOPE = "notifications";
 export const NOTIFICATION_PREF_KEY = "channels";
@@ -165,7 +167,7 @@ export interface NotificationChannelPreferences {
  * both channels are enabled by default.
  */
 function normalizeChannelPreferences(
-  value: Record<string, unknown> | undefined | null
+  value: Record<string, unknown> | undefined | null,
 ): NotificationChannelPreferences {
   const v = value ?? {};
   return {
@@ -178,19 +180,32 @@ function normalizeChannelPreferences(
 export async function getNotificationChannelPreferences(): Promise<
   ApiResponse<NotificationChannelPreferences>
 > {
-  const res = await getUserPreference(NOTIFICATION_PREF_SCOPE, NOTIFICATION_PREF_KEY);
+  const res = await getUserPreference(
+    NOTIFICATION_PREF_SCOPE,
+    NOTIFICATION_PREF_KEY,
+  );
   if (res.status !== "success") return res;
-  return { status: "success", data: normalizeChannelPreferences(res.data?.value) };
+  return {
+    status: "success",
+    data: normalizeChannelPreferences(res.data?.value),
+  };
 }
 
 /** Persist the current user's notification channel preferences. */
 export async function saveNotificationChannelPreferences(
-  prefs: NotificationChannelPreferences
+  prefs: NotificationChannelPreferences,
 ): Promise<ApiResponse<NotificationChannelPreferences>> {
-  const res = await saveUserPreference(NOTIFICATION_PREF_SCOPE, NOTIFICATION_PREF_KEY, {
-    whatsapp_enabled: prefs.whatsapp_enabled,
-    email_enabled: prefs.email_enabled,
-  });
+  const res = await saveUserPreference(
+    NOTIFICATION_PREF_SCOPE,
+    NOTIFICATION_PREF_KEY,
+    {
+      whatsapp_enabled: prefs.whatsapp_enabled,
+      email_enabled: prefs.email_enabled,
+    },
+  );
   if (res.status !== "success") return res;
-  return { status: "success", data: normalizeChannelPreferences(res.data?.value) };
+  return {
+    status: "success",
+    data: normalizeChannelPreferences(res.data?.value),
+  };
 }

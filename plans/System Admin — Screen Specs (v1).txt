@@ -1,4 +1,6 @@
 System Admin — Screen Specs (v1)
+Status: Screen baseline (reviewed 2026-07-20)
+Implementation note: verify current routes and permissions against `plans/API Route Status Matrix.md`; this document describes UX, not authorization.
 1) Login
 
 Purpose: Allow Admin to access the system securely.

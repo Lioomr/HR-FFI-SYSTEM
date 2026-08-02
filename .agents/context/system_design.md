@@ -1,6 +1,6 @@
 # System Design Context
 
-> **TL;DR:** Django 5.2 + DRF + PostgreSQL 16 backend, React 18 + TS + Vite + AntD frontend, JWT auth (15 min access / 14 day refresh), bilingual en/ar, multi-company via `x-active-company-id` header + `filter_queryset_by_company_scope`. 14 backend apps (accounts, admin_portal, organization, core, employees, hr_reference, attendance, leaves, payroll, loans, assets, rents, announcements, audit, invites). Cross-cutting: multi-company scoping, workflow engine (`core`), audit trail (`audit.utils.audit`), private uploads, BioTime sync, i18n hook. Source-of-truth files live in `plans/`.
+> **TL;DR:** Django 5.2 + DRF + PostgreSQL 16 backend, React 19 + TS + Vite + AntD frontend, React Router v7, JWT auth (15 min access / 14 day refresh), bilingual en/ar, multi-company via `x-active-company-id` header + `filter_queryset_by_company_scope`. Backend includes accounts, admin_portal, organization, core, employees, hr_reference, attendance, leaves, payroll, loans, assets, rents, announcements, audit, invites, and in-app notifications. Verify routes with `plans/API Route Status Matrix.md`.
 
 FFI HR System is a **Django 5.2 REST + React TypeScript** multi-company HR platform.
 
@@ -10,7 +10,7 @@ FFI HR System is a **Django 5.2 REST + React TypeScript** multi-company HR platf
 |---|---|
 | Backend | Django 5.2, Django REST Framework, PostgreSQL 16 |
 | Auth | JWT via `rest_framework_simplejwt` (15 min access / 14 day refresh) |
-| Frontend | React 18, TypeScript, Vite, Ant Design, React Router, Zustand, Axios |
+| Frontend | React 19, TypeScript, Vite, Ant Design, React Router v7, Zustand, Axios |
 | i18n | Full bilingual en/ar via `FrontEnd/src/i18n/translations.ts` |
 | Tests | Backend: pytest + django; Frontend: Vitest + Testing Library |
 | Infra | Docker Compose (db/backend/frontend services), optional production variant |
