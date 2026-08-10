@@ -14,7 +14,7 @@ from rest_framework.throttling import UserRateThrottle
 
 from audit.utils import audit
 from core.delegation import get_delegated_manager_user_ids
-from core.permissions import IsManager, get_role, is_hr_workflow_approver_user
+from core.permissions import IsDepartmentCEOApprover, IsManager, get_role, is_hr_workflow_approver_user
 from core.responses import error, success
 from core.services import (
     get_ceo_approver_users,
@@ -28,7 +28,7 @@ from employees.models import EmployeeProfile
 from organization.services import filter_queryset_by_company_scope, get_active_company_for_request
 
 from .models import AttendanceCorrectionRequest, AttendanceRecord
-from .permissions import IsAttendanceSelfServiceRole, IsDepartmentCEOApprover, IsHRManagerOrAdmin
+from .permissions import IsAttendanceSelfServiceRole, IsHRManagerOrAdmin
 from .serializers import (
     AttendanceCorrectionRequestSerializer,
     AttendanceOverrideSerializer,
