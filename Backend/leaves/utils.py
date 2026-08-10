@@ -98,6 +98,26 @@ def ensure_policy_leave_types():
         )
 
 
+def ensure_policy_leave_types_for_company(company=None):
+    """
+    Ensure baseline leave types required by policy exist for one company context.
+    Falls back to legacy global leave types when no company is known.
+    """
+    for definition in POLICY_LEAVE_TYPE_DEFINITIONS:
+        lookup = {"code": definition["code"]}
+        defaults = {
+            "name": definition["name"],
+            "is_paid": definition["is_paid"],
+            "requires_attachment": definition["requires_attachment"],
+            "is_active": True,
+            "annual_quota": definition["annual_quota"],
+        }
+        if company is not None:
+            lookup["company"] = company
+            defaults["company"] = company
+        LeaveType.objects.get_or_create(**lookup, defaults=defaults)
+
+
 def resolve_employee_profile(employee_subject):
     if isinstance(employee_subject, EmployeeProfile):
         return employee_subject
