@@ -1,3 +1,4 @@
+from datetime import timedelta
 from pathlib import Path
 
 from django.conf import settings
@@ -21,6 +22,7 @@ from .utils import (
 User = get_user_model()
 LEAVE_ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png"}
 LEAVE_MAX_UPLOAD_SIZE = int(getattr(settings, "MAX_LEAVE_DOCUMENT_SIZE_BYTES", 5 * 1024 * 1024))
+EMPLOYEE_LEAVE_BACKDATE_DAYS = 7
 
 
 def delegation_user_queryset():
@@ -220,13 +222,11 @@ class LeaveRequestCreateSerializer(serializers.ModelSerializer):
             if start > end:
                 raise serializers.ValidationError({"end_date": "End date must be after start date."})
 
-            # Optional: Past date check
-            # if start < date.today():
-            #    raise serializers.ValidationError({"start_date": "Cannot request leave in the past."})
-
-            # Optional: Past date check
-            # if start < date.today():
-            #    raise serializers.ValidationError({"start_date": "Cannot request leave in the past."})
+            earliest_start_date = timezone.localdate() - timedelta(days=EMPLOYEE_LEAVE_BACKDATE_DAYS)
+            if start < earliest_start_date:
+                raise serializers.ValidationError(
+                    {"start_date": "Leave can be submitted up to 7 calendar days after it starts."}
+                )
 
         if leave_type and not leave_type.is_active:
             raise serializers.ValidationError({"leave_type": "Leave type is inactive."})
