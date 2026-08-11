@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button, Card, Form, Select, DatePicker, Input, Alert, notification, Upload, Row, Col } from "antd";
 import { ArrowLeftOutlined, SendOutlined } from "@ant-design/icons";
-import dayjs from "dayjs";
 import type { UploadFile } from "antd/es/upload/interface";
 
 import PageHeader from "../../../components/ui/PageHeader";
@@ -11,10 +10,16 @@ import { getLeaveTypes, createLeaveRequest, getMyLeaveBalance, type LeaveType, t
 import { listDelegationCandidates, type DelegationCandidate } from "../../../services/api/employeesApi";
 import { isApiError } from "../../../services/api/apiTypes";
 import { getDetailedHttpErrorMessage } from "../../../services/api/userErrorMessages";
+import { getLeaveValidationErrors, isEmployeeLeaveDateDisabled } from "./leaveRequestValidation";
 
 const { Option } = Select;
 const { TextArea } = Input;
 const { RangePicker } = DatePicker;
+
+export function LeaveSubmissionError({ message }: { message: string | null }) {
+    if (!message) return null;
+    return <Alert type="error" title={message} showIcon style={{ marginBottom: 24 }} />;
+}
 
 export default function RequestLeavePage() {
     const navigate = useNavigate();
@@ -38,6 +43,7 @@ export default function RequestLeavePage() {
 
     const [daysCount, setDaysCount] = useState(0);
     const [balanceError, setBalanceError] = useState<string | null>(null);
+    const [submitError, setSubmitError] = useState<string | null>(null);
     const [isOtherSelected, setIsOtherSelected] = useState(false);
     const [isSickSelected, setIsSickSelected] = useState(false);
     const [delegationCandidates, setDelegationCandidates] = useState<DelegationCandidate[]>([]);
@@ -110,6 +116,10 @@ export default function RequestLeavePage() {
         }
 
         if (changedValues.dates || changedValues.leave_type) {
+            if (changedValues.dates) {
+                setSubmitError(null);
+                form.setFields([{ name: "dates", errors: [] }]);
+            }
             const { dates, leave_type } = allValues;
 
             if (dates && dates[0] && dates[1]) {
@@ -152,6 +162,7 @@ export default function RequestLeavePage() {
         }
 
         setSubmitting(true);
+        setSubmitError(null);
         try {
             const payload = new FormData();
             payload.append("leave_type", String(values.leave_type));
@@ -182,26 +193,17 @@ export default function RequestLeavePage() {
         } catch (err: any) {
             console.error("Submit Error:", err);
 
-            const data = err.apiData || err.response?.data;
             let description = getDetailedHttpErrorMessage(t, err);
-            if (data?.errors) {
-                if (Array.isArray(data.errors)) {
-                    description = data.errors
-                        .map((entry: unknown) => {
-                            if (typeof entry === "string") return entry;
-                            if (entry && typeof entry === "object" && "message" in entry) {
-                                const msg = (entry as { message?: unknown }).message;
-                                return typeof msg === "string" ? msg : "";
-                            }
-                            return "";
-                        })
-                        .filter(Boolean)
-                        .join(", ");
-                } else {
-                    description = Object.values(data.errors).flat().join(", ");
+            const validationErrors = getLeaveValidationErrors(err);
+            if (validationErrors.length > 0) {
+                description = validationErrors.map(({ message }) => message).join(", ");
+                const startDateError = validationErrors.find(({ field }) => field === "start_date");
+                if (startDateError) {
+                    form.setFields([{ name: "dates", errors: [startDateError.message] }]);
                 }
             }
 
+            setSubmitError(description);
             notification.error({ message: t("common.error"), description });
         } finally {
             setSubmitting(false);
@@ -233,6 +235,8 @@ export default function RequestLeavePage() {
                         style={{ marginBottom: 24 }}
                     />
                 )}
+
+                <LeaveSubmissionError message={submitError} />
 
                 <Form
                     layout="vertical"
@@ -276,11 +280,12 @@ export default function RequestLeavePage() {
                         label={t("common.date")}
                         name="dates"
                         rules={[{ required: true, message: t("common.required") }]}
+                        extra={t("leave.backdateHelper")}
                     >
                         <RangePicker
-                            style={{ width: '100%' }}
+                            style={{ width: "100%" }}
                             format="YYYY-MM-DD"
-                            disabledDate={(current) => current && current < dayjs().startOf('day')}
+                            disabledDate={(current) => isEmployeeLeaveDateDisabled(current)}
                         />
                     </Form.Item>
 
