@@ -269,7 +269,7 @@ class UserResetPasswordView(APIView):
             temp_password = generate_temp_password()
             user.set_password(temp_password)
             user.save(update_fields=["password"])
-            
+
             context = {
                 "logo_url": _load_logo_base64(),
                 "contact_email": getattr(settings, "EMAIL_CONTACT_EMAIL", "hr@fficontracting.com"),
@@ -284,7 +284,7 @@ class UserResetPasswordView(APIView):
                 "requested_at": requested_at,
             }
             html = render_to_string("emails/password_reset_email.html", context)
-            
+
             _send_password_reset_material(
                 user,
                 subject="Your temporary password",
@@ -300,7 +300,7 @@ class UserResetPasswordView(APIView):
         token = secrets.token_urlsafe(32)
         _store_hashed_reset_token(user.id, token)
         reset_link = f"{settings.FRONTEND_URL.rstrip('/')}/change-password?token={token}&uid={user.id}"
-        
+
         context = {
             "logo_url": _load_logo_base64(),
             "contact_email": getattr(settings, "EMAIL_CONTACT_EMAIL", "hr@fficontracting.com"),
@@ -315,7 +315,7 @@ class UserResetPasswordView(APIView):
             "requested_at": requested_at,
         }
         html = render_to_string("emails/password_reset_email.html", context)
-        
+
         _send_password_reset_material(
             user,
             subject="Reset your password",

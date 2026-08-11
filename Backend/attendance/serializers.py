@@ -156,6 +156,9 @@ class AttendanceCorrectionRequestSerializer(serializers.ModelSerializer):
         check_out = attrs.get("requested_check_out_at", getattr(self.instance, "requested_check_out_at", None))
         requested_status = attrs.get("requested_status", getattr(self.instance, "requested_status", ""))
 
+        if self.instance is None and employee_profile and employee_profile.is_archived:
+            raise serializers.ValidationError({"employee_profile": "Archived employees cannot create attendance records."})
+
         if not check_in and not check_out and not requested_status:
             raise serializers.ValidationError(
                 "At least one requested check-in, check-out, or status change is required."
@@ -195,6 +198,8 @@ class CheckOutResponseSerializer(serializers.ModelSerializer):
     class Meta:
         model = AttendanceRecord
         fields = ["id", "date", "check_in_at", "check_out_at", "status"]
+
+
 class BioTimeConfigSerializer(serializers.ModelSerializer):
     class Meta:
         model = BioTimeConfig
@@ -212,7 +217,7 @@ class BioTimeConfigSerializer(serializers.ModelSerializer):
 class BioTimeEmployeeMapSerializer(serializers.ModelSerializer):
     employee_name = serializers.CharField(source="employee_profile.user.get_full_name", read_only=True)
     department = serializers.CharField(source="employee_profile.department", read_only=True)
-    
+
     class Meta:
         model = BioTimeEmployeeMap
         fields = ["id", "employee_profile", "employee_name", "department", "biotime_emp_code", "created_at"]

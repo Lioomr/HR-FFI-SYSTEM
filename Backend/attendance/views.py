@@ -271,6 +271,9 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         except EmployeeProfile.DoesNotExist:
             return error("Employee profile not found.", status=status.HTTP_404_NOT_FOUND)
 
+        if profile.is_archived:
+            return error("Archived employees cannot check in.", status=status.HTTP_403_FORBIDDEN)
+
         if not _profile_matches_active_company(request, profile):
             return error("Employee profile is not available in the active company.", status=status.HTTP_403_FORBIDDEN)
 
@@ -353,6 +356,9 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
             profile = EmployeeProfile.objects.get(user=user)
         except EmployeeProfile.DoesNotExist:
             return error("Employee profile not found.", status=status.HTTP_404_NOT_FOUND)
+
+        if profile.is_archived:
+            return error("Archived employees cannot check out.", status=status.HTTP_403_FORBIDDEN)
 
         if not _profile_matches_active_company(request, profile):
             return error("Employee profile is not available in the active company.", status=status.HTTP_403_FORBIDDEN)

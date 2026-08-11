@@ -1,13 +1,14 @@
-from rest_framework import views, viewsets, status
-from rest_framework.response import Response
+from rest_framework import status, views, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 
+from core.permissions import IsHRManagerOrAdmin
+
+from .biotime_client import BioTimeClient
 from .models import BioTimeConfig, BioTimeEmployeeMap
 from .serializers import BioTimeConfigSerializer, BioTimeEmployeeMapSerializer
-from .biotime_client import BioTimeClient
 from .services import SyncBioTimeService
-from core.permissions import IsHRManagerOrAdmin
 
 
 class BioTimeConfigViewSet(views.APIView):
@@ -37,19 +38,19 @@ class BioTimeActionsViewSet(views.APIView):
     def post(self, request, action):
         if action == "test-connection":
             config = BioTimeConfig.get_solo()
-            
+
             # Allow testing with submitted data if provided, otherwise use saved config
             ip = request.data.get("server_ip", config.server_ip)
             port = request.data.get("server_port", config.server_port)
             user = request.data.get("username", config.username)
             password = request.data.get("password", config.password)
-            
+
             client = BioTimeClient(ip, port, user, password)
             if client.test_connection():
                 return Response({"status": "success", "message": "Connection successful"})
             else:
                 return Response({"status": "error", "message": "Connection failed"}, status=status.HTTP_400_BAD_REQUEST)
-                
+
         elif action == "sync-now":
             try:
                 days_back = max(int(request.data.get("days_back", 7)), 1)
@@ -63,7 +64,7 @@ class BioTimeActionsViewSet(views.APIView):
                 return Response({"status": "success", "message": message})
             else:
                 return Response({"status": "error", "message": message}, status=status.HTTP_400_BAD_REQUEST)
-                
+
         return Response({"error": "Invalid action"}, status=status.HTTP_400_BAD_REQUEST)
 
 

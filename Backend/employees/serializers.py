@@ -42,6 +42,7 @@ class EmployeeProfileReadSerializer(serializers.ModelSerializer):
     sponsor = serializers.SerializerMethodField()
     passport = serializers.CharField(source="passport_no", read_only=True)
     employment_status = serializers.SerializerMethodField()
+    archived_by_name = serializers.SerializerMethodField()
 
     department_id = serializers.PrimaryKeyRelatedField(source="department_ref", read_only=True)
     position_id = serializers.PrimaryKeyRelatedField(source="position_ref", read_only=True)
@@ -105,6 +106,7 @@ class EmployeeProfileReadSerializer(serializers.ModelSerializer):
             "health_card",
             "health_card_expiry",
             "health_card_expiry_raw",
+            "work_license_expiry",
             "basic_salary",
             "transportation_allowance",
             "accommodation_allowance",
@@ -114,6 +116,11 @@ class EmployeeProfileReadSerializer(serializers.ModelSerializer):
             "total_salary",
             "data_source",
             "employment_status",
+            "is_archived",
+            "archived_at",
+            "archived_by",
+            "archived_by_name",
+            "archive_reason",
             "manager_id",
             "manager_name",
             "manager_profile_id",
@@ -127,6 +134,11 @@ class EmployeeProfileReadSerializer(serializers.ModelSerializer):
 
     def get_email(self, obj):
         return obj.user.email if obj.user else ""
+
+    def get_archived_by_name(self, obj):
+        if not obj.archived_by:
+            return None
+        return (obj.archived_by.full_name or "").strip() or obj.archived_by.email
 
     def get_manager_id(self, obj):
         if obj.manager_profile and obj.manager_profile.user:
@@ -301,6 +313,7 @@ class EmployeeProfileWriteSerializer(serializers.ModelSerializer):
             "health_card",
             "health_card_expiry",
             "health_card_expiry_raw",
+            "work_license_expiry",
             "basic_salary",
             "transportation_allowance",
             "accommodation_allowance",
@@ -338,7 +351,8 @@ class EmployeeProfileWriteSerializer(serializers.ModelSerializer):
                 is_active=True,
             )
             self.fields["manager_profile_id"].queryset = EmployeeProfile.objects.filter(
-                models.Q(company=company) | models.Q(company__isnull=True)
+                models.Q(company=company) | models.Q(company__isnull=True),
+                is_archived=False,
             )
 
     def validate_full_name(self, value):
@@ -394,6 +408,7 @@ class EmployeeDeletionRequestReadSerializer(serializers.ModelSerializer):
             "employee_profile_id",
             "target_user_id",
             "reason",
+            "archive_reason",
             "status",
             "request_snapshot",
             "execution_snapshot",
@@ -419,6 +434,10 @@ class EmployeeDeletionRequestReadSerializer(serializers.ModelSerializer):
 
 
 class EmployeeDeletionRequestCreateSerializer(serializers.ModelSerializer):
+    archive_reason = serializers.ChoiceField(
+        choices=EmployeeProfile.ArchiveReason.choices,
+        default=EmployeeProfile.ArchiveReason.OTHER,
+    )
     employee_profile_id = serializers.PrimaryKeyRelatedField(
         queryset=EmployeeProfile.objects.none(),
         source="employee_profile",
@@ -427,14 +446,14 @@ class EmployeeDeletionRequestCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = EmployeeDeletionRequest
-        fields = ["employee_profile_id", "reason"]
+        fields = ["employee_profile_id", "archive_reason", "reason"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         request = self.context.get("request")
         if request is not None:
             self.fields["employee_profile_id"].queryset = EmployeeProfile.objects.filter(
-                company=getattr(request, "_active_company", None)
+                company=getattr(request, "_active_company", None), is_archived=False
             )
 
     def validate_reason(self, value):
@@ -469,6 +488,7 @@ class EmployeeDeletionRequestCreateSerializer(serializers.ModelSerializer):
 class EmployeeDocumentSerializer(serializers.ModelSerializer):
     employee_profile_id = serializers.IntegerField(read_only=True)
     company_id = serializers.IntegerField(read_only=True)
+    document_type = serializers.ChoiceField(choices=EmployeeDocument.DocumentType.choices, required=True)
     uploaded_by_name = serializers.CharField(source="uploaded_by.full_name", read_only=True)
     display_name = serializers.SerializerMethodField()
     extraction_warnings = serializers.ListField(child=serializers.CharField(), read_only=True, required=False)
@@ -515,9 +535,7 @@ class EmployeeDocumentSerializer(serializers.ModelSerializer):
         extra_kwargs = {"file": {"write_only": True}}
 
     def get_display_name(self, obj):
-        if obj.document_type == EmployeeDocument.DocumentType.OTHER:
-            return obj.custom_name
-        return obj.get_document_type_display()
+        return obj.display_name
 
     def validate(self, attrs):
         document_type = attrs.get("document_type", getattr(self.instance, "document_type", None))

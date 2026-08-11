@@ -387,7 +387,9 @@ class EvolutionWhatsAppProvider:
     ) -> None:
         self.api_base_url = (api_base_url or getattr(settings, "EVOLUTION_API_BASE_URL", "")).rstrip("/")
         self.api_key = api_key if api_key is not None else getattr(settings, "EVOLUTION_API_KEY", "")
-        self.instance_name = instance_name if instance_name is not None else getattr(settings, "EVOLUTION_INSTANCE_NAME", "")
+        self.instance_name = (
+            instance_name if instance_name is not None else getattr(settings, "EVOLUTION_INSTANCE_NAME", "")
+        )
         self.timeout_seconds = timeout_seconds or int(getattr(settings, "NOTIFICATION_HTTP_TIMEOUT_SECONDS", 10))
 
     def is_configured(self) -> bool:

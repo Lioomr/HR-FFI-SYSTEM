@@ -10,6 +10,13 @@ app.config_from_object("django.conf:settings", namespace="CELERY")
 app.autodiscover_tasks()
 
 app.conf.beat_schedule = {
+    "send-work-license-expiry-reminders-daily": {
+        "task": "employees.tasks.send_work_license_expiry_reminders",
+        "schedule": crontab(
+            hour=int(os.environ.get("WORK_LICENSE_REMINDER_HOUR", "8")),
+            minute=int(os.environ.get("WORK_LICENSE_REMINDER_MINUTE", "0")),
+        ),
+    },
     "cleanup-expired-notifications-daily": {
         "task": "in_app_notifications.tasks.cleanup_expired_notifications",
         "schedule": crontab(

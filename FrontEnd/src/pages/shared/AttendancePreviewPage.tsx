@@ -7,8 +7,16 @@ import dayjs from "dayjs";
 import PageHeader from "../../components/ui/PageHeader";
 import EmptyState from "../../components/ui/EmptyState";
 import ErrorState from "../../components/ui/ErrorState";
-import { getCEOAttendance, getGlobalAttendance } from "../../services/api/attendanceApi";
+import ApprovalActions from "../../components/ceo/ApprovalActions";
+import RejectReasonModal from "../../components/ceo/RejectReasonModal";
+import {
+  approveCEOAttendance,
+  getCEOAttendance,
+  getGlobalAttendance,
+  rejectCEOAttendance,
+} from "../../services/api/attendanceApi";
 import type { AttendanceListResponse } from "../../services/api/attendanceApi";
+import { isApiError } from "../../services/api/apiTypes";
 import type { AttendanceRecord, AttendanceStatus } from "../../types/attendance";
 import { unwrapEnvelope, normalizeListData } from "../../utils/dataUtils";
 import { formatDateOnly, formatTimeOnly } from "../../utils/dateTime";
@@ -69,6 +77,12 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({ role }) =
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [pagination, setPagination] = useState({ current: 1, pageSize: 20 });
+
+  // CEO-only decision state. HR opens the same screen read-only.
+  const isCeoApprover = role === "ceo";
+  const [approvingRecord, setApprovingRecord] = useState<AttendanceRecord | null>(null);
+  const [rejectingRecord, setRejectingRecord] = useState<AttendanceRecord | null>(null);
+  const [deciding, setDeciding] = useState(false);
 
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -194,6 +208,44 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({ role }) =
     return record.employee_name_en || record.employee_name || `${t("common.employee")} #${record.employee_profile}`;
   };
 
+  const handleApprove = async (record: AttendanceRecord) => {
+    setApprovingRecord(record);
+    setDeciding(true);
+    try {
+      const response = await approveCEOAttendance(record.id, {});
+      if (isApiError(response)) {
+        message.error(response.message || t("attendancePreview.decision.failed"));
+        return;
+      }
+      message.success(t("attendancePreview.decision.approved"));
+      await fetchRecords();
+    } catch (error: any) {
+      message.error(error?.message || t("attendancePreview.decision.failed"));
+    } finally {
+      setDeciding(false);
+      setApprovingRecord(null);
+    }
+  };
+
+  const handleReject = async (reason: string) => {
+    if (!rejectingRecord) return;
+    setDeciding(true);
+    try {
+      const response = await rejectCEOAttendance(rejectingRecord.id, { notes: reason });
+      if (isApiError(response)) {
+        message.error(response.message || t("attendancePreview.decision.failed"));
+        return;
+      }
+      message.success(t("attendancePreview.decision.rejected"));
+      setRejectingRecord(null);
+      await fetchRecords();
+    } catch (error: any) {
+      message.error(error?.message || t("attendancePreview.decision.failed"));
+    } finally {
+      setDeciding(false);
+    }
+  };
+
   const pendingTotal =
     (summary.PENDING || 0) + (summary.PENDING_HR || 0) + (summary.PENDING_MGR || 0) + (summary.PENDING_CEO || 0);
 
@@ -261,13 +313,36 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({ role }) =
       width: 140,
       render: (value: string) => <Tag color={sourceColors[value] || "default"}>{getSourceLabel(value)}</Tag>,
     },
+    // Only the CEO can clear PENDING_CEO rows, so the column appears for that
+    // role alone and stays empty on rows waiting elsewhere in the chain.
+    ...(isCeoApprover
+      ? ([
+          {
+            title: t("common.actions"),
+            key: "actions",
+            width: 210,
+            render: (_: unknown, record: AttendanceRecord) =>
+              record.status === "PENDING_CEO" ? (
+                <ApprovalActions
+                  subjectLabel={getEmployeeName(record)}
+                  approveLoading={deciding && approvingRecord?.id === record.id}
+                  disabled={deciding}
+                  onApprove={() => void handleApprove(record)}
+                  onReject={() => setRejectingRecord(record)}
+                />
+              ) : (
+                <Text type="secondary">{t("attendancePreview.decision.noActionNeeded")}</Text>
+              ),
+          },
+        ] as ColumnsType<AttendanceRecord>)
+      : []),
   ];
 
   return (
     <div>
       <PageHeader
-        title={t("hr.attendance.recordsTitle")}
-        subtitle={t("attendancePreview.subtitle")}
+        title={isCeoApprover ? t("ceo.attendance.title") : t("hr.attendance.recordsTitle")}
+        subtitle={isCeoApprover ? t("ceo.attendance.subtitle") : t("attendancePreview.subtitle")}
         actions={
           <Button icon={<ReloadOutlined />} onClick={fetchRecords} loading={loading}>
             {t("common.refresh")}
@@ -361,6 +436,17 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({ role }) =
             }}
           />
         </Card>
+      )}
+
+      {isCeoApprover && (
+        <RejectReasonModal
+          open={Boolean(rejectingRecord)}
+          title={t("attendancePreview.decision.rejectTitle")}
+          subject={rejectingRecord ? getEmployeeName(rejectingRecord) : undefined}
+          loading={deciding}
+          onCancel={() => setRejectingRecord(null)}
+          onSubmit={handleReject}
+        />
       )}
     </div>
   );

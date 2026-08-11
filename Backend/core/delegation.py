@@ -59,42 +59,56 @@ def get_delegated_manager_user_ids(to_user) -> list[int]:
 
 def get_role_approver_users(role: str):
     if role == "hr":
-        return User.objects.filter(is_active=True, groups__name__in=["HRManager", "SystemAdmin"]).exclude(
-            email=""
-        ).distinct()
+        return (
+            User.objects.filter(is_active=True, groups__name__in=["HRManager", "SystemAdmin"])
+            .exclude(email="")
+            .distinct()
+        )
 
     if role == "cfo":
         config = _get_active_workflow_config()
-        return User.objects.filter(
-            Q(is_active=True, groups__name__in=["CFO", "SystemAdmin"])
-            | Q(
-                is_active=True,
-                employee_profile__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
-                employee_profile__position_ref_id=config.cfo_position_id,
+        return (
+            User.objects.filter(
+                Q(is_active=True, groups__name__in=["CFO", "SystemAdmin"])
+                | Q(
+                    is_active=True,
+                    employee_profile__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+                    employee_profile__position_ref_id=config.cfo_position_id,
+                )
             )
-        ).exclude(email="").distinct()
+            .exclude(email="")
+            .distinct()
+        )
 
     if role == "ceo":
-        return User.objects.filter(
-            Q(is_active=True, groups__name__in=["CEO", "SystemAdmin"])
-            | Q(
-                is_active=True,
-                employee_profile__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
-                employee_profile__department_ref_id=_get_ceo_department_id(),
+        return (
+            User.objects.filter(
+                Q(is_active=True, groups__name__in=["CEO", "SystemAdmin"])
+                | Q(
+                    is_active=True,
+                    employee_profile__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+                    employee_profile__department_ref_id=_get_ceo_department_id(),
+                )
             )
-        ).exclude(email="").distinct()
+            .exclude(email="")
+            .distinct()
+        )
 
     if role == "disbursement":
         config = _get_active_workflow_config()
-        return User.objects.filter(
-            Q(is_active=True, groups__name__in=["SystemAdmin"])
-            | Q(
-                is_active=True,
-                employee_profile__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
-                employee_profile__department_ref_id=config.finance_department_id,
-                employee_profile__position_ref_id=config.finance_position_id,
+        return (
+            User.objects.filter(
+                Q(is_active=True, groups__name__in=["SystemAdmin"])
+                | Q(
+                    is_active=True,
+                    employee_profile__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+                    employee_profile__department_ref_id=config.finance_department_id,
+                    employee_profile__position_ref_id=config.finance_position_id,
+                )
             )
-        ).exclude(email="").distinct()
+            .exclude(email="")
+            .distinct()
+        )
 
     return User.objects.none()
 

@@ -1,5 +1,6 @@
 import { Button } from "antd";
 import { ExclamationCircleOutlined, ReloadOutlined } from "@ant-design/icons";
+import { useI18n } from "../../i18n/useI18n";
 
 export default function ErrorState({
   title = "Something went wrong",
@@ -10,6 +11,8 @@ export default function ErrorState({
   description?: string;
   onRetry?: () => void;
 }) {
+  const { t } = useI18n();
+
   return (
     <div
       style={{
@@ -55,12 +58,13 @@ export default function ErrorState({
 
       {onRetry && (
         <Button
-          icon={<ReloadOutlined />}
+          icon={<ReloadOutlined aria-hidden />}
           onClick={onRetry}
+          aria-label={t("common.retry")}
           size="large"
           style={{ borderRadius: 10, paddingLeft: 24, paddingRight: 24 }}
         >
-          Try Again
+          {t("common.retry")}
         </Button>
       )}
     </div>

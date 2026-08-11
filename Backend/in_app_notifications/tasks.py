@@ -136,7 +136,9 @@ def deliver_whatsapp_notification(
                         timeout=int(getattr(settings, "NOTIFICATION_DELIVERY_TIMEOUT_SECONDS", 10)),
                     )
                 except Exception as exc:
-                    logger.exception("notification_whatsapp_delivery_exception", extra={"notification_id": notification.id})
+                    logger.exception(
+                        "notification_whatsapp_delivery_exception", extra={"notification_id": notification.id}
+                    )
                     result = {"success": False, "provider": "evolution_whatsapp", "error": str(exc)}
 
                 if result.get("success"):
@@ -163,7 +165,9 @@ def deliver_whatsapp_notification(
                     retryable = _is_retryable(result) and not exhausted
                     _finish(
                         delivery,
-                        status=(NotificationDelivery.Status.PENDING if retryable else NotificationDelivery.Status.FAILED),
+                        status=(
+                            NotificationDelivery.Status.PENDING if retryable else NotificationDelivery.Status.FAILED
+                        ),
                         provider="evolution_whatsapp",
                         result=result,
                     )
@@ -201,7 +205,9 @@ def deliver_whatsapp_notification(
 
 
 @shared_task(bind=True, acks_late=True, reject_on_worker_lost=True, max_retries=3)
-def deliver_email_notification(self, notification_id: int, email_payload: dict | None = None, email_enabled: bool = True):
+def deliver_email_notification(
+    self, notification_id: int, email_payload: dict | None = None, email_enabled: bool = True
+):
     delivery = None
     retryable = False
     error = ""
@@ -253,7 +259,9 @@ def deliver_email_notification(self, notification_id: int, email_payload: dict |
                         timeout=int(getattr(settings, "NOTIFICATION_DELIVERY_TIMEOUT_SECONDS", 10)),
                     )
                 except Exception as exc:
-                    logger.exception("notification_email_delivery_exception", extra={"notification_id": notification.id})
+                    logger.exception(
+                        "notification_email_delivery_exception", extra={"notification_id": notification.id}
+                    )
                     result = {"success": False, "provider": "bird", "error": str(exc)}
 
                 if result.get("success"):
@@ -269,7 +277,9 @@ def deliver_email_notification(self, notification_id: int, email_payload: dict |
                     retryable = _is_retryable(result) and not exhausted
                     _finish(
                         delivery,
-                        status=(NotificationDelivery.Status.PENDING if retryable else NotificationDelivery.Status.FAILED),
+                        status=(
+                            NotificationDelivery.Status.PENDING if retryable else NotificationDelivery.Status.FAILED
+                        ),
                         provider="bird",
                         result=result,
                     )

@@ -4,20 +4,19 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('assets', '0001_initial'),
+        ("assets", "0001_initial"),
     ]
 
     operations = [
         migrations.RenameField(
-            model_name='asset',
-            old_name='name',
-            new_name='name_en',
+            model_name="asset",
+            old_name="name",
+            new_name="name_en",
         ),
         migrations.AddField(
-            model_name='asset',
-            name='name_ar',
+            model_name="asset",
+            name="name_ar",
             field=models.CharField(blank=True, max_length=255),
         ),
     ]

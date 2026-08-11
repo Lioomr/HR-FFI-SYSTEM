@@ -12,6 +12,8 @@ interface EmployeeListFilters {
   status?: string;
   nationality?: string;
   joinDateOrder?: "asc" | "desc";
+  /** Active employees by default; archived employees are opt-in (HR/Admin only). */
+  archiveState?: "active" | "archived";
 }
 
 /**

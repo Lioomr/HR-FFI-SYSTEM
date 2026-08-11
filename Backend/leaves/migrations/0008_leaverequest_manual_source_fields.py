@@ -57,6 +57,8 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="leaverequest",
             name="source_document_ref",
-            field=models.CharField(blank=True, help_text="Reference to source document for manual HR entries.", max_length=255),
+            field=models.CharField(
+                blank=True, help_text="Reference to source document for manual HR entries.", max_length=255
+            ),
         ),
     ]

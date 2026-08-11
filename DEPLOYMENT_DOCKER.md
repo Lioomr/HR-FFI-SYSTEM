@@ -87,3 +87,11 @@ docker compose --env-file .env.prod.compose -f docker-compose.prod.yml down
 - Put reverse proxy/TLS in front (Nginx/Caddy/Cloud LB).
 - Keep database backups enabled.
 - If invite/reset/notification email appears successful in API but does not arrive, inspect Bird suppression lists for recipient addresses.
+
+### Employee document OCR
+
+- The backend image installs Tesseract with English and Arabic language data.
+- Employee document extraction runs in the Celery worker so uploads return immediately.
+- Production must run the worker with the same backend image, Redis broker settings, database settings, and private-upload volume as the backend service.
+- After deployment, verify the worker reports `employees.tasks.extract_employee_document` in its registered task list.
+- Existing Pending/Failed documents can be retried from the Document Archive UI or with `POST /api/employees/{employee_id}/documents/{document_id}/extract/`.

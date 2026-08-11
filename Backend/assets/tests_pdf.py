@@ -102,8 +102,6 @@ def test_render_labels_pdf_arabic_name_does_not_crash():
         company=SimpleNamespace(name="شركة"),
     )
 
-    pdf_bytes = render_labels_pdf(
-        [asset], "60X40", name_language="ar", qr_base_url="https://hr.example.com"
-    )
+    pdf_bytes = render_labels_pdf([asset], "60X40", name_language="ar", qr_base_url="https://hr.example.com")
 
     assert pdf_bytes.startswith(b"%PDF")

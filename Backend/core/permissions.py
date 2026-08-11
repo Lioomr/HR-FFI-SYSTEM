@@ -3,7 +3,6 @@ from rest_framework.permissions import BasePermission
 
 from employees.models import EmployeeProfile
 
-
 CEO_APPROVER_DEPARTMENT_ID = 1
 
 
@@ -41,7 +40,9 @@ def has_direct_reports(user):
     if not delegated_manager_ids:
         return False
 
-    return EmployeeProfile.objects.filter(Q(manager_id__in=delegated_manager_ids) | Q(manager_profile__user_id__in=delegated_manager_ids)).exists()
+    return EmployeeProfile.objects.filter(
+        Q(manager_id__in=delegated_manager_ids) | Q(manager_profile__user_id__in=delegated_manager_ids)
+    ).exists()
 
 
 class IsSystemAdmin(BasePermission):
@@ -59,7 +60,8 @@ class IsManager(BasePermission):
         # Allow SystemAdmin/HRManager to act as manager if needed, or strictly manager
         # Usually Managers are distinct, but let's allow Admin for override
         return request.user.is_authenticated and (
-            get_role(request.user) in [
+            get_role(request.user)
+            in [
                 "SystemAdmin",
                 "HRManager",
                 "Manager",

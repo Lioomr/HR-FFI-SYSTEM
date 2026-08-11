@@ -11,7 +11,6 @@ from django.utils import timezone
 from audit.utils import audit
 from core.models import DelegationRule, RequestObligation
 
-
 BUSINESS_TRIP_CODE = "BUSINESS_TRIP"
 
 
@@ -149,11 +148,15 @@ def has_covering_delegation_for_leave(leave_request) -> bool:
         return True
     start_at = _aware_start(leave_request.start_date)
     end_at = _aware_end(leave_request.date_of_rejoin or leave_request.end_date)
-    return DelegationRule.objects.filter(
-        from_user=employee,
-        is_active=True,
-        start_at__lte=start_at,
-    ).filter(Q(end_at__isnull=True) | Q(end_at__gte=end_at)).exists()
+    return (
+        DelegationRule.objects.filter(
+            from_user=employee,
+            is_active=True,
+            start_at__lte=start_at,
+        )
+        .filter(Q(end_at__isnull=True) | Q(end_at__gte=end_at))
+        .exists()
+    )
 
 
 def get_pending_approval_workflows_for_user(user, *, exclude_parent=None):
@@ -180,7 +183,9 @@ def sync_leave_obligations(leave_request, *, actor=None) -> dict[str, Any]:
     company = getattr(leave_request, "company", None) or getattr(profile, "company", None)
 
     if not is_business_trip_leave(leave_request):
-        for obligation in RequestObligation.objects.filter(parent_content_type=parent_ct, parent_object_id=leave_request.pk):
+        for obligation in RequestObligation.objects.filter(
+            parent_content_type=parent_ct, parent_object_id=leave_request.pk
+        ):
             _resolve_obligation(obligation, note="Not a Business Trip request.", actor=actor)
         return get_obligations_summary(leave_request)
 
@@ -250,7 +255,9 @@ def sync_leave_obligations(leave_request, *, actor=None) -> dict[str, Any]:
             metadata={"pending_count": pending_count},
         )
     elif pending_obligation:
-        note = "Delegation covers the Business Trip period." if delegation_covers_trip else "No pending approvals remain."
+        note = (
+            "Delegation covers the Business Trip period." if delegation_covers_trip else "No pending approvals remain."
+        )
         _resolve_obligation(pending_obligation, note=note, actor=actor)
 
     return get_obligations_summary(leave_request)

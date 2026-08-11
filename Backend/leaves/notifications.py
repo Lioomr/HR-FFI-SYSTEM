@@ -68,7 +68,9 @@ def _send_whatsapp_template(
     }
 
 
-def _notify_user(*, user, email_template, email_context, whatsapp_template, whatsapp_variables, **notification_kwargs) -> dict:
+def _notify_user(
+    *, user, email_template, email_context, whatsapp_template, whatsapp_variables, **notification_kwargs
+) -> dict:
     return dispatch_notification_channels(
         recipient=user,
         whatsapp_template=whatsapp_template,

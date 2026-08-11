@@ -6,7 +6,7 @@ import os
 from datetime import datetime
 
 from django.conf import settings
-from django.http import FileResponse, HttpResponse, Http404
+from django.http import FileResponse, HttpResponse
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
@@ -14,7 +14,6 @@ from audit.utils import audit
 from core.pdf import encrypt_pdf
 from core.responses import error, success
 from employees.permissions import IsHRManagerOrAdmin
-
 
 SENSITIVE_TEMPLATE_KEYS = {"salary_certificate", "termination_letter", "employment_certificate"}
 

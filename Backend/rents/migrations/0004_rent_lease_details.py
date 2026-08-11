@@ -18,7 +18,6 @@ def backfill_lease_details(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("rents", "0003_rent_company_renttype_company_alter_renttype_code_and_more"),
     ]

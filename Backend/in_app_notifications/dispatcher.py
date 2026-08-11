@@ -167,6 +167,7 @@ def dispatch_notification_channels(
     company_id: int | None = None,
     whatsapp_enabled: bool | None = None,
     email_enabled: bool | None = None,
+    redeliver_existing: bool = True,
 ) -> dict:
     """Persist immediately and enqueue WhatsApp-first external delivery after commit."""
     try:
@@ -208,7 +209,7 @@ def dispatch_notification_channels(
             ).first()
             if created:
                 transaction.on_commit(lambda notification_id=notification.id: _broadcast_created(notification_id))
-            if whatsapp_delivery.status != NotificationDelivery.Status.SENT:
+            if (created or redeliver_existing) and whatsapp_delivery.status != NotificationDelivery.Status.SENT:
                 transaction.on_commit(
                     lambda notification_id=notification.id, payload=task_payload: _queue_whatsapp(
                         notification_id, payload

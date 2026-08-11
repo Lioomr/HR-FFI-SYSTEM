@@ -19,6 +19,7 @@ from .services import SyncBioTimeService
 
 User = get_user_model()
 
+
 class AttendanceTests(TestCase):
     def setUp(self):
         self.client = APIClient()

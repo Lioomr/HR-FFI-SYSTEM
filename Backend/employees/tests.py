@@ -17,6 +17,7 @@ from leaves.models import LeaveRequest, LeaveType
 from organization.models import OrganizationNode, UserOrganizationAccess
 
 from .models import EmployeeDeletionRequest, EmployeeDocument, EmployeeProfile
+from .serializers import EmployeeProfileReadSerializer
 
 User = get_user_model()
 
@@ -66,6 +67,40 @@ class EmployeeProfileTests(TestCase):
         self.assertTrue(
             AuditLog.objects.filter(action="employee_profile_created", entity_id=response.data["data"]["id"]).exists()
         )
+
+    def test_read_serializer_returns_archiver_id_and_display_name(self):
+        self.admin_user.full_name = "Archive Administrator"
+        self.admin_user.save(update_fields=["full_name"])
+        archived_profile = EmployeeProfile.objects.create(
+            user=self.employee_user,
+            employee_id="EMP-ARCHIVED-SERIALIZER",
+            is_archived=True,
+            archived_at=timezone.now(),
+            archived_by=self.admin_user,
+            archive_reason=EmployeeProfile.ArchiveReason.OTHER,
+        )
+
+        data = EmployeeProfileReadSerializer(archived_profile).data
+
+        self.assertEqual(data["archived_by"], self.admin_user.id)
+        self.assertEqual(data["archived_by_name"], "Archive Administrator")
+        self.assertNotIn("archived_by_email", data)
+
+        self.admin_user.full_name = ""
+        self.admin_user.save(update_fields=["full_name"])
+        fallback_data = EmployeeProfileReadSerializer(archived_profile).data
+        self.assertEqual(fallback_data["archived_by_name"], self.admin_user.email)
+
+    def test_read_serializer_returns_null_archiver_for_non_archived_employee(self):
+        profile = EmployeeProfile.objects.create(
+            user=self.employee_user,
+            employee_id="EMP-ACTIVE-SERIALIZER",
+        )
+
+        data = EmployeeProfileReadSerializer(profile).data
+
+        self.assertIsNone(data["archived_by"])
+        self.assertIsNone(data["archived_by_name"])
 
     def test_hr_update_profile(self):
         # Create profile first
@@ -339,7 +374,7 @@ class EmployeeProfileTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         whatsapp_send.assert_not_called()
 
-    def test_hard_delete_forbidden(self):
+    def test_permanent_delete_forbidden(self):
         profile = EmployeeProfile.objects.create(
             user=self.employee_user,
             department="Engineering",
@@ -964,12 +999,16 @@ class EmployeeDeletionWorkflowTests(TestCase):
             employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
         )
 
-    def test_hr_can_create_employee_hard_delete_request(self):
+    def test_hr_can_create_employee_archive_request(self):
         self.client.force_authenticate(user=self.hr_user)
 
         response = self.client.post(
             "/api/employees/deletion-requests/",
-            {"employee_profile_id": self.profile.id, "reason": "Left the company"},
+            {
+                "employee_profile_id": self.profile.id,
+                "archive_reason": EmployeeProfile.ArchiveReason.RESIGNED,
+                "reason": "Left the company",
+            },
             format="json",
             HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
         )
@@ -977,18 +1016,30 @@ class EmployeeDeletionWorkflowTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
         request_obj = EmployeeDeletionRequest.objects.get()
         self.assertEqual(request_obj.status, EmployeeDeletionRequest.Status.PENDING_CEO)
+        self.assertEqual(request_obj.archive_reason, EmployeeProfile.ArchiveReason.RESIGNED)
         self.assertEqual(request_obj.request_snapshot["employee_id"], "DEL-001")
         self.assertTrue(
-            AuditLog.objects.filter(action="employee_hard_delete_requested", entity_id=request_obj.id).exists()
+            AuditLog.objects.filter(action="employee_archive_requested", entity_id=request_obj.id).exists()
         )
 
-    def test_global_ceo_can_approve_and_hard_delete_across_companies(self):
+    def test_approval_archives_employee_preserves_history_and_restore_works(self):
+        leave_type = LeaveType.objects.create(company=self.company, name="Annual", code="ANNUAL")
+        leave_request = LeaveRequest.objects.create(
+            employee=self.employee_user,
+            employee_profile=self.profile,
+            company=self.company,
+            leave_type=leave_type,
+            start_date=date.today(),
+            end_date=date.today(),
+            status=LeaveRequest.RequestStatus.APPROVED,
+        )
         request_obj = EmployeeDeletionRequest.objects.create(
             company=self.company,
             employee_profile=self.profile,
             target_user=self.employee_user,
             requested_by=self.hr_user,
             reason="Duplicate employee record cleanup",
+            archive_reason=EmployeeProfile.ArchiveReason.OTHER,
             request_snapshot={"employee_id": self.profile.employee_id, "full_name": self.profile.full_name},
         )
 
@@ -1002,10 +1053,51 @@ class EmployeeDeletionWorkflowTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         request_obj.refresh_from_db()
+        self.profile.refresh_from_db()
+        self.employee_user.refresh_from_db()
         self.assertEqual(request_obj.status, EmployeeDeletionRequest.Status.EXECUTED)
-        self.assertFalse(User.objects.filter(id=self.employee_user.id).exists())
-        self.assertFalse(EmployeeProfile.objects.filter(id=self.profile.id).exists())
-        self.assertTrue(AuditLog.objects.filter(action="employee_hard_deleted", entity_id=request_obj.id).exists())
+        self.assertTrue(User.objects.filter(id=self.employee_user.id).exists())
+        self.assertFalse(self.employee_user.is_active)
+        self.assertTrue(EmployeeProfile.objects.filter(id=self.profile.id).exists())
+        self.assertTrue(self.profile.is_archived)
+        self.assertEqual(self.profile.archive_reason, EmployeeProfile.ArchiveReason.OTHER)
+        self.assertEqual(self.profile.archived_by_id, self.ceo_user.id)
+        self.assertIsNotNone(self.profile.archived_at)
+        self.assertEqual(LeaveRequest.objects.get(id=leave_request.id).employee_profile_id, self.profile.id)
+        self.assertTrue(request_obj.execution_snapshot["is_archived"])
+        self.assertTrue(request_obj.execution_snapshot["target_user_disabled"])
+        self.assertTrue(AuditLog.objects.filter(action="employee_archived", entity_id=self.profile.id).exists())
+
+        self.client.force_authenticate(user=self.hr_user)
+        active_response = self.client.get(
+            "/api/employees/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id)
+        )
+        self.assertEqual(active_response.status_code, status.HTTP_200_OK, active_response.data)
+        self.assertFalse(any(item["id"] == self.profile.id for item in active_response.data["data"]["results"]))
+
+        archived_response = self.client.get(
+            "/api/employees/?archive_state=archived", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id)
+        )
+        self.assertEqual(archived_response.status_code, status.HTTP_200_OK, archived_response.data)
+        archived_items = archived_response.data["data"]["results"]
+        self.assertTrue(any(item["id"] == self.profile.id and item["is_archived"] for item in archived_items))
+        archived_item = next(item for item in archived_items if item["id"] == self.profile.id)
+        self.assertEqual(archived_item["archived_by"], self.ceo_user.id)
+        self.assertEqual(archived_item["archived_by_name"], self.ceo_user.full_name)
+
+        restore_response = self.client.post(
+            f"/api/employees/{self.profile.id}/restore/",
+            {},
+            format="json",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+        self.assertEqual(restore_response.status_code, status.HTTP_200_OK, restore_response.data)
+        self.profile.refresh_from_db()
+        self.employee_user.refresh_from_db()
+        self.assertFalse(self.profile.is_archived)
+        self.assertIsNone(self.profile.archive_reason)
+        self.assertTrue(self.employee_user.is_active)
+        self.assertTrue(AuditLog.objects.filter(action="employee_restored", entity_id=self.profile.id).exists())
 
     def test_cfo_group_user_is_global_cfo_approver(self):
         from loans.permissions import is_cfo_approver_user

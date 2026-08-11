@@ -1,8 +1,7 @@
+import logging
 from datetime import datetime, timedelta
 
 from django.utils import timezone
-
-import logging
 
 from .biotime_client import BioTimeClient
 from .models import AttendanceRecord, BioTimeConfig, BioTimeEmployeeMap
@@ -88,14 +87,16 @@ class SyncBioTimeService:
         # Preload the map
         mappings = {
             m.biotime_emp_code: m.employee_profile
-            for m in BioTimeEmployeeMap.objects.select_related("employee_profile").all()
+            for m in BioTimeEmployeeMap.objects.select_related("employee_profile").filter(
+                employee_profile__is_archived=False
+            )
         }
 
         for emp_code, dates in grouped_data.items():
             if emp_code not in mappings:
                 unmapped_count += 1
                 continue
-                
+
             employee_profile = mappings[emp_code]
 
             for date_obj, punches in dates.items():
@@ -170,11 +171,13 @@ class SyncBioTimeService:
         for emp in device_employees:
             emp_code = str(emp.get("emp_code"))
             if emp_code not in existing_mappings:
-                unmapped.append({
-                    "emp_code": emp_code,
-                    "first_name": emp.get("first_name", ""),
-                    "last_name": emp.get("last_name", ""),
-                    "department": emp.get("dept_name", ""),
-                })
+                unmapped.append(
+                    {
+                        "emp_code": emp_code,
+                        "first_name": emp.get("first_name", ""),
+                        "last_name": emp.get("last_name", ""),
+                        "department": emp.get("dept_name", ""),
+                    }
+                )
 
         return unmapped

@@ -86,8 +86,7 @@ class Command(BaseCommand):
         email_status = None
         while time.monotonic() < deadline:
             deliveries = {
-                d.channel: d.status
-                for d in NotificationDelivery.objects.filter(notification_id=notification_id)
+                d.channel: d.status for d in NotificationDelivery.objects.filter(notification_id=notification_id)
             }
             whatsapp_status = deliveries.get(NotificationDelivery.Channel.WHATSAPP)
             email_status = deliveries.get(NotificationDelivery.Channel.EMAIL)
@@ -104,9 +103,7 @@ class Command(BaseCommand):
 
         failures = []
         if whatsapp_status != NotificationDelivery.Status.SKIPPED:
-            failures.append(
-                f"expected WhatsApp to be skipped (no phone on file), got '{whatsapp_status}'."
-            )
+            failures.append(f"expected WhatsApp to be skipped (no phone on file), got '{whatsapp_status}'.")
         if email_status is None:
             failures.append("email fallback was never queued (no NotificationDelivery row created).")
         elif email_status not in TERMINAL_STATUSES:

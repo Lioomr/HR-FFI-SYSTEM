@@ -57,4 +57,3 @@ def custom_exception_handler(exc, context):
     response = error(msg, status=resp.status_code)
     response.data["detail"] = msg
     return response
-

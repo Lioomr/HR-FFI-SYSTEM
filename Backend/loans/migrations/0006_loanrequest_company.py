@@ -12,17 +12,22 @@ def backfill_loan_company(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('loans', '0005_loan_type_and_installments'),
-        ('organization', '0001_initial'),
+        ("loans", "0005_loan_type_and_installments"),
+        ("organization", "0001_initial"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='loanrequest',
-            name='company',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='loan_requests', to='organization.organizationnode'),
+            model_name="loanrequest",
+            name="company",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name="loan_requests",
+                to="organization.organizationnode",
+            ),
         ),
         migrations.RunPython(backfill_loan_company, migrations.RunPython.noop),
     ]

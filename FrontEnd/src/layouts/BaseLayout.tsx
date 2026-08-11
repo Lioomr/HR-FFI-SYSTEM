@@ -8,7 +8,6 @@ import {
   SettingOutlined,
   LogoutOutlined,
   KeyOutlined,
-  CalendarOutlined,
   ApartmentOutlined,
   IdcardOutlined,
   GroupOutlined,
@@ -43,6 +42,8 @@ import { isCEOApproverEmployee } from "../utils/ceoApprover";
 import { isHeadOfficeOrganization } from "../utils/organizationContext";
 import NotificationBell from "../components/notifications/NotificationBell";
 import { useNotificationsRuntime } from "../hooks/useNotificationsRuntime";
+import { buildCeoMenuItems, getCeoOpenKeysForPath } from "./ceoNav";
+import { getSelectedKey, sectionLabel } from "./menuUtils";
 
 const { Header, Sider, Content } = Layout;
 const { useBreakpoint } = Grid;
@@ -117,28 +118,6 @@ function BrandLogo({ collapsed, title, subtitle, accent, accentGlow, titleColor 
 }
 
 // ─── Key helpers ────────────────────────────────────────────────────────────────
-function getSelectedKey(pathname: string, items: MenuProps["items"]): string {
-  if (!items) return pathname;
-  let longestMatch = pathname;
-  let longestMatchLength = 0;
-  const checkItems = (menuItems: MenuProps["items"]) => {
-    menuItems?.forEach((item) => {
-      if (!item || typeof item !== "object" || !("key" in item)) return;
-      const key = (item as { key?: unknown }).key;
-      if (typeof key === "string") {
-        if (pathname.startsWith(key) && key.length > longestMatchLength) {
-          longestMatch = key;
-          longestMatchLength = key.length;
-        }
-      }
-      const children = (item as { children?: MenuProps["items"] }).children;
-      if (children) checkItems(children);
-    });
-  };
-  checkItems(items);
-  return longestMatch;
-}
-
 function getTitle(pathname: string, t: (key: string, fallback?: string) => string) {
   if (pathname.startsWith("/admin/dashboard")) return t("layout.adminDashboard");
   if (pathname.startsWith("/admin/users/create")) return t("layout.createUser");
@@ -158,6 +137,7 @@ function getTitle(pathname: string, t: (key: string, fallback?: string) => strin
   if (pathname.startsWith("/manager/team")) return t("layout.myTeam", "My Team");
   if (pathname.startsWith("/manager/announcements")) return t("layout.announcements", "Announcements");
   if (pathname.startsWith("/manager/profile")) return t("layout.profile");
+  if (pathname.startsWith("/ceo/dashboard")) return t("ceo.dashboard.title", "CEO Dashboard");
   if (pathname.startsWith("/ceo/leave/requests")) return t("layout.ceoLeaveApprovals", "CEO Leave Approvals");
   if (pathname.startsWith("/ceo/team-requests")) return t("layout.teamRequests", "Team Requests");
   if (pathname.startsWith("/ceo/team")) return t("layout.ceoTeam", "Leadership Team");
@@ -212,9 +192,8 @@ function getOpenKeysForPath(pathname: string): string[] {
   if (isEmployeeRequestPath) opens.push("mgr-requests-sub");
   if (pathname.startsWith("/manager/announcements") || pathname.startsWith("/employee/announcements")) opens.push("mgr-announcements-sub");
   if (pathname.startsWith("/employee/attendance") || pathname.startsWith("/employee/attendance-corrections")) opens.push("mgr-attendance-sub");
-  // CEO sidebar sub-menus
-  if (pathname.startsWith("/ceo/assets")) opens.push("ceo-assets-sub");
-  if (pathname.startsWith("/ceo/announcements")) opens.push("ceo-announcements-sub");
+  // CEO sidebar sub-menus (owned by ceoNav so the groups stay in one place)
+  opens.push(...getCeoOpenKeysForPath(pathname));
   return opens;
 }
 
@@ -389,17 +368,6 @@ function getSidebarBrandTheme(code?: string, nodeType?: string) {
         titleColor: "#ffffff",
       };
   }
-}
-
-function sectionLabel(title: string, caption?: string) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      <span>{title}</span>
-      {caption ? (
-        <span style={{ fontSize: 10, letterSpacing: "0.04em", textTransform: "none", opacity: 0.7 }}>{caption}</span>
-      ) : null}
-    </div>
-  );
 }
 
 // ─── Main Layout ────────────────────────────────────────────────────────────────
@@ -827,69 +795,7 @@ export default function BaseLayout() {
     },
   ];
 
-  const ceoItems: MenuProps["items"] = [
-    { key: "/ceo/dashboard", icon: <DashboardOutlined />, label: <Link to="/ceo/dashboard">{t("layout.dashboard")}</Link> },
-    {
-      type: "group",
-      label: sectionLabel(t("layout.menu.workInbox", "Work Inbox"), t("layout.menu.approvals", "Approvals")),
-      children: [
-        { key: "/pending-inbox", icon: <InboxOutlined />, label: <Link to="/pending-inbox">{t("layout.pendingInbox", "Pending Inbox")}</Link> },
-      ],
-    },
-    {
-      type: "group",
-      label: sectionLabel(t("layout.menu.ceo", "CEO"), t("layout.menu.approvals", "Approvals")),
-      children: [
-        { key: "/ceo/leave/requests", icon: <CalendarOutlined />, label: <Link to="/ceo/leave/requests">{t("layout.ceoLeaveApprovals", "Leave Approvals")}</Link> },
-        { key: "/ceo/team-requests", icon: <FileSearchOutlined />, label: <Link to="/ceo/team-requests">{t("layout.teamRequests", "Team Requests")}</Link> },
-        { key: "/ceo/loan-requests", icon: <DollarOutlined />, label: <Link to="/ceo/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
-        { key: "/ceo/attendance", icon: <ClockCircleOutlined />, label: <Link to="/ceo/attendance">{t("layout.attendance")}</Link> },
-        {
-          key: "ceo-assets-sub",
-          icon: <AppstoreOutlined />,
-          label: t("layout.assetReviews", "Asset Reviews"),
-          children: [
-            { key: "/ceo/assets/damage-reports", label: <Link to="/ceo/assets/damage-reports">{t("assets.damageReports", "Damage Reports")}</Link> },
-            { key: "/ceo/assets/return-requests", label: <Link to="/ceo/assets/return-requests">{t("assets.returnRequests", "Return Requests")}</Link> },
-          ],
-        },
-        { key: "/ceo/employees/deletion-requests", icon: <TeamOutlined />, label: <Link to="/ceo/employees/deletion-requests">{t("employees.removalInbox.menu", "Employee Removals")}</Link> },
-      ],
-    },
-    {
-      type: "group",
-      label: sectionLabel(t("layout.menu.manager", "Manager"), t("layout.menu.teamManagement", "Team Management")),
-      children: [
-        { key: "/manager/dashboard", icon: <DashboardOutlined />, label: <Link to="/manager/dashboard">{t("layout.managerDashboard", "Manager Dashboard")}</Link> },
-        { key: "/manager/team", icon: <TeamOutlined />, label: <Link to="/manager/team">{t("layout.myTeam", "My Team")}</Link> },
-        { key: "/manager/team-requests", icon: <FileSearchOutlined />, label: <Link to="/manager/team-requests">{t("layout.teamRequests", "Team Requests")}</Link> },
-        { key: "/manager/loan-requests", icon: <DollarOutlined />, label: <Link to="/manager/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
-      ],
-    },
-    {
-      type: "group",
-      label: sectionLabel(t("layout.myTeam", "My Team"), t("layout.leadership", "Leadership")),
-      children: [
-        { key: "/ceo/team", icon: <TeamOutlined />, label: <Link to="/ceo/team">{t("layout.ceoTeam", "Leadership Team")}</Link> },
-      ],
-    },
-    {
-      type: "group",
-      label: sectionLabel(t("layout.menu.account", "Account"), t("layout.profile")),
-      children: [
-        {
-          key: "ceo-announcements-sub",
-          icon: <BellOutlined />,
-          label: t("layout.announcements", "Announcements"),
-          children: [
-            { key: "/ceo/announcements", label: <Link to="/ceo/announcements">{t("layout.announcements", "Announcements")}</Link> },
-            { key: "/ceo/announcements/create", label: <Link to="/ceo/announcements/create">{t("layout.newAnnouncement", "New")}</Link> },
-          ],
-        },
-        { key: "/ceo/profile", icon: <IdcardOutlined />, label: <Link to="/ceo/profile">{t("layout.profile")}</Link> },
-      ],
-    },
-  ];
+  const ceoItems: MenuProps["items"] = buildCeoMenuItems(t);
 
   const cfoItems: MenuProps["items"] = [
     { key: "/cfo/dashboard", icon: <DashboardOutlined />, label: <Link to="/cfo/dashboard">{t("layout.dashboard")}</Link> },

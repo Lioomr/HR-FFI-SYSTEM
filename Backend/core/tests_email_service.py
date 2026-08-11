@@ -47,4 +47,3 @@ class BirdEmailServiceTests(SimpleTestCase):
         self.assertTrue(result["success"])
         self.assertEqual(result["status_code"], 202)
         self.assertEqual(mock_post.call_count, 2)
-

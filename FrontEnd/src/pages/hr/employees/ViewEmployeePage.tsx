@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Button, Card, Descriptions, Space, Modal, Select, message, Tooltip, Avatar, Row, Col, Tabs, Tag, Typography, Divider } from "antd";
+import { Alert, Button, Card, Descriptions, Space, Modal, Select, message, Tooltip, Avatar, Row, Col, Tabs, Tag, Typography, Divider } from "antd";
 import { ArrowLeftOutlined, EditOutlined, UserAddOutlined, DisconnectOutlined, UserOutlined, ContainerOutlined, DollarOutlined, FolderOpenOutlined, MailOutlined, PhoneOutlined, SafetyCertificateOutlined, InboxOutlined } from "@ant-design/icons";
 import { getCountryFlag } from "../../../utils/countries";
 import EmployeeLeaveBalances from "./components/EmployeeLeaveBalances";
@@ -10,7 +10,7 @@ import LoadingState from "../../../components/ui/LoadingState";
 import EmptyState from "../../../components/ui/EmptyState";
 import ErrorState from "../../../components/ui/ErrorState";
 import Unauthorized403Page from "../../Unauthorized403Page";
-import { getEmployee } from "../../../services/api/employeesApi";
+import { getEmployee, restoreEmployee } from "../../../services/api/employeesApi";
 import type { Employee } from "../../../services/api/employeesApi";
 import { listUsers } from "../../../services/api/usersApi";
 import { api } from "../../../services/api/apiClient";
@@ -72,14 +72,14 @@ function ExpiryTag({ status }: { status: ReturnType<typeof getExpiryStatus> }) {
     return <Tag>Unknown</Tag>;
 }
 
-function DocCard({ label, tagLabel, tagColor, number, expiry }: {
+function DocCard({ label, tagLabel, tagColor, number, expiry, testId }: {
     label: string; tagLabel: string; tagColor: string;
-    number: string; expiry: string | undefined;
+    number?: string; expiry: string | undefined; testId?: string;
 }) {
     const status = getExpiryStatus(expiry);
     const borderColor = status === 'expired' ? '#ff4d4f' : status === 'warning' ? '#faad14' : '#f0f0f0';
     return (
-        <div style={{ padding: 12, background: '#fafafa', borderRadius: 8, border: `1px solid ${borderColor}` }}>
+        <div data-testid={testId} style={{ padding: 12, background: '#fafafa', borderRadius: 8, border: `1px solid ${borderColor}` }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                 <Text strong><SafetyCertificateOutlined /> {label}</Text>
                 <Space size={4}>
@@ -87,7 +87,7 @@ function DocCard({ label, tagLabel, tagColor, number, expiry }: {
                     <Tag color={tagColor}>{tagLabel}</Tag>
                 </Space>
             </div>
-            <div style={{ fontSize: 13, color: '#595959', marginBottom: 4 }}>{number}</div>
+            {number && <div style={{ fontSize: 13, color: '#595959', marginBottom: 4 }}>{number}</div>}
             <div style={{ fontSize: 12, color: '#8c8c8c' }}>Expires: {formatDate(expiry)}</div>
         </div>
     );
@@ -100,6 +100,8 @@ export default function ViewEmployeePage() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const activeOrganizationId = useAuthStore((state) => state.user?.active_organization_id ?? state.user?.default_organization_id ?? null);
+    const role = useAuthStore((state) => state.user?.role);
+    const canRestoreEmployee = role === "SystemAdmin" || role === "HRManager";
 
 
     // State
@@ -115,6 +117,11 @@ export default function ViewEmployeePage() {
     const [usersLoading, setUsersLoading] = useState(false);
     const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
     const [linking, setLinking] = useState(false);
+
+    // Restore (archived employees only)
+    const [restoreOpen, setRestoreOpen] = useState(false);
+    const [restoring, setRestoring] = useState(false);
+    const [restoreError, setRestoreError] = useState<string | null>(null);
 
     /**
      * Load employee data
@@ -247,6 +254,34 @@ export default function ViewEmployeePage() {
         });
     }
 
+    const handleRestore = async () => {
+        if (!employee) return;
+        setRestoreError(null);
+        setRestoring(true);
+        try {
+            const response = await restoreEmployee(employee.id);
+            if (isApiError(response)) {
+                setRestoreError(response.message || t("employees.restore.errorGeneric"));
+                setRestoring(false);
+                return;
+            }
+            message.success(t("employees.restore.success"));
+            setRestoreOpen(false);
+            setRestoring(false);
+            loadEmployee();
+        } catch (err: any) {
+            const httpStatus = err?.response?.status;
+            if (httpStatus === 403 || isForbidden(err)) {
+                setRestoreError(t("employees.restore.errorForbidden"));
+            } else if (httpStatus === 422) {
+                setRestoreError(t("employees.restore.errorNotArchived"));
+            } else {
+                setRestoreError(err?.message || t("employees.restore.errorGeneric"));
+            }
+            setRestoring(false);
+        }
+    };
+
     const handleBack = () => {
         navigate("/hr/employees");
     };
@@ -336,6 +371,43 @@ export default function ViewEmployeePage() {
                 }
             />
 
+            {employee.is_archived && (
+                <Alert
+                    type="warning"
+                    showIcon
+                    style={{ marginBottom: 16, borderRadius: 12 }}
+                    message={t("employees.archive.archivedBanner")}
+                    description={
+                        <Space direction="vertical" size={4}>
+                            <Text>{t("employees.archive.archivedBannerDescription")}</Text>
+                            {employee.archive_reason && (
+                                <Text type="secondary">
+                                    {t("employees.archive.colArchiveReason")}:{" "}
+                                    {t(`employees.removal.archiveReason.${employee.archive_reason}`)}
+                                </Text>
+                            )}
+                            {employee.archived_at && (
+                                <Text type="secondary">
+                                    {t("employees.archive.archivedAt")}: {formatDate(employee.archived_at)}
+                                </Text>
+                            )}
+                            {employee.archived_by_name?.trim() && (
+                                <Text type="secondary">
+                                    {t("employees.archive.archivedBy")}: {employee.archived_by_name}
+                                </Text>
+                            )}
+                        </Space>
+                    }
+                    action={
+                        canRestoreEmployee ? (
+                            <Button size="small" onClick={() => { setRestoreError(null); setRestoreOpen(true); }}>
+                                {t("employees.restore.action")}
+                            </Button>
+                        ) : undefined
+                    }
+                />
+            )}
+
             {/* Hero Banner */}
             <Card style={{ borderRadius: 16, border: 'none', boxShadow: '0 2px 16px rgba(0,0,0,0.06)', marginBottom: 24, background: 'linear-gradient(135deg, #fff7f0 0%, #fff 100%)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
@@ -350,6 +422,9 @@ export default function ViewEmployeePage() {
                         <Text type="secondary" style={{ fontSize: 15 }}>{employee.position || "—"}</Text>
                         <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                             {employee.department && <Tag color="orange">{employee.department}</Tag>}
+                            {employee.is_archived && (
+                                <Tag color="default">{t("employees.archive.archivedTag")}</Tag>
+                            )}
                             <Tag color={employee.employment_status === 'ACTIVE' ? 'success' : 'default'}>
                                 {employee.employment_status || 'ACTIVE'}
                             </Tag>
@@ -533,6 +608,13 @@ export default function ViewEmployeePage() {
                                     number={formatValue((employee as any).health_card)}
                                     expiry={(employee as any).health_card_expiry}
                                 />
+                                <DocCard
+                                    label={t("employees.form.workLicense")}
+                                    tagLabel={t("employees.form.workLicenseTag")}
+                                    tagColor="purple"
+                                    expiry={employee.work_license_expiry}
+                                    testId="work-license-expiry-card"
+                                />
                             </Space>
                         </Card>
                     </Col>
@@ -569,6 +651,28 @@ export default function ViewEmployeePage() {
                         };
                     })}
                 />
+            </Modal>
+
+            <Modal
+                open={restoreOpen}
+                title={t("employees.restore.modalTitle")}
+                okText={t("employees.restore.confirmButton")}
+                okButtonProps={{ loading: restoring }}
+                cancelText={t("common.cancel")}
+                cancelButtonProps={{ disabled: restoring }}
+                onOk={handleRestore}
+                onCancel={() => { if (!restoring) { setRestoreOpen(false); setRestoreError(null); } }}
+                closable={!restoring}
+                maskClosable={!restoring}
+                destroyOnClose
+            >
+                <Space direction="vertical" size={12} style={{ width: "100%" }}>
+                    <Text>{t("employees.restore.modalIntro", { name: employee.full_name || employee.email })}</Text>
+                    <Text type="secondary" style={{ fontSize: 12 }}>{t("employees.restore.modalNote")}</Text>
+                    {restoreError && (
+                        <Alert type="error" showIcon message={restoreError} />
+                    )}
+                </Space>
             </Modal>
         </div>
     );

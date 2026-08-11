@@ -46,9 +46,7 @@ def load_config(environ: Mapping[str, str] | None = None) -> ReadinessConfig:
         evolution_instance_configured=bool(env.get("EVOLUTION_INSTANCE_NAME", "").strip()),
         timeout_seconds=max(1.0, float(env.get("NOTIFICATION_WORKER_READINESS_TIMEOUT_SECONDS", "60"))),
         interval_seconds=max(0.1, float(env.get("NOTIFICATION_WORKER_READINESS_INTERVAL_SECONDS", "2"))),
-        request_timeout_seconds=max(
-            0.1, float(env.get("NOTIFICATION_WORKER_READINESS_REQUEST_TIMEOUT_SECONDS", "5"))
-        ),
+        request_timeout_seconds=max(0.1, float(env.get("NOTIFICATION_WORKER_READINESS_REQUEST_TIMEOUT_SECONDS", "5"))),
     )
 
 

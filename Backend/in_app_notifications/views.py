@@ -39,7 +39,9 @@ class NotificationListView(APIView):
             queryset = queryset.filter(category=category)
         paginator = StandardPagination()
         page = paginator.paginate_queryset(queryset, request, view=self)
-        return paginator.get_paginated_response(NotificationSerializer(page, many=True, context={"request": request}).data)
+        return paginator.get_paginated_response(
+            NotificationSerializer(page, many=True, context={"request": request}).data
+        )
 
 
 class NotificationUnreadCountView(APIView):

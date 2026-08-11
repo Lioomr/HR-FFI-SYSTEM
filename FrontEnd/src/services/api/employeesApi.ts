@@ -2,6 +2,14 @@ import { api } from "./apiClient";
 import type { ApiResponse, ApiSuccess, LeaveBalance } from "./apiTypes";
 export type { LeaveBalance };
 
+export type EmployeeArchiveReason =
+  | "FIRED"
+  | "RESIGNED"
+  | "RETIRED"
+  | "END_OF_CONTRACT"
+  | "DECEASED"
+  | "OTHER";
+
 /**
  * Employee data type
  */
@@ -33,6 +41,11 @@ export interface Employee {
   company_id?: number;
   company_name?: string;
   employment_status?: "ACTIVE" | "ON_LEAVE" | "SUSPENDED" | "TERMINATED";
+  is_archived: boolean;
+  archived_at?: string | null;
+  archived_by?: number | null;
+  archived_by_name?: string | null;
+  archive_reason?: EmployeeArchiveReason | null;
   hire_date?: string;
   department_id?: number;
   position_id?: number;
@@ -58,6 +71,7 @@ export interface Employee {
   allowed_overtime?: number;
   health_card?: string;
   health_card_expiry?: string;
+  work_license_expiry?: string;
   basic_salary?: number;
   transportation_allowance?: number;
   accommodation_allowance?: number;
@@ -85,6 +99,7 @@ export interface ListEmployeesParams {
   status?: string;
   nationality?: string;
   join_date_order?: "asc" | "desc";
+  archive_state?: "active" | "archived" | "all";
 }
 
 export interface DelegationCandidate {
@@ -153,7 +168,9 @@ export async function getEmployee(
   id: string | number,
   params?: Record<string, string | number>,
 ): Promise<ApiResponse<Employee>> {
-  const { data } = await api.get<ApiResponse<Employee>>(`/employees/${id}`, { params });
+  const { data } = await api.get<ApiResponse<Employee>>(`/employees/${id}`, {
+    params,
+  });
   return data;
 }
 
@@ -189,6 +206,7 @@ export interface CreateEmployeeDto {
   // Documents
   health_card?: string;
   health_card_expiry?: string; // YYYY-MM-DD
+  work_license_expiry?: string; // YYYY-MM-DD
 
   // Salary & Allowances
   basic_salary?: number;
@@ -345,9 +363,15 @@ export async function downloadImportTemplate(): Promise<Blob> {
 }
 
 export interface ExpiringDocumentItem {
-  doc_type: "passport" | "id_card" | "health_card" | "contract";
+  doc_type?:
+    | "passport"
+    | "id_card"
+    | "health_card"
+    | "contract"
+    | "work_license";
+  document_type?: "WORK_LICENSE";
   label: string;
-  expiry_date: string;
+  expiry_date: string | null;
   days_left: number;
 }
 
@@ -359,6 +383,7 @@ export interface ExpiringEmployee {
   mobile: string | null;
   nearest_days_left: number;
   documents: ExpiringDocumentItem[];
+  is_archived?: boolean;
 }
 
 export interface ExpiringEmployeesResponse {
@@ -404,11 +429,11 @@ export async function notifyExpiringEmployee(
   return data;
 }
 
-// ── Employee Hard-Delete Requests (CEO-approved) ──────────────────────────────
+// ── Employee Archive Requests (CEO-approved; legacy route retained) ───────────
 
-export type EmployeeDeletionStatus = "PENDING_CEO" | "REJECTED" | "EXECUTED";
+export type EmployeeArchiveStatus = "PENDING_CEO" | "REJECTED" | "EXECUTED";
 
-export interface EmployeeDeletionRequestSnapshot {
+export interface EmployeeArchiveRequestSnapshot {
   employee_profile_id?: number;
   target_user_id?: number;
   employee_id?: string;
@@ -429,16 +454,17 @@ export interface EmployeeDeletionRequestSnapshot {
   target_user_email?: string;
 }
 
-export interface EmployeeDeletionRequest {
+export interface EmployeeArchiveRequest {
   id: number;
   company_id?: number;
   company_name?: string;
   employee_profile_id?: number;
   target_user_id?: number;
   reason: string;
-  status: EmployeeDeletionStatus;
-  request_snapshot: EmployeeDeletionRequestSnapshot;
-  execution_snapshot: EmployeeDeletionRequestSnapshot;
+  archive_reason: EmployeeArchiveReason;
+  status: EmployeeArchiveStatus;
+  request_snapshot: EmployeeArchiveRequestSnapshot;
+  execution_snapshot: EmployeeArchiveRequestSnapshot;
   rejection_reason?: string;
   requested_by?: number;
   requested_by_name?: string;
@@ -459,49 +485,51 @@ export interface EmployeeDeletionRequest {
   };
 }
 
-export interface ListEmployeeDeletionRequestsParams {
-  status?: EmployeeDeletionStatus;
+export interface ListEmployeeArchiveRequestsParams {
+  status?: EmployeeArchiveStatus;
   page?: number;
   page_size?: number;
 }
 
 // StandardPagination shape: { items, page, page_size, count, total_pages }
 // (the unpaginated fallback uses { results, count } — both supported below)
-export interface EmployeeDeletionRequestListResponse {
-  items: EmployeeDeletionRequest[];
+export interface EmployeeArchiveRequestListResponse {
+  items: EmployeeArchiveRequest[];
   page?: number;
   page_size?: number;
   count: number;
   total_pages?: number;
 }
 
-const DELETION_BASE = "/api/employees/deletion-requests";
+// The backend route remains unchanged for existing clients.
+const ARCHIVE_REQUEST_BASE = "/api/employees/deletion-requests";
 
-export async function requestEmployeeDeletion(payload: {
+export async function requestEmployeeArchive(payload: {
   employee_profile_id: number;
+  archive_reason: EmployeeArchiveReason;
   reason: string;
-}): Promise<ApiResponse<EmployeeDeletionRequest>> {
-  const { data } = await api.post<ApiResponse<EmployeeDeletionRequest>>(
-    `${DELETION_BASE}/`,
+}): Promise<ApiResponse<EmployeeArchiveRequest>> {
+  const { data } = await api.post<ApiResponse<EmployeeArchiveRequest>>(
+    `${ARCHIVE_REQUEST_BASE}/`,
     payload,
   );
   return data;
 }
 
-export async function listEmployeeDeletionRequests(
-  params?: ListEmployeeDeletionRequestsParams,
-): Promise<ApiResponse<EmployeeDeletionRequestListResponse>> {
-  const { data } = await api.get<ApiResponse<any>>(`${DELETION_BASE}/`, {
+export async function listEmployeeArchiveRequests(
+  params?: ListEmployeeArchiveRequestsParams,
+): Promise<ApiResponse<EmployeeArchiveRequestListResponse>> {
+  const { data } = await api.get<ApiResponse<any>>(`${ARCHIVE_REQUEST_BASE}/`, {
     params,
   });
   if (data && (data as ApiResponse<any>).status === "success") {
     const payload = (data as ApiSuccess<any>).data || {};
-    const items: EmployeeDeletionRequest[] = Array.isArray(payload.items)
+    const items: EmployeeArchiveRequest[] = Array.isArray(payload.items)
       ? payload.items
       : Array.isArray(payload.results)
         ? payload.results
         : [];
-    const normalized: EmployeeDeletionRequestListResponse = {
+    const normalized: EmployeeArchiveRequestListResponse = {
       items,
       count: typeof payload.count === "number" ? payload.count : items.length,
       page: payload.page,
@@ -510,23 +538,38 @@ export async function listEmployeeDeletionRequests(
     };
     return { status: "success", data: normalized };
   }
-  return data as ApiResponse<EmployeeDeletionRequestListResponse>;
+  return data as ApiResponse<EmployeeArchiveRequestListResponse>;
 }
 
-export async function getEmployeeDeletionRequest(
+export async function getEmployeeArchiveRequest(
   id: number | string,
-): Promise<ApiResponse<EmployeeDeletionRequest>> {
-  const { data } = await api.get<ApiResponse<EmployeeDeletionRequest>>(
-    `${DELETION_BASE}/${id}/`,
+): Promise<ApiResponse<EmployeeArchiveRequest>> {
+  const { data } = await api.get<ApiResponse<EmployeeArchiveRequest>>(
+    `${ARCHIVE_REQUEST_BASE}/${id}/`,
   );
   return data;
 }
 
-export async function approveEmployeeDeletionRequest(
+export async function approveEmployeeArchiveRequest(
   id: number | string,
-): Promise<ApiResponse<EmployeeDeletionRequest>> {
-  const { data } = await api.post<ApiResponse<EmployeeDeletionRequest>>(
-    `${DELETION_BASE}/${id}/approve/`,
+): Promise<ApiResponse<EmployeeArchiveRequest>> {
+  const { data } = await api.post<ApiResponse<EmployeeArchiveRequest>>(
+    `${ARCHIVE_REQUEST_BASE}/${id}/approve/`,
+  );
+  return data;
+}
+
+/**
+ * Un-archives an employee and re-enables the linked account.
+ * Restricted to SystemAdmin/HRManager server-side; returns the refreshed profile.
+ * Uses the `/api/employees/*` family (see plans/API Route Status Matrix.md), the
+ * same prefix as the archive-request endpoints above.
+ */
+export async function restoreEmployee(
+  id: number | string,
+): Promise<ApiResponse<Employee>> {
+  const { data } = await api.post<ApiResponse<Employee>>(
+    `/api/employees/${id}/restore/`,
   );
   return data;
 }
@@ -567,17 +610,17 @@ export interface UploadEmployeeDocumentPayload {
 }
 
 export async function getEmployeeDocuments(
-  employeeId: number | string
+  employeeId: number | string,
 ): Promise<ApiResponse<EmployeeDocument[]>> {
   const { data } = await api.get<ApiResponse<EmployeeDocument[]>>(
-    `/api/employees/${employeeId}/documents/`
+    `/api/employees/${employeeId}/documents/`,
   );
   return data;
 }
 
 export async function uploadEmployeeDocument(
   employeeId: number | string,
-  payload: UploadEmployeeDocumentPayload
+  payload: UploadEmployeeDocumentPayload,
 ): Promise<ApiResponse<EmployeeDocument>> {
   const form = new FormData();
   form.append("document_type", payload.document_type);
@@ -586,7 +629,7 @@ export async function uploadEmployeeDocument(
   const { data } = await api.post<ApiResponse<EmployeeDocument>>(
     `/api/employees/${employeeId}/documents/`,
     form,
-    { headers: { "Content-Type": "multipart/form-data" } }
+    { headers: { "Content-Type": "multipart/form-data" } },
   );
   return data;
 }
@@ -594,22 +637,32 @@ export async function uploadEmployeeDocument(
 export async function patchEmployeeDocument(
   employeeId: number | string,
   documentId: number | string,
-  payload: Partial<Pick<EmployeeDocument, "document_type" | "custom_name">>
+  payload: Partial<Pick<EmployeeDocument, "document_type" | "custom_name">>,
 ): Promise<ApiResponse<EmployeeDocument>> {
   const { data } = await api.patch<ApiResponse<EmployeeDocument>>(
     `/api/employees/${employeeId}/documents/${documentId}/`,
-    payload
+    payload,
+  );
+  return data;
+}
+
+export async function extractEmployeeDocument(
+  employeeId: number | string,
+  documentId: number | string,
+): Promise<ApiResponse<EmployeeDocument>> {
+  const { data } = await api.post<ApiResponse<EmployeeDocument>>(
+    `/api/employees/${employeeId}/documents/${documentId}/extract/`,
   );
   return data;
 }
 
 export async function downloadEmployeeDocument(
   employeeId: number | string,
-  documentId: number | string
+  documentId: number | string,
 ): Promise<Blob> {
   const { data } = await api.get(
     `/api/employees/${employeeId}/documents/${documentId}/download/`,
-    { responseType: "blob" }
+    { responseType: "blob" },
   );
   return data;
 }
@@ -649,12 +702,12 @@ export async function notifyEmployeeDocumentExpiry(
   return data;
 }
 
-export async function rejectEmployeeDeletionRequest(
+export async function rejectEmployeeArchiveRequest(
   id: number | string,
   reason: string,
-): Promise<ApiResponse<EmployeeDeletionRequest>> {
-  const { data } = await api.post<ApiResponse<EmployeeDeletionRequest>>(
-    `${DELETION_BASE}/${id}/reject/`,
+): Promise<ApiResponse<EmployeeArchiveRequest>> {
+  const { data } = await api.post<ApiResponse<EmployeeArchiveRequest>>(
+    `${ARCHIVE_REQUEST_BASE}/${id}/reject/`,
     { reason },
   );
   return data;

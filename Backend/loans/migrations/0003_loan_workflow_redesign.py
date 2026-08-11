@@ -14,7 +14,6 @@ def reverse_pending_hr_to_pending_finance(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("loans", "0002_loanworkflowconfig_and_ceo_stage"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),

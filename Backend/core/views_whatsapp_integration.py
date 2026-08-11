@@ -29,7 +29,9 @@ def _headers(config: dict[str, str]) -> dict[str, str]:
     return {"apikey": config["api_key"], "Content-Type": "application/json"}
 
 
-def _request(method: str, path: str, *, json: dict[str, Any] | None = None) -> tuple[int, dict[str, Any] | list[Any] | str]:
+def _request(
+    method: str, path: str, *, json: dict[str, Any] | None = None
+) -> tuple[int, dict[str, Any] | list[Any] | str]:
     config = _evolution_config()
     response = requests.request(
         method,
@@ -77,7 +79,11 @@ def _extract_connection_state(data: Any) -> str:
 
 def _safe_connection_state(value: Any) -> str:
     normalized = str(value).strip().lower()
-    return normalized if normalized in {"open", "connected", "connecting", "close", "closed", "disconnected"} else "unknown"
+    return (
+        normalized
+        if normalized in {"open", "connected", "connecting", "close", "closed", "disconnected"}
+        else "unknown"
+    )
 
 
 def _extract_qr_code(data: Any) -> str:

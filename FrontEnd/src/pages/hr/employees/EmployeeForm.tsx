@@ -430,12 +430,20 @@ export default function EmployeeForm({ form, loadingRefs, refOptions }: Employee
                         </div>
 
                         {/* Health Card */}
-                        <div style={{ marginBottom: 0, padding: 12, border: '1px solid #f0f0f0', borderRadius: 8, background: '#fafafa' }}>
+                        <div style={{ marginBottom: 16, padding: 12, border: '1px solid #f0f0f0', borderRadius: 8, background: '#fafafa' }}>
                             <div style={{ fontWeight: 600, marginBottom: 8 }}>{t("employees.form.healthCard")}</div>
                             <Form.Item name="health_card" style={{ marginBottom: 8 }}>
                                 <Input placeholder={t("employees.form.healthCardPlaceholder")} prefix={<MedicineBoxOutlined style={{ color: '#bfbfbf' }} />} />
                             </Form.Item>
                             <Form.Item name="health_card_expiry" style={{ marginBottom: 0 }}>
+                                <DatePicker placeholder={t("employees.form.expiryDate")} style={{ width: '100%' }} />
+                            </Form.Item>
+                        </div>
+
+                        {/* Work License */}
+                        <div style={{ marginBottom: 0, padding: 12, border: '1px solid #f0f0f0', borderRadius: 8, background: '#fafafa' }}>
+                            <div style={{ fontWeight: 600, marginBottom: 8 }}>{t("employees.form.workLicense")}</div>
+                            <Form.Item name="work_license_expiry" style={{ marginBottom: 0 }}>
                                 <DatePicker placeholder={t("employees.form.expiryDate")} style={{ width: '100%' }} />
                             </Form.Item>
                         </div>

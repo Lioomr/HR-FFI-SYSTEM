@@ -130,5 +130,7 @@ class WhatsAppTemplateTestView(APIView):
         else:
             text = render_configured_template_message(key, variables)
 
-        result = EvolutionWhatsAppProvider().send_text(phone_number=phone_number, text=text, event=f"template_test:{key}")
+        result = EvolutionWhatsAppProvider().send_text(
+            phone_number=phone_number, text=text, event=f"template_test:{key}"
+        )
         return success(result)

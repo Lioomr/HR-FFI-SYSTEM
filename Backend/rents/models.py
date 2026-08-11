@@ -32,6 +32,7 @@ class RentType(models.Model):
     def __str__(self):
         return f"{self.code} - {self.name_en}"
 
+
 class Rent(models.Model):
     class Recurrence(models.TextChoices):
         ONE_TIME = "ONE_TIME", _("One Time")

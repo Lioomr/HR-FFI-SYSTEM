@@ -49,4 +49,3 @@ class UserOrganizationAccess(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user_id} -> {self.organization_id}"
-

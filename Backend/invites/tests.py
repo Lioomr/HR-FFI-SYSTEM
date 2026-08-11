@@ -463,7 +463,12 @@ class InvitePermissionTests(TestCase):
     @patch("invites.views.send_user_invite_whatsapp")
     @patch("invites.views.send_user_invite_email")
     def test_resend_email_invite_calls_email_path(self, send_email, send_whatsapp):
-        send_email.return_value = {"success": True, "provider": "bird", "message_id": "email-resend", "status_code": 202}
+        send_email.return_value = {
+            "success": True,
+            "provider": "bird",
+            "message_id": "email-resend",
+            "status_code": 202,
+        }
         now = timezone.now()
         invite = Invite.objects.create(
             email="resend-email@test.com",

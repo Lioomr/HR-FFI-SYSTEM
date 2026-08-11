@@ -12,17 +12,23 @@ def backfill_employee_company(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('employees', '0008_employee_id_prefix_to_ffi'),
-        ('organization', '0001_initial'),
+        ("employees", "0008_employee_id_prefix_to_ffi"),
+        ("organization", "0001_initial"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='employeeprofile',
-            name='company',
-            field=models.ForeignKey(blank=True, help_text='Owning company for this employee profile.', null=True, on_delete=django.db.models.deletion.PROTECT, related_name='employee_profiles', to='organization.organizationnode'),
+            model_name="employeeprofile",
+            name="company",
+            field=models.ForeignKey(
+                blank=True,
+                help_text="Owning company for this employee profile.",
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name="employee_profiles",
+                to="organization.organizationnode",
+            ),
         ),
         migrations.RunPython(backfill_employee_company, migrations.RunPython.noop),
     ]

@@ -336,9 +336,11 @@ class PendingRequestsApiTests(APITestCase):
         self.hr_group, _ = Group.objects.get_or_create(name="HRManager")
         self.ceo_group, _ = Group.objects.get_or_create(name="CEO")
         self.company = get_default_company()
-        self.other_company = OrganizationNode.objects.exclude(id=self.company.id).filter(
-            node_type=OrganizationNode.NodeType.COMPANY
-        ).first()
+        self.other_company = (
+            OrganizationNode.objects.exclude(id=self.company.id)
+            .filter(node_type=OrganizationNode.NodeType.COMPANY)
+            .first()
+        )
         self.department = Department.objects.create(code="PEND", name="Pending Department", company=self.company)
         self.position = Position.objects.create(code="PENDPOS", name="Pending Position", company=self.company)
         self.other_department = Department.objects.create(
@@ -434,7 +436,9 @@ class PendingRequestsApiTests(APITestCase):
             hire_date=date(2024, 1, 1),
             company=self.company,
         )
-        self.leave_type = LeaveType.objects.create(name="Annual Leave Pending", code="PEND_ANNUAL", company=self.company)
+        self.leave_type = LeaveType.objects.create(
+            name="Annual Leave Pending", code="PEND_ANNUAL", company=self.company
+        )
 
     def _create_hr_pending_requests(self):
         LeaveRequest.objects.create(

@@ -66,9 +66,7 @@ class BusinessTripObligationsTests(TestCase):
         summary = sync_leave_obligations(leave_request, actor=self.employee)
 
         self.assertEqual(summary["total"], 0)
-        self.assertFalse(
-            RequestObligation.objects.filter(parent_object_id=leave_request.pk).exists()
-        )
+        self.assertFalse(RequestObligation.objects.filter(parent_object_id=leave_request.pk).exists())
 
     def test_business_trip_asset_obligation_resolves_after_assignment_return(self):
         asset = Asset.objects.create(

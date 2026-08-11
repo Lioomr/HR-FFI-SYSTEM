@@ -12,12 +12,16 @@ def backfill_rent_payments(apps, schema_editor):
     Rent = apps.get_model("rents", "Rent")
     RentPayment = apps.get_model("rents", "RentPayment")
 
-    for rent in Rent.objects.filter(is_active=True).exclude(payments="").only(
-        "id",
-        "payments",
-        "lease_end_date",
-        "one_time_due_date",
-        "annual_rent_value",
+    for rent in (
+        Rent.objects.filter(is_active=True)
+        .exclude(payments="")
+        .only(
+            "id",
+            "payments",
+            "lease_end_date",
+            "one_time_due_date",
+            "annual_rent_value",
+        )
     ):
         raw_amount = (rent.payments or "").strip().replace(",", "")
         if not raw_amount:
@@ -43,7 +47,6 @@ def backfill_rent_payments(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
         ("rents", "0004_rent_lease_details"),

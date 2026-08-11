@@ -17,13 +17,16 @@ import shutil
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.utils import ImageReader, simpleSplit
+from reportlab.pdfgen import canvas as pdf_canvas
 
 from core.pdf import (
+    PALETTE_RGB,
     ApprovalStage,
     DetailRow,
     EmployeeBlock,
     ExtraSection,
-    PALETTE_RGB,
     RequestDocument,
     font_pair,
     get_logo_path,
@@ -32,9 +35,6 @@ from core.pdf import (
     shape_ar,
 )
 from core.views_templates import _get_templates_dir
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.utils import ImageReader, simpleSplit
-from reportlab.pdfgen import canvas as pdf_canvas
 
 
 def _blank_employee_block() -> EmployeeBlock:
@@ -51,9 +51,15 @@ def _blank_employee_block() -> EmployeeBlock:
 def _blank_approval_stages() -> list[ApprovalStage]:
     return [
         ApprovalStage(stage_en="Submitted", stage_ar="مُقدّم", actor="________", at="________", note="________"),
-        ApprovalStage(stage_en="Manager Review", stage_ar="مراجعة المدير", actor="________", at="________", note="________"),
-        ApprovalStage(stage_en="HR Review", stage_ar="مراجعة الموارد البشرية", actor="________", at="________", note="________"),
-        ApprovalStage(stage_en="Final Approval", stage_ar="اعتماد نهائي", actor="________", at="________", note="________"),
+        ApprovalStage(
+            stage_en="Manager Review", stage_ar="مراجعة المدير", actor="________", at="________", note="________"
+        ),
+        ApprovalStage(
+            stage_en="HR Review", stage_ar="مراجعة الموارد البشرية", actor="________", at="________", note="________"
+        ),
+        ApprovalStage(
+            stage_en="Final Approval", stage_ar="اعتماد نهائي", actor="________", at="________", note="________"
+        ),
     ]
 
 

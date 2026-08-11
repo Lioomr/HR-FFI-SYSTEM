@@ -34,7 +34,6 @@ def seed_default_organization(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
@@ -43,33 +42,59 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
-            name='OrganizationNode',
+            name="OrganizationNode",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('code', models.CharField(max_length=40, unique=True)),
-                ('name', models.CharField(max_length=120)),
-                ('node_type', models.CharField(choices=[('head_office', 'Head Office'), ('company', 'Company')], max_length=20)),
-                ('is_active', models.BooleanField(default=True)),
-                ('employee_id_prefix', models.CharField(blank=True, default='', max_length=20)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('parent', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='children', to='organization.organizationnode')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("code", models.CharField(max_length=40, unique=True)),
+                ("name", models.CharField(max_length=120)),
+                (
+                    "node_type",
+                    models.CharField(choices=[("head_office", "Head Office"), ("company", "Company")], max_length=20),
+                ),
+                ("is_active", models.BooleanField(default=True)),
+                ("employee_id_prefix", models.CharField(blank=True, default="", max_length=20)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "parent",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="children",
+                        to="organization.organizationnode",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['node_type', 'name', 'id'],
+                "ordering": ["node_type", "name", "id"],
             },
         ),
         migrations.CreateModel(
-            name='UserOrganizationAccess',
+            name="UserOrganizationAccess",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('organization', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='user_access_entries', to='organization.organizationnode')),
-                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='organization_access_entries', to=settings.AUTH_USER_MODEL)),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "organization",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="user_access_entries",
+                        to="organization.organizationnode",
+                    ),
+                ),
+                (
+                    "user",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="organization_access_entries",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
-                'ordering': ['user_id', 'organization_id'],
-                'unique_together': {('user', 'organization')},
+                "ordering": ["user_id", "organization_id"],
+                "unique_together": {("user", "organization")},
             },
         ),
         migrations.RunPython(seed_default_organization, migrations.RunPython.noop),

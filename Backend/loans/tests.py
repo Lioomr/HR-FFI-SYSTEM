@@ -258,7 +258,9 @@ class LoanWorkflowTests(APITestCase):
     def test_manager_can_submit_and_view_own_employee_loan_requests(self):
         self.client.force_authenticate(user=self.manager)
 
-        create_response = self.client.post(self.loan_requests_url, {"amount": "900", "reason": "Personal"}, format="json")
+        create_response = self.client.post(
+            self.loan_requests_url, {"amount": "900", "reason": "Personal"}, format="json"
+        )
         self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
 
         request_id = create_response.data["data"]["id"]

@@ -12,6 +12,9 @@ RUN apt-get update \
         fonts-dejavu-core \
         libfreetype6-dev \
         libjpeg62-turbo-dev \
+        tesseract-ocr \
+        tesseract-ocr-ara \
+        tesseract-ocr-eng \
         zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 

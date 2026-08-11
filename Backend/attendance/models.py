@@ -154,7 +154,9 @@ class AttendanceCorrectionRequest(models.Model):
 
 
 class BioTimeConfig(models.Model):
-    server_ip = models.CharField(max_length=100, help_text=_("IP address or domain of the BioTime server (e.g. 192.168.1.100)"))
+    server_ip = models.CharField(
+        max_length=100, help_text=_("IP address or domain of the BioTime server (e.g. 192.168.1.100)")
+    )
     server_port = models.CharField(max_length=10, default="8090", help_text=_("Port for BioTime server (e.g. 8090)"))
     username = models.CharField(max_length=100, help_text=_("BioTime device/API username"))
     password = models.CharField(max_length=100, help_text=_("BioTime device/API password"))
@@ -173,13 +175,11 @@ class BioTimeConfig(models.Model):
     @classmethod
     def get_solo(cls):
         # Singleton pattern implementation
-        obj, created = cls.objects.get_or_create(id=1, defaults={
-            "server_ip": "127.0.0.1",
-            "server_port": "8090",
-            "username": "admin",
-            "password": ""
-        })
+        obj, created = cls.objects.get_or_create(
+            id=1, defaults={"server_ip": "127.0.0.1", "server_port": "8090", "username": "admin", "password": ""}
+        )
         return obj
+
 
 class BioTimeEmployeeMap(models.Model):
     employee_profile = models.ForeignKey(
@@ -197,4 +197,3 @@ class BioTimeEmployeeMap(models.Model):
 
     def __str__(self):
         return f"BioTime {self.biotime_emp_code} -> {self.employee_profile}"
-

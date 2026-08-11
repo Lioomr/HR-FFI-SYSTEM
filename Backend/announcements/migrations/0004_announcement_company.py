@@ -12,17 +12,22 @@ def backfill_announcement_company(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('announcements', '0003_announcement_attachment'),
-        ('organization', '0001_initial'),
+        ("announcements", "0003_announcement_attachment"),
+        ("organization", "0001_initial"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='announcement',
-            name='company',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='announcements', to='organization.organizationnode'),
+            model_name="announcement",
+            name="company",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name="announcements",
+                to="organization.organizationnode",
+            ),
         ),
         migrations.RunPython(backfill_announcement_company, migrations.RunPython.noop),
     ]

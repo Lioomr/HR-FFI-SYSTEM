@@ -8,7 +8,6 @@ from core.models import WhatsAppMessageTemplate
 
 from .messaging_providers import render_template_message
 
-
 PLACEHOLDER_RE = re.compile(r"\{\{\s*([a-zA-Z0-9_]+)\s*\}\}|\{([a-zA-Z0-9_]+)\}")
 
 
@@ -122,7 +121,15 @@ Please check the HR system for full meeting details.""",
         key="pending_approval",
         title="Pending Approval",
         description="Notification sent to the next approver.",
-        variables=("approver_name", "request_type", "request_id", "requester_name", "status_label", "details", "action_url"),
+        variables=(
+            "approver_name",
+            "request_type",
+            "request_id",
+            "requester_name",
+            "status_label",
+            "details",
+            "action_url",
+        ),
         sample_variables={
             "approver_name": "Manager",
             "request_type": "Leave Request",
