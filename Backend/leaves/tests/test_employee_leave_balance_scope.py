@@ -49,6 +49,11 @@ class EmployeeLeaveBalanceScopeTests(APITestCase):
         LeaveType.objects.create(company=self.aseco, name="Annual Leave", code="ANNUAL", is_active=True)
         LeaveType.objects.create(company=self.ffi, name="Unpaid Leave", code="UNPAID", is_active=True, is_paid=False)
         LeaveType.objects.create(company=self.aseco, name="Unpaid Leave", code="UNPAID", is_active=True, is_paid=False)
+        # PostgreSQL permits duplicate NULL values under a composite unique
+        # constraint. These represent legacy global policy types that must not
+        # prevent company-scoped balances from loading.
+        LeaveType.objects.create(name="Legacy Annual Leave A", code="ANNUAL", is_active=True)
+        LeaveType.objects.create(name="Legacy Annual Leave B", code="ANNUAL", is_active=True)
 
     def test_employee_balance_uses_active_company_scope(self):
         self.client.force_authenticate(user=self.user)

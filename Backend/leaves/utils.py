@@ -86,15 +86,18 @@ def ensure_policy_leave_types():
     This keeps balance/eligibility logic reliable even if DB seed was skipped.
     """
     for definition in POLICY_LEAVE_TYPE_DEFINITIONS:
-        LeaveType.objects.get_or_create(
+        # Legacy databases can contain multiple global rows for the same code.
+        # Existence is sufficient here; company-scoped records are seeded by
+        # ensure_policy_leave_types_for_company().
+        if LeaveType.objects.filter(code=definition["code"], company__isnull=True).exists():
+            continue
+        LeaveType.objects.create(
             code=definition["code"],
-            defaults={
-                "name": definition["name"],
-                "is_paid": definition["is_paid"],
-                "requires_attachment": definition["requires_attachment"],
-                "is_active": True,
-                "annual_quota": definition["annual_quota"],
-            },
+            name=definition["name"],
+            is_paid=definition["is_paid"],
+            requires_attachment=definition["requires_attachment"],
+            is_active=True,
+            annual_quota=definition["annual_quota"],
         )
 
 
@@ -532,7 +535,10 @@ def calculate_leave_balance(user, year, profile=None):
     if year < hire_year:
         return []  # No balances before hire
 
-    ensure_policy_leave_types()
+    if profile and profile.company_id:
+        ensure_policy_leave_types_for_company(profile.company)
+    else:
+        ensure_policy_leave_types()
     leave_types = _get_balance_leave_types(profile)
     balances = []
 

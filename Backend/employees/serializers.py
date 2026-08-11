@@ -207,7 +207,6 @@ class EmployeeProfileReadSerializer(serializers.ModelSerializer):
             obj.user,
             year,
             profile=obj,
-            company=self.context.get("active_company") or obj.company,
         )
         return LeaveBalanceSerializer(balances, many=True).data
 
