@@ -2250,11 +2250,10 @@ class EmployeeLeaveBalanceView(APIView):
             except ValueError:
                 return error("Validation error", errors=["year must be a valid integer."], status=422)
 
-        balances = calculate_leave_balance(
-            request.user,
-            year,
-            company=get_active_company_for_request(request),
-        )
+        # The balance calculator derives company scope from the employee profile.
+        # Do not pass the request company separately: calculate_leave_balance()
+        # intentionally accepts only user, year, and optional profile arguments.
+        balances = calculate_leave_balance(request.user, year)
 
         # Audit
         audit(request, "leave_balance.viewed", entity="user", entity_id=request.user.id, metadata={"year": year})
