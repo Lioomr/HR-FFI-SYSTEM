@@ -170,7 +170,7 @@ class LoanRequestCreateSerializer(serializers.Serializer):
         except EmployeeProfile.DoesNotExist as exc:
             raise serializers.ValidationError("Employee profile not found.") from exc
 
-        if profile.employment_status != EmployeeProfile.EmploymentStatus.ACTIVE:
+        if profile.is_archived or profile.employment_status != EmployeeProfile.EmploymentStatus.ACTIVE:
             raise serializers.ValidationError("Only active employees can request loans.")
 
         loan_type = attrs.get("loan_type", LoanRequest.LoanType.OPEN)
@@ -179,7 +179,9 @@ class LoanRequestCreateSerializer(serializers.Serializer):
 
         if loan_type == LoanRequest.LoanType.OPEN:
             if installment_months:
-                raise serializers.ValidationError({"installment_months": "Installment months are only for installment loans."})
+                raise serializers.ValidationError(
+                    {"installment_months": "Installment months are only for installment loans."}
+                )
 
             if profile.basic_salary and profile.basic_salary > 0:
                 open_limit = profile.basic_salary * Decimal("0.25")
@@ -193,7 +195,9 @@ class LoanRequestCreateSerializer(serializers.Serializer):
             if not profile.basic_salary or profile.basic_salary <= 0:
                 raise serializers.ValidationError("Basic salary is not configured for this employee.")
             if installment_months is None:
-                raise serializers.ValidationError({"installment_months": "Installment months are required for installment loans."})
+                raise serializers.ValidationError(
+                    {"installment_months": "Installment months are required for installment loans."}
+                )
 
             joining_date = profile.hire_date or profile.contract_date
             if not joining_date:

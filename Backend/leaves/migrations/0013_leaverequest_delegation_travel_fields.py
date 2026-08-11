@@ -6,51 +6,62 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('leaves', '0012_leavebalanceadjustment_company_leaverequest_company_and_more'),
+        ("leaves", "0012_leavebalanceadjustment_company_leaverequest_company_and_more"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='leaverequest',
-            name='airplane_ticket_address',
+            model_name="leaverequest",
+            name="airplane_ticket_address",
             field=models.CharField(blank=True, max_length=255),
         ),
         migrations.AddField(
-            model_name='leaverequest',
-            name='airplane_ticket_payer',
-            field=models.CharField(blank=True, choices=[('company', 'Company'), ('employee', 'Employee')], help_text='Who pays for the airplane ticket.', max_length=20),
+            model_name="leaverequest",
+            name="airplane_ticket_payer",
+            field=models.CharField(
+                blank=True,
+                choices=[("company", "Company"), ("employee", "Employee")],
+                help_text="Who pays for the airplane ticket.",
+                max_length=20,
+            ),
         ),
         migrations.AddField(
-            model_name='leaverequest',
-            name='date_of_rejoin',
+            model_name="leaverequest",
+            name="date_of_rejoin",
             field=models.DateField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='leaverequest',
-            name='delegated_to',
-            field=models.ForeignKey(blank=True, help_text='Employee delegated to handle duties during leave.', null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='delegated_leave_requests', to=settings.AUTH_USER_MODEL),
+            model_name="leaverequest",
+            name="delegated_to",
+            field=models.ForeignKey(
+                blank=True,
+                help_text="Employee delegated to handle duties during leave.",
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="delegated_leave_requests",
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
         migrations.AddField(
-            model_name='leaverequest',
-            name='delegation_note',
+            model_name="leaverequest",
+            name="delegation_note",
             field=models.TextField(blank=True),
         ),
         migrations.AddField(
-            model_name='leaverequest',
-            name='full_address',
+            model_name="leaverequest",
+            name="full_address",
             field=models.TextField(blank=True),
         ),
         migrations.AddField(
-            model_name='leaverequest',
-            name='other_leave_description',
+            model_name="leaverequest",
+            name="other_leave_description",
             field=models.CharField(blank=True, max_length=255),
         ),
         migrations.AddField(
-            model_name='leaverequest',
-            name='po_box',
+            model_name="leaverequest",
+            name="po_box",
             field=models.CharField(blank=True, max_length=100),
         ),
     ]

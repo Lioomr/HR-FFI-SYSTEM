@@ -179,9 +179,7 @@ def _build_loan_request_pdf_fallback(instance: LoanRequest) -> bytes:
         or getattr(employee, "email", None)
         or "-"
     )
-    department = (
-        getattr(profile, "department_name_en", None) or getattr(profile, "department", None) or "-"
-    )
+    department = getattr(profile, "department_name_en", None) or getattr(profile, "department", None) or "-"
     job_title = getattr(profile, "job_title_en", None) or getattr(profile, "job_title", None) or "-"
 
     employee_block = EmployeeBlock(
@@ -416,12 +414,18 @@ def _build_loan_request_pdf(instance: LoanRequest) -> bytes:
         pdf.setFillColorRGB(1, 0.985, 0.965)
         line_specs = [
             (38, 752, 530),
-            (38, 686, 260), (308, 686, 260),
-            (38, 658, 260), (308, 658, 260),
-            (38, 630, 260), (308, 630, 260),
-            (38, 566, 260), (308, 566, 260),
-            (38, 538, 260), (308, 538, 260),
-            (38, 510, 260), (308, 510, 260),
+            (38, 686, 260),
+            (308, 686, 260),
+            (38, 658, 260),
+            (308, 658, 260),
+            (38, 630, 260),
+            (308, 630, 260),
+            (38, 566, 260),
+            (308, 566, 260),
+            (38, 538, 260),
+            (308, 538, 260),
+            (38, 510, 260),
+            (308, 510, 260),
             (38, 414, 530),
         ]
         for x, y, line_width in line_specs:
@@ -439,7 +443,9 @@ def _build_loan_request_pdf(instance: LoanRequest) -> bytes:
     right_w = 120
 
     _draw_text(pdf, left_x, 748, f"LN-{instance.id:05d}", size=9.2, font=bold_font, max_width=left_w)
-    _draw_text(pdf, right_x, 748, _fmt_date(getattr(instance, "created_at", None)), size=9.2, font=bold_font, max_width=right_w)
+    _draw_text(
+        pdf, right_x, 748, _fmt_date(getattr(instance, "created_at", None)), size=9.2, font=bold_font, max_width=right_w
+    )
 
     _draw_text(pdf, left_x, 682, _employee_name(), size=8.6, font=bold_font, max_width=left_w)
     _draw_text(pdf, right_x, 682, _employee_number(), size=8.6, font=bold_font, max_width=right_w)
@@ -875,8 +881,10 @@ class ManagerLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
             manager_match = manager_match | Q(employee_profile__manager_profile=manager_profile)
         delegated_manager_ids = get_delegated_manager_user_ids(self.request.user)
         if delegated_manager_ids:
-            manager_match = manager_match | Q(employee_profile__manager_id__in=delegated_manager_ids) | Q(
-                employee_profile__manager_profile__user_id__in=delegated_manager_ids
+            manager_match = (
+                manager_match
+                | Q(employee_profile__manager_id__in=delegated_manager_ids)
+                | Q(employee_profile__manager_profile__user_id__in=delegated_manager_ids)
             )
 
         return base_qs.filter(manager_match | Q(manager_decision_by=self.request.user)).distinct()
@@ -1101,7 +1109,12 @@ class CFOLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
             pass
         return success(LoanRequestReadSerializer(instance).data)
 
-    @action(detail=True, methods=["post"], url_path="refer-to-ceo", permission_classes=[IsAuthenticated, IsCFOApproverOrAdmin])
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="refer-to-ceo",
+        permission_classes=[IsAuthenticated, IsCFOApproverOrAdmin],
+    )
     def refer_to_ceo(self, request, pk=None):
         instance = self.get_object()
         self_approval_error = _reject_self_approval(request, instance)
@@ -1296,7 +1309,12 @@ class DisbursementLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
             return qs.filter(status=status_param)
         return qs.filter(status=LoanRequest.RequestStatus.PENDING_DISBURSEMENT)
 
-    @action(detail=True, methods=["post"], url_path="mark-disbursed", permission_classes=[IsAuthenticated, IsFinanceApproverOrAdmin])
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="mark-disbursed",
+        permission_classes=[IsAuthenticated, IsFinanceApproverOrAdmin],
+    )
     def mark_disbursed(self, request, pk=None):
         instance = self.get_object()
         if instance.status != LoanRequest.RequestStatus.PENDING_DISBURSEMENT:

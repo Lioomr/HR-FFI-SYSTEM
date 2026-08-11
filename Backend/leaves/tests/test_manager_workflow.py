@@ -343,7 +343,7 @@ class ManagerWorkflowTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response["Content-Type"], "application/pdf")
-        self.assertIn(f'leave_request_{lr.id}.pdf', response["Content-Disposition"])
+        self.assertIn(f"leave_request_{lr.id}.pdf", response["Content-Disposition"])
 
     def test_hr_can_download_leave_document(self):
         lr = LeaveRequest.objects.create(
@@ -380,7 +380,7 @@ class ManagerWorkflowTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response["Content-Type"], "application/pdf")
-        self.assertIn(f'leave_request_{lr.id}.pdf', response["Content-Disposition"])
+        self.assertIn(f"leave_request_{lr.id}.pdf", response["Content-Disposition"])
 
     def test_ceo_manager_scope_is_direct_reports_only(self):
         direct_request = LeaveRequest.objects.create(

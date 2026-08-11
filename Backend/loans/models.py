@@ -62,9 +62,7 @@ class LoanRequest(models.Model):
         related_name="manager_decided_loans",
     )
     manager_decision_note = models.TextField(blank=True)
-    manager_recommendation = models.CharField(
-        max_length=16, choices=Recommendation.choices, null=True, blank=True
-    )
+    manager_recommendation = models.CharField(max_length=16, choices=Recommendation.choices, null=True, blank=True)
 
     finance_decision_at = models.DateTimeField(null=True, blank=True)
     finance_decision_by = models.ForeignKey(

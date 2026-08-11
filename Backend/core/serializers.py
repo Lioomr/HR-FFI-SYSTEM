@@ -6,7 +6,6 @@ from employees.models import EmployeeProfile
 
 from .models import DelegationRule, RequestObligation, UserPreference
 
-
 User = get_user_model()
 
 

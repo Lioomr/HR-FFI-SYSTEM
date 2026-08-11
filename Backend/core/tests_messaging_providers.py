@@ -66,7 +66,11 @@ class MessagingProviderTests(SimpleTestCase):
         self.assertEqual(result["provider"], "evolution_whatsapp")
         self.assertIn("E.164", result["error"])
 
-    @override_settings(EVOLUTION_API_BASE_URL="http://evolution-api:8080", EVOLUTION_API_KEY="evolution-key", EVOLUTION_INSTANCE_NAME="ffi-staging")
+    @override_settings(
+        EVOLUTION_API_BASE_URL="http://evolution-api:8080",
+        EVOLUTION_API_KEY="evolution-key",
+        EVOLUTION_INSTANCE_NAME="ffi-staging",
+    )
     @patch("core.services.messaging_providers.requests.post")
     def test_whatsapp_service_uses_evolution_without_provider_switch(self, post):
         post.return_value = Mock(status_code=201, text="", json=lambda: {"id": "evolution-1"})

@@ -1,8 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Button, Card, InputNumber, message, Space, Table, Tag, Typography } from "antd";
+import { Alert, Button, Card, InputNumber, message, Space, Table, Tag, Typography } from "antd";
 import { BellOutlined, MailOutlined, MessageOutlined, ReloadOutlined } from "@ant-design/icons";
-import { getExpiringEmployees, notifyExpiringEmployee, type ExpiringEmployee } from "../../../services/api/employeesApi";
+import {
+  getExpiringEmployees,
+  notifyExpiringEmployee,
+  type ExpiringDocumentItem,
+  type ExpiringEmployee,
+} from "../../../services/api/employeesApi";
 import { useI18n } from "../../../i18n/useI18n";
 
 const { Title, Text } = Typography;
@@ -22,6 +27,45 @@ function getStoredWindowDays(): number {
   }
 
   return parsed;
+}
+
+/**
+ * The endpoint identifies work licences via `document_type: "WORK_LICENSE"` and the
+ * older document families via `doc_type`. Returns null when neither is present, so an
+ * unrecognised document falls back to the server-supplied label instead of being
+ * mislabelled as a work licence.
+ */
+function getDocumentTypeKey(document: ExpiringDocumentItem): string | null {
+  if (document.document_type === "WORK_LICENSE") return "work_license";
+  return document.doc_type || null;
+}
+
+function ExpiryDocumentTag({ document, employeeId }: { document: ExpiringDocumentItem; employeeId: number }) {
+  const { t } = useI18n();
+  const documentType = getDocumentTypeKey(document);
+  const documentLabel = documentType
+    ? t(`hr.expiringDocs.docType.${documentType}`)
+    : document.label;
+  const hasExpiryDate = Boolean(document.expiry_date);
+  const isExpired = hasExpiryDate && document.days_left < 0;
+  const statusLabel = !hasExpiryDate
+    ? t("hr.expiringDocs.statusUnknown")
+    : isExpired
+      ? t("hr.expiringDocs.statusExpired")
+      : t("hr.expiringDocs.statusExpiring");
+  const daysLabel = isExpired
+    ? t("hr.expiringDocs.daysOverdue", { days: Math.abs(document.days_left) })
+    : t("hr.expiringDocs.daysRemaining", { days: document.days_left });
+
+  return (
+    <Tag
+      data-testid={`expiry-document-${employeeId}-${documentType ?? "unknown"}`}
+      color={!hasExpiryDate ? "default" : isExpired || document.days_left <= 7 ? "red" : "orange"}
+    >
+      {documentLabel}: {document.expiry_date || t("hr.expiringDocs.missingExpiryDate")}
+      {hasExpiryDate ? ` · ${daysLabel}` : ""} · {statusLabel}
+    </Tag>
+  );
 }
 
 export default function ExpiringDocumentsPage() {
@@ -54,8 +98,10 @@ export default function ExpiringDocumentsPage() {
     try {
       const response = await getExpiringEmployees(nextDays || DEFAULT_WINDOW_DAYS, nextPage, nextPageSize);
       if (response.status === "success") {
-        setItems(response.data.items || []);
-        setTotal(response.data.count || 0);
+        const responseItems = response.data.items || [];
+        const visibleItems = responseItems.filter((item) => !item.is_archived);
+        setItems(visibleItems);
+        setTotal(Math.max(0, (response.data.count || 0) - (responseItems.length - visibleItems.length)));
       } else {
         message.error(response.message || t("hr.expiringDocs.errorLoad"));
       }
@@ -137,12 +183,14 @@ export default function ExpiringDocumentsPage() {
       title: t("hr.expiringDocs.colExpiringDocs"),
       dataIndex: "documents",
       key: "documents",
-      render: (docs: ExpiringEmployee["documents"]) => (
+      render: (docs: ExpiringEmployee["documents"], record: ExpiringEmployee) => (
         <Space direction="vertical" size={4}>
-          {docs.map((doc) => (
-            <Tag key={`${doc.doc_type}-${doc.expiry_date}`} color={doc.days_left <= 7 ? "red" : "orange"}>
-              {t(`hr.expiringDocs.docType.${doc.doc_type}`)}: {doc.expiry_date} ({doc.days_left} {t("hr.expiringDocs.daysShort")})
-            </Tag>
+          {docs.map((doc, index) => (
+            <ExpiryDocumentTag
+              key={`${getDocumentTypeKey(doc) ?? "unknown"}-${doc.expiry_date || index}`}
+              document={doc}
+              employeeId={record.id}
+            />
           ))}
         </Space>
       ),
@@ -212,6 +260,13 @@ export default function ExpiringDocumentsPage() {
           </Button>
         </Space>
       </div>
+
+      <Alert
+        type="info"
+        showIcon
+        title={t("hr.expiringDocs.automaticReminderInfo")}
+        style={{ marginBottom: 16, borderRadius: 12 }}
+      />
 
       <Card bordered={false} style={{ borderRadius: 12 }}>
         <Table

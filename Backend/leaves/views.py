@@ -1324,7 +1324,9 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         if not serializer.is_valid():
             flattened_errors = _flatten_errors(serializer.errors)
-            response_status = 400 if any("Annual leave exceeds available balance" in item for item in flattened_errors) else 422
+            response_status = (
+                400 if any("Annual leave exceeds available balance" in item for item in flattened_errors) else 422
+            )
             return error("Validation error", errors=flattened_errors, status=response_status)
         self.perform_create(serializer)
 

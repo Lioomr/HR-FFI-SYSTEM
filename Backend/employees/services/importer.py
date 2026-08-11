@@ -336,7 +336,9 @@ class EmployeeImporter:
     def execute(self, upload, uploader, company: OrganizationNode | None = None):
         file_hash = ""
         if company is None:
-            return ImportExecutionResult(ok=False, status_code=422, errors=["Active company is required."], result="failed")
+            return ImportExecutionResult(
+                ok=False, status_code=422, errors=["Active company is required."], result="failed"
+            )
         if upload is None:
             return ImportExecutionResult(ok=False, status_code=400, errors=["File is required."], result="failed")
         if upload.size > MAX_IMPORT_FILE_SIZE:
@@ -591,7 +593,9 @@ class EmployeeImporter:
 
             department_ref = self._resolve_or_create_department(department_lookup, department_name_en, company)
             position_ref = self._resolve_or_create_position(position_lookup, position_name_en, company)
-            task_group_ref = self._resolve_or_create_task_group(task_group_lookup, task_group_name, location_name, company)
+            task_group_ref = self._resolve_or_create_task_group(
+                task_group_lookup, task_group_name, location_name, company
+            )
             sponsor_ref = self._resolve_or_create_sponsor(sponsor_lookup, sponsor_code, company)
 
             if not row_has_error:
@@ -666,23 +670,29 @@ class EmployeeImporter:
         passport_numbers = [row["passport_no"] for row in prepared_rows if row["passport_no"]]
         existing_profiles_by_number = {
             ep.employee_number: ep
-            for ep in EmployeeProfile.objects.filter(company=company, employee_number__in=employee_numbers).select_related(
-                "manager_profile"
-            )
+            for ep in EmployeeProfile.objects.filter(
+                company=company, employee_number__in=employee_numbers
+            ).select_related("manager_profile")
         }
         existing_profiles_by_national_id = {
             ep.national_id: ep
-            for ep in EmployeeProfile.objects.filter(company=company, national_id__in=national_ids).select_related("manager_profile")
+            for ep in EmployeeProfile.objects.filter(company=company, national_id__in=national_ids).select_related(
+                "manager_profile"
+            )
             if ep.national_id
         }
         existing_profiles_by_passport = {
             ep.passport_no: ep
-            for ep in EmployeeProfile.objects.filter(company=company, passport_no__in=passport_numbers).select_related("manager_profile")
+            for ep in EmployeeProfile.objects.filter(company=company, passport_no__in=passport_numbers).select_related(
+                "manager_profile"
+            )
             if ep.passport_no
         }
         all_profiles_by_emp_no = {
             ep.employee_number: ep
-            for ep in EmployeeProfile.objects.filter(company=company).exclude(employee_number="").only("id", "employee_number")
+            for ep in EmployeeProfile.objects.filter(company=company)
+            .exclude(employee_number="")
+            .only("id", "employee_number")
         }
 
         created_or_updated = {}
@@ -701,7 +711,9 @@ class EmployeeImporter:
                     if profile is None and row["passport_no"]:
                         profile = existing_profiles_by_passport.get(row["passport_no"])
                     if profile is None:
-                        employee_id = self._generate_unique_employee_id(existing_ids, company.employee_id_prefix or "EMP")
+                        employee_id = self._generate_unique_employee_id(
+                            existing_ids, company.employee_id_prefix or "EMP"
+                        )
                         if not employee_id:
                             raise ValueError("Failed to generate unique employee_id.")
                         profile = EmployeeProfile.objects.create(employee_id=employee_id, **row)
@@ -734,7 +746,9 @@ class EmployeeImporter:
                             EmployeeProfile.objects.filter(company=company, full_name_en__iexact=manager_ref)
                             .only("id", "user")
                             .first()
-                            or EmployeeProfile.objects.filter(company=company, full_name__iexact=manager_ref).only("id", "user").first()
+                            or EmployeeProfile.objects.filter(company=company, full_name__iexact=manager_ref)
+                            .only("id", "user")
+                            .first()
                         )
                     if manager_profile and manager_profile.id != profile.id:
                         profile.manager_profile = manager_profile

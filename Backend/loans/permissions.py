@@ -55,8 +55,10 @@ def is_accountant_user(user):
 def is_hr_approver_user(user):
     if not user or not user.is_authenticated:
         return False
-    return _is_group_member(user, "SystemAdmin") or _is_group_member(user, "HRManager") or _is_delegated_role_user(
-        user, "hr"
+    return (
+        _is_group_member(user, "SystemAdmin")
+        or _is_group_member(user, "HRManager")
+        or _is_delegated_role_user(user, "hr")
     )
 
 

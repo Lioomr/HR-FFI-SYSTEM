@@ -16,45 +16,62 @@ def backfill_leave_company(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('leaves', '0011_rename_exceptional_to_unpaid'),
-        ('organization', '0001_initial'),
+        ("leaves", "0011_rename_exceptional_to_unpaid"),
+        ("organization", "0001_initial"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='leavebalanceadjustment',
-            name='company',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='leave_balance_adjustments', to='organization.organizationnode'),
+            model_name="leavebalanceadjustment",
+            name="company",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name="leave_balance_adjustments",
+                to="organization.organizationnode",
+            ),
         ),
         migrations.AddField(
-            model_name='leaverequest',
-            name='company',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='leave_requests', to='organization.organizationnode'),
+            model_name="leaverequest",
+            name="company",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name="leave_requests",
+                to="organization.organizationnode",
+            ),
         ),
         migrations.AddField(
-            model_name='leavetype',
-            name='company',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='leave_types', to='organization.organizationnode'),
+            model_name="leavetype",
+            name="company",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name="leave_types",
+                to="organization.organizationnode",
+            ),
         ),
         migrations.AlterField(
-            model_name='leavetype',
-            name='code',
-            field=models.CharField(blank=True, help_text='Optional code (e.g. ANNUAL, SICK)', max_length=20),
+            model_name="leavetype",
+            name="code",
+            field=models.CharField(blank=True, help_text="Optional code (e.g. ANNUAL, SICK)", max_length=20),
         ),
         migrations.AlterField(
-            model_name='leavetype',
-            name='name',
+            model_name="leavetype",
+            name="name",
             field=models.CharField(max_length=50),
         ),
         migrations.RunPython(backfill_leave_company, migrations.RunPython.noop),
         migrations.AddConstraint(
-            model_name='leavetype',
-            constraint=models.UniqueConstraint(fields=('company', 'name'), name='uniq_leave_type_company_name'),
+            model_name="leavetype",
+            constraint=models.UniqueConstraint(fields=("company", "name"), name="uniq_leave_type_company_name"),
         ),
         migrations.AddConstraint(
-            model_name='leavetype',
-            constraint=models.UniqueConstraint(fields=('company', 'code'), name='uniq_leave_type_company_code'),
+            model_name="leavetype",
+            constraint=models.UniqueConstraint(fields=("company", "code"), name="uniq_leave_type_company_code"),
         ),
     ]

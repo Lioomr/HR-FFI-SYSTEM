@@ -209,7 +209,9 @@ class NotificationDispatcherTests(TestCase):
         with self.captureOnCommitCallbacks(execute=True):
             notify_leave_approved(leave)
         payload = delay.call_args.kwargs
-        self.assertEqual(payload["email_payload"]["template"], "core.services.bird_email_service.send_leave_approved_email")
+        self.assertEqual(
+            payload["email_payload"]["template"], "core.services.bird_email_service.send_leave_approved_email"
+        )
         self.assertEqual(
             NotificationDelivery.objects.get(notification__deduplication_key=f"leave.approved:{leave.id}").status,
             NotificationDelivery.Status.PENDING,

@@ -131,7 +131,9 @@ def _draw_single_label(
     qr_size = min(qr_size, h - 10, w * 0.44)
     qr_x = x + w - qr_size - padding
     qr_y = y + h - qr_size - 2.2 * mm
-    pdf.drawImage(ImageReader(io.BytesIO(_build_qr_png(qr_payload))), qr_x, qr_y, width=qr_size, height=qr_size, mask="auto")
+    pdf.drawImage(
+        ImageReader(io.BytesIO(_build_qr_png(qr_payload))), qr_x, qr_y, width=qr_size, height=qr_size, mask="auto"
+    )
 
     text_right = qr_x - 3
     text_width = max(text_right - (x + padding), 20)
@@ -143,7 +145,11 @@ def _draw_single_label(
     name_y = y + (18.3 * mm if size_key != "60X40" else 25.5 * mm)
     truncated_name = _truncate_to_width(name, bold, name_size, text_width)
     shaped_name = shape_ar(truncated_name)
-    name_x = x + w - padding - pdfmetrics.stringWidth(shaped_name, bold, name_size) if _is_rtl(truncated_name) else x + padding
+    name_x = (
+        x + w - padding - pdfmetrics.stringWidth(shaped_name, bold, name_size)
+        if _is_rtl(truncated_name)
+        else x + padding
+    )
     pdf.drawString(name_x, name_y, shaped_name)
 
     company_name = str(getattr(company, "name", "") or "")

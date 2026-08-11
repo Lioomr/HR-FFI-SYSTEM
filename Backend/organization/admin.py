@@ -15,4 +15,3 @@ class UserOrganizationAccessAdmin(admin.ModelAdmin):
     list_display = ("id", "user", "organization", "created_at")
     list_select_related = ("user", "organization")
     search_fields = ("user__email", "organization__name", "organization__code")
-

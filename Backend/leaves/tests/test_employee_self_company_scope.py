@@ -38,13 +38,9 @@ class EmployeeSelfLeaveCompanyScopeTests(APITestCase):
             employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
         )
         self.leave_type = LeaveType.objects.create(company=self.company, name="Annual A", code="ANNUAL_A")
-        self.other_leave_type = LeaveType.objects.create(
-            company=self.other_company, name="Annual B", code="ANNUAL_B"
-        )
+        self.other_leave_type = LeaveType.objects.create(company=self.other_company, name="Annual B", code="ANNUAL_B")
         self.own = self._leave(self.user, self.company, self.leave_type, date(2026, 8, 1))
-        self.cross_company = self._leave(
-            self.user, self.other_company, self.other_leave_type, date(2026, 9, 1)
-        )
+        self.cross_company = self._leave(self.user, self.other_company, self.other_leave_type, date(2026, 9, 1))
         self.other_owner = self._leave(self.other_user, self.company, self.leave_type, date(2026, 10, 1))
 
     @staticmethod

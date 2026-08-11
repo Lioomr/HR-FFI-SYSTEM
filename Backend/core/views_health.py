@@ -71,11 +71,7 @@ class HealthCheckView(APIView):
             "evolution_api": _check_evolution_api(),
             "email_provider": _check_email_provider(),
         }
-        unhealthy = {
-            name: value
-            for name, value in components.items()
-            if value not in {"ok", "disabled", "configured"}
-        }
+        unhealthy = {name: value for name, value in components.items() if value not in {"ok", "disabled", "configured"}}
         overall_status = status.HTTP_200_OK if not unhealthy else status.HTTP_503_SERVICE_UNAVAILABLE
         return Response(
             {"status": "ok" if not unhealthy else "degraded", "components": components},

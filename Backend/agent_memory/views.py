@@ -2,7 +2,8 @@ from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .services import CogneeError, recall, remember, status as cognee_status
+from .services import CogneeError, recall, remember
+from .services import status as cognee_status
 
 
 class MemoryStatusView(APIView):
@@ -42,4 +43,3 @@ class MemoryRememberView(APIView):
         except CogneeError as exc:
             return Response({"error": "Memory service unavailable", "detail": str(exc)}, status=503)
         return Response({"data": result or {}, "message": "Memory stored", "status": "success"})
-

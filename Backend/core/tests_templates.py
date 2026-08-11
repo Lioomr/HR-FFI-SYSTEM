@@ -9,7 +9,6 @@ from rest_framework.test import APIClient
 
 from core.views_templates import TEMPLATE_CATALOG, TEMPLATES_DIR, get_template_search_dirs, resolve_template_path
 
-
 User = get_user_model()
 
 

@@ -139,7 +139,9 @@ class UserMeView(APIView):
                 "is_active": user.is_active,
                 "date_joined": user.date_joined,
                 "accessible_organizations": serialize_organizations(accessible_orgs),
-                "default_organization_id": active_org.id if active_org else (accessible_orgs[0].id if accessible_orgs else None),
+                "default_organization_id": active_org.id
+                if active_org
+                else (accessible_orgs[0].id if accessible_orgs else None),
                 "has_all_company_access": user_has_all_company_access(user),
             }
         )

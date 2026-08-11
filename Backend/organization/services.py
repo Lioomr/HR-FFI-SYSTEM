@@ -87,16 +87,16 @@ def get_default_organization_for_user(user):
 
 def get_user_accessible_company_ids(user) -> set[int]:
     return {
-        org.id
-        for org in get_user_accessible_organizations(user)
-        if org.node_type == OrganizationNode.NodeType.COMPANY
+        org.id for org in get_user_accessible_organizations(user) if org.node_type == OrganizationNode.NodeType.COMPANY
     }
 
 
 def user_has_all_company_access(user) -> bool:
     accessible = get_user_accessible_company_ids(user)
     all_companies = set(
-        OrganizationNode.objects.filter(node_type=OrganizationNode.NodeType.COMPANY, is_active=True).values_list("id", flat=True)
+        OrganizationNode.objects.filter(node_type=OrganizationNode.NodeType.COMPANY, is_active=True).values_list(
+            "id", flat=True
+        )
     )
     return bool(accessible) and accessible == all_companies
 
@@ -149,9 +149,7 @@ def filter_queryset_by_company_scope(queryset, request, field_name: str = "compa
         return queryset.none()
 
     if active_org and active_org.node_type == OrganizationNode.NodeType.HEAD_OFFICE:
-        return queryset.filter(
-            Q(**{f"{field_name}__in": list(accessible_company_ids)}) | Q(**{field_name: None})
-        )
+        return queryset.filter(Q(**{f"{field_name}__in": list(accessible_company_ids)}) | Q(**{field_name: None}))
 
     active_company = get_active_company_for_request(request)
     if active_company:
@@ -160,7 +158,9 @@ def filter_queryset_by_company_scope(queryset, request, field_name: str = "compa
     return queryset.filter(Q(**{f"{field_name}__in": list(accessible_company_ids)}) | Q(**{field_name: None}))
 
 
-def filter_queryset_by_accessible_companies(queryset, request, field_name: str = "company_id", include_null: bool = True):
+def filter_queryset_by_accessible_companies(
+    queryset, request, field_name: str = "company_id", include_null: bool = True
+):
     """
     Scope direct object lookups to every company the user can access.
 

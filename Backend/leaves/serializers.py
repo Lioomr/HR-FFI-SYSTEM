@@ -207,6 +207,9 @@ class LeaveRequestCreateSerializer(serializers.ModelSerializer):
         document = attrs.get("document")
         delegated_to = attrs.get("delegated_to")
         user = self.context["request"].user
+        profile = EmployeeProfile.objects.filter(user=user).first()
+        if profile and profile.is_archived:
+            raise serializers.ValidationError("Archived employees cannot create leave requests.")
 
         if delegated_to and delegated_to.id == user.id:
             raise serializers.ValidationError(
@@ -338,7 +341,7 @@ class HRManualLeaveRequestSerializer(serializers.ModelSerializer):
         except EmployeeProfile.DoesNotExist as exc:
             raise serializers.ValidationError({"employee_id": "Employee Profile not found."}) from exc
 
-        if profile.employment_status != EmployeeProfile.EmploymentStatus.ACTIVE:
+        if profile.is_archived or profile.employment_status != EmployeeProfile.EmploymentStatus.ACTIVE:
             raise serializers.ValidationError({"employee_id": "Only active employees are allowed."})
 
         return profile
@@ -475,7 +478,7 @@ class LeaveBalanceAdjustmentSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         emp_id = validated_data.pop("employee_id")
         try:
-            profile = EmployeeProfile.objects.get(id=emp_id)
+            profile = EmployeeProfile.objects.get(id=emp_id, is_archived=False)
         except EmployeeProfile.DoesNotExist:
             raise serializers.ValidationError({"employee_id": "Employee Profile not found."})
 

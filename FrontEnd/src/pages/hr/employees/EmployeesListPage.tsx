@@ -1,7 +1,7 @@
 
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Card, Checkbox, Input, Modal, Select, Table, Tag, Dropdown, Typography, Tooltip, Popover, Form, message } from "antd";
+import { Alert, Button, Card, Checkbox, Input, Modal, Segmented, Select, Table, Tag, Dropdown, Typography, Tooltip, Popover, Form, message } from "antd";
 import type { MenuProps } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
@@ -46,12 +46,13 @@ import ErrorState from "../../../components/ui/ErrorState";
 import Unauthorized403Page from "../../Unauthorized403Page";
 
 import { useHrEmployeeListStore } from "../../../stores/hrEmployeeListStore";
-import type { Employee } from "../../../services/api/employeesApi";
+import type { Employee, EmployeeArchiveReason } from "../../../services/api/employeesApi";
 import {
     exportEmployees,
     listEmployees,
-    listEmployeeDeletionRequests,
-    requestEmployeeDeletion,
+    listEmployeeArchiveRequests,
+    requestEmployeeArchive,
+    restoreEmployee,
 } from "../../../services/api/employeesApi";
 import { listDepartments } from "../../../services/api/departmentsApi";
 import { isApiError } from "../../../services/api/apiTypes";
@@ -75,6 +76,18 @@ const DEFAULT_VISIBLE_COLUMNS = [
     "hire_date",
     "employment_status",
     "action",
+];
+
+/** Only these roles may list archived employees or restore them (mirrors the backend check). */
+const ARCHIVE_MANAGER_ROLES: ReadonlyArray<string> = ["SystemAdmin", "HRManager"];
+
+const ARCHIVE_REASON_VALUES: EmployeeArchiveReason[] = [
+    "FIRED",
+    "RESIGNED",
+    "RETIRED",
+    "END_OF_CONTRACT",
+    "DECEASED",
+    "OTHER",
 ];
 
 function getInitials(name?: string) {
@@ -212,9 +225,22 @@ export default function EmployeesListPage() {
     const [pendingDeletionIds, setPendingDeletionIds] = useState<Set<number>>(new Set());
     const [deletionTarget, setDeletionTarget] = useState<Employee | null>(null);
     const [deletionReason, setDeletionReason] = useState("");
+    const [archiveReason, setArchiveReason] = useState<EmployeeArchiveReason | undefined>(undefined);
+    const [archiveReasonError, setArchiveReasonError] = useState<string | null>(null);
     const [deletionSubmitting, setDeletionSubmitting] = useState(false);
     const [deletionError, setDeletionError] = useState<string | null>(null);
     const [deletionReasonError, setDeletionReasonError] = useState<string | null>(null);
+
+    // Employee restore flow
+    const [restoreTarget, setRestoreTarget] = useState<Employee | null>(null);
+    const [restoreSubmitting, setRestoreSubmitting] = useState(false);
+    const [restoreError, setRestoreError] = useState<string | null>(null);
+
+    const canManageArchive = ARCHIVE_MANAGER_ROLES.includes(user?.role ?? "");
+    // Annotated so the literal type survives into the request params object.
+    const archiveState: "active" | "archived" =
+        canManageArchive && filters.archiveState === "archived" ? "archived" : "active";
+    const viewingArchived = archiveState === "archived";
 
     /**
      * Fetch filter options
@@ -262,6 +288,7 @@ export default function EmployeesListPage() {
                 status: filters.status || undefined,
                 nationality: filters.nationality || undefined,
                 join_date_order: filters.joinDateOrder || undefined,
+                archive_state: archiveState,
             };
 
             const response = await listEmployees(params);
@@ -295,7 +322,7 @@ export default function EmployeesListPage() {
             setError(err.message || t("error.generic"));
             setLoading(false);
         }
-    }, [page, pageSize, search, filters]);
+    }, [page, pageSize, search, filters, archiveState]);
 
     useEffect(() => {
         loadFilterOptions();
@@ -308,7 +335,7 @@ export default function EmployeesListPage() {
             let totalPages = 1;
 
             while (nextPage <= totalPages) {
-                const response = await listEmployeeDeletionRequests({
+                const response = await listEmployeeArchiveRequests({
                     status: "PENDING_CEO",
                     page: nextPage,
                     page_size: 200,
@@ -431,31 +458,45 @@ export default function EmployeesListPage() {
         }
         setDeletionTarget(record);
         setDeletionReason("");
+        setArchiveReason(undefined);
         setDeletionError(null);
         setDeletionReasonError(null);
+        setArchiveReasonError(null);
     };
 
     const closeDeletionModal = () => {
         if (deletionSubmitting) return;
         setDeletionTarget(null);
         setDeletionReason("");
+        setArchiveReason(undefined);
         setDeletionError(null);
         setDeletionReasonError(null);
+        setArchiveReasonError(null);
     };
 
     const submitDeletionRequest = async () => {
         if (!deletionTarget) return;
         const trimmed = deletionReason.trim();
+        let invalid = false;
+        if (!archiveReason) {
+            setArchiveReasonError(t("employees.removal.archiveReasonRequired"));
+            invalid = true;
+        } else {
+            setArchiveReasonError(null);
+        }
         if (!trimmed) {
             setDeletionReasonError(t("employees.removal.reasonRequired"));
-            return;
+            invalid = true;
+        } else {
+            setDeletionReasonError(null);
         }
-        setDeletionReasonError(null);
+        if (invalid || !archiveReason) return;
         setDeletionError(null);
         setDeletionSubmitting(true);
         try {
-            const response = await requestEmployeeDeletion({
+            const response = await requestEmployeeArchive({
                 employee_profile_id: deletionTarget.id,
+                archive_reason: archiveReason,
                 reason: trimmed,
             });
             if (isApiError(response)) {
@@ -472,6 +513,7 @@ export default function EmployeesListPage() {
             message.success(t("employees.removal.successSubmitted"));
             setDeletionTarget(null);
             setDeletionReason("");
+            setArchiveReason(undefined);
             setDeletionSubmitting(false);
         } catch (err: any) {
             const httpStatus = err?.response?.status;
@@ -490,9 +532,76 @@ export default function EmployeesListPage() {
         }
     };
 
+    const openRestoreModal = (record: Employee) => {
+        setRestoreTarget(record);
+        setRestoreError(null);
+    };
+
+    const closeRestoreModal = () => {
+        if (restoreSubmitting) return;
+        setRestoreTarget(null);
+        setRestoreError(null);
+    };
+
+    const submitRestore = async () => {
+        if (!restoreTarget) return;
+        setRestoreError(null);
+        setRestoreSubmitting(true);
+        try {
+            const response = await restoreEmployee(restoreTarget.id);
+            if (isApiError(response)) {
+                setRestoreError(response.message || t("employees.restore.errorGeneric"));
+                setRestoreSubmitting(false);
+                return;
+            }
+            message.success(t("employees.restore.success"));
+            setRestoreTarget(null);
+            setRestoreSubmitting(false);
+            // The employee moved between the active and archived views, so refetch.
+            loadEmployees();
+        } catch (err: any) {
+            const httpStatus = err?.response?.status;
+            if (httpStatus === 403 || isForbidden(err)) {
+                setRestoreError(t("employees.restore.errorForbidden"));
+            } else if (httpStatus === 422) {
+                const apiMessage = getFirstApiErrorMessage(err);
+                setRestoreError(apiMessage || t("employees.restore.errorNotArchived"));
+            } else {
+                const apiMessage = getFirstApiErrorMessage(err);
+                setRestoreError(apiMessage || t("employees.restore.errorGeneric"));
+            }
+            setRestoreSubmitting(false);
+        }
+    };
+
     const getActionItems = (record: Employee): MenuProps['items'] => {
         const isPending = pendingDeletionIds.has(record.id);
         const removalDisabled = isPending || isHeadOffice;
+
+        if (record.is_archived) {
+            const archivedItems: MenuProps['items'] = [
+                {
+                    key: 'view',
+                    label: t("employees.list.actionView"),
+                    onClick: ({ domEvent }) => {
+                        domEvent.stopPropagation();
+                        navigate(`/hr/employees/${record.id}`);
+                    }
+                },
+            ];
+            if (canManageArchive) {
+                archivedItems.push({
+                    key: 'restore',
+                    label: t("employees.restore.action"),
+                    onClick: ({ domEvent }) => {
+                        domEvent.stopPropagation();
+                        openRestoreModal(record);
+                    }
+                });
+            }
+            return archivedItems;
+        }
+
         return [
             {
                 key: 'view',
@@ -519,7 +628,6 @@ export default function EmployeesListPage() {
                 ) : (
                     isPending ? t("employees.removal.actionPending") : t("employees.removal.action")
                 ),
-                danger: !removalDisabled,
                 disabled: removalDisabled,
                 onClick: ({ domEvent }) => {
                     domEvent.stopPropagation();
@@ -609,7 +717,12 @@ export default function EmployeesListPage() {
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                             <Text strong style={{ fontSize: 14 }}>{record.full_name}</Text>
-                            {pendingDeletionIds.has(record.id) && (
+                            {record.is_archived && (
+                                <Tag color="default" style={{ fontSize: 11, marginInlineStart: 0 }}>
+                                    {t("employees.archive.archivedTag")}
+                                </Tag>
+                            )}
+                            {!record.is_archived && pendingDeletionIds.has(record.id) && (
                                 <Tag color="warning" style={{ fontSize: 11, marginInlineStart: 0 }}>
                                     {t("employees.removal.pendingTag")}
                                 </Tag>
@@ -675,6 +788,24 @@ export default function EmployeesListPage() {
             render: (status) => <StatusBadge status={status} t={t} />
         },
         {
+            title: t("employees.archive.colArchiveReason"),
+            key: "archive_reason",
+            width: 160,
+            render: (_, record) => (
+                <Text>
+                    {record.archive_reason
+                        ? t(`employees.removal.archiveReason.${record.archive_reason}`)
+                        : "-"}
+                </Text>
+            )
+        },
+        {
+            title: t("employees.archive.colArchivedBy"),
+            key: "archived_by_name",
+            width: 180,
+            render: (_, record) => <Text>{record.archived_by_name?.trim() || "-"}</Text>
+        },
+        {
             title: t("employees.list.colAction"),
             key: "action",
             width: 80,
@@ -690,11 +821,19 @@ export default function EmployeesListPage() {
     ];
 
     const columns = useMemo(() => {
-        const keys = isHeadOffice && !visibleColumnKeys.includes("company")
-            ? ["company", ...visibleColumnKeys]
-            : visibleColumnKeys;
+        let keys = visibleColumnKeys;
+        if (isHeadOffice && !keys.includes("company")) {
+            keys = ["company", ...keys];
+        }
+        // Archive metadata only carries meaning in the archived view, so surface it there.
+        const archiveColumns = ["archive_reason", "archived_by_name"];
+        if (viewingArchived) {
+            keys = [...keys, ...archiveColumns.filter((key) => !keys.includes(key))];
+        } else {
+            keys = keys.filter((key) => !archiveColumns.includes(key));
+        }
         return allColumns.filter((column) => keys.includes(String(column.key)));
-    }, [allColumns, visibleColumnKeys, isHeadOffice]);
+    }, [allColumns, visibleColumnKeys, isHeadOffice, viewingArchived]);
 
     const columnOptions = [
         { label: t("employees.list.colName"), value: "full_name" },
@@ -705,6 +844,12 @@ export default function EmployeesListPage() {
         { label: t("employees.list.colManager"), value: "manager" },
         { label: t("employees.list.colJoiningDate"), value: "hire_date" },
         { label: t("employees.list.colStatus"), value: "employment_status" },
+        ...(viewingArchived
+            ? [
+                { label: t("employees.archive.colArchiveReason"), value: "archive_reason" },
+                { label: t("employees.archive.colArchivedBy"), value: "archived_by_name" },
+            ]
+            : []),
         { label: t("employees.list.colAction"), value: "action" },
     ];
 
@@ -717,6 +862,7 @@ export default function EmployeesListPage() {
                 status: filters.status || undefined,
                 nationality: filters.nationality || undefined,
                 join_date_order: filters.joinDateOrder || undefined,
+                archive_state: archiveState,
             });
             triggerBlobDownload(blob, `employees_${new Date().toISOString().slice(0, 10)}.xlsx`);
             message.success(t("common.success"));
@@ -806,6 +952,19 @@ export default function EmployeesListPage() {
                     </div>
 
                     <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                        {canManageArchive && (
+                            <Segmented
+                                aria-label={t("employees.archive.stateFilterLabel")}
+                                size="large"
+                                value={archiveState}
+                                onChange={(value) => setFilters({ archiveState: value as "active" | "archived" })}
+                                options={[
+                                    { label: t("employees.archive.stateActive"), value: "active" },
+                                    { label: t("employees.archive.stateArchived"), value: "archived" },
+                                ]}
+                            />
+                        )}
+
                         <Select
                             placeholder={t("employees.list.departmentPlaceholder")}
                             value={filters.department || undefined}
@@ -913,7 +1072,7 @@ export default function EmployeesListPage() {
                 open={deletionTarget !== null}
                 title={t("employees.removal.modalTitle")}
                 okText={t("employees.removal.confirmButton")}
-                okButtonProps={{ danger: true, loading: deletionSubmitting }}
+                okButtonProps={{ loading: deletionSubmitting }}
                 cancelText={t("common.cancel")}
                 cancelButtonProps={{ disabled: deletionSubmitting }}
                 onOk={submitDeletionRequest}
@@ -929,10 +1088,34 @@ export default function EmployeesListPage() {
                         <Text>
                             {t("employees.removal.modalIntro", { name: deletionTarget.full_name || deletionTarget.email })}
                         </Text>
-                        <Text type="secondary" style={{ fontSize: 12 }}>
-                            {t("employees.removal.modalNote")}
-                        </Text>
+                        <Alert
+                            type="info"
+                            showIcon
+                            message={t("employees.removal.preservationTitle")}
+                            description={t("employees.removal.modalNote")}
+                        />
                         <Form layout="vertical">
+                            <Form.Item
+                                label={t("employees.removal.archiveReasonLabel")}
+                                required
+                                validateStatus={archiveReasonError ? "error" : undefined}
+                                help={archiveReasonError || undefined}
+                            >
+                                <Select
+                                    aria-label={t("employees.removal.archiveReasonLabel")}
+                                    placeholder={t("employees.removal.archiveReasonPlaceholder")}
+                                    value={archiveReason}
+                                    onChange={(value) => {
+                                        setArchiveReason(value as EmployeeArchiveReason);
+                                        if (archiveReasonError) setArchiveReasonError(null);
+                                    }}
+                                    disabled={deletionSubmitting}
+                                    options={ARCHIVE_REASON_VALUES.map((value) => ({
+                                        value,
+                                        label: t(`employees.removal.archiveReason.${value}`),
+                                    }))}
+                                />
+                            </Form.Item>
                             <Form.Item
                                 label={t("employees.removal.reasonLabel")}
                                 required
@@ -966,6 +1149,59 @@ export default function EmployeesListPage() {
                                 }}
                             >
                                 {deletionError}
+                            </div>
+                        )}
+                    </div>
+                )}
+            </Modal>
+
+            <Modal
+                open={restoreTarget !== null}
+                title={t("employees.restore.modalTitle")}
+                okText={t("employees.restore.confirmButton")}
+                okButtonProps={{ loading: restoreSubmitting }}
+                cancelText={t("common.cancel")}
+                cancelButtonProps={{ disabled: restoreSubmitting }}
+                onOk={submitRestore}
+                onCancel={closeRestoreModal}
+                closable={!restoreSubmitting}
+                maskClosable={!restoreSubmitting}
+                destroyOnClose
+                width="min(480px, 96vw)"
+                style={{ top: 16 }}
+            >
+                {restoreTarget && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                        <Text>
+                            {t("employees.restore.modalIntro", { name: restoreTarget.full_name || restoreTarget.email })}
+                        </Text>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                            {t("employees.restore.modalNote")}
+                        </Text>
+                        {restoreTarget.archive_reason && (
+                            <Text type="secondary" style={{ fontSize: 12 }}>
+                                {t("employees.archive.colArchiveReason")}:{" "}
+                                {t(`employees.removal.archiveReason.${restoreTarget.archive_reason}`)}
+                            </Text>
+                        )}
+                        {restoreTarget.archived_by_name?.trim() && (
+                            <Text type="secondary" style={{ fontSize: 12 }}>
+                                {t("employees.archive.archivedBy")}: {restoreTarget.archived_by_name}
+                            </Text>
+                        )}
+                        {restoreError && (
+                            <div
+                                role="alert"
+                                style={{
+                                    background: "rgba(255, 77, 79, 0.08)",
+                                    border: "1px solid rgba(255, 77, 79, 0.24)",
+                                    color: "#cf1322",
+                                    padding: "8px 12px",
+                                    borderRadius: 8,
+                                    fontSize: 13,
+                                }}
+                            >
+                                {restoreError}
                             </div>
                         )}
                     </div>

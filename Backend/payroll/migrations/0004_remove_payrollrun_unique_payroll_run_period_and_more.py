@@ -12,25 +12,30 @@ def backfill_payroll_company(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('organization', '0001_initial'),
-        ('payroll', '0003_payslip_is_active'),
+        ("organization", "0001_initial"),
+        ("payroll", "0003_payslip_is_active"),
     ]
 
     operations = [
         migrations.RemoveConstraint(
-            model_name='payrollrun',
-            name='unique_payroll_run_period',
+            model_name="payrollrun",
+            name="unique_payroll_run_period",
         ),
         migrations.AddField(
-            model_name='payrollrun',
-            name='company',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='payroll_runs', to='organization.organizationnode'),
+            model_name="payrollrun",
+            name="company",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name="payroll_runs",
+                to="organization.organizationnode",
+            ),
         ),
         migrations.RunPython(backfill_payroll_company, migrations.RunPython.noop),
         migrations.AddConstraint(
-            model_name='payrollrun',
-            constraint=models.UniqueConstraint(fields=('company', 'year', 'month'), name='unique_payroll_run_period'),
+            model_name="payrollrun",
+            constraint=models.UniqueConstraint(fields=("company", "year", "month"), name="unique_payroll_run_period"),
         ),
     ]

@@ -614,16 +614,12 @@ def send_delegation_notification_email(
     if recipient_role == "delegate":
         title = "You have been assigned as an alternative employee"
         title_ar = "تم تعيينك كموظف بديل لصلاحية الموافقة"
-        message = (
-            f"{from_user_name} has assigned you as an alternative employee for the specified period."
-        )
+        message = f"{from_user_name} has assigned you as an alternative employee for the specified period."
         message_ar = "قام المستخدم الأصلي بإسناد مسؤوليات الموافقة إليك كموظف بديل خلال الفترة المحددة."
     else:
         title = "Your alternative employee option is active"
         title_ar = "تم تفعيل خيار الموظف البديل الخاص بك"
-        message = (
-            f"Your approval responsibilities have been assigned to {to_user_name} for the specified period."
-        )
+        message = f"Your approval responsibilities have been assigned to {to_user_name} for the specified period."
         message_ar = "تم إسناد مسؤوليات الموافقة الخاصة بك إلى الموظف البديل خلال الفترة المحددة."
 
     context = _base_email_context(

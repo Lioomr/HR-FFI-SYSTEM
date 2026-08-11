@@ -127,6 +127,9 @@ export function fromEmployeeToFormValues(employee: Employee): any {
   formValues.health_card_expiry = (employee as any).health_card_expiry
     ? dayjs((employee as any).health_card_expiry)
     : null;
+  formValues.work_license_expiry = employee.work_license_expiry
+    ? dayjs(employee.work_license_expiry)
+    : null;
 
   // Salary & Allowances
   formValues.basic_salary = (employee as any).basic_salary

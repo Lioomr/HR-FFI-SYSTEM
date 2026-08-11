@@ -14,31 +14,42 @@ def backfill_rent_company(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('organization', '0001_initial'),
-        ('rents', '0002_rename_property_name_rent_property_name_en_and_more'),
+        ("organization", "0001_initial"),
+        ("rents", "0002_rename_property_name_rent_property_name_en_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='rent',
-            name='company',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='rents', to='organization.organizationnode'),
+            model_name="rent",
+            name="company",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name="rents",
+                to="organization.organizationnode",
+            ),
         ),
         migrations.AddField(
-            model_name='renttype',
-            name='company',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='rent_types', to='organization.organizationnode'),
+            model_name="renttype",
+            name="company",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name="rent_types",
+                to="organization.organizationnode",
+            ),
         ),
         migrations.AlterField(
-            model_name='renttype',
-            name='code',
+            model_name="renttype",
+            name="code",
             field=models.CharField(max_length=30),
         ),
         migrations.RunPython(backfill_rent_company, migrations.RunPython.noop),
         migrations.AddConstraint(
-            model_name='renttype',
-            constraint=models.UniqueConstraint(fields=('company', 'code'), name='uniq_rent_type_company_code'),
+            model_name="renttype",
+            constraint=models.UniqueConstraint(fields=("company", "code"), name="uniq_rent_type_company_code"),
         ),
     ]

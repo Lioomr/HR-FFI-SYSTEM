@@ -18,53 +18,76 @@ def backfill_reference_company(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('hr_reference', '0001_initial'),
-        ('organization', '0001_initial'),
+        ("hr_reference", "0001_initial"),
+        ("organization", "0001_initial"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='department',
-            name='company',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='%(class)ss', to='organization.organizationnode'),
+            model_name="department",
+            name="company",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name="%(class)ss",
+                to="organization.organizationnode",
+            ),
         ),
         migrations.AddField(
-            model_name='position',
-            name='company',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='%(class)ss', to='organization.organizationnode'),
+            model_name="position",
+            name="company",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name="%(class)ss",
+                to="organization.organizationnode",
+            ),
         ),
         migrations.AddField(
-            model_name='sponsor',
-            name='company',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='%(class)ss', to='organization.organizationnode'),
+            model_name="sponsor",
+            name="company",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name="%(class)ss",
+                to="organization.organizationnode",
+            ),
         ),
         migrations.AddField(
-            model_name='taskgroup',
-            name='company',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='%(class)ss', to='organization.organizationnode'),
+            model_name="taskgroup",
+            name="company",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name="%(class)ss",
+                to="organization.organizationnode",
+            ),
         ),
         migrations.AlterField(
-            model_name='sponsor',
-            name='code',
+            model_name="sponsor",
+            name="code",
             field=models.CharField(max_length=20),
         ),
         migrations.RunPython(backfill_reference_company, migrations.RunPython.noop),
         migrations.AddConstraint(
-            model_name='department',
-            constraint=models.UniqueConstraint(fields=('company', 'code'), name='uniq_department_company_code'),
+            model_name="department",
+            constraint=models.UniqueConstraint(fields=("company", "code"), name="uniq_department_company_code"),
         ),
         migrations.AddConstraint(
-            model_name='position',
-            constraint=models.UniqueConstraint(fields=('company', 'code'), name='uniq_position_company_code'),
+            model_name="position",
+            constraint=models.UniqueConstraint(fields=("company", "code"), name="uniq_position_company_code"),
         ),
         migrations.AddConstraint(
-            model_name='sponsor',
-            constraint=models.UniqueConstraint(fields=('company', 'code'), name='uniq_sponsor_company_code'),
+            model_name="sponsor",
+            constraint=models.UniqueConstraint(fields=("company", "code"), name="uniq_sponsor_company_code"),
         ),
         migrations.AddConstraint(
-            model_name='taskgroup',
-            constraint=models.UniqueConstraint(fields=('company', 'code'), name='uniq_task_group_company_code'),
+            model_name="taskgroup",
+            constraint=models.UniqueConstraint(fields=("company", "code"), name="uniq_task_group_company_code"),
         ),
     ]

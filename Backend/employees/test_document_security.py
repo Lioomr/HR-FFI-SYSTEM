@@ -10,7 +10,9 @@ from rest_framework.test import APIClient
 from audit.models import AuditLog
 from organization.models import OrganizationNode, UserOrganizationAccess
 
+from .document_extraction import extract_document_fields
 from .models import EmployeeDocument, EmployeeProfile
+from .serializers import EmployeeDocumentSerializer
 
 User = get_user_model()
 
@@ -117,7 +119,7 @@ class EmployeeDocumentSecurityTests(TestCase):
         self.assertEqual(list_response.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(download_response.status_code, status.HTTP_404_NOT_FOUND)
 
-    @patch("employees.views.extract_visa_fields", return_value=[])
+    @patch("employees.views._queue_document_extraction", return_value=[])
     def test_upload_validates_signature_content_type_and_size(self, _extract):
         self.client.force_authenticate(self.hr)
         url = f"/api/employees/{self.profile.id}/documents/"
@@ -156,3 +158,113 @@ class EmployeeDocumentSecurityTests(TestCase):
         document = EmployeeDocument.objects.get(pk=valid.data["data"]["id"])
         self.assertEqual(document.company, self.company)
         self.assertEqual(document.original_filename, "valid.pdf")
+
+    @patch("employees.views._queue_document_extraction", return_value=[])
+    def test_upload_preserves_document_type_and_returns_classification_metadata(self, _extract):
+        self.client.force_authenticate(self.hr)
+        url = f"/api/employees/{self.profile.id}/documents/"
+        cases = [
+            (EmployeeDocument.DocumentType.PASSPORT, "", "Passport"),
+            (EmployeeDocument.DocumentType.IQAMA, "", "Iqama"),
+            (EmployeeDocument.DocumentType.SAUDI_ID, "", "Saudi ID"),
+            (EmployeeDocument.DocumentType.VISA, "", "Visa"),
+            (EmployeeDocument.DocumentType.OTHER, "Medical Certificate", "Medical Certificate"),
+        ]
+
+        for index, (document_type, custom_name, display_name) in enumerate(cases):
+            with self.subTest(document_type=document_type):
+                response = self.client.post(
+                    url,
+                    {
+                        "document_type": document_type,
+                        "custom_name": custom_name,
+                        "file": SimpleUploadedFile(
+                            f"document-{index}.pdf",
+                            b"%PDF-1.4\nvalid",
+                            content_type="application/pdf",
+                        ),
+                    },
+                    format="multipart",
+                    HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+                )
+
+                self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+                payload = response.data["data"]
+                self.assertEqual(payload["document_type"], document_type)
+                self.assertEqual(payload["display_name"], display_name)
+                self.assertEqual(EmployeeDocument.objects.get(pk=payload["id"]).document_type, document_type)
+
+    @patch("employees.views._queue_document_extraction", return_value=[])
+    def test_upload_rejects_missing_document_type_instead_of_defaulting_to_visa(self, _extract):
+        self.client.force_authenticate(self.hr)
+
+        response = self.client.post(
+            f"/api/employees/{self.profile.id}/documents/",
+            {
+                "file": SimpleUploadedFile(
+                    "unclassified.pdf",
+                    b"%PDF-1.4\nvalid",
+                    content_type="application/pdf",
+                )
+            },
+            format="multipart",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertFalse(EmployeeDocument.objects.filter(employee_profile=self.profile).exists())
+
+    def test_serializer_preserves_identity_ocr_fields_for_legacy_types(self):
+        extracted_fields = {
+            "passport_number": "P1234567",
+            "full_name": "Example Employee",
+            "nationality": "Egyptian",
+            "date_of_birth": "1990-01-01",
+            "issue_date": "2020-01-01",
+            "expiry_date": "2030-01-01",
+            "profession": "Engineer",
+            "iqama_number": "2123456789",
+            "iqama_expiry_date": "2030-02-01",
+        }
+        passport = self._document()
+        passport.extracted_fields = extracted_fields
+        passport.save(update_fields=["extracted_fields"])
+        saudi_id = self._document()
+        saudi_id.document_type = EmployeeDocument.DocumentType.SAUDI_ID
+        saudi_id.extracted_fields = extracted_fields
+        saudi_id.save(update_fields=["document_type", "extracted_fields"])
+
+        passport_payload = EmployeeDocumentSerializer(passport).data
+        saudi_id_payload = EmployeeDocumentSerializer(saudi_id).data
+
+        self.assertEqual(passport_payload["document_type"], "PASSPORT")
+        self.assertEqual(passport_payload["display_name"], "Passport")
+        self.assertEqual(passport_payload["extracted_fields"], extracted_fields)
+        self.assertEqual(saudi_id_payload["document_type"], "SAUDI_ID")
+        self.assertEqual(saudi_id_payload["display_name"], "Saudi ID")
+        self.assertEqual(saudi_id_payload["extracted_fields"], extracted_fields)
+
+        for document in (passport, saudi_id):
+            with self.subTest(document_type=document.document_type):
+                extract_document_fields(document)
+                document.refresh_from_db()
+                self.assertEqual(document.extracted_fields, extracted_fields)
+
+    @patch("employees.views.extract_employee_document.apply_async")
+    def test_hr_can_retry_ocr_for_an_existing_document(self, apply_async):
+        document = self._document()
+        document.extraction_status = EmployeeDocument.ExtractionStatus.FAILED
+        document.extraction_error = "Previous OCR failure"
+        document.save(update_fields=["extraction_status", "extraction_error"])
+        self.client.force_authenticate(self.hr)
+
+        response = self.client.post(
+            f"/api/employees/{self.profile.id}/documents/{document.id}/extract/",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["data"]["document_type"], "PASSPORT")
+        self.assertEqual(response.data["data"]["display_name"], "Passport")
+        self.assertEqual(response.data["data"]["extraction_status"], "pending")
+        apply_async.assert_called_once_with(args=[document.id], retry=False)

@@ -32,7 +32,11 @@ def send_whatsapp_notification(
         language=language,
     )
     if result.get("success"):
-        return {"sent": True, "provider": result.get("provider", "evolution_whatsapp"), "status_code": result.get("status_code")}
+        return {
+            "sent": True,
+            "provider": result.get("provider", "evolution_whatsapp"),
+            "status_code": result.get("status_code"),
+        }
     return {
         "sent": False,
         "provider": result.get("provider", "evolution_whatsapp"),

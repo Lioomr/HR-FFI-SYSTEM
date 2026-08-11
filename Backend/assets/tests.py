@@ -254,7 +254,9 @@ class AssetsTests(TestCase):
             {"note": "Leaving project"},
         )
         self.assertEqual(return_request_response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(return_request_response.data["data"]["status"], AssetReturnRequest.RequestStatus.PENDING_MANAGER)
+        self.assertEqual(
+            return_request_response.data["data"]["status"], AssetReturnRequest.RequestStatus.PENDING_MANAGER
+        )
 
     def test_manager_can_use_employee_asset_self_service_for_own_asset(self):
         asset = Asset.objects.create(
@@ -368,9 +370,7 @@ class AssetsTests(TestCase):
             operating_system="Linux",
             status=Asset.AssetStatus.ASSIGNED,
         )
-        AssetAssignment.objects.create(
-            asset=asset, employee=self.hr_profile, assigned_by=self.hr_user, is_active=True
-        )
+        AssetAssignment.objects.create(asset=asset, employee=self.hr_profile, assigned_by=self.hr_user, is_active=True)
         self.client.force_authenticate(user=self.hr_user)
 
         damage_response = self.client.post(f"/api/assets/{asset.id}/damage-report/", {"description": "Broken charger"})
@@ -397,7 +397,9 @@ class AssetsTests(TestCase):
             operating_system="Linux",
             status=Asset.AssetStatus.ASSIGNED,
         )
-        AssetAssignment.objects.create(asset=asset, employee=self.employee_profile, assigned_by=self.hr_user, is_active=True)
+        AssetAssignment.objects.create(
+            asset=asset, employee=self.employee_profile, assigned_by=self.hr_user, is_active=True
+        )
 
         self.client.force_authenticate(user=self.employee_user)
         response = self.client.post(f"/api/assets/{asset.id}/return-request/", {"note": "No manager"})
@@ -416,7 +418,9 @@ class AssetsTests(TestCase):
             operating_system="Linux",
             status=Asset.AssetStatus.ASSIGNED,
         )
-        AssetAssignment.objects.create(asset=asset, employee=self.employee_profile, assigned_by=self.hr_user, is_active=True)
+        AssetAssignment.objects.create(
+            asset=asset, employee=self.employee_profile, assigned_by=self.hr_user, is_active=True
+        )
 
         self.client.force_authenticate(user=self.employee_user)
         create_response = self.client.post(f"/api/assets/{asset.id}/return-request/", {"note": "Project ended"})
@@ -450,7 +454,9 @@ class AssetsTests(TestCase):
             operating_system="Linux",
             status=Asset.AssetStatus.ASSIGNED,
         )
-        AssetAssignment.objects.create(asset=asset, employee=self.employee_profile, assigned_by=self.hr_user, is_active=True)
+        AssetAssignment.objects.create(
+            asset=asset, employee=self.employee_profile, assigned_by=self.hr_user, is_active=True
+        )
 
         self.client.force_authenticate(user=self.employee_user)
         create_response = self.client.post(f"/api/assets/{asset.id}/return-request/", {"note": "Need return"})
@@ -460,7 +466,9 @@ class AssetsTests(TestCase):
         self.client.post(f"/api/assets/manager/return-requests/{request_id}/approve/", {"comment": "Forwarding to HR"})
 
         self.client.force_authenticate(user=self.hr_user)
-        approve_response = self.client.post(f"/api/assets/return-requests/{request_id}/approve/", {"comment": "Approved by HR"})
+        approve_response = self.client.post(
+            f"/api/assets/return-requests/{request_id}/approve/", {"comment": "Approved by HR"}
+        )
         self.assertEqual(approve_response.status_code, status.HTTP_200_OK)
         self.assertEqual(approve_response.data["data"]["status"], AssetReturnRequest.RequestStatus.APPROVED)
 
@@ -476,7 +484,9 @@ class AssetsTests(TestCase):
             operating_system="Linux",
             status=Asset.AssetStatus.ASSIGNED,
         )
-        AssetAssignment.objects.create(asset=asset, employee=self.employee_profile, assigned_by=self.hr_user, is_active=True)
+        AssetAssignment.objects.create(
+            asset=asset, employee=self.employee_profile, assigned_by=self.hr_user, is_active=True
+        )
 
         self.client.force_authenticate(user=self.employee_user)
         first_response = self.client.post(f"/api/assets/{asset.id}/return-request/", {"note": "First"})

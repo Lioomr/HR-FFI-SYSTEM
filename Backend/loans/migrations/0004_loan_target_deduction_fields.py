@@ -36,7 +36,6 @@ def reverse_backfill_loan_target_fields(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("loans", "0003_loan_workflow_redesign"),
     ]

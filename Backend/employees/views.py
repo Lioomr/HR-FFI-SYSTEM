@@ -1,6 +1,7 @@
 import csv
 import hashlib
 import io
+import logging
 import os
 import random
 import string
@@ -37,7 +38,7 @@ from organization.services import (
     get_active_company_for_request,
 )
 
-from .document_extraction import extract_visa_fields
+from .document_extraction import extract_document_fields
 from .models import EmployeeDeletionRequest, EmployeeDocument, EmployeeImport, EmployeeProfile
 from .notifications import notify_document_expiry_in_app
 from .permissions import IsEmployeeOwner, IsHRManagerOnly, IsHRManagerOrAdmin, IsManagerOfEmployee
@@ -52,12 +53,29 @@ from .serializers import (
 )
 from .services import EmployeeImporter
 from .storage import PrivateUploadStorage
+from .tasks import extract_employee_document
 from .throttles import EmployeeImportThrottle
+
+logger = logging.getLogger(__name__)
 
 try:
     from openpyxl import load_workbook
 except Exception:  # pragma: no cover - fallback for missing dependency
     load_workbook = None
+
+
+def _queue_document_extraction(document: EmployeeDocument) -> list[str]:
+    if document.document_type == EmployeeDocument.DocumentType.OTHER:
+        return extract_document_fields(document)
+    try:
+        extract_employee_document.apply_async(args=[document.id], retry=False)
+        return []
+    except Exception:
+        logger.exception("employee_document_ocr_queue_failed", extra={"document_id": document.id})
+        document.extraction_status = EmployeeDocument.ExtractionStatus.FAILED
+        document.extraction_error = "OCR worker is unavailable."
+        document.save(update_fields=["extraction_status", "extraction_error", "updated_at"])
+        return ["Document was saved, but OCR could not be queued."]
 
 
 def generate_employee_id(prefix="FFI"):
@@ -78,6 +96,10 @@ def _audit_snapshot(instance: EmployeeProfile) -> dict:
         "task_group_id": instance.task_group_ref.id if instance.task_group_ref else None,
         "sponsor_id": instance.sponsor_ref.id if instance.sponsor_ref else None,
         "employment_status": instance.employment_status,
+        "is_archived": instance.is_archived,
+        "archived_at": instance.archived_at.isoformat() if instance.archived_at else None,
+        "archived_by_id": instance.archived_by_id,
+        "archive_reason": instance.archive_reason,
         "manager_profile_id": instance.manager_profile.id if instance.manager_profile else None,
         "data_source": instance.data_source,
     }
@@ -95,6 +117,8 @@ def _deletion_request_snapshot(instance: EmployeeProfile) -> dict:
         "company_id": instance.company_id,
         "company_name": instance.company.name if instance.company_id else "",
         "employment_status": instance.employment_status,
+        "is_archived": instance.is_archived,
+        "archive_reason": instance.archive_reason,
         "department_id": instance.department_ref_id,
         "department_name": instance.department_ref.name if instance.department_ref_id else instance.department,
         "position_id": instance.position_ref_id,
@@ -300,6 +324,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
 
         base_qs = EmployeeProfile.objects.select_related(
             "user",
+            "archived_by",
             "manager",
             "manager_profile",
             "manager_profile__user",
@@ -309,6 +334,16 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             "sponsor_ref",
         )
         base_qs = _with_effective_status(base_qs)
+
+        archive_state = self.request.query_params.get("archive_state", "active").lower()
+        if self.action == "restore":
+            base_qs = base_qs.filter(is_archived=True)
+        elif archive_state == "archived" and role in ["SystemAdmin", "HRManager"]:
+            base_qs = base_qs.filter(is_archived=True)
+        elif archive_state == "all" and role in ["SystemAdmin", "HRManager"]:
+            pass
+        else:
+            base_qs = base_qs.filter(is_archived=False)
 
         if role in ["SystemAdmin", "HRManager"]:
             if self.action in ["list", "export", "expiries"]:
@@ -334,6 +369,47 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         if self.action in ["list", "retrieve", "me"]:
             return EmployeeProfileReadSerializer
         return EmployeeProfileWriteSerializer
+
+    @action(detail=True, methods=["post"], url_path="restore")
+    def restore(self, request, pk=None):
+        profile = self.get_object()
+        if not profile.is_archived:
+            return error("Validation error", errors=["Employee is not archived."], status=422)
+
+        previous = _audit_snapshot(profile)
+        with transaction.atomic():
+            profile = EmployeeProfile.objects.select_for_update().select_related("user").get(pk=profile.pk)
+            should_reactivate_user = True
+            latest_request = (
+                EmployeeDeletionRequest.objects.filter(
+                    employee_profile=profile, status=EmployeeDeletionRequest.Status.EXECUTED
+                )
+                .order_by("-executed_at", "-id")
+                .first()
+            )
+            if latest_request:
+                should_reactivate_user = bool(
+                    (latest_request.execution_snapshot or {}).get("target_user_was_active", True)
+                )
+
+            profile.is_archived = False
+            profile.archived_at = None
+            profile.archived_by = None
+            profile.archive_reason = None
+            profile.save(update_fields=["is_archived", "archived_at", "archived_by", "archive_reason", "updated_at"])
+
+            if profile.user_id and should_reactivate_user and not profile.user.is_active:
+                profile.user.is_active = True
+                profile.user.save(update_fields=["is_active"])
+
+        audit(
+            request,
+            "employee_restored",
+            entity="EmployeeProfile",
+            entity_id=profile.id,
+            metadata={"employee_before": previous, "restored_by": request.user.id},
+        )
+        return success(EmployeeProfileReadSerializer(profile, context=self.get_serializer_context()).data)
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -506,7 +582,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             uploaded_by=request.user,
             original_filename=os.path.basename(getattr(serializer.validated_data.get("file"), "name", "")),
         )
-        warnings = extract_visa_fields(document)
+        warnings = _queue_document_extraction(document)
         document.extraction_warnings = warnings
 
         audit(
@@ -585,11 +661,37 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         )
         return success(EmployeeDocumentSerializer(document, context={"request": request}).data)
 
+    @action(detail=True, methods=["post"], url_path=r"documents/(?P<document_id>[^/.]+)/extract")
+    def extract_document(self, request, pk=None, document_id=None):
+        profile, error_response = self._document_profile_for_request(request, pk)
+        if error_response:
+            return error_response
+
+        role = get_role(request.user)
+        if role not in ["SystemAdmin", "HRManager"]:
+            return error("Forbidden", errors=["Forbidden."], status=status.HTTP_403_FORBIDDEN)
+
+        document = self._documents_for_profile(profile).filter(pk=document_id).first()
+        if document is None:
+            return error("Not found", errors=["Not found."], status=404)
+
+        document.extraction_status = EmployeeDocument.ExtractionStatus.PENDING
+        document.extraction_error = ""
+        document.save(update_fields=["extraction_status", "extraction_error", "updated_at"])
+        warnings = _queue_document_extraction(document)
+        document.extraction_warnings = warnings
+        audit(
+            request,
+            "employee_document_extraction_queued",
+            entity="employee_document",
+            entity_id=document.id,
+            metadata={"employee_profile_id": profile.id, "document_type": document.document_type},
+        )
+        return success(EmployeeDocumentSerializer(document, context={"request": request}).data)
+
     @staticmethod
     def _document_notification_label(document: EmployeeDocument) -> str:
-        if document.document_type == EmployeeDocument.DocumentType.OTHER:
-            return document.custom_name or "Document"
-        return document.get_document_type_display()
+        return document.display_name or "Document"
 
     @staticmethod
     def _whatsapp_delivery_exception(exc: Exception) -> dict:
@@ -691,6 +793,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         try:
             profile = EmployeeProfile.objects.select_related(
                 "user",
+                "archived_by",
                 "manager",
                 "manager_profile",
                 "manager_profile__user",
@@ -733,6 +836,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
     def delegation_candidates(self, request):
         qs = EmployeeProfile.objects.select_related("user", "company").filter(
             employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+            is_archived=False,
         )
 
         if request.query_params.get("scope") == "all":
@@ -769,6 +873,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
 
         base_qs = EmployeeProfile.objects.select_related(
             "user",
+            "archived_by",
             "manager",
             "manager_profile",
             "manager_profile__user",
@@ -777,7 +882,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             "task_group_ref",
             "sponsor_ref",
         )
-        base_qs = _with_effective_status(base_qs)
+        base_qs = _with_effective_status(base_qs).filter(is_archived=False)
         if role == "SystemAdmin":
             qs = base_qs
         else:
@@ -879,20 +984,22 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
     @staticmethod
     def _expiring_docs_for_profile(profile, today, cutoff_date):
         candidates = [
-            ("passport", "Passport", profile.passport_expiry),
-            ("id_card", "ID Card", profile.id_expiry),
-            ("health_card", "Health Card", profile.health_card_expiry),
-            ("contract", "Contract", profile.contract_expiry),
+            ("passport", "PASSPORT", "Passport", profile.passport_expiry),
+            ("id_card", "ID_CARD", "ID Card", profile.id_expiry),
+            ("health_card", "HEALTH_CARD", "Health Card", profile.health_card_expiry),
+            ("contract", "CONTRACT", "Contract", profile.contract_expiry),
+            ("work_license", "WORK_LICENSE", "Work License", profile.work_license_expiry),
         ]
 
         documents = []
-        for doc_type, label, expiry_date in candidates:
+        for doc_type, document_type, label, expiry_date in candidates:
             if not expiry_date:
                 continue
             if today <= expiry_date <= cutoff_date:
                 documents.append(
                     {
                         "doc_type": doc_type,
+                        "document_type": document_type,
                         "label": label,
                         "expiry_date": expiry_date.isoformat(),
                         "days_left": (expiry_date - today).days,
@@ -931,6 +1038,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             | Q(id_expiry__isnull=False, id_expiry__range=[today, cutoff_date])
             | Q(health_card_expiry__isnull=False, health_card_expiry__range=[today, cutoff_date])
             | Q(contract_expiry__isnull=False, contract_expiry__range=[today, cutoff_date])
+            | Q(work_license_expiry__isnull=False, work_license_expiry__range=[today, cutoff_date])
         )
 
         items = []
@@ -1091,7 +1199,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         return error(
-            "Hard delete is not allowed. Please update status to TERMINATED.",
+            "Permanent deletion is not allowed. Use the employee archive workflow.",
             status=status.HTTP_403_FORBIDDEN,
         )
 
@@ -1204,23 +1312,25 @@ class EmployeeDeletionRequestViewSet(viewsets.ModelViewSet):
             target_user=employee_profile.user,
             requested_by=request.user,
             reason=serializer.validated_data["reason"],
+            archive_reason=serializer.validated_data["archive_reason"],
             request_snapshot=_deletion_request_snapshot(employee_profile),
         )
         audit(
             request,
-            "employee_hard_delete_requested",
+            "employee_archive_requested",
             entity="employee_deletion_request",
             entity_id=instance.id,
             metadata={
                 "request_id": instance.id,
                 "employee": instance.request_snapshot,
                 "reason": instance.reason,
+                "archive_reason": instance.archive_reason,
             },
         )
         try:
             notify_users_for_pending_status(
                 users=get_ceo_approver_users(),
-                request_type="Employee Deletion",
+                request_type="Employee Archive",
                 request_id=instance.id,
                 requester_name=request.user.full_name or request.user.email,
                 status_label="Pending CEO",
@@ -1252,6 +1362,7 @@ class EmployeeDeletionRequestViewSet(viewsets.ModelViewSet):
                 }
             )
         snapshot["target_user_email"] = target_user.email if target_user else snapshot.get("email", "")
+        snapshot["target_user_was_active"] = bool(target_user and target_user.is_active)
         return snapshot
 
     @action(detail=True, methods=["post"], url_path="approve")
@@ -1259,16 +1370,44 @@ class EmployeeDeletionRequestViewSet(viewsets.ModelViewSet):
         if get_role(request.user) not in ["CEO", "SystemAdmin"]:
             return error("Forbidden", status=status.HTTP_403_FORBIDDEN)
 
-        instance = self.get_object()
-        if instance.status != EmployeeDeletionRequest.Status.PENDING_CEO:
-            return error("Validation error", errors=["Request is not pending CEO approval."], status=422)
-
-        profile = instance.employee_profile
-        target_user = instance.target_user or (profile.user if profile and profile.user_id else None)
-        execution_snapshot = self._build_execution_snapshot(instance)
-
         with transaction.atomic():
+            instance = (
+                EmployeeDeletionRequest.objects.select_for_update()
+                .select_related("employee_profile", "employee_profile__user", "target_user")
+                .get(pk=self.get_object().pk)
+            )
+            if instance.status != EmployeeDeletionRequest.Status.PENDING_CEO:
+                return error("Validation error", errors=["Request is not pending CEO approval."], status=422)
+
+            profile = instance.employee_profile
+            target_user = instance.target_user or (profile.user if profile and profile.user_id else None)
+            if profile is None:
+                return error("Validation error", errors=["Employee profile is no longer available."], status=422)
+            if profile.is_archived:
+                return error("Validation error", errors=["Employee is already archived."], status=422)
+
+            execution_snapshot = self._build_execution_snapshot(instance)
             now = timezone.now()
+            profile.is_archived = True
+            profile.archived_at = now
+            profile.archived_by = request.user
+            profile.archive_reason = instance.archive_reason
+            profile.save(update_fields=["is_archived", "archived_at", "archived_by", "archive_reason", "updated_at"])
+            execution_snapshot.update(
+                {
+                    "is_archived": True,
+                    "archived_at": now.isoformat(),
+                    "archived_by_id": request.user.id,
+                    "archive_reason": instance.archive_reason,
+                    "target_user_disabled": bool(target_user),
+                }
+            )
+
+            if target_user is not None and target_user.is_active:
+                target_user.is_active = False
+                target_user.auth_token_version += 1
+                target_user.save(update_fields=["is_active", "auth_token_version"])
+
             instance.status = EmployeeDeletionRequest.Status.EXECUTED
             instance.approved_by = request.user
             instance.approved_at = now
@@ -1285,17 +1424,12 @@ class EmployeeDeletionRequestViewSet(viewsets.ModelViewSet):
                 ]
             )
 
-            if target_user is not None:
-                target_user.delete()
-            elif profile is not None:
-                profile.delete()
-
         instance.refresh_from_db()
         audit(
             request,
-            "employee_hard_deleted",
-            entity="employee_deletion_request",
-            entity_id=instance.id,
+            "employee_archived",
+            entity="EmployeeProfile",
+            entity_id=profile.id,
             metadata={
                 "request_id": instance.id,
                 "employee": execution_snapshot,
@@ -1305,9 +1439,9 @@ class EmployeeDeletionRequestViewSet(viewsets.ModelViewSet):
         try:
             notify_profile_request_status_whatsapp(
                 profile=getattr(instance.requested_by, "employee_profile", None),
-                request_type="Employee Deletion",
+                request_type="Employee Archive",
                 request_id=instance.id,
-                status_label="Executed",
+                status_label="Archived",
                 details=[
                     f"Employee: {execution_snapshot.get('full_name') or execution_snapshot.get('employee_id')}",
                 ],
@@ -1339,7 +1473,7 @@ class EmployeeDeletionRequestViewSet(viewsets.ModelViewSet):
 
         audit(
             request,
-            "employee_hard_delete_rejected",
+            "employee_archive_rejected",
             entity="employee_deletion_request",
             entity_id=instance.id,
             metadata={"request_id": instance.id, "reason": reason, "employee": instance.request_snapshot},
@@ -1347,7 +1481,7 @@ class EmployeeDeletionRequestViewSet(viewsets.ModelViewSet):
         try:
             notify_profile_request_status_whatsapp(
                 profile=getattr(instance.requested_by, "employee_profile", None),
-                request_type="Employee Deletion",
+                request_type="Employee Archive",
                 request_id=instance.id,
                 status_label="Rejected",
                 reason=reason,
@@ -1362,7 +1496,7 @@ class EmployeeDeletionRequestViewSet(viewsets.ModelViewSet):
         return success(data)
 
     def destroy(self, request, *args, **kwargs):
-        return error("Hard delete requests cannot be deleted.", status=status.HTTP_403_FORBIDDEN)
+        return error("Employee archive requests cannot be deleted.", status=status.HTTP_403_FORBIDDEN)
 
 
 class EmployeeImportHistoryViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):

@@ -78,7 +78,15 @@ WHATSAPP_TEMPLATE_REGISTRY: dict[str, WhatsAppTemplateSpec] = {
     ),
     "request_status_update": WhatsAppTemplateSpec(
         template_name="request_status_update",
-        variable_order=("employee_name", "request_type", "request_id", "status_label", "reason", "details", "action_url"),
+        variable_order=(
+            "employee_name",
+            "request_type",
+            "request_id",
+            "status_label",
+            "reason",
+            "details",
+            "action_url",
+        ),
     ),
     "employee_invitation": WhatsAppTemplateSpec(
         template_name="employee_invitation",

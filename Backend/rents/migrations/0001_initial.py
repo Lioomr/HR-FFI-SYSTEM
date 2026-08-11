@@ -6,77 +6,121 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
-        ('assets', '0001_initial'),
+        ("assets", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='RentType',
+            name="RentType",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('code', models.CharField(max_length=30, unique=True)),
-                ('name', models.CharField(max_length=120)),
-                ('description', models.TextField(blank=True)),
-                ('is_active', models.BooleanField(default=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("code", models.CharField(max_length=30, unique=True)),
+                ("name", models.CharField(max_length=120)),
+                ("description", models.TextField(blank=True)),
+                ("is_active", models.BooleanField(default=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
             ],
             options={
-                'ordering': ['code'],
+                "ordering": ["code"],
             },
         ),
         migrations.CreateModel(
-            name='Rent',
+            name="Rent",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('property_name', models.CharField(blank=True, max_length=180)),
-                ('property_address', models.CharField(blank=True, max_length=255)),
-                ('recurrence', models.CharField(choices=[('ONE_TIME', 'One Time'), ('MONTHLY', 'Monthly')], max_length=20)),
-                ('one_time_due_date', models.DateField(blank=True, null=True)),
-                ('start_date', models.DateField(blank=True, null=True)),
-                ('due_day', models.PositiveSmallIntegerField(blank=True, null=True)),
-                ('reminder_days', models.PositiveIntegerField(default=30)),
-                ('amount', models.DecimalField(blank=True, decimal_places=2, max_digits=12, null=True)),
-                ('is_active', models.BooleanField(default=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('asset', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='rents', to='assets.asset')),
-                ('created_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='rents_created', to=settings.AUTH_USER_MODEL)),
-                ('updated_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='rents_updated', to=settings.AUTH_USER_MODEL)),
-                ('rent_type', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='rents', to='rents.renttype')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("property_name", models.CharField(blank=True, max_length=180)),
+                ("property_address", models.CharField(blank=True, max_length=255)),
+                (
+                    "recurrence",
+                    models.CharField(choices=[("ONE_TIME", "One Time"), ("MONTHLY", "Monthly")], max_length=20),
+                ),
+                ("one_time_due_date", models.DateField(blank=True, null=True)),
+                ("start_date", models.DateField(blank=True, null=True)),
+                ("due_day", models.PositiveSmallIntegerField(blank=True, null=True)),
+                ("reminder_days", models.PositiveIntegerField(default=30)),
+                ("amount", models.DecimalField(blank=True, decimal_places=2, max_digits=12, null=True)),
+                ("is_active", models.BooleanField(default=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "asset",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="rents",
+                        to="assets.asset",
+                    ),
+                ),
+                (
+                    "created_by",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="rents_created",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "updated_by",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="rents_updated",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "rent_type",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT, related_name="rents", to="rents.renttype"
+                    ),
+                ),
             ],
             options={
-                'ordering': ['id'],
+                "ordering": ["id"],
             },
         ),
         migrations.CreateModel(
-            name='RentReminderLog',
+            name="RentReminderLog",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('due_date', models.DateField()),
-                ('channel', models.CharField(choices=[('announcement', 'Announcement'), ('email', 'Email')], max_length=32)),
-                ('sent_at', models.DateTimeField(auto_now_add=True)),
-                ('status', models.CharField(default='sent', max_length=20)),
-                ('error_message', models.TextField(blank=True)),
-                ('rent', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='reminder_logs', to='rents.rent')),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("due_date", models.DateField()),
+                (
+                    "channel",
+                    models.CharField(choices=[("announcement", "Announcement"), ("email", "Email")], max_length=32),
+                ),
+                ("sent_at", models.DateTimeField(auto_now_add=True)),
+                ("status", models.CharField(default="sent", max_length=20)),
+                ("error_message", models.TextField(blank=True)),
+                (
+                    "rent",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, related_name="reminder_logs", to="rents.rent"
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-sent_at'],
-                'indexes': [models.Index(fields=['rent', 'due_date'], name='rents_reminder_lookup_idx')],
-                'constraints': [models.UniqueConstraint(fields=('rent', 'due_date', 'channel'), name='rents_reminder_unique_once')],
+                "ordering": ["-sent_at"],
+                "indexes": [models.Index(fields=["rent", "due_date"], name="rents_reminder_lookup_idx")],
+                "constraints": [
+                    models.UniqueConstraint(fields=("rent", "due_date", "channel"), name="rents_reminder_unique_once")
+                ],
             },
         ),
         migrations.AddIndex(
-            model_name='rent',
-            index=models.Index(fields=['is_active', 'recurrence'], name='rents_rent_active_rec_idx'),
+            model_name="rent",
+            index=models.Index(fields=["is_active", "recurrence"], name="rents_rent_active_rec_idx"),
         ),
         migrations.AddIndex(
-            model_name='rent',
-            index=models.Index(fields=['reminder_days'], name='rents_rent_reminder_idx'),
+            model_name="rent",
+            index=models.Index(fields=["reminder_days"], name="rents_rent_reminder_idx"),
         ),
     ]

@@ -160,8 +160,12 @@ class RentReadSerializer(serializers.ModelSerializer):
 
 
 class RentWriteSerializer(serializers.ModelSerializer):
-    rent_type_id = serializers.PrimaryKeyRelatedField(queryset=RentType.objects.filter(is_active=True), source="rent_type")
-    asset_id = serializers.PrimaryKeyRelatedField(queryset=Asset.objects.all(), source="asset", required=False, allow_null=True)
+    rent_type_id = serializers.PrimaryKeyRelatedField(
+        queryset=RentType.objects.filter(is_active=True), source="rent_type"
+    )
+    asset_id = serializers.PrimaryKeyRelatedField(
+        queryset=Asset.objects.all(), source="asset", required=False, allow_null=True
+    )
 
     class Meta:
         model = Rent

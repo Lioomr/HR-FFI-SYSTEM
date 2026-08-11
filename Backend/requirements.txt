@@ -10,6 +10,8 @@ requests
 openpyxl
 reportlab
 pypdf
+pypdfium2==5.12.1
+pytesseract==0.3.13
 arabic-reshaper
 python-bidi
 psycopg2-binary

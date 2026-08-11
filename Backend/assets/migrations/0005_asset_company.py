@@ -12,17 +12,22 @@ def backfill_asset_company(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('assets', '0004_assetreturnrequest_manager_decision_at_and_more'),
-        ('organization', '0001_initial'),
+        ("assets", "0004_assetreturnrequest_manager_decision_at_and_more"),
+        ("organization", "0001_initial"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='asset',
-            name='company',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='assets', to='organization.organizationnode'),
+            model_name="asset",
+            name="company",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name="assets",
+                to="organization.organizationnode",
+            ),
         ),
         migrations.RunPython(backfill_asset_company, migrations.RunPython.noop),
     ]

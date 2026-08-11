@@ -20,6 +20,14 @@ class EmployeeProfile(models.Model):
         IMPORT_EXCEL = "IMPORT_EXCEL", _("Import Excel")
         MANUAL = "MANUAL", _("Manual")
 
+    class ArchiveReason(models.TextChoices):
+        FIRED = "FIRED", _("Fired")
+        RESIGNED = "RESIGNED", _("Resigned")
+        RETIRED = "RETIRED", _("Retired")
+        END_OF_CONTRACT = "END_OF_CONTRACT", _("End of contract")
+        DECEASED = "DECEASED", _("Deceased")
+        OTHER = "OTHER", _("Other")
+
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -110,6 +118,7 @@ class EmployeeProfile(models.Model):
     health_card = models.CharField(max_length=100, blank=True)
     health_card_expiry = models.DateField(null=True, blank=True)
     health_card_expiry_raw = models.CharField(max_length=50, blank=True, null=True)
+    work_license_expiry = models.DateField(null=True, blank=True)
 
     basic_salary = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     transportation_allowance = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
@@ -126,6 +135,16 @@ class EmployeeProfile(models.Model):
         default=EmploymentStatus.ACTIVE,
         help_text=_("Current employment status."),
     )
+    is_archived = models.BooleanField(default=False, db_index=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
+    archived_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="employee_profiles_archived",
+    )
+    archive_reason = models.CharField(max_length=30, choices=ArchiveReason.choices, null=True, blank=True)
 
     # Manager is a direct link to a User, not another EmployeeProfile (per specs)
     manager = models.ForeignKey(
@@ -299,9 +318,20 @@ class EmployeeDocument(models.Model):
             models.Index(fields=["leave_request"], name="emp_doc_leave_request_idx"),
         ]
 
+    @property
+    def display_name(self):
+        labels = {
+            self.DocumentType.PASSPORT: "Passport",
+            self.DocumentType.IQAMA: "Iqama",
+            self.DocumentType.SAUDI_ID: "Saudi ID",
+            self.DocumentType.VISA: "Visa",
+        }
+        if self.document_type == self.DocumentType.OTHER:
+            return self.custom_name
+        return labels.get(self.document_type, self.get_document_type_display())
+
     def __str__(self):
-        label = self.custom_name if self.document_type == self.DocumentType.OTHER else self.get_document_type_display()
-        return f"{self.employee_profile_id} - {label}"
+        return f"{self.employee_profile_id} - {self.display_name}"
 
 
 class EmployeeDeletionRequest(models.Model):
@@ -351,6 +381,11 @@ class EmployeeDeletionRequest(models.Model):
         related_name="employee_deletion_requests_rejected",
     )
     reason = models.TextField()
+    archive_reason = models.CharField(
+        max_length=30,
+        choices=EmployeeProfile.ArchiveReason.choices,
+        default=EmployeeProfile.ArchiveReason.OTHER,
+    )
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING_CEO)
     request_snapshot = models.JSONField(default=dict, blank=True)
     execution_snapshot = models.JSONField(default=dict, blank=True)
@@ -370,4 +405,4 @@ class EmployeeDeletionRequest(models.Model):
 
     def __str__(self):
         employee_id = self.request_snapshot.get("employee_id") or self.employee_profile_id or "unknown"
-        return f"Delete:{employee_id}:{self.status}"
+        return f"Archive:{employee_id}:{self.status}"

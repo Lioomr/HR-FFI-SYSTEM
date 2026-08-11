@@ -60,6 +60,8 @@ services:
         condition: service_healthy
     ports:
       - "8000:8000"
+    volumes:
+      - private_uploads:/app/private_uploads
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz/', timeout=3)"]
       interval: 15s
@@ -134,6 +136,8 @@ services:
       evolution-api:
         condition: service_healthy
         required: false
+    volumes:
+      - private_uploads:/app/private_uploads
     healthcheck:
       test: ["CMD-SHELL", "celery -A config inspect ping --timeout 5 || exit 1"]
       interval: 30s
@@ -222,6 +226,7 @@ services:
 
 volumes:
   postgres_data:
+  private_uploads:
   redis_data:
   evolution_postgres_data:
   evolution_redis_data:

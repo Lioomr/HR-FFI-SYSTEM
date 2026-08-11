@@ -1,32 +1,24 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import {
-  Alert,
-  Button,
-  Card,
-  Descriptions,
-  Form,
-  Input,
-  Modal,
-  Space,
-  Tag,
-  Typography,
-  message,
-} from "antd";
-import { ArrowLeftOutlined, CheckOutlined, CloseOutlined } from "@ant-design/icons";
+import { Alert, Button, Descriptions, Modal, Typography, message } from "antd";
+import { ArrowLeftOutlined } from "@ant-design/icons";
 
 import PageHeader from "../../components/ui/PageHeader";
 import LoadingState from "../../components/ui/LoadingState";
 import ErrorState from "../../components/ui/ErrorState";
+import ApprovalActions from "../../components/ceo/ApprovalActions";
+import ApprovalStatusTag, { type ApprovalStatusTone } from "../../components/ceo/ApprovalStatusTag";
+import ApprovalSurface from "../../components/ceo/ApprovalSurface";
+import RejectReasonModal from "../../components/ceo/RejectReasonModal";
 import Unauthorized403Page from "../Unauthorized403Page";
 import NotFound404Page from "../NotFound404Page";
 
 import {
-  approveEmployeeDeletionRequest,
-  getEmployeeDeletionRequest,
-  rejectEmployeeDeletionRequest,
-  type EmployeeDeletionRequest,
-  type EmployeeDeletionStatus,
+  approveEmployeeArchiveRequest,
+  getEmployeeArchiveRequest,
+  rejectEmployeeArchiveRequest,
+  type EmployeeArchiveRequest,
+  type EmployeeArchiveStatus,
 } from "../../services/api/employeesApi";
 import { isApiError } from "../../services/api/apiTypes";
 import { isForbidden, isNotFound } from "../../services/api/httpErrors";
@@ -36,18 +28,35 @@ import { formatDateTimeShort } from "../../utils/dateTime";
 
 const { Text, Paragraph } = Typography;
 
-const STATUS_COLOR: Record<EmployeeDeletionStatus, string> = {
-  PENDING_CEO: "gold",
-  REJECTED: "red",
-  EXECUTED: "green",
+const STATUS_TONE: Record<EmployeeArchiveStatus, ApprovalStatusTone> = {
+  PENDING_CEO: "pending",
+  REJECTED: "rejected",
+  EXECUTED: "approved",
 };
+
+/** Section heading shared by the detail blocks, so all three read alike. */
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <h2
+      style={{
+        margin: "0 0 12px",
+        fontSize: 15,
+        fontWeight: 700,
+        color: "#0f172a",
+        letterSpacing: "-0.01em",
+      }}
+    >
+      {children}
+    </h2>
+  );
+}
 
 export default function CEOEmployeeDeletionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { t, language } = useI18n();
 
-  const [data, setData] = useState<EmployeeDeletionRequest | null>(null);
+  const [data, setData] = useState<EmployeeArchiveRequest | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [forbidden, setForbidden] = useState(false);
@@ -58,9 +67,6 @@ export default function CEOEmployeeDeletionDetailPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const [rejectionReason, setRejectionReason] = useState("");
-  const [rejectionFieldError, setRejectionFieldError] = useState<string | null>(null);
-
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
@@ -68,7 +74,7 @@ export default function CEOEmployeeDeletionDetailPage() {
     setForbidden(false);
     setNotFound(false);
     try {
-      const response = await getEmployeeDeletionRequest(id);
+      const response = await getEmployeeArchiveRequest(id);
       if (isApiError(response)) {
         setError(response.message || t("employees.removalDetail.errorGeneric"));
         return;
@@ -93,20 +99,6 @@ export default function CEOEmployeeDeletionDetailPage() {
     void load();
   }, [load]);
 
-  const closeApprove = () => {
-    if (actionLoading) return;
-    setApproveOpen(false);
-    setActionError(null);
-  };
-
-  const closeReject = () => {
-    if (actionLoading) return;
-    setRejectOpen(false);
-    setRejectionReason("");
-    setRejectionFieldError(null);
-    setActionError(null);
-  };
-
   const handleActionError = (err: any, fallbackKey: string) => {
     const httpStatus = err?.response?.status;
     if (httpStatus === 403 || isForbidden(err)) {
@@ -114,11 +106,9 @@ export default function CEOEmployeeDeletionDetailPage() {
     } else if (httpStatus === 404 || isNotFound(err)) {
       setActionError(t("employees.removalDetail.errorNotFound"));
     } else if (httpStatus === 422) {
-      const friendly = getFirstApiErrorMessage(err);
-      setActionError(friendly || t("employees.removalDetail.errorValidation"));
+      setActionError(getFirstApiErrorMessage(err) || t("employees.removalDetail.errorValidation"));
     } else {
-      const friendly = getFirstApiErrorMessage(err);
-      setActionError(friendly || t(fallbackKey));
+      setActionError(getFirstApiErrorMessage(err) || t(fallbackKey));
     }
   };
 
@@ -127,7 +117,7 @@ export default function CEOEmployeeDeletionDetailPage() {
     setActionLoading(true);
     setActionError(null);
     try {
-      const response = await approveEmployeeDeletionRequest(data.id);
+      const response = await approveEmployeeArchiveRequest(data.id);
       if (isApiError(response)) {
         setActionError(response.message || t("employees.removalDetail.errorApprove"));
         return;
@@ -142,25 +132,18 @@ export default function CEOEmployeeDeletionDetailPage() {
     }
   };
 
-  const submitReject = async () => {
+  const submitReject = async (reason: string) => {
     if (!data) return;
-    const trimmed = rejectionReason.trim();
-    if (!trimmed) {
-      setRejectionFieldError(t("employees.removalDetail.rejectReasonRequired"));
-      return;
-    }
-    setRejectionFieldError(null);
     setActionLoading(true);
     setActionError(null);
     try {
-      const response = await rejectEmployeeDeletionRequest(data.id, trimmed);
+      const response = await rejectEmployeeArchiveRequest(data.id, reason);
       if (isApiError(response)) {
         setActionError(response.message || t("employees.removalDetail.errorReject"));
         return;
       }
       message.success(t("employees.removalDetail.successRejected"));
       setRejectOpen(false);
-      setRejectionReason("");
       setData(response.data);
     } catch (err: any) {
       handleActionError(err, "employees.removalDetail.errorReject");
@@ -171,27 +154,10 @@ export default function CEOEmployeeDeletionDetailPage() {
 
   if (forbidden) return <Unauthorized403Page />;
   if (notFound) return <NotFound404Page />;
-
-  if (loading) {
-    return (
-      <div style={{ padding: 40 }}>
-        <LoadingState />
-      </div>
-    );
-  }
-
+  if (loading) return <LoadingState title={t("loading.generic")} />;
   if (error) {
-    return (
-      <div style={{ padding: 40 }}>
-        <ErrorState
-          title={t("common.error")}
-          description={error}
-          onRetry={load}
-        />
-      </div>
-    );
+    return <ErrorState title={t("common.error")} description={error} onRetry={load} />;
   }
-
   if (!data) return null;
 
   const snapshot = data.request_snapshot || {};
@@ -204,23 +170,58 @@ export default function CEOEmployeeDeletionDetailPage() {
   const isPending = data.status === "PENDING_CEO";
   const canApprove = isPending && (data.workflow?.can_approve ?? true);
   const canReject = isPending && (data.workflow?.can_reject ?? true);
+  const hasLinkedRecords =
+    typeof execution.open_leave_requests === "number" ||
+    typeof execution.asset_assignments === "number" ||
+    typeof execution.loan_requests === "number";
 
   return (
-    <div style={{ padding: "0 12px", maxWidth: 980, margin: "0 auto" }}>
+    <div style={{ maxWidth: 1040, margin: "0 auto", paddingBottom: 24 }}>
       <PageHeader
         title={t("employees.removalDetail.title")}
         subtitle={displayName}
         actions={
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate("/ceo/employees/deletion-requests")}>
+          <Button
+            icon={<ArrowLeftOutlined aria-hidden />}
+            onClick={() => navigate("/ceo/employees/deletion-requests")}
+            style={{ borderRadius: 10, minHeight: 40 }}
+          >
             {t("employees.removalDetail.backToInbox")}
           </Button>
         }
         tags={
-          <Tag color={STATUS_COLOR[data.status] || "default"}>
-            {t(`employees.removalInbox.status.${data.status}`)}
-          </Tag>
+          <ApprovalStatusTag
+            label={t(`employees.removalInbox.status.${data.status}`)}
+            tone={STATUS_TONE[data.status] || "neutral"}
+          />
         }
       />
+
+      {/* ─── Decision first: the reason this page was opened ─────────────── */}
+      {isPending && (
+        <ApprovalSurface padding={18} style={{ marginBottom: 16 }}>
+          <SectionTitle>{t("employees.removalDetail.decisionTitle")}</SectionTitle>
+          <Paragraph type="secondary" style={{ marginBottom: 14 }}>
+            {t("employees.removalDetail.decisionHint")}
+          </Paragraph>
+          <ApprovalActions
+            size="middle"
+            subjectLabel={displayName}
+            approveDisabled={!canApprove}
+            rejectDisabled={!canReject}
+            approveLabel={t("employees.removalDetail.approveButton")}
+            rejectLabel={t("employees.removalDetail.rejectButton")}
+            onApprove={() => {
+              setApproveOpen(true);
+              setActionError(null);
+            }}
+            onReject={() => {
+              setRejectOpen(true);
+              setActionError(null);
+            }}
+          />
+        </ApprovalSurface>
+      )}
 
       {data.status === "EXECUTED" && (
         <Alert
@@ -230,7 +231,7 @@ export default function CEOEmployeeDeletionDetailPage() {
           message={t("employees.removalDetail.executedTitle")}
           description={t("employees.removalDetail.executedDescription", {
             at: formatDateTimeShort(data.executed_at),
-            by: data.approved_by_name || "-",
+            by: data.approved_by_name || "—",
           })}
         />
       )}
@@ -245,7 +246,7 @@ export default function CEOEmployeeDeletionDetailPage() {
             <div>
               <div>
                 {t("employees.removalDetail.rejectedBy", {
-                  by: data.rejected_by_name || "-",
+                  by: data.rejected_by_name || "—",
                   at: formatDateTimeShort(data.rejected_at),
                 })}
               </div>
@@ -260,118 +261,64 @@ export default function CEOEmployeeDeletionDetailPage() {
         />
       )}
 
-      <Card
-        title={t("employees.removalDetail.employeeSection")}
-        bordered={false}
-        style={{ borderRadius: 16, marginBottom: 16 }}
-      >
-        <Descriptions column={{ xs: 1, sm: 1, md: 2 }} bordered size="small">
-          <Descriptions.Item label={t("employees.removalDetail.fullName")}>
-            {displayName}
-          </Descriptions.Item>
+      <ApprovalSurface padding={18} style={{ marginBottom: 16 }}>
+        <SectionTitle>{t("employees.removalDetail.employeeSection")}</SectionTitle>
+        <Descriptions column={{ xs: 1, sm: 1, md: 2 }} size="small" bordered>
+          <Descriptions.Item label={t("employees.removalDetail.fullName")}>{displayName}</Descriptions.Item>
           <Descriptions.Item label={t("employees.removalDetail.employeeId")}>
-            {snapshot.employee_id || "-"}
+            {snapshot.employee_id || "—"}
           </Descriptions.Item>
           <Descriptions.Item label={t("employees.removalDetail.email")}>
-            {snapshot.email || snapshot.target_user_email || "-"}
+            {snapshot.email || snapshot.target_user_email || "—"}
           </Descriptions.Item>
           <Descriptions.Item label={t("employees.removalDetail.company")}>
-            {data.company_name || snapshot.company_name || "-"}
+            {data.company_name || snapshot.company_name || "—"}
           </Descriptions.Item>
           <Descriptions.Item label={t("employees.removalDetail.department")}>
-            {snapshot.department_name || "-"}
+            {snapshot.department_name || "—"}
           </Descriptions.Item>
           <Descriptions.Item label={t("employees.removalDetail.position")}>
-            {snapshot.position_name || "-"}
+            {snapshot.position_name || "—"}
           </Descriptions.Item>
           <Descriptions.Item label={t("employees.removalDetail.employmentStatus")}>
-            {snapshot.employment_status || "-"}
+            {snapshot.employment_status || "—"}
           </Descriptions.Item>
         </Descriptions>
-      </Card>
+      </ApprovalSurface>
 
-      <Card
-        title={t("employees.removalDetail.requestSection")}
-        bordered={false}
-        style={{ borderRadius: 16, marginBottom: 16 }}
-      >
-        <Descriptions column={1} bordered size="small">
+      <ApprovalSurface padding={18} style={{ marginBottom: 16 }}>
+        <SectionTitle>{t("employees.removalDetail.requestSection")}</SectionTitle>
+        <Descriptions column={1} size="small" bordered>
           <Descriptions.Item label={t("employees.removalDetail.requestedBy")}>
-            {data.requested_by_name || "-"}
+            {data.requested_by_name || "—"}
           </Descriptions.Item>
           <Descriptions.Item label={t("employees.removalDetail.createdAt")}>
             {formatDateTimeShort(data.created_at)}
           </Descriptions.Item>
+          <Descriptions.Item label={t("employees.removal.archiveReasonLabel")}>
+            {t(`employees.removal.archiveReason.${data.archive_reason}`)}
+          </Descriptions.Item>
           <Descriptions.Item label={t("employees.removalDetail.reason")}>
-            <Paragraph style={{ marginBottom: 0, whiteSpace: "pre-wrap" }}>
-              {data.reason || "-"}
-            </Paragraph>
+            <Paragraph style={{ marginBottom: 0, whiteSpace: "pre-wrap" }}>{data.reason || "—"}</Paragraph>
           </Descriptions.Item>
         </Descriptions>
-      </Card>
+      </ApprovalSurface>
 
-      {(typeof execution.open_leave_requests === "number" ||
-        typeof execution.asset_assignments === "number" ||
-        typeof execution.loan_requests === "number") && (
-        <Card
-          title={t("employees.removalDetail.linkedRecords")}
-          bordered={false}
-          style={{ borderRadius: 16, marginBottom: 16 }}
-        >
-          <Descriptions column={{ xs: 1, sm: 3 }} bordered size="small">
+      {hasLinkedRecords && (
+        <ApprovalSurface padding={18}>
+          <SectionTitle>{t("employees.removalDetail.linkedRecords")}</SectionTitle>
+          <Descriptions column={{ xs: 1, sm: 3 }} size="small" bordered>
             <Descriptions.Item label={t("employees.removalDetail.openLeaveRequests")}>
-              {execution.open_leave_requests ?? "-"}
+              {execution.open_leave_requests ?? "—"}
             </Descriptions.Item>
             <Descriptions.Item label={t("employees.removalDetail.assetAssignments")}>
-              {execution.asset_assignments ?? "-"}
+              {execution.asset_assignments ?? "—"}
             </Descriptions.Item>
             <Descriptions.Item label={t("employees.removalDetail.loanRequests")}>
-              {execution.loan_requests ?? "-"}
+              {execution.loan_requests ?? "—"}
             </Descriptions.Item>
           </Descriptions>
-        </Card>
-      )}
-
-      {isPending && (
-        <Card
-          bordered={false}
-          style={{ borderRadius: 16, marginBottom: 16 }}
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <Text strong style={{ fontSize: 16 }}>
-              {t("employees.removalDetail.decisionTitle")}
-            </Text>
-            <Text type="secondary">
-              {t("employees.removalDetail.decisionHint")}
-            </Text>
-            <Space wrap>
-              <Button
-                type="primary"
-                icon={<CheckOutlined />}
-                disabled={!canApprove}
-                onClick={() => {
-                  setApproveOpen(true);
-                  setActionError(null);
-                }}
-              >
-                {t("employees.removalDetail.approveButton")}
-              </Button>
-              <Button
-                danger
-                icon={<CloseOutlined />}
-                disabled={!canReject}
-                onClick={() => {
-                  setRejectOpen(true);
-                  setActionError(null);
-                  setRejectionReason("");
-                  setRejectionFieldError(null);
-                }}
-              >
-                {t("employees.removalDetail.rejectButton")}
-              </Button>
-            </Space>
-          </div>
-        </Card>
+        </ApprovalSurface>
       )}
 
       {/* Approve confirmation */}
@@ -379,81 +326,48 @@ export default function CEOEmployeeDeletionDetailPage() {
         open={approveOpen}
         title={t("employees.removalDetail.approveModalTitle")}
         okText={t("employees.removalDetail.approveConfirm")}
-        okButtonProps={{ danger: true, loading: actionLoading }}
+        okButtonProps={{
+          loading: actionLoading,
+          "aria-label": t("employees.removalDetail.approveConfirm"),
+        }}
         cancelText={t("common.cancel")}
         cancelButtonProps={{ disabled: actionLoading }}
         onOk={submitApprove}
-        onCancel={closeApprove}
+        onCancel={() => {
+          if (actionLoading) return;
+          setApproveOpen(false);
+          setActionError(null);
+        }}
         closable={!actionLoading}
         maskClosable={!actionLoading}
-        destroyOnClose
+        destroyOnHidden
       >
-        <Paragraph>
-          {t("employees.removalDetail.approveModalIntro", { name: displayName })}
-        </Paragraph>
+        <Paragraph>{t("employees.removalDetail.approveModalIntro", { name: displayName })}</Paragraph>
         <Alert
-          type="warning"
+          type="info"
           showIcon
-          message={t("employees.removalDetail.irreversibleWarning")}
-          style={{ marginTop: 8 }}
+          message={t("employees.removalDetail.preservationNotice")}
+          style={{ marginTop: 8, borderRadius: 10 }}
         />
         {actionError && (
-          <Alert
-            type="error"
-            showIcon
-            message={actionError}
-            style={{ marginTop: 12 }}
-          />
+          <Alert type="error" showIcon message={actionError} style={{ marginTop: 12, borderRadius: 10 }} />
         )}
       </Modal>
 
       {/* Reject with reason */}
-      <Modal
+      <RejectReasonModal
         open={rejectOpen}
         title={t("employees.removalDetail.rejectModalTitle")}
-        okText={t("employees.removalDetail.rejectConfirm")}
-        okButtonProps={{ danger: true, loading: actionLoading }}
-        cancelText={t("common.cancel")}
-        cancelButtonProps={{ disabled: actionLoading }}
-        onOk={submitReject}
-        onCancel={closeReject}
-        closable={!actionLoading}
-        maskClosable={!actionLoading}
-        destroyOnClose
-      >
-        <Paragraph>
-          {t("employees.removalDetail.rejectModalIntro", { name: displayName })}
-        </Paragraph>
-        <Form layout="vertical">
-          <Form.Item
-            label={t("employees.removalDetail.rejectReasonLabel")}
-            required
-            validateStatus={rejectionFieldError ? "error" : undefined}
-            help={rejectionFieldError || undefined}
-          >
-            <Input.TextArea
-              rows={4}
-              value={rejectionReason}
-              onChange={(e) => {
-                setRejectionReason(e.target.value);
-                if (rejectionFieldError) setRejectionFieldError(null);
-              }}
-              placeholder={t("employees.removalDetail.rejectReasonPlaceholder")}
-              maxLength={500}
-              showCount
-              disabled={actionLoading}
-            />
-          </Form.Item>
-        </Form>
-        {actionError && (
-          <Alert
-            type="error"
-            showIcon
-            message={actionError}
-            style={{ marginTop: 4 }}
-          />
-        )}
-      </Modal>
+        subject={t("employees.removalDetail.rejectModalIntro", { name: displayName })}
+        confirmText={t("employees.removalDetail.rejectConfirm")}
+        loading={actionLoading}
+        errorMessage={actionError}
+        onCancel={() => {
+          setRejectOpen(false);
+          setActionError(null);
+        }}
+        onSubmit={submitReject}
+      />
     </div>
   );
 }

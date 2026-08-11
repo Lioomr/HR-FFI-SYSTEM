@@ -139,10 +139,10 @@ class AssetAssignmentCreateSerializer(serializers.Serializer):
         request = self.context.get("request")
         company = getattr(request, "_active_company", None) if request else None
         if company is not None:
-            self.fields["employee_id"].queryset = EmployeeProfile.objects.filter(company=company)
+            self.fields["employee_id"].queryset = EmployeeProfile.objects.filter(company=company, is_archived=False)
 
     def validate_employee(self, value):
-        if value.employment_status != EmployeeProfile.EmploymentStatus.ACTIVE:
+        if value.is_archived or value.employment_status != EmployeeProfile.EmploymentStatus.ACTIVE:
             raise serializers.ValidationError("Only active employees can be assigned assets.")
         return value
 
@@ -314,12 +314,16 @@ class AssetLookupSerializer(serializers.Serializer):
         return AssetSerializer(obj, context=self.context).data
 
     def get_active_assignment(self, obj):
-        assignment = obj.assignments.filter(is_active=True).select_related(
-            "employee",
-            "employee__department_ref",
-            "employee__position_ref",
-            "assigned_by",
-        ).first()
+        assignment = (
+            obj.assignments.filter(is_active=True)
+            .select_related(
+                "employee",
+                "employee__department_ref",
+                "employee__position_ref",
+                "assigned_by",
+            )
+            .first()
+        )
         if not assignment:
             return None
         employee = assignment.employee

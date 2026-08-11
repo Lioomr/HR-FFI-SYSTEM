@@ -358,6 +358,8 @@ GET /api/employees/{employee_id}/documents/
 
 GET /api/employees/{employee_id}/documents/{document_id}/download/
 
+POST /api/employees/{employee_id}/documents/{document_id}/extract/
+
 These routes enforce active-company scope and ownership/role permissions. Uploaded content is checked by extension, size,
 claimed MIME type, and file signature. Downloads are authenticated attachments served as `application/octet-stream` with
 `nosniff` and private no-store headers and are audited. The deprecated `attachment-public` compatibility path now also

@@ -1,21 +1,19 @@
 import csv
 import io
-import os
-from xml.sax.saxutils import escape
 from decimal import Decimal
+from xml.sax.saxutils import escape
 
 import openpyxl
-from django.conf import settings
-from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4, landscape
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.lib.units import mm
-from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 from django.db import IntegrityError, transaction
 from django.db.models import Avg, Q, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -29,7 +27,6 @@ from core.pdf import (
     build_corporate_header,
     build_platypus_story_pdf,
     build_signature_stamp_block,
-    build_simple_lines_pdf,
 )
 from core.responses import error, success
 from employees.permissions import IsHRManagerOrAdmin
@@ -258,14 +255,6 @@ def _build_payroll_report_pdf(run, items):
     soft_orange = palette["soft_orange"]
     dark_text = palette["dark_text"]
 
-    title_style = ParagraphStyle(
-        "PayrollReportTitle",
-        parent=styles["Heading1"],
-        fontName="Helvetica-Bold",
-        fontSize=15,
-        textColor=dark_text,
-        spaceAfter=2,
-    )
     cell_style = ParagraphStyle(
         "PayrollCell",
         parent=styles["Normal"],
@@ -521,6 +510,7 @@ def _generate_payroll_items(run, request=None):
     # 1. Fetch active employees
     employees = EmployeeProfile.objects.filter(
         employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        is_archived=False,
         company=run.company,
     )
 

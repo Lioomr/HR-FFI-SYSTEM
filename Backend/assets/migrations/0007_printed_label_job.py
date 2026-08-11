@@ -1,7 +1,8 @@
 import django.db.models.deletion
-import employees.storage
 from django.conf import settings
 from django.db import migrations, models
+
+import employees.storage
 
 
 class Migration(migrations.Migration):

@@ -1,128 +1,127 @@
 import { useCallback, useEffect, useState } from "react";
-import { Button, Card, Table, Tag, Modal, Input, Alert, notification, Space, Tooltip } from "antd";
-import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, DownloadOutlined } from "@ant-design/icons";
+import { Alert, Button, Form, Grid, Input, Modal, Space, Table, Tooltip, Typography, notification } from "antd";
+import { DownloadOutlined, EyeOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 
-import PageHeader from "../../components/ui/PageHeader";
-import LoadingState from "../../components/ui/LoadingState";
-import ErrorState from "../../components/ui/ErrorState";
-import { useI18n } from "../../i18n/useI18n";
-import { getCEOLeaveRequests, approveCEOLeaveRequest, rejectCEOLeaveRequest, getLeaveRequestDocumentBlob, type LeaveRequest } from "../../services/api/leaveApi";
-import { isApiError } from "../../services/api/apiTypes";
+import ApprovalActions from "../../components/ceo/ApprovalActions";
+import ApprovalQueuePage from "../../components/ceo/ApprovalQueuePage";
+import ApprovalStatusTag from "../../components/ceo/ApprovalStatusTag";
+import RejectReasonModal from "../../components/ceo/RejectReasonModal";
+import { approvalStatusLabel } from "../../components/ceo/approvalStatusLabel";
 import LeaveApprovalMap from "../../components/leaves/LeaveApprovalMap";
 import RequestObligationsPanel from "../../components/requests/RequestObligationsPanel";
+import { useI18n } from "../../i18n/useI18n";
+import { isApiError } from "../../services/api/apiTypes";
+import {
+    approveCEOLeaveRequest,
+    getCEOLeaveRequests,
+    getLeaveRequestDocumentBlob,
+    rejectCEOLeaveRequest,
+    type LeaveRequest,
+} from "../../services/api/leaveApi";
 
-const { TextArea } = Input;
+const { useBreakpoint } = Grid;
+const PAGE_SIZE = 20;
 
 export default function CEOLeaveInboxPage() {
     const { t } = useI18n();
+    const screens = useBreakpoint();
+    const isNarrow = !screens.lg;
+
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [requests, setRequests] = useState<LeaveRequest[]>([]);
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(1);
     const [error, setError] = useState<string | null>(null);
 
-    const [rejectModalVisible, setRejectModalVisible] = useState(false);
-    const [rejectingId, setRejectingId] = useState<number | null>(null);
-    const [rejectionComment, setRejectionComment] = useState("");
+    const [approving, setApproving] = useState<LeaveRequest | null>(null);
+    const [waiverReason, setWaiverReason] = useState("");
+    const [waiverError, setWaiverError] = useState<string | null>(null);
+    const [rejecting, setRejecting] = useState<LeaveRequest | null>(null);
     const [processing, setProcessing] = useState(false);
     const [documentLoading, setDocumentLoading] = useState<number | null>(null);
 
-    const loadData = useCallback(async (p = 1) => {
-        setLoading(true);
-        try {
-            const res = await getCEOLeaveRequests({ page: p, page_size: 20 });
-            if (isApiError(res)) {
-                setError(res.message);
-            } else {
+    const loadData = useCallback(
+        async (targetPage = 1, { isRefresh = false }: { isRefresh?: boolean } = {}) => {
+            if (isRefresh) setRefreshing(true);
+            else setLoading(true);
+            setError(null);
+            try {
+                const res = await getCEOLeaveRequests({ page: targetPage, page_size: PAGE_SIZE });
+                if (isApiError(res)) {
+                    setError(res.message);
+                    return;
+                }
                 setRequests(res.data?.items ?? []);
                 setTotal(res.data?.count ?? 0);
+            } catch (e: any) {
+                setError(e?.message || t("common.tryAgain"));
+            } finally {
+                setLoading(false);
+                setRefreshing(false);
             }
-        } catch (e: any) {
-            setError(e.message || t("common.tryAgain"));
-        } finally {
-            setLoading(false);
-        }
-    }, [t]);
+        },
+        [t],
+    );
 
     useEffect(() => {
-        loadData(page);
+        void loadData(page);
     }, [loadData, page]);
 
-    const handleApprove = (record: LeaveRequest) => {
-        const blockerCount = record.obligations_summary?.blocking_open || 0;
-        let waiverReason = "";
-        Modal.confirm({
-            title: t("ceo.leaveApprovals.approveTitle"),
-            content: (
-                <Space direction="vertical" style={{ width: "100%" }}>
-                    <span>{record.employee?.full_name} ({record.days} {t("leave.days")})</span>
-                    {blockerCount > 0 ? (
-                        <>
-                            <Alert
-                                type="warning"
-                                showIcon
-                                message={t("obligations.ceoWaiverRequired", { count: blockerCount }, "{count} blocking obligation(s) remain. Enter a CEO waiver reason to approve.")}
-                            />
-                            <TextArea
-                                rows={3}
-                                placeholder={t("obligations.waiverReason", "Waiver reason")}
-                                onChange={(event) => {
-                                    waiverReason = event.target.value;
-                                }}
-                            />
-                        </>
-                    ) : null}
-                </Space>
-            ),
-            okText: t("common.approve"),
-            okType: "primary",
-            cancelText: t("common.cancel"),
-            onOk: async () => {
-                if (blockerCount > 0 && !waiverReason.trim()) {
-                    notification.error({ message: t("common.error"), description: t("obligations.waiverRequired", "Waiver reason is required.") });
-                    return Promise.reject();
-                }
-                setProcessing(true);
-                try {
-                    const res = await approveCEOLeaveRequest(record.id, undefined, waiverReason.trim() || undefined);
-                    if (isApiError(res)) {
-                        notification.error({ message: t("common.error"), description: res.message });
-                    } else {
-                        notification.success({ message: t("leave.ceoApproveSuccess", "Approved and sent to HR for completion.") });
-                        loadData(page);
-                    }
-                } catch {
-                    notification.error({ message: t("common.error"), description: t("common.tryAgain") });
-                } finally {
-                    setProcessing(false);
-                }
-            }
-        });
+    const employeeName = (record: LeaveRequest) =>
+        record.employee?.full_name || `#${record.employee?.id ?? record.id}`;
+
+    // ── Approve, with the CEO waiver requirement kept intact ──────────────────
+    const blockerCount = approving?.obligations_summary?.blocking_open || 0;
+
+    const closeApprove = () => {
+        if (processing) return;
+        setApproving(null);
+        setWaiverReason("");
+        setWaiverError(null);
     };
 
-    const openRejectModal = (id: number) => {
-        setRejectingId(id);
-        setRejectionComment("");
-        setRejectModalVisible(true);
-    };
-
-    const handleReject = async () => {
-        if (!rejectingId || !rejectionComment.trim()) {
-            notification.error({ message: t("common.error"), description: t("common.required") });
+    const submitApprove = async () => {
+        if (!approving) return;
+        const trimmedWaiver = waiverReason.trim();
+        if (blockerCount > 0 && !trimmedWaiver) {
+            setWaiverError(t("obligations.waiverRequired", "Waiver reason is required."));
             return;
         }
+        setWaiverError(null);
         setProcessing(true);
         try {
-            const res = await rejectCEOLeaveRequest(rejectingId, rejectionComment);
+            const res = await approveCEOLeaveRequest(approving.id, undefined, trimmedWaiver || undefined);
             if (isApiError(res)) {
                 notification.error({ message: t("common.error"), description: res.message });
-            } else {
-                notification.success({ message: t("leave.rejected") });
-                setRejectModalVisible(false);
-                setRejectingId(null);
-                loadData(page);
+                return;
             }
+            notification.success({
+                message: t("leave.ceoApproveSuccess", "Approved and sent to HR for completion."),
+            });
+            setApproving(null);
+            setWaiverReason("");
+            void loadData(page);
+        } catch {
+            notification.error({ message: t("common.error"), description: t("common.tryAgain") });
+        } finally {
+            setProcessing(false);
+        }
+    };
+
+    const submitReject = async (reason: string) => {
+        if (!rejecting) return;
+        setProcessing(true);
+        try {
+            const res = await rejectCEOLeaveRequest(rejecting.id, reason);
+            if (isApiError(res)) {
+                notification.error({ message: t("common.error"), description: res.message });
+                return;
+            }
+            notification.success({ message: t("leave.rejected") });
+            setRejecting(null);
+            void loadData(page);
         } catch {
             notification.error({ message: t("common.error"), description: t("common.tryAgain") });
         } finally {
@@ -154,147 +153,208 @@ export default function CEOLeaveInboxPage() {
     };
 
     const columns: ColumnsType<LeaveRequest> = [
-        { title: "#", dataIndex: "id", key: "id", width: 60 },
         {
             title: t("ceo.leaveApprovals.employee"),
             key: "employee",
-            render: (_, r) => r.employee?.full_name || `ID: ${r.employee?.id}`,
+            render: (_, record) => (
+                <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, color: "#0f172a" }}>{employeeName(record)}</div>
+                    <div style={{ fontSize: 12, color: "#64748b" }}>#{record.id}</div>
+                </div>
+            ),
         },
         {
             title: t("leave.type"),
             key: "leave_type",
-            render: (_, r) => r.leave_type?.name,
+            render: (_, record) => record.leave_type?.name || "—",
         },
         {
             title: t("ceo.leaveApprovals.period"),
             key: "period",
-            render: (_, r) => `${r.start_date} → ${r.end_date}`,
+            render: (_, record) => (
+                <span className="tabular-nums">
+                    {record.start_date} → {record.end_date}
+                </span>
+            ),
         },
-        { title: t("leave.days"), dataIndex: "days", key: "days", width: 70 },
+        {
+            title: t("leave.days"),
+            dataIndex: "days",
+            key: "days",
+            width: 80,
+            align: "center",
+        },
         {
             title: t("common.status"),
             key: "status",
-            render: (_, r) => (
-                <Tag color="volcano">
-                    {(r.status || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
-                </Tag>
+            width: 150,
+            render: (_, record) => (
+                <ApprovalStatusTag label={approvalStatusLabel(record.status, t)} status={record.status} />
             ),
         },
         {
             title: t("ceo.leaveApprovals.document"),
             key: "document",
-            render: (_, r) =>
-                r.document ? (
-                    <Space>
+            width: 110,
+            render: (_, record) =>
+                record.document ? (
+                    <Space size={4}>
                         <Tooltip title={t("common.view")}>
                             <Button
                                 size="small"
-                                icon={<EyeOutlined />}
-                                loading={documentLoading === r.id}
-                                onClick={() => handleDocumentBlobAction(r.id, false)}
+                                icon={<EyeOutlined aria-hidden />}
+                                loading={documentLoading === record.id}
+                                onClick={() => handleDocumentBlobAction(record.id, false)}
+                                aria-label={`${t("common.view")}: ${employeeName(record)}`}
                             />
                         </Tooltip>
                         <Tooltip title={t("common.download")}>
                             <Button
                                 size="small"
-                                icon={<DownloadOutlined />}
-                                loading={documentLoading === r.id}
-                                onClick={() => handleDocumentBlobAction(r.id, true)}
+                                icon={<DownloadOutlined aria-hidden />}
+                                loading={documentLoading === record.id}
+                                onClick={() => handleDocumentBlobAction(record.id, true)}
+                                aria-label={`${t("common.download")}: ${employeeName(record)}`}
                             />
                         </Tooltip>
                     </Space>
                 ) : (
-                    <span style={{ color: '#aaa' }}>—</span>
+                    <span style={{ color: "#94a3b8" }}>—</span>
                 ),
         },
         {
             title: t("common.actions"),
             key: "actions",
-            width: 160,
-            render: (_, r) => (
-                <Space>
-                    <Button
-                        type="primary"
-                        size="small"
-                        icon={<CheckCircleOutlined />}
-                        loading={processing}
-                        onClick={() => handleApprove(r)}
-                    >
-                        {t("common.approve")}
-                    </Button>
-                    <Button
-                        danger
-                        size="small"
-                        icon={<CloseCircleOutlined />}
-                        onClick={() => openRejectModal(r.id)}
-                    >
-                        {t("common.reject")}
-                    </Button>
-                </Space>
+            width: isNarrow ? 200 : 210,
+            fixed: isNarrow ? undefined : "right",
+            render: (_, record) => (
+                <ApprovalActions
+                    subjectLabel={employeeName(record)}
+                    approveLoading={processing && approving?.id === record.id}
+                    disabled={processing}
+                    onApprove={() => {
+                        setApproving(record);
+                        setWaiverReason("");
+                        setWaiverError(null);
+                    }}
+                    onReject={() => setRejecting(record)}
+                />
             ),
         },
     ];
 
-    if (error) return <ErrorState title={t("ceo.leaveApprovals.title")} description={error} onRetry={() => loadData(1)} />;
-
     return (
-        <div>
-            <PageHeader
+        <>
+            <ApprovalQueuePage
                 title={t("ceo.leaveApprovals.title")}
                 subtitle={t("ceo.leaveApprovals.subtitle")}
-            />
-
-            {loading ? (
-                <LoadingState title={t("loading.generic")} />
-            ) : (
-                <Card style={{ borderRadius: 16, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
-                    <Table
-                        columns={columns}
-                        dataSource={requests}
-                        rowKey="id"
-                        expandable={{
-                            expandedRowRender: (record) => (
-                                <Space direction="vertical" style={{ width: "100%" }}>
-                                    <LeaveApprovalMap request={record} t={t} />
-                                    <RequestObligationsPanel parentType="leave_request" parentId={record.id} leaveRequest={record} onChanged={() => loadData(page)} />
-                                </Space>
-                            ),
-                        }}
-                        pagination={{
-                            current: page,
-                            total,
-                            pageSize: 20,
-                            showSizeChanger: false,
-                            onChange: (p) => setPage(p),
-                        }}
-                        locale={{ emptyText: t("ceo.leaveApprovals.noRequests") }}
-                    />
-                </Card>
-            )}
-
-            {/* Reject Modal */}
-            <Modal
-                title={t("ceo.leaveApprovals.rejectTitle")}
-                open={rejectModalVisible}
-                onOk={handleReject}
-                onCancel={() => setRejectModalVisible(false)}
-                okText={t("ceo.leaveApprovals.rejectConfirm")}
-                okType="danger"
-                confirmLoading={processing}
+                pendingCount={total}
+                loading={loading}
+                error={error}
+                isEmpty={requests.length === 0}
+                emptyTitle={t("ceo.leaveApprovals.noRequests")}
+                emptyDescription={t("ceo.approvals.emptyDescription")}
+                onRetry={() => loadData(1)}
+                onRefresh={() => loadData(page, { isRefresh: true })}
+                refreshing={refreshing}
             >
-                <Alert
-                    type="warning"
-                    message={t("ceo.leaveApprovals.rejectWarning")}
-                    showIcon
-                    style={{ marginBottom: 16 }}
+                <Table
+                    columns={columns}
+                    dataSource={requests}
+                    rowKey="id"
+                    scroll={{ x: 960 }}
+                    expandable={{
+                        expandedRowRender: (record) => (
+                            <Space direction="vertical" size={16} style={{ width: "100%" }}>
+                                <LeaveApprovalMap request={record} t={t} />
+                                <RequestObligationsPanel
+                                    parentType="leave_request"
+                                    parentId={record.id}
+                                    leaveRequest={record}
+                                    onChanged={() => loadData(page)}
+                                />
+                            </Space>
+                        ),
+                    }}
+                    pagination={{
+                        current: page,
+                        total,
+                        pageSize: PAGE_SIZE,
+                        showSizeChanger: false,
+                        hideOnSinglePage: true,
+                        style: { paddingInline: 16 },
+                        onChange: (nextPage) => setPage(nextPage),
+                    }}
                 />
-                <TextArea
-                    rows={4}
-                    placeholder={t("ceo.leaveApprovals.rejectComment")}
-                    value={rejectionComment}
-                    onChange={e => setRejectionComment(e.target.value)}
-                />
+            </ApprovalQueuePage>
+
+            {/* Approve — carries the blocking-obligation waiver when required */}
+            <Modal
+                open={Boolean(approving)}
+                title={t("ceo.leaveApprovals.approveTitle")}
+                okText={t("common.approve")}
+                okButtonProps={{ loading: processing, "aria-label": t("common.approve") }}
+                cancelText={t("common.cancel")}
+                cancelButtonProps={{ disabled: processing }}
+                onOk={submitApprove}
+                onCancel={closeApprove}
+                closable={!processing}
+                maskClosable={!processing}
+                destroyOnHidden
+            >
+                {approving && (
+                    <Space direction="vertical" size={12} style={{ width: "100%" }}>
+                        <Typography.Text strong>
+                            {employeeName(approving)} — {approving.days} {t("leave.days")}
+                        </Typography.Text>
+                        {blockerCount > 0 && (
+                            <>
+                                <Alert
+                                    type="warning"
+                                    showIcon
+                                    style={{ borderRadius: 10 }}
+                                    message={t(
+                                        "obligations.ceoWaiverRequired",
+                                        { count: blockerCount },
+                                        "{count} blocking obligation(s) remain. Enter a CEO waiver reason to approve.",
+                                    )}
+                                />
+                                <Form layout="vertical" style={{ width: "100%" }}>
+                                    <Form.Item
+                                        label={t("obligations.waiverReason", "Waiver reason")}
+                                        required
+                                        validateStatus={waiverError ? "error" : undefined}
+                                        help={waiverError || undefined}
+                                        style={{ marginBottom: 0 }}
+                                    >
+                                        <Input.TextArea
+                                            rows={3}
+                                            autoFocus
+                                            value={waiverReason}
+                                            disabled={processing}
+                                            aria-label={t("obligations.waiverReason", "Waiver reason")}
+                                            onChange={(event) => {
+                                                setWaiverReason(event.target.value);
+                                                if (waiverError) setWaiverError(null);
+                                            }}
+                                        />
+                                    </Form.Item>
+                                </Form>
+                            </>
+                        )}
+                    </Space>
+                )}
             </Modal>
-        </div>
+
+            <RejectReasonModal
+                open={Boolean(rejecting)}
+                title={t("ceo.leaveApprovals.rejectTitle")}
+                subject={rejecting ? employeeName(rejecting) : undefined}
+                confirmText={t("ceo.leaveApprovals.rejectConfirm")}
+                loading={processing}
+                onCancel={() => setRejecting(null)}
+                onSubmit={submitReject}
+            />
+        </>
     );
 }

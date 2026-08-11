@@ -74,15 +74,9 @@ class VersionedTokenRefreshSerializer(TokenRefreshSerializer):
         try:
             refresh = self.token_class(attrs["refresh"])
             user_id = refresh.get(api_settings.USER_ID_CLAIM)
-            user = User.objects.only("is_active", "auth_token_version").get(
-                **{api_settings.USER_ID_FIELD: user_id}
-            )
+            user = User.objects.only("is_active", "auth_token_version").get(**{api_settings.USER_ID_FIELD: user_id})
             token_version = refresh.get("token_version")
-            if (
-                type(token_version) is not int
-                or not user.is_active
-                or token_version != user.auth_token_version
-            ):
+            if type(token_version) is not int or not user.is_active or token_version != user.auth_token_version:
                 raise InvalidToken(INVALID_TOKEN_MESSAGE)
 
             data = super().validate(attrs)

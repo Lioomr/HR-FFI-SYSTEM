@@ -6,31 +6,47 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('assets', '0003_asset_request_ceo_workflow'),
+        ("assets", "0003_asset_request_ceo_workflow"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='assetreturnrequest',
-            name='manager_decision_at',
+            model_name="assetreturnrequest",
+            name="manager_decision_at",
             field=models.DateTimeField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='assetreturnrequest',
-            name='manager_decision_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='manager_decided_asset_return_requests', to=settings.AUTH_USER_MODEL),
+            model_name="assetreturnrequest",
+            name="manager_decision_by",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="manager_decided_asset_return_requests",
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
         migrations.AddField(
-            model_name='assetreturnrequest',
-            name='manager_decision_note',
+            model_name="assetreturnrequest",
+            name="manager_decision_note",
             field=models.TextField(blank=True),
         ),
         migrations.AlterField(
-            model_name='assetreturnrequest',
-            name='status',
-            field=models.CharField(choices=[('PENDING_MANAGER', 'Pending Manager'), ('PENDING', 'Pending'), ('PENDING_CEO', 'Pending CEO'), ('APPROVED', 'Approved'), ('PROCESSED', 'Processed'), ('REJECTED', 'Rejected')], default='PENDING', max_length=20),
+            model_name="assetreturnrequest",
+            name="status",
+            field=models.CharField(
+                choices=[
+                    ("PENDING_MANAGER", "Pending Manager"),
+                    ("PENDING", "Pending"),
+                    ("PENDING_CEO", "Pending CEO"),
+                    ("APPROVED", "Approved"),
+                    ("PROCESSED", "Processed"),
+                    ("REJECTED", "Rejected"),
+                ],
+                default="PENDING",
+                max_length=20,
+            ),
         ),
     ]

@@ -75,4 +75,3 @@ def status():
     except CogneeError as exc:
         logger.warning("Cognee is unavailable: %s", exc)
         return {"enabled": True, "reachable": False}
-

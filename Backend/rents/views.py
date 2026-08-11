@@ -1,7 +1,6 @@
-from django.db.models import Q
 from django.db import IntegrityError
+from django.db.models import Q
 from django.http import HttpResponse
-from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -92,30 +91,20 @@ def _build_rent_pdf(rent: Rent) -> bytes:
         details.append(DetailRow("Due Date", "تاريخ الاستحقاق", _fmt_date_rent(rent.one_time_due_date)))
     else:
         details.append(DetailRow("Start Date", "تاريخ البدء", _fmt_date_rent(rent.start_date)))
-        details.append(
-            DetailRow("Due Day", "يوم الاستحقاق", str(rent.due_day) if rent.due_day else "-")
-        )
+        details.append(DetailRow("Due Day", "يوم الاستحقاق", str(rent.due_day) if rent.due_day else "-"))
 
     approvals = [
         ApprovalStage(
             stage_en="Created",
             stage_ar="إنشاء السجل",
-            actor=str(
-                getattr(rent.created_by, "full_name", None)
-                or getattr(rent.created_by, "email", None)
-                or "-"
-            ),
+            actor=str(getattr(rent.created_by, "full_name", None) or getattr(rent.created_by, "email", None) or "-"),
             at=_fmt_date_rent(rent.created_at),
             note="Rent record created",
         ),
         ApprovalStage(
             stage_en="Last Updated",
             stage_ar="آخر تحديث",
-            actor=str(
-                getattr(rent.updated_by, "full_name", None)
-                or getattr(rent.updated_by, "email", None)
-                or "-"
-            ),
+            actor=str(getattr(rent.updated_by, "full_name", None) or getattr(rent.updated_by, "email", None) or "-"),
             at=_fmt_date_rent(rent.updated_at),
             note="-",
         ),
@@ -124,9 +113,7 @@ def _build_rent_pdf(rent: Rent) -> bytes:
     extra = []
     if rent.payment_schedule:
         extra.append(
-            ExtraSection(
-                title_en="Payment Schedule", title_ar="جدول الدفعات", body=str(rent.payment_schedule)
-            )
+            ExtraSection(title_en="Payment Schedule", title_ar="جدول الدفعات", body=str(rent.payment_schedule))
         )
     if rent.notice:
         extra.append(ExtraSection(title_en="Notice", title_ar="إشعار", body=str(rent.notice)))
@@ -248,7 +235,9 @@ class RentViewSet(viewsets.ModelViewSet):
     def _filter_by_status(self, queryset):
         status_filter = (self.request.query_params.get("status") or "all").strip().lower()
         if status_filter not in {"all", "upcoming", "overdue"}:
-            return None, error("Validation error", errors={"status": ["Must be one of: all, upcoming, overdue."]}, status=422)
+            return None, error(
+                "Validation error", errors={"status": ["Must be one of: all, upcoming, overdue."]}, status=422
+            )
 
         items = []
         for rent in queryset:
@@ -270,7 +259,15 @@ class RentViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(page if page is not None else filtered, many=True)
         if page is not None:
             return self.get_paginated_response(serializer.data)
-        return success({"items": serializer.data, "count": len(serializer.data), "page": 1, "page_size": len(serializer.data), "total_pages": 1})
+        return success(
+            {
+                "items": serializer.data,
+                "count": len(serializer.data),
+                "page": 1,
+                "page_size": len(serializer.data),
+                "total_pages": 1,
+            }
+        )
 
     def retrieve(self, request, *args, **kwargs):
         serializer = self.get_serializer(self.get_object())

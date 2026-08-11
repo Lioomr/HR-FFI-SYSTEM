@@ -234,7 +234,9 @@ class AnnouncementCreateSerializer(serializers.ModelSerializer):
 
         if announcement_type == Announcement.AnnouncementType.MEETING:
             if not target_user_ids and not target_user:
-                raise serializers.ValidationError({"target_user_ids": "Select at least one employee for a meeting notification."})
+                raise serializers.ValidationError(
+                    {"target_user_ids": "Select at least one employee for a meeting notification."}
+                )
             if not meeting_starts_at:
                 raise serializers.ValidationError({"meeting_starts_at": "Meeting date and time is required."})
 
