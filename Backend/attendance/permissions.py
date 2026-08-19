@@ -1,6 +1,6 @@
 from rest_framework import permissions
 
-from core.permissions import IsHRManagerOrAdmin, get_role
+from core.permissions import get_role
 
 
 class IsAttendanceOwner(permissions.BasePermission):
@@ -14,10 +14,6 @@ class IsAttendanceOwner(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
         # Read permissions are allowed to the owner
         return obj.employee_profile.user == request.user
-
-
-# Re-export strict RBAC
-IsHRManagerOrAdmin = IsHRManagerOrAdmin
 
 
 class IsAttendanceSelfServiceRole(permissions.BasePermission):

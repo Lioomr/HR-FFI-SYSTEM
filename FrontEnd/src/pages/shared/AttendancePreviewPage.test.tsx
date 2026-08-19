@@ -291,7 +291,7 @@ describe("AttendancePreviewPage states", () => {
     ).toBeInTheDocument();
 
     getGlobal.mockResolvedValue(listResponse([record()]));
-    fireEvent.click(screen.getByRole("button", { name: /Try Again/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Retry/ }));
 
     expect(await screen.findByText("Sara Ali")).toBeInTheDocument();
   });
