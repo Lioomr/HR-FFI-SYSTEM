@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
+from django.utils import timezone
 from pypdf import PdfReader
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -846,7 +847,8 @@ class LeaveBalanceTests(TestCase):
 
     def test_annual_leave_request_can_fall_back_to_unpaid_balance(self):
         self.client.force_authenticate(user=self.emp1)
-        year = date.today().year
+        request_start = timezone.localdate() + timedelta(days=7)
+        year = request_start.year
 
         LeaveRequest.objects.create(
             employee=self.emp1,
@@ -857,8 +859,8 @@ class LeaveBalanceTests(TestCase):
             decided_by=self.hr,
         )
 
-        start = date(year, 3, 1)
-        end = date(year, 3, 5)
+        start = request_start
+        end = request_start + timedelta(days=4)
         response = self.client.post(
             "/api/leaves/leave-requests/",
             {"leave_type": self.annual.id, "start_date": str(start), "end_date": str(end), "reason": "Annual overflow"},
@@ -875,12 +877,13 @@ class LeaveBalanceTests(TestCase):
         with patch("leaves.utils.date") as mocked_date:
             mocked_date.today.return_value = date(2026, 5, 17)
             mocked_date.side_effect = lambda *args, **kwargs: date(*args, **kwargs)
+            request_start = timezone.localdate() + timedelta(days=1)
             response = self.client.post(
                 "/api/leaves/leave-requests/",
                 {
                     "leave_type": self.annual.id,
-                    "start_date": "2026-07-01",
-                    "end_date": "2026-09-20",
+                    "start_date": str(request_start),
+                    "end_date": str(request_start + timedelta(days=81)),
                     "reason": "Beyond accrued annual plus unpaid",
                 },
             )
