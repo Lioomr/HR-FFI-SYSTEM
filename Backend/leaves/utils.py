@@ -641,6 +641,8 @@ def calculate_leave_balance(user, year, profile=None, as_of: date | None = None)
         available_annual_year_days = None
         if _is_annual(code):
             available_annual_year_days = get_annual_accrued_days(profile, year, as_of=balance_date)
+            if configured_quota > 0:
+                available_annual_year_days = min(available_annual_year_days, configured_quota)
 
         emergency_available_days = None
         # Emergency leave is deducted from annual leave.
