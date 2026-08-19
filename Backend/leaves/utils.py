@@ -642,6 +642,7 @@ def calculate_leave_balance(user, year, profile=None, as_of: date | None = None)
         if _is_annual(code):
             available_annual_year_days = get_annual_accrued_days(profile, year, as_of=balance_date)
 
+        emergency_available_days = None
         # Emergency leave is deducted from annual leave.
         if _is_emergency(code):
             annual_type = next(
@@ -655,7 +656,7 @@ def calculate_leave_balance(user, year, profile=None, as_of: date | None = None)
                 annual_used = get_used_days_for_type(employee_subject, annual_type, year, as_of=balance_date)
                 emergency_used = used
                 annual_remaining_after_annual = max(0.0, annual_total - annual_used)
-                quota = min(
+                emergency_available_days = min(
                     float(EMERGENCY_MAX_DAYS_PER_YEAR), max(0.0, annual_remaining_after_annual - emergency_used)
                 )
 
@@ -675,6 +676,8 @@ def calculate_leave_balance(user, year, profile=None, as_of: date | None = None)
         available_total = opening + quota + adjustments
         if available_annual_year_days is not None:
             available_total = opening + available_annual_year_days + adjustments
+        if emergency_available_days is not None:
+            available_total = emergency_available_days
         remaining = available_total - used
         remaining = max(0.0, remaining)
 
