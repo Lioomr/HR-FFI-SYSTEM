@@ -20,7 +20,7 @@ export default defineConfig({
       }
       // Ant Design notification timers can close after jsdom tears down its
       // window. The notification test already verified the visible behavior.
-      if (error instanceof ReferenceError && error.message === 'window is not defined') {
+      if ((error as Error).name === 'ReferenceError' && error.message === 'window is not defined') {
         return false;
       }
     },
