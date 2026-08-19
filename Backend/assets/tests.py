@@ -12,6 +12,7 @@ from hr_reference.models import Department, Position
 from organization.models import OrganizationNode, UserOrganizationAccess
 
 from .models import Asset, AssetAssignment, AssetDamageReport, AssetReturnRequest, PrintedLabelJob
+from .services.label_pdf import build_asset_label_qr_token
 
 User = get_user_model()
 
@@ -660,6 +661,20 @@ class AssetLabelAndLookupTests(TestCase):
             **self._company_header(),
         )
 
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_lookup_accepts_only_valid_company_scoped_qr_token(self):
+        token = build_asset_label_qr_token(self.asset)
+        response = self.client.get(f"/api/assets/lookup/?token={token}", **self._company_header())
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"]["asset"]["id"], self.asset.id)
+
+        tampered = f"{token}x"
+        response = self.client.get(f"/api/assets/lookup/?token={tampered}", **self._company_header())
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+        other_company_token = build_asset_label_qr_token(self.other_asset)
+        response = self.client.get(f"/api/assets/lookup/?token={other_company_token}", **self._company_header())
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_print_labels_saves_job_and_returns_pdf(self):

@@ -345,7 +345,7 @@ export async function rejectCEOAssetReturnRequest(id: number | string, comment: 
 
 // ─── Asset Labels: printing, lookup, history ──────────────────────────────────
 
-export type LabelPaperSize = "50X30" | "40X30" | "60X40" | "A4_GRID";
+export type LabelPaperSize = "2X1" | "4X6" | "50X30" | "40X30" | "60X40" | "A4_GRID";
 export type LabelNameLanguage = "en" | "ar" | "auto";
 
 export interface AssetLookupAssignment {
@@ -400,9 +400,9 @@ export interface PrintedLabelJobsPaginatedResponse {
   total_pages: number;
 }
 
-export async function lookupAssetByCode(code: string) {
+export async function lookupAssetByCode(code?: string, token?: string) {
   const { data } = await api.get<ApiResponse<AssetLookupResult>>("/api/assets/lookup/", {
-    params: { code },
+    params: token ? { token } : { code },
   });
   return data;
 }

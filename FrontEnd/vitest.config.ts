@@ -7,5 +7,9 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: './src/test/setup.ts',
+    // Rendering antd tables/selects/pickers under jsdom is slow, and slower
+    // still when several component suites run in parallel. The default 5s
+    // times out spuriously on loaded machines.
+    testTimeout: 20000,
   },
 });

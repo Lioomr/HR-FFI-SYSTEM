@@ -30,6 +30,8 @@ class AttendanceRecord(models.Model):
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
 
     source = models.CharField(max_length=10, choices=Source.choices, default=Source.SYSTEM)
+    biotime_emp_code = models.CharField(max_length=50, blank=True, default="")
+    biotime_terminal_sn = models.CharField(max_length=100, blank=True, default="")
 
     # Manager Decision
     manager_decision_at = models.DateTimeField(null=True, blank=True)
@@ -70,6 +72,9 @@ class AttendanceRecord(models.Model):
     class Meta:
         constraints = [models.UniqueConstraint(fields=["employee_profile", "date"], name="unique_attendance_per_day")]
         ordering = ["-date"]
+        indexes = [
+            models.Index(fields=["date", "source", "status"], name="att_date_source_status_idx"),
+        ]
 
     def __str__(self):
         return f"{self.employee_profile} - {self.date} ({self.status})"
@@ -194,6 +199,9 @@ class BioTimeEmployeeMap(models.Model):
     class Meta:
         verbose_name = _("BioTime Employee Mapping")
         verbose_name_plural = _("BioTime Employee Mappings")
+        constraints = [
+            models.UniqueConstraint(fields=["employee_profile"], name="unique_biotime_mapping_per_employee"),
+        ]
 
     def __str__(self):
         return f"BioTime {self.biotime_emp_code} -> {self.employee_profile}"

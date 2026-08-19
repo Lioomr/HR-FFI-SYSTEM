@@ -24,6 +24,8 @@ export interface AttendanceRecord {
     | "PENDING_CEO"
     | "REJECTED";
   source: "EMPLOYEE" | "HR" | "SYSTEM";
+  biotime_emp_code?: string | null;
+  biotime_terminal_sn?: string | null;
   is_overridden: boolean;
   notes?: string;
   override_reason?: string;

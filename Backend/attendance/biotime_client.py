@@ -7,9 +7,7 @@ logger = logging.getLogger(__name__)
 
 
 class BioTimeClient:
-    """
-    Client for interacting with ZKTeco BioTime 8.5 API.
-    """
+    """Small, defensive client for the documented BioTime 8.5 Open API."""
 
     def __init__(self, server_ip, server_port, username, password):
         self.server_ip = server_ip
@@ -17,117 +15,103 @@ class BioTimeClient:
         self.username = username
         self.password = password
         self.token = None
+        self.auth_scheme = "Token"
+        self.last_error = ""
         self.base_url = f"http://{self.server_ip}:{self.server_port}"
         self.session = requests.Session()
 
     def authenticate(self):
-        """
-        Authenticate with the BioTime API and obtain a JWT token.
-        """
-        url = urljoin(self.base_url, "/jwt-api-token-auth/")
+        """Authenticate using BioTime 8.5's DRF token endpoint."""
+        self.last_error = ""
         try:
             response = self.session.post(
-                url,
-                json={
-                    "username": self.username,
-                    "password": self.password,
-                },
+                urljoin(self.base_url, "/api-token-auth/"),
+                json={"username": self.username, "password": self.password},
                 timeout=10,
             )
+            if response.status_code != 200:
+                self.last_error = f"HTTP {response.status_code}"
+                logger.warning("BioTime Token authentication failed: HTTP %s", response.status_code)
+                return False
 
-            if response.status_code == 200:
-                data = response.json()
-                self.token = data.get("token")
-                return True
+            token = response.json().get("token")
+            if not token:
+                self.last_error = "Authentication response did not contain a token."
+                logger.warning("BioTime Token authentication response did not contain a token.")
+                return False
 
-            logger.error("BioTime authentication failed: %s", response.text)
-            return False
-        except Exception as e:
-            logger.error("Error connecting to BioTime server: %s", e)
+            self.token = token
+            self.auth_scheme = "Token"
+            return True
+        except (requests.RequestException, ValueError) as exc:
+            self.last_error = str(exc)
+            logger.error("Error connecting to BioTime server: %s", exc)
             return False
 
     def get_headers(self):
-        if not self.token:
-            self.authenticate()
-
-        return {
-            "Content-Type": "application/json",
-            "Authorization": f"JWT {self.token}" if self.token else "",
-        }
+        if not self.token and not self.authenticate():
+            return None
+        return {"Accept": "application/json", "Authorization": f"Token {self.token}"}
 
     def test_connection(self):
-        """
-        Test if the credentials and server address are correct.
-        """
         return self.authenticate()
 
-    def _extract_results(self, data):
-        if isinstance(data.get("data"), list):
-            return data["data"]
-        if isinstance(data.get("results"), list):
-            return data["results"]
+    @staticmethod
+    def _extract_results(payload):
+        if not isinstance(payload, dict):
+            return []
+        for key in ("data", "results"):
+            if isinstance(payload.get(key), list):
+                return payload[key]
         return []
 
     def _paginate(self, endpoints, params=None):
         if not self.token and not self.authenticate():
-            return []
+            return None
 
-        params = params.copy() if params else {}
-        params.setdefault("page_size", 100)
-
+        params = {**(params or {}), "page_size": 100}
         for endpoint in endpoints:
             url = urljoin(self.base_url, endpoint)
             items = []
             page = 1
+            endpoint_succeeded = False
 
             while True:
-                request_params = {**params, "page": page}
                 try:
-                    response = self.session.get(url, headers=self.get_headers(), params=request_params, timeout=15)
+                    response = self.session.get(
+                        url,
+                        headers=self.get_headers(),
+                        params={**params, "page": page},
+                        timeout=15,
+                    )
                     if response.status_code != 200:
-                        logger.error("BioTime request failed for %s: %s", endpoint, response.text)
-                        items = []
+                        self.last_error = f"{endpoint}: HTTP {response.status_code}"
+                        logger.warning("BioTime request failed for %s: HTTP %s", endpoint, response.status_code)
                         break
 
                     payload = response.json()
+                    endpoint_succeeded = True
                     results = self._extract_results(payload)
-                    if not results:
-                        break
-
                     items.extend(results)
-                    if not payload.get("next"):
+                    if not payload.get("next") or not results:
                         return items
                     page += 1
-                except Exception as e:
-                    logger.error("Error fetching BioTime data from %s: %s", endpoint, e)
-                    items = []
+                except (requests.RequestException, ValueError) as exc:
+                    self.last_error = f"{endpoint}: {exc}"
+                    logger.error("Error fetching BioTime data from %s: %s", endpoint, exc)
                     break
 
-            if items:
+            if endpoint_succeeded:
                 return items
-
-        return []
+        return None
 
     def get_transactions(self, start_time=None, end_time=None):
-        """
-        Fetch attendance transactions.
-        start_time and end_time should be strings in format 'YYYY-MM-DD HH:MM:SS'
-        """
         params = {}
         if start_time:
             params["start_time"] = start_time
         if end_time:
             params["end_time"] = end_time
-
         return self._paginate(["/iclock/api/transactions/"], params=params)
 
     def get_employees(self):
-        """
-        Fetch all employees configured in the BioTime device to help with mapping.
-        """
-        return self._paginate(
-            [
-                "/personnel/api/employees/",
-                "/personnel/api/employee/",
-            ]
-        )
+        return self._paginate(["/personnel/api/employees/", "/personnel/api/employee/"])

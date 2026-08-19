@@ -1,6 +1,8 @@
 from datetime import timedelta
 from uuid import uuid4
 
+from django.conf import settings
+from django.core import signing
 from django.core.files.base import ContentFile
 from django.db import transaction
 from django.db.models import Count, F, Q
@@ -54,7 +56,7 @@ from .serializers import (
     AssetSerializer,
     PrintedLabelJobSerializer,
 )
-from .services.label_pdf import render_labels_pdf
+from .services.label_pdf import ASSET_LABEL_QR_SALT, render_labels_pdf
 
 
 def _is_hr_manager_user(user):
@@ -634,21 +636,40 @@ class AssetViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"], url_path="lookup")
     def lookup(self, request):
         code = str(request.query_params.get("code", "") or "").strip()
-        if not code:
-            return error("code is required", status=status.HTTP_400_BAD_REQUEST)
+        label_token = str(request.query_params.get("token", "") or "").strip()
+        asset_id = None
+        token_company_id = None
 
-        asset = (
-            filter_queryset_by_company_scope(
-                Asset.objects.select_related("company").prefetch_related(
-                    "assignments",
-                    "damage_reports",
-                    "return_requests",
-                ),
-                request,
-            )
-            .filter(asset_code__iexact=code)
-            .first()
+        if label_token:
+            if len(label_token) > 2048:
+                return error("Asset not found.", status=status.HTTP_404_NOT_FOUND)
+            try:
+                token_data = signing.loads(
+                    label_token,
+                    salt=ASSET_LABEL_QR_SALT,
+                    max_age=getattr(settings, "ASSET_LABEL_QR_TOKEN_MAX_AGE_SECONDS", 157_680_000),
+                )
+                asset_id = int(token_data["asset_id"])
+                token_company_id = int(token_data["company_id"])
+            except (KeyError, TypeError, ValueError, signing.BadSignature):
+                # Do not reveal whether a token, asset, or company is valid.
+                return error("Asset not found.", status=status.HTTP_404_NOT_FOUND)
+        elif not code:
+            return error("code is required", status=status.HTTP_400_BAD_REQUEST)
+        elif len(code) > Asset._meta.get_field("asset_code").max_length:
+            return error("Asset not found.", status=status.HTTP_404_NOT_FOUND)
+
+        assets = filter_queryset_by_company_scope(
+            Asset.objects.select_related("company").prefetch_related(
+                "assignments",
+                "damage_reports",
+                "return_requests",
+            ),
+            request,
         )
+        asset = assets.filter(id=asset_id, company_id=token_company_id).first() if label_token else assets.filter(
+            asset_code__iexact=code
+        ).first()
         if not asset:
             return error("Asset not found.", status=status.HTTP_404_NOT_FOUND)
         return success(AssetLookupSerializer(asset, context={"request": request}).data)
