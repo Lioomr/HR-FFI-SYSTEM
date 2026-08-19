@@ -109,7 +109,9 @@ def test_render_labels_pdf_supports_d520_4x6_media():
 
 
 def test_render_labels_pdf_supports_d520_2x1_media():
-    asset = SimpleNamespace(asset_code="LAP-00044", name_en="D520 Label", name_ar="", company=SimpleNamespace(name="FFI"))
+    asset = SimpleNamespace(
+        asset_code="LAP-00044", name_en="D520 Label", name_ar="", company=SimpleNamespace(name="FFI")
+    )
     pdf_bytes = render_labels_pdf([asset], "2X1")
     assert pdf_bytes.startswith(b"%PDF")
 
