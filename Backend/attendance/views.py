@@ -14,7 +14,13 @@ from rest_framework.throttling import UserRateThrottle
 
 from audit.utils import audit
 from core.delegation import get_delegated_manager_user_ids
-from core.permissions import IsDepartmentCEOApprover, IsManager, get_role, is_hr_workflow_approver_user
+from core.permissions import (
+    IsDepartmentCEOApprover,
+    IsHRManagerOrAdmin,
+    IsManager,
+    get_role,
+    is_hr_workflow_approver_user,
+)
 from core.responses import error, success
 from core.services import (
     get_ceo_approver_users,
@@ -28,7 +34,7 @@ from employees.models import EmployeeProfile
 from organization.services import filter_queryset_by_company_scope, get_active_company_for_request
 
 from .models import AttendanceCorrectionRequest, AttendanceRecord
-from .permissions import IsAttendanceSelfServiceRole, IsHRManagerOrAdmin
+from .permissions import IsAttendanceSelfServiceRole
 from .serializers import (
     AttendanceCorrectionRequestSerializer,
     AttendanceOverrideSerializer,
@@ -38,6 +44,7 @@ from .serializers import (
 )
 
 User = get_user_model()
+
 
 def _apply_employee_search(queryset, search_param):
     if not search_param:
@@ -98,7 +105,7 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ["status"]
-    ordering_fields = ["date", "created_at"]
+    ordering_fields = ["date", "check_in_at", "check_out_at", "created_at"]
     ordering = ["-date"]
 
     def _apply_status_filter(self, queryset):
@@ -120,6 +127,15 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
 
         return queryset.filter(status=status_param)
 
+    def _apply_source_filter(self, queryset):
+        source_param = self.request.query_params.get("source")
+        if not source_param:
+            return queryset
+        if source_param not in AttendanceRecord.Source.values:
+            self._source_filter_error = "source must be SYSTEM, EMPLOYEE, or HR"
+            return queryset.none()
+        return queryset.filter(source=source_param)
+
     def get_queryset(self):
         user = self.request.user
         role = get_role(user)
@@ -127,24 +143,30 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         # Date Filter Logic (Default: Last 30 days)
         queryset = AttendanceRecord.objects.all().select_related("employee_profile__user")
         queryset = _scope_attendance_queryset(queryset, self.request)
+        date_str = self.request.query_params.get("date")
         date_from_str = self.request.query_params.get("date_from")
         date_to_str = self.request.query_params.get("date_to")
 
-        # Validate and parse dates
-        if date_from_str and date_to_str:
+        if date_str:
             try:
-                date_from = date_type.fromisoformat(date_from_str)
-                date_to = date_type.fromisoformat(date_to_str)
-                if date_from > date_to:
-                    # This will be caught in list() to return proper error envelope
+                queryset = queryset.filter(date=date_type.fromisoformat(date_str))
+            except (ValueError, TypeError) as exc:
+                self._date_filter_error = str(exc)
+                return queryset.none()
+        elif date_from_str or date_to_str:
+            try:
+                date_from = date_type.fromisoformat(date_from_str) if date_from_str else None
+                date_to = date_type.fromisoformat(date_to_str) if date_to_str else None
+                if date_from:
+                    queryset = queryset.filter(date__gte=date_from)
+                if date_to:
+                    queryset = queryset.filter(date__lte=date_to)
+                if date_from and date_to and date_from > date_to:
                     raise ValueError("date_from must not be after date_to")
-                queryset = queryset.filter(date__range=[date_from, date_to])
             except (ValueError, TypeError) as e:
-                # Store error for list() to handle
                 self._date_filter_error = str(e)
                 return queryset.none()
-        elif not date_from_str and not date_to_str:
-            # Default to last 30 days if no explicit filter
+        else:
             today = timezone.localdate()
             thirty_days_ago = today - timedelta(days=30)
             queryset = queryset.filter(date__range=[thirty_days_ago, today])
@@ -178,6 +200,7 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
     def filter_queryset(self, queryset):
         # Apply custom status mapping first.
         queryset = self._apply_status_filter(queryset)
+        queryset = self._apply_source_filter(queryset)
 
         # Skip DjangoFilterBackend because we've already handled status.
         # Keep ordering behavior from OrderingFilter.
@@ -188,14 +211,13 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         return queryset
 
     def list(self, request, *args, **kwargs):
-        # Check for date filter error
-        if hasattr(self, "_date_filter_error"):
-            return error(f"Invalid date filter: {self._date_filter_error}", status=status.HTTP_400_BAD_REQUEST)
+        queryset = self.get_queryset()
+        filtered_queryset = self.filter_queryset(queryset)
+        filter_error = getattr(self, "_date_filter_error", None) or getattr(self, "_source_filter_error", None)
+        if filter_error:
+            return error(f"Invalid attendance filter: {filter_error}", status=status.HTTP_400_BAD_REQUEST)
 
-        summary = {
-            row["status"]: row["n"]
-            for row in self.filter_queryset(self.get_queryset()).values("status").annotate(n=Count("id"))
-        }
+        summary = {row["status"]: row["n"] for row in filtered_queryset.values("status").annotate(n=Count("id"))}
 
         response = super().list(request, *args, **kwargs)
 
@@ -285,7 +307,9 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         if _is_hr_manager_user(user):
             status_value = AttendanceRecord.Status.PENDING_CEO
         else:
-            status_value = AttendanceRecord.Status.PENDING_MANAGER if has_manager else AttendanceRecord.Status.PENDING_HR
+            status_value = (
+                AttendanceRecord.Status.PENDING_MANAGER if has_manager else AttendanceRecord.Status.PENDING_HR
+            )
         # Fallback/Legacy note: PENDING_HR maps to old 'PENDING' concept effectively
 
         try:
@@ -538,7 +562,9 @@ class AttendanceCorrectionRequestViewSet(viewsets.ModelViewSet):
     def submit(self, request, pk=None):
         instance = self.get_object()
         if instance.status != AttendanceCorrectionRequest.Status.DRAFT:
-            return error("Only draft correction requests can be submitted.", status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+            return error(
+                "Only draft correction requests can be submitted.", status=status.HTTP_422_UNPROCESSABLE_ENTITY
+            )
         if instance.created_by_id != request.user.id and get_role(request.user) not in ["SystemAdmin", "HRManager"]:
             return error("You cannot submit this correction request.", status=status.HTTP_403_FORBIDDEN)
 
@@ -580,7 +606,12 @@ class AttendanceCorrectionRequestViewSet(viewsets.ModelViewSet):
                 ]
             )
             sync_workflow(instance, actor=request.user)
-            audit(request, "attendance_correction.manager_approved", entity="AttendanceCorrectionRequest", entity_id=instance.id)
+            audit(
+                request,
+                "attendance_correction.manager_approved",
+                entity="AttendanceCorrectionRequest",
+                entity_id=instance.id,
+            )
             self._notify_next_approver(instance)
             return success(self._serialize(instance))
 
@@ -590,7 +621,12 @@ class AttendanceCorrectionRequestViewSet(viewsets.ModelViewSet):
             with transaction.atomic():
                 self._apply_correction(instance, request.user, note)
                 sync_workflow(instance, actor=request.user)
-            audit(request, "attendance_correction.hr_approved", entity="AttendanceCorrectionRequest", entity_id=instance.id)
+            audit(
+                request,
+                "attendance_correction.hr_approved",
+                entity="AttendanceCorrectionRequest",
+                entity_id=instance.id,
+            )
             try:
                 notify_profile_request_status_whatsapp(
                     profile=instance.employee_profile,

@@ -13,9 +13,11 @@ class Command(BaseCommand):
         days_back = options["days"]
         self.stdout.write(self.style.NOTICE(f"Starting BioTime Sync for the last {days_back} days..."))
 
-        success, message = SyncBioTimeService.execute(days_back=days_back)
+        successful, result = SyncBioTimeService.execute(days_back=days_back)
+        message = result.pop("message", "BioTime sync completed.")
+        counts = ", ".join(f"{key}={value}" for key, value in result.items())
 
-        if success:
-            self.stdout.write(self.style.SUCCESS(f"Sync Complete: {message}"))
+        if successful:
+            self.stdout.write(self.style.SUCCESS(f"Sync Complete: {message} ({counts})"))
         else:
-            self.stdout.write(self.style.ERROR(f"Sync Failed: {message}"))
+            self.stdout.write(self.style.ERROR(f"Sync Failed: {message} ({counts})"))

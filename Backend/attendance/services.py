@@ -1,4 +1,5 @@
 import logging
+from collections import defaultdict
 from datetime import datetime, timedelta
 
 from django.utils import timezone
@@ -9,22 +10,56 @@ from .models import AttendanceRecord, BioTimeConfig, BioTimeEmployeeMap
 logger = logging.getLogger(__name__)
 
 
+class BioTimeIntegrationError(Exception):
+    """Raised when BioTime data cannot be loaded safely."""
+
+
 class SyncBioTimeService:
-    """
-    Service responsible for coordinating the sync of attendance
-    transactions from BioTime 8.5 to Django AttendanceRecords.
-    """
+    """Import BioTime transactions without changing user-managed attendance."""
+
+    @staticmethod
+    def _result(**overrides):
+        result = {
+            "processed": 0,
+            "created": 0,
+            "updated": 0,
+            "skipped": 0,
+            "unmapped": 0,
+            "invalid": 0,
+        }
+        result.update(overrides)
+        return result
+
+    @staticmethod
+    def _parse_punch_time(value):
+        if not isinstance(value, str) or not value.strip():
+            return None
+
+        value = value.strip()
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            try:
+                parsed = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                return None
+
+        if timezone.is_naive(parsed):
+            return timezone.make_aware(parsed, timezone.get_current_timezone())
+        return parsed
 
     @classmethod
     def execute(cls, days_back=1):
+        counts = cls._result()
         config = BioTimeConfig.get_solo()
 
         if not config.is_active:
-            logger.info("BioTime sync is disabled in configuration.")
-            return False, "Sync is disabled in settings."
+            logger.info("BioTime sync skipped because the integration is disabled.")
+            return False, {**counts, "message": "Sync is disabled in settings."}
 
-        if not config.server_ip or not config.server_port or not config.username or not config.password:
-            return False, "BioTime configuration is incomplete."
+        if not all([config.server_ip, config.server_port, config.username, config.password]):
+            logger.error("BioTime sync failed because the configuration is incomplete.")
+            return False, {**counts, "message": "BioTime configuration is incomplete."}
 
         client = BioTimeClient(
             server_ip=config.server_ip,
@@ -32,152 +67,136 @@ class SyncBioTimeService:
             username=config.username,
             password=config.password,
         )
-
-        # Authenticate and confirm connectivity
         if not client.test_connection():
-            return False, "Failed to connect to BioTime Server."
+            logger.error("BioTime sync authentication failed: %s", client.last_error)
+            return False, {**counts, "message": "Failed to connect to BioTime Server."}
 
-        # Compute time range
         end_time = timezone.now()
-        if config.last_sync_time:
-            start_time = config.last_sync_time - timedelta(minutes=5)
-        else:
-            start_time = end_time - timedelta(days=days_back)
+        start_time = (
+            config.last_sync_time - timedelta(minutes=5)
+            if config.last_sync_time
+            else end_time - timedelta(days=days_back)
+        )
+        transactions = client.get_transactions(
+            start_time=start_time.strftime("%Y-%m-%d 00:00:00"),
+            end_time=end_time.strftime("%Y-%m-%d 23:59:59"),
+        )
 
-        start_str = start_time.strftime("%Y-%m-%d 00:00:00")
-        end_str = end_time.strftime("%Y-%m-%d 23:59:59")
+        if transactions is None:
+            logger.error("BioTime sync transaction request failed: %s", client.last_error)
+            return False, {**counts, "message": "Unable to fetch BioTime transactions."}
 
-        transactions = client.get_transactions(start_time=start_str, end_time=end_str)
-
-        if not transactions:
-            return True, "No transactions found in this period."
-
-        # Group transactions by employee and date
-        # Expected structure: { emp_code: { date_string: [list of timestamps] } }
-        grouped_data = {}
-        for t in transactions:
-            emp_code = str(t.get("emp_code"))
-            punch_time_str = t.get("punch_time")  # "2019-03-04 09:50:00"
-
-            if not emp_code or not punch_time_str or not t.get("is_attendance", 1):
+        grouped = defaultdict(lambda: defaultdict(list))
+        terminal_codes = defaultdict(set)
+        for transaction in transactions:
+            emp_code = str(transaction.get("emp_code") or "").strip()
+            punch_time = cls._parse_punch_time(transaction.get("punch_time"))
+            if not emp_code or not punch_time or transaction.get("is_attendance", True) in (False, 0, "0"):
+                counts["invalid"] += 1
                 continue
+            grouped[emp_code][punch_time.date()].append(punch_time)
+            terminal_sn = str(transaction.get("terminal_sn") or "").strip()
+            if terminal_sn:
+                terminal_codes[(emp_code, punch_time.date())].add(terminal_sn)
 
-            try:
-                punch_time = datetime.strptime(punch_time_str, "%Y-%m-%d %H:%M:%S")
-            except ValueError:
-                logger.warning("Skipping BioTime transaction with invalid punch_time: %s", punch_time_str)
-                continue
-
-            # Make punch_time aware relying on timezone.now() tz
-            if timezone.is_naive(punch_time):
-                punch_time = timezone.make_aware(punch_time, timezone.get_current_timezone())
-            punch_date = punch_time.date()
-
-            if emp_code not in grouped_data:
-                grouped_data[emp_code] = {}
-            if punch_date not in grouped_data[emp_code]:
-                grouped_data[emp_code][punch_date] = []
-
-            grouped_data[emp_code][punch_date].append(punch_time)
-
-        # Mapping and saving
-        processed_count = 0
-        unmapped_count = 0
-
-        # Preload the map
         mappings = {
-            m.biotime_emp_code: m.employee_profile
-            for m in BioTimeEmployeeMap.objects.select_related("employee_profile").filter(
-                employee_profile__is_archived=False
+            mapping.biotime_emp_code: mapping.employee_profile
+            for mapping in BioTimeEmployeeMap.objects.select_related("employee_profile").filter(
+                employee_profile__company_id__isnull=False,
+                employee_profile__is_archived=False,
             )
         }
 
-        for emp_code, dates in grouped_data.items():
-            if emp_code not in mappings:
-                unmapped_count += 1
+        for emp_code, dates in grouped.items():
+            employee_profile = mappings.get(emp_code)
+            if not employee_profile:
+                counts["unmapped"] += len(dates)
+                logger.warning("BioTime employee code %s is not mapped; skipped %s day(s).", emp_code, len(dates))
                 continue
 
-            employee_profile = mappings[emp_code]
+            for record_date, punches in dates.items():
+                counts["processed"] += 1
+                check_in_at = min(punches)
+                check_out_at = max(punches) if len(punches) > 1 else None
+                terminal_sn = ",".join(sorted(terminal_codes[(emp_code, record_date)]))
 
-            for date_obj, punches in dates.items():
-                punches.sort()
-                check_in_at = punches[0]
-                check_out_at = punches[-1] if len(punches) > 1 else None
-
-                # Create or Update attendance record
                 record, created = AttendanceRecord.objects.get_or_create(
                     employee_profile=employee_profile,
-                    date=date_obj,
+                    date=record_date,
                     defaults={
                         "check_in_at": check_in_at,
                         "check_out_at": check_out_at,
                         "source": AttendanceRecord.Source.SYSTEM,
                         "status": AttendanceRecord.Status.PRESENT,
+                        "biotime_emp_code": emp_code,
+                        "biotime_terminal_sn": terminal_sn,
                     },
                 )
+                if created:
+                    counts["created"] += 1
+                    continue
 
-                # If record exists, update times if needed
-                if not created and record.source == AttendanceRecord.Source.SYSTEM:
-                    updated = False
+                if record.source != AttendanceRecord.Source.SYSTEM:
+                    counts["skipped"] += 1
+                    logger.info("BioTime skipped non-system attendance record %s.", record.pk)
+                    continue
 
-                    if not record.check_in_at or check_in_at < record.check_in_at:
-                        record.check_in_at = check_in_at
-                        updated = True
+                update_fields = []
+                if not record.check_in_at or check_in_at < record.check_in_at:
+                    record.check_in_at = check_in_at
+                    update_fields.append("check_in_at")
+                if check_out_at and (not record.check_out_at or check_out_at > record.check_out_at):
+                    record.check_out_at = check_out_at
+                    update_fields.append("check_out_at")
+                if record.status != AttendanceRecord.Status.PRESENT:
+                    record.status = AttendanceRecord.Status.PRESENT
+                    update_fields.append("status")
+                if record.biotime_emp_code != emp_code:
+                    record.biotime_emp_code = emp_code
+                    update_fields.append("biotime_emp_code")
+                if terminal_sn and record.biotime_terminal_sn != terminal_sn:
+                    record.biotime_terminal_sn = terminal_sn
+                    update_fields.append("biotime_terminal_sn")
 
-                    if record.check_out_at is None and check_out_at is not None:
-                        record.check_out_at = check_out_at
-                        updated = True
-                    elif record.check_out_at and check_out_at and check_out_at > record.check_out_at:
-                        record.check_out_at = check_out_at
-                        updated = True
-
-                    if record.status != AttendanceRecord.Status.PRESENT:
-                        record.status = AttendanceRecord.Status.PRESENT
-                        updated = True
-
-                    if updated:
-                        record.save()
-
-                processed_count += 1
+                if update_fields:
+                    record.save(update_fields=[*update_fields, "updated_at"])
+                    counts["updated"] += 1
+                else:
+                    counts["skipped"] += 1
 
         config.last_sync_time = timezone.now()
-        config.save()
-
-        message = f"Synced {processed_count} dates. Unmapped codes: {unmapped_count}"
-        return True, message
+        config.save(update_fields=["last_sync_time", "updated_at"])
+        logger.info("BioTime sync completed: %s", counts)
+        return True, {**counts, "message": "BioTime sync completed."}
 
     @classmethod
     def get_unmapped_users(cls):
-        """
-        Fetch all employees from the device, and check which ones are NOT mapped
-        in our local database.
-        """
         config = BioTimeConfig.get_solo()
-        if not config.server_ip or not config.server_port or not config.username or not config.password:
-            return []
+        if not all([config.server_ip, config.server_port, config.username, config.password]):
+            logger.error("Cannot load BioTime employees because configuration is incomplete.")
+            raise BioTimeIntegrationError("BioTime configuration is incomplete.")
 
-        client = BioTimeClient(
-            server_ip=config.server_ip,
-            server_port=config.server_port,
-            username=config.username,
-            password=config.password,
-        )
-
+        client = BioTimeClient(config.server_ip, config.server_port, config.username, config.password)
         device_employees = client.get_employees()
+        if device_employees is None:
+            logger.error("Unable to load BioTime employees: %s", client.last_error)
+            raise BioTimeIntegrationError("Unable to fetch BioTime employees.")
 
-        existing_mappings = list(BioTimeEmployeeMap.objects.values_list("biotime_emp_code", flat=True))
-
-        unmapped = []
-        for emp in device_employees:
-            emp_code = str(emp.get("emp_code"))
-            if emp_code not in existing_mappings:
-                unmapped.append(
-                    {
-                        "emp_code": emp_code,
-                        "first_name": emp.get("first_name", ""),
-                        "last_name": emp.get("last_name", ""),
-                        "department": emp.get("dept_name", ""),
-                    }
-                )
-
-        return unmapped
+        mapped_codes = set(BioTimeEmployeeMap.objects.values_list("biotime_emp_code", flat=True))
+        employees = []
+        for employee in device_employees:
+            emp_code = str(employee.get("emp_code") or "").strip()
+            if not emp_code or emp_code in mapped_codes:
+                continue
+            department = employee.get("dept_name") or employee.get("department") or ""
+            if isinstance(department, dict):
+                department = department.get("dept_name") or ""
+            employees.append(
+                {
+                    "emp_code": emp_code,
+                    "first_name": employee.get("first_name") or "",
+                    "last_name": employee.get("last_name") or "",
+                    "department": department,
+                }
+            )
+        return employees
