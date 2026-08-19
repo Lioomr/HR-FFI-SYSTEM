@@ -316,9 +316,9 @@ def get_adjustments_for_type(user, leave_type: LeaveType, year: int):
     adjustments = LeaveBalanceAdjustment.objects.none()
     if profile:
         if profile.user_id:
-            adjustments = LeaveBalanceAdjustment.objects.filter(employee=profile.user) | LeaveBalanceAdjustment.objects.filter(
-                employee_profile=profile
-            )
+            adjustments = LeaveBalanceAdjustment.objects.filter(
+                employee=profile.user
+            ) | LeaveBalanceAdjustment.objects.filter(employee_profile=profile)
         else:
             adjustments = LeaveBalanceAdjustment.objects.filter(employee_profile=profile)
     elif user:
@@ -326,9 +326,9 @@ def get_adjustments_for_type(user, leave_type: LeaveType, year: int):
     else:
         return 0.0
 
-    adjs = adjustments.filter(leave_type=leave_type, created_at__year=year).aggregate(
-        Sum("adjustment_days")
-    )["adjustment_days__sum"] or Decimal("0")
+    adjs = adjustments.filter(leave_type=leave_type, created_at__year=year).aggregate(Sum("adjustment_days"))[
+        "adjustment_days__sum"
+    ] or Decimal("0")
     return float(adjs)
 
 
@@ -484,8 +484,7 @@ def validate_leave_request_policy(
         used = get_used_days_for_type(user, leave_type, year)
         if used + requested_days > UNPAID_MAX_DAYS_PER_YEAR:
             return (
-                f"Unpaid leave exceeds annual maximum. Remaining: "
-                f"{max(0, UNPAID_MAX_DAYS_PER_YEAR - used):.0f} days."
+                f"Unpaid leave exceeds annual maximum. Remaining: {max(0, UNPAID_MAX_DAYS_PER_YEAR - used):.0f} days."
             )
 
     if _is_marriage(code):
@@ -665,6 +664,8 @@ def calculate_leave_balance(user, year, profile=None):
     if annual_balance and unpaid_balance:
         annual_overflow = max(0.0, float(annual_balance["used_days"]) - float(annual_balance["total_days"]))
         unpaid_balance["used_days"] = float(unpaid_balance["used_days"]) + annual_overflow
-        unpaid_balance["remaining_days"] = max(0.0, float(unpaid_balance["total_days"]) - float(unpaid_balance["used_days"]))
+        unpaid_balance["remaining_days"] = max(
+            0.0, float(unpaid_balance["total_days"]) - float(unpaid_balance["used_days"])
+        )
 
     return balances

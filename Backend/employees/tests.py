@@ -1018,9 +1018,7 @@ class EmployeeDeletionWorkflowTests(TestCase):
         self.assertEqual(request_obj.status, EmployeeDeletionRequest.Status.PENDING_CEO)
         self.assertEqual(request_obj.archive_reason, EmployeeProfile.ArchiveReason.RESIGNED)
         self.assertEqual(request_obj.request_snapshot["employee_id"], "DEL-001")
-        self.assertTrue(
-            AuditLog.objects.filter(action="employee_archive_requested", entity_id=request_obj.id).exists()
-        )
+        self.assertTrue(AuditLog.objects.filter(action="employee_archive_requested", entity_id=request_obj.id).exists())
 
     def test_approval_archives_employee_preserves_history_and_restore_works(self):
         leave_type = LeaveType.objects.create(company=self.company, name="Annual", code="ANNUAL")
@@ -1069,9 +1067,7 @@ class EmployeeDeletionWorkflowTests(TestCase):
         self.assertTrue(AuditLog.objects.filter(action="employee_archived", entity_id=self.profile.id).exists())
 
         self.client.force_authenticate(user=self.hr_user)
-        active_response = self.client.get(
-            "/api/employees/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id)
-        )
+        active_response = self.client.get("/api/employees/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id))
         self.assertEqual(active_response.status_code, status.HTTP_200_OK, active_response.data)
         self.assertFalse(any(item["id"] == self.profile.id for item in active_response.data["data"]["results"]))
 

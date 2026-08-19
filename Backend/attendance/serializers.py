@@ -161,7 +161,9 @@ class AttendanceCorrectionRequestSerializer(serializers.ModelSerializer):
         requested_status = attrs.get("requested_status", getattr(self.instance, "requested_status", ""))
 
         if self.instance is None and employee_profile and employee_profile.is_archived:
-            raise serializers.ValidationError({"employee_profile": "Archived employees cannot create attendance records."})
+            raise serializers.ValidationError(
+                {"employee_profile": "Archived employees cannot create attendance records."}
+            )
 
         if not check_in and not check_out and not requested_status:
             raise serializers.ValidationError(

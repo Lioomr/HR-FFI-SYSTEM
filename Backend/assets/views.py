@@ -667,9 +667,11 @@ class AssetViewSet(viewsets.ModelViewSet):
             ),
             request,
         )
-        asset = assets.filter(id=asset_id, company_id=token_company_id).first() if label_token else assets.filter(
-            asset_code__iexact=code
-        ).first()
+        asset = (
+            assets.filter(id=asset_id, company_id=token_company_id).first()
+            if label_token
+            else assets.filter(asset_code__iexact=code).first()
+        )
         if not asset:
             return error("Asset not found.", status=status.HTTP_404_NOT_FOUND)
         return success(AssetLookupSerializer(asset, context={"request": request}).data)

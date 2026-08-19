@@ -106,6 +106,8 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
   role,
 }) => {
   const { language, t } = useI18n();
+  const translateRef = useRef(t);
+  translateRef.current = t;
   // The CEO endpoint only supports date_from/date_to, status and search.
   const supportsAdvancedFilters = role === "hr";
 
@@ -149,13 +151,16 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
   useEffect(() => {
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     searchDebounceRef.current = setTimeout(() => {
-      setSearch(searchInput.trim());
-      setPagination((current) => ({ ...current, current: 1 }));
+      const nextSearch = searchInput.trim();
+      if (nextSearch !== search) {
+        setSearch(nextSearch);
+        setPagination((current) => ({ ...current, current: 1 }));
+      }
     }, SEARCH_DEBOUNCE_MS);
     return () => {
       if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     };
-  }, [searchInput]);
+  }, [searchInput, search]);
 
   useEffect(() => {
     if (employeeDebounceRef.current) clearTimeout(employeeDebounceRef.current);
@@ -203,7 +208,7 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
       const msg =
         error.response?.data?.message ||
         error.message ||
-        t("attendancePreview.loadFailed");
+        translateRef.current("attendancePreview.loadFailed");
       setErrorMessage(msg);
       setRecords([]);
       setTotal(0);
@@ -220,7 +225,6 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
     source,
     status,
     supportsAdvancedFilters,
-    t,
   ]);
 
   useEffect(() => {
