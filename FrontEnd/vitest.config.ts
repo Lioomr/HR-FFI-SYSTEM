@@ -11,5 +11,6 @@ export default defineConfig({
     // still when several component suites run in parallel. The default 5s
     // times out spuriously on loaded machines.
     testTimeout: 20000,
+    fileParallelism: false,
   },
 });
