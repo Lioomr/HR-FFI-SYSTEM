@@ -44,7 +44,7 @@ function formatDateTime(value?: string | null) {
 function extractAssetCode(raw: string): string {
   const cleaned = raw.replace(/[\r\n\t]/g, "").trim();
   if (!cleaned) return "";
-  // Scanners on phones / shaped URLs read a full URL — pull ?code= out of it.
+  // Scanners on phones / shaped URLs read a full URL — pull its code out.
   const match = cleaned.match(/[?&]code=([^&#\s]+)/i);
   if (match) {
     try {
@@ -72,20 +72,22 @@ export default function AssetLookupPage() {
 
   useEffect(() => {
     focusInput();
+    const initialToken = searchParams.get("token");
     const initialCode = searchParams.get("code");
-    if (initialCode) {
-      void runLookup(initialCode);
+    if (initialToken || initialCode) {
+      void runLookup(initialCode || "", initialToken || undefined);
       // Clear the param so a manual refresh doesn't re-trigger the same lookup.
       const next = new URLSearchParams(searchParams);
       next.delete("code");
+      next.delete("token");
       setSearchParams(next, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const runLookup = async (value: string) => {
+  const runLookup = async (value: string, token?: string) => {
     const code = extractAssetCode(value);
-    if (!code) {
+    if (!code && !token) {
       setRawValue("");
       focusInput();
       return;
@@ -95,12 +97,12 @@ export default function AssetLookupPage() {
     setError(null);
     setNotFoundCode(null);
     try {
-      const response = await lookupAssetByCode(code);
+      const response = await lookupAssetByCode(code || undefined, token);
       if (isApiError(response)) {
         const status = (response as { status_code?: number }).status_code;
         if (status === 404 || /not found/i.test(response.message)) {
           setResult(null);
-          setNotFoundCode(code);
+          setNotFoundCode(code || t("hr.assets.lookup.invalidLabel", "Invalid or expired asset label."));
         } else {
           setResult(null);
           setError(response.message || t("common.error"));
@@ -112,7 +114,7 @@ export default function AssetLookupPage() {
       const status = err?.response?.status;
       if (status === 404) {
         setResult(null);
-        setNotFoundCode(code);
+        setNotFoundCode(code || t("hr.assets.lookup.invalidLabel", "Invalid or expired asset label."));
       } else {
         setResult(null);
         setError(err?.response?.data?.message || err?.message || t("common.error"));

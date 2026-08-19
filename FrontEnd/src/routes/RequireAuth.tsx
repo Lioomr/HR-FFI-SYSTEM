@@ -21,7 +21,8 @@ export default function RequireAuth() {
       );
     }
 
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+    const from = `${location.pathname}${location.search}${location.hash}`;
+    return <Navigate to={`/login?next=${encodeURIComponent(from)}`} replace state={{ from }} />;
   }
 
   return <Outlet />;

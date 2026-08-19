@@ -37,3 +37,25 @@ export function formatTimeOnly12(value?: string | Date | null, fallback = "-") {
   const parsed = parseDateTime(value);
   return parsed ? parsed.tz(APP_TIME_ZONE).format("hh:mm A") : fallback;
 }
+
+/**
+ * Formats the elapsed time between two timestamps as "8h 15m" / "45m".
+ * Returns the fallback when either bound is missing/invalid or the range is negative.
+ */
+export function formatDurationBetween(
+  start?: string | Date | null,
+  end?: string | Date | null,
+  fallback = "-",
+) {
+  const from = parseDateTime(start);
+  const to = parseDateTime(end);
+  if (!from || !to) return fallback;
+
+  const totalMinutes = Math.floor(to.diff(from, "minute"));
+  if (totalMinutes < 0) return fallback;
+
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours === 0) return `${minutes}m`;
+  return `${hours}h ${minutes}m`;
+}

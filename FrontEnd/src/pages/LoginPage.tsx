@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Alert, Button, Card, Checkbox, Form, Input, Select } from "antd";
 import { LockOutlined, MailOutlined, ApartmentOutlined } from "@ant-design/icons";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../auth/authStore";
 import { loginApi } from "../services/api/authApi";
 import { isApiError } from "../services/api/apiTypes";
@@ -24,6 +24,26 @@ export default function LoginPage() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const getPostLoginDestination = useCallback((role?: string) => {
+    const requestedPath =
+      new URLSearchParams(location.search).get("next") ||
+      (location.state as { from?: unknown } | null)?.from;
+    if (
+      typeof requestedPath === "string" &&
+      requestedPath.startsWith("/") &&
+      !requestedPath.startsWith("//") &&
+      !requestedPath.includes("\\")
+    ) {
+      return requestedPath;
+    }
+    if (role === "SystemAdmin") return "/admin/dashboard";
+    if (role === "HRManager") return "/hr/dashboard";
+    if (role === "Manager") return "/employee/dashboard";
+    if (role === "CEO") return "/ceo/leave/requests";
+    return "/employee/home";
+  }, [location.search, location.state]);
   const { t, language, setLanguage, direction } = useI18n();
 
   function buildLoginError(message?: string | null) {
@@ -52,13 +72,9 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (isAuthenticated && user?.role) {
-      if (user.role === "SystemAdmin") navigate("/admin/dashboard", { replace: true });
-      else if (user.role === "HRManager") navigate("/hr/dashboard", { replace: true });
-      else if (user.role === "Manager") navigate("/employee/dashboard", { replace: true });
-      else if (user.role === "CEO") navigate("/ceo/leave/requests", { replace: true });
-      else navigate("/employee/home", { replace: true });
+      navigate(getPostLoginDestination(user.role), { replace: true });
     }
-  }, [isAuthenticated, user, navigate]);
+  }, [isAuthenticated, user, navigate, getPostLoginDestination]);
 
   async function onFinish(values: LoginFormValues) {
     setError(null);
@@ -71,11 +87,7 @@ export default function LoginPage() {
       }
       login(res.data.user, res.data.token);
       const role = res.data.user.role;
-      if (role === "SystemAdmin") navigate("/admin/dashboard", { replace: true });
-      else if (role === "HRManager") navigate("/hr/dashboard", { replace: true });
-      else if (role === "Manager") navigate("/employee/dashboard", { replace: true });
-      else if (role === "CEO") navigate("/ceo/leave/requests", { replace: true });
-      else navigate("/employee/home", { replace: true });
+      navigate(getPostLoginDestination(role), { replace: true });
     } catch (e: unknown) {
       if (typeof e === "object" && e !== null && "response" in e) {
         setError(buildLoginError(getFirstApiErrorMessage(e) || t("auth.loginFailed")));

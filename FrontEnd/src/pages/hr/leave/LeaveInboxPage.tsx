@@ -126,10 +126,13 @@ export default function LeaveInboxPage() {
         setData(res.data.items || []);
         setTotal(res.data.count || 0);
       }
-    } catch {
+    } catch (error) {
       notification.error({
         message: t("common.error"),
-        description: t("leave.noRequests"),
+        description:
+          error instanceof Error && error.message
+            ? error.message
+            : t("common.tryAgain"),
       });
     } finally {
       setLoading(false);
