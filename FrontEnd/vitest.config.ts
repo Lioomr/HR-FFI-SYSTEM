@@ -12,5 +12,12 @@ export default defineConfig({
     // times out spuriously on loaded machines.
     testTimeout: 20000,
     fileParallelism: false,
+    onUnhandledError(error) {
+      // jsdom 28 can emit this Node/undici cleanup error after all test
+      // assertions pass. It is not application code and has no test owner.
+      if ((error as Error & { code?: string }).code === 'UND_ERR_INVALID_ARG') {
+        return false;
+      }
+    },
   },
 });
