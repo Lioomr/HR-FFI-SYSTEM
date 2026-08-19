@@ -293,7 +293,28 @@ def get_annual_entitlement(profile: EmployeeProfile, year: int):
     return base
 
 
-def get_used_days_for_type(user, leave_type: LeaveType, year: int):
+def get_annual_accrued_days(profile: EmployeeProfile, year: int, as_of: date | None = None) -> float:
+    """Return the annual entitlement earned by ``as_of`` in the given year."""
+    if not profile or not profile.hire_date:
+        return 0.0
+
+    year_start = date(year, 1, 1)
+    year_end = date(year, 12, 31)
+    as_of = min(as_of or year_end, year_end)
+    if as_of < year_start or as_of < profile.hire_date:
+        return 0.0
+
+    # Accrual is based on the standard annual allowance, including in the
+    # employee's hire year. The separate entitlement function remains the
+    # full-year quota used for reporting and carry-over calculations.
+    entitlement = 30.0 if get_service_years(profile, as_of) >= 5 else 21.0
+    service_start = max(year_start, profile.hire_date)
+    started_months = (as_of.year - service_start.year) * 12 + as_of.month - service_start.month + 1
+    eligible_months = 12 - (service_start.month - 1)
+    return round(entitlement * min(started_months, eligible_months) / 12, 2)
+
+
+def get_used_days_for_type(user, leave_type: LeaveType, year: int, as_of: date | None = None):
     year_start = date(year, 1, 1)
     year_end = date(year, 12, 31)
     requests = leave_request_employee_filter(user)
@@ -307,7 +328,9 @@ def get_used_days_for_type(user, leave_type: LeaveType, year: int):
     )
     used = 0
     for req in requests:
-        used += calculate_overlap_days(req.start_date, req.end_date, year)
+        request_end = min(req.end_date, as_of) if as_of else req.end_date
+        if request_end >= req.start_date:
+            used += calculate_overlap_days(req.start_date, request_end, year)
     return float(used)
 
 
@@ -453,7 +476,7 @@ def validate_leave_request_policy(
 
         # Only enforce remaining balance when profile + hire date are available.
         if profile.hire_date:
-            balances = calculate_leave_balance(user, year)
+            balances = calculate_leave_balance(user, year, as_of=date.today())
             annual_balance = next((b for b in balances if b["leave_code"] == code), None)
             unpaid_balance = _find_balance_by_code(balances, "UNPAID", "UNPAID_LEAVE")
             annual_remaining = annual_balance["remaining_days"] if annual_balance else 0
@@ -516,7 +539,7 @@ def validate_leave_request_policy(
     return None
 
 
-def calculate_leave_balance(user, year, profile=None):
+def calculate_leave_balance(user, year, profile=None, as_of: date | None = None):
     """
     Calculate balances for all leave types for a user in a given year.
     Returns a list of dicts.
@@ -541,9 +564,11 @@ def calculate_leave_balance(user, year, profile=None):
     leave_types = _get_balance_leave_types(profile)
     balances = []
 
+    balance_date = as_of or date(year, 12, 31)
+
     for lt in leave_types:
         code = _normalized_leave_code(lt)
-        used = get_used_days_for_type(employee_subject, lt, year)
+        used = get_used_days_for_type(employee_subject, lt, year, as_of=balance_date)
 
         # Opening Balance (Carry-over)
         opening = 0.0
@@ -613,6 +638,10 @@ def calculate_leave_balance(user, year, profile=None):
 
         adjustments = get_adjustments_for_type(employee_subject, lt, year)
 
+        available_annual_year_days = None
+        if _is_annual(code):
+            available_annual_year_days = get_annual_accrued_days(profile, year, as_of=balance_date)
+
         # Emergency leave is deducted from annual leave.
         if _is_emergency(code):
             annual_type = next(
@@ -620,10 +649,10 @@ def calculate_leave_balance(user, year, profile=None):
                 None,
             )
             if annual_type:
-                annual_total = (get_annual_entitlement(profile, year) if profile else 0.0) + get_adjustments_for_type(
-                    employee_subject, annual_type, year
-                )
-                annual_used = get_used_days_for_type(employee_subject, annual_type, year)
+                annual_total = (
+                    get_annual_accrued_days(profile, year, as_of=balance_date) if profile else 0.0
+                ) + get_adjustments_for_type(employee_subject, annual_type, year)
+                annual_used = get_used_days_for_type(employee_subject, annual_type, year, as_of=balance_date)
                 emergency_used = used
                 annual_remaining_after_annual = max(0.0, annual_total - annual_used)
                 quota = min(
@@ -643,7 +672,10 @@ def calculate_leave_balance(user, year, profile=None):
             if approved_lifetime:
                 quota = 0.0
 
-        remaining = opening + quota + adjustments - used
+        available_total = opening + quota + adjustments
+        if available_annual_year_days is not None:
+            available_total = opening + available_annual_year_days + adjustments
+        remaining = available_total - used
         remaining = max(0.0, remaining)
 
         balances.append(
@@ -655,6 +687,11 @@ def calculate_leave_balance(user, year, profile=None):
                 "used_days": float(used),
                 "remaining_days": float(remaining),
                 "adjustments": adjustments,  # Useful for UI
+                **(
+                    {"available_annual_year_days": float(available_annual_year_days)}
+                    if available_annual_year_days is not None
+                    else {}
+                ),
             }
         )
 
