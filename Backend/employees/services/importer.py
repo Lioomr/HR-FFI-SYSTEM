@@ -1,8 +1,8 @@
 import csv
 import hashlib
 import io
-import random
 import re
+import secrets
 import string
 import uuid
 import zipfile
@@ -107,7 +107,7 @@ class EmployeeImporter:
 
     @staticmethod
     def _generate_employee_id(prefix="FFI"):
-        return f"{prefix}-{''.join(random.choices(string.digits, k=6))}"
+        return f"{prefix}-{''.join(secrets.choice(string.digits) for _ in range(6))}"
 
     def _generate_unique_employee_id(self, existing_ids, prefix="FFI", max_attempts=20):
         for _ in range(max_attempts):
