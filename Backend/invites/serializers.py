@@ -11,11 +11,13 @@ from .models import Invite
 
 User = get_user_model()
 
-ALLOWED_ROLES = {"SystemAdmin", "HRManager", "Manager", "Employee", "CEO", "CFO"}
+ALLOWED_ROLES = {"SystemAdmin", "HRManager", "Employee", "CEO", "CFO"}
+UNSUPPORTED_ACCEPT_ROLES = {"Manager"}
+UNSUPPORTED_MANAGER_INVITE_MESSAGE = "Manager role invites are no longer supported. Ask HR to resend as Employee."
 
 
 class InviteCreateSerializer(serializers.Serializer):
-    email = serializers.EmailField(required=False, allow_blank=True)
+    email = serializers.EmailField(required=False, allow_blank=True, allow_null=True)
     phone_number = serializers.CharField(required=False, allow_blank=True, max_length=32)
     channel = serializers.ChoiceField(choices=Invite.Channel.choices, required=False, default=Invite.Channel.EMAIL)
     role = serializers.CharField()
@@ -54,7 +56,9 @@ class InviteCreateSerializer(serializers.Serializer):
         attrs["phone_number"] = phone_number or None
         return attrs
 
-    def validate_email(self, value: str) -> str:
+    def validate_email(self, value: str | None) -> str:
+        if value is None:
+            return ""
         normalized = value.strip().lower()
         if not normalized:
             return ""
@@ -69,6 +73,15 @@ class InviteSerializer(serializers.ModelSerializer):
     email_delivery = serializers.SerializerMethodField()
     whatsapp_delivery = serializers.SerializerMethodField()
     last_delivery = serializers.SerializerMethodField()
+
+    DELIVERY_STATUS_LABELS = {
+        Invite.DeliveryStatus.UNKNOWN: "Pending",
+        Invite.DeliveryStatus.QUEUED: "Queued",
+        Invite.DeliveryStatus.SENT: "Submitted",
+        Invite.DeliveryStatus.DELIVERED: "Delivered",
+        Invite.DeliveryStatus.READ: "Read",
+        Invite.DeliveryStatus.FAILED: "Failed",
+    }
 
     class Meta:
         model = Invite
@@ -114,11 +127,15 @@ class InviteSerializer(serializers.ModelSerializer):
         }
         return {
             "channel": obj.last_delivery_channel,
+            "channel_label": self._channel_label(obj.last_delivery_channel),
             "sent": obj.last_delivery_sent,
             "provider_submitted": obj.provider_submitted,
+            "provider_label": self._provider_label(obj.last_delivery_channel),
             "provider": obj.last_delivery_provider or None,
             "provider_status": obj.provider_status or None,
             "delivery_status": delivery_status,
+            "delivery_status_label": self._delivery_status_label(delivery_status),
+            "delivery_summary": self._delivery_summary(obj.last_delivery_channel, delivery_status),
             "status_code": obj.last_delivery_status_code,
             "message_id": obj.last_delivery_message_id or None,
             "external_message_id": obj.external_message_id or obj.last_delivery_message_id or None,
@@ -127,6 +144,36 @@ class InviteSerializer(serializers.ModelSerializer):
             "submitted_at": attempted_at if obj.provider_submitted else None,
             "sent_at": attempted_at if is_actual_sent else None,
         }
+
+    def _channel_label(self, channel: str) -> str:
+        if channel == Invite.Channel.WHATSAPP:
+            return "WhatsApp"
+        if channel == Invite.Channel.EMAIL:
+            return "Email"
+        return "Delivery"
+
+    def _provider_label(self, channel: str) -> str:
+        if channel == Invite.Channel.WHATSAPP:
+            return "WhatsApp delivery service"
+        if channel == Invite.Channel.EMAIL:
+            return "Email delivery service"
+        return "Delivery service"
+
+    def _delivery_status_label(self, delivery_status: str) -> str:
+        return self.DELIVERY_STATUS_LABELS.get(delivery_status, "Pending")
+
+    def _delivery_summary(self, channel: str, delivery_status: str) -> str:
+        channel_label = self._channel_label(channel)
+        status_label = self._delivery_status_label(delivery_status)
+        if delivery_status == Invite.DeliveryStatus.FAILED:
+            return f"{channel_label} delivery failed"
+        if delivery_status == Invite.DeliveryStatus.QUEUED:
+            return f"{channel_label} delivery queued"
+        if delivery_status == Invite.DeliveryStatus.SENT:
+            return f"{channel_label} invite submitted"
+        if delivery_status in {Invite.DeliveryStatus.DELIVERED, Invite.DeliveryStatus.READ}:
+            return f"{channel_label} invite {status_label.lower()}"
+        return f"{channel_label} delivery pending"
 
 
 class InviteAcceptSerializer(serializers.Serializer):
@@ -139,7 +186,7 @@ class InviteAcceptSerializer(serializers.Serializer):
     def validate(self, attrs):
         token = attrs.get("token", "").strip()
         try:
-            invite = Invite.objects.get(token=token)
+            invite = Invite.objects.select_for_update().get(token=token)
         except Invite.DoesNotExist:
             raise serializers.ValidationError({"token": "Invalid invitation token."})
 
@@ -152,6 +199,8 @@ class InviteAcceptSerializer(serializers.Serializer):
             raise serializers.ValidationError({"token": "Invitation has been revoked."})
         if invite.status == Invite.Status.EXPIRED or invite.expires_at <= timezone.now():
             raise serializers.ValidationError({"token": "Invitation has expired."})
+        if invite.role in UNSUPPORTED_ACCEPT_ROLES:
+            raise serializers.ValidationError({"role": UNSUPPORTED_MANAGER_INVITE_MESSAGE})
 
         invite_email = (invite.email or "").strip().lower()
         submitted_email = (attrs.get("email") or "").strip().lower()
@@ -170,6 +219,7 @@ class InviteAcceptSerializer(serializers.Serializer):
         if submitted_phone and not is_e164(submitted_phone):
             raise serializers.ValidationError({"phone_number": "Phone number must be in E.164 format."})
         attrs["phone_number"] = submitted_phone or invite.phone_number or ""
+        attrs["submitted_phone_number"] = submitted_phone
 
         attrs["invite"] = invite
         return attrs

@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
-import { Form, Input, Button, Select, Switch, Card, message, Typography, Radio, Upload } from "antd";
+import { Form, Input, Button, Select, Switch, message, Radio, Upload } from "antd";
 import type { UploadFile } from "antd/es/upload/interface";
 import { useNavigate } from "react-router-dom";
+import PageHeader from "../../components/ui/PageHeader";
+import ApprovalSurface from "../../components/ceo/ApprovalSurface";
 import { createAnnouncement, type CreateAnnouncementData } from "../../services/api/announcementApi";
 import { getManagerTeam, type ManagerTeamMember } from "../../services/api/managerApi";
 import { isApiError } from "../../services/api/apiTypes";
 import { useAuthStore } from "../../auth/authStore";
 import { useI18n } from "../../i18n/useI18n";
 import { UploadOutlined } from "@ant-design/icons";
-
-const { Title } = Typography;
 
 export default function CreateTeamAnnouncementPage() {
   const navigate = useNavigate();
@@ -37,7 +37,7 @@ export default function CreateTeamAnnouncementPage() {
       }
     };
     loadTeam();
-  }, []);
+  }, [t]);
 
   const onFinish = async (values: any) => {
     setLoading(true);
@@ -67,15 +67,18 @@ export default function CreateTeamAnnouncementPage() {
   };
 
   return (
-    <div style={{ padding: 24, maxWidth: 820, margin: "0 auto" }}>
-      <div style={{ marginBottom: 24, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <Title level={2} style={{ margin: 0 }}>
-          {role === "CEO" ? t("announcements.ceoTitle") : t("announcements.teamTitle")}
-        </Title>
-        <Button onClick={() => navigate(announcementsPath)}>{t("common.cancel")}</Button>
-      </div>
+    <div style={{ maxWidth: 900, margin: "0 auto", paddingBottom: 24 }}>
+      <PageHeader
+        title={role === "CEO" ? t("announcements.ceoTitle") : t("announcements.teamTitle")}
+        subtitle={t("announcements.createSubtitle")}
+        actions={
+          <Button onClick={() => navigate(announcementsPath)} style={{ borderRadius: 10, minHeight: 40 }}>
+            {t("common.cancel")}
+          </Button>
+        }
+      />
 
-      <Card>
+      <ApprovalSurface padding={24}>
         <Form
           form={form}
           layout="vertical"
@@ -162,7 +165,7 @@ export default function CreateTeamAnnouncementPage() {
             </Button>
           </Form.Item>
         </Form>
-      </Card>
+      </ApprovalSurface>
     </div>
   );
 }

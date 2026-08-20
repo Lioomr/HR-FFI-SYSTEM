@@ -15,6 +15,7 @@ from audit.models import AuditLog
 from core.services import get_workflow_snapshot
 from employees.models import EmployeeProfile
 from leaves.models import LeaveRequest, LeaveType
+from leaves.pdf_leave_request import load_field_map
 from leaves.views import _approval_path_rows, _leave_type_labels
 from organization.models import OrganizationNode, UserOrganizationAccess
 
@@ -283,9 +284,18 @@ class LeaveManagementTests(TestCase):
         self.assertIn(f"leave_request_{req.id}.pdf", response["Content-Disposition"])
         reader = PdfReader(BytesIO(response.content))
         extracted_text = "\n".join(page.extract_text() or "" for page in reader.pages)
-        self.assertEqual(len(reader.pages), 2)
-        self.assertIn("Pending", extracted_text)
+        self.assertEqual(len(reader.pages), 1)
+        self.assertIn(str(req.start_date), extracted_text)
+        self.assertIn(str(req.end_date), extracted_text)
+        self.assertIn("Family event", extracted_text)
         self.assertNotIn("pending_hr", extracted_text)
+
+    def test_leave_request_pdf_field_map_uses_rtl_date_flow(self):
+        field_map = load_field_map()
+
+        self.assertEqual(field_map["start_date"]["page"], 1)
+        self.assertEqual(field_map["end_date"]["page"], 1)
+        self.assertGreater(field_map["start_date"]["x"], field_map["end_date"]["x"])
 
     def test_leave_type_labels_translate_known_arabic_policy_labels(self):
         english, arabic = _leave_type_labels(LeaveType(name="Unpaid Leave", code="UNPAID"))

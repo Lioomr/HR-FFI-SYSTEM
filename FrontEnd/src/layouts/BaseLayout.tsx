@@ -35,7 +35,7 @@ import { useI18n } from "../i18n/useI18n";
 import type { AppLanguage } from "../i18n/types";
 import { getEmployee } from "../services/api/employeesApi";
 import { isApiError } from "../services/api/apiTypes";
-import { getManagerAccess } from "../services/api/managerApi";
+import { useManagerAccess } from "../hooks/useManagerAccess";
 import { isFinanceApproverEmployee } from "../utils/financeApprover";
 import { isCFOApproverEmployee } from "../utils/cfoApprover";
 import { isCEOApproverEmployee } from "../utils/ceoApprover";
@@ -43,6 +43,7 @@ import { isHeadOfficeOrganization } from "../utils/organizationContext";
 import NotificationBell from "../components/notifications/NotificationBell";
 import { useNotificationsRuntime } from "../hooks/useNotificationsRuntime";
 import { buildCeoMenuItems, getCeoOpenKeysForPath } from "./ceoNav";
+import { buildManagerNavGroups } from "./managerNav";
 import { getSelectedKey, sectionLabel } from "./menuUtils";
 
 const { Header, Sider, Content } = Layout;
@@ -132,7 +133,7 @@ function getTitle(pathname: string, t: (key: string, fallback?: string) => strin
   if (pathname.startsWith("/hr/invites")) return t("layout.invites");
   if (pathname.startsWith("/hr/workflow/delegations")) return t("layout.delegationRules", "Delegation Rules");
   if (pathname.startsWith("/hr")) return t("layout.hrManagement");
-  if (pathname.startsWith("/manager/dashboard")) return t("layout.managerDashboard", "Manager Dashboard");
+  if (pathname.startsWith("/manager/dashboard")) return t("layout.teamDashboard", "Team Dashboard");
   if (pathname.startsWith("/manager/team-requests")) return t("layout.teamRequests", "Team Requests");
   if (pathname.startsWith("/manager/team")) return t("layout.myTeam", "My Team");
   if (pathname.startsWith("/manager/announcements")) return t("layout.announcements", "Announcements");
@@ -391,7 +392,6 @@ export default function BaseLayout() {
   const [isFinanceApprover, setIsFinanceApprover] = useState(false);
   const [isCFOApprover, setIsCFOApprover] = useState(false);
   const [isCEOApprover, setIsCEOApprover] = useState(false);
-  const [hasManagerAccess, setHasManagerAccess] = useState(false);
   const [isSwitchingOrganization, setIsSwitchingOrganization] = useState(false);
   const [openMenuKeys, setOpenMenuKeys] = useState<string[]>(() => getOpenKeysForPath(location.pathname));
 
@@ -404,6 +404,10 @@ export default function BaseLayout() {
   }, [location.pathname]);
 
   const role = user?.role;
+  // Manager navigation follows the backend capability, not the role: an
+  // Employee with direct reports gets it, a Manager without them does not.
+  const { access: managerAccess } = useManagerAccess();
+  const hasManagerAccess = managerAccess.has_access;
   const organizations = user?.accessible_organizations ?? [];
   const activeOrganizationId = user?.active_organization_id ?? user?.default_organization_id ?? null;
   const activeOrganization = organizations.find((organization) => String(organization.id) === String(activeOrganizationId));
@@ -442,35 +446,27 @@ export default function BaseLayout() {
           setIsFinanceApprover(false);
           setIsCFOApprover(false);
           setIsCEOApprover(false);
-          setHasManagerAccess(false);
         }
         return;
       }
       try {
-        const [profileRes, managerRes] = await Promise.allSettled([getEmployee("me"), getManagerAccess()]);
+        const profileRes = await getEmployee("me");
         if (!mounted) return;
-        const resolvedProfile =
-          profileRes.status === "fulfilled" ? profileRes.value : null;
-        const resolvedManager =
-          managerRes.status === "fulfilled" ? managerRes.value : null;
 
-        if (!resolvedProfile || isApiError(resolvedProfile)) {
+        if (isApiError(profileRes)) {
           setIsFinanceApprover(false);
           setIsCFOApprover(false);
           setIsCEOApprover(false);
-          setHasManagerAccess(Boolean(resolvedManager && !isApiError(resolvedManager) && resolvedManager.data.has_access));
         } else {
-          setIsFinanceApprover(isFinanceApproverEmployee(resolvedProfile.data));
-          setIsCFOApprover(isCFOApproverEmployee(resolvedProfile.data));
-          setIsCEOApprover(isCEOApproverEmployee(resolvedProfile.data));
-          setHasManagerAccess(Boolean(resolvedManager && !isApiError(resolvedManager) && resolvedManager.data.has_access));
+          setIsFinanceApprover(isFinanceApproverEmployee(profileRes.data));
+          setIsCFOApprover(isCFOApproverEmployee(profileRes.data));
+          setIsCEOApprover(isCEOApproverEmployee(profileRes.data));
         }
       } catch {
         if (mounted) {
           setIsFinanceApprover(false);
           setIsCFOApprover(false);
           setIsCEOApprover(false);
-          setHasManagerAccess(false);
         }
       }
     }
@@ -664,21 +660,7 @@ export default function BaseLayout() {
         },
       ]
       : []),
-    ...(hasManagerAccess
-      ? [
-        {
-          type: "group" as const,
-          label: sectionLabel(t("layout.menu.manager", "Manager"), t("layout.menu.teamManagement", "Team Management")),
-          children: [
-            { key: "/manager/dashboard", icon: <DashboardOutlined />, label: <Link to="/manager/dashboard">{t("layout.managerDashboard", "Manager Dashboard")}</Link> },
-            { key: "/manager/team", icon: <TeamOutlined />, label: <Link to="/manager/team">{t("layout.myTeam", "My Team")}</Link> },
-            { key: "/manager/team-requests", icon: <FileSearchOutlined />, label: <Link to="/manager/team-requests">{t("layout.teamRequests", "Team Requests")}</Link> },
-            { key: "/manager/attendance-corrections", icon: <ClockCircleOutlined />, label: <Link to="/manager/attendance-corrections">{t("layout.attendanceCorrections", "Attendance Corrections")}</Link> },
-            { key: "/manager/loan-requests", icon: <DollarOutlined />, label: <Link to="/manager/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
-          ],
-        },
-      ]
-      : []),
+    ...buildManagerNavGroups(t, hasManagerAccess),
     ...(isFinanceApprover
       ? [
         {
@@ -765,17 +747,7 @@ export default function BaseLayout() {
         { key: "/pending-inbox", icon: <InboxOutlined />, label: <Link to="/pending-inbox">{t("layout.pendingInbox", "Pending Inbox")}</Link> },
       ],
     },
-    {
-      type: "group",
-      label: sectionLabel(t("layout.menu.manager", "Manager"), t("layout.menu.teamManagement", "Team Management")),
-      children: [
-        { key: "/manager/dashboard", icon: <DashboardOutlined />, label: <Link to="/manager/dashboard">{t("layout.managerDashboard", "Manager Dashboard")}</Link> },
-        { key: "/manager/team", icon: <TeamOutlined />, label: <Link to="/manager/team">{t("layout.myTeam", "My Team")}</Link> },
-        { key: "/manager/team-requests", icon: <FileSearchOutlined />, label: <Link to="/manager/team-requests">{t("layout.teamRequests", "Team Requests")}</Link> },
-        { key: "/manager/attendance-corrections", icon: <ClockCircleOutlined />, label: <Link to="/manager/attendance-corrections">{t("layout.attendanceCorrections", "Attendance Corrections")}</Link> },
-        { key: "/manager/loan-requests", icon: <DollarOutlined />, label: <Link to="/manager/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },
-      ],
-    },
+    ...buildManagerNavGroups(t, hasManagerAccess),
     {
       type: "group",
       label: sectionLabel(t("layout.menu.account", "Account"), t("layout.profile")),
@@ -786,8 +758,13 @@ export default function BaseLayout() {
           label: t("layout.announcements", "Announcements"),
           children: [
             { key: "/employee/announcements", label: <Link to="/employee/announcements">{t("layout.myFeed", "My Feed")}</Link> },
-            { key: "/manager/announcements", label: <Link to="/manager/announcements">{t("layout.manage", "Manage")}</Link> },
-            { key: "/manager/announcements/create", label: <Link to="/manager/announcements/create">{t("layout.newAnnouncement", "New")}</Link> },
+            // Team announcements need the manager capability, not the role.
+            ...(hasManagerAccess
+              ? [
+                { key: "/manager/announcements", label: <Link to="/manager/announcements">{t("layout.manage", "Manage")}</Link> },
+                { key: "/manager/announcements/create", label: <Link to="/manager/announcements/create">{t("layout.newAnnouncement", "New")}</Link> },
+              ]
+              : []),
           ],
         },
         { key: "/manager/profile", icon: <IdcardOutlined />, label: <Link to="/manager/profile">{t("layout.profile")}</Link> },
@@ -815,9 +792,12 @@ export default function BaseLayout() {
     },
     {
       type: "group",
-      label: sectionLabel(t("layout.menu.manager", "Manager"), t("layout.menu.teamManagement", "Team Management")),
+      label: sectionLabel(
+        t("layout.menu.teamOperations", "Team Operations"),
+        t("layout.menu.teamManagement", "Team Management"),
+      ),
       children: [
-        { key: "/manager/dashboard", icon: <DashboardOutlined />, label: <Link to="/manager/dashboard">{t("layout.managerDashboard", "Manager Dashboard")}</Link> },
+        { key: "/manager/dashboard", icon: <DashboardOutlined />, label: <Link to="/manager/dashboard">{t("layout.teamDashboard", "Team Dashboard")}</Link> },
         { key: "/manager/team", icon: <TeamOutlined />, label: <Link to="/manager/team">{t("layout.myTeam", "My Team")}</Link> },
         { key: "/manager/team-requests", icon: <FileSearchOutlined />, label: <Link to="/manager/team-requests">{t("layout.teamRequests", "Team Requests")}</Link> },
         { key: "/manager/loan-requests", icon: <DollarOutlined />, label: <Link to="/manager/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link> },

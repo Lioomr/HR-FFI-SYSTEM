@@ -190,6 +190,18 @@ class AttendanceTests(TestCase):
         # Audit
         self.assertTrue(AuditLog.objects.filter(action="attendance.check_in").exists())
 
+    def test_employee_check_in_with_inactive_manager_falls_back_to_hr(self):
+        self.manager_profile.employment_status = EmployeeProfile.EmploymentStatus.SUSPENDED
+        self.manager_profile.save(update_fields=["employment_status", "updated_at"])
+        self.profile1.manager_profile = self.manager_profile
+        self.profile1.save(update_fields=["manager_profile", "updated_at"])
+
+        self.client.force_authenticate(user=self.emp1)
+        response = self.client.post("/api/attendance/me/check-in/")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["data"]["status"], AttendanceRecord.Status.PENDING_HR)
+
     def test_employee_check_in_duplicate_fail(self):
         self.client.force_authenticate(user=self.emp1)
         self.client.post("/api/attendance/me/check-in/")  # First
@@ -539,9 +551,8 @@ class AttendanceTests(TestCase):
             HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
         )
 
-        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
-        self.assertEqual(list_response.data["data"]["items"], [])
-        self.assertEqual(approve_response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(list_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(approve_response.status_code, status.HTTP_403_FORBIDDEN)
         other_company_record.refresh_from_db()
         self.assertEqual(other_company_record.status, AttendanceRecord.Status.PENDING_MANAGER)
 

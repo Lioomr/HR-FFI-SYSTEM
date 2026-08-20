@@ -9,6 +9,7 @@ from reportlab.pdfgen import canvas
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from audit.models import AuditLog
 from core.models import DelegationRule
 from employees.models import EmployeeDocument, EmployeeProfile
 from leaves.models import LeaveRequest, LeaveType
@@ -137,6 +138,7 @@ class ManagerWorkflowTests(APITestCase):
         self.delegate_user = User.objects.create_user(email="delegate@example.com", password="password")
         self.delegate_profile = EmployeeProfile.objects.create(
             user=self.delegate_user,
+            company=self.company,
             employee_id="EMP-DEL",
             department="Operations",
             job_title="Delegate",
@@ -263,6 +265,69 @@ class ManagerWorkflowTests(APITestCase):
         self.assertEqual(lr.status, LeaveRequest.RequestStatus.PENDING_HR)
         self.assertEqual(lr.manager_decision_by, self.manager_user)
         self.assertEqual(lr.manager_decision_note, "Enjoy!")
+
+    def test_manager_delegation_can_approve_and_is_audited(self):
+        DelegationRule.objects.create(
+            from_user=self.manager_user,
+            to_user=self.delegate_user,
+            start_at=timezone.now(),
+            created_by=self.manager_user,
+        )
+        request_obj = LeaveRequest.objects.create(
+            employee=self.employee_user,
+            employee_profile=self.employee_profile,
+            company=self.company,
+            leave_type=self.leave_type,
+            start_date=date(2027, 9, 1),
+            end_date=date(2027, 9, 2),
+            status=LeaveRequest.RequestStatus.PENDING_MANAGER,
+        )
+
+        self.client.force_authenticate(user=self.delegate_user)
+        response = self.client.post(
+            f"{self.manager_inbox_url}{request_obj.id}/approve/",
+            {"comment": "Delegated manager approval"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        audit_log = AuditLog.objects.filter(
+            action="approve",
+            entity="LeaveRequest",
+            entity_id=str(request_obj.id),
+        ).latest("created_at")
+        self.assertEqual(audit_log.metadata["actor_source"], "delegate")
+
+    def test_manager_group_alone_cannot_approve_unrelated_request(self):
+        manager_group, _ = Group.objects.get_or_create(name="Manager")
+        unrelated_user = User.objects.create_user(email="unrelated-manager@example.com", password="password")
+        unrelated_user.groups.add(manager_group)
+        EmployeeProfile.objects.create(
+            user=unrelated_user,
+            company=self.company,
+            employee_id="EMP-UNRELATED-MGR",
+            hire_date=date(2020, 1, 1),
+        )
+        request_obj = LeaveRequest.objects.create(
+            employee=self.employee_user,
+            employee_profile=self.employee_profile,
+            company=self.company,
+            leave_type=self.leave_type,
+            start_date=date(2027, 9, 3),
+            end_date=date(2027, 9, 4),
+            status=LeaveRequest.RequestStatus.PENDING_MANAGER,
+        )
+
+        self.client.force_authenticate(user=unrelated_user)
+        response = self.client.post(
+            f"{self.manager_inbox_url}{request_obj.id}/approve/",
+            {"comment": "Not allowed"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        request_obj.refresh_from_db()
+        self.assertEqual(request_obj.status, LeaveRequest.RequestStatus.PENDING_MANAGER)
 
     def test_hr_approval_sends_to_ceo(self):
         """

@@ -1,6 +1,7 @@
 from rest_framework.permissions import SAFE_METHODS, BasePermission
 
 from core.permissions import get_role
+from employees.services.manager_relationships import manager_approval_actor_source
 
 
 class IsLeaveRequestOwner(BasePermission):
@@ -51,27 +52,8 @@ class IsManagerOfEmployee(BasePermission):
         return request.user and request.user.is_authenticated
 
     def has_object_permission(self, request, view, obj):
-        # obj is LeaveRequest
-        # Check if obj.employee (User) -> employee_profile -> manager_profile.user is request.user
-        if not hasattr(obj.employee, "employee_profile"):
-            return False
-        profile = obj.employee.employee_profile
-        manager_profile = profile.manager_profile
-        if manager_profile and manager_profile.user_id == request.user.id:
-            return True
-        if (
-            hasattr(request.user, "employee_profile")
-            and manager_profile
-            and manager_profile.id == request.user.employee_profile.id
-        ):
-            return True
-        if profile.manager_id == request.user.id:
-            return True
-
-        from core.delegation import is_user_delegate_for_manager
-
-        manager_user = manager_profile.user if manager_profile and manager_profile.user_id else profile.manager
-        return bool(manager_user and is_user_delegate_for_manager(request.user, manager_user))
+        profile = getattr(obj.employee, "employee_profile", None)
+        return bool(manager_approval_actor_source(request.user, profile, allow_admin=True))
 
 
 class IsEmployeeOnly(BasePermission):

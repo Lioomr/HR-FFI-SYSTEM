@@ -5,7 +5,7 @@ import PageHeader from "../../../components/ui/PageHeader";
 import LoadingState from "../../../components/ui/LoadingState";
 import Unauthorized403Page from "../../Unauthorized403Page";
 import { isApiError } from "../../../services/api/apiTypes";
-import { apply422ToForm } from "../../../utils/formErrors";
+import { apply422ToForm, getFieldApiError } from "../../../utils/formErrors";
 import { notifyError } from "../../../utils/notify";
 import { isForbidden } from "../../../services/api/httpErrors";
 import { createEmployee, listEmployees } from "../../../services/api/employeesApi";
@@ -36,6 +36,7 @@ export default function CreateEmployeePage() {
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [forbidden, setForbidden] = useState(false);
+    const [managerAssignmentError, setManagerAssignmentError] = useState<string | null>(null);
 
     // Reference data
     const [departments, setDepartments] = useState<Department[]>([]);
@@ -110,6 +111,7 @@ export default function CreateEmployeePage() {
             notifyError(t("organization.headOffice.switchToCreateEmployees"));
             return;
         }
+        setManagerAssignmentError(null);
         try {
             // Validate form
             const values = await form.validateFields();
@@ -123,6 +125,7 @@ export default function CreateEmployeePage() {
             if (isApiError(response)) {
                 // Apply 422 field errors
                 apply422ToForm(form, response);
+                setManagerAssignmentError(getFieldApiError(response, "manager_profile_id") ?? null);
                 notifyError(response.message || "Failed to create employee");
                 setSubmitting(false);
                 return;
@@ -146,6 +149,7 @@ export default function CreateEmployeePage() {
 
             // Apply backend 422 errors
             apply422ToForm(form, err);
+            setManagerAssignmentError(getFieldApiError(err, "manager_profile_id") ?? null);
 
             if (isForbidden(err)) {
                 setForbidden(true);
@@ -202,6 +206,7 @@ export default function CreateEmployeePage() {
             <Card style={{ borderRadius: 16 }}>
                 <EmployeeForm
                     form={form}
+                    managerAssignmentError={managerAssignmentError}
                     refOptions={{
                         departments,
                         positions,

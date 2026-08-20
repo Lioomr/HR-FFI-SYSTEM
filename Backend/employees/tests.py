@@ -73,7 +73,7 @@ class EmployeeProfileTests(TestCase):
         self.admin_user.save(update_fields=["full_name"])
         archived_profile = EmployeeProfile.objects.create(
             user=self.employee_user,
-            employee_id="EMP-ARCHIVED-SERIALIZER",
+            employee_id="EMP-ARCH-SERIAL",
             is_archived=True,
             archived_at=timezone.now(),
             archived_by=self.admin_user,
@@ -94,7 +94,7 @@ class EmployeeProfileTests(TestCase):
     def test_read_serializer_returns_null_archiver_for_non_archived_employee(self):
         profile = EmployeeProfile.objects.create(
             user=self.employee_user,
-            employee_id="EMP-ACTIVE-SERIALIZER",
+            employee_id="EMP-ACT-SERIAL",
         )
 
         data = EmployeeProfileReadSerializer(profile).data
@@ -394,9 +394,12 @@ class EmployeeProfileTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_manual_create_computes_total_salary_and_syncs_manager_profile(self):
+        from organization.services import get_default_company
+
         manager_user = User.objects.create_user(email="mgr@ffi.com", password="password", full_name="Line Manager")
         manager_profile = EmployeeProfile.objects.create(
             user=manager_user,
+            company=get_default_company(),
             employee_id="EMP-MAN-01",
             department_ref=self.dept,
             position_ref=self.pos_senior,
@@ -571,7 +574,10 @@ class EmployeeProfileTests(TestCase):
         response = self.client.get("/api/employees/manager/access/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["data"], {"has_access": False})
+        self.assertEqual(
+            response.data["data"],
+            {"has_access": False, "managed_employee_count": 0, "source": "none", "scopes": []},
+        )
 
     def test_employee_manager_access_probe_returns_true_for_direct_manager(self):
         manager_profile = EmployeeProfile.objects.create(
@@ -600,7 +606,15 @@ class EmployeeProfileTests(TestCase):
         response = self.client.get("/api/employees/manager/access/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["data"], {"has_access": True})
+        self.assertEqual(
+            response.data["data"],
+            {
+                "has_access": True,
+                "managed_employee_count": 1,
+                "source": "direct_reports",
+                "scopes": ["leave", "loan", "attendance", "asset", "announcement"],
+            },
+        )
 
     def test_employee_can_list_same_company_delegation_candidates(self):
         company = OrganizationNode.objects.create(
@@ -807,6 +821,17 @@ class EmployeeProfileTests(TestCase):
         self.assertNotEqual(results[0]["employee_id"], active_profile.employee_id)
 
     def test_excel_import_raw_dates_saudi_foreign_and_manager_profile_linking(self):
+        from organization.services import get_default_company
+
+        manager_user = User.objects.create_user(email="import-manager@ffi.com", password="password")
+        EmployeeProfile.objects.create(
+            user=manager_user,
+            company=get_default_company(),
+            employee_id="EMP-IMPORT-MANAGER",
+            employee_number="MGR-100",
+            full_name="Manager One",
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        )
         self.client.force_authenticate(user=self.hr_user)
         wb = Workbook()
         ws = wb.active

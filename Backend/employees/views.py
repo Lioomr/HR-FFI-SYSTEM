@@ -22,7 +22,7 @@ from announcements.models import Announcement
 from audit.utils import audit
 from core.exporting import audit_export, xlsx_response
 from core.pagination import EmployeePagination, StandardPagination
-from core.permissions import get_role, has_direct_reports
+from core.permissions import get_role
 from core.responses import error, success
 from core.services import (
     get_ceo_approver_users,
@@ -51,7 +51,14 @@ from .serializers import (
     EmployeeProfileReadSerializer,
     EmployeeProfileWriteSerializer,
 )
-from .services import EmployeeImporter
+from .services import (
+    MANAGER_SCOPES,
+    EmployeeImporter,
+    has_manager_access,
+    managed_reports_queryset,
+    manager_scope_q,
+)
+from .services.manager_relationships import log_manager_assignment_change, reroute_pending_manager_requests
 from .storage import PrivateUploadStorage
 from .tasks import extract_employee_document
 from .throttles import EmployeeImportThrottle
@@ -101,6 +108,7 @@ def _audit_snapshot(instance: EmployeeProfile) -> dict:
         "archived_by_id": instance.archived_by_id,
         "archive_reason": instance.archive_reason,
         "manager_profile_id": instance.manager_profile.id if instance.manager_profile else None,
+        "manager_id": instance.manager_id,
         "data_source": instance.data_source,
     }
 
@@ -353,11 +361,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             return scoped_qs | base_qs.filter(company__isnull=True)
 
         if self.action == "retrieve":
-            manager_profile = getattr(user, "employee_profile", None)
-            manager_match = Q(manager=user)
-            if manager_profile:
-                manager_match = manager_match | Q(manager_profile=manager_profile)
-            return base_qs.filter(Q(user=user) | manager_match).distinct()
+            return base_qs.filter(Q(user=user) | manager_scope_q(user)).distinct()
 
         return base_qs.filter(user=user)
 
@@ -378,7 +382,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
 
         previous = _audit_snapshot(profile)
         with transaction.atomic():
-            profile = EmployeeProfile.objects.select_for_update().select_related("user").get(pk=profile.pk)
+            profile = EmployeeProfile.objects.select_for_update(of=("self",)).select_related("user").get(pk=profile.pk)
             should_reactivate_user = True
             latest_request = (
                 EmployeeDeletionRequest.objects.filter(
@@ -857,8 +861,26 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
     )
     def manager_access(self, request):
         role = get_role(request.user)
-        has_role_access = role in ["Manager", "CEO", "CFO", "SystemAdmin", "HRManager"]
-        return success({"has_access": bool(has_role_access or has_direct_reports(request.user))})
+        reports = managed_reports_queryset(request.user)
+        managed_employee_count = reports.count()
+        if managed_employee_count:
+            direct_report_count = reports.filter(manager_profile__user=request.user).count()
+            source = "direct_reports" if direct_report_count else "delegation"
+            has_access = True
+        elif role == "SystemAdmin":
+            source = "admin"
+            has_access = True
+        else:
+            source = "none"
+            has_access = False
+        return success(
+            {
+                "has_access": has_access,
+                "managed_employee_count": managed_employee_count,
+                "source": source,
+                "scopes": MANAGER_SCOPES if has_access else [],
+            }
+        )
 
     @action(
         detail=False,
@@ -868,7 +890,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
     )
     def manager_team(self, request):
         role = get_role(request.user)
-        if role not in ["Manager", "CEO", "CFO", "SystemAdmin", "HRManager"] and not has_direct_reports(request.user):
+        if role != "SystemAdmin" and not has_manager_access(request.user):
             return error("Forbidden", status=status.HTTP_403_FORBIDDEN)
 
         base_qs = EmployeeProfile.objects.select_related(
@@ -886,12 +908,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         if role == "SystemAdmin":
             qs = base_qs
         else:
-            manager_profile = getattr(request.user, "employee_profile", None)
-            qs = base_qs.filter(
-                Q(manager=request.user) | Q(manager_profile=manager_profile)
-                if manager_profile
-                else Q(manager=request.user)
-            )
+            qs = base_qs.filter(manager_scope_q(request.user)).distinct()
 
         search = request.query_params.get("search")
         if search:
@@ -932,10 +949,15 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
                         data_source=EmployeeProfile.DataSource.MANUAL,
                         company=company,
                     )
-                    if instance.manager_profile and instance.manager != instance.manager_profile.user:
-                        instance.manager = instance.manager_profile.user
-                        instance.save(update_fields=["manager", "updated_at"])
                     _sync_legacy_fields(instance)
+                    log_manager_assignment_change(
+                        employee=instance,
+                        previous_manager=None,
+                        new_manager=instance.manager_profile,
+                        changed_by=self.request.user,
+                        request=self.request,
+                        source="hr_create",
+                    )
                     audit(
                         self.request,
                         "employee_profile_created",
@@ -960,11 +982,19 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         ensure_company_write_allowed(self.request)
         before = _audit_snapshot(serializer.instance)
+        previous_manager = serializer.instance.manager_profile
         instance = serializer.save()
-        if instance.manager_profile and instance.manager != instance.manager_profile.user:
-            instance.manager = instance.manager_profile.user
-            instance.save(update_fields=["manager", "updated_at"])
         _sync_legacy_fields(instance)
+        log_manager_assignment_change(
+            employee=instance,
+            previous_manager=previous_manager,
+            new_manager=instance.manager_profile,
+            changed_by=self.request.user,
+            request=self.request,
+            source="hr_update",
+        )
+        if previous_manager and instance.manager_profile_id is None:
+            reroute_pending_manager_requests(instance, actor=self.request.user)
         audit(
             self.request,
             "employee_profile_updated",
@@ -1372,7 +1402,7 @@ class EmployeeDeletionRequestViewSet(viewsets.ModelViewSet):
 
         with transaction.atomic():
             instance = (
-                EmployeeDeletionRequest.objects.select_for_update()
+                EmployeeDeletionRequest.objects.select_for_update(of=("self",))
                 .select_related("employee_profile", "employee_profile__user", "target_user")
                 .get(pk=self.get_object().pk)
             )
@@ -1425,6 +1455,12 @@ class EmployeeDeletionRequestViewSet(viewsets.ModelViewSet):
             )
 
         instance.refresh_from_db()
+        reroute_pending_manager_requests(
+            EmployeeProfile.objects.select_related("user", "manager_profile", "manager_profile__user").filter(
+                manager_profile=profile
+            ),
+            actor=request.user,
+        )
         audit(
             request,
             "employee_archived",

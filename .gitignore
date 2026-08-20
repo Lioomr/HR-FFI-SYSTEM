@@ -77,3 +77,7 @@ exports/
 
 # Leave PDF generated templates
 Backend/static/pdf_templates/
+!Backend/static/pdf_templates/
+Backend/static/pdf_templates/*
+!Backend/static/pdf_templates/generate_leave_request_final.py
+!Backend/static/pdf_templates/leave_request_blank_field_map.json

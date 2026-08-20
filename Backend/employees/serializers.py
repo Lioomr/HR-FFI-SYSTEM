@@ -2,6 +2,7 @@ from pathlib import Path
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import models
 from django.utils import timezone
 from rest_framework import serializers
@@ -11,6 +12,7 @@ from core.services import get_workflow_snapshot
 from hr_reference.models import Department, Position, Sponsor, TaskGroup
 
 from .models import EmployeeDeletionRequest, EmployeeDocument, EmployeeImport, EmployeeProfile
+from .services.manager_relationships import validate_manager_assignment
 
 EMPLOYEE_DOCUMENT_ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png"}
 EMPLOYEE_DOCUMENT_MAX_SIZE = int(getattr(settings, "MAX_EMPLOYEE_DOCUMENT_SIZE_BYTES", 5 * 1024 * 1024))
@@ -350,8 +352,7 @@ class EmployeeProfileWriteSerializer(serializers.ModelSerializer):
                 is_active=True,
             )
             self.fields["manager_profile_id"].queryset = EmployeeProfile.objects.filter(
-                models.Q(company=company) | models.Q(company__isnull=True),
-                is_archived=False,
+                company=company,
             )
 
     def validate_full_name(self, value):
@@ -364,6 +365,15 @@ class EmployeeProfileWriteSerializer(serializers.ModelSerializer):
         full_name_en = attrs.get("full_name_en")
         if full_name is None and full_name_en:
             attrs["full_name"] = full_name_en
+
+        if "manager_profile" in attrs:
+            employee = self.instance or EmployeeProfile()
+            request = self.context.get("request")
+            company = employee.company if self.instance else getattr(request, "_active_company", None)
+            try:
+                validate_manager_assignment(employee, attrs.get("manager_profile"), company=company)
+            except DjangoValidationError as exc:
+                raise serializers.ValidationError({"manager_profile_id": exc.messages}) from exc
         return super().validate(attrs)
 
 

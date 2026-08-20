@@ -9,6 +9,7 @@ from core.services.bird_email_service import (
     send_leave_request_submitted_email,
 )
 from core.services.whatsapp_service import WhatsAppService
+from employees.services.manager_relationships import get_valid_direct_manager_user
 from in_app_notifications.dispatcher import dispatch_notification_channels
 from in_app_notifications.models import Notification
 from leaves.models import LeaveRequest
@@ -93,8 +94,7 @@ def notify_leave_submitted(leave_request: LeaveRequest) -> None:
         return
 
     profile = getattr(employee, "employee_profile", None)
-    manager_profile = getattr(profile, "manager_profile", None)
-    manager = getattr(manager_profile, "user", None) or getattr(profile, "manager", None)
+    manager = get_valid_direct_manager_user(profile)
 
     days = get_leave_days(leave_request.start_date, leave_request.end_date)
     base_url = _frontend_url()

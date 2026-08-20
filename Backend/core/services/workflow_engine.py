@@ -1113,6 +1113,9 @@ def _adapter_for_instance(instance):
 
 @transaction.atomic
 def sync_workflow(instance, *, actor=None, workflow_key: str | None = None) -> WorkflowInstance:
+    from employees.services.manager_relationships import fallback_invalid_manager_stage
+
+    fallback_invalid_manager_stage(instance, actor=actor)
     resolved_workflow_key, snapshot_builder, events_builder = _adapter_for_instance(instance)
     if workflow_key and workflow_key != resolved_workflow_key:
         raise ValueError("workflow_key does not match instance adapter")

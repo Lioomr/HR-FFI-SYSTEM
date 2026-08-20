@@ -7,7 +7,8 @@ const leavesApi = {
    */
   getMyBalances: async (year: number): Promise<ApiResponse<LeaveBalance[]>> => {
     const response = await apiClient.get<ApiResponse<LeaveBalance[]>>(
-      `/api/leaves/employee/leave-balance/?year=${year}`
+      "/api/leaves/employee/leave-balance/",
+      { params: { year } }
     );
     return response.data;
   },
@@ -20,7 +21,8 @@ const leavesApi = {
     year: number
   ): Promise<ApiResponse<LeaveBalance[]>> => {
     const response = await apiClient.get<ApiResponse<LeaveBalance[]>>(
-      `/api/leaves/leave-balances/?employee_id=${employeeId}&year=${year}`
+      "/api/leaves/leave-balances/",
+      { params: { employee_id: employeeId, year } }
     );
     return response.data;
   },

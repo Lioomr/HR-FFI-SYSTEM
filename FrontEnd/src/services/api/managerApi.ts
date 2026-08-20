@@ -115,11 +115,50 @@ export type ManagerTeamMember = {
     department?: string;
     position?: string;
     manager_name?: string;
+    /** Present only on deployments whose team serializer exposes it. */
+    employment_status?: string;
 };
+
+/**
+ * Where the manager capability comes from.
+ * - direct_reports: the user is the assigned `manager_profile` of active employees
+ * - delegation: the user acts for a manager through an active delegation
+ * - role_compat: legacy Manager-group membership kept for backwards compatibility
+ * - admin: SystemAdmin override
+ * - none: no manager capability
+ */
+export type ManagerAccessSource =
+    | "direct_reports"
+    | "delegation"
+    | "role_compat"
+    | "admin"
+    | "none";
 
 export type ManagerAccess = {
     has_access: boolean;
+    managed_employee_count: number;
+    source: ManagerAccessSource;
+    scopes: string[];
 };
+
+/** Safe default used whenever the capability cannot be established. */
+export const NO_MANAGER_ACCESS: ManagerAccess = {
+    has_access: false,
+    managed_employee_count: 0,
+    source: "none",
+    scopes: [],
+};
+
+/** Fills in any field the backend omits so callers never have to guard. */
+export function normalizeManagerAccess(raw: unknown): ManagerAccess {
+    const value = (raw ?? {}) as Partial<ManagerAccess>;
+    return {
+        has_access: Boolean(value.has_access),
+        managed_employee_count: Number(value.managed_employee_count) || 0,
+        source: value.source ?? (value.has_access ? "direct_reports" : "none"),
+        scopes: Array.isArray(value.scopes) ? value.scopes : [],
+    };
+}
 
 export async function getManagerAttendance(status?: string) {
     const params = status ? { status } : {};
@@ -165,8 +204,14 @@ export async function getManagerTeam(search?: string) {
 }
 
 export async function getManagerAccess() {
-    const { data } = await api.get<ApiResponse<ManagerAccess>>("/employees/manager/access");
-    return data;
+    const { data } = await api.get<ApiResponse<ManagerAccess>>("/api/employees/manager/access/");
+    if (data?.status === "success") {
+        return { ...data, data: normalizeManagerAccess(data.data) } as ApiResponse<ManagerAccess>;
+    }
+    if (data && typeof data === "object" && "has_access" in data) {
+        return { status: "success", data: normalizeManagerAccess(data) } as ApiResponse<ManagerAccess>;
+    }
+    return data as ApiResponse<ManagerAccess>;
 }
 
 export async function getManagerAssetReturnRequests(status?: string) {

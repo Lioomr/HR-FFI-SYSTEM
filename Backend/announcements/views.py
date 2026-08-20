@@ -19,6 +19,7 @@ from core.permissions import get_role
 from core.responses import error, success
 from employees.models import EmployeeProfile
 from employees.permissions import IsHRManagerOrAdmin
+from employees.services.manager_relationships import has_manager_access, manager_scope_q
 from organization.services import (
     ensure_company_write_allowed,
     filter_queryset_by_company_scope,
@@ -62,18 +63,23 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated()]
 
     def _manager_team_user_ids(self, user):
-        manager_profile = getattr(user, "employee_profile", None)
-        reports_qs = EmployeeProfile.objects.filter(manager=user)
-        if manager_profile:
-            reports_qs = EmployeeProfile.objects.filter(Q(manager=user) | Q(manager_profile=manager_profile))
+        reports_qs = EmployeeProfile.objects.filter(manager_scope_q(user))
         reports_qs = filter_queryset_by_company_scope(reports_qs, self.request)
-        return reports_qs.exclude(user__isnull=True).values_list("user_id", flat=True)
+        return (
+            reports_qs.filter(
+                is_archived=False,
+                employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+                user__is_active=True,
+            )
+            .exclude(user__isnull=True)
+            .values_list("user_id", flat=True)
+        )
 
     def _ceo_team_user_ids(self, user):
         ceo_profile = getattr(user, "employee_profile", None)
-        direct_reports_q = Q(manager=user)
+        direct_reports_q = Q(pk__in=[])
         if ceo_profile:
-            direct_reports_q = direct_reports_q | Q(manager_profile=ceo_profile)
+            direct_reports_q = Q(manager_profile=ceo_profile, company_id=ceo_profile.company_id)
 
         team_profiles = EmployeeProfile.objects.filter(
             Q(user__groups__name__in=["Manager", "HRManager"]) | direct_reports_q
@@ -140,7 +146,9 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
             return self._collapse_broadcast_duplicates(scoped_announcements)
 
         # Managers can also see what they created for their team.
-        if user_role == "MANAGER":
+        if user_role == "MANAGER" or (
+            user_role not in {"ADMIN", "HR_MANAGER", "CEO"} and has_manager_access(user)
+        ):
             base_qs = scoped_announcements.filter(
                 Q(created_by=user) | Q(target_user=user) | self._role_target_filter("MANAGER")
             )
@@ -208,8 +216,11 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         ensure_company_write_allowed(request)
         active_company = get_active_company_for_request(request)
         user_role = get_role(request.user)
+        manager_capability = user_role not in ["SystemAdmin", "HRManager", "CEO"] and has_manager_access(
+            request.user
+        )
         serializer_context = self.get_serializer_context()
-        if user_role in ["Manager", "CEO"]:
+        if user_role in ["Manager", "CEO"] or manager_capability:
             serializer_context["allow_empty_targets_for_manager"] = True
 
         serializer = self.get_serializer(data=request.data, context=serializer_context)
@@ -221,7 +232,7 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         target_user_ids = validated.pop("target_user_ids", [])
         attachment = validated.get("attachment")
 
-        if user_role not in ["SystemAdmin", "HRManager", "Manager", "CEO"]:
+        if user_role not in ["SystemAdmin", "HRManager", "Manager", "CEO"] and not manager_capability:
             return error(
                 "Forbidden", errors=["You are not allowed to create announcements."], status=status.HTTP_403_FORBIDDEN
             )
@@ -259,7 +270,7 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
                     announcement.attachment.save(attachment_name, ContentFile(attachment_bytes), save=True)
                 created_announcements.append(announcement)
         # Manager can only target own team (direct reports), never global roles.
-        elif user_role in ["Manager", "CEO"]:
+        elif user_role in ["Manager", "CEO"] or manager_capability:
             if validated.get("target_roles"):
                 return error(
                     "Validation error",
@@ -269,7 +280,7 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
 
             team_user_ids = (
                 set(self._manager_team_user_ids(request.user))
-                if user_role == "Manager"
+                if user_role == "Manager" or manager_capability
                 else set(self._ceo_team_user_ids(request.user))
             )
             if not team_user_ids:

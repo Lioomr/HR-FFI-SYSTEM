@@ -6,7 +6,7 @@ import LoadingState from "../../../components/ui/LoadingState";
 import ErrorState from "../../../components/ui/ErrorState";
 import Unauthorized403Page from "../../Unauthorized403Page";
 import { isApiError } from "../../../services/api/apiTypes";
-import { apply422ToForm } from "../../../utils/formErrors";
+import { apply422ToForm, getFieldApiError } from "../../../utils/formErrors";
 import { notifyError, notifySuccess } from "../../../utils/notify";
 import { isForbidden } from "../../../services/api/httpErrors";
 import { getEmployee, listEmployees, updateEmployee } from "../../../services/api/employeesApi";
@@ -39,6 +39,7 @@ export default function EditEmployeePage() {
     const [error, setError] = useState<string | null>(null);
     const [employeeCompanyId, setEmployeeCompanyId] = useState<number | null>(null);
     const [notAvailableInSelectedCompany, setNotAvailableInSelectedCompany] = useState(false);
+    const [managerAssignmentError, setManagerAssignmentError] = useState<string | null>(null);
 
     // Reference data
     const [departments, setDepartments] = useState<Department[]>([]);
@@ -155,6 +156,7 @@ export default function EditEmployeePage() {
     const handleSubmit = async () => {
         if (!id) return;
 
+        setManagerAssignmentError(null);
         try {
             // Validate form
             const values = await form.validateFields();
@@ -168,6 +170,7 @@ export default function EditEmployeePage() {
             if (isApiError(response)) {
                 // Apply 422 field errors
                 apply422ToForm(form, response);
+                setManagerAssignmentError(getFieldApiError(response, "manager_profile_id") ?? null);
                 notifyError(response.message || t("hr.employees.updateFailed"));
                 setSubmitting(false);
                 return;
@@ -187,6 +190,7 @@ export default function EditEmployeePage() {
 
             // Apply backend 422 errors
             apply422ToForm(form, err);
+            setManagerAssignmentError(getFieldApiError(err, "manager_profile_id") ?? null);
 
             if (isForbidden(err)) {
                 setForbidden(true);
@@ -257,6 +261,8 @@ export default function EditEmployeePage() {
             <Card style={{ borderRadius: 16 }}>
                 <EmployeeForm
                     form={form}
+                    currentEmployeeId={id}
+                    managerAssignmentError={managerAssignmentError}
                     refOptions={{
                         departments,
                         positions,

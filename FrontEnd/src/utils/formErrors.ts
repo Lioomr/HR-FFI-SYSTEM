@@ -165,6 +165,54 @@ export function getValidationErrors(apiError: ApiError): Record<string, string[]
 }
 
 /**
+ * Extracts the first validation message the backend reported for one field.
+ *
+ * Accepts both the contract array shape (`[{ field, message }]`) and the legacy
+ * object map (`{ field: ["msg"] }`), and both raw ApiError payloads and Axios
+ * errors carrying them.
+ *
+ * @example
+ * const managerError = getFieldApiError(err, "manager_profile_id");
+ */
+export function getFieldApiError(error: unknown, field: string): string | undefined {
+  if (!error || typeof error !== "object") {
+    return undefined;
+  }
+
+  const anyError = error as any;
+  const candidates = [anyError, anyError.response?.data, anyError.apiData];
+
+  for (const candidate of candidates) {
+    const errors = candidate?.errors;
+    if (!errors) continue;
+
+    if (Array.isArray(errors)) {
+      for (const item of errors) {
+        if (
+          typeof item === "object" &&
+          item !== null &&
+          item.field === field &&
+          typeof item.message === "string" &&
+          item.message.trim()
+        ) {
+          return item.message;
+        }
+      }
+    } else if (typeof errors === "object") {
+      const value = errors[field];
+      if (Array.isArray(value) && typeof value[0] === "string" && value[0].trim()) {
+        return value[0];
+      }
+      if (typeof value === "string" && value.trim()) {
+        return value;
+      }
+    }
+  }
+
+  return undefined;
+}
+
+/**
  * Extracts the first human-readable validation message from an API error payload.
  */
 export function getFirstApiErrorMessage(error: unknown): string | undefined {

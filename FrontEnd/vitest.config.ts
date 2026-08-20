@@ -24,5 +24,6 @@ export default defineConfig({
         return false;
       }
     },
+    hookTimeout: 20000,
   },
 });

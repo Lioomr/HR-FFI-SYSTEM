@@ -14,14 +14,12 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 
 from audit.utils import audit
-from core.delegation import get_delegated_manager_user_ids
 from core.pagination import StandardPagination
 from core.pdf import merge_pdfs
 from core.permissions import IsDepartmentCEOApprover, get_role
 from core.responses import error, success
 from core.services import (
     get_ceo_approver_users,
-    get_direct_manager_user,
     get_hr_approver_users,
     notify_profile_request_status_whatsapp,
     notify_users_for_pending_status,
@@ -30,6 +28,11 @@ from core.services import (
     sync_workflow,
 )
 from employees.models import EmployeeProfile
+from employees.services.manager_relationships import (
+    get_valid_direct_manager_user,
+    manager_approval_actor_source,
+    manager_scope_q,
+)
 from in_app_notifications.dispatcher import dispatch_notification_channels
 from in_app_notifications.models import Notification
 from leaves.models import LeaveRequest
@@ -99,20 +102,13 @@ def _asset_invoice_pdf_bytes(asset) -> bytes | None:
 
 
 def _reject_self_approval(request, profile):
-    if _is_hr_manager_profile(profile) and getattr(profile, "user_id", None) == request.user.id:
+    if getattr(profile, "user_id", None) == request.user.id:
         return error("Validation error", errors=["Self approval is not allowed."], status=422)
     return None
 
 
 def _resolve_manager_user(profile: EmployeeProfile | None):
-    if not profile:
-        return None
-    if getattr(profile, "manager_profile_id", None) and getattr(profile.manager_profile, "user_id", None):
-        return profile.manager_profile.user
-    if getattr(profile, "manager_id", None):
-        return profile.manager
-    user = getattr(profile, "user", None)
-    return get_direct_manager_user(user) if user else None
+    return get_valid_direct_manager_user(profile)
 
 
 _DAMAGE_STATUS_LABELS = {
@@ -1089,10 +1085,9 @@ class AssetViewSet(viewsets.ModelViewSet):
         is_hr_manager_request = _is_hr_manager_user(request.user)
         manager_user = _resolve_manager_user(profile)
         workflow_config = get_active_workflow_config()
-        requester_role = get_role(request.user)
         if is_hr_manager_request:
             initial_status = AssetReturnRequest.RequestStatus.PENDING_CEO
-        elif workflow_config.require_manager_stage and requester_role != "Manager" and manager_user:
+        elif workflow_config.require_manager_stage and manager_user:
             initial_status = AssetReturnRequest.RequestStatus.PENDING_MANAGER
         else:
             initial_status = AssetReturnRequest.RequestStatus.PENDING
@@ -1356,20 +1351,7 @@ class ManagerAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
             base_qs = filter_queryset_by_accessible_companies(qs, self.request, field_name="asset__company_id")
         if role == "SystemAdmin":
             return base_qs
-
-        manager_profile = getattr(self.request.user, "employee_profile", None)
-        manager_match = Q(employee__manager=self.request.user)
-        if manager_profile:
-            manager_match = manager_match | Q(employee__manager_profile=manager_profile)
-        delegated_manager_ids = get_delegated_manager_user_ids(self.request.user)
-        if delegated_manager_ids:
-            manager_match = (
-                manager_match
-                | Q(employee__manager_id__in=delegated_manager_ids)
-                | Q(employee__manager_profile__user_id__in=delegated_manager_ids)
-            )
-
-        return base_qs.filter(manager_match | Q(manager_decision_by=self.request.user)).distinct()
+        return base_qs.filter(manager_scope_q(self.request.user, employee_prefix="employee__")).distinct()
 
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
@@ -1394,6 +1376,13 @@ class ManagerAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
         self_approval_error = _reject_self_approval(request, instance.employee)
         if self_approval_error:
             return self_approval_error
+        actor_source = manager_approval_actor_source(
+            request.user,
+            instance.employee,
+            allow_admin=True,
+        )
+        if not actor_source:
+            return error("Forbidden", errors=["You cannot approve this asset return request."], status=403)
         if instance.status != AssetReturnRequest.RequestStatus.PENDING_MANAGER:
             return error("Validation error", errors=["Request is not pending manager approval."], status=422)
 
@@ -1407,7 +1396,13 @@ class ManagerAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
         instance.manager_decision_note = serializer.validated_data.get("comment", "")
         instance.save(update_fields=["status", "manager_decision_by", "manager_decision_at", "manager_decision_note"])
         sync_workflow(instance, actor=request.user)
-        audit(request, "asset_return_request_approved_manager", entity="AssetReturnRequest", entity_id=instance.id)
+        audit(
+            request,
+            "asset_return_request_approved_manager",
+            entity="AssetReturnRequest",
+            entity_id=instance.id,
+            metadata={"actor_source": actor_source},
+        )
         try:
             notify_users_for_pending_status(
                 users=get_hr_approver_users(),
@@ -1428,6 +1423,13 @@ class ManagerAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
         self_approval_error = _reject_self_approval(request, instance.employee)
         if self_approval_error:
             return self_approval_error
+        actor_source = manager_approval_actor_source(
+            request.user,
+            instance.employee,
+            allow_admin=True,
+        )
+        if not actor_source:
+            return error("Forbidden", errors=["You cannot reject this asset return request."], status=403)
         if instance.status != AssetReturnRequest.RequestStatus.PENDING_MANAGER:
             return error("Validation error", errors=["Request is not pending manager approval."], status=422)
 
@@ -1444,7 +1446,13 @@ class ManagerAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
         instance.manager_decision_note = comment
         instance.save(update_fields=["status", "manager_decision_by", "manager_decision_at", "manager_decision_note"])
         sync_workflow(instance, actor=request.user)
-        audit(request, "asset_return_request_rejected_manager", entity="AssetReturnRequest", entity_id=instance.id)
+        audit(
+            request,
+            "asset_return_request_rejected_manager",
+            entity="AssetReturnRequest",
+            entity_id=instance.id,
+            metadata={"actor_source": actor_source},
+        )
         try:
             notify_profile_request_status_whatsapp(
                 profile=instance.employee,
