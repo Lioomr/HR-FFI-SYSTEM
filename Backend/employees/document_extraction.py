@@ -100,7 +100,26 @@ def _ocr_image(image: Image.Image, document_type: str) -> str:
     timeout = float(getattr(settings, "EMPLOYEE_DOCUMENT_OCR_TIMEOUT_SECONDS", 20))
     prepared = _prepare_image(image)
     language = "eng" if document_type == EmployeeDocument.DocumentType.PASSPORT else "eng+ara"
-    rotations = (0, 90, 270) if document_type == EmployeeDocument.DocumentType.PASSPORT else (0,)
+    rotations = (0, 90, 180, 270) if document_type == EmployeeDocument.DocumentType.PASSPORT else (0,)
+    if document_type == EmployeeDocument.DocumentType.PASSPORT:
+        width, height = prepared.size
+        mrz_regions = (
+            prepared.crop((0, int(height * 0.55), width, height)),
+            prepared.crop((0, int(height * 0.70), width, height)),
+        )
+        for region in mrz_regions:
+            for rotation in rotations:
+                candidate = region.rotate(rotation, expand=True) if rotation else region
+                for psm in (6, 11, 12):
+                    text = pytesseract.image_to_string(
+                        candidate,
+                        lang=language,
+                        config=f"--oem 1 --psm {psm}",
+                        timeout=timeout,
+                    ).strip()
+                    clean_text = re.sub(r"[^A-Z0-9<]", "", text.upper())
+                    if re.search(r"P\s*<\s*[A-Z]{3}", text.upper()) or "P<" in clean_text:
+                        return text
     best_text = ""
     best_score = -1
     for rotation in rotations:
@@ -186,7 +205,9 @@ def _extract_identity_fields(document_type: str, text: str) -> dict[str, str]:
             fields[key] = value
 
     if not fields.get("full_name"):
-        fields["full_name"] = _first_match(r"^\s*([A-Z]{2,}(?:\s+[A-Z]{2,}){2,})\s*$", text)
+        fallback_name = _first_match(r"^\s*([A-Z]{2,}(?:\s+[A-Z]{2,}){2,})\s*$", text)
+        if fallback_name and re.fullmatch(r"[A-Z][A-Z ]{7,}", fallback_name):
+            fields["full_name"] = fallback_name
     if not fields.get("nationality"):
         if re.search(r"^\s*مصر\s*$", text, flags=re.MULTILINE):
             fields["nationality"] = "Egypt"
