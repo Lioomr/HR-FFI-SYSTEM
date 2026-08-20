@@ -1,7 +1,7 @@
 import csv
 import io
 from decimal import Decimal
-from xml.sax.saxutils import escape
+from html import escape
 
 import openpyxl
 from django.db import IntegrityError, transaction

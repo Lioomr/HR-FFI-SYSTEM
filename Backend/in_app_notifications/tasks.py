@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import logging
-import random
 import re
+from random import SystemRandom
 
 from celery import shared_task
 from django.conf import settings
@@ -13,6 +13,7 @@ from django.utils.module_loading import import_string
 from .models import Notification, NotificationDelivery
 
 logger = logging.getLogger(__name__)
+_SECURE_RANDOM = SystemRandom()
 
 _SECRET_RE = re.compile(r"(?i)(authorization|api[-_ ]?key|access[-_ ]?key)\s*[:=]\s*\S+")
 _BEARER_RE = re.compile(r"(?i)bearer\s+\S+")
@@ -42,7 +43,7 @@ def _max_retries() -> int:
 def _retry_countdown(retry_number: int) -> float:
     base = max(1, int(getattr(settings, "NOTIFICATION_DELIVERY_RETRY_BACKOFF_SECONDS", 2)))
     exponential = base * (2**retry_number)
-    return exponential + random.uniform(0, base)
+    return exponential + _SECURE_RANDOM.uniform(0, base)
 
 
 def _is_retryable(result: dict) -> bool:

@@ -3,7 +3,7 @@ import hashlib
 import io
 import logging
 import os
-import random
+import secrets
 import string
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
@@ -79,7 +79,7 @@ def _queue_document_extraction(document: EmployeeDocument) -> list[str]:
 
 
 def generate_employee_id(prefix="FFI"):
-    suffix = "".join(random.choices(string.digits, k=6))
+    suffix = "".join(secrets.choice(string.digits) for _ in range(6))
     return f"{prefix}-{suffix}"
 
 
