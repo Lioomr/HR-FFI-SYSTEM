@@ -94,6 +94,28 @@ def test_render_labels_pdf_returns_pdf_bytes():
     assert len(pdf_bytes) > 500
 
 
+def test_render_labels_pdf_supports_d520_4x6_media():
+    asset = SimpleNamespace(
+        asset_code="LAP-00043",
+        name_en="D520 Printer Test",
+        name_ar="",
+        company=SimpleNamespace(name="FFI"),
+    )
+
+    pdf_bytes = render_labels_pdf([asset], "4X6")
+
+    assert pdf_bytes.startswith(b"%PDF")
+    assert len(pdf_bytes) > 500
+
+
+def test_render_labels_pdf_supports_d520_2x1_media():
+    asset = SimpleNamespace(
+        asset_code="LAP-00044", name_en="D520 Label", name_ar="", company=SimpleNamespace(name="FFI")
+    )
+    pdf_bytes = render_labels_pdf([asset], "2X1")
+    assert pdf_bytes.startswith(b"%PDF")
+
+
 def test_render_labels_pdf_arabic_name_does_not_crash():
     asset = SimpleNamespace(
         asset_code="LAP-00099",

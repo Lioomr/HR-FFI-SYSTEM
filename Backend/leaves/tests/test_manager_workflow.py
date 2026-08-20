@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from io import BytesIO
 
 from django.contrib.auth import get_user_model
@@ -153,10 +153,11 @@ class ManagerWorkflowTests(APITestCase):
         Employee with manager -> Status PENDING_MANAGER
         """
         self.client.force_authenticate(user=self.employee_user)
+        start = timezone.localdate() + timedelta(days=1)
         data = {
             "leave_type": self.leave_type.id,
-            "start_date": str(date(2026, 6, 1)),
-            "end_date": str(date(2026, 6, 5)),
+            "start_date": str(start),
+            "end_date": str(start + timedelta(days=4)),
             "reason": "Vacation",
         }
         response = self.client.post(self.requests_url, data)
@@ -168,10 +169,11 @@ class ManagerWorkflowTests(APITestCase):
         Employee without manager -> Status PENDING_HR
         """
         self.client.force_authenticate(user=self.indep_employee_user)
+        start = timezone.localdate() + timedelta(days=1)
         data = {
             "leave_type": self.leave_type.id,
-            "start_date": str(date(2026, 7, 1)),
-            "end_date": str(date(2026, 7, 5)),
+            "start_date": str(start),
+            "end_date": str(start + timedelta(days=4)),
             "reason": "Vacation",
         }
         response = self.client.post(self.requests_url, data)
@@ -194,10 +196,11 @@ class ManagerWorkflowTests(APITestCase):
         self.employee_profile.save(update_fields=["manager_profile", "manager", "updated_at"])
 
         self.client.force_authenticate(user=self.employee_user)
+        start = timezone.localdate() + timedelta(days=1)
         data = {
             "leave_type": self.leave_type.id,
-            "start_date": str(date(2026, 8, 1)),
-            "end_date": str(date(2026, 8, 3)),
+            "start_date": str(start),
+            "end_date": str(start + timedelta(days=2)),
             "reason": "Vacation",
         }
         response = self.client.post(self.requests_url, data)

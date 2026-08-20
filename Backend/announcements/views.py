@@ -4,6 +4,7 @@ import re
 
 from django.core import signing
 from django.core.files.base import ContentFile
+from django.db import connection
 from django.db.models import Min, Q
 from django.db.models.functions import TruncMinute
 from django.http import FileResponse
@@ -102,6 +103,13 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         )
         return queryset.filter(~Q(target_user__isnull=False, target_roles=[]) | Q(id__in=grouped_ids))
 
+    @staticmethod
+    def _role_target_filter(role):
+        """Use a JSON lookup supported by the active database backend."""
+        if connection.vendor == "postgresql":
+            return Q(target_roles__contains=[role])
+        return Q(target_roles__icontains=f'"{role}"')
+
     def get_queryset(self):
         user = self.request.user
         scoped_announcements = filter_queryset_by_company_scope(
@@ -134,7 +142,7 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         # Managers can also see what they created for their team.
         if user_role == "MANAGER":
             base_qs = scoped_announcements.filter(
-                Q(created_by=user) | Q(target_user=user) | Q(target_roles__contains=["MANAGER"])
+                Q(created_by=user) | Q(target_user=user) | self._role_target_filter("MANAGER")
             )
             return self._collapse_broadcast_duplicates(base_qs)
 
@@ -145,7 +153,7 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         # Other users only see announcements targeted to their role
         return self._collapse_broadcast_duplicates(
             scoped_announcements.filter(publish_to_dashboard=True).filter(
-                Q(target_user=user) | Q(target_roles__contains=[user_role])
+                Q(target_user=user) | self._role_target_filter(user_role)
             )
         )
 

@@ -268,6 +268,8 @@ class AssetReturnRequest(models.Model):
 
 class PrintedLabelJob(models.Model):
     class PaperSize(models.TextChoices):
+        SIZE_2X1 = "2X1", _("2x1 inch")
+        SIZE_4X6 = "4X6", _("4x6 inch")
         SIZE_50X30 = "50X30", _("50x30 mm")
         SIZE_40X30 = "40X30", _("40x30 mm")
         SIZE_60X40 = "60X40", _("60x40 mm")

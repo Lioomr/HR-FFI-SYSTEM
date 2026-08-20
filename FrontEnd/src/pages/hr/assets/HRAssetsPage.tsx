@@ -770,7 +770,7 @@ export default function HRAssetsPage() {
   const openPrintModal = (assetIds: number[]) => {
     if (assetIds.length === 0) return;
     setPrintTargetIds(assetIds);
-    setPrintPaperSize("50X30");
+    setPrintPaperSize("2X1");
     setPrintNameLanguage(language === "ar" ? "ar" : "en");
     setPrintModalOpen(true);
   };
@@ -1472,6 +1472,8 @@ export default function HRAssetsPage() {
               onChange={(e) => setPrintPaperSize(e.target.value as LabelPaperSize)}
             >
               <Space direction="vertical">
+                <Radio value="2X1">{t("hr.assets.paperSize2x1")}</Radio>
+                <Radio value="4X6">{t("hr.assets.paperSize4x6")}</Radio>
                 <Radio value="50X30">{t("hr.assets.paperSize50x30")}</Radio>
                 <Radio value="40X30">{t("hr.assets.paperSize40x30")}</Radio>
                 <Radio value="60X40">{t("hr.assets.paperSize60x40")}</Radio>

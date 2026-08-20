@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import io
+from urllib.parse import urlencode
 
 import qrcode
 from barcode import Code128
 from barcode.writer import ImageWriter
+from django.core import signing
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
@@ -14,11 +16,32 @@ from reportlab.pdfgen import canvas as pdf_canvas
 from core.pdf import PALETTE_RGB, font_pair, get_logo_path, register_fonts, shape_ar
 
 LABEL_SIZES_MM = {
+    "2X1": (50.8, 25.4),
+    "4X6": (101.6, 152.4),
     "50X30": (50, 30),
     "40X30": (40, 30),
     "60X40": (60, 40),
 }
 PAPER_SIZES = {*LABEL_SIZES_MM.keys(), "A4_GRID"}
+ASSET_LABEL_QR_SALT = "assets.label-qr.v1"
+
+
+def build_asset_label_qr_token(asset) -> str | None:
+    """Create a tamper-proof, company-bound QR lookup reference.
+
+    This is deliberately not an authorization credential: the lookup endpoint
+    still requires an authenticated HR user and applies the active-company
+    scope. It prevents an attacker from changing a QR URL into another asset.
+    """
+    asset_id = getattr(asset, "id", None)
+    company_id = getattr(asset, "company_id", None)
+    if not asset_id or not company_id:
+        return None
+    return signing.dumps(
+        {"asset_id": asset_id, "company_id": company_id},
+        salt=ASSET_LABEL_QR_SALT,
+        compress=True,
+    )
 
 
 def _build_qr_png(payload: str) -> bytes:
@@ -31,11 +54,16 @@ def _build_qr_png(payload: str) -> bytes:
     return buffer.getvalue()
 
 
-def _build_qr_payload(code: str, qr_base_url: str) -> str:
+def _build_qr_payload(asset, qr_base_url: str) -> str:
     base = (qr_base_url or "").rstrip("/")
+    code = str(getattr(asset, "asset_code", "") or "")
     if not base:
         return code
-    return f"{base}/hr/assets/lookup?code={code}"
+    token = build_asset_label_qr_token(asset)
+    if not token:
+        # Kept for PDF rendering tests and non-persisted preview objects.
+        return f"{base}/hr/assets/lookup?{urlencode({'code': code})}"
+    return f"{base}/hr/assets/lookup?{urlencode({'token': token})}"
 
 
 def _build_code128_png(code: str) -> bytes:
@@ -99,7 +127,7 @@ def _draw_single_label(
     regular, bold = font_pair()
     code = str(getattr(asset, "asset_code", "") or "")
     name = _resolve_label_name(asset, name_language)
-    qr_payload = _build_qr_payload(code, qr_base_url)
+    qr_payload = _build_qr_payload(asset, qr_base_url)
     size_key = _size_key(w, h)
     padding = 2.0 * mm
 
@@ -189,6 +217,10 @@ def _draw_single_label(
 def _size_key(w: float, h: float) -> str:
     width_mm = round(w / mm)
     height_mm = round(h / mm)
+    if (width_mm, height_mm) == (51, 25):
+        return "2X1"
+    if (width_mm, height_mm) == (102, 152):
+        return "4X6"
     return f"{width_mm}X{height_mm}"
 
 

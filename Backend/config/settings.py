@@ -320,6 +320,9 @@ EMPLOYEE_IMPORT_THROTTLE_RATE = "5/min"
 PAYROLL_FINALIZE_THROTTLE_RATE = "5/min"
 PAYROLL_GENERATE_PAYSLIPS_THROTTLE_RATE = "5/min"
 PAYROLL_EXPORT_THROTTLE_RATE = "10/min"
+# QR labels are signed, company-bound references rather than public asset URLs.
+# Reprint labels before this five-year validity window expires.
+ASSET_LABEL_QR_TOKEN_MAX_AGE_SECONDS = int(os.environ.get("ASSET_LABEL_QR_TOKEN_MAX_AGE_SECONDS", "157680000"))
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ("accounts.authentication.VersionedJWTAuthentication",),

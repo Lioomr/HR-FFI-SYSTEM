@@ -25,4 +25,20 @@ app.conf.beat_schedule = {
         ),
         "kwargs": {"days": int(os.environ.get("NOTIFICATION_RETENTION_DAYS", "90"))},
     },
+    "sync-biotime-attendance-morning": {
+        "task": "attendance.tasks.sync_biotime_attendance",
+        "schedule": crontab(
+            hour=int(os.environ.get("BIOTIME_SYNC_MORNING_HOUR", "9")),
+            minute=int(os.environ.get("BIOTIME_SYNC_MORNING_MINUTE", "0")),
+        ),
+        "kwargs": {"days_back": int(os.environ.get("BIOTIME_SYNC_DAYS_BACK", "1"))},
+    },
+    "sync-biotime-attendance-evening": {
+        "task": "attendance.tasks.sync_biotime_attendance",
+        "schedule": crontab(
+            hour=int(os.environ.get("BIOTIME_SYNC_EVENING_HOUR", "22")),
+            minute=int(os.environ.get("BIOTIME_SYNC_EVENING_MINUTE", "0")),
+        ),
+        "kwargs": {"days_back": int(os.environ.get("BIOTIME_SYNC_DAYS_BACK", "1"))},
+    },
 }
