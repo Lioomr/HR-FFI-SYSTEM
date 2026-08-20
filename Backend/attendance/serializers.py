@@ -26,6 +26,8 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
             "check_out_at",
             "status",
             "source",
+            "biotime_emp_code",
+            "biotime_terminal_sn",
             "manager_decision_at",
             "manager_decision_by",
             "manager_decision_note",
@@ -46,6 +48,8 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
             "check_in_at",
             "check_out_at",
             "source",
+            "biotime_emp_code",
+            "biotime_terminal_sn",
             "manager_decision_at",
             "manager_decision_by",
             "manager_decision_note",
@@ -157,7 +161,9 @@ class AttendanceCorrectionRequestSerializer(serializers.ModelSerializer):
         requested_status = attrs.get("requested_status", getattr(self.instance, "requested_status", ""))
 
         if self.instance is None and employee_profile and employee_profile.is_archived:
-            raise serializers.ValidationError({"employee_profile": "Archived employees cannot create attendance records."})
+            raise serializers.ValidationError(
+                {"employee_profile": "Archived employees cannot create attendance records."}
+            )
 
         if not check_in and not check_out and not requested_status:
             raise serializers.ValidationError(
@@ -207,18 +213,43 @@ class BioTimeConfigSerializer(serializers.ModelSerializer):
         read_only_fields = ["last_sync_time"]
         extra_kwargs = {"password": {"write_only": True, "required": False, "allow_blank": True}}
 
-    def to_representation(self, instance):
-        # Always output password as empty to frontend or masked to avoid leaking
-        ret = super().to_representation(instance)
-        ret["password"] = ""
-        return ret
-
 
 class BioTimeEmployeeMapSerializer(serializers.ModelSerializer):
-    employee_name = serializers.CharField(source="employee_profile.user.get_full_name", read_only=True)
+    employee_name = serializers.CharField(source="employee_profile.full_name", read_only=True)
     department = serializers.CharField(source="employee_profile.department", read_only=True)
 
     class Meta:
         model = BioTimeEmployeeMap
         fields = ["id", "employee_profile", "employee_name", "department", "biotime_emp_code", "created_at"]
         read_only_fields = ["id", "created_at", "employee_name", "department"]
+
+    def validate_biotime_emp_code(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("BioTime employee code is required.")
+        return value
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+        employee_profile = attrs.get("employee_profile") or getattr(self.instance, "employee_profile", None)
+        if not employee_profile:
+            return attrs
+
+        if not employee_profile.company_id:
+            raise serializers.ValidationError({"employee_profile": "Employee must belong to a company."})
+
+        if request:
+            from organization.services import get_active_company_for_request
+
+            active_company = get_active_company_for_request(request)
+            if not active_company or active_company.id != employee_profile.company_id:
+                raise serializers.ValidationError(
+                    {"employee_profile": "Employee is not available in the active company."}
+                )
+
+        duplicate = BioTimeEmployeeMap.objects.filter(employee_profile=employee_profile)
+        if self.instance:
+            duplicate = duplicate.exclude(pk=self.instance.pk)
+        if duplicate.exists():
+            raise serializers.ValidationError({"employee_profile": "Employee already has a BioTime mapping."})
+        return attrs

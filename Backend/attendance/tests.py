@@ -1,5 +1,5 @@
-from datetime import date, timedelta
-from unittest.mock import patch
+from datetime import date, datetime, timedelta
+from unittest.mock import Mock, patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -14,6 +14,7 @@ from employees.models import EmployeeProfile
 from hr_reference.models import Department, Position
 from organization.models import OrganizationNode, UserOrganizationAccess
 
+from .biotime_client import BioTimeClient
 from .models import AttendanceRecord, BioTimeConfig, BioTimeEmployeeMap
 from .services import SyncBioTimeService
 
@@ -589,9 +590,18 @@ class BioTimeSyncTests(TestCase):
         self.client = APIClient()
         self.admin = User.objects.create_user(email="admin@ffi.com", password="password", is_staff=True)
         self.admin.groups.add(Group.objects.get_or_create(name="SystemAdmin")[0])
+        self.company = OrganizationNode.objects.create(
+            code="BIOTIME_A", name="BioTime Company A", node_type=OrganizationNode.NodeType.COMPANY
+        )
+        self.other_company = OrganizationNode.objects.create(
+            code="BIOTIME_B", name="BioTime Company B", node_type=OrganizationNode.NodeType.COMPANY
+        )
+        UserOrganizationAccess.objects.create(user=self.admin, organization=self.company)
+        UserOrganizationAccess.objects.create(user=self.admin, organization=self.other_company)
         self.employee = User.objects.create_user(email="biotime-user@ffi.com", password="password")
         self.profile = EmployeeProfile.objects.create(
             user=self.employee,
+            company=self.company,
             employee_id="EMP100",
             department="Operations",
             job_title="Operator",
@@ -616,10 +626,11 @@ class BioTimeSyncTests(TestCase):
             {"emp_code": "100001", "punch_time": "2026-04-01 17:30:00", "is_attendance": 1},
         ]
 
-        success, message = SyncBioTimeService.execute(days_back=3)
+        successful, result = SyncBioTimeService.execute(days_back=3)
 
-        self.assertTrue(success)
-        self.assertIn("Synced 1 dates", message)
+        self.assertTrue(successful)
+        self.assertEqual(result["processed"], 1)
+        self.assertEqual(result["created"], 1)
         record = AttendanceRecord.objects.get(employee_profile=self.profile, date=date(2026, 4, 1))
         self.assertEqual(record.source, AttendanceRecord.Source.SYSTEM)
         self.assertEqual(record.status, AttendanceRecord.Status.PRESENT)
@@ -679,3 +690,127 @@ class BioTimeSyncTests(TestCase):
         self.assertEqual(config.server_ip, "10.0.0.10")
         self.assertEqual(config.username, "updated-admin")
         self.assertEqual(config.password, "secret")
+        self.assertNotIn("password", response.data["data"])
+
+    def test_biotime_client_uses_documented_token_authentication(self):
+        client = BioTimeClient("10.0.0.1", "8090", "api-user", "api-password")
+        response = Mock(status_code=200)
+        response.json.return_value = {"token": "biotime-token"}
+        client.session.post = Mock(return_value=response)
+
+        self.assertTrue(client.authenticate())
+        self.assertEqual(client.get_headers()["Authorization"], "Token biotime-token")
+        client.session.post.assert_called_once_with(
+            "http://10.0.0.1:8090/api-token-auth/",
+            json={"username": "api-user", "password": "api-password"},
+            timeout=10,
+        )
+
+    def test_sync_skips_unmapped_and_invalid_transactions(self):
+        client = Mock()
+        client.test_connection.return_value = True
+        client.get_transactions.return_value = [
+            {"emp_code": "UNKNOWN", "punch_time": "2026-04-02 08:00:00", "is_attendance": 1},
+            {"emp_code": "100001", "punch_time": "not-a-date", "is_attendance": 1},
+        ]
+        with patch("attendance.services.BioTimeClient", return_value=client):
+            successful, result = SyncBioTimeService.execute(days_back=1)
+
+        self.assertTrue(successful)
+        self.assertEqual(result["unmapped"], 1)
+        self.assertEqual(result["invalid"], 1)
+        self.assertEqual(result["processed"], 0)
+
+    @patch("attendance.services.BioTimeClient")
+    def test_sync_preserves_manual_record_and_updates_system_bounds(self, client_cls):
+        BioTimeEmployeeMap.objects.create(employee_profile=self.profile, biotime_emp_code="100001")
+        manual = AttendanceRecord.objects.create(
+            employee_profile=self.profile,
+            date=date(2026, 4, 3),
+            check_in_at=timezone.make_aware(datetime(2026, 4, 3, 9, 0)),
+            source=AttendanceRecord.Source.HR,
+            status=AttendanceRecord.Status.PRESENT,
+        )
+        system = AttendanceRecord.objects.create(
+            employee_profile=self.profile,
+            date=date(2026, 4, 4),
+            check_in_at=timezone.make_aware(datetime(2026, 4, 4, 9, 0)),
+            check_out_at=timezone.make_aware(datetime(2026, 4, 4, 17, 0)),
+            source=AttendanceRecord.Source.SYSTEM,
+            status=AttendanceRecord.Status.LATE,
+        )
+        client = client_cls.return_value
+        client.test_connection.return_value = True
+        client.get_transactions.return_value = [
+            {"emp_code": "100001", "punch_time": "2026-04-03 08:00:00", "is_attendance": 1},
+            {"emp_code": "100001", "punch_time": "2026-04-03 18:00:00", "is_attendance": 1},
+            {"emp_code": "100001", "punch_time": "2026-04-04 08:00:00", "is_attendance": 1, "terminal_sn": "DEV-1"},
+            {"emp_code": "100001", "punch_time": "2026-04-04 18:00:00", "is_attendance": 1, "terminal_sn": "DEV-1"},
+        ]
+
+        successful, result = SyncBioTimeService.execute(days_back=1)
+
+        self.assertTrue(successful)
+        self.assertEqual(result["updated"], 1)
+        self.assertEqual(result["skipped"], 1)
+        manual.refresh_from_db()
+        system.refresh_from_db()
+        self.assertEqual(manual.check_in_at, timezone.make_aware(datetime(2026, 4, 3, 9, 0)))
+        self.assertEqual(system.check_in_at, timezone.make_aware(datetime(2026, 4, 4, 8, 0)))
+        self.assertEqual(system.check_out_at, timezone.make_aware(datetime(2026, 4, 4, 18, 0)))
+        self.assertEqual(system.status, AttendanceRecord.Status.PRESENT)
+        self.assertEqual(system.biotime_emp_code, "100001")
+        self.assertEqual(system.biotime_terminal_sn, "DEV-1")
+
+    def test_mapping_api_enforces_active_company_and_duplicate_rules(self):
+        second_user = User.objects.create_user(email="biotime-second@ffi.com", password="password")
+        second_profile = EmployeeProfile.objects.create(
+            user=second_user,
+            company=self.company,
+            employee_id="EMP101",
+            department="Operations",
+            job_title="Operator",
+            hire_date=date.today(),
+        )
+        other_profile = EmployeeProfile.objects.create(
+            employee_id="EMP102",
+            company=self.other_company,
+            department="Operations",
+            job_title="Operator",
+            hire_date=date.today(),
+        )
+        self.client.force_authenticate(user=self.admin)
+        headers = {"HTTP_X_ACTIVE_COMPANY_ID": str(self.company.id)}
+
+        created = self.client.post(
+            "/api/biotime-mappings/",
+            {"employee_profile": self.profile.id, "biotime_emp_code": "100001"},
+            format="json",
+            **headers,
+        )
+        duplicate_code = self.client.post(
+            "/api/biotime-mappings/",
+            {"employee_profile": second_profile.id, "biotime_emp_code": "100001"},
+            format="json",
+            **headers,
+        )
+        duplicate_employee = self.client.post(
+            "/api/biotime-mappings/",
+            {"employee_profile": self.profile.id, "biotime_emp_code": "100002"},
+            format="json",
+            **headers,
+        )
+        cross_company = self.client.post(
+            "/api/biotime-mappings/",
+            {"employee_profile": other_profile.id, "biotime_emp_code": "100003"},
+            format="json",
+            **headers,
+        )
+        listing = self.client.get("/api/biotime-mappings/", **headers)
+
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(created.data["status"], "success")
+        self.assertEqual(duplicate_code.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(duplicate_employee.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(cross_company.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(listing.data["data"]["count"], 1)

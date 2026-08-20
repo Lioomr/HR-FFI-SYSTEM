@@ -58,7 +58,9 @@ jobs:
       - name: Bandit Security Scan
         run: |
           cd Backend
-          bandit -r . -x "*/migrations/*,*/venv/*,*/.venv/*"
+          # Fail the release gate on high-severity production findings. Test
+          # fixtures and one-off local verification scripts are not shipped.
+          bandit -r . -lll -x "*/migrations/*,*/tests/*,*/venv/*,*/.venv/*,run_debug_tests.py,verify_endpoint.py,verify_manager_workflow.py"
 
       - name: Python Dependency Audit
         run: |

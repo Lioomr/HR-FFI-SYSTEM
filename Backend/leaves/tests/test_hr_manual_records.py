@@ -44,7 +44,7 @@ class HRManualLeaveRecordTests(APITestCase):
             manager=self.manager_user,
         )
 
-        self.annual = LeaveType.objects.create(name="Annual Leave", code="ANNUAL", is_active=True)
+        self.annual = LeaveType.objects.create(name="Annual Leave", code="ANNUAL", annual_quota=21, is_active=True)
         self.sick = LeaveType.objects.create(name="Sick Leave", code="SICK", is_active=True)
         self.url = "/api/leaves/hr/manual-leave-requests/"
 
