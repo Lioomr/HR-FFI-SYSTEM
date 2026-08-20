@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Alert, Button, Card, Checkbox, Form, Input, Select } from "antd";
 import { LockOutlined, MailOutlined, ApartmentOutlined } from "@ant-design/icons";
 import { useLocation, useNavigate } from "react-router-dom";
+import { UserOutlined } from "@ant-design/icons";
 import { useAuthStore } from "../auth/authStore";
 import { loginApi } from "../services/api/authApi";
 import { isApiError } from "../services/api/apiTypes";
@@ -10,7 +11,8 @@ import { useI18n } from "../i18n/useI18n";
 import type { AppLanguage } from "../i18n/types";
 
 type LoginFormValues = {
-  email: string;
+  /** Email address or phone number — the backend resolves either. */
+  identifier: string;
   password: string;
   remember: boolean;
 };
@@ -57,6 +59,15 @@ export default function LoginPage() {
       };
     }
 
+    // A short local phone number can belong to more than one account; tell the
+    // user how to disambiguate rather than echoing the backend sentence.
+    if (normalized.includes("more than one account")) {
+      return {
+        title: t("auth.loginFailedTitle"),
+        description: t("auth.login.phoneAmbiguousFallback"),
+      };
+    }
+
     if (description === t("auth.backendNotConnected")) {
       return {
         title: t("auth.backendUnavailableTitle"),
@@ -80,7 +91,9 @@ export default function LoginPage() {
     setError(null);
     setSubmitting(true);
     try {
-      const res = await loginApi({ email: values.email, password: values.password });
+      // Sent verbatim: the backend normalizes phone numbers itself, and reformatting
+      // here would break local-format numbers such as "0554867964".
+      const res = await loginApi({ identifier: values.identifier.trim(), password: values.password });
       if (isApiError(res)) {
         setError(buildLoginError(res.message || t("auth.loginFailed")));
         return;
@@ -238,18 +251,15 @@ export default function LoginPage() {
               requiredMark={false}
             >
               <Form.Item
-                label={t("auth.email")}
-                name="email"
-                rules={[
-                  { required: true, message: t("auth.emailRequired") },
-                  { type: "email", message: t("auth.emailInvalid") },
-                ]}
+                label={t("auth.emailOrPhone")}
+                name="identifier"
+                rules={[{ required: true, message: t("auth.emailOrPhoneRequired") }]}
               >
                 <Input
                   size="large"
-                  prefix={<MailOutlined style={{ color: "#94a3b8" }} />}
-                  placeholder="name@company.com"
-                  autoComplete="email"
+                  prefix={<UserOutlined style={{ color: "#94a3b8" }} />}
+                  placeholder={t("auth.emailOrPhonePlaceholder")}
+                  autoComplete="username"
                 />
               </Form.Item>
 

@@ -31,6 +31,11 @@ from core.services import (
     sync_workflow,
 )
 from employees.models import EmployeeProfile
+from employees.services.manager_relationships import (
+    get_valid_direct_manager_user,
+    manager_approval_actor_source,
+    manager_scope_q,
+)
 from organization.services import filter_queryset_by_company_scope, get_active_company_for_request
 
 from .models import AttendanceCorrectionRequest, AttendanceRecord
@@ -67,21 +72,17 @@ def _is_hr_manager_origin_record(instance: AttendanceRecord):
 
 
 def _manager_scope_filter(user):
-    manager_profile = getattr(user, "employee_profile", None)
-    manager_match = Q(employee_profile__manager=user)
-    if manager_profile:
-        manager_match |= Q(employee_profile__manager_profile=manager_profile)
-
-    delegated_manager_ids = get_delegated_manager_user_ids(user)
-    if delegated_manager_ids:
-        manager_match |= Q(employee_profile__manager_id__in=delegated_manager_ids) | Q(
-            employee_profile__manager_profile__user_id__in=delegated_manager_ids
-        )
-    return manager_match
+    return manager_scope_q(user, employee_prefix="employee_profile__")
 
 
 def _can_manager_act_on_correction(user, correction: AttendanceCorrectionRequest):
-    return AttendanceCorrectionRequest.objects.filter(pk=correction.pk).filter(_manager_scope_filter(user)).exists()
+    return bool(
+        manager_approval_actor_source(
+            user,
+            correction.employee_profile,
+            allow_admin=True,
+        )
+    )
 
 
 def _scope_attendance_queryset(queryset, request):
@@ -299,10 +300,7 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         if not _profile_matches_active_company(request, profile):
             return error("Employee profile is not available in the active company.", status=status.HTTP_403_FORBIDDEN)
 
-        # Check if user has a manager
-        has_manager = False
-        if profile.manager or profile.manager_profile:
-            has_manager = True
+        has_manager = bool(get_valid_direct_manager_user(profile))
 
         if _is_hr_manager_user(user):
             status_value = AttendanceRecord.Status.PENDING_CEO
@@ -568,7 +566,7 @@ class AttendanceCorrectionRequestViewSet(viewsets.ModelViewSet):
         if instance.created_by_id != request.user.id and get_role(request.user) not in ["SystemAdmin", "HRManager"]:
             return error("You cannot submit this correction request.", status=status.HTTP_403_FORBIDDEN)
 
-        has_manager = bool(instance.employee_profile.manager_id or instance.employee_profile.manager_profile_id)
+        has_manager = bool(get_valid_direct_manager_user(instance.employee_profile))
         instance.status = (
             AttendanceCorrectionRequest.Status.PENDING_MANAGER
             if has_manager
@@ -590,6 +588,11 @@ class AttendanceCorrectionRequestViewSet(viewsets.ModelViewSet):
         if instance.status == AttendanceCorrectionRequest.Status.PENDING_MANAGER:
             if not _can_manager_act_on_correction(request.user, instance):
                 return error("You cannot approve this correction request.", status=status.HTTP_403_FORBIDDEN)
+            actor_source = manager_approval_actor_source(
+                request.user,
+                instance.employee_profile,
+                allow_admin=True,
+            )
             instance.status = AttendanceCorrectionRequest.Status.PENDING_HR
             instance.manager_decision_by = request.user
             instance.manager_decision_at = timezone.now()
@@ -611,6 +614,7 @@ class AttendanceCorrectionRequestViewSet(viewsets.ModelViewSet):
                 "attendance_correction.manager_approved",
                 entity="AttendanceCorrectionRequest",
                 entity_id=instance.id,
+                metadata={"actor_source": actor_source},
             )
             self._notify_next_approver(instance)
             return success(self._serialize(instance))
@@ -646,12 +650,19 @@ class AttendanceCorrectionRequestViewSet(viewsets.ModelViewSet):
     def reject(self, request, pk=None):
         instance = self.get_object()
         note = (request.data.get("notes") or request.data.get("comment") or "").strip()
+        approval_actor_source = "admin"
         if not note:
             return error("notes/comment is required for rejection.", status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
         if instance.status == AttendanceCorrectionRequest.Status.PENDING_MANAGER:
             if not _can_manager_act_on_correction(request.user, instance):
                 return error("You cannot reject this correction request.", status=status.HTTP_403_FORBIDDEN)
+            actor_source = manager_approval_actor_source(
+                request.user,
+                instance.employee_profile,
+                allow_admin=True,
+            )
+            approval_actor_source = actor_source
             instance.manager_decision_by = request.user
             instance.manager_decision_at = timezone.now()
             instance.manager_decision_note = note
@@ -669,7 +680,13 @@ class AttendanceCorrectionRequestViewSet(viewsets.ModelViewSet):
         instance.updated_by = request.user
         instance.save()
         sync_workflow(instance, actor=request.user)
-        audit(request, "attendance_correction.rejected", entity="AttendanceCorrectionRequest", entity_id=instance.id)
+        audit(
+            request,
+            "attendance_correction.rejected",
+            entity="AttendanceCorrectionRequest",
+            entity_id=instance.id,
+            metadata={"actor_source": approval_actor_source},
+        )
         try:
             notify_profile_request_status_whatsapp(
                 profile=instance.employee_profile,
@@ -785,25 +802,7 @@ class ManagerAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
         base_qs = _scope_attendance_queryset(base_qs, self.request)
         if role == "SystemAdmin":
             return base_qs
-
-        # Only records where the employee's manager maps to current user
-        manager_profile = getattr(self.request.user, "employee_profile", None)
-        profile_match = Q()
-        if manager_profile:
-            profile_match = Q(employee_profile__manager_profile=manager_profile)
-        delegated_manager_ids = get_delegated_manager_user_ids(self.request.user)
-        delegated_match = Q()
-        if delegated_manager_ids:
-            delegated_match = Q(employee_profile__manager_id__in=delegated_manager_ids) | Q(
-                employee_profile__manager_profile__user_id__in=delegated_manager_ids
-            )
-
-        return base_qs.filter(
-            Q(employee_profile__manager_profile__user=self.request.user)
-            | Q(employee_profile__manager=self.request.user)
-            | profile_match
-            | delegated_match
-        )
+        return base_qs.filter(manager_scope_q(self.request.user, employee_prefix="employee_profile__")).distinct()
 
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
@@ -811,6 +810,14 @@ class ManagerAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
             instance = self.get_queryset().get(pk=pk)
         except AttendanceRecord.DoesNotExist:
             return error("Not found", errors=["Not found."], status=404)
+
+        actor_source = manager_approval_actor_source(
+            request.user,
+            instance.employee_profile,
+            allow_admin=True,
+        )
+        if not actor_source:
+            return error("Forbidden", errors=["You cannot approve this attendance request."], status=403)
 
         if instance.status != AttendanceRecord.Status.PENDING_MANAGER:
             return error(
@@ -824,7 +831,13 @@ class ManagerAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
         instance.save()
         sync_workflow(instance, actor=request.user)
 
-        audit(request, "approve", entity="AttendanceRecord", entity_id=instance.id)
+        audit(
+            request,
+            "approve",
+            entity="AttendanceRecord",
+            entity_id=instance.id,
+            metadata={"actor_source": actor_source},
+        )
         try:
             notify_users_for_pending_status(
                 users=get_hr_approver_users(),
@@ -846,6 +859,14 @@ class ManagerAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
         except AttendanceRecord.DoesNotExist:
             return error("Not found", errors=["Not found."], status=404)
 
+        actor_source = manager_approval_actor_source(
+            request.user,
+            instance.employee_profile,
+            allow_admin=True,
+        )
+        if not actor_source:
+            return error("Forbidden", errors=["You cannot reject this attendance request."], status=403)
+
         if instance.status != AttendanceRecord.Status.PENDING_MANAGER:
             return error(
                 "Validation error", errors=["Request is not in a state to be rejected by manager."], status=422
@@ -862,7 +883,13 @@ class ManagerAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
         instance.save()
         sync_workflow(instance, actor=request.user)
 
-        audit(request, "reject", entity="AttendanceRecord", entity_id=instance.id)
+        audit(
+            request,
+            "reject",
+            entity="AttendanceRecord",
+            entity_id=instance.id,
+            metadata={"actor_source": actor_source},
+        )
         try:
             notify_profile_request_status_whatsapp(
                 profile=instance.employee_profile,

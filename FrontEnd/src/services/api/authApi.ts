@@ -1,7 +1,11 @@
 import { api } from "./apiClient";
 import type { ApiResponse, OrganizationNodeDto } from "./apiTypes";
 
-export type LoginRequest = { email: string; password: string };
+/**
+ * The backend resolves `identifier` as either an email or a phone number, and
+ * falls back to the legacy `email` field only when `identifier` is absent.
+ */
+export type LoginRequest = { identifier: string; password: string };
 export type LoginResponse = {
   token: string;
   user: {

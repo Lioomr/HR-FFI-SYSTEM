@@ -1,4 +1,3 @@
-from django.db.models import Q
 from django.http import HttpResponse
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
@@ -8,7 +7,6 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from audit.utils import audit
-from core.delegation import get_delegated_manager_user_ids
 from core.pagination import StandardPagination
 from core.permissions import get_role
 from core.responses import error, success
@@ -22,6 +20,11 @@ from core.services import (
     notify_users_for_pending_status,
     send_request_submission_email,
     sync_workflow,
+)
+from employees.services.manager_relationships import (
+    get_valid_direct_manager_user,
+    manager_approval_actor_source,
+    manager_scope_q,
 )
 from leaves.permissions import IsOwnerOrHR
 from organization.services import filter_queryset_by_accessible_companies, filter_queryset_by_company_scope
@@ -84,8 +87,7 @@ def _scope_ceo_queryset_for_user(user, qs):
 
 
 def _reject_self_approval(request, instance):
-    is_hr_manager_origin = bool(instance.employee and instance.employee.groups.filter(name="HRManager").exists())
-    if is_hr_manager_origin and instance.employee_id == request.user.id:
+    if instance.employee_id == request.user.id:
         return error("Validation error", errors=["Self approval is not allowed."], status=422)
     return None
 
@@ -559,11 +561,7 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
             return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
 
         profile = serializer.validated_data["employee_profile"]
-        manager_user = None
-        if profile.manager_profile and profile.manager_profile.user_id:
-            manager_user = profile.manager_profile.user
-        elif profile.manager_id:
-            manager_user = profile.manager
+        manager_user = get_valid_direct_manager_user(profile)
 
         config = get_active_workflow_config()
         if _is_hr_manager_user(request.user):
@@ -874,20 +872,7 @@ class ManagerLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
             base_qs = filter_queryset_by_accessible_companies(qs, self.request)
         if role == "SystemAdmin":
             return base_qs
-
-        manager_profile = getattr(self.request.user, "employee_profile", None)
-        manager_match = Q(employee_profile__manager=self.request.user)
-        if manager_profile:
-            manager_match = manager_match | Q(employee_profile__manager_profile=manager_profile)
-        delegated_manager_ids = get_delegated_manager_user_ids(self.request.user)
-        if delegated_manager_ids:
-            manager_match = (
-                manager_match
-                | Q(employee_profile__manager_id__in=delegated_manager_ids)
-                | Q(employee_profile__manager_profile__user_id__in=delegated_manager_ids)
-            )
-
-        return base_qs.filter(manager_match | Q(manager_decision_by=self.request.user)).distinct()
+        return base_qs.filter(manager_scope_q(self.request.user, employee_prefix="employee_profile__")).distinct()
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -899,6 +884,13 @@ class ManagerLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
         self_approval_error = _reject_self_approval(request, instance)
         if self_approval_error:
             return self_approval_error
+        actor_source = manager_approval_actor_source(
+            request.user,
+            instance.employee_profile,
+            allow_admin=True,
+        )
+        if not actor_source:
+            return error("Forbidden", errors=["You cannot approve this loan request."], status=403)
         if instance.status != LoanRequest.RequestStatus.PENDING_MANAGER:
             return error("Validation error", errors=["Request is not pending manager approval."], status=422)
 
@@ -922,7 +914,13 @@ class ManagerLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
             ]
         )
         sync_workflow(instance, actor=request.user)
-        audit(request, "loan_request_recommended_manager_approve", entity="LoanRequest", entity_id=instance.id)
+        audit(
+            request,
+            "loan_request_recommended_manager_approve",
+            entity="LoanRequest",
+            entity_id=instance.id,
+            metadata={"actor_source": actor_source},
+        )
         try:
             notify_users_for_pending_status(
                 users=get_hr_approver_users(),
@@ -943,6 +941,13 @@ class ManagerLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
         self_approval_error = _reject_self_approval(request, instance)
         if self_approval_error:
             return self_approval_error
+        actor_source = manager_approval_actor_source(
+            request.user,
+            instance.employee_profile,
+            allow_admin=True,
+        )
+        if not actor_source:
+            return error("Forbidden", errors=["You cannot reject this loan request."], status=403)
         if instance.status != LoanRequest.RequestStatus.PENDING_MANAGER:
             return error("Validation error", errors=["Request is not pending manager approval."], status=422)
 
@@ -966,7 +971,13 @@ class ManagerLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
             ]
         )
         sync_workflow(instance, actor=request.user)
-        audit(request, "loan_request_recommended_manager_reject", entity="LoanRequest", entity_id=instance.id)
+        audit(
+            request,
+            "loan_request_recommended_manager_reject",
+            entity="LoanRequest",
+            entity_id=instance.id,
+            metadata={"actor_source": actor_source},
+        )
         try:
             notify_users_for_pending_status(
                 users=get_hr_approver_users(),

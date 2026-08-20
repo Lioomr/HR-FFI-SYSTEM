@@ -491,6 +491,16 @@ class InviteResendView(APIView):
 class InviteRevokeView(APIView):
     permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
 
+    def get(self, request, invite_id: int):
+        normalize_expired_invites()
+
+        try:
+            invite = Invite.objects.get(id=invite_id)
+        except Invite.DoesNotExist:
+            return error("Invite not found", status=404)
+
+        return success(InviteSerializer(invite).data)
+
     @transaction.atomic
     def delete(self, request, invite_id: int):
         try:
@@ -557,29 +567,37 @@ class InviteAcceptView(APIView):
         invite: Invite = s.validated_data["invite"]
         email: str = s.validated_data["email"]
         phone_number: str = s.validated_data.get("phone_number", "")
+        submitted_phone_number: str = s.validated_data.get("submitted_phone_number", "")
         password: str = s.validated_data["password"]
         full_name: str = (s.validated_data.get("full_name") or "").strip()
 
         if User.objects.filter(email__iexact=email).exists():
             return error("Validation error", errors={"email": ["Email is already registered."]}, status=422)
 
-        user = User.objects.create_user(
-            email=email,
-            password=password,
-            full_name=full_name,
-            is_active=True,
-        )
+        try:
+            with transaction.atomic():
+                user = User.objects.create_user(
+                    email=email,
+                    password=password,
+                    full_name=full_name,
+                    is_active=True,
+                )
+        except IntegrityError:
+            return error("Validation error", errors={"email": ["Email is already registered."]}, status=422)
         group, _ = Group.objects.get_or_create(name=invite.role)
         user.groups.clear()
         user.groups.add(group)
         profile = _ensure_invited_employee_profile(user=user, full_name=full_name, phone_number=phone_number)
 
         invite.status = Invite.Status.ACCEPTED
+        update_fields = ["status"]
         if not invite.email:
             invite.email = email
-            invite.save(update_fields=["status", "email"])
-        else:
-            invite.save(update_fields=["status"])
+            update_fields.append("email")
+        if submitted_phone_number:
+            invite.phone_number = submitted_phone_number
+            update_fields.append("phone_number")
+        invite.save(update_fields=update_fields)
 
         audit(
             request,

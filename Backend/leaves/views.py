@@ -23,7 +23,6 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from audit.utils import audit
-from core.delegation import get_delegated_manager_user_ids
 from core.pagination import StandardPagination
 from core.pdf import merge_pdfs
 from core.permissions import IsDepartmentCEOApprover, IsHRWorkflowApprover, get_role
@@ -31,7 +30,6 @@ from core.responses import error, success
 from core.services import (
     can_user_act_on_instance,
     get_ceo_approver_users,
-    get_direct_manager_user,
     get_hr_approver_users,
     notify_users_for_pending_status,
     sync_leave_obligations,
@@ -43,6 +41,11 @@ from core.views_templates import resolve_template_path
 from employees.document_extraction import extract_visa_fields
 from employees.models import EmployeeDocument, EmployeeProfile
 from employees.permissions import IsHRManagerOrAdmin
+from employees.services.manager_relationships import (
+    get_valid_direct_manager_user,
+    manager_approval_actor_source,
+    manager_scope_q,
+)
 from in_app_notifications.dispatcher import dispatch_notification_channels
 from in_app_notifications.models import Notification
 from organization.models import OrganizationNode
@@ -63,7 +66,6 @@ from .notifications import (
 from .permissions import (
     IsEmployeeOnly,
     IsLeaveRequestOwner,
-    IsManagerOfEmployee,
     IsOwnerOrHR,
 )
 from .serializers import (
@@ -146,16 +148,7 @@ def _leave_employee_email(instance: LeaveRequest):
 
 def _leave_manager_user(instance: LeaveRequest):
     profile = _leave_profile(instance)
-    if not profile:
-        employee = getattr(instance, "employee", None)
-        return get_direct_manager_user(employee) if employee else None
-    manager_profile = getattr(profile, "manager_profile", None)
-    if manager_profile and manager_profile.user:
-        return manager_profile.user
-    if getattr(profile, "manager", None):
-        return profile.manager
-    employee = getattr(instance, "employee", None)
-    return get_direct_manager_user(employee) if employee else None
+    return get_valid_direct_manager_user(profile)
 
 
 def _serve_leave_document(instance, request):
@@ -215,7 +208,7 @@ def _approval_path_rows(instance: LeaveRequest):
         return rows
 
     profile = _leave_profile(instance)
-    needs_manager = bool(getattr(profile, "manager_id", None) or getattr(profile, "manager_profile_id", None))
+    needs_manager = bool(get_valid_direct_manager_user(profile))
     needs_ceo = bool(
         getattr(instance.leave_type, "requires_ceo_approval", False) or _is_hr_manager_origin_request(instance)
     )
@@ -418,7 +411,7 @@ def _build_leave_request_pdf_fallback(instance: LeaveRequest):
     return render_request_pdf(doc)
 
 
-def _build_leave_request_pdf(instance: LeaveRequest):
+def _build_leave_request_pdf_legacy(instance: LeaveRequest):
     def _register_pdf_fonts():
         font_candidates = {
             "DejaVuSans": [
@@ -1105,6 +1098,12 @@ def _build_leave_request_pdf(instance: LeaveRequest):
     return output.getvalue()
 
 
+def _build_leave_request_pdf(instance: LeaveRequest):
+    from .pdf_leave_request import build_leave_request_pdf
+
+    return build_leave_request_pdf(instance, fallback=_build_leave_request_pdf_fallback)
+
+
 class LeaveTypeViewSet(viewsets.ModelViewSet):
     queryset = LeaveType.objects.all()
     serializer_class = LeaveTypeSerializer
@@ -1338,14 +1337,8 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         # Determine initial status
         user = self.request.user
-        has_manager = False
-        # Check both new manager_profile and legacy manager for compatibility
-        if hasattr(user, "employee_profile"):
-            profile = user.employee_profile
-            manager_user_id = profile.manager_id
-            if not manager_user_id and profile.manager_profile:
-                manager_user_id = profile.manager_profile.user_id
-            has_manager = bool(manager_user_id)
+        profile = getattr(user, "employee_profile", None)
+        has_manager = bool(get_valid_direct_manager_user(profile))
 
         if serializer.validated_data.get("delegated_to"):
             initial_status = LeaveRequest.RequestStatus.PENDING_DELEGATE
@@ -1356,7 +1349,6 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         else:
             initial_status = LeaveRequest.RequestStatus.PENDING_HR
 
-        profile = getattr(self.request.user, "employee_profile", None)
         leave_type = serializer.validated_data.get("leave_type")
         instance = serializer.save(
             employee=self.request.user,
@@ -2069,26 +2061,9 @@ class ManagerLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
             base_qs = filter_queryset_by_accessible_companies(qs, self.request)
         if role == "SystemAdmin":
             return base_qs
-
-        manager_profile_match = Q()
-        if hasattr(self.request.user, "employee_profile"):
-            manager_profile_match = Q(employee__employee_profile__manager_profile=self.request.user.employee_profile)
-
-        delegated_manager_ids = get_delegated_manager_user_ids(self.request.user)
-        delegated_manager_match = Q()
-        if delegated_manager_ids:
-            delegated_manager_match = Q(employee__employee_profile__manager_id__in=delegated_manager_ids) | Q(
-                employee__employee_profile__manager_profile__user_id__in=delegated_manager_ids
-            )
-
         return base_qs.filter(
-            (
-                Q(employee__employee_profile__manager_profile__user=self.request.user)
-                | Q(employee__employee_profile__manager=self.request.user)
-                | manager_profile_match
-                | delegated_manager_match
-            )
-        )
+            manager_scope_q(self.request.user, employee_prefix="employee__employee_profile__")
+        ).distinct()
 
     def list(self, request, *args, **kwargs):
         return super().list(request, *args, **kwargs)
@@ -2097,9 +2072,16 @@ class ManagerLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
         # Implicitly checks queryset filter
         return super().retrieve(request, *args, **kwargs)
 
-    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsManagerOfEmployee])
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
     def approve(self, request, pk=None):
         instance = self.get_object()
+        actor_source = manager_approval_actor_source(
+            request.user,
+            _leave_profile(instance),
+            allow_admin=True,
+        )
+        if not actor_source:
+            return error("Forbidden", errors=["You cannot approve this leave request."], status=403)
 
         allowed_statuses = [LeaveRequest.RequestStatus.SUBMITTED, LeaveRequest.RequestStatus.PENDING_MANAGER]
 
@@ -2119,7 +2101,13 @@ class ManagerLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
         instance.save()
         sync_workflow(instance, actor=request.user)
 
-        audit(request, "approve", entity="LeaveRequest", entity_id=instance.id)
+        audit(
+            request,
+            "approve",
+            entity="LeaveRequest",
+            entity_id=instance.id,
+            metadata={"actor_source": actor_source},
+        )
         try:
             notify_users_for_pending_status(
                 users=get_hr_approver_users(),
@@ -2134,9 +2122,16 @@ class ManagerLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
             pass
         return success(LeaveRequestSerializer(instance, context={"request": request}).data)
 
-    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsManagerOfEmployee])
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
     def reject(self, request, pk=None):
         instance = self.get_object()
+        actor_source = manager_approval_actor_source(
+            request.user,
+            _leave_profile(instance),
+            allow_admin=True,
+        )
+        if not actor_source:
+            return error("Forbidden", errors=["You cannot reject this leave request."], status=403)
 
         allowed_statuses = [LeaveRequest.RequestStatus.SUBMITTED, LeaveRequest.RequestStatus.PENDING_MANAGER]
 
@@ -2159,19 +2154,25 @@ class ManagerLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
         instance.save()
         sync_workflow(instance, actor=request.user)
 
-        audit(request, "reject", entity="LeaveRequest", entity_id=instance.id)
+        audit(
+            request,
+            "reject",
+            entity="LeaveRequest",
+            entity_id=instance.id,
+            metadata={"actor_source": actor_source},
+        )
         try:
             notify_leave_rejected(instance, comment)
         except Exception:
             pass
         return success(LeaveRequestSerializer(instance, context={"request": request}).data)
 
-    @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated, IsManagerOfEmployee])
+    @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated])
     def document(self, request, pk=None):
         instance = self.get_object()
         return _serve_leave_document(instance, request)
 
-    @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated, IsManagerOfEmployee])
+    @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated])
     def pdf(self, request, pk=None):
         instance = self.get_object()
         pdf_bytes = _build_leave_request_pdf(instance)

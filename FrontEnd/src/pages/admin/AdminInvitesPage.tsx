@@ -9,20 +9,22 @@ import ErrorState from "../../components/ui/ErrorState";
 import Unauthorized403Page from "../Unauthorized403Page";
 import type { InviteDeliveryStatus, InviteDto, Role } from "../../services/api/apiTypes";
 import { isApiError } from "../../services/api/apiTypes";
-import { createInvite, listInvites, resendInvite, revokeInvite, testWhatsappProvider } from "../../services/api/invitesApi";
+import { createInvite, listInvites, resendInvite, revokeInvite } from "../../services/api/invitesApi";
 import type { CreateInviteRequest, InviteChannel } from "../../services/api/invitesApi";
 import PhoneNumberInput from "../../components/ui/PhoneNumberInput";
 import { useI18n } from "../../i18n/useI18n";
 import { useAuthStore } from "../../auth/authStore";
+import { MAX_SEARCH_LENGTH, toSearchParam } from "../../utils/searchInput";
 
 type UiMode = "loading" | "empty" | "error" | "ok";
 
 type InviteStatus = "sent" | "accepted" | "revoked" | "expired";
 
 // null = no delivery metadata available (older rows / pending)
+// The raw provider name is deliberately dropped here: HR-facing UI never names
+// the delivery vendor, it only reports the delivery state.
 type DeliveryInfo = {
   sent: boolean | null;
-  provider: string | null;
   error: string | null;
   // Confirmed delivery state from the provider. "sent" means submitted to the
   // provider only — NOT confirmed delivery. null = older rows without metadata.
@@ -50,7 +52,9 @@ type SendInviteValues = {
   role: Role;
 };
 
-const roleOptions: Role[] = ["SystemAdmin", "HRManager", "Manager", "CEO", "Employee"];
+// Manager is intentionally absent: the backend no longer accepts Manager invites.
+// Manager access is granted by assigning the person as a direct manager instead.
+const roleOptions: Role[] = ["SystemAdmin", "HRManager", "CEO", "Employee"];
 
 function statusTag(status: InviteStatus, t: any) {
   if (status === "sent") return <Tag color="gold">{t("status.pending")}</Tag>;
@@ -71,7 +75,6 @@ function resolveDelivery(invite: InviteDto): DeliveryInfo {
   if (last) {
     return {
       sent: last.sent,
-      provider: last.provider ?? null,
       error: last.error ?? null,
       deliveryStatus: last.delivery_status ?? null,
       providerSubmitted: last.provider_submitted ?? null,
@@ -81,22 +84,12 @@ function resolveDelivery(invite: InviteDto): DeliveryInfo {
   if (fallback) {
     return {
       sent: fallback.sent,
-      provider: fallback.provider ?? null,
       error: fallback.error ?? null,
       deliveryStatus: fallback.delivery_status ?? null,
       providerSubmitted: fallback.provider_submitted ?? null,
     };
   }
-  return { sent: null, provider: null, error: null, deliveryStatus: null, providerSubmitted: null };
-}
-
-// Map raw provider identifiers to short, human-friendly brand labels.
-function providerLabel(provider: string | null): string | null {
-  if (!provider) return null;
-  const p = provider.toLowerCase();
-  if (p.includes("evolution")) return "Evolution";
-  if (p.includes("bird")) return "Bird";
-  return provider;
+  return { sent: null, error: null, deliveryStatus: null, providerSubmitted: null };
 }
 
 function toInviteRow(invite: InviteDto): InviteRow {
@@ -114,51 +107,58 @@ function toInviteRow(invite: InviteDto): InviteRow {
   };
 }
 
-// A safe, user-facing fallback when the provider returns no error detail.
+// Raw vendor identifiers must never reach the HR-facing UI, not even inside a
+// pass-through error string from the delivery backend.
+const PROVIDER_NAME_PATTERN = /bird|evolution/i;
+
+// A safe, user-facing explanation. Any detail that names the delivery vendor is
+// replaced by the generic message.
 function safeDeliveryError(delivery: DeliveryInfo, t: any): string {
-  return delivery.error || t("admin.invites.deliveryFailedGeneric");
+  const detail = delivery.error?.trim();
+  if (!detail || PROVIDER_NAME_PATTERN.test(detail)) {
+    return t("admin.invites.deliveryFailedGeneric");
+  }
+  return detail;
 }
 
-function makeTag(color: string | undefined, label: string, provider: string | null, tip?: string) {
-  const tag = (
-    <Tag color={color}>
-      {label}
-      {provider ? ` · ${provider}` : ""}
-    </Tag>
-  );
+function makeTag(color: string | undefined, label: string, tip?: string) {
+  const tag = <Tag color={color}>{label}</Tag>;
   return tip ? <Tooltip title={tip}>{tag}</Tooltip> : tag;
 }
 
-// WhatsApp delivery is reported through Evolution asynchronously: a successful
-// provider submission is NOT a confirmed delivery. Only show "Delivered" when
-// the back-end explicitly reports delivered/read; otherwise show Queued/Submitted.
+// WhatsApp delivery is reported asynchronously: a successful hand-off is NOT a
+// confirmed delivery. Only show "Delivered"/"Read" when the back-end explicitly
+// reports them; otherwise show Queued/Sent.
 function whatsappDeliveryTag(delivery: DeliveryInfo, t: any) {
-  const provider = providerLabel(delivery.provider);
-
-  // Confirmed delivery (or read) is the only path that may claim "Delivered".
-  if (delivery.deliveryStatus === "delivered" || delivery.deliveryStatus === "read") {
-    return makeTag("green", t("admin.invites.deliveryDelivered"), provider);
+  // Read is the strongest confirmation available.
+  if (delivery.deliveryStatus === "read") {
+    return makeTag("green", t("admin.invites.deliveryRead"));
   }
 
-  // Accepted by the provider but not yet delivered.
+  // Confirmed delivery is the only other path that may claim "Delivered".
+  if (delivery.deliveryStatus === "delivered") {
+    return makeTag("green", t("admin.invites.deliveryDelivered"));
+  }
+
+  // Accepted for delivery but not yet handed to the recipient.
   if (delivery.deliveryStatus === "queued") {
-    return makeTag("blue", t("admin.invites.deliveryQueued"), provider);
+    return makeTag("blue", t("admin.invites.deliveryQueued"));
   }
 
-  // Submitted to the provider (status "sent"/"unknown") — handed off, not delivered.
+  // Handed off (status "sent"/"unknown") — sent, not confirmed delivered.
   if (
     delivery.deliveryStatus === "sent" ||
     delivery.deliveryStatus === "unknown" ||
     delivery.providerSubmitted === true ||
     delivery.sent === true
   ) {
-    return makeTag("blue", t("admin.invites.deliverySubmitted"), provider);
+    return makeTag("blue", t("admin.invites.deliverySent"));
   }
 
-  // Immediate provider send failure. For WhatsApp, `sent: false` can also mean
-  // "queued but not confirmed delivered", so only fail when it was not accepted.
+  // Immediate send failure. For WhatsApp, `sent: false` can also mean "queued but
+  // not confirmed delivered", so only fail when it was not accepted at all.
   if (delivery.deliveryStatus === "failed" || delivery.sent === false) {
-    return makeTag("red", t("admin.invites.deliveryFailed"), provider, safeDeliveryError(delivery, t));
+    return makeTag("red", t("admin.invites.deliveryFailed"), safeDeliveryError(delivery, t));
   }
 
   // No delivery metadata available (older rows / not yet attempted).
@@ -170,14 +170,18 @@ function deliveryTag(delivery: DeliveryInfo, channel: InviteChannel, t: any) {
     return whatsappDeliveryTag(delivery, t);
   }
 
-  // Email delivery is synchronous: the provider response reflects acceptance,
-  // so the existing sent/failed behavior is kept unchanged.
-  const provider = providerLabel(delivery.provider);
+  // Email delivery is synchronous: the send response reflects acceptance.
+  if (delivery.deliveryStatus === "read") {
+    return makeTag("green", t("admin.invites.deliveryRead"));
+  }
+  if (delivery.deliveryStatus === "delivered") {
+    return makeTag("green", t("admin.invites.deliveryDelivered"));
+  }
   if (delivery.sent === true) {
-    return makeTag("green", t("admin.invites.deliverySent"), provider);
+    return makeTag("green", t("admin.invites.deliverySent"));
   }
   if (delivery.sent === false) {
-    return makeTag("red", t("admin.invites.deliveryFailed"), provider, delivery.error || undefined);
+    return makeTag("red", t("admin.invites.deliveryFailed"), safeDeliveryError(delivery, t));
   }
   return <Tag>{t("admin.invites.deliveryPending")}</Tag>;
 }
@@ -186,14 +190,12 @@ export default function AdminInvitesPage() {
   const [form] = Form.useForm<SendInviteValues>();
   const { t } = useI18n();
   const channel = (Form.useWatch("channel", form) as InviteChannel | undefined) ?? "email";
+  const isWhatsappChannel = channel === "whatsapp";
 
   const [mode, setMode] = useState<UiMode>("loading");
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [unauthorized, setUnauthorized] = useState(false);
-
-  const [testPhone, setTestPhone] = useState("");
-  const [testing, setTesting] = useState(false);
 
   const [rows, setRows] = useState<InviteRow[]>([]);
   const [search, setSearch] = useState("");
@@ -219,7 +221,7 @@ export default function AdminInvitesPage() {
         const res = await listInvites({
           page,
           page_size: pageSize,
-          search: search.trim() || undefined,
+          search: toSearchParam(search),
           status: statusFilter === "All" ? undefined : statusFilter,
         });
 
@@ -318,55 +320,6 @@ export default function AdminInvitesPage() {
     }
   }
 
-  async function testWhatsapp() {
-    const phone = testPhone.trim();
-    if (!phone) {
-      message.warning(t("admin.invites.phoneRequired"));
-      return;
-    }
-    if (!/^\+[1-9]\d{7,14}$/.test(phone)) {
-      message.warning(t("admin.invites.phoneInvalid"));
-      return;
-    }
-
-    setTesting(true);
-    try {
-      message.loading({ content: t("admin.invites.testWhatsappSending"), key: "test-whatsapp" });
-      const res = await testWhatsappProvider(phone);
-
-      if (isApiError(res)) {
-        message.error({ content: res.message || t("admin.invites.testWhatsappFailed"), key: "test-whatsapp" });
-        return;
-      }
-
-      const result = res.data;
-      if (result?.sent) {
-        const provider = providerLabel(result.provider ?? null);
-        message.success({
-          content: provider
-            ? `${t("admin.invites.testWhatsappSent")} · ${provider}`
-            : t("admin.invites.testWhatsappSent"),
-          key: "test-whatsapp",
-        });
-      } else {
-        message.warning({
-          content: result?.error
-            ? `${t("admin.invites.testWhatsappFailed")}: ${result.error}`
-            : t("admin.invites.testWhatsappFailed"),
-          key: "test-whatsapp",
-        });
-      }
-    } catch (e: any) {
-      if (e?.response?.status === 403) {
-        setUnauthorized(true);
-        return;
-      }
-      message.error({ content: e?.message || t("admin.invites.testWhatsappFailed"), key: "test-whatsapp" });
-    } finally {
-      setTesting(false);
-    }
-  }
-
   async function resendInviteRow(invite: InviteRow) {
     try {
       message.loading({ content: "Resending invite...", key: `resend-${invite.id}` });
@@ -428,20 +381,35 @@ export default function AdminInvitesPage() {
       title: t("admin.invites.recipient"),
       key: "recipient",
       render: (_, record) => {
-        const recipient = record.channel === "whatsapp" ? record.phoneNumber : record.email;
+        const isWhatsapp = record.channel === "whatsapp";
+        // WhatsApp invites are addressed by phone; the email is supporting detail
+        // that HR may not have supplied yet.
+        const primary = isWhatsapp ? record.phoneNumber : record.email;
+        const secondary = isWhatsapp
+          ? record.email || t("admin.invites.emailAddedDuringSignup")
+          : null;
         return (
-          <Space size={4}>
+          <Space size={8} align="start">
             <Tag
-              icon={record.channel === "whatsapp" ? <WhatsAppOutlined /> : <MailOutlined />}
-              color={record.channel === "whatsapp" ? "green" : "blue"}
+              icon={isWhatsapp ? <WhatsAppOutlined /> : <MailOutlined />}
+              color={isWhatsapp ? "green" : "blue"}
             >
-              {record.channel === "whatsapp" ? t("admin.invites.channelWhatsapp") : t("common.email")}
+              {isWhatsapp ? t("admin.invites.channelWhatsapp") : t("common.email")}
             </Tag>
-            {recipient ? (
-              <Typography.Text strong>{recipient}</Typography.Text>
-            ) : (
-              <Typography.Text type="secondary">-</Typography.Text>
-            )}
+            <div>
+              {primary ? (
+                <Typography.Text strong>{primary}</Typography.Text>
+              ) : (
+                <Typography.Text type="secondary">-</Typography.Text>
+              )}
+              {secondary && (
+                <div>
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    {secondary}
+                  </Typography.Text>
+                </div>
+              )}
+            </div>
           </Space>
         );
       },
@@ -456,7 +424,9 @@ export default function AdminInvitesPage() {
         ) : v === "HRManager" ? (
           <Tag color="blue">{t(`role.${v}`, v)}</Tag>
         ) : v === "Manager" ? (
-          <Tag color="geekblue">{t(`role.${v}`, v)}</Tag>
+          // Manager invites are no longer issued; older rows are flagged as legacy
+          // rather than presented as a role HR can still pick.
+          <Tag>{t("admin.invites.legacyManagerRole")}</Tag>
         ) : v === "CEO" ? (
           <Tag color="purple">{t(`role.${v}`, v)}</Tag>
         ) : (
@@ -517,7 +487,7 @@ export default function AdminInvitesPage() {
     <div>
       <PageHeader
         title={t("admin.invites.title")}
-        subtitle={`${t("admin.dashboard.pendingInvites")}: ${pendingCount}`}
+        subtitle={`${t("admin.invites.pendingInvitations")}: ${pendingCount}`}
         actions={
           <Space>
             <Button icon={<ReloadOutlined />} onClick={() => loadInvites(1, pagination.pageSize || 8)}>{t("common.refresh")}</Button>
@@ -526,7 +496,7 @@ export default function AdminInvitesPage() {
       />
 
       <Card style={{ borderRadius: 16, marginBottom: 16 }} bodyStyle={{ padding: 24 }}>
-        <Typography.Title level={5} style={{ marginTop: 0 }}>{t("admin.invites.sendInvite")}</Typography.Title>
+        <Typography.Title level={5} style={{ marginTop: 0 }}>{t("admin.invites.sendInvitation")}</Typography.Title>
         {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 12 }} />}
         <Form<SendInviteValues> form={form} layout="vertical" requiredMark={false} onFinish={sendInvite} initialValues={{ role: "Employee", channel: "email" }}>
           <Row gutter={16} align="bottom">
@@ -543,7 +513,9 @@ export default function AdminInvitesPage() {
               </Form.Item>
             </Col>
             <Col xs={24} md={8}>
-              {channel === "whatsapp" ? (
+              {isWhatsappChannel ? (
+                // WhatsApp invites are addressed by phone only; the employee supplies
+                // their email during signup and the back-end stores it on the invite.
                 <Form.Item
                   label={t("admin.invites.phoneNumber")}
                   name="phone_number"
@@ -584,48 +556,18 @@ export default function AdminInvitesPage() {
             <Col xs={24} md={5}>
               <Form.Item>
                 <Button type="primary" htmlType="submit" size="large" loading={sending} block>
-                  {t("common.submit")}
+                  {t("admin.invites.sendInvite")}
                 </Button>
               </Form.Item>
             </Col>
           </Row>
         </Form>
-
-        <div
-          style={{
-            marginTop: 4,
-            paddingTop: 16,
-            borderTop: "1px solid rgba(0,0,0,0.06)",
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            gap: 12,
-          }}
-        >
-          <Typography.Text type="secondary" style={{ whiteSpace: "nowrap" }}>
-            {t("admin.invites.testWhatsappLabel")}
-          </Typography.Text>
-          <div style={{ flex: "0 1 260px", minWidth: 200 }}>
-            <PhoneNumberInput
-              size="middle"
-              value={testPhone}
-              onChange={(v) => setTestPhone(v ?? "")}
-              disabled={testing}
-            />
-          </div>
-          <Button
-            icon={<WhatsAppOutlined />}
-            onClick={() => testWhatsapp()}
-            loading={testing}
-          >
-            {t("admin.invites.testWhatsapp")}
-          </Button>
-        </div>
       </Card>
 
       <Card style={{ borderRadius: 16 }}>
+        <Typography.Title level={5} style={{ marginTop: 0 }}>{t("admin.invites.invitationHistory")}</Typography.Title>
         <div className="responsive-filter-bar" style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-          <Input allowClear placeholder={t("admin.users.searchPlaceholder")} style={{ flex: "1 1 200px", minWidth: 150 }} value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Input allowClear maxLength={MAX_SEARCH_LENGTH} placeholder={t("admin.invites.searchByEmailOrPhone")} style={{ flex: "1 1 200px", minWidth: 150 }} value={search} onChange={(e) => setSearch(e.target.value)} />
           <Select value={statusFilter} onChange={setStatusFilter} style={{ flex: "0 1 180px", minWidth: 120 }} options={[
             { label: t("common.filter"), value: "All" },
             { label: t("status.pending"), value: "sent" },
@@ -640,7 +582,7 @@ export default function AdminInvitesPage() {
             <EmptyState
               title={t("common.noData")}
               description={t("admin.invites.title")}
-              actionText={t("admin.invites.sendInvite")}
+              actionText={t("admin.invites.sendInvitation")}
               onAction={() => { window.scrollTo({ top: 0, behavior: "smooth" }); }}
             />
           ) : (

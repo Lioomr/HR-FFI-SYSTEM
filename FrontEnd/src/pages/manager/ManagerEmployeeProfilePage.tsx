@@ -1,87 +1,106 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Button, Card, Descriptions, Space, Avatar, Row, Col, Tabs, Tag, Typography, Divider } from "antd";
-import { ArrowLeftOutlined, UserOutlined, ContainerOutlined, DollarOutlined, FolderOpenOutlined, PhoneOutlined, MailOutlined, SafetyCertificateOutlined } from "@ant-design/icons";
-import { getCountryFlag } from "../../utils/countries";
-import EmployeeLeaveBalances from "../hr/employees/components/EmployeeLeaveBalances";
+import { Alert, Button, Col, Grid, Row, Space, Tabs, Tag, Typography } from "antd";
+import {
+    ArrowLeftOutlined,
+    ArrowRightOutlined,
+    ContainerOutlined,
+    EyeInvisibleOutlined,
+    MailOutlined,
+    PhoneOutlined,
+    RightOutlined,
+    UserOutlined,
+} from "@ant-design/icons";
+
 import PageHeader from "../../components/ui/PageHeader";
 import LoadingState from "../../components/ui/LoadingState";
 import EmptyState from "../../components/ui/EmptyState";
 import ErrorState from "../../components/ui/ErrorState";
-import { getEmployee } from "../../services/api/employeesApi";
-import type { Employee } from "../../services/api/employeesApi";
+import DashboardPanel from "../../components/hr/dashboard/DashboardPanel";
+import ApprovalStatusTag from "../../components/ceo/ApprovalStatusTag";
+import { approvalStatusLabel } from "../../components/ceo/approvalStatusLabel";
+import TeamMemberCell from "../../components/manager/TeamMemberCell";
+import EmployeeLeaveBalances from "../hr/employees/components/EmployeeLeaveBalances";
+import { getCountryFlag } from "../../utils/countries";
+import { getEmployee, type Employee } from "../../services/api/employeesApi";
+import {
+    getManagerWorkSummary,
+    type ManagerPendingItem,
+} from "../../services/api/managerSummaryApi";
 import { isApiError } from "../../services/api/apiTypes";
-import AmountWithSAR from "../../components/ui/AmountWithSAR";
+import { requestAgeLabel } from "../../utils/requestAge";
 import { useI18n } from "../../i18n/useI18n";
 
-const { Title, Text } = Typography;
+const { useBreakpoint } = Grid;
+const { Text } = Typography;
 
 const formatValue = (value: unknown): string => {
     if (value === null || value === undefined || value === "") return "—";
     return String(value);
 };
 
-const formatCurrency = (value: unknown): React.ReactNode => {
-    if (value === null || value === undefined || value === "") return "—";
-    return <AmountWithSAR amount={value as number} size={12} />;
-};
-
 const formatDate = (value: unknown): string => {
     if (!value) return "—";
-    if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) {
-        return value.split("T")[0];
-    }
+    if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) return value.split("T")[0];
     return formatValue(value);
 };
 
-function getExpiryStatus(dateStr: string | undefined): "expired" | "warning" | "ok" | "unknown" {
-    if (!dateStr) return "unknown";
-    const expiry = new Date(dateStr);
-    const diffDays = Math.floor((expiry.getTime() - Date.now()) / 86400000);
-    if (diffDays < 0) return "expired";
-    if (diffDays <= 60) return "warning";
-    return "ok";
-}
-
-function ExpiryTag({ status }: { status: ReturnType<typeof getExpiryStatus> }) {
-    if (status === "expired") return <Tag color="error">Expired</Tag>;
-    if (status === "warning") return <Tag color="warning">Expiring Soon</Tag>;
-    if (status === "ok") return <Tag color="success">Valid</Tag>;
-    return <Tag>Unknown</Tag>;
-}
-
-function DocCard({ label, tagLabel, tagColor, number, expiry }: {
-    label: string; tagLabel: string; tagColor: string;
-    number: string; expiry: string | undefined;
-}) {
-    const status = getExpiryStatus(expiry);
-    const borderColor = status === "expired" ? "#ff4d4f" : status === "warning" ? "#faad14" : "#f0f0f0";
+/** One labelled fact inside a detail panel. */
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
     return (
-        <div style={{ padding: 12, background: "#fafafa", borderRadius: 8, border: `1px solid ${borderColor}` }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                <Text strong><SafetyCertificateOutlined /> {label}</Text>
-                <Space size={4}>
-                    <ExpiryTag status={status} />
-                    <Tag color={tagColor}>{tagLabel}</Tag>
-                </Space>
+        <div style={{ minWidth: 0 }}>
+            <div
+                style={{
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                    color: "#94a3b8",
+                    marginBottom: 4,
+                }}
+            >
+                {label}
             </div>
-            <div style={{ fontSize: 13, color: "#595959", marginBottom: 4 }}>{number}</div>
-            <div style={{ fontSize: 12, color: "#8c8c8c" }}>Expires: {formatDate(expiry)}</div>
+            <div style={{ fontSize: 14, color: "#0f172a", overflowWrap: "anywhere" }}>{children}</div>
         </div>
     );
 }
 
+function FieldGrid({ children, isMobile }: { children: React.ReactNode; isMobile: boolean }) {
+    return (
+        <div
+            style={{
+                display: "grid",
+                gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(190px, 1fr))",
+                gap: 18,
+            }}
+        >
+            {children}
+        </div>
+    );
+}
+
+/**
+ * Read-only profile of a direct report.
+ *
+ * A manager reviews people here but never edits them, so the page carries no
+ * write affordances at all — record changes stay with HR.
+ */
 export default function ManagerEmployeeProfilePage() {
-    const { t } = useI18n();
+    const { t, language } = useI18n();
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const screens = useBreakpoint();
+    const isMobile = !screens.md;
+    const isRtl = language === "ar";
 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [employee, setEmployee] = useState<Employee | null>(null);
     const [notInTeam, setNotInTeam] = useState(false);
+    const [pendingItems, setPendingItems] = useState<ManagerPendingItem[] | null>(null);
 
-    const loadEmployee = async () => {
+    const loadEmployee = useCallback(async () => {
         if (!id) {
             setError(t("manager.team.profile.loadFailed"));
             setLoading(false);
@@ -99,7 +118,6 @@ export default function ManagerEmployeeProfilePage() {
                 } else {
                     setError(response.message || t("manager.team.profile.loadFailed"));
                 }
-                setLoading(false);
                 return;
             }
             setEmployee(response.data);
@@ -113,11 +131,33 @@ export default function ManagerEmployeeProfilePage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [id, t]);
 
     useEffect(() => {
-        loadEmployee();
-    }, [id]);
+        void loadEmployee();
+    }, [loadEmployee]);
+
+    // Open requests are supporting context: a failure here leaves the panel out
+    // rather than breaking the profile.
+    useEffect(() => {
+        let cancelled = false;
+        getManagerWorkSummary()
+            .then((summary) => {
+                if (!cancelled) setPendingItems(summary.items);
+            })
+            .catch(() => {
+                if (!cancelled) setPendingItems([]);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    const employeeEmail = employee?.email?.toLowerCase() || "";
+    const openRequests = useMemo(() => {
+        if (!pendingItems || !employeeEmail) return [];
+        return pendingItems.filter((item) => item.employeeEmail.toLowerCase() === employeeEmail);
+    }, [pendingItems, employeeEmail]);
 
     const handleBack = () => navigate("/manager/team");
 
@@ -145,185 +185,250 @@ export default function ManagerEmployeeProfilePage() {
     }
 
     const emp = employee as unknown as Record<string, unknown>;
+    const gutter: [number, number] = isMobile ? [12, 12] : [20, 20];
 
     return (
-        <div>
+        <div style={{ maxWidth: 1600, margin: "0 auto", paddingBottom: 24 }}>
+            <Button
+                type="link"
+                icon={isRtl ? <ArrowRightOutlined aria-hidden /> : <ArrowLeftOutlined aria-hidden />}
+                onClick={handleBack}
+                style={{ paddingInlineStart: 0, marginBottom: 8, fontWeight: 600 }}
+            >
+                {t("manager.team.profile.back")}
+            </Button>
+
             <PageHeader
-                title={t("manager.team.profile.title")}
+                title={employee.full_name || t("manager.team.profile.title")}
+                subtitle={employee.position || undefined}
+                secondarySubtitle={employee.department || undefined}
                 breadcrumb={t("manager.team.title")}
-                subtitle={employee.full_name}
-                actions={
-                    <Button icon={<ArrowLeftOutlined />} onClick={handleBack}>
-                        {t("manager.team.profile.back")}
-                    </Button>
+                tags={
+                    <Space size={6} wrap>
+                        {employee.employee_id && (
+                            <Tag
+                                className="tabular-nums"
+                                style={{
+                                    marginInlineEnd: 0,
+                                    borderRadius: 999,
+                                    paddingInline: 10,
+                                    background: "#f8fafc",
+                                    borderColor: "#e2e8f0",
+                                    color: "#475569",
+                                    fontWeight: 600,
+                                }}
+                            >
+                                #{employee.employee_id}
+                            </Tag>
+                        )}
+                        <Tag
+                            color={
+                                String(employee.employment_status || "ACTIVE").toUpperCase() === "ACTIVE"
+                                    ? "green"
+                                    : "default"
+                            }
+                            style={{ marginInlineEnd: 0, borderRadius: 999, paddingInline: 10, fontWeight: 600 }}
+                        >
+                            {employee.employment_status || "ACTIVE"}
+                        </Tag>
+                    </Space>
                 }
             />
 
-            {/* Hero Banner */}
-            <Card style={{ borderRadius: 16, border: "none", boxShadow: "0 2px 16px rgba(0,0,0,0.06)", marginBottom: 24, background: "linear-gradient(135deg, #fff7f0 0%, #fff 100%)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
-                    <Avatar
-                        size={88}
-                        style={{ backgroundColor: "#f56a00", fontSize: 36, flexShrink: 0, boxShadow: "0 0 0 4px #fff2e8" }}
-                    >
-                        {employee.full_name?.charAt(0).toUpperCase()}
-                    </Avatar>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                        <Title level={3} style={{ margin: 0 }}>{employee.full_name}</Title>
-                        <Text type="secondary" style={{ fontSize: 15 }}>{employee.position || "—"}</Text>
-                        <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                            {employee.department && <Tag color="orange">{employee.department}</Tag>}
-                            <Tag color={employee.employment_status === "ACTIVE" ? "success" : "default"}>
-                                {employee.employment_status || "ACTIVE"}
-                            </Tag>
-                            <Tag style={{ fontFamily: "monospace", background: "#f5f5f5", border: "1px solid #d9d9d9", color: "#595959" }}>
-                                #{employee.employee_id}
-                            </Tag>
-                        </div>
-                        {employee.mobile && (
-                            <div style={{ marginTop: 8 }}>
-                                <Space>
-                                    <PhoneOutlined style={{ color: "#bfbfbf" }} />
-                                    <a href={`tel:${employee.mobile}`} style={{ fontSize: 13, color: "inherit" }}>{employee.mobile}</a>
-                                </Space>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </Card>
+            <Alert
+                type="info"
+                showIcon
+                icon={<EyeInvisibleOutlined aria-hidden />}
+                message={t("manager.team.profile.readOnlyNote")}
+                style={{ borderRadius: 12, marginBottom: isMobile ? 12 : 20 }}
+            />
 
-            <div style={{ paddingBottom: 24 }}>
-                <Row gutter={24}>
-                    {/* Left Column: Tabs */}
-                    <Col xs={24} lg={17}>
-                        <Card style={{ borderRadius: 16, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.03)" }}>
+            <Row gutter={gutter} align="top">
+                <Col xs={24} lg={15}>
+                    <Space direction="vertical" size={isMobile ? 12 : 20} style={{ width: "100%" }}>
+                        <DashboardPanel title={t("manager.team.profile.identitySection")} animDelay={0}>
+                            <TeamMemberCell
+                                name={employee.full_name}
+                                secondary={employee.position || employee.department || undefined}
+                                size={52}
+                            />
+                            <div style={{ marginTop: 18 }}>
+                                <FieldGrid isMobile={isMobile}>
+                                    <Field label={t("common.email")}>
+                                        {employee.email ? (
+                                            <Space size={6}>
+                                                <MailOutlined aria-hidden style={{ color: "#94a3b8" }} />
+                                                <a href={`mailto:${employee.email}`}>{employee.email}</a>
+                                            </Space>
+                                        ) : (
+                                            "—"
+                                        )}
+                                    </Field>
+                                    <Field label={t("employees.form.mobile")}>
+                                        {employee.mobile ? (
+                                            <Space size={6}>
+                                                <PhoneOutlined aria-hidden style={{ color: "#94a3b8" }} />
+                                                <a className="tabular-nums" href={`tel:${employee.mobile}`}>
+                                                    {employee.mobile}
+                                                </a>
+                                            </Space>
+                                        ) : (
+                                            "—"
+                                        )}
+                                    </Field>
+                                    <Field label={t("employees.form.nationality")}>
+                                        <Space size={6}>
+                                            <span aria-hidden>{getCountryFlag(emp.nationality as string)}</span>
+                                            {formatValue(emp.nationality)}
+                                        </Space>
+                                    </Field>
+                                    <Field label={t("employees.form.dateOfBirth")}>
+                                        <span className="tabular-nums">{formatDate(emp.date_of_birth)}</span>
+                                    </Field>
+                                </FieldGrid>
+                            </div>
+                        </DashboardPanel>
+
+                        <DashboardPanel
+                            title={t("manager.team.profile.detailsSection")}
+                            bodyPadding="0 16px 16px"
+                            animDelay={60}
+                        >
                             <Tabs
-                                defaultActiveKey="1"
+                                defaultActiveKey="employment"
                                 items={[
                                     {
-                                        key: "1",
-                                        label: <span><UserOutlined />{t("hr.employees.personalInfo")}</span>,
+                                        key: "employment",
+                                        label: (
+                                            <span>
+                                                <ContainerOutlined aria-hidden /> {t("hr.employees.employmentInfo")}
+                                            </span>
+                                        ),
                                         children: (
-                                            <Descriptions column={{ xs: 1, sm: 2 }} layout="vertical" style={{ marginTop: 16 }}>
-                                                <Descriptions.Item label={t("hr.employees.fullName")}>{formatValue(employee.full_name)}</Descriptions.Item>
-                                                <Descriptions.Item label={t("employees.form.dateOfBirth")}>{formatDate(emp.date_of_birth)}</Descriptions.Item>
-                                                <Descriptions.Item label={t("employees.form.nationality")}>
-                                                    <Space>
-                                                        <span>{getCountryFlag(emp.nationality as string)}</span>
-                                                        {formatValue(emp.nationality)}
-                                                    </Space>
-                                                </Descriptions.Item>
-                                                <Descriptions.Item label={t("employees.form.empNumber")}>{formatValue(emp.employee_number)}</Descriptions.Item>
-                                                <Descriptions.Item label={t("employees.form.mobile")}>
-                                                    <Space>
-                                                        <PhoneOutlined style={{ color: "#bfbfbf" }} />
-                                                        {formatValue(employee.mobile)}
-                                                    </Space>
-                                                </Descriptions.Item>
-                                                {employee.email && (
-                                                    <Descriptions.Item label={t("common.email")}>
-                                                        <Space>
-                                                            <MailOutlined style={{ color: "#bfbfbf" }} />
-                                                            <span>{employee.email}</span>
-                                                        </Space>
-                                                    </Descriptions.Item>
-                                                )}
-                                            </Descriptions>
+                                            <FieldGrid isMobile={isMobile}>
+                                                <Field label={t("employees.form.department")}>
+                                                    {formatValue(employee.department)}
+                                                </Field>
+                                                <Field label={t("employees.form.position")}>
+                                                    {formatValue(employee.position)}
+                                                </Field>
+                                                <Field label={t("employees.form.taskGroup")}>
+                                                    {formatValue(employee.task_group)}
+                                                </Field>
+                                                <Field label={t("employees.form.sponsor")}>
+                                                    {formatValue(employee.sponsor)}
+                                                </Field>
+                                                <Field label={t("employees.form.joiningDate")}>
+                                                    <span className="tabular-nums">
+                                                        {formatDate(emp.join_date || employee.hire_date)}
+                                                    </span>
+                                                </Field>
+                                                <Field label={t("employees.form.contractExpiry")}>
+                                                    <span className="tabular-nums">
+                                                        {formatDate(emp.contract_expiry)}
+                                                    </span>
+                                                </Field>
+                                                <Field label={t("employees.form.allowedOvertime")}>
+                                                    <span className="tabular-nums">
+                                                        {formatValue(emp.allowed_overtime)} {t("hr.employees.hours")}
+                                                    </span>
+                                                </Field>
+                                            </FieldGrid>
                                         ),
                                     },
                                     {
-                                        key: "2",
-                                        label: <span><ContainerOutlined />{t("hr.employees.employmentInfo")}</span>,
-                                        children: (
-                                            <Descriptions column={{ xs: 1, sm: 2 }} layout="vertical" style={{ marginTop: 16 }}>
-                                                <Descriptions.Item label={t("employees.form.department")}>{formatValue(employee.department)}</Descriptions.Item>
-                                                <Descriptions.Item label={t("employees.form.position")}>{formatValue(employee.position)}</Descriptions.Item>
-                                                <Descriptions.Item label={t("employees.form.taskGroup")}>{formatValue(employee.task_group)}</Descriptions.Item>
-                                                <Descriptions.Item label={t("employees.form.sponsor")}>{formatValue(employee.sponsor)}</Descriptions.Item>
-                                                <Descriptions.Item label={t("employees.form.jobOffer")}>{formatValue(emp.job_offer)}</Descriptions.Item>
-                                                <Descriptions.Item label={t("employees.form.joiningDate")}>{formatDate(emp.join_date || employee.hire_date)}</Descriptions.Item>
-                                                <Descriptions.Item label={t("employees.form.contractDate")}>{formatDate(emp.contract_date)}</Descriptions.Item>
-                                                <Descriptions.Item label={t("employees.form.contractExpiry")}>{formatDate(emp.contract_expiry)}</Descriptions.Item>
-                                                <Descriptions.Item label={t("employees.form.allowedOvertime")}>{formatValue(emp.allowed_overtime)} {t("hr.employees.hours")}</Descriptions.Item>
-                                            </Descriptions>
+                                        key: "leave",
+                                        label: (
+                                            <span>
+                                                <UserOutlined aria-hidden /> {t("hr.employees.leaveBalances")}
+                                            </span>
                                         ),
-                                    },
-                                    {
-                                        key: "3",
-                                        label: <span><DollarOutlined />{t("hr.employees.salaryDetails")}</span>,
-                                        children: (
-                                            <div>
-                                                <Descriptions column={{ xs: 1, sm: 2 }} layout="vertical" style={{ marginTop: 16 }}>
-                                                    <Descriptions.Item label={t("employees.form.basicSalary")}>{formatCurrency(emp.basic_salary)}</Descriptions.Item>
-                                                    <Descriptions.Item label={t("employees.form.totalSalary")}>
-                                                        <AmountWithSAR
-                                                            amount={emp.total_salary as number}
-                                                            size={16}
-                                                            color="#52c41a"
-                                                            fontWeight="bold"
-                                                            style={{ fontSize: 16 }}
-                                                        />
-                                                    </Descriptions.Item>
-                                                </Descriptions>
-                                                <Divider style={{ margin: "12px 0", fontSize: 13, color: "#8c8c8c" }}>{t("employees.form.allowances")}</Divider>
-                                                <Descriptions column={{ xs: 1, sm: 2, md: 3 }} layout="vertical" size="small">
-                                                    <Descriptions.Item label={t("employees.form.transportation")}>{formatCurrency(emp.transportation_allowance)}</Descriptions.Item>
-                                                    <Descriptions.Item label={t("employees.form.accommodation")}>{formatCurrency(emp.accommodation_allowance)}</Descriptions.Item>
-                                                    <Descriptions.Item label={t("employees.form.telephone")}>{formatCurrency(emp.telephone_allowance)}</Descriptions.Item>
-                                                    <Descriptions.Item label={t("employees.form.petrol")}>{formatCurrency(emp.petrol_allowance)}</Descriptions.Item>
-                                                    <Descriptions.Item label={t("employees.form.other")}>{formatCurrency(emp.other_allowance)}</Descriptions.Item>
-                                                </Descriptions>
-                                            </div>
-                                        ),
-                                    },
-                                    {
-                                        key: "4",
-                                        label: <span><ContainerOutlined />{t("hr.employees.leaveBalances")}</span>,
                                         children: <EmployeeLeaveBalances employeeId={Number(id)} />,
                                     },
+                                    // Compensation is deliberately absent: a manager
+                                    // reviews people here, and pay data belongs to the
+                                    // HR and payroll surfaces.
                                 ]}
                             />
-                        </Card>
-                    </Col>
+                        </DashboardPanel>
+                    </Space>
+                </Col>
 
-                    {/* Right Column: Document cards (data from employee object only) */}
-                    <Col xs={24} lg={7}>
-                        <Card
-                            title={
-                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                    <FolderOpenOutlined style={{ color: "#fa8c16" }} />
-                                    <span>{t("hr.employees.documents")}</span>
-                                </div>
+                <Col xs={24} lg={9}>
+                    <div style={{ marginTop: isMobile ? 12 : 0 }}>
+                        <DashboardPanel
+                            title={t("manager.team.profile.openRequests")}
+                            titleSuffix={
+                                openRequests.length > 0 ? (
+                                    <Tag
+                                        color="orange"
+                                        style={{ margin: 0, borderRadius: 999, fontWeight: 700 }}
+                                    >
+                                        {openRequests.length}
+                                    </Tag>
+                                ) : undefined
                             }
-                            style={{ borderRadius: 16, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.03)" }}
+                            bodyPadding={0}
+                            animDelay={120}
                         >
-                            <Space direction="vertical" style={{ width: "100%" }} size={12}>
-                                <DocCard
-                                    label={t("employees.form.passport")}
-                                    tagLabel="Passport"
-                                    tagColor="cyan"
-                                    number={formatValue(employee.passport || emp.passport_no)}
-                                    expiry={emp.passport_expiry as string | undefined}
-                                />
-                                <DocCard
-                                    label={t("employees.form.nationalId")}
-                                    tagLabel="ID"
-                                    tagColor="blue"
-                                    number={formatValue(emp.national_id)}
-                                    expiry={emp.id_expiry as string | undefined}
-                                />
-                                <DocCard
-                                    label={t("employees.form.healthCard")}
-                                    tagLabel="Health"
-                                    tagColor="green"
-                                    number={formatValue(emp.health_card)}
-                                    expiry={emp.health_card_expiry as string | undefined}
-                                />
-                            </Space>
-                        </Card>
-                    </Col>
-                </Row>
-            </div>
+                            {openRequests.length === 0 ? (
+                                <div style={{ padding: "16px 18px", fontSize: 13, color: "#64748b" }}>
+                                    {pendingItems === null
+                                        ? t("common.loading")
+                                        : t("manager.team.profile.noOpenRequests")}
+                                </div>
+                            ) : (
+                                <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+                                    {openRequests.map((item, index) => (
+                                        <li
+                                            key={item.key}
+                                            style={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: 12,
+                                                flexWrap: "wrap",
+                                                padding: "12px 18px",
+                                                borderTop: index === 0 ? undefined : "1px solid #f1f5f9",
+                                            }}
+                                        >
+                                            <span style={{ flex: 1, minWidth: 140 }}>
+                                                <span
+                                                    style={{
+                                                        display: "block",
+                                                        fontWeight: 600,
+                                                        fontSize: 13.5,
+                                                        color: "#0f172a",
+                                                    }}
+                                                >
+                                                    {t(`manager.queue.type.${item.queue}`)}
+                                                </span>
+                                                <Text type="secondary" style={{ fontSize: 12 }}>
+                                                    {requestAgeLabel(t, item.submittedAt)}
+                                                </Text>
+                                            </span>
+                                            <ApprovalStatusTag
+                                                label={approvalStatusLabel(item.status, t)}
+                                                status={item.status}
+                                            />
+                                            <Button
+                                                size="small"
+                                                icon={<RightOutlined aria-hidden />}
+                                                onClick={() => navigate(item.path)}
+                                                aria-label={`${t("common.review")}: ${t(
+                                                    `manager.queue.type.${item.queue}`,
+                                                )}`}
+                                                style={{ borderRadius: 8, fontWeight: 600 }}
+                                            >
+                                                {t("common.review")}
+                                            </Button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </DashboardPanel>
+                    </div>
+                </Col>
+            </Row>
         </div>
     );
 }

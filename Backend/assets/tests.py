@@ -52,7 +52,7 @@ class AssetsTests(TestCase):
         self.employee_user.groups.add(self.employee_group)
 
         self.manager_user = User.objects.create_user(email="mgr-assets@ffi.com", password="password")
-        self.manager_user.groups.add(self.manager_group)
+        self.manager_user.groups.add(self.employee_group)
 
         self.employee_profile = EmployeeProfile.objects.create(
             user=self.employee_user,
@@ -407,6 +407,33 @@ class AssetsTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["data"]["status"], AssetReturnRequest.RequestStatus.PENDING)
 
+    def test_employee_with_inactive_manager_goes_directly_to_hr_for_return_request(self):
+        self.manager_profile.is_archived = True
+        self.manager_profile.save(update_fields=["is_archived", "updated_at"])
+        asset = Asset.objects.create(
+            company=self.company,
+            name_en="Laptop Inactive Manager",
+            type=Asset.AssetType.LAPTOP,
+            cpu="i5",
+            ram="8GB",
+            storage="256GB",
+            mac_address="AA:BB:CC:DD:EE:10",
+            operating_system="Linux",
+            status=Asset.AssetStatus.ASSIGNED,
+        )
+        AssetAssignment.objects.create(
+            asset=asset,
+            employee=self.employee_profile,
+            assigned_by=self.hr_user,
+            is_active=True,
+        )
+
+        self.client.force_authenticate(user=self.employee_user)
+        response = self.client.post(f"/api/assets/{asset.id}/return-request/", {"note": "Manager inactive"})
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["data"]["status"], AssetReturnRequest.RequestStatus.PENDING)
+
     def test_manager_can_approve_asset_return_request_and_move_it_to_hr(self):
         asset = Asset.objects.create(
             company=self.company,
@@ -442,6 +469,39 @@ class AssetsTests(TestCase):
         return_request = AssetReturnRequest.objects.get(id=request_id)
         self.assertEqual(return_request.manager_decision_by, self.manager_user)
         self.assertIsNotNone(return_request.manager_decision_at)
+
+    def test_manager_group_alone_cannot_approve_unrelated_asset_return(self):
+        unrelated_user = User.objects.create_user(email="unrelated-assets-manager@ffi.com", password="password")
+        unrelated_user.groups.add(self.manager_group)
+        EmployeeProfile.objects.create(
+            user=unrelated_user,
+            company=self.company,
+            employee_id="EMP-ASSET-UNRELATED",
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        )
+        asset = Asset.objects.create(
+            company=self.company,
+            name_en="Unrelated Return Asset",
+            type=Asset.AssetType.OTHER,
+            flexible_attributes={"category": "test"},
+            status=Asset.AssetStatus.ASSIGNED,
+        )
+        request_obj = AssetReturnRequest.objects.create(
+            asset=asset,
+            employee=self.employee_profile,
+            note="Return",
+            status=AssetReturnRequest.RequestStatus.PENDING_MANAGER,
+        )
+
+        self.client.force_authenticate(user=unrelated_user)
+        response = self.client.post(
+            f"/api/assets/manager/return-requests/{request_obj.id}/approve/",
+            {"comment": "Not allowed"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        request_obj.refresh_from_db()
+        self.assertEqual(request_obj.status, AssetReturnRequest.RequestStatus.PENDING_MANAGER)
 
     def test_hr_can_approve_return_request_after_manager_stage(self):
         asset = Asset.objects.create(

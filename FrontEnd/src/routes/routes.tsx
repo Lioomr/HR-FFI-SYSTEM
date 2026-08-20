@@ -1,6 +1,7 @@
 import { Navigate } from "react-router-dom";
 import RequireAuth from "./RequireAuth";
 import RequireRole from "./RequireRole";
+import RequireManagerAccess from "./RequireManagerAccess";
 import RequireFinanceApprover from "./RequireFinanceApprover";
 import RequireCFOApprover from "./RequireCFOApprover";
 import RequireCEOApprover from "./RequireCEOApprover";
@@ -248,9 +249,10 @@ export const routes = [
             ],
           },
 
-          // Manager Routes
+          // Manager Routes — capability driven: any user the backend reports
+          // manager access for (assigned direct reports) reaches these pages.
           {
-            element: <RequireRole roles={["Manager", "CEO", "CFO", "SystemAdmin"]} />,
+            element: <RequireManagerAccess allowRoles={["CEO", "CFO", "SystemAdmin"]} />,
             children: [
               { path: "manager", element: <Navigate to="/manager/dashboard" replace /> },
               { path: "manager/dashboard", element: <ManagerDashboardPage /> },
@@ -263,7 +265,6 @@ export const routes = [
               { path: "manager/loan-requests/:id", element: <ManagerLoanRequestDetailsPage /> },
               { path: "manager/announcements", element: <AnnouncementsPage /> },
               { path: "manager/announcements/create", element: <CreateTeamAnnouncementPage /> },
-              { path: "manager/profile", element: <UserProfilePage /> },
             ]
           },
 
@@ -331,6 +332,8 @@ export const routes = [
             children: [
               { path: "pending-inbox", element: <PendingInboxPage /> },
               { path: "notifications", element: <NotificationsPage /> },
+              // Personal profile: reachable even without manager capability.
+              { path: "manager/profile", element: <UserProfilePage /> },
             ],
           },
         ],

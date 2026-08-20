@@ -49,16 +49,10 @@ def _active_profile_users_by_department(department_ref_id: int):
 
 def get_direct_manager_user(employee_user):
     profile = getattr(employee_user, "employee_profile", None)
-    if not profile:
-        return None
-    manager = None
-    if profile.manager_profile and profile.manager_profile.user_id:
-        manager = profile.manager_profile.user
-    elif profile.manager_id:
-        manager = profile.manager
-    if manager and getattr(manager, "is_active", False) and getattr(manager, "email", ""):
-        return manager
-    return None
+    from employees.services.manager_relationships import get_valid_direct_manager_user
+
+    manager = get_valid_direct_manager_user(profile)
+    return manager if manager and getattr(manager, "email", "") else None
 
 
 def get_hr_approver_users():

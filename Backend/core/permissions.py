@@ -1,7 +1,7 @@
-from django.db.models import Q
 from rest_framework.permissions import BasePermission
 
 from employees.models import EmployeeProfile
+from employees.services.manager_relationships import has_manager_access
 
 CEO_APPROVER_DEPARTMENT_ID = 1
 
@@ -23,26 +23,7 @@ def get_role(user):
 
 
 def has_direct_reports(user):
-    if not user or not user.is_authenticated:
-        return False
-
-    manager_profile = getattr(user, "employee_profile", None)
-    manager_match = Q(manager=user)
-    if manager_profile:
-        manager_match = manager_match | Q(manager_profile=manager_profile)
-
-    if EmployeeProfile.objects.filter(manager_match).exists():
-        return True
-
-    from core.delegation import get_delegated_manager_user_ids
-
-    delegated_manager_ids = get_delegated_manager_user_ids(user)
-    if not delegated_manager_ids:
-        return False
-
-    return EmployeeProfile.objects.filter(
-        Q(manager_id__in=delegated_manager_ids) | Q(manager_profile__user_id__in=delegated_manager_ids)
-    ).exists()
+    return has_manager_access(user)
 
 
 class IsSystemAdmin(BasePermission):
@@ -57,18 +38,8 @@ class IsHRManagerOrAdmin(BasePermission):
 
 class IsManager(BasePermission):
     def has_permission(self, request, view):
-        # Allow SystemAdmin/HRManager to act as manager if needed, or strictly manager
-        # Usually Managers are distinct, but let's allow Admin for override
         return request.user.is_authenticated and (
-            get_role(request.user)
-            in [
-                "SystemAdmin",
-                "HRManager",
-                "Manager",
-                "CFO",
-                "CEO",
-            ]
-            or has_direct_reports(request.user)
+            get_role(request.user) == "SystemAdmin" or has_manager_access(request.user)
         )
 
 

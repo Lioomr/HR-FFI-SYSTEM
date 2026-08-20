@@ -55,6 +55,8 @@ class InvitePermissionTests(TestCase):
         self.assertIsNone(response.data["data"]["whatsapp_delivery"])
         self.assertEqual(response.data["data"]["last_delivery"]["channel"], Invite.Channel.EMAIL)
         self.assertEqual(response.data["data"]["email_delivery"]["provider"], "bird")
+        self.assertEqual(response.data["data"]["email_delivery"]["provider_label"], "Email delivery service")
+        self.assertEqual(response.data["data"]["email_delivery"]["delivery_status_label"], "Submitted")
         self.assertEqual(response.data["data"]["email_delivery"]["message_id"], "email-1")
         self.assertTrue(response.data["data"]["email_delivery"]["provider_submitted"])
         self.assertEqual(response.data["data"]["email_delivery"]["delivery_status"], Invite.DeliveryStatus.SENT)
@@ -97,6 +99,8 @@ class InvitePermissionTests(TestCase):
         self.assertIsNone(response.data["data"]["email_delivery"])
         self.assertEqual(response.data["data"]["last_delivery"]["channel"], Invite.Channel.WHATSAPP)
         self.assertEqual(response.data["data"]["whatsapp_delivery"]["provider"], "evolution_whatsapp")
+        self.assertEqual(response.data["data"]["whatsapp_delivery"]["provider_label"], "WhatsApp delivery service")
+        self.assertEqual(response.data["data"]["whatsapp_delivery"]["delivery_status_label"], "Queued")
         self.assertEqual(response.data["data"]["whatsapp_delivery"]["message_id"], "wa-1")
         invite.refresh_from_db()
         self.assertEqual(invite.last_delivery_channel, Invite.Channel.WHATSAPP)
@@ -111,6 +115,66 @@ class InvitePermissionTests(TestCase):
         whatsapp_send.assert_called_once()
         self.assertEqual(whatsapp_send.call_args.kwargs["template_name"], "employee_invitation")
         self.assertIn("/register?token=", whatsapp_send.call_args.kwargs["template_variables"]["invite_link"])
+
+    @patch("core.services.whatsapp_notifications.WhatsAppService.send_template_message")
+    def test_hr_manager_can_create_whatsapp_invite_with_expected_email(self, whatsapp_send):
+        whatsapp_send.return_value = {
+            "success": True,
+            "provider": "evolution_whatsapp",
+            "message_id": "wa-email-1",
+            "provider_status": "PENDING",
+            "status_code": 201,
+            "error": None,
+        }
+        self.client.force_authenticate(user=self.hr_user)
+
+        response = self.client.post(
+            "/invites/",
+            {
+                "channel": "whatsapp",
+                "phone_number": "+201515091693",
+                "email": "Expected.WA@TEST.COM",
+                "role": "Employee",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        invite = Invite.objects.get(phone_number="+201515091693")
+        self.assertEqual(invite.email, "expected.wa@test.com")
+        self.assertEqual(response.data["data"]["email"], "expected.wa@test.com")
+
+        list_response = self.client.get("/invites/")
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(list_response.data["data"]["items"][0]["email"], "expected.wa@test.com")
+
+        detail_response = self.client.get(f"/invites/{invite.id}/")
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertEqual(detail_response.data["data"]["email"], "expected.wa@test.com")
+
+        accept_response = self.client.get("/invites/accept/", {"token": invite.token})
+        self.assertEqual(accept_response.status_code, 200)
+        self.assertEqual(accept_response.data["data"]["email"], "expected.wa@test.com")
+
+    @patch("core.services.whatsapp_notifications.WhatsAppService.send_template_message")
+    def test_whatsapp_invite_with_registered_expected_email_is_rejected(self, whatsapp_send):
+        self.client.force_authenticate(user=self.hr_user)
+
+        response = self.client.post(
+            "/invites/",
+            {
+                "channel": "whatsapp",
+                "phone_number": "+201515091694",
+                "email": self.employee_user.email,
+                "role": "Employee",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("email", {item["field"] for item in response.data["errors"]})
+        self.assertFalse(Invite.objects.filter(phone_number="+201515091694").exists())
+        whatsapp_send.assert_not_called()
 
     @patch("core.services.whatsapp_notifications.WhatsAppService.send_template_message")
     def test_whatsapp_provider_failure_is_returned_and_persisted(self, whatsapp_send):
@@ -285,6 +349,19 @@ class InvitePermissionTests(TestCase):
         self.assertEqual(response.status_code, 422)
         self.assertFalse(Invite.objects.filter(email="blocked-admin@test.com").exists())
 
+    def test_new_manager_invite_is_rejected(self):
+        self.client.force_authenticate(user=self.hr_user)
+
+        response = self.client.post(
+            "/invites/",
+            {"email": "blocked-manager@test.com", "role": "Manager"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("role", {item["field"] for item in response.data["errors"]})
+        self.assertFalse(Invite.objects.filter(email="blocked-manager@test.com").exists())
+
     def test_hr_manager_can_list_invites(self):
         now = timezone.now()
         Invite.objects.create(
@@ -302,6 +379,27 @@ class InvitePermissionTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["data"]["count"], 1)
+
+    def test_existing_manager_invite_rows_serialize_safely(self):
+        now = timezone.now()
+        invite = Invite.objects.create(
+            email="legacy-manager@test.com",
+            role="Manager",
+            token=Invite.generate_token(),
+            status=Invite.Status.SENT,
+            sent_at=now,
+            expires_at=now + timedelta(hours=72),
+            created_by=self.hr_user,
+        )
+        self.client.force_authenticate(user=self.hr_user)
+
+        list_response = self.client.get("/invites/")
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(list_response.data["data"]["items"][0]["role"], "Manager")
+
+        detail_response = self.client.get(f"/invites/{invite.id}/")
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertEqual(detail_response.data["data"]["role"], "Manager")
 
     def test_invite_list_includes_delivery_info(self):
         now = timezone.now()
@@ -383,7 +481,7 @@ class InvitePermissionTests(TestCase):
         now = timezone.now()
         invite = Invite.objects.create(
             email=None,
-            phone_number="+201515091691",
+            phone_number="+201515091690",
             channel=Invite.Channel.WHATSAPP,
             role="Employee",
             token=Invite.generate_token(),
@@ -411,6 +509,130 @@ class InvitePermissionTests(TestCase):
         self.assertEqual(profile.mobile, "+201515091691")
         invite.refresh_from_db()
         self.assertEqual(invite.email, "accepted-whatsapp@test.com")
+        self.assertEqual(invite.phone_number, "+201515091691")
+        self.assertEqual(User.objects.filter(email="accepted-whatsapp@test.com").count(), 1)
+
+        self.client.force_authenticate(user=self.hr_user)
+        list_response = self.client.get("/invites/")
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(list_response.data["data"]["items"][0]["email"], "accepted-whatsapp@test.com")
+        self.assertEqual(list_response.data["data"]["items"][0]["phone_number"], "+201515091691")
+        self.client.force_authenticate(user=None)
+
+        duplicate_response = self.client.post(
+            "/invites/accept/",
+            {
+                "token": invite.token,
+                "email": "accepted-whatsapp@test.com",
+                "phone_number": "+201515091691",
+                "full_name": "Accepted WhatsApp",
+                "password": "StrongPass123!",
+            },
+            format="json",
+        )
+
+        self.assertEqual(duplicate_response.status_code, 422)
+        self.assertEqual(User.objects.filter(email="accepted-whatsapp@test.com").count(), 1)
+
+    def test_accept_whatsapp_invite_with_prefilled_email_rejects_different_email(self):
+        now = timezone.now()
+        invite = Invite.objects.create(
+            email="expected-accept@test.com",
+            phone_number="+201515091695",
+            channel=Invite.Channel.WHATSAPP,
+            role="Employee",
+            token=Invite.generate_token(),
+            status=Invite.Status.SENT,
+            sent_at=now,
+            expires_at=now + timedelta(hours=72),
+            created_by=self.hr_user,
+        )
+
+        response = self.client.post(
+            "/invites/accept/",
+            {
+                "token": invite.token,
+                "email": "different-accept@test.com",
+                "phone_number": "+201515091695",
+                "full_name": "Mismatch Email",
+                "password": "StrongPass123!",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("email", {item["field"] for item in response.data["errors"]})
+        self.assertFalse(
+            User.objects.filter(email__in=["expected-accept@test.com", "different-accept@test.com"]).exists()
+        )
+        invite.refresh_from_db()
+        self.assertEqual(invite.status, Invite.Status.SENT)
+
+    def test_accept_whatsapp_invite_with_prefilled_email_uses_invite_email(self):
+        now = timezone.now()
+        invite = Invite.objects.create(
+            email="prefilled-accept@test.com",
+            phone_number="+201515091696",
+            channel=Invite.Channel.WHATSAPP,
+            role="Employee",
+            token=Invite.generate_token(),
+            status=Invite.Status.SENT,
+            sent_at=now,
+            expires_at=now + timedelta(hours=72),
+            created_by=self.hr_user,
+        )
+
+        response = self.client.post(
+            "/invites/accept/",
+            {
+                "token": invite.token,
+                "email": "PREFILLED-ACCEPT@TEST.COM",
+                "phone_number": "+201515091696",
+                "full_name": "Prefilled Accept",
+                "password": "StrongPass123!",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        user = User.objects.get(email="prefilled-accept@test.com")
+        profile = EmployeeProfile.objects.get(user=user)
+        self.assertEqual(profile.mobile, "+201515091696")
+        invite.refresh_from_db()
+        self.assertEqual(invite.email, "prefilled-accept@test.com")
+
+    def test_existing_manager_invite_acceptance_is_rejected(self):
+        now = timezone.now()
+        invite = Invite.objects.create(
+            email="legacy-manager-accept@test.com",
+            channel=Invite.Channel.EMAIL,
+            role="Manager",
+            token=Invite.generate_token(),
+            status=Invite.Status.SENT,
+            sent_at=now,
+            expires_at=now + timedelta(hours=72),
+            created_by=self.hr_user,
+        )
+
+        response = self.client.post(
+            "/invites/accept/",
+            {
+                "token": invite.token,
+                "full_name": "Legacy Manager",
+                "password": "StrongPass123!",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(
+            response.data["message"],
+            "Manager role invites are no longer supported. Ask HR to resend as Employee.",
+        )
+        self.assertIn("role", {item["field"] for item in response.data["errors"]})
+        self.assertFalse(User.objects.filter(email="legacy-manager-accept@test.com").exists())
+        invite.refresh_from_db()
+        self.assertEqual(invite.status, Invite.Status.SENT)
 
     def test_accept_details_returns_whatsapp_phone_number(self):
         now = timezone.now()

@@ -10,10 +10,16 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
+from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.db import transaction
 
 from employees.models import EmployeeImport, EmployeeProfile
+from employees.services.manager_relationships import (
+    log_manager_assignment_change,
+    reroute_pending_manager_requests,
+    validate_manager_assignment,
+)
 from employees.storage import PrivateUploadStorage
 from hr_reference.models import Department, Position, Sponsor, TaskGroup
 from organization.models import OrganizationNode
@@ -40,6 +46,13 @@ class ImportExecutionResult:
     row_count: int = 0
     file_hash: str = ""
     result: str = "failed"
+
+
+class ManagerImportValidationError(Exception):
+    def __init__(self, errors, details):
+        super().__init__("Manager assignment validation failed.")
+        self.errors = errors
+        self.details = details
 
 
 class EmployeeImporter:
@@ -647,6 +660,7 @@ class EmployeeImporter:
                         "job_title_en": position_name_en or "",
                         "job_title_ar": position_name_ar or "",
                         "manager_ref": manager_ref,
+                        "_row_index": row_index,
                         "data_source": EmployeeProfile.DataSource.IMPORT_EXCEL,
                         "company": company,
                     }
@@ -701,6 +715,7 @@ class EmployeeImporter:
         try:
             with transaction.atomic():
                 for row in prepared_rows:
+                    row_index = row.pop("_row_index")
                     manager_ref = row.pop("manager_ref", "")
                     employee_number = row["employee_number"]
                     profile = None
@@ -732,13 +747,23 @@ class EmployeeImporter:
                     if employee_number:
                         created_or_updated[employee_number] = profile
                         all_profiles_by_emp_no[employee_number] = profile
-                    manager_links.append((profile, manager_ref))
+                    manager_links.append((profile, manager_ref, row_index))
 
-                for profile, manager_ref in manager_links:
+                manager_errors = []
+                manager_error_details = []
+                for profile, manager_ref, row_index in manager_links:
+                    previous_manager = profile.manager_profile
                     if not manager_ref:
                         profile.manager_profile = None
-                        profile.manager = None
-                        profile.save(update_fields=["manager_profile", "manager", "updated_at"])
+                        profile.save(update_fields=["manager_profile", "updated_at"])
+                        log_manager_assignment_change(
+                            employee=profile,
+                            previous_manager=previous_manager,
+                            new_manager=None,
+                            changed_by=uploader,
+                            source="employee_import",
+                        )
+                        reroute_pending_manager_requests(profile, actor=uploader)
                         continue
                     manager_profile = created_or_updated.get(manager_ref) or all_profiles_by_emp_no.get(manager_ref)
                     if manager_profile is None:
@@ -750,10 +775,46 @@ class EmployeeImporter:
                             .only("id", "user")
                             .first()
                         )
-                    if manager_profile and manager_profile.id != profile.id:
-                        profile.manager_profile = manager_profile
-                        profile.manager = manager_profile.user
-                        profile.save(update_fields=["manager_profile", "manager", "updated_at"])
+                    if manager_profile is None:
+                        message = f"Manager '{manager_ref}' could not be resolved to one employee profile."
+                        manager_errors.append(f"row {row_index}: {message}")
+                        manager_error_details.append(
+                            {"row": row_index, "column": "manager", "message": message}
+                        )
+                        continue
+                    try:
+                        validate_manager_assignment(profile, manager_profile, company=company)
+                    except ValidationError as exc:
+                        message = "; ".join(exc.messages)
+                        manager_errors.append(f"row {row_index}: {message}")
+                        manager_error_details.append(
+                            {"row": row_index, "column": "manager", "message": message}
+                        )
+                        continue
+
+                    profile.manager_profile = manager_profile
+                    profile.save(update_fields=["manager_profile", "updated_at"])
+                    log_manager_assignment_change(
+                        employee=profile,
+                        previous_manager=previous_manager,
+                        new_manager=manager_profile,
+                        changed_by=uploader,
+                        source="employee_import",
+                    )
+
+                if manager_errors:
+                    raise ManagerImportValidationError(manager_errors, manager_error_details)
+        except ManagerImportValidationError as exc:
+            self._save_import_failure(import_record, exc.errors, exc.details)
+            return ImportExecutionResult(
+                ok=False,
+                status_code=422,
+                errors=exc.errors,
+                inserted_rows=0,
+                row_count=row_count,
+                file_hash=file_hash,
+                result="failed",
+            )
         except Exception:
             errors = ["Import failed due to a database constraint."]
             detail = [{"row": 0, "column": "Database", "message": "Constraint violation."}]

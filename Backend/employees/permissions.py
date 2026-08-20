@@ -45,11 +45,17 @@ class IsManagerOfEmployee(BasePermission):
     def has_object_permission(self, request, view, obj):
         if request.method not in ["GET", "HEAD", "OPTIONS"]:
             return False
-        if obj.manager_id == request.user.id:
-            return True
-
         manager_profile = getattr(request.user, "employee_profile", None)
-        return bool(manager_profile and obj.manager_profile_id == manager_profile.id)
+        return bool(
+            manager_profile
+            and not manager_profile.is_archived
+            and manager_profile.employment_status == obj.EmploymentStatus.ACTIVE
+            and manager_profile.user_id == request.user.id
+            and manager_profile.user.is_active
+            and obj.manager_profile_id == manager_profile.id
+            and obj.company_id == manager_profile.company_id
+            and obj.user_id != request.user.id
+        )
 
 
 class IsHRManagerOnly(BasePermission):

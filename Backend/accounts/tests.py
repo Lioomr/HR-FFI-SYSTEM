@@ -2,7 +2,7 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -11,10 +11,12 @@ from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
 
 from admin_portal.models import SystemSettings
 from audit.models import AuditLog
+from employees.models import EmployeeProfile
 
 User = get_user_model()
 
 
+@override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["testserver", "localhost", "127.0.0.1"])
 class AccountTests(TestCase):
     def setUp(self):
         cache.clear()
@@ -23,6 +25,16 @@ class AccountTests(TestCase):
         self.user = User.objects.create_user(email="test@ffi.com", password=self.password)
         self.settings_obj = SystemSettings.get_solo()
 
+    def _create_phone_user(self, *, email: str, mobile: str, employee_id: str, is_active: bool = True):
+        user = User.objects.create_user(email=email, password=self.password, is_active=is_active)
+        EmployeeProfile.objects.create(
+            user=user,
+            employee_id=employee_id,
+            full_name=email,
+            mobile=mobile,
+        )
+        return user
+
     def test_login_success(self):
         response = self.client.post("/auth/login", {"email": "test@ffi.com", "password": self.password})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -30,6 +42,105 @@ class AccountTests(TestCase):
         self.assertEqual(response.data["data"]["token"], response.data["data"]["access"])
         self.assertIn("refresh", response.data["data"])
         self.assertNotEqual(response.data["data"]["access"], response.data["data"]["refresh"])
+
+    def test_login_by_full_e164_phone_works(self):
+        user = self._create_phone_user(
+            email="phone-e164@ffi.com",
+            mobile="+966554867964",
+            employee_id="PHONE-SA-E164",
+        )
+
+        response = self.client.post("/auth/login", {"email": "+966554867964", "password": self.password})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"]["user"]["email"], user.email)
+        self.assertEqual(response.data["data"]["token"], response.data["data"]["access"])
+
+    def test_login_by_phone_without_plus_works(self):
+        user = self._create_phone_user(
+            email="phone-no-plus@ffi.com",
+            mobile="+966554867964",
+            employee_id="PHONE-SA-NO-PLUS",
+        )
+
+        response = self.client.post("/auth/login", {"email": "966554867964", "password": self.password})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"]["user"]["email"], user.email)
+
+    def test_login_by_local_saudi_phone_works(self):
+        user = self._create_phone_user(
+            email="phone-sa-local@ffi.com",
+            mobile="+966554867964",
+            employee_id="PHONE-SA-LOCAL",
+        )
+
+        response = self.client.post("/auth/login", {"email": "0554867964", "password": self.password})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"]["user"]["email"], user.email)
+
+        response_without_leading_zero = self.client.post(
+            "/auth/login",
+            {"email": "554867964", "password": self.password},
+        )
+
+        self.assertEqual(response_without_leading_zero.status_code, status.HTTP_200_OK)
+        self.assertEqual(response_without_leading_zero.data["data"]["user"]["email"], user.email)
+
+    def test_login_by_local_egypt_phone_works(self):
+        user = self._create_phone_user(
+            email="phone-eg-local@ffi.com",
+            mobile="+201013530963",
+            employee_id="PHONE-EG-LOCAL",
+        )
+
+        response = self.client.post("/auth/login", {"identifier": "01013530963", "password": self.password})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"]["user"]["email"], user.email)
+
+        response_without_leading_zero = self.client.post(
+            "/auth/login",
+            {"identifier": "1013530963", "password": self.password},
+        )
+
+        self.assertEqual(response_without_leading_zero.status_code, status.HTTP_200_OK)
+        self.assertEqual(response_without_leading_zero.data["data"]["user"]["email"], user.email)
+
+    def test_ambiguous_local_phone_returns_validation_error(self):
+        self._create_phone_user(
+            email="phone-ambiguous-sa@ffi.com",
+            mobile="+966554867964",
+            employee_id="PHONE-AMB-SA",
+        )
+        self._create_phone_user(
+            email="phone-ambiguous-eg@ffi.com",
+            mobile="+20554867964",
+            employee_id="PHONE-AMB-EG",
+        )
+
+        response = self.client.post("/auth/login", {"email": "554867964", "password": self.password})
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        messages = [item["message"] for item in response.data["errors"]]
+        self.assertIn(
+            "Phone number matches more than one account. Use full international format including country code.",
+            messages,
+        )
+
+    def test_inactive_user_cannot_login_by_phone(self):
+        self._create_phone_user(
+            email="phone-inactive@ffi.com",
+            mobile="+201013530963",
+            employee_id="PHONE-INACTIVE",
+            is_active=False,
+        )
+
+        response = self.client.post("/auth/login", {"email": "+201013530963", "password": self.password})
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response.data["detail"], "Unable to authenticate with the provided credentials.")
 
     def test_login_fail(self):
         response = self.client.post("/auth/login", {"email": "test@ffi.com", "password": "wrong"})
@@ -106,6 +217,7 @@ class AccountTests(TestCase):
         self.assertTrue(any("special" in message for message in error_messages))
 
 
+@override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["testserver", "localhost", "127.0.0.1"])
 class AuthenticationLifecycleTests(TestCase):
     def setUp(self):
         cache.clear()

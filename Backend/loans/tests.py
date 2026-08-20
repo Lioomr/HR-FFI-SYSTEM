@@ -249,6 +249,16 @@ class LoanWorkflowTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["data"]["status"], LoanRequest.RequestStatus.PENDING_HR)
 
+    def test_employee_submission_with_inactive_manager_falls_back_to_hr(self):
+        self.manager_profile.employment_status = EmployeeProfile.EmploymentStatus.SUSPENDED
+        self.manager_profile.save(update_fields=["employment_status", "updated_at"])
+
+        self.client.force_authenticate(user=self.employee)
+        response = self.client.post(self.loan_requests_url, {"amount": "1200", "reason": "Medical"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["data"]["status"], LoanRequest.RequestStatus.PENDING_HR)
+
     def test_hr_manager_submission_sets_pending_ceo(self):
         self.client.force_authenticate(user=self.hr_user)
         response = self.client.post(self.loan_requests_url, {"amount": "800", "reason": "Travel"}, format="json")
@@ -528,6 +538,30 @@ class LoanWorkflowTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["data"]["status"], LoanRequest.RequestStatus.PENDING_HR)
+
+    def test_manager_group_alone_cannot_approve_unrelated_loan(self):
+        unrelated_user = User.objects.create_user(email="unrelated-loan-manager@ffi.test", password="password")
+        unrelated_user.groups.add(self.manager_group)
+        EmployeeProfile.objects.create(
+            user=unrelated_user,
+            employee_id="EMP-UNRELATED-LOAN",
+            full_name="Unrelated Loan Manager",
+            department_ref=self.it_dept,
+            position_ref=self.other_position,
+            hire_date=date(2024, 1, 1),
+        )
+        request_obj = self._create_pending_manager_request()
+
+        self.client.force_authenticate(user=unrelated_user)
+        response = self.client.post(
+            f"{self.manager_loan_requests_url}{request_obj.id}/approve/",
+            {"comment": "Not allowed"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        request_obj.refresh_from_db()
+        self.assertEqual(request_obj.status, LoanRequest.RequestStatus.PENDING_MANAGER)
 
     def test_payroll_deducts_open_loan_when_target_month_is_due(self):
         from payroll.views import _generate_payroll_items

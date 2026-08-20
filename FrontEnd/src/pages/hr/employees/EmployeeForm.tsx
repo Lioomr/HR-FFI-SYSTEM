@@ -21,16 +21,45 @@ interface EmployeeFormProps {
         sponsors: Sponsor[];
         employees?: Employee[]; // For manager selection
     };
+    /** Profile being edited, so it can never be offered as its own manager. */
+    currentEmployeeId?: number | string | null;
+    /**
+     * Backend rejection of the direct-manager assignment (self-manager,
+     * cross-company, archived/inactive manager, reporting cycle).
+     */
+    managerAssignmentError?: string | null;
 }
 
 /**
  * Shared employee form component used by both Create and Edit pages
  * Supports bilingual names, Saudi/Foreign distinction, and manager profile selection
  */
-export default function EmployeeForm({ form, loadingRefs, refOptions }: EmployeeFormProps) {
+export default function EmployeeForm({
+    form,
+    loadingRefs,
+    refOptions,
+    currentEmployeeId = null,
+    managerAssignmentError = null,
+}: EmployeeFormProps) {
     const { t } = useI18n();
     const { departments, positions, taskGroups, sponsors, employees = [] } = refOptions;
     const [isSaudi, setIsSaudi] = useState<boolean>(false);
+    const [activeTab, setActiveTab] = useState("1");
+
+    // A rejected manager assignment lives on the Job Details tab; bring it into
+    // view so the inline error is not hidden behind another tab.
+    useEffect(() => {
+        if (managerAssignmentError) {
+            setActiveTab("2");
+        }
+    }, [managerAssignmentError]);
+
+    const managerOptions = employees
+        .filter((emp) => currentEmployeeId == null || String(emp.id) !== String(currentEmployeeId))
+        .map((emp) => ({
+            label: emp.full_name_en || emp.full_name || emp.employee_id,
+            value: emp.id,
+        }));
 
     // Sync isSaudi with form value on initial render (for Edit page)
     useEffect(() => {
@@ -88,7 +117,8 @@ export default function EmployeeForm({ form, loadingRefs, refOptions }: Employee
                 <Col xs={24} lg={16}>
                     <Card style={{ borderRadius: 16, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
                         <Tabs
-                            defaultActiveKey="1"
+                            activeKey={activeTab}
+                            onChange={setActiveTab}
                             items={[
                                 {
                                     key: '1',
@@ -196,7 +226,6 @@ export default function EmployeeForm({ form, loadingRefs, refOptions }: Employee
                                                                     showSearch
                                                                     optionFilterProp="search"
                                                                     options={countryCodeOptions}
-                                                                    defaultValue="+966"
                                                                 />
                                                             </Form.Item>
                                                             <Form.Item
@@ -269,7 +298,7 @@ export default function EmployeeForm({ form, loadingRefs, refOptions }: Employee
                                                     </Form.Item>
                                                 </Col>
 
-                                                {/* Manager Selection */}
+                                                {/* Manager Selection — grants the manager approval capability */}
                                                 <Col span={24}>
                                                     <Form.Item
                                                         label={
@@ -280,6 +309,9 @@ export default function EmployeeForm({ form, loadingRefs, refOptions }: Employee
                                                         }
                                                         name="manager_profile_id"
                                                         tooltip={t("employees.form.managerTooltip")}
+                                                        extra={t("employees.form.managerHelp")}
+                                                        validateStatus={managerAssignmentError ? "error" : undefined}
+                                                        help={managerAssignmentError || undefined}
                                                     >
                                                         <Select
                                                             size="large"
@@ -288,12 +320,19 @@ export default function EmployeeForm({ form, loadingRefs, refOptions }: Employee
                                                             allowClear
                                                             optionFilterProp="label"
                                                             loading={loadingRefs}
-                                                            options={employees.map((emp) => ({
-                                                                label: emp.full_name_en || emp.full_name || emp.employee_id,
-                                                                value: emp.id,
-                                                            }))}
+                                                            options={managerOptions}
                                                         />
                                                     </Form.Item>
+                                                    {managerAssignmentError && (
+                                                        <Alert
+                                                            type="error"
+                                                            showIcon
+                                                            role="alert"
+                                                            style={{ marginBottom: 16, borderRadius: 12 }}
+                                                            title={t("employees.form.managerAssignmentRejected")}
+                                                            description={managerAssignmentError}
+                                                        />
+                                                    )}
                                                 </Col>
 
                                                 <Col span={24}>
@@ -401,9 +440,9 @@ export default function EmployeeForm({ form, loadingRefs, refOptions }: Employee
                             </div>
                         }
                         style={{ borderRadius: 16, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}
-                        headStyle={{ borderBottom: '1px solid #f0f0f0' }}
+                        styles={{ header: { borderBottom: '1px solid #f0f0f0' } }}
                     >
-                        <Alert message={t("employees.form.editDocumentsDesc")} type="info" showIcon style={{ marginBottom: 16, borderRadius: 8 }} />
+                        <Alert title={t("employees.form.editDocumentsDesc")} type="info" showIcon style={{ marginBottom: 16, borderRadius: 8 }} />
 
                         {/* Passport – hidden for Saudi employees */}
                         {!isSaudi && (

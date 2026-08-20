@@ -74,8 +74,9 @@ export default function RegisterInvitePage() {
   }, [invite]);
 
   const isWhatsapp = invite?.channel === "whatsapp";
-  // Email invites keep their email prefilled and locked; WhatsApp invites enter it themselves.
-  const lockEmail = !isWhatsapp && !!invite?.email;
+  // Whenever HR supplied an email — on either channel — it is prefilled and locked so
+  // the account matches the invitation. WhatsApp invites sent without one stay editable.
+  const lockEmail = !!invite?.email;
   // Phone is required for WhatsApp invites (their contact channel) or when backend says so.
   const phoneRequired = invite?.phone_required ?? isWhatsapp;
 
@@ -160,12 +161,12 @@ export default function RegisterInvitePage() {
               </Form.Item>
               <Form.Item
                 label={
-                  isWhatsapp ? (
+                  lockEmail ? (
+                    t("auth.invite.email")
+                  ) : (
                     <span>
                       {t("auth.invite.email")} <span style={{ color: "#ff4d4f" }}>*</span>
                     </span>
-                  ) : (
-                    t("auth.invite.email")
                   )
                 }
                 name="email"

@@ -177,6 +177,27 @@ class EmployeeProfile(models.Model):
         return f"{self.employee_id} - {email}".strip()
 
     def save(self, *args, **kwargs):
+        creating = self._state.adding
+        update_fields = kwargs.get("update_fields")
+        manager_profile_changed = creating and self.manager_profile_id is not None
+        if not creating:
+            if update_fields is not None:
+                manager_profile_changed = bool({"manager_profile", "manager_profile_id"} & set(update_fields))
+            else:
+                previous_manager_profile_id = (
+                    type(self).objects.filter(pk=self.pk).values_list("manager_profile_id", flat=True).first()
+                )
+                manager_profile_changed = previous_manager_profile_id != self.manager_profile_id
+
+        if manager_profile_changed:
+            self.manager_id = (
+                type(self).objects.filter(pk=self.manager_profile_id).values_list("user_id", flat=True).first()
+                if self.manager_profile_id
+                else None
+            )
+            if update_fields is not None:
+                kwargs["update_fields"] = list(set(update_fields) | {"manager"})
+
         if not self.full_name_en and self.full_name:
             self.full_name_en = self.full_name
         if not self.full_name and self.full_name_en:
