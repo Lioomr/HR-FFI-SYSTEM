@@ -1,5 +1,8 @@
 import logging
+import secrets
 
+from django.conf import settings
+from django.utils import timezone
 from rest_framework import status, views, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -67,6 +70,27 @@ class BioTimeActionsViewSet(views.APIView):
             return error(message, errors=result, status=status.HTTP_400_BAD_REQUEST)
 
         return error("Invalid action", status=status.HTTP_400_BAD_REQUEST)
+
+
+class BioTimeAgentIngestView(views.APIView):
+    """Receive BioTime transactions from an agent inside the office LAN."""
+
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        configured_token = getattr(settings, "BIOTIME_AGENT_TOKEN", "")
+        supplied_token = request.headers.get("X-BioTime-Agent-Token", "")
+        if not configured_token or not secrets.compare_digest(supplied_token, configured_token):
+            return error("Unauthorized", status=status.HTTP_401_UNAUTHORIZED)
+        transactions = request.data.get("transactions") if isinstance(request.data, dict) else None
+        if not isinstance(transactions, list) or len(transactions) > 5000:
+            return error("transactions must be a list of at most 5000 items.", status=status.HTTP_400_BAD_REQUEST)
+        result = SyncBioTimeService.ingest_transactions(transactions)
+        config = BioTimeConfig.get_solo()
+        config.last_sync_time = timezone.now()
+        config.save(update_fields=["last_sync_time", "updated_at"])
+        return success(result, message="BioTime transactions ingested.")
 
 
 class BioTimeEmployeeMapViewSet(viewsets.ModelViewSet):

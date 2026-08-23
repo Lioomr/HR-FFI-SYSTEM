@@ -86,6 +86,15 @@ class SyncBioTimeService:
             logger.error("BioTime sync transaction request failed: %s", client.last_error)
             return False, {**counts, "message": "Unable to fetch BioTime transactions."}
 
+        result = cls.ingest_transactions(transactions)
+        config.last_sync_time = timezone.now()
+        config.save(update_fields=["last_sync_time", "updated_at"])
+        return True, {**result, "message": "BioTime sync completed."}
+
+    @classmethod
+    def ingest_transactions(cls, transactions):
+        """Process transactions fetched by either AWS or the office-side agent."""
+        counts = cls._result()
         grouped = defaultdict(lambda: defaultdict(list))
         terminal_codes = defaultdict(set)
         for transaction in transactions:
@@ -164,10 +173,8 @@ class SyncBioTimeService:
                 else:
                     counts["skipped"] += 1
 
-        config.last_sync_time = timezone.now()
-        config.save(update_fields=["last_sync_time", "updated_at"])
         logger.info("BioTime sync completed: %s", counts)
-        return True, {**counts, "message": "BioTime sync completed."}
+        return counts
 
     @classmethod
     def get_unmapped_users(cls):
