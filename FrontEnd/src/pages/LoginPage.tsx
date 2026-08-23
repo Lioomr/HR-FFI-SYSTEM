@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Alert, Button, Card, Checkbox, Form, Input, Select } from "antd";
-import { LockOutlined, MailOutlined, ApartmentOutlined } from "@ant-design/icons";
+import { LockOutlined, ApartmentOutlined } from "@ant-design/icons";
 import { useLocation, useNavigate } from "react-router-dom";
 import { UserOutlined } from "@ant-design/icons";
 import { useAuthStore } from "../auth/authStore";
