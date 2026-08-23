@@ -53,6 +53,23 @@ def fetch_transactions(host, port, username, password, days):
         page += 1
 
 
+def fetch_employees(host, port, username, password):
+    base_url = f"http://{host}:{port}"
+    session = requests.Session()
+    auth = session.post(urljoin(base_url, "/api-token-auth/"), json={"username": username, "password": password}, timeout=15)
+    auth.raise_for_status()
+    token = auth.json().get("token")
+    response = session.get(
+        urljoin(base_url, "/personnel/api/employees/"),
+        headers={"Accept": "application/json", "Authorization": f"Token {token}"},
+        params={"page_size": 5000, "page": 1},
+        timeout=30,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    return payload.get("data") or payload.get("results") or []
+
+
 def main():
     transactions = fetch_transactions(
         required("BIOTIME_HOST"),
@@ -61,12 +78,20 @@ def main():
         required("BIOTIME_PASSWORD"),
         max(int(os.getenv("SYNC_DAYS", "2")), 1),
     )
+    common = {
+        "headers": {"X-BioTime-Agent-Token": required("BIOTIME_AGENT_TOKEN")},
+        "timeout": 60,
+    }
     response = requests.post(
         required("AWS_INGEST_URL"),
-        headers={"X-BioTime-Agent-Token": required("BIOTIME_AGENT_TOKEN")},
+        **common,
         json={"transactions": transactions},
-        timeout=60,
     )
+    response.raise_for_status()
+    employees_url = required("AWS_INGEST_URL").replace("/ingest/", "/employees/")
+    response = requests.post(employees_url, **common, json={"employees": fetch_employees(
+        required("BIOTIME_HOST"), os.getenv("BIOTIME_PORT", "80"), required("BIOTIME_USERNAME"), required("BIOTIME_PASSWORD")
+    )})
     response.raise_for_status()
     print(response.text)
 
