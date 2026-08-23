@@ -70,7 +70,6 @@ const BioTimeSettingsPage: React.FC = () => {
   const [loadingConfig, setLoadingConfig] = useState(true);
   const [configError, setConfigError] = useState<string | null>(null);
   const [savingConfig, setSavingConfig] = useState(false);
-  const [testingConnection, setTestingConnection] = useState(false);
 
   // ── Sync ──────────────────────────────────────────────────────────────────
   const [syncing, setSyncing] = useState(false);
@@ -266,29 +265,6 @@ const BioTimeSettingsPage: React.FC = () => {
       message.error(resolveErrorMessage(error, t("bioTime.errors.saveConfig")));
     } finally {
       setSavingConfig(false);
-    }
-  };
-
-  const handleTestConnection = async () => {
-    setTestingConnection(true);
-    try {
-      const values = form.getFieldsValue();
-      const payload: BioTimeConfigPayload = {
-        server_ip: values.server_ip,
-        server_port: values.server_port,
-        username: values.username,
-      };
-      const typedPassword = (values.password || "").trim();
-      if (typedPassword) payload.password = typedPassword;
-
-      await bioTimeApi.testConnection(payload);
-      message.success(t("bioTime.success.testConnection"));
-    } catch (error) {
-      message.error(
-        resolveErrorMessage(error, t("bioTime.errors.testConnection")),
-      );
-    } finally {
-      setTestingConnection(false);
     }
   };
 
@@ -604,9 +580,6 @@ const BioTimeSettingsPage: React.FC = () => {
             <Button type="primary" htmlType="submit" loading={savingConfig}>
               {t("common.save")}
             </Button>
-            <Button onClick={handleTestConnection} loading={testingConnection}>
-              {t("bioTime.actions.testConnection")}
-            </Button>
           </Space>
         </Form>
       )}
@@ -617,7 +590,8 @@ const BioTimeSettingsPage: React.FC = () => {
         title={t("bioTime.titles.manualSync")}
       >
         <Text type="secondary" style={{ display: "block", marginBottom: 12 }}>
-          {t("bioTime.descriptions.manualSync")}
+          The BioTime office agent performs synchronization from inside the
+          office network. AWS cannot directly test or sync the private device.
         </Text>
 
         <Space wrap align="end" style={{ marginBottom: 12 }}>
@@ -642,6 +616,7 @@ const BioTimeSettingsPage: React.FC = () => {
             icon={<SyncOutlined />}
             loading={syncing}
             onClick={handleSyncNow}
+            disabled
           >
             {t("bioTime.actions.syncNow")}
           </Button>
