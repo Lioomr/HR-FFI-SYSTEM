@@ -14,7 +14,7 @@ from core.responses import error, success
 from organization.services import filter_queryset_by_company_scope
 
 from .biotime_client import BioTimeClient
-from .models import BioTimeConfig, BioTimeEmployeeMap
+from .models import BioTimeConfig, BioTimeDeviceEmployee, BioTimeEmployeeMap
 from .serializers import BioTimeConfigSerializer, BioTimeEmployeeMapSerializer
 from .services import SyncBioTimeService
 
@@ -93,6 +93,32 @@ class BioTimeAgentIngestView(views.APIView):
         return success(result, message="BioTime transactions ingested.")
 
 
+class BioTimeAgentEmployeesView(views.APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        configured_token = getattr(settings, "BIOTIME_AGENT_TOKEN", "")
+        supplied_token = request.headers.get("X-BioTime-Agent-Token", "")
+        if not configured_token or not secrets.compare_digest(supplied_token, configured_token):
+            return error("Unauthorized", status=status.HTTP_401_UNAUTHORIZED)
+        employees = request.data.get("employees") if isinstance(request.data, dict) else None
+        if not isinstance(employees, list) or len(employees) > 5000:
+            return error("employees must be a list of at most 5000 items.", status=status.HTTP_400_BAD_REQUEST)
+        for employee in employees:
+            emp_code = str(employee.get("emp_code") or "").strip()
+            if emp_code:
+                BioTimeDeviceEmployee.objects.update_or_create(
+                    emp_code=emp_code,
+                    defaults={
+                        "first_name": str(employee.get("first_name") or "").strip(),
+                        "last_name": str(employee.get("last_name") or "").strip(),
+                        "department": str(employee.get("department") or "").strip(),
+                    },
+                )
+        return success({"received": len(employees)}, message="BioTime employees updated.")
+
+
 class BioTimeEmployeeMapViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
     serializer_class = BioTimeEmployeeMapSerializer
@@ -155,7 +181,17 @@ class BioTimeEmployeeMapViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"])
     def unmapped(self, request):
         try:
-            employees = SyncBioTimeService.get_unmapped_users()
+            mapped_codes = set(BioTimeEmployeeMap.objects.values_list("biotime_emp_code", flat=True))
+            employees = [
+                {
+                    "emp_code": employee.emp_code,
+                    "first_name": employee.first_name,
+                    "last_name": employee.last_name,
+                    "department": employee.department,
+                }
+                for employee in BioTimeDeviceEmployee.objects.all()
+                if employee.emp_code not in mapped_codes
+            ]
         except Exception:
             logger.exception("Unexpected error while loading unmapped BioTime employees.")
             return error("Unable to load BioTime employees.", status=status.HTTP_502_BAD_GATEWAY)

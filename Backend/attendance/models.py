@@ -205,3 +205,17 @@ class BioTimeEmployeeMap(models.Model):
 
     def __str__(self):
         return f"BioTime {self.biotime_emp_code} -> {self.employee_profile}"
+
+
+class BioTimeDeviceEmployee(models.Model):
+    emp_code = models.CharField(max_length=50, unique=True)
+    first_name = models.CharField(max_length=100, blank=True, default="")
+    last_name = models.CharField(max_length=100, blank=True, default="")
+    department = models.CharField(max_length=200, blank=True, default="")
+    last_seen_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["emp_code"]
+
+    def __str__(self):
+        return f"BioTime device employee {self.emp_code}"
