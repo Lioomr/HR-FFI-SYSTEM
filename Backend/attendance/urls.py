@@ -1,7 +1,13 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from .biotime_views import BioTimeActionsViewSet, BioTimeAgentIngestView, BioTimeConfigViewSet, BioTimeEmployeeMapViewSet
+from .biotime_views import (
+    BioTimeActionsViewSet,
+    BioTimeAgentEmployeesView,
+    BioTimeAgentIngestView,
+    BioTimeConfigViewSet,
+    BioTimeEmployeeMapViewSet,
+)
 from .views import (
     AttendanceCorrectionRequestViewSet,
     AttendanceRecordViewSet,
@@ -24,5 +30,6 @@ urlpatterns = [
     path("biotime/config/", BioTimeConfigViewSet.as_view(), name="biotime-config"),
     path("biotime/actions/<str:action>/", BioTimeActionsViewSet.as_view(), name="biotime-actions"),
     path("biotime/agent/ingest/", BioTimeAgentIngestView.as_view(), name="biotime-agent-ingest"),
+    path("biotime/agent/employees/", BioTimeAgentEmployeesView.as_view(), name="biotime-agent-employees"),
     path("", include(router.urls)),
 ]
