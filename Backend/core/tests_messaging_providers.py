@@ -170,6 +170,27 @@ class EvolutionTemplateRenderingTests(SimpleTestCase):
         self.assertEqual(post.call_args.kwargs["json"]["media"], "https://api.example.com/file.pdf")
         self.assertEqual(post.call_args.kwargs["json"]["fileName"], "policy.pdf")
 
+    @override_settings(
+        EVOLUTION_API_BASE_URL="http://evolution-api:8080",
+        EVOLUTION_API_KEY="evolution-key",
+        EVOLUTION_INSTANCE_NAME="ffi-staging",
+    )
+    @patch("core.services.messaging_providers.requests.post")
+    def test_evolution_whatsapp_provider_sends_base64_pdf_document(self, post):
+        post.return_value = Mock(status_code=201, text="", json=lambda: {"key": {"id": "doc-2"}, "status": "PENDING"})
+
+        result = WhatsAppService().send_document_message(
+            phone_number="+201013530963",
+            document_base64="JVBERi0xLjQK",
+            file_name="offer.pdf",
+            caption="Offer PDF",
+        )
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["message_id"], "doc-2")
+        self.assertEqual(post.call_args.kwargs["json"]["media"], "JVBERi0xLjQK")
+        self.assertEqual(post.call_args.kwargs["json"]["fileName"], "offer.pdf")
+
     def test_renders_meeting_template_with_optional_links(self):
         message = render_template_message(
             "meeting_notification_v1",

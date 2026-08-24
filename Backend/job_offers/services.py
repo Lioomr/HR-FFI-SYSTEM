@@ -1,3 +1,4 @@
+import base64
 import logging
 import secrets
 import string
@@ -127,6 +128,8 @@ def deliver_job_offer(offer: JobOffer) -> dict[str, Any]:
             warning_details["candidate_text"].append("Candidate WhatsApp text delivery failed.")
 
     email_service = EmailService()
+    pdf_bytes = b""
+    pdf_base64 = ""
     media_url = ""
     attachments: list[dict[str, Any]] = []
     needs_pdf_delivery = bool(
@@ -137,6 +140,7 @@ def deliver_job_offer(offer: JobOffer) -> dict[str, Any]:
     if needs_pdf_delivery:
         try:
             pdf_bytes = build_job_offer_pdf(offer)
+            pdf_base64 = base64.b64encode(pdf_bytes).decode("ascii")
             upload = email_service.upload_media(filename=filename, content=pdf_bytes, content_type="application/pdf")
             if upload.get("success") and upload.get("media_url"):
                 media_url = str(upload["media_url"])
@@ -145,11 +149,11 @@ def deliver_job_offer(offer: JobOffer) -> dict[str, Any]:
             logger.exception("job_offer_pdf_media_upload_failed", extra={"job_offer_id": offer.id})
 
     if offer.candidate_phone_number:
-        if media_url:
+        if pdf_base64:
             try:
                 result = WhatsAppService().send_document_message(
                     phone_number=offer.candidate_phone_number,
-                    document_url=media_url,
+                    document_base64=pdf_base64,
                     file_name=filename,
                     caption=f"Job Offer {offer.reference_number}",
                 )
@@ -159,7 +163,7 @@ def deliver_job_offer(offer: JobOffer) -> dict[str, Any]:
             candidate["whatsapp_pdf"] = _safe_delivery_result(result, provider="evolution_whatsapp")
         else:
             candidate["whatsapp_pdf"] = _skipped_delivery(
-                provider="evolution_whatsapp", reason="PDF media upload failed."
+                provider="evolution_whatsapp", reason="PDF generation failed."
             )
         if not candidate["whatsapp_pdf"]["sent"]:
             warning_details["candidate_whatsapp_pdf"].append("Candidate WhatsApp PDF delivery failed.")
@@ -183,11 +187,11 @@ def deliver_job_offer(offer: JobOffer) -> dict[str, Any]:
     ceo_deliveries = []
     for user in ceo_recipients:
         phone = get_user_whatsapp_number(user)
-        if phone and media_url:
+        if phone and pdf_base64:
             try:
                 whatsapp_result = WhatsAppService().send_document_message(
                     phone_number=phone,
-                    document_url=media_url,
+                    document_base64=pdf_base64,
                     file_name=filename,
                     caption=f"CEO copy: Job Offer {offer.reference_number}",
                 )
@@ -200,7 +204,7 @@ def deliver_job_offer(offer: JobOffer) -> dict[str, Any]:
         else:
             whatsapp_pdf = _skipped_delivery(
                 provider="evolution_whatsapp",
-                reason="Recipient WhatsApp number is missing." if not phone else "PDF media upload failed.",
+                reason="Recipient WhatsApp number is missing." if not phone else "PDF generation failed.",
             )
         if phone and not whatsapp_pdf["sent"]:
             warning_details["ceo_whatsapp_pdf"].append(f"CEO WhatsApp PDF delivery failed for user {user.id}.")
