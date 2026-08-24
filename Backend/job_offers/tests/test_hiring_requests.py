@@ -524,6 +524,9 @@ class HiringRequestApiTests(APITestCase):
         metadata = deliver_job_offer(offer)
 
         self.assertEqual(whatsapp_service.send_document_message.call_count, 2)
+        for call in whatsapp_service.send_document_message.call_args_list:
+            self.assertNotIn("document_url", call.kwargs)
+            self.assertTrue(call.kwargs["document_base64"].startswith("JVBERi0"))
         self.assertEqual(email_service.send_html_email.call_count, 2)
         for call in email_service.send_html_email.call_args_list:
             self.assertEqual(call.kwargs["attachments"][0]["mediaUrl"], "https://media.example/job-offer.pdf")

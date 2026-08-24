@@ -157,13 +157,15 @@ class WhatsAppService:
         self,
         *,
         phone_number: str,
-        document_url: str,
+        document_url: str = "",
+        document_base64: str = "",
         file_name: str,
         caption: str = "",
     ) -> dict[str, Any]:
         result = EvolutionWhatsAppProvider(timeout_seconds=self.timeout_seconds).send_document(
             phone_number=phone_number,
             document_url=document_url,
+            document_base64=document_base64,
             file_name=file_name,
             caption=caption,
             event="whatsapp_document",

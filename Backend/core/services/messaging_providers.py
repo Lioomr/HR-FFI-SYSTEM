@@ -469,7 +469,8 @@ class EvolutionWhatsAppProvider:
         self,
         *,
         phone_number: str,
-        document_url: str,
+        document_url: str = "",
+        document_base64: str = "",
         file_name: str,
         caption: str = "",
         event: str = "",
@@ -497,14 +498,14 @@ class EvolutionWhatsAppProvider:
                 started_at=started_at,
             )
 
-        media_url = str(document_url or "").strip()
-        if not media_url:
+        media = str(document_base64 or document_url or "").strip()
+        if not media:
             return self._result(
                 phone_number=normalized_phone,
                 event=event,
                 success=False,
                 status_code=0,
-                error="Document URL is required.",
+                error="Document URL or Base64 content is required.",
                 started_at=started_at,
             )
 
@@ -514,7 +515,7 @@ class EvolutionWhatsAppProvider:
             "mediatype": "document",
             "mimetype": "application/pdf",
             "caption": caption,
-            "media": media_url,
+            "media": media,
             "fileName": file_name or "announcement.pdf",
         }
         headers = {"apikey": self.api_key, "Content-Type": "application/json"}
