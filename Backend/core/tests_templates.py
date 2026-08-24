@@ -39,6 +39,8 @@ class TemplateLibraryTests(TestCase):
         self.assertIn("leave_request", keys)
         self.assertIn("loan_request", keys)
         self.assertIn("termination_letter", keys)
+        self.assertIn("job_offer", keys)
+        self.assertIn("starting_work_acknowledgment", keys)
 
     def test_list_forbidden_for_non_hr(self):
         self.client.force_authenticate(user=self.employee)

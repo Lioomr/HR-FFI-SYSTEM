@@ -18,6 +18,10 @@ class WhatsAppTemplateSpec:
 
 
 WHATSAPP_TEMPLATE_REGISTRY: dict[str, WhatsAppTemplateSpec] = {
+    "job_offer": WhatsAppTemplateSpec(
+        template_name="job_offer",
+        variable_order=("candidate_name", "position_title", "reference_number", "expiry_date", "response_link"),
+    ),
     "document_expiry_reminder": WhatsAppTemplateSpec(
         template_name="document_expiry_reminder",
         variable_order=("employee_name", "document_type", "expiry_date"),
@@ -242,6 +246,7 @@ def _resolve_from_event(event: str) -> str | None:
         "meeting_notification": "meeting_notification_v1",
         "request_status_update": "request_status_update",
         "employee_invitation": "employee_invitation",
+        "job_offer": "job_offer",
         "whatsapp_provider_test": "whatsapp_provider_test",
     }
     return event_map.get(event_norm)
@@ -250,6 +255,7 @@ def _resolve_from_event(event: str) -> str | None:
 def _resolve_from_variables(template_variables: dict[str, Any]) -> str | None:
     keys = set(template_variables.keys())
     preferred_order = [
+        "job_offer",
         "document_expiry_reminder",
         "new_announcement_notification",
         "leave_request_rejected",

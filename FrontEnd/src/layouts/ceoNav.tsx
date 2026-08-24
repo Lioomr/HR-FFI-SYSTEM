@@ -8,6 +8,7 @@ import {
   FileSearchOutlined,
   IdcardOutlined,
   InboxOutlined,
+  SolutionOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
 import type { MenuProps } from "antd";
@@ -80,6 +81,15 @@ export function buildCeoMenuItems(t: TranslateFn): MenuProps["items"] {
           key: "/manager/loan-requests",
           icon: <DollarOutlined />,
           label: <Link to="/manager/loan-requests">{t("layout.teamLoanRequests", "Team Loan Requests")}</Link>,
+        },
+        {
+          key: "/ceo/hiring-requests",
+          icon: <SolutionOutlined />,
+          label: (
+            <Link to="/ceo/hiring-requests">
+              {t("layout.hiringRequests", "Hiring Requests")}
+            </Link>
+          ),
         },
         {
           key: "/ceo/employees/deletion-requests",

@@ -30,6 +30,16 @@ def _env_list(name, default=None):
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+def _env_int(name, default):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except ValueError as exc:
+        raise ImproperlyConfigured(f"{name} must be an integer.") from exc
+
+
 def _is_weak_secret_key(value: str) -> bool:
     if not value:
         return True
@@ -92,6 +102,7 @@ INSTALLED_APPS = [
     "admin_portal",
     "audit",
     "invites",
+    "job_offers",
     "employees",
     "payroll",
     "leaves",
@@ -292,6 +303,7 @@ STATIC_URL = "static/"
 
 # Private uploads (not served publicly)
 PRIVATE_UPLOAD_ROOT = BASE_DIR / "private_uploads"
+MAX_HIRING_REQUEST_CV_SIZE_BYTES = _env_int("MAX_HIRING_REQUEST_CV_SIZE_BYTES", 5 * 1024 * 1024)
 
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True
@@ -318,6 +330,7 @@ LOGIN_FAILURE_WINDOW_SECONDS = 900
 LOGIN_LOCKOUT_SECONDS = 900
 LOGIN_THROTTLE_RATE = "10/min"
 EMPLOYEE_IMPORT_THROTTLE_RATE = "5/min"
+JOB_OFFER_RESPONSE_THROTTLE_RATE = "30/min"
 PAYROLL_FINALIZE_THROTTLE_RATE = "5/min"
 PAYROLL_GENERATE_PAYSLIPS_THROTTLE_RATE = "5/min"
 PAYROLL_EXPORT_THROTTLE_RATE = "10/min"
@@ -334,6 +347,7 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "login": LOGIN_THROTTLE_RATE,
         "employee_import": EMPLOYEE_IMPORT_THROTTLE_RATE,
+        "job_offer_response": JOB_OFFER_RESPONSE_THROTTLE_RATE,
         "payroll_finalize": PAYROLL_FINALIZE_THROTTLE_RATE,
         "payroll_generate_payslips": PAYROLL_GENERATE_PAYSLIPS_THROTTLE_RATE,
         "payroll_export": PAYROLL_EXPORT_THROTTLE_RATE,

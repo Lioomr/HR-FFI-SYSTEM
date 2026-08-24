@@ -13,7 +13,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
 
     // Auth
     "auth.signInToContinue": "Sign in to continue",
-    "auth.internalSystemNotice": "Internal system for authorized FFI personnel only.",
+    "auth.internalSystemNotice":
+      "Internal system for authorized FFI personnel only.",
     "auth.email": "Email",
     "auth.emailRequired": "Email is required",
     "auth.emailInvalid": "Enter a valid email",
@@ -31,7 +32,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "auth.loginFailedTitle": "Sign-in failed",
     "auth.loginLockedTitle": "Account temporarily locked",
     "auth.backendUnavailableTitle": "Server unavailable",
-    "auth.backendNotConnected": "Backend not connected (API login failed). Start the backend or set VITE_API_BASE_URL.",
+    "auth.backendNotConnected":
+      "Backend not connected (API login failed). Start the backend or set VITE_API_BASE_URL.",
     "auth.tryAgain": "Please try again later",
     "auth.invite.missingToken": "Invitation token is missing.",
     "auth.invite.invalidLink": "Invalid invite link.",
@@ -54,20 +56,25 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "auth.invite.backToLogin": "Back to Login",
     "auth.invite.phonePlaceholderRequired": "Phone number",
     "auth.invite.phoneRequired": "Phone number is required",
-    "auth.invite.emailAlreadyRegistered": "This email is already registered. Please log in instead.",
+    "auth.invite.emailAlreadyRegistered":
+      "This email is already registered. Please log in instead.",
 
     // Change Password
     "changePassword.title": "Change Password",
-    "changePassword.subtitle": "Update your account security by choosing a new password",
+    "changePassword.subtitle":
+      "Update your account security by choosing a new password",
     "changePassword.currentPassword": "Current Password",
     "changePassword.newPassword": "New Password",
     "changePassword.confirmPassword": "Confirm New Password",
     "changePassword.currentRequired": "Please enter your current password",
     "changePassword.newRequired": "Please enter a new password",
     "changePassword.confirmRequired": "Please confirm your new password",
-    "changePassword.mismatch": "The two passwords that you entered do not match!",
-    "changePassword.strengthError": "Password must be at least 8 characters and contain both letters and numbers",
-    "changePassword.success": "Password changed successfully! Please log in again.",
+    "changePassword.mismatch":
+      "The two passwords that you entered do not match!",
+    "changePassword.strengthError":
+      "Password must be at least 8 characters and contain both letters and numbers",
+    "changePassword.success":
+      "Password changed successfully! Please log in again.",
     "changePassword.enterCurrent": "Enter current password",
     "changePassword.enterNew": "Enter new password",
     "changePassword.enterConfirm": "Confirm new password",
@@ -99,16 +106,19 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "layout.rentTypes": "Rent Types",
     "layout.templateLibrary": "Template Library",
     "templates.title": "Template Library",
-    "templates.subtitle": "Download blank HR forms and letters to print or fill offline.",
+    "templates.subtitle":
+      "Download blank HR forms and letters to print or fill offline.",
     "templates.category.requests": "Request Forms",
     "templates.category.letters": "HR Letters",
     "templates.download": "Download",
-    "templates.unavailable": "Template is not available yet. Ask an admin to regenerate templates.",
+    "templates.unavailable":
+      "Template is not available yet. Ask an admin to regenerate templates.",
     "templates.downloadFailed": "Failed to download template.",
     "templates.notGenerated": "Not generated yet",
     "templates.emptyCategory": "No templates in this category.",
     "templates.empty.title": "No templates found",
-    "templates.empty.subtitle": "Run generate_blank_templates to populate the library.",
+    "templates.empty.subtitle":
+      "Run generate_blank_templates to populate the library.",
     "layout.myAssets": "My Assets",
     "layout.leaveInbox": "Leave Inbox",
     "layout.attendance": "Attendance",
@@ -184,13 +194,20 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "common.no": "No",
     "common.loading": "Loading...",
     "common.error": "Error",
-    "common.error.serverDetailed": "We could not complete your request due to a temporary server issue. Please try again in a few minutes. If the issue continues, contact support.",
-    "common.error.networkDetailed": "We could not reach the server. Please check your internet connection and try again.",
-    "common.error.timeoutDetailed": "The server is taking too long to respond. Please try again.",
-    "common.error.validationDetailed": "Some information is invalid. Please review your entries and submit again.",
-    "common.error.unauthorizedDetailed": "Your session may have expired. Please sign in again and retry.",
-    "common.error.forbiddenDetailed": "You do not have permission to perform this action.",
-    "common.error.genericDetailed": "We could not complete your request. Please try again.",
+    "common.error.serverDetailed":
+      "We could not complete your request due to a temporary server issue. Please try again in a few minutes. If the issue continues, contact support.",
+    "common.error.networkDetailed":
+      "We could not reach the server. Please check your internet connection and try again.",
+    "common.error.timeoutDetailed":
+      "The server is taking too long to respond. Please try again.",
+    "common.error.validationDetailed":
+      "Some information is invalid. Please review your entries and submit again.",
+    "common.error.unauthorizedDetailed":
+      "Your session may have expired. Please sign in again and retry.",
+    "common.error.forbiddenDetailed":
+      "You do not have permission to perform this action.",
+    "common.error.genericDetailed":
+      "We could not complete your request. Please try again.",
     "common.retry": "Retry",
     "common.tryAgain": "Please try again later",
     "common.success": "Success",
@@ -223,10 +240,14 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "bioTime.titles.mapped": "Currently Mapped Users",
     "bioTime.titles.manualSync": "Manual Sync",
     "bioTime.titles.syncResult": "Last Sync Result",
-    "bioTime.descriptions.unmapped": "These users were found on the fingerprint device but are not linked to any Employee Profile in the HR System. Please select an employee to link them to.",
-    "bioTime.descriptions.mapped": "Device users already linked to an HR employee profile. Attendance punches for these codes are imported automatically.",
-    "bioTime.descriptions.manualSync": "Pull attendance punches from the device for the selected number of days back.",
-    "bioTime.hints.passwordUnchanged": "Leave empty to keep the stored password unchanged.",
+    "bioTime.descriptions.unmapped":
+      "These users were found on the fingerprint device but are not linked to any Employee Profile in the HR System. Please select an employee to link them to.",
+    "bioTime.descriptions.mapped":
+      "Device users already linked to an HR employee profile. Attendance punches for these codes are imported automatically.",
+    "bioTime.descriptions.manualSync":
+      "Pull attendance punches from the device for the selected number of days back.",
+    "bioTime.hints.passwordUnchanged":
+      "Leave empty to keep the stored password unchanged.",
     "bioTime.placeholders.selectEmployee": "Select Employee",
     "bioTime.placeholders.password": "Leave empty to keep unchanged",
     "bioTime.placeholders.searchEmployees": "Search HR employees",
@@ -237,7 +258,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "bioTime.sync.unmapped": "Unmapped",
     "bioTime.sync.invalid": "Invalid",
     "bioTime.confirm.unlinkTitle": "Remove this mapping?",
-    "bioTime.confirm.unlinkDescription": "Device ID {code} will stop importing attendance until it is mapped again.",
+    "bioTime.confirm.unlinkDescription":
+      "Device ID {code} will stop importing attendance until it is mapped again.",
     "bioTime.empty.unmapped": "No unmapped device users.",
     "bioTime.empty.mapped": "No employees are mapped yet.",
     "bioTime.validation.serverIpRequired": "Server IP or domain is required.",
@@ -252,7 +274,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "bioTime.errors.loadMappings": "Failed to load mapping data.",
     "bioTime.errors.loadUnmapped": "Failed to load device users from BioTime.",
     "bioTime.errors.saveConfig": "Failed to save configuration.",
-    "bioTime.errors.testConnection": "Connection failed. Please check your settings.",
+    "bioTime.errors.testConnection":
+      "Connection failed. Please check your settings.",
     "bioTime.errors.sync": "Failed to trigger sync.",
     "bioTime.errors.map": "Failed to map employee.",
     "bioTime.errors.unmap": "Failed to remove mapping.",
@@ -298,20 +321,33 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "common.preview": "Preview",
     "common.submittedOn": "Submitted On",
     "organization.headOffice.badge": "Head Office View",
-    "organization.headOffice.bannerTitle": "Main Head Office is in read-only mode",
-    "organization.headOffice.bannerDescription": "Review aggregate data here, then switch to a company to create, import, edit, or run company-owned actions.",
+    "organization.headOffice.bannerTitle":
+      "Main Head Office is in read-only mode",
+    "organization.headOffice.bannerDescription":
+      "Review aggregate data here, then switch to a company to create, import, edit, or run company-owned actions.",
     "organization.headOffice.readOnlyTitle": "Main Head Office is read-only",
-    "organization.headOffice.switchToUseAction": "Switch to a company to use this action.",
-    "organization.headOffice.switchToCreateRecords": "Switch to a company to create records.",
-    "organization.headOffice.switchToEditRecords": "Switch to a company to edit records.",
-    "organization.headOffice.switchToCreateEmployees": "Switch to a company to create employees.",
-    "organization.headOffice.switchToRemoveEmployees": "Switch to a company to request employee archival.",
-    "organization.headOffice.createEmployeeDescription": "Select FFI, Aseco Pro, or Athroya to create an employee.",
-    "organization.headOffice.switchToCreatePayroll": "Switch to a company to create a payroll run.",
-    "organization.headOffice.createPayrollDescription": "Switch to FFI, Aseco Pro, or Athroya to create a payroll run.",
-    "organization.headOffice.selectCompanyBeforePayroll": "Select a company before running payroll.",
-    "organization.headOffice.switchToImportEmployees": "Switch to a company to import employees.",
-    "organization.headOffice.importEmployeesDescription": "Imports are disabled here. Switch to FFI, Aseco Pro, or Athroya to upload employees.",
+    "organization.headOffice.switchToUseAction":
+      "Switch to a company to use this action.",
+    "organization.headOffice.switchToCreateRecords":
+      "Switch to a company to create records.",
+    "organization.headOffice.switchToEditRecords":
+      "Switch to a company to edit records.",
+    "organization.headOffice.switchToCreateEmployees":
+      "Switch to a company to create employees.",
+    "organization.headOffice.switchToRemoveEmployees":
+      "Switch to a company to request employee archival.",
+    "organization.headOffice.createEmployeeDescription":
+      "Select FFI, Aseco Pro, or Athroya to create an employee.",
+    "organization.headOffice.switchToCreatePayroll":
+      "Switch to a company to create a payroll run.",
+    "organization.headOffice.createPayrollDescription":
+      "Switch to FFI, Aseco Pro, or Athroya to create a payroll run.",
+    "organization.headOffice.selectCompanyBeforePayroll":
+      "Select a company before running payroll.",
+    "organization.headOffice.switchToImportEmployees":
+      "Switch to a company to import employees.",
+    "organization.headOffice.importEmployeesDescription":
+      "Imports are disabled here. Switch to FFI, Aseco Pro, or Athroya to upload employees.",
 
     // Roles
     "role.SystemAdmin": "System Admin",
@@ -422,7 +458,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.dashboard.actionType": "Action Type",
     "hr.dashboard.dateTime": "Date & Time",
     "hr.dashboard.actor": "Actor",
-    "hr.dashboard.recentActivityDesc": "View and filter all recent activity in the system",
+    "hr.dashboard.recentActivityDesc":
+      "View and filter all recent activity in the system",
     "hr.dashboard.filterByActor": "Search by Actor Name/Email",
     "hr.dashboard.filterByAction": "Filter by Action Type",
     "hr.dashboard.overviewContext": "Approvals, workforce and payroll",
@@ -468,7 +505,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.expiringDocs.successNotify": "Notification sent via: {channels}",
     "hr.expiringDocs.announcementRef": "announcement #{id}",
     "hr.expiringDocs.notDelivered": "Not delivered.",
-    "hr.expiringDocs.noDeliveredChannels": "No notification channel was delivered",
+    "hr.expiringDocs.noDeliveredChannels":
+      "No notification channel was delivered",
     "hr.expiringDocs.errorNotify": "Failed to send notification",
     "hr.expiringDocs.errorLoad": "Failed to load expiring documents",
     "hr.expiringDocs.daysShort": "d",
@@ -478,7 +516,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.expiringDocs.statusExpiring": "Expiring",
     "hr.expiringDocs.statusUnknown": "Expiry unavailable",
     "hr.expiringDocs.missingExpiryDate": "Expiry date unavailable",
-    "hr.expiringDocs.automaticReminderInfo": "WhatsApp reminders are sent automatically to HR only when an expiry is within 10 days.",
+    "hr.expiringDocs.automaticReminderInfo":
+      "WhatsApp reminders are sent automatically to HR only when an expiry is within 10 days.",
     "hr.expiringDocs.docType.passport": "Passport",
     "hr.expiringDocs.docType.id_card": "ID Card",
     "hr.expiringDocs.docType.health_card": "Health Card",
@@ -576,7 +615,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.announcements.createTitle": "Create Announcement",
     "hr.announcements.createButton": "Create Announcement",
     "hr.announcements.deletePopconfirmTitle": "Delete this announcement?",
-    "hr.announcements.deletePopconfirmDesc": "Are you sure to delete this announcement?",
+    "hr.announcements.deletePopconfirmDesc":
+      "Are you sure to delete this announcement?",
     "hr.announcements.tableTitle": "Title",
     "hr.announcements.tableTargetRoles": "Target Roles",
     "hr.announcements.tableCreatedBy": "Created By",
@@ -587,7 +627,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.announcements.contentPlaceholder": "Enter announcement content",
     "hr.announcements.contentRequired": "Please enter content",
     "hr.announcements.targetAudienceLabel": "Target Audience",
-    "hr.announcements.targetAudienceRequired": "Please select at least one role",
+    "hr.announcements.targetAudienceRequired":
+      "Please select at least one role",
     "hr.announcements.placeholderSelectRoles": "Select target roles",
     "hr.announcements.publishingOptions": "Publishing Options",
     "hr.announcements.dashboardLabel": "Dashboard",
@@ -595,19 +636,23 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.announcements.emailLabel": "Email",
     "hr.announcements.emailDesc": "Send email notification to target users",
     "hr.announcements.smsLabel": "SMS",
-    "hr.announcements.smsDesc": "Send SMS notification (requires configuration)",
+    "hr.announcements.smsDesc":
+      "Send SMS notification (requires configuration)",
     "hr.announcements.whatsappLabel": "WhatsApp",
-    "hr.announcements.whatsappDesc": "Send WhatsApp notification to target users",
+    "hr.announcements.whatsappDesc":
+      "Send WhatsApp notification to target users",
     "hr.announcements.typeLabel": "Notification Type",
     "hr.announcements.typeGeneral": "General Announcement",
     "hr.announcements.typeMeeting": "Meeting",
     "hr.announcements.meetingTitleLabel": "Meeting Title",
     "hr.announcements.meetingMessageLabel": "Meeting Message",
     "hr.announcements.selectedEmployeesLabel": "Selected Employees",
-    "hr.announcements.selectedEmployeesRequired": "Please select at least one employee",
+    "hr.announcements.selectedEmployeesRequired":
+      "Please select at least one employee",
     "hr.announcements.selectedEmployeesPlaceholder": "Select employees",
     "hr.announcements.meetingStartsAt": "Meeting Date and Time",
-    "hr.announcements.meetingStartsAtRequired": "Please choose the meeting date and time",
+    "hr.announcements.meetingStartsAtRequired":
+      "Please choose the meeting date and time",
     "hr.announcements.meetingDuration": "Duration (minutes)",
     "hr.announcements.meetingLocation": "Location",
     "hr.announcements.meetingAgenda": "Agenda",
@@ -616,10 +661,12 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.announcements.zoomUrl": "Zoom Link",
     "hr.announcements.errorLoadEmployees": "Failed to load employees",
     "hr.announcements.attachmentLabel": "PDF Attachment (Optional)",
-    "hr.announcements.attachmentHelp": "Upload one PDF file. It will be previewable in the dashboard and included in email notifications.",
+    "hr.announcements.attachmentHelp":
+      "Upload one PDF file. It will be previewable in the dashboard and included in email notifications.",
     "hr.announcements.attachmentSelect": "Select PDF",
     "hr.announcements.attachmentPdfOnly": "Only PDF files are allowed.",
-    "hr.announcements.attachmentPreviewUnavailable": "Preview is unavailable, but the file can still be downloaded.",
+    "hr.announcements.attachmentPreviewUnavailable":
+      "Preview is unavailable, but the file can still be downloaded.",
     "hr.announcements.successCreated": "Announcement created successfully",
     "hr.announcements.successDeleted": "Announcement deleted successfully",
     "hr.announcements.errorLoad": "Failed to load announcements",
@@ -652,9 +699,9 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "manager.dashboard.overviewContext": "Everything waiting on you",
     "manager.dashboard.loadFailed": "Could not load your team overview",
     "manager.dashboard.loadFailedHint":
-        "None of your team queues could be read. Check your connection or your access, then try again.",
+      "None of your team queues could be read. Check your connection or your access, then try again.",
     "manager.dashboard.partialData":
-        "Some queues could not be read, so the totals below may be incomplete.",
+      "Some queues could not be read, so the totals below may be incomplete.",
     "manager.dashboard.pendingApprovals": "Pending approvals",
     "manager.dashboard.pendingApprovalsCaption": "Across all your team queues",
     "manager.dashboard.reviewPending": "Review pending requests",
@@ -676,7 +723,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "manager.dashboard.teamSnapshotHint": "Your direct reports",
     "manager.dashboard.openMyTeam": "Open My Team",
     "manager.dashboard.teamPreviewMore": "+{count} more in My Team",
-    "manager.dashboard.teamPreviewUnavailable": "The team list could not be loaded right now.",
+    "manager.dashboard.teamPreviewUnavailable":
+      "The team list could not be loaded right now.",
 
     // Manager work queue rows
     "manager.queue.noDetail": "No details",
@@ -693,13 +741,15 @@ export const translations: Record<AppLanguage, TranslationMap> = {
 
     // Employees List
     "employees.list.title": "All Employees",
-    "employees.list.subtitle": "Manage your team members and their account permissions.",
+    "employees.list.subtitle":
+      "Manage your team members and their account permissions.",
     "employees.list.createEmployee": "Create Employee",
     "employees.list.searchPlaceholder": "Search by name, ID or email",
     "employees.list.departmentPlaceholder": "Department",
     "employees.list.statusPlaceholder": "Status",
     "employees.list.nationalityPlaceholder": "Nationality",
-    "employees.list.moreFiltersHelp": "Filter by nationality or sort by joining date.",
+    "employees.list.moreFiltersHelp":
+      "Filter by nationality or sort by joining date.",
     "employees.list.joinDateDefault": "Joining Date: Default",
     "employees.list.joinDateNewestFirst": "Joining Date: Newest First",
     "employees.list.joinDateOldestFirst": "Joining Date: Oldest First",
@@ -714,15 +764,18 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "employees.list.actionView": "View Details",
     "employees.list.actionEdit": "Edit",
     "employees.list.actionDelete": "Archive",
-    "employees.list.showingPagination": "Showing {from} to {to} of {total} entries",
+    "employees.list.showingPagination":
+      "Showing {from} to {to} of {total} entries",
 
     // Employee archival (CEO-approved; legacy removal labels retained as keys)
     "employees.removal.action": "Request Archive",
     "employees.removal.actionPending": "Archive Pending CEO",
     "employees.removal.pendingTag": "Pending CEO",
     "employees.removal.modalTitle": "Request Employee Archive",
-    "employees.removal.modalIntro": "You are requesting archival of {name}. The CEO must approve before the account is disabled.",
-    "employees.removal.modalNote": "Approval archives the employee and disables login while preserving all linked records. Authorized HR/Admin users can restore the employee.",
+    "employees.removal.modalIntro":
+      "You are requesting archival of {name}. The CEO must approve before the account is disabled.",
+    "employees.removal.modalNote":
+      "Approval archives the employee and disables login while preserving all linked records. Authorized HR/Admin users can restore the employee.",
     "employees.removal.preservationTitle": "The employee stays in the system",
     "employees.removal.archiveReasonLabel": "Archive reason",
     "employees.removal.archiveReasonPlaceholder": "Select an archive reason",
@@ -734,14 +787,20 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "employees.removal.archiveReason.DECEASED": "Deceased",
     "employees.removal.archiveReason.OTHER": "Other",
     "employees.removal.reasonLabel": "Archive details",
-    "employees.removal.reasonPlaceholder": "Add details supporting this employee archive request.",
+    "employees.removal.reasonPlaceholder":
+      "Add details supporting this employee archive request.",
     "employees.removal.reasonRequired": "A reason is required.",
     "employees.removal.confirmButton": "Submit for CEO Approval",
-    "employees.removal.successSubmitted": "Archive request sent to the CEO for approval.",
-    "employees.removal.errorAlreadyPending": "An archive request is already pending for this employee.",
-    "employees.removal.errorForbidden": "You don't have permission to request employee archival.",
-    "employees.removal.errorConflict": "This employee cannot be archived in the current state.",
-    "employees.removal.errorGeneric": "Could not submit the archive request. Please try again.",
+    "employees.removal.successSubmitted":
+      "Archive request sent to the CEO for approval.",
+    "employees.removal.errorAlreadyPending":
+      "An archive request is already pending for this employee.",
+    "employees.removal.errorForbidden":
+      "You don't have permission to request employee archival.",
+    "employees.removal.errorConflict":
+      "This employee cannot be archived in the current state.",
+    "employees.removal.errorGeneric":
+      "Could not submit the archive request. Please try again.",
 
     // Archived employees (filter, display, restore)
     "employees.archive.stateActive": "Active",
@@ -753,24 +812,31 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "employees.archive.archivedBy": "Archived by",
     "employees.archive.colArchivedBy": "Archived By",
     "employees.archive.archivedBanner": "This employee is archived",
-    "employees.archive.archivedBannerDescription": "The login account is disabled. All historical records remain available.",
+    "employees.archive.archivedBannerDescription":
+      "The login account is disabled. All historical records remain available.",
     "employees.restore.action": "Restore Employee",
     "employees.restore.modalTitle": "Restore Employee",
-    "employees.restore.modalIntro": "Restore {name} to the active employee list?",
-    "employees.restore.modalNote": "The employee profile becomes active again and their login account is re-enabled.",
+    "employees.restore.modalIntro":
+      "Restore {name} to the active employee list?",
+    "employees.restore.modalNote":
+      "The employee profile becomes active again and their login account is re-enabled.",
     "employees.restore.confirmButton": "Restore Employee",
     "employees.restore.success": "Employee restored.",
-    "employees.restore.errorForbidden": "You don't have permission to restore employees.",
+    "employees.restore.errorForbidden":
+      "You don't have permission to restore employees.",
     "employees.restore.errorNotArchived": "This employee is not archived.",
-    "employees.restore.errorGeneric": "Could not restore the employee. Please try again.",
+    "employees.restore.errorGeneric":
+      "Could not restore the employee. Please try again.",
 
     // CEO Employee Archive Inbox
     "employees.removalInbox.menu": "Employee Archives",
     "employees.removalInbox.title": "Employee Archive Requests",
-    "employees.removalInbox.subtitle": "Review employee archive requests submitted by HR.",
+    "employees.removalInbox.subtitle":
+      "Review employee archive requests submitted by HR.",
     "employees.removalInbox.review": "Review",
     "employees.removalInbox.empty": "No archive requests in this status.",
-    "employees.removalInbox.errorGeneric": "Could not load archive requests. Please try again.",
+    "employees.removalInbox.errorGeneric":
+      "Could not load archive requests. Please try again.",
     "employees.removalInbox.colEmployee": "Employee",
     "employees.removalInbox.colDepartment": "Department",
     "employees.removalInbox.colCompany": "Company",
@@ -803,32 +869,46 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "employees.removalDetail.assetAssignments": "Active Asset Assignments",
     "employees.removalDetail.loanRequests": "Loan Requests",
     "employees.removalDetail.decisionTitle": "Decision",
-    "employees.removalDetail.decisionHint": "Approving will archive the employee, disable login, and preserve all linked records. Rejecting requires a reason.",
+    "employees.removalDetail.decisionHint":
+      "Approving will archive the employee, disable login, and preserve all linked records. Rejecting requires a reason.",
     "employees.removalDetail.approveButton": "Approve & Archive",
     "employees.removalDetail.rejectButton": "Reject",
     "employees.removalDetail.approveModalTitle": "Approve Employee Archive",
-    "employees.removalDetail.approveModalIntro": "You are about to archive {name} and disable their login account.",
+    "employees.removalDetail.approveModalIntro":
+      "You are about to archive {name} and disable their login account.",
     "employees.removalDetail.approveConfirm": "Approve & Archive",
-    "employees.removalDetail.preservationNotice": "All employee and historical records will be preserved. Authorized HR/Admin users can restore access later.",
+    "employees.removalDetail.preservationNotice":
+      "All employee and historical records will be preserved. Authorized HR/Admin users can restore access later.",
     "employees.removalDetail.rejectModalTitle": "Reject Archive Request",
-    "employees.removalDetail.rejectModalIntro": "You are about to reject the archive request for {name}. The employee will remain active.",
+    "employees.removalDetail.rejectModalIntro":
+      "You are about to reject the archive request for {name}. The employee will remain active.",
     "employees.removalDetail.rejectConfirm": "Submit Rejection",
     "employees.removalDetail.rejectReasonLabel": "Rejection Reason",
-    "employees.removalDetail.rejectReasonPlaceholder": "Explain why this archive request is being rejected.",
-    "employees.removalDetail.rejectReasonRequired": "A rejection reason is required.",
+    "employees.removalDetail.rejectReasonPlaceholder":
+      "Explain why this archive request is being rejected.",
+    "employees.removalDetail.rejectReasonRequired":
+      "A rejection reason is required.",
     "employees.removalDetail.executedTitle": "Employee Archived",
-    "employees.removalDetail.executedDescription": "Approved by {by} on {at}. The employee is archived and their login is disabled.",
+    "employees.removalDetail.executedDescription":
+      "Approved by {by} on {at}. The employee is archived and their login is disabled.",
     "employees.removalDetail.rejectedTitle": "Archive Request Rejected",
     "employees.removalDetail.rejectedBy": "Rejected by {by} on {at}.",
     "employees.removalDetail.rejectionReasonLabel": "Rejection Reason",
-    "employees.removalDetail.successApproved": "Archive request approved. The employee is now archived.",
+    "employees.removalDetail.successApproved":
+      "Archive request approved. The employee is now archived.",
     "employees.removalDetail.successRejected": "Archive request rejected.",
-    "employees.removalDetail.errorGeneric": "Could not load the archive request. Please try again.",
-    "employees.removalDetail.errorApprove": "Could not approve the archive request. Please try again.",
-    "employees.removalDetail.errorReject": "Could not reject the archive request. Please try again.",
-    "employees.removalDetail.errorForbidden": "You don't have permission to act on this request.",
-    "employees.removalDetail.errorNotFound": "This archive request no longer exists.",
-    "employees.removalDetail.errorValidation": "The request could not be processed in its current state.",
+    "employees.removalDetail.errorGeneric":
+      "Could not load the archive request. Please try again.",
+    "employees.removalDetail.errorApprove":
+      "Could not approve the archive request. Please try again.",
+    "employees.removalDetail.errorReject":
+      "Could not reject the archive request. Please try again.",
+    "employees.removalDetail.errorForbidden":
+      "You don't have permission to act on this request.",
+    "employees.removalDetail.errorNotFound":
+      "This archive request no longer exists.",
+    "employees.removalDetail.errorValidation":
+      "The request could not be processed in its current state.",
 
     // Employees create/edit/view
     "employees.create.title": "Create Employee",
@@ -837,11 +917,13 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "employees.view.linkUser": "Connect User Account",
     "employees.view.unlinkUser": "Unlink User",
     "employees.view.connectUser": "Connect User",
-    "employees.view.connectUserDesc": "Select a system user to link to this employee profile.",
+    "employees.view.connectUserDesc":
+      "Select a system user to link to this employee profile.",
     "employees.view.searchUserPlaceholder": "Search by name or email",
     "employees.view.linkedTo": "Linked to: {email}",
     "employees.view.notLinked": "Not Linked",
-    "employees.view.unlinkConfirm": "Are you sure you want to unlink the user account from this employee?",
+    "employees.view.unlinkConfirm":
+      "Are you sure you want to unlink the user account from this employee?",
     "employees.view.hours": "Hours",
     "employees.view.doc": "Doc",
     "employees.view.idTag": "ID",
@@ -876,15 +958,22 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "employees.form.sponsorPlaceholder": "Select sponsor",
     "employees.form.directManager": "Direct Manager",
     "employees.form.managerPlaceholder": "Select manager (optional)",
-    "employees.form.managerTooltip": "The direct manager approves this employee's leave, loan, attendance and asset requests",
+    "employees.form.managerTooltip":
+      "The direct manager approves this employee's leave, loan, attendance and asset requests",
     "employees.form.managerHelp":
-        "Assigning a direct manager gives that person manager access for this employee's requests, even if their role is Employee. Leave it empty to route requests straight to HR.",
-    "employees.form.managerAssignmentRejected": "This manager cannot be assigned",
-    "employees.form.managerErrors.self": "An employee cannot be their own manager.",
-    "employees.form.managerErrors.company": "The selected manager must belong to the employee's company.",
-    "employees.form.managerErrors.archived": "The selected manager is archived.",
-    "employees.form.managerErrors.inactive": "The selected manager must be an active employee with an active user account.",
-    "employees.form.managerErrors.cycle": "Manager assignment cannot create a reporting cycle.",
+      "Assigning a direct manager gives that person manager access for this employee's requests, even if their role is Employee. Leave it empty to route requests straight to HR.",
+    "employees.form.managerAssignmentRejected":
+      "This manager cannot be assigned",
+    "employees.form.managerErrors.self":
+      "An employee cannot be their own manager.",
+    "employees.form.managerErrors.company":
+      "The selected manager must belong to the employee's company.",
+    "employees.form.managerErrors.archived":
+      "The selected manager is archived.",
+    "employees.form.managerErrors.inactive":
+      "The selected manager must be an active employee with an active user account.",
+    "employees.form.managerErrors.cycle":
+      "Manager assignment cannot create a reporting cycle.",
     "employees.form.joiningDate": "Joining Date",
     "employees.form.jobOffer": "Job Offer",
     "employees.form.jobOfferPlaceholder": "Job offer details",
@@ -911,7 +1000,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "employees.form.workLicense": "Work License Expiry",
     "employees.form.workLicenseTag": "Work License",
     "employees.form.expiryDate": "Expiry Date",
-    "employees.form.requiredNameEn": "Please enter employee full name in English",
+    "employees.form.requiredNameEn":
+      "Please enter employee full name in English",
     "employees.form.requiredDept": "Please select department",
     "employees.form.requiredPos": "Please select position",
     "employees.form.requiredJoinDate": "Please select joining date",
@@ -923,7 +1013,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "leave.leaveBalance": "Leave Balance",
     "leave.startDate": "Start Date",
     "leave.endDate": "End Date",
-    "leave.backdateHelper": "Leave can be submitted up to 7 calendar days after it starts.",
+    "leave.backdateHelper":
+      "Leave can be submitted up to 7 calendar days after it starts.",
     "leave.leaveType": "Leave Type",
     "leave.reason": "Reason",
     "leave.days": "Days",
@@ -995,7 +1086,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "leave.approveSuccess": "Request Approved",
     "leave.approveError": "System error during approval",
     "leave.sendToCeoTitle": "Send Request to CEO",
-    "leave.sendToCeoDesc": "This will move the request to CEO inbox for review and final handling.",
+    "leave.sendToCeoDesc":
+      "This will move the request to CEO inbox for review and final handling.",
     "leave.sendToCeoBtn": "Send to CEO",
     "leave.sendFail": "Send Failed",
     "leave.sendSuccess": "Request sent to CEO",
@@ -1014,16 +1106,20 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "leave.backToInbox": "Back to Inbox",
     "leave.backToTeamReqs": "Back to Team Requests",
     "leave.requestDetailsTitle": "Leave Request #{id}",
-    "leave.employeeDetailsSubtitle": "Review the request status, approval path, and exported summary",
+    "leave.employeeDetailsSubtitle":
+      "Review the request status, approval path, and exported summary",
     "leave.period": "Period",
     "leave.rejectionReason": "Rejection Reason",
     "leave.statusNote": "Status Note",
-    "leave.ceoApprovalWait": "This request is awaiting CEO approval. No further HR action required.",
+    "leave.ceoApprovalWait":
+      "This request is awaiting CEO approval. No further HR action required.",
     "leave.ceoApproveSuccess": "Approved and sent to HR for completion.",
     "leave.rejected": "Leave request rejected",
-    "leave.hrCompletionWait": "CEO has approved. HR must complete the request to finalize.",
+    "leave.hrCompletionWait":
+      "CEO has approved. HR must complete the request to finalize.",
     "leave.hrCompletionRequired": "HR Completion Required",
-    "leave.hrCompletionDesc": "CEO has approved this request. Complete it below to finalize.",
+    "leave.hrCompletionDesc":
+      "CEO has approved this request. Complete it below to finalize.",
     "leave.visaRequired": "Visa document is required for non-Saudi employees.",
     "leave.visaDocument": "Visa Document (PDF)",
     "leave.visaDocumentOptional": "Visa Document (optional)",
@@ -1035,7 +1131,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "leave.extractionWarnings": "Extraction Warnings",
     "leave.rejectTitle": "Reject Leave Request",
     "leave.rejectBtn": "Reject Request",
-    "leave.rejectWarning": "This action is irreversible. Please provide a reason to the employee.",
+    "leave.rejectWarning":
+      "This action is irreversible. Please provide a reason to the employee.",
     "leave.rejectPlaceholder": "Reason for rejection...",
     "leave.manual.badge": "Manual HR Record",
     "leave.manual.addButton": "Add Manual Record",
@@ -1054,7 +1151,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "leave.previewAttachment": "Preview Attachment",
     "leave.downloadAttachment": "Download Attachment",
     "leave.pdfDownloadFailed": "Could not download the leave request PDF.",
-    "leave.pdfDownloadForbidden": "You are not allowed to download this leave request PDF.",
+    "leave.pdfDownloadForbidden":
+      "You are not allowed to download this leave request PDF.",
     "leave.requestSource": "Request Source",
     "leave.approvalMap.eyebrow": "Approval Flow",
     "leave.approvalMap.title": "Request Progress",
@@ -1079,12 +1177,15 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "leave.approvalMap.rejected": "Rejected",
     "leave.approvalMap.upcoming": "Upcoming",
     "leave.approvalMap.skipped": "Skipped",
-    "leave.approvalMap.notRequired": "This stage was not required for this request.",
+    "leave.approvalMap.notRequired":
+      "This stage was not required for this request.",
     "leave.approvalMap.noDate": "Awaiting action",
     "leave.approvalMap.hrCompletion": "HR Completion",
-    "leave.approvalMap.hrCompletionPending": "Waiting for HR to upload visa and complete the request.",
+    "leave.approvalMap.hrCompletionPending":
+      "Waiting for HR to upload visa and complete the request.",
     "pendingBanner.waitingForActor": "Waiting for {actor}",
-    "pendingBanner.waitingHrCompletion": "Waiting for HR to complete the request.",
+    "pendingBanner.waitingHrCompletion":
+      "Waiting for HR to complete the request.",
     "pendingBanner.waitingForStage": "Waiting for {stage}",
     "leave.visaDetails": "Visa Details",
     "leave.visaNumber": "Visa Number",
@@ -1092,7 +1193,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "leave.visaDuration": "Visa Duration",
     "leave.extractionStatus": "Extraction Status",
     "leave.noVisaUploaded": "No visa document uploaded yet.",
-    "leave.noVisaForRequest": "No visa document is associated with this leave request.",
+    "leave.noVisaForRequest":
+      "No visa document is associated with this leave request.",
 
     // Document Archive
     "archive.tabLabel": "Document Archive",
@@ -1153,19 +1255,23 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "leave.delegatedTo": "Alternative Employee",
     "leave.delegationNote": "Alternative Employee Note",
     "leave.delegatedInboxTitle": "Alternative Employee Inbox",
-    "leave.delegatedInboxSubtitle": "Leave requests assigned to you as an alternative employee for coverage confirmation.",
+    "leave.delegatedInboxSubtitle":
+      "Leave requests assigned to you as an alternative employee for coverage confirmation.",
     "leave.delegatedPendingCount": "{count} pending",
-    "leave.delegatedInboxEmpty": "No alternative employee leave approvals assigned to you.",
+    "leave.delegatedInboxEmpty":
+      "No alternative employee leave approvals assigned to you.",
     "leave.backToDelegatedInbox": "Back to alternative employee inbox",
     "leave.ticketPayer.company": "Company",
     "leave.ticketPayer.employee": "Employee",
 
     // CEO Dashboard
     "ceo.dashboard.title": "Executive Overview",
-    "ceo.dashboard.subtitle": "Overview of pending requests requiring CEO approval.",
+    "ceo.dashboard.subtitle":
+      "Overview of pending requests requiring CEO approval.",
     "ceo.dashboard.overviewContext": "Everything awaiting your decision",
     "ceo.dashboard.loadFailed": "Failed to load the approval overview",
-    "ceo.dashboard.loadFailedHint": "None of the approval queues could be read. Check your connection or access, then try again.",
+    "ceo.dashboard.loadFailedHint":
+      "None of the approval queues could be read. Check your connection or access, then try again.",
     "ceo.dashboard.awaitingDecision": "Awaiting Your Decision",
     "ceo.dashboard.awaitingDecisionCaption": "Across all approval queues",
     "ceo.dashboard.openPendingInbox": "Open Pending Inbox",
@@ -1175,7 +1281,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "ceo.dashboard.queueNonePending": "None pending",
     "ceo.dashboard.queuePendingCount": "{count} awaiting review",
     "ceo.dashboard.queueUnavailable": "Unavailable",
-    "ceo.dashboard.queueUnavailableHint": "You do not have access to this queue",
+    "ceo.dashboard.queueUnavailableHint":
+      "You do not have access to this queue",
     "ceo.dashboard.queue.leave": "Leave Requests",
     "ceo.dashboard.queue.leaveCaption": "Awaiting CEO approval",
     "ceo.dashboard.queue.loan": "Loan Requests",
@@ -1193,29 +1300,35 @@ export const translations: Record<AppLanguage, TranslationMap> = {
 
     // CEO approval screens (shared wording)
     "ceo.approvals.awaitingCount": "{count} awaiting",
-    "ceo.approvals.emptyDescription": "New requests appear here as soon as they reach you.",
-    "ceo.approvals.emptyFilteredDescription": "Try a different filter or search term.",
+    "ceo.approvals.emptyDescription":
+      "New requests appear here as soon as they reach you.",
+    "ceo.approvals.emptyFilteredDescription":
+      "Try a different filter or search term.",
     "ceo.approvals.approveTitle": "Approve request",
     "ceo.approvals.approveNoteLabel": "Decision note (optional)",
     "ceo.approvals.approveNotePlaceholder": "Add a note for the record...",
     "ceo.approvals.approveSuccess": "Request approved",
     "ceo.approvals.rejectSuccess": "Request rejected",
-    "ceo.approvals.rejectWarning": "Rejection is final for this request. Explain the decision for the employee.",
+    "ceo.approvals.rejectWarning":
+      "Rejection is final for this request. Explain the decision for the employee.",
     "ceo.approvals.rejectReasonLabel": "Reason for rejection",
-    "ceo.approvals.rejectReasonPlaceholder": "Explain why this request is being rejected...",
+    "ceo.approvals.rejectReasonPlaceholder":
+      "Explain why this request is being rejected...",
     "ceo.approvals.rejectReasonRequired": "A rejection reason is required.",
 
     // CEO asset reviews
     "ceo.assets.damageSubtitle": "Damage reports escalated for your approval.",
     "ceo.assets.damageEmpty": "No damage reports awaiting approval",
     "ceo.assets.damageRejectTitle": "Reject damage report",
-    "ceo.assets.returnSubtitle": "Asset return requests escalated for your approval.",
+    "ceo.assets.returnSubtitle":
+      "Asset return requests escalated for your approval.",
     "ceo.assets.returnEmpty": "No return requests awaiting approval",
     "ceo.assets.returnRejectTitle": "Reject return request",
 
     // CEO attendance
     "ceo.attendance.title": "Attendance Approvals",
-    "ceo.attendance.subtitle": "Review attendance records escalated to the CEO.",
+    "ceo.attendance.subtitle":
+      "Review attendance records escalated to the CEO.",
 
     // CEO navigation
     "ceo.nav.overviewCaption": "Executive summary",
@@ -1226,7 +1339,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
 
     // CFO Dashboard
     "cfo.dashboard.title": "CFO Dashboard",
-    "cfo.dashboard.subtitle": "Overview of pending requests requiring CFO approval.",
+    "cfo.dashboard.subtitle":
+      "Overview of pending requests requiring CFO approval.",
     "cfo.dashboard.pendingLoanRequests": "Pending Loan Requests",
     "cfo.dashboard.viewLoanRequests": "View Loan Requests",
     "cfo.dashboard.quickActions": "Quick Actions",
@@ -1251,9 +1365,12 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "attendance.teamAttendance": "Team Attendance",
     "attendance.maintenance.eyebrow": "Maintenance",
     "attendance.maintenance.title": "Attendance is temporarily unavailable",
-    "attendance.maintenance.description": "We are fixing this part right now. Please check back soon.",
-    "attendance.maintenance.managerDescription": "We are fixing this part right now for all users. Attendance requests and approvals will be back soon.",
-    "attendance.maintenance.pageSubtitle": "This section is temporarily unavailable while we fix it.",
+    "attendance.maintenance.description":
+      "We are fixing this part right now. Please check back soon.",
+    "attendance.maintenance.managerDescription":
+      "We are fixing this part right now for all users. Attendance requests and approvals will be back soon.",
+    "attendance.maintenance.pageSubtitle":
+      "This section is temporarily unavailable while we fix it.",
     "attendance.maintenance.back": "Go back",
     "attendance.submitCorrection": "Submit Correction",
     "attendance.noRecords": "No attendance records",
@@ -1266,11 +1383,13 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.attendance.allRecords": "All Records",
     "hr.attendance.rejectTitle": "Reject Attendance",
     "hr.attendance.rejectReasonLabel": "Please provide a reason for rejection:",
-    "hr.attendance.rejectPlaceholder": "e.g. Not at work location, Duplicate entry...",
+    "hr.attendance.rejectPlaceholder":
+      "e.g. Not at work location, Duplicate entry...",
     "hr.attendance.approvedSuccess": "Attendance for {name} approved!",
     "hr.attendance.rejectedSuccess": "Attendance rejected.",
     "hr.attendance.recordsTitle": "Attendance Records",
-    "attendancePreview.subtitle": "Read-only preview for HR and CEO while attendance self-service remains closed.",
+    "attendancePreview.subtitle":
+      "Read-only preview for HR and CEO while attendance self-service remains closed.",
     "attendancePreview.decision.approved": "Attendance record approved",
     "attendancePreview.decision.rejected": "Attendance record rejected",
     "attendancePreview.decision.failed": "Could not save the decision",
@@ -1288,7 +1407,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "attendancePreview.status.pendingCeo": "Pending CEO",
     "attendancePreview.status.rejected": "Rejected",
     "attendancePreview.filters.statusAll": "All statuses",
-    "attendancePreview.filters.searchPlaceholder": "Search by employee name or email",
+    "attendancePreview.filters.searchPlaceholder":
+      "Search by employee name or email",
     "attendancePreview.filters.employeePlaceholder": "Filter by employee",
     "attendancePreview.filters.sourcePlaceholder": "All sources",
     "attendancePreview.columns.duration": "Duration",
@@ -1301,7 +1421,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "attendancePreview.range.thisMonth": "This Month",
     "attendancePreview.summary.total": "Total Records",
     "attendancePreview.empty.title": "No attendance records",
-    "attendancePreview.empty.description": "No records match the selected filters. Try adjusting the date range or clearing filters.",
+    "attendancePreview.empty.description":
+      "No records match the selected filters. Try adjusting the date range or clearing filters.",
     "attendancePreview.error.title": "Couldn't load attendance records",
     "attendancePreview.source.employee": "Employee Check-in",
     "attendancePreview.source.hr": "HR Entry",
@@ -1318,7 +1439,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.attendance.reasonPlaceholder": "Why are you overriding this?",
     "hr.attendance.reasonRequired": "Please provide a reason for this override",
     "hr.attendance.auditedAction": "Audited Action",
-    "hr.attendance.auditedDesc": "All changes are logged. 'Override Reason' is required when changing Status or Times.",
+    "hr.attendance.auditedDesc":
+      "All changes are logged. 'Override Reason' is required when changing Status or Times.",
     "hr.attendance.overrideReasonLabel": "Override Reason",
     "hr.attendance.checkInTime": "Check In Time",
     "hr.attendance.checkOutTime": "Check Out Time",
@@ -1356,16 +1478,20 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "payroll.gosi": "GOSI",
     "payroll.absence": "Absence Deduction",
     "payroll.processingTitle": "Processing Payroll",
-    "payroll.processingDesc": "Calculating salaries and generating payslips for all active employees...",
+    "payroll.processingDesc":
+      "Calculating salaries and generating payslips for all active employees...",
     "payroll.runExists": "Payroll Run Exists",
-    "payroll.runExistsDesc": "A run for {month}/{year} already exists. Opening it...",
+    "payroll.runExistsDesc":
+      "A run for {month}/{year} already exists. Opening it...",
     "payroll.alreadyExists": "Already Exists",
-    "payroll.alreadyExistsDesc": "A payroll run for this period already exists.",
+    "payroll.alreadyExistsDesc":
+      "A payroll run for this period already exists.",
     "payroll.creationFail": "Creation Failed",
     "payroll.creationFailDesc": "Could not create payroll run.",
     "payroll.creationSuccess": "Payroll run created successfully",
     "payroll.runExistsDesc2": "Opening existing run for {month}/{year}...",
-    "payroll.alreadyExistsDesc2": "A payroll run for this period already exists, but could not be automatically located.",
+    "payroll.alreadyExistsDesc2":
+      "A payroll run for this period already exists, but could not be automatically located.",
     "payroll.unexpectedError": "An unexpected error occurred",
     "payroll.createTitle": "Create Payroll Run",
     "payroll.createDesc": "Select the period for the new payroll run",
@@ -1433,7 +1559,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "admin.invites.invitationHistory": "Invitation history",
     "admin.invites.pendingInvitations": "Pending invitations",
     "admin.invites.searchByEmailOrPhone": "Search by email or phone",
-    "admin.invites.emailAddedDuringSignup": "Email will be added during signup.",
+    "admin.invites.emailAddedDuringSignup":
+      "Email will be added during signup.",
     "admin.invites.legacyManagerRole": "Legacy manager role",
     "admin.invites.colEmail": "Email",
     "admin.invites.colRole": "Role",
@@ -1451,7 +1578,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "admin.invites.recipient": "Recipient",
     "admin.invites.phoneNumber": "Phone Number",
     "admin.invites.phoneRequired": "Phone number is required",
-    "admin.invites.phoneInvalid": "Enter a valid phone number, e.g. +201515091691",
+    "admin.invites.phoneInvalid":
+      "Enter a valid phone number, e.g. +201515091691",
     "admin.invites.delivery": "Delivery",
     "admin.invites.deliveryPending": "Pending",
     "admin.invites.deliveryQueued": "Queued",
@@ -1491,7 +1619,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "audit.action.payroll_exported_pdf": "Exported Payroll PDF",
     "audit.action.submit": "Submitted",
     "audit.action.invite_accepted": "Invite Accepted",
-    "audit.action.employee_expiry_notification_sent": "Expiry Notification Sent",
+    "audit.action.employee_expiry_notification_sent":
+      "Expiry Notification Sent",
     "audit.action.payslips_generated": "Payslips Generated",
     "audit.action.manual_leave_record_created": "Manual Leave Record Created",
     "audit.action.payroll_exported_csv": "Exported Payroll CSV",
@@ -1504,8 +1633,10 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "audit.action.announcement_created": "Announcement Created",
     "audit.action.announcement_updated": "Announcement Updated",
     "audit.action.announcement_deleted": "Announcement Deleted",
-    "audit.action.loan_request_recommended_manager_approve": "Loan Approved (Manager)",
-    "audit.action.loan_request_recommended_manager_reject": "Loan Rejected (Manager)",
+    "audit.action.loan_request_recommended_manager_approve":
+      "Loan Approved (Manager)",
+    "audit.action.loan_request_recommended_manager_reject":
+      "Loan Rejected (Manager)",
     "audit.action.loan_request_recommended_hr_approve": "Loan Approved (HR)",
     "audit.action.loan_request_recommended_hr_reject": "Loan Rejected (HR)",
     "audit.action.loan_request_referred_to_ceo": "Loan Referred to CEO",
@@ -1539,7 +1670,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "admin.settings.title": "System Settings",
     "admin.settings.companyName": "Company Name",
     "admin.settings.save": "Save Settings",
-    "admin.settings.subtitle": "Manage application configuration and security policies.",
+    "admin.settings.subtitle":
+      "Manage application configuration and security policies.",
     "admin.settings.loading": "Loading settings...",
     "admin.settings.loadFailedState": "Failed to load settings",
     "admin.settings.pleaseTryAgain": "Please try again later.",
@@ -1548,7 +1680,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "admin.settings.saveError": "Failed to save settings.",
     "admin.settings.secInvites": "Invitation Settings",
     "admin.settings.lblDefaultInviteExpiry": "Default Invite Expiry (Hours)",
-    "admin.settings.reqInviteExpiry": "Please enter default invite expiry limit",
+    "admin.settings.reqInviteExpiry":
+      "Please enter default invite expiry limit",
     "admin.settings.secSessions": "Session Management",
     "admin.settings.lblSessionTimeout": "Idle Session Timeout (Minutes)",
     "admin.settings.reqSessionTimeout": "Please enter session timeout",
@@ -1575,8 +1708,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "admin.userCreate.lblActive": "Active User",
     "admin.userCreate.successMsg": "User created successfully!",
     "admin.userCreate.failMsg": "Failed to create user.",
-    "admin.userCreate.failMsgTryAgain": "Failed to create user. Please try again.",
-
+    "admin.userCreate.failMsgTryAgain":
+      "Failed to create user. Please try again.",
 
     // Reference Data
     "reference.departments.title": "Departments",
@@ -1618,7 +1751,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "leaves.enterReason": "Enter reason for leave request",
     "leaves.medicalReportReq": "Medical Report (Required)",
     "leaves.documentOptional": "Document (Optional)",
-    "leaves.uploadMedicalReport": "Please upload a medical report for sick leave.",
+    "leaves.uploadMedicalReport":
+      "Please upload a medical report for sick leave.",
     // Leave statuses
     "leave.status.approved": "Approved",
     "leave.status.rejected": "Rejected",
@@ -1770,7 +1904,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.assets.printLabelsSelected": "Print labels for selected ({count})",
     "hr.assets.printLabelDialogTitle": "Print asset labels",
     "hr.assets.printLabelsCount": "Labels to print: {count}",
-    "hr.assets.printLabelsHint": "A PDF will download. Print it from your OS dialog to your label printer.",
+    "hr.assets.printLabelsHint":
+      "A PDF will download. Print it from your OS dialog to your label printer.",
     "hr.assets.printLabelsSuccess": "Labels PDF generated.",
     "hr.assets.printLabelsFailed": "Failed to generate labels PDF.",
     "hr.assets.paperSize": "Paper size",
@@ -1795,7 +1930,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.assets.noDamageReports": "No damage reports for this asset.",
     "hr.assets.noReturnRequests": "No return requests for this asset.",
     "hr.assets.lookup.title": "Asset lookup (scanner)",
-    "hr.assets.lookup.subtitle": "Scan a label or type an asset code to see its current state.",
+    "hr.assets.lookup.subtitle":
+      "Scan a label or type an asset code to see its current state.",
     "hr.assets.lookup.placeholder": "Scan or type asset code...",
     "hr.assets.lookup.ready": "Ready. Scan an asset label.",
     "hr.assets.lookup.loading": "Looking up...",
@@ -1807,7 +1943,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.assets.lookup.recentDamageReports": "Recent damage reports",
     "hr.assets.lookup.recentReturnRequests": "Recent return requests",
     "hr.assets.labelJobs.title": "Label print history",
-    "hr.assets.labelJobs.subtitle": "Re-download previously printed label PDFs.",
+    "hr.assets.labelJobs.subtitle":
+      "Re-download previously printed label PDFs.",
     "hr.assets.labelJobs.redownload": "Re-download",
     "hr.assets.labelJobs.assetCount": "Assets",
     "hr.assets.labelJobs.assetCodes": "Asset Codes",
@@ -1826,7 +1963,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.employees.loadFailed": "Failed to load employee data",
     "hr.employees.updateSuccess": "Employee updated successfully",
     "hr.employees.noIdError": "No employee ID provided",
-    "hr.employees.fixValidationErrors": "Please fix the validation errors in the form.",
+    "hr.employees.fixValidationErrors":
+      "Please fix the validation errors in the form.",
     "hr.employees.noData": "No data available",
     "hr.employees.notFound": "Employee not found",
     "hr.employees.backToList": "Back to List",
@@ -1840,9 +1978,11 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.employees.notLinked": "Not Linked",
     "hr.employees.documents": "Documents",
     "hr.employees.connectUserTitle": "Connect User Account",
-    "hr.employees.connectUserDesc": "Select a system user to link to this employee profile.",
+    "hr.employees.connectUserDesc":
+      "Select a system user to link to this employee profile.",
     "hr.employees.searchUserPlaceholder": "Search by name or email",
-    "hr.employees.unlinkUserConfirm": "Are you sure you want to unlink the user account from this employee?",
+    "hr.employees.unlinkUserConfirm":
+      "Are you sure you want to unlink the user account from this employee?",
     "hr.employees.linkSuccess": "User linked successfully",
     "hr.employees.linkFailed": "Failed to link user",
     "hr.employees.unlinkSuccess": "User unlinked successfully",
@@ -1859,7 +1999,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.employees.balances.adjustFailed": "Failed to adjust balance",
     "hr.employees.balances.leaveType": "Leave Type",
     "hr.employees.balances.totalQuota": "Total Quota (incl. Adjustments)",
-    "hr.employees.balances.availableAnnualYearDays": "Available Annual Year Days",
+    "hr.employees.balances.availableAnnualYearDays":
+      "Available Annual Year Days",
     "hr.employees.balances.used": "Used",
     "hr.employees.balances.remaining": "Remaining",
     "hr.employees.balances.title": "Leave Balances",
@@ -1868,27 +2009,32 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.employees.balances.selectLeaveType": "Select leave type",
     "hr.employees.balances.adjustmentDays": "Adjustment Days (+/-)",
     "hr.employees.balances.enterDays": "Enter days",
-    "hr.employees.balances.adjustmentHelp": "Enter positive number to add days, negative to deduct.",
+    "hr.employees.balances.adjustmentHelp":
+      "Enter positive number to add days, negative to deduct.",
     "hr.employees.balances.adjustmentPlaceholder": "e.g. 5 or -2",
     "hr.employees.balances.reason": "Reason",
     "hr.employees.balances.reasonRequired": "Reason is required",
-    "hr.employees.balances.reasonPlaceholder": "e.g. Compensation for weekend work",
+    "hr.employees.balances.reasonPlaceholder":
+      "e.g. Compensation for weekend work",
     "hr.employees.balances.submit": "Submit Adjustment",
 
     // Import
     "import.employees.title": "Import Employees",
-    "import.employees.subtitle": "Upload an Excel file to bulk-import employees.",
+    "import.employees.subtitle":
+      "Upload an Excel file to bulk-import employees.",
     "import.employees.upload": "Upload File",
     "import.employees.uploadTitle": "📤 Upload File",
     "import.employees.download": "Download Excel Template",
     "import.employees.start": "Start Import",
     "import.employees.selectFile": "Please select a file to upload",
-    "import.employees.successMsg": "Import Successful! {inserted} employees inserted.",
+    "import.employees.successMsg":
+      "Import Successful! {inserted} employees inserted.",
     "import.employees.excelOnly": "You can only upload Excel (.xlsx) files!",
     "import.employees.sizeLimit": "File must be smaller than 5MB!",
     "import.employees.viewHistory": "View Import History",
     "import.employees.alertTitle": "Running in All-or-Nothing Mode",
-    "import.employees.alertDesc": "If any row in the file fails validation, the entire import will be rejected. Please ensure your data is clean.",
+    "import.employees.alertDesc":
+      "If any row in the file fails validation, the entire import will be rejected. Please ensure your data is clean.",
     "import.employees.instructionsTitle": "📋 Instructions",
     "import.employees.requirements": "Requirements:",
     "import.employees.fileFormat": "File format: .xlsx only",
@@ -1896,13 +2042,16 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "import.employees.maxRows": "Maximum rows: 5,000",
     "import.employees.headersMatch": "Headers must match the template exactly",
     "import.employees.autoCreation": "Auto-Creation:",
-    "import.employees.autoCreateDesc": "Departments and Positions will be auto-created if they don't exist",
+    "import.employees.autoCreateDesc":
+      "Departments and Positions will be auto-created if they don't exist",
     "import.employees.autoCreatedLabel": "auto-created",
-    "import.employees.existDesc": "Task Groups and Sponsors must exist in the system beforehand",
+    "import.employees.existDesc":
+      "Task Groups and Sponsors must exist in the system beforehand",
     "import.employees.templateSuccess": "Template downloaded successfully",
     "import.employees.templateFail": "Failed to download template",
     "import.employees.dragDrop": "Click or drag Excel file to upload",
-    "import.employees.uploadHint": "Only .xlsx files are supported. File will be validated before import.",
+    "import.employees.uploadHint":
+      "Only .xlsx files are supported. File will be validated before import.",
     "import.employees.processing": "Processing Import...",
     "import.history.title": "Import History",
     "import.history.downloadFail": "Failed to download error file",
@@ -1921,13 +2070,17 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "import.result.successTitle": "Import Completed Successfully",
     "import.result.failedTitle": "Import Failed",
     "import.result.processingTitle": "Import Processing...",
-    "import.result.successDesc": "Successfully inserted {inserted} of {total} employees.",
-    "import.result.processingDesc": "Your file is being processed. You can refresh this page or check back later.",
-    "import.result.failedDesc": "One or more errors occurred. No data was saved.",
+    "import.result.successDesc":
+      "Successfully inserted {inserted} of {total} employees.",
+    "import.result.processingDesc":
+      "Your file is being processed. You can refresh this page or check back later.",
+    "import.result.failedDesc":
+      "One or more errors occurred. No data was saved.",
     "import.result.uploadNew": "Upload New File",
     "import.result.viewHistory": "View History",
     "import.result.alertTitle": "All-or-Nothing Import",
-    "import.result.alertDesc": "Because errors were found, the entire import was rejected to prevent partial data corruption.",
+    "import.result.alertDesc":
+      "Because errors were found, the entire import was rejected to prevent partial data corruption.",
     "import.result.downloadError": "Download Detailed Error Report (.xlsx)",
     "import.result.errorSummary": "Error Summary",
 
@@ -1982,12 +2135,14 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "profile.active": "Active",
     "profile.inactive": "Inactive",
     "profile.limitedProfile": "Limited Profile",
-    "profile.limitedProfileDesc": "You are viewing a basic system profile because you do not have a linked Employee record.",
+    "profile.limitedProfileDesc":
+      "You are viewing a basic system profile because you do not have a linked Employee record.",
     "profile.notFound": "Profile not found",
 
     // Manager Team & Requests
     "manager.requests.title": "Team Requests",
-    "manager.requests.subtitle": "Review and decide on everything your team has submitted.",
+    "manager.requests.subtitle":
+      "Review and decide on everything your team has submitted.",
     "manager.requests.awaitingCount": "{count} awaiting you",
     "manager.requests.leaveTab": "Leave Requests",
     "manager.requests.attendanceTab": "Attendance",
@@ -2002,38 +2157,47 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "manager.requests.rejectTitle": "Reject leave request",
     "manager.requests.rejectAssetTitle": "Reject asset return",
     "manager.requests.rejectConfirm": "Reject request",
-    "manager.requests.searchPlaceholder": "Search by employee, leave type or reason",
-    "manager.requests.searchAssetsPlaceholder": "Search by employee, asset code or name",
-    "manager.requests.expandHint": "Expand a row to see the full approval trail.",
+    "manager.requests.searchPlaceholder":
+      "Search by employee, leave type or reason",
+    "manager.requests.searchAssetsPlaceholder":
+      "Search by employee, asset code or name",
+    "manager.requests.expandHint":
+      "Expand a row to see the full approval trail.",
     "manager.requests.noMatches": "No requests match your search",
-    "manager.requests.noMatchesDesc": "Try a different employee name or keyword.",
+    "manager.requests.noMatchesDesc":
+      "Try a different employee name or keyword.",
     "manager.requests.waiting": "Waiting",
     "manager.requests.history": "History",
     "manager.requests.unknown": "Unknown",
     "manager.team.title": "My Team",
     "manager.team.failedLoad": "Failed to load team members",
-    "manager.team.searchPlaceholder": "Search by name, ID, department or position",
+    "manager.team.searchPlaceholder":
+      "Search by name, ID, department or position",
     "manager.team.departmentFilter": "All departments",
     "manager.team.viewProfile": "View profile",
     "manager.team.noMatches": "No team members match your filters",
-    "manager.team.noMatchesDesc": "Try a different name, employee ID, department or position.",
+    "manager.team.noMatchesDesc":
+      "Try a different name, employee ID, department or position.",
     "manager.team.profile.title": "Team Member Profile",
     "manager.team.profile.back": "Back to My Team",
     "manager.team.profile.loadFailed": "Failed to load employee profile",
     "manager.team.profile.notFound": "Team Member Not Found",
-    "manager.team.profile.notFoundDesc": "This employee is not in your team or does not exist.",
+    "manager.team.profile.notFoundDesc":
+      "This employee is not in your team or does not exist.",
     "manager.team.profile.readOnlyNote":
-        "This profile is read-only. Employee records are maintained by HR.",
+      "This profile is read-only. Employee records are maintained by HR.",
     "manager.team.profile.identitySection": "Employee",
     "manager.team.profile.detailsSection": "Details",
     "manager.team.profile.openRequests": "Open requests",
-    "manager.team.profile.noOpenRequests": "This employee has nothing waiting for your approval.",
+    "manager.team.profile.noOpenRequests":
+      "This employee has nothing waiting for your approval.",
 
     // Manager request detail screens
     "manager.leaveDetails.employeeSection": "Employee",
     "manager.leaveDetails.requestSection": "Request",
     "manager.leaveDetails.decisionSection": "Your decision",
-    "manager.leaveDetails.decisionClosed": "This request is no longer waiting for your decision.",
+    "manager.leaveDetails.decisionClosed":
+      "This request is no longer waiting for your decision.",
     "manager.leaveDetails.approvalTrail": "Approval trail",
 
     // Manager capability (team access derived from assigned direct reports)
@@ -2043,18 +2207,19 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "manager.access.checking": "Checking manager access...",
     "manager.access.forbiddenTitle": "Manager access not available",
     "manager.access.forbiddenDesc":
-        "You do not have any employees reporting to you, so team management pages are unavailable. Ask HR to assign you as a direct manager if this is unexpected.",
+      "You do not have any employees reporting to you, so team management pages are unavailable. Ask HR to assign you as a direct manager if this is unexpected.",
     "manager.empty.noDirectReportsTitle": "No employees assigned to you yet",
     "manager.empty.noDirectReportsDesc":
-        "Nobody is currently assigned to you as their direct manager. Once HR assigns direct reports, they appear here.",
+      "Nobody is currently assigned to you as their direct manager. Once HR assigns direct reports, they appear here.",
     "manager.empty.noPendingRequestsTitle": "No pending team requests",
-    "manager.empty.noPendingRequestsDesc": "Your team has no requests waiting for your approval right now.",
+    "manager.empty.noPendingRequestsDesc":
+      "Your team has no requests waiting for your approval right now.",
     "manager.empty.noAssetReturnsTitle": "No asset returns to review",
     "manager.empty.noAssetReturnsDesc":
-        "Nobody on your team has asked to return equipment right now.",
+      "Nobody on your team has asked to return equipment right now.",
     "manager.empty.noRequestPermissionTitle": "You cannot review this request",
     "manager.empty.noRequestPermissionDesc":
-        "This request belongs to an employee outside your team, or it has already moved to another approval stage.",
+      "This request belongs to an employee outside your team, or it has already moved to another approval stage.",
 
     // Announcements Widget
     "announcements.widget.title": "Announcements",
@@ -2074,10 +2239,12 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "ceo.leaveApprovals.noRequests": "No pending leave requests found.",
     "ceo.leaveApprovals.rejectTitle": "Reject Leave Request",
     "ceo.leaveApprovals.rejectConfirm": "Reject Request",
-    "ceo.leaveApprovals.rejectWarning": "This action is irreversible. Please provide a reason.",
+    "ceo.leaveApprovals.rejectWarning":
+      "This action is irreversible. Please provide a reason.",
     "ceo.leaveApprovals.rejectComment": "Reason for rejection...",
     "ceo.team.title": "CEO Team",
-    "ceo.team.subtitle": "Managers, HR Managers, and employees reporting to CEO.",
+    "ceo.team.subtitle":
+      "Managers, HR Managers, and employees reporting to CEO.",
     "ceo.team.failedLoad": "Failed to load leadership team",
     "ceo.team.roleEmail": "Role Email",
     "ceo.team.searchPlaceholder": "Search by name, ID, department...",
@@ -2127,40 +2294,54 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "payroll.runDetails.employeePayslipsReview": "Employee Payslips Review",
     "payroll.runDetails.colAllowances": "Allowances",
     "payroll.runDetails.colDeductions": "Deductions",
-    "payroll.runDetails.subtitle": "Review all payroll items and finalize this payroll run.",
+    "payroll.runDetails.subtitle":
+      "Review all payroll items and finalize this payroll run.",
     "payroll.runDetails.backToDashboard": "Back to Payroll",
     "payroll.runDetails.finalizeBtn": "Finalize Run",
     "payroll.runDetails.finalizeConfirmTitle": "Finalize Payroll Run",
-    "payroll.runDetails.finalizeConfirmText": "Are you sure you want to finalize this payroll run?",
-    "payroll.runDetails.finalizeConfirmWarningTitle": "This action is irreversible",
-    "payroll.runDetails.finalizeConfirmWarningDesc": "Once finalized, payslips will be locked and no further edits can be made.",
+    "payroll.runDetails.finalizeConfirmText":
+      "Are you sure you want to finalize this payroll run?",
+    "payroll.runDetails.finalizeConfirmWarningTitle":
+      "This action is irreversible",
+    "payroll.runDetails.finalizeConfirmWarningDesc":
+      "Once finalized, payslips will be locked and no further edits can be made.",
     "payroll.runDetails.finalizeConfirmOkBtn": "Yes, Finalize",
     "payroll.runDetails.finalizeFailed": "Failed to finalize payroll run",
     "payroll.runDetails.finalizeSuccess": "Payroll run finalized successfully",
-    "payroll.runDetails.failedLoadDetails": "Failed to load payroll run details",
+    "payroll.runDetails.failedLoadDetails":
+      "Failed to load payroll run details",
     "payroll.runDetails.failedLoadItems": "Failed to load payroll run items",
-    "payroll.runDetails.fetchError": "An error occurred while loading payroll data",
+    "payroll.runDetails.fetchError":
+      "An error occurred while loading payroll data",
     "payroll.runDetails.loadingDetails": "Loading payroll run...",
     "payroll.runDetails.notFound": "Payroll run not found",
     "payroll.history.colRun": "Payroll Run",
     "payroll.runDetails.payslipsTitle": "Payslips",
-    "payroll.runDetails.payslipRequiresFinalized": "Payslip generation requires the run to be finalized first.",
+    "payroll.runDetails.payslipRequiresFinalized":
+      "Payslip generation requires the run to be finalized first.",
     "payroll.runDetails.btnGeneratePayslips": "Generate Payslips",
-    "payroll.runDetails.generatePayslipsDesc": "Generate or regenerate all payslips for this payroll run. Safe to run multiple times.",
+    "payroll.runDetails.generatePayslipsDesc":
+      "Generate or regenerate all payslips for this payroll run. Safe to run multiple times.",
     "payroll.runDetails.payslipsGeneratedTitle": "Payslips Ready",
     "payroll.runDetails.payslipsReady": "Payslips updated successfully",
     "payroll.runDetails.generationFailed": "Payslip generation failed",
-    "payroll.runDetails.couldNotTriggerGeneration": "Could not trigger payslip generation. Please try again.",
-    "payroll.runDetails.reportsAvailability": "Reports are available once the payroll run is finalized.",
-    "payroll.runDetails.reportsDesc": "Download payroll reports in various formats for your records and accounting needs.",
+    "payroll.runDetails.couldNotTriggerGeneration":
+      "Could not trigger payslip generation. Please try again.",
+    "payroll.runDetails.reportsAvailability":
+      "Reports are available once the payroll run is finalized.",
+    "payroll.runDetails.reportsDesc":
+      "Download payroll reports in various formats for your records and accounting needs.",
     "payroll.runDetails.csvReportName": "CSV Report",
-    "payroll.runDetails.csvReportDesc": "Full payroll data in spreadsheet format, compatible with all accounting tools.",
+    "payroll.runDetails.csvReportDesc":
+      "Full payroll data in spreadsheet format, compatible with all accounting tools.",
     "payroll.runDetails.exportCsv": "Export CSV",
     "payroll.runDetails.excelReportName": "Excel Report",
-    "payroll.runDetails.excelReportDesc": "Formatted Excel workbook with summary and itemized payroll data.",
+    "payroll.runDetails.excelReportDesc":
+      "Formatted Excel workbook with summary and itemized payroll data.",
     "payroll.runDetails.exportExcel": "Export Excel",
     "payroll.runDetails.pdfReportName": "PDF Report",
-    "payroll.runDetails.pdfReportDesc": "Printable PDF summary of the payroll run, suitable for official records.",
+    "payroll.runDetails.pdfReportDesc":
+      "Printable PDF summary of the payroll run, suitable for official records.",
     "payroll.runDetails.exportPdf": "Export PDF",
     "payroll.runDetails.exportReady": "Report downloaded successfully.",
     "payroll.runDetails.exportFailed": "Failed to download report.",
@@ -2177,27 +2358,45 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "loans.myLoans": "My Loans",
     "loans.noLoans": "No loan requests",
     "loans.request.failedLoad": "Request failed",
-    "loans.request.error.server": "We could not submit your loan request due to a temporary server issue. Please try again in a few minutes. If the issue continues, contact HR support.",
-    "loans.request.error.network": "We could not reach the server. Please check your internet connection and try again.",
-    "loans.request.error.timeout": "The server is taking too long to respond. Please try again.",
-    "loans.request.error.validation": "Some information is invalid. Please review your entries and submit again.",
-    "loans.request.error.unauthorized": "Your session may have expired. Please sign in again and retry.",
-    "loans.request.error.forbidden": "You do not have permission to submit a loan request from this account.",
-    "loans.request.error.generic": "We could not submit your loan request. Please try again.",
-    "loans.request.error.profileNotFound": "Your employee profile was not found. Please contact HR.",
-    "loans.request.error.inactiveEmployee": "Only active employees can request loans.",
-    "loans.request.error.basicSalaryMissing": "Basic salary is not configured for your profile. Please contact HR.",
-    "loans.request.error.openLoanWindow": "Open loan requests are allowed only in the last 10 days of the month.",
-    "loans.request.error.openExceedsLimit": "Open loan amount cannot exceed 25% of basic salary ({limit}).",
-    "loans.request.error.installmentMonthsOnlyForInstallment": "Installment months can only be used with installment loans.",
-    "loans.request.error.installmentMonthsRequired": "Installment months are required for installment loans.",
-    "loans.request.error.installmentNeedsJoinDate": "Installment loan requires a configured joining date.",
-    "loans.request.error.installmentMinService": "Installment loan is allowed only after 6 months of service.",
-    "loans.request.error.exceedsBasicSalary": "Loan amount cannot exceed your basic salary.",
+    "loans.request.error.server":
+      "We could not submit your loan request due to a temporary server issue. Please try again in a few minutes. If the issue continues, contact HR support.",
+    "loans.request.error.network":
+      "We could not reach the server. Please check your internet connection and try again.",
+    "loans.request.error.timeout":
+      "The server is taking too long to respond. Please try again.",
+    "loans.request.error.validation":
+      "Some information is invalid. Please review your entries and submit again.",
+    "loans.request.error.unauthorized":
+      "Your session may have expired. Please sign in again and retry.",
+    "loans.request.error.forbidden":
+      "You do not have permission to submit a loan request from this account.",
+    "loans.request.error.generic":
+      "We could not submit your loan request. Please try again.",
+    "loans.request.error.profileNotFound":
+      "Your employee profile was not found. Please contact HR.",
+    "loans.request.error.inactiveEmployee":
+      "Only active employees can request loans.",
+    "loans.request.error.basicSalaryMissing":
+      "Basic salary is not configured for your profile. Please contact HR.",
+    "loans.request.error.openLoanWindow":
+      "Open loan requests are allowed only in the last 10 days of the month.",
+    "loans.request.error.openExceedsLimit":
+      "Open loan amount cannot exceed 25% of basic salary ({limit}).",
+    "loans.request.error.installmentMonthsOnlyForInstallment":
+      "Installment months can only be used with installment loans.",
+    "loans.request.error.installmentMonthsRequired":
+      "Installment months are required for installment loans.",
+    "loans.request.error.installmentNeedsJoinDate":
+      "Installment loan requires a configured joining date.",
+    "loans.request.error.installmentMinService":
+      "Installment loan is allowed only after 6 months of service.",
+    "loans.request.error.exceedsBasicSalary":
+      "Loan amount cannot exceed your basic salary.",
     "loans.request.submittedSuccess": "Loan request submitted",
     "loans.details.back": "Back",
     "loans.request.title": "Request Loan",
-    "loans.request.subtitle": "Submit a loan request up to your basic salary limit.",
+    "loans.request.subtitle":
+      "Submit a loan request up to your basic salary limit.",
     "loans.request.limitLabel": "Basic Salary Limit:",
     "loans.request.openLimitLabel": "Open Loan Limit (25% of basic salary):",
     "loans.request.formLoanType": "Loan Type",
@@ -2211,7 +2410,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "loans.request.formAmountPlaceholder": "Enter amount",
     "loans.request.formInstallmentMonths": "Installment Months",
     "loans.request.formInstallmentMonthsReq": "Please enter installment months",
-    "loans.request.formInstallmentMonthsRange": "Installment months must be between 1 and 10",
+    "loans.request.formInstallmentMonthsRange":
+      "Installment months must be between 1 and 10",
     "loans.request.formInstallmentMonthsPlaceholder": "Enter months (max 10)",
     "loans.request.monthlyDeductionLabel": "Monthly payroll deduction:",
     "loans.request.formReason": "Reason",
@@ -2219,7 +2419,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "loans.request.formSubmit": "Submit Request",
     "loans.myRequests.failedLoad": "Failed to load requests",
     "loans.myRequests.cancelTitle": "Cancel Loan Request",
-    "loans.myRequests.cancelConfirm": "Are you sure you want to cancel this loan request?",
+    "loans.myRequests.cancelConfirm":
+      "Are you sure you want to cancel this loan request?",
     "loans.myRequests.cancelBtn": "Yes, Cancel",
     "loans.myRequests.cancelFailed": "Cancel failed",
     "loans.myRequests.cancelSuccess": "Request cancelled",
@@ -2230,7 +2431,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "loans.list.viewDetails": "View Details",
     "loans.list.cancelReq": "Cancel Request",
     "loans.myRequests.title": "My Loan Requests",
-    "loans.myRequests.subtitle": "Track your submitted loan requests and approval status.",
+    "loans.myRequests.subtitle":
+      "Track your submitted loan requests and approval status.",
     "loans.myRequests.newRequest": "New Loan Request",
     "loans.details.titlePrefix": "Loan Request Details",
     "loans.details.subtitle": "View your request status and approval history.",
@@ -2240,7 +2442,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "loans.details.employeeSection": "Employee",
     "loans.details.requestSection": "Request",
     "loans.details.decisionSection": "Your decision",
-    "loans.details.decisionClosed": "This request is no longer waiting for your decision.",
+    "loans.details.decisionClosed":
+      "This request is no longer waiting for your decision.",
     "loans.details.approvalTrail": "Approval trail",
     "loans.details.targetDeductionPeriod": "Target Deduction Period",
     "loans.details.approvedAmount": "Approved Amount",
@@ -2252,19 +2455,23 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "loans.approvalMap.cfoReview": "CFO Review",
     "loans.approvalMap.ceoReview": "CEO Review",
     "loans.approvalMap.disbursement": "Disbursement",
-    "loans.approvalMap.requestSent": "Your loan request was submitted successfully.",
+    "loans.approvalMap.requestSent":
+      "Your loan request was submitted successfully.",
     "loans.approvalMap.forwarded": "Reviewed and forwarded to the next stage.",
     "loans.approvalMap.completed": "Completed",
     "loans.approvalMap.current": "In Progress",
     "loans.approvalMap.rejected": "Rejected",
     "loans.approvalMap.upcoming": "Upcoming",
     "loans.approvalMap.skipped": "Skipped",
-    "loans.approvalMap.notRequired": "This stage was not required for this request.",
+    "loans.approvalMap.notRequired":
+      "This stage was not required for this request.",
     "loans.approvalMap.deducted": "Deducted from payroll successfully.",
     "loans.inbox.allStatuses": "All statuses",
     "loans.inbox.emptyTitle": "No loan requests to show",
-    "loans.inbox.emptyDescription": "Requests appear here as soon as they reach your stage.",
-    "loans.inbox.emptyFilteredDescription": "No request matches the selected status.",
+    "loans.inbox.emptyDescription":
+      "Requests appear here as soon as they reach your stage.",
+    "loans.inbox.emptyFilteredDescription":
+      "No request matches the selected status.",
     "loans.inbox.approveFailed": "Approve failed",
     "loans.inbox.requestApproved": "Request approved",
     "loans.inbox.commentRequired": "Comment is required for reject",
@@ -2279,31 +2486,39 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "loans.inbox.btnRecommendReject": "Recommend Reject",
     "loans.inbox.btnReferToCEO": "Refer To CEO",
     "loans.inbox.btnMarkDisbursed": "Mark Disbursed",
-    "loans.inbox.managerRecommendedApprove": "Manager recommendation saved (approve).",
-    "loans.inbox.managerRecommendedReject": "Manager recommendation saved (reject).",
+    "loans.inbox.managerRecommendedApprove":
+      "Manager recommendation saved (approve).",
+    "loans.inbox.managerRecommendedReject":
+      "Manager recommendation saved (reject).",
     "loans.inbox.hrRecommendedApprove": "HR recommendation saved (approve).",
     "loans.inbox.hrRecommendedReject": "HR recommendation saved (reject).",
     "loans.inbox.referredToCEOSuccess": "Request referred to CEO.",
     "loans.inbox.referFailed": "Failed to refer request to CEO.",
     "loans.inbox.disbursementTitle": "Disbursement Queue",
-    "loans.inbox.disbursementSubtitle": "Process approved requests and mark payment disbursed.",
+    "loans.inbox.disbursementSubtitle":
+      "Process approved requests and mark payment disbursed.",
     "loans.inbox.disbursementReviewTitle": "Disbursement Review",
     "loans.inbox.disbursementSuccess": "Disbursement marked successfully.",
     "loans.inbox.financeApproveTitle": "Finance Loan Inbox",
-    "loans.inbox.financeApproveSubtitle": "Review requests pending HR recommendation",
+    "loans.inbox.financeApproveSubtitle":
+      "Review requests pending HR recommendation",
     "loans.inbox.managerRequestsTitle": "Loan Requests",
-    "loans.inbox.managerRequestsSubtitle": "Review and track loan request history from your direct reports",
+    "loans.inbox.managerRequestsSubtitle":
+      "Review and track loan request history from your direct reports",
     "loans.inbox.managerReviewTitle": "Loan Request Review",
     "loans.inbox.financeReviewTitle": "Finance Loan Review",
     "loans.inbox.ceoRequestsTitle": "CEO Loan Inbox",
-    "loans.inbox.ceoRequestsSubtitle": "Final approval queue for CFO-originated loan requests",
+    "loans.inbox.ceoRequestsSubtitle":
+      "Final approval queue for CFO-originated loan requests",
     "loans.inbox.ceoDecisionTitle": "CEO Loan Decision",
     "loans.inbox.cfoRequestsTitle": "CFO Loan Inbox",
     "loans.inbox.cfoRequestsSubtitle": "Final approval queue for loan requests",
     "loans.inbox.cfoDecisionTitle": "CFO Loan Decision",
     "loans.history.stage.submitted": "Submitted",
-    "loans.history.stage.manager_recommended_approve": "Manager Recommended Approve",
-    "loans.history.stage.manager_recommended_reject": "Manager Recommended Reject",
+    "loans.history.stage.manager_recommended_approve":
+      "Manager Recommended Approve",
+    "loans.history.stage.manager_recommended_reject":
+      "Manager Recommended Reject",
     "loans.history.stage.hr_recommended_approve": "HR Recommended Approve",
     "loans.history.stage.hr_recommended_reject": "HR Recommended Reject",
     "loans.history.stage.cfo": "CFO Decision",
@@ -2320,14 +2535,16 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "common.noEndDate": "No end date",
     "common.notAvailable": "Not provided",
     "delegation.title": "Alternative Employee Option",
-    "delegation.subtitle": "Reassign workflow responsibilities during absence or temporary coverage.",
+    "delegation.subtitle":
+      "Reassign workflow responsibilities during absence or temporary coverage.",
     "delegation.create": "New Alternative Employee",
     "delegation.createSuccess": "Alternative employee option created.",
     "delegation.loading": "Loading alternative employee options",
     "delegation.loadFailed": "Alternative employee options unavailable",
     "delegation.tryAgain": "Please try again.",
     "delegation.summaryTitle": "Active approval handovers",
-    "delegation.summaryBody": "Options here are applied by the shared workflow engine to manager and role-based approval assignments.",
+    "delegation.summaryBody":
+      "Options here are applied by the shared workflow engine to manager and role-based approval assignments.",
     "delegation.empty": "No alternative employee options yet.",
     "delegation.deleteConfirm": "Remove this alternative employee option?",
     "delegation.fromRequired": "Choose the original approver.",
@@ -2335,7 +2552,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "delegation.startRequired": "Choose a start date.",
     "obligations.title": "Request Obligations",
     "obligations.loadFailed": "Unable to load obligations.",
-    "obligations.blockingSummary": "{count} blocking item(s) must be resolved or waived.",
+    "obligations.blockingSummary":
+      "{count} blocking item(s) must be resolved or waived.",
     "obligations.clearSummary": "No blocking obligations remain.",
     "obligations.empty": "No obligations for this request.",
     "obligations.blocking": "Blocking",
@@ -2343,12 +2561,14 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "obligations.assetReturnNote": "Required for Business Trip approval.",
     "obligations.returnRequested": "Asset return request submitted.",
     "obligations.actionFailed": "Action failed.",
-    "obligations.delegateApprovals": "Assign alternative employee for pending approvals",
+    "obligations.delegateApprovals":
+      "Assign alternative employee for pending approvals",
     "obligations.chooseDelegate": "Choose an alternative employee.",
     "obligations.delegateSaved": "Alternative employee saved.",
     "obligations.saveDelegate": "Save alternative employee",
     "obligations.waiverReason": "Waiver reason",
-    "obligations.ceoWaiverRequired": "{count} blocking obligation(s) remain. Enter a CEO waiver reason to approve.",
+    "obligations.ceoWaiverRequired":
+      "{count} blocking obligation(s) remain. Enter a CEO waiver reason to approve.",
     "obligations.waiverRequired": "Waiver reason is required.",
     "hr.assets.mustReturnBeforeTravel": "Must return before Business Trip",
 
@@ -2379,23 +2599,34 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "layout.requests": "Requests",
     "attendanceCorrections.page.tabLabel": "Attendance Corrections",
     "attendanceCorrections.page.employeeTitle": "Attendance Corrections",
-    "attendanceCorrections.page.employeeSubtitle": "Submit corrections for missing or incorrect attendance entries.",
+    "attendanceCorrections.page.employeeSubtitle":
+      "Submit corrections for missing or incorrect attendance entries.",
     "attendanceCorrections.page.managerTitle": "Attendance Corrections",
-    "attendanceCorrections.page.managerSubtitle": "Review attendance correction requests submitted by your team.",
+    "attendanceCorrections.page.managerSubtitle":
+      "Review attendance correction requests submitted by your team.",
     "attendanceCorrections.page.hrTitle": "Attendance Correction Requests",
-    "attendanceCorrections.page.hrSubtitle": "Review and apply attendance corrections approved by managers.",
-    "attendanceCorrections.maintenance.title": "Attendance is under maintenance",
-    "attendanceCorrections.maintenance.description": "Attendance records are temporarily under maintenance. You can still submit correction requests for missing or incorrect records.",
-    "attendanceCorrections.maintenance.managerDescription": "The attendance module is under maintenance. You can still approve correction requests here so the records are updated once it is back.",
-    "attendanceCorrections.maintenance.hrDescription": "The attendance module is under maintenance. HR approvals here will still apply the change to the attendance record once it is back.",
+    "attendanceCorrections.page.hrSubtitle":
+      "Review and apply attendance corrections approved by managers.",
+    "attendanceCorrections.maintenance.title":
+      "Attendance is under maintenance",
+    "attendanceCorrections.maintenance.description":
+      "Attendance records are temporarily under maintenance. You can still submit correction requests for missing or incorrect records.",
+    "attendanceCorrections.maintenance.managerDescription":
+      "The attendance module is under maintenance. You can still approve correction requests here so the records are updated once it is back.",
+    "attendanceCorrections.maintenance.hrDescription":
+      "The attendance module is under maintenance. HR approvals here will still apply the change to the attendance record once it is back.",
     "attendanceCorrections.actions.create": "New correction request",
     "attendanceCorrections.actions.submitTitle": "Submit correction request",
-    "attendanceCorrections.actions.submitConfirm": "This will send the request for approval. Continue?",
+    "attendanceCorrections.actions.submitConfirm":
+      "This will send the request for approval. Continue?",
     "attendanceCorrections.actions.cancelTitle": "Cancel correction request",
-    "attendanceCorrections.actions.cancelConfirm": "Are you sure you want to cancel this request?",
+    "attendanceCorrections.actions.cancelConfirm":
+      "Are you sure you want to cancel this request?",
     "attendanceCorrections.actions.rejectTitle": "Reject correction request",
-    "attendanceCorrections.actions.rejectPrompt": "Provide a reason for the rejection. The employee will see this note.",
-    "attendanceCorrections.actions.rejectPlaceholder": "e.g. The requested time does not match our records.",
+    "attendanceCorrections.actions.rejectPrompt":
+      "Provide a reason for the rejection. The employee will see this note.",
+    "attendanceCorrections.actions.rejectPlaceholder":
+      "e.g. The requested time does not match our records.",
     "attendanceCorrections.form.title": "New correction request",
     "attendanceCorrections.form.date": "Date",
     "attendanceCorrections.form.dateRequired": "Date is required",
@@ -2404,7 +2635,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "attendanceCorrections.form.requestedStatus": "Requested status",
     "attendanceCorrections.form.requestedStatusPlaceholder": "Optional",
     "attendanceCorrections.form.reason": "Reason",
-    "attendanceCorrections.form.reasonPlaceholder": "Explain why this correction is needed (missing check-in, wrong time, etc.).",
+    "attendanceCorrections.form.reasonPlaceholder":
+      "Explain why this correction is needed (missing check-in, wrong time, etc.).",
     "attendanceCorrections.form.submit": "Submit request",
     "attendanceCorrections.fields.currentCheckIn": "Current check-in",
     "attendanceCorrections.fields.currentCheckOut": "Current check-out",
@@ -2413,7 +2645,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "attendanceCorrections.fields.requestedCheckOut": "Requested check-out",
     "attendanceCorrections.fields.requestedStatus": "Requested status",
     "attendanceCorrections.fields.attendanceRecord": "Linked record",
-    "attendanceCorrections.fields.missingRecord": "No record exists for this date.",
+    "attendanceCorrections.fields.missingRecord":
+      "No record exists for this date.",
     "attendanceCorrections.fields.managerNote": "Manager note",
     "attendanceCorrections.fields.hrNote": "HR note",
     "attendanceCorrections.fields.requested": "Requested",
@@ -2436,20 +2669,27 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "attendanceCorrections.statusValue.REJECTED": "Rejected",
     "attendanceCorrections.statusValue.PENDING": "Pending",
     "attendanceCorrections.empty.title": "No correction requests yet",
-    "attendanceCorrections.empty.employeeDescription": "Submit a correction request if your attendance for a day is missing or wrong.",
-    "attendanceCorrections.empty.approverDescription": "No attendance correction requests match the current filter.",
-    "attendanceCorrections.errors.atLeastOne": "Provide at least one of: check-in, check-out, or status.",
-    "attendanceCorrections.errors.checkOutBeforeCheckIn": "Requested check-out cannot be before requested check-in.",
+    "attendanceCorrections.empty.employeeDescription":
+      "Submit a correction request if your attendance for a day is missing or wrong.",
+    "attendanceCorrections.empty.approverDescription":
+      "No attendance correction requests match the current filter.",
+    "attendanceCorrections.errors.atLeastOne":
+      "Provide at least one of: check-in, check-out, or status.",
+    "attendanceCorrections.errors.checkOutBeforeCheckIn":
+      "Requested check-out cannot be before requested check-in.",
     "attendanceCorrections.errors.reasonRequired": "Reason is required",
-    "attendanceCorrections.errors.rejectNoteRequired": "Rejection note is required",
-    "attendanceCorrections.errors.createFailed": "Failed to create correction request",
+    "attendanceCorrections.errors.rejectNoteRequired":
+      "Rejection note is required",
+    "attendanceCorrections.errors.createFailed":
+      "Failed to create correction request",
     "attendanceCorrections.success.created": "Correction request created.",
     "attendanceCorrections.success.submitted": "Correction request submitted.",
     "attendanceCorrections.success.cancelled": "Correction request cancelled.",
     "attendanceCorrections.success.approved": "Correction approved.",
     "attendanceCorrections.success.rejected": "Correction request rejected.",
     "attendanceCorrections.success.applied": "Correction applied.",
-    "attendanceCorrections.notice.savedAsDraft": "Saved as draft. You can submit it later.",
+    "attendanceCorrections.notice.savedAsDraft":
+      "Saved as draft. You can submit it later.",
 
     // Notifications
     "notifications.title": "Notifications",
@@ -2477,12 +2717,16 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "notifications.preferences.open": "Open notification preferences",
     "notifications.preferences.title": "Notification preferences",
     "notifications.preferences.explanationTitle": "How you're notified",
-    "notifications.preferences.explanation": "WhatsApp is tried first. Email is used only if WhatsApp fails or is unavailable.",
+    "notifications.preferences.explanation":
+      "WhatsApp is tried first. Email is used only if WhatsApp fails or is unavailable.",
     "notifications.preferences.whatsappLabel": "WhatsApp notifications",
-    "notifications.preferences.whatsappHelp": "Receive notifications on WhatsApp when a valid number is on file.",
+    "notifications.preferences.whatsappHelp":
+      "Receive notifications on WhatsApp when a valid number is on file.",
     "notifications.preferences.emailLabel": "Email fallback",
-    "notifications.preferences.emailHelp": "Send an email only when WhatsApp fails or is unavailable.",
-    "notifications.preferences.note": "Your organization's settings may still apply, and some critical messages are always sent.",
+    "notifications.preferences.emailHelp":
+      "Send an email only when WhatsApp fails or is unavailable.",
+    "notifications.preferences.note":
+      "Your organization's settings may still apply, and some critical messages are always sent.",
     "notifications.preferences.save": "Save preferences",
     "notifications.preferences.saving": "Saving…",
     "notifications.preferences.saved": "Preferences saved.",
@@ -2524,6 +2768,403 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "notifications.category.employee": "Employee",
     "notifications.category.system": "System",
     "notifications.category.general": "General",
+
+    // Job Offers (HR)
+    "layout.jobOffers": "Job Offers",
+    "jobOffers.title": "Job Offers",
+    "jobOffers.subtitle": "Manage candidate offers and onboarding invitations.",
+    "jobOffers.newOffer": "New Offer",
+    "jobOffers.searchPlaceholder":
+      "Search by candidate, email, phone or reference number",
+    "jobOffers.filterStatus": "Status",
+    "jobOffers.countTag": "{count} offers",
+    "jobOffers.loadFailed": "Could not load job offers.",
+    "jobOffers.status.all": "All",
+    "jobOffers.status.draft": "Draft",
+    "jobOffers.status.sent": "Sent",
+    "jobOffers.status.accepted": "Accepted",
+    "jobOffers.status.rejected": "Rejected",
+    "jobOffers.status.expired": "Expired",
+    "jobOffers.status.cancelled": "Cancelled",
+    "jobOffers.col.candidate": "Candidate",
+    "jobOffers.col.position": "Position",
+    "jobOffers.col.departmentLocation": "Department / Location",
+    "jobOffers.col.package": "Total Package",
+    "jobOffers.col.status": "Status",
+    "jobOffers.col.offerDate": "Offer Date",
+    "jobOffers.col.expiryDate": "Expiry Date",
+    "jobOffers.col.actions": "Actions",
+    "jobOffers.action.view": "View",
+    "jobOffers.action.edit": "Edit",
+    "jobOffers.action.send": "Send",
+    "jobOffers.action.sendOffer": "Send Offer",
+    "jobOffers.action.pdf": "PDF",
+    "jobOffers.action.downloadPdf": "Download PDF",
+    "jobOffers.action.cancel": "Cancel",
+    "jobOffers.action.cancelOffer": "Cancel Offer",
+    "jobOffers.action.refresh": "Refresh",
+    "jobOffers.action.backToList": "Back to Job Offers",
+    "jobOffers.empty.title": "No job offers yet",
+    "jobOffers.empty.description":
+      "Create the first offer to start onboarding a candidate.",
+    "jobOffers.empty.filteredTitle": "No offers match these filters",
+    "jobOffers.empty.filteredDescription":
+      "Try a different status or clear the search.",
+    "jobOffers.form.createTitle": "New Job Offer",
+    "jobOffers.form.createSubtitle":
+      "Draft an offer, then send it to the candidate when it is ready.",
+    "jobOffers.form.editTitle": "Edit Job Offer",
+    "jobOffers.form.editSubtitle":
+      "Update the draft before it is sent to the candidate.",
+    "jobOffers.form.section.candidate": "Candidate & Contact",
+    "jobOffers.form.section.job": "Job Details",
+    "jobOffers.form.section.compensation": "Compensation",
+    "jobOffers.form.section.benefits": "Benefits & Contract",
+    "jobOffers.form.section.metadata": "Offer Details",
+    "jobOffers.form.automationHint":
+      "The reference number and HR signer are assigned automatically when the offer is saved.",
+    "jobOffers.form.saveDraft": "Save Draft",
+    "jobOffers.form.saveChanges": "Save Changes",
+    "jobOffers.form.discard": "Discard",
+    "jobOffers.form.created": "Job offer saved as draft.",
+    "jobOffers.form.updated": "Job offer updated.",
+    "jobOffers.form.saveFailed": "Could not save the job offer.",
+    "jobOffers.form.notEditable": "Only draft offers can be edited.",
+    "jobOffers.form.contactHint":
+      "Provide an email, a phone number, or both. At least one is required to send the offer.",
+    "jobOffers.form.totalHint": "Calculated from the salary components above.",
+    "jobOffers.form.employeeProfileHint":
+      "Link a pre-hire profile so acceptance updates it automatically.",
+    "jobOffers.form.employeeProfileNone": "Not linked",
+    "jobOffers.form.employeeProfilePlaceholder": "Search employee profiles",
+    "jobOffers.form.nationalityPlaceholder": "Select a nationality",
+    "jobOffers.form.profileAutomatic": "Employee profile handled automatically",
+    "jobOffers.form.profileAutomaticHint":
+      "A pre-hire employee profile is created and linked for you when this offer is saved.",
+    "jobOffers.form.referenceHint":
+      "Chosen from your company's HR reference data.",
+    "jobOffers.form.departmentPlaceholder": "Select a department",
+    "jobOffers.form.positionPlaceholder": "Select a position",
+    "jobOffers.field.candidateFullName": "Candidate Full Name",
+    "jobOffers.field.candidateEmail": "Candidate Email",
+    "jobOffers.field.candidatePhone": "Candidate Phone Number",
+    "jobOffers.field.nationality": "Nationality",
+    "jobOffers.field.idNumber": "ID / Passport / Iqama Number",
+    "jobOffers.field.employeeProfile": "Linked Employee Profile",
+    "jobOffers.field.positionTitle": "Position Title",
+    "jobOffers.field.classification": "Classification",
+    "jobOffers.field.department": "Department",
+    "jobOffers.field.departmentRef": "Department",
+    "jobOffers.field.position": "Position",
+    "jobOffers.field.location": "Location",
+    "jobOffers.field.basicSalary": "Basic Salary",
+    "jobOffers.field.housingAllowance": "Housing Allowance",
+    "jobOffers.field.transportationAllowance": "Transportation Allowance",
+    "jobOffers.field.otherAllowance": "Other Allowance",
+    "jobOffers.field.totalPackage": "Total Salary Package",
+    "jobOffers.field.vacation": "Vacation",
+    "jobOffers.field.tickets": "Tickets",
+    "jobOffers.field.contractStatus": "Contract Status",
+    "jobOffers.field.contractType": "Contract Type",
+    "jobOffers.field.contractDuration": "Contract Duration",
+    "jobOffers.field.medicalInsurance": "Medical Insurance",
+    "jobOffers.field.offerDate": "Offer Date",
+    "jobOffers.field.expiryDate": "Expiry Date",
+    "jobOffers.field.referenceNumber": "Reference Number",
+    "jobOffers.field.hrSignerName": "HR Signer Name",
+    "jobOffers.field.hrSignerTitle": "HR Signer Title",
+    "jobOffers.validation.required": "This field is required.",
+    "jobOffers.validation.emailInvalid": "Enter a valid email address.",
+    "jobOffers.validation.phoneInvalid":
+      "Enter a valid phone number for the selected country code.",
+    "jobOffers.validation.contactRequired":
+      "Enter a candidate email or phone number.",
+    "jobOffers.validation.expiryBeforeOffer":
+      "Expiry date cannot be before the offer date.",
+    "jobOffers.validation.negativeAmount": "Amount cannot be negative.",
+    "jobOffers.validation.departmentRequired": "Select a department.",
+    "jobOffers.validation.positionRequired": "Select a position.",
+    "jobOffers.reference.emptyTitle": "HR reference data is missing",
+    "jobOffers.reference.emptyBoth":
+      "This offer needs a department and a position from your company's HR reference data. Add them first, then return to this offer.",
+    "jobOffers.reference.emptyDepartments":
+      "No departments are set up for this company yet. Add one in HR reference data, then return to this offer.",
+    "jobOffers.reference.emptyPositions":
+      "No positions are set up for this company yet. Add one in HR reference data, then return to this offer.",
+    "jobOffers.reference.goToDepartments": "Manage Departments",
+    "jobOffers.reference.goToPositions": "Manage Positions",
+    "jobOffers.detail.reference": "Reference {reference}",
+    "jobOffers.detail.loadFailed": "Could not load the job offer.",
+    "jobOffers.detail.notFound": "Job offer not found.",
+    "jobOffers.detail.section.job": "Job Details",
+    "jobOffers.detail.section.compensation": "Compensation Package",
+    "jobOffers.detail.section.benefits": "Benefits & Contract",
+    "jobOffers.detail.section.delivery": "Delivery",
+    "jobOffers.detail.section.onboarding": "Onboarding",
+    "jobOffers.detail.section.timeline": "Status Timeline",
+    "jobOffers.detail.rejectionReason": "Rejection reason",
+    "jobOffers.detail.noContact": "No contact details recorded.",
+    "jobOffers.timeline.created": "Offer created",
+    "jobOffers.timeline.sent": "Sent to candidate",
+    "jobOffers.timeline.accepted": "Accepted by candidate",
+    "jobOffers.timeline.rejected": "Rejected by candidate",
+    "jobOffers.timeline.cancelled": "Cancelled by HR",
+    "jobOffers.timeline.expires": "Expires",
+    "jobOffers.timeline.expired": "Expired",
+    "jobOffers.timeline.awaitingSend": "Awaiting send",
+    "jobOffers.timeline.awaitingResponse": "Awaiting candidate response",
+    "jobOffers.delivery.whatsapp": "WhatsApp",
+    "jobOffers.delivery.email": "Email",
+    "jobOffers.delivery.sent": "Handed to the delivery service",
+    "jobOffers.delivery.failed": "Not delivered",
+    "jobOffers.delivery.notUsed": "Channel not used",
+    "jobOffers.delivery.attemptedAt": "Attempted {time}",
+    "jobOffers.delivery.attachmentAttached": "Offer PDF attached",
+    "jobOffers.delivery.attachmentLinkOnly": "Secure link only",
+    "jobOffers.delivery.warningsTitle": "Delivery warnings",
+    "jobOffers.delivery.warningsHint":
+      "The offer was still recorded as sent. Follow up with the candidate on another channel if needed.",
+    "jobOffers.delivery.notSentYet": "This offer has not been sent yet.",
+    "jobOffers.delivery.warning.whatsappFailed":
+      "The WhatsApp message could not be delivered.",
+    "jobOffers.delivery.warning.emailFailed":
+      "The email could not be delivered.",
+    "jobOffers.delivery.warning.attachmentFailed":
+      "The offer PDF could not be attached; the email carried the secure link only.",
+    "jobOffers.delivery.warning.generic": "The offer could not be delivered.",
+    "jobOffers.onboarding.offerAccepted": "Offer accepted",
+    "jobOffers.onboarding.awaitingResponse": "Awaiting candidate response",
+    "jobOffers.onboarding.notAccepted":
+      "Onboarding starts once the candidate accepts.",
+    "jobOffers.onboarding.invitationSent": "System invitation sent",
+    "jobOffers.onboarding.invitationPending": "System invitation not sent yet",
+    "jobOffers.onboarding.linkedProfile": "Linked employee profile",
+    "jobOffers.onboarding.noLinkedProfile":
+      "No employee profile is linked to this offer.",
+    "jobOffers.onboarding.prehireProfileCreated": "Pre-hire profile created",
+    "jobOffers.onboarding.profileId": "Profile #{id}",
+    "jobOffers.onboarding.openEmployeeProfile": "Open employee profile",
+    "jobOffers.biotime.connected": "BioTime connected",
+    "jobOffers.biotime.employeeCode": "Device employee code {code}",
+    "jobOffers.biotime.notConnected": "BioTime mapping not connected yet",
+    "jobOffers.biotime.notConnectedHint":
+      "HR has been notified. Attendance records start once the device mapping is added; the candidate's acceptance is unaffected.",
+    "jobOffers.onboarding.acknowledgmentPending": "Pending BioTime attendance",
+    "jobOffers.onboarding.acknowledgmentHint":
+      "This document will be generated after the employee's first BioTime attendance record.",
+    "jobOffers.onboarding.acknowledgmentGenerated": "Generated",
+    "jobOffers.onboarding.acknowledgmentTitle": "Starting Work Acknowledgment",
+    "jobOffers.onboarding.downloadAcknowledgment": "Download acknowledgment",
+    "jobOffers.onboarding.acknowledgmentDownloadFailed":
+      "Could not download the acknowledgment.",
+    "jobOffers.onboarding.openDocumentArchive": "Open document archive",
+    "archive.systemGenerated": "Generated",
+    "archive.startingWorkAcknowledgment": "Starting Work Acknowledgment",
+    "jobOffers.send.confirmTitle": "Send this job offer?",
+    "jobOffers.send.confirmBody":
+      "The candidate receives a secure link to accept or reject the offer. Once sent, the offer can no longer be edited.",
+    "jobOffers.send.confirmOk": "Send Offer",
+    "jobOffers.send.success": "Job offer sent.",
+    "jobOffers.send.successWithWarnings":
+      "Job offer sent, but one or more channels reported a problem.",
+    "jobOffers.send.failed": "Could not send the job offer.",
+    "jobOffers.cancel.confirmTitle": "Cancel this job offer?",
+    "jobOffers.cancel.confirmBody":
+      "The candidate will no longer be able to respond. This cannot be undone.",
+    "jobOffers.cancel.confirmOk": "Cancel Offer",
+    "jobOffers.cancel.keep": "Keep Offer",
+    "jobOffers.cancel.success": "Job offer cancelled.",
+    "jobOffers.cancel.failed": "Could not cancel the job offer.",
+    "jobOffers.pdf.success": "Job offer PDF downloaded.",
+    "jobOffers.pdf.failed": "Could not download the job offer PDF.",
+
+    // Public job offer response (candidate facing, no auth)
+    "publicJobOffer.brand": "FFI Human Resources",
+    "publicJobOffer.title": "Your Job Offer",
+    "publicJobOffer.greeting": "Hello {name}",
+    "publicJobOffer.intro":
+      "Please review your offer below and let us know your decision.",
+    "publicJobOffer.loading": "Loading your offer...",
+    "publicJobOffer.position": "Position",
+    "publicJobOffer.department": "Department",
+    "publicJobOffer.location": "Location",
+    "publicJobOffer.package": "Total salary package",
+    "publicJobOffer.offerDate": "Offer date",
+    "publicJobOffer.expiryDate": "Valid until",
+    "publicJobOffer.status": "Status",
+    "publicJobOffer.accept": "Accept Offer",
+    "publicJobOffer.reject": "Reject Offer",
+    "publicJobOffer.acceptConfirmTitle": "Accept this offer?",
+    "publicJobOffer.acceptConfirmBody":
+      "We will notify our HR team and send you an invitation to set up your account.",
+    "publicJobOffer.acceptConfirmOk": "Yes, accept",
+    "publicJobOffer.rejectTitle": "Reject this offer",
+    "publicJobOffer.rejectPrompt":
+      "Tell us why you are declining. Our HR team reads every response.",
+    "publicJobOffer.reasonLabel": "Reason",
+    "publicJobOffer.reasonPlaceholder": "Write your reason here",
+    "publicJobOffer.reasonRequired":
+      "Please provide a reason before submitting.",
+    "publicJobOffer.rejectSubmit": "Submit Rejection",
+    "publicJobOffer.cancel": "Cancel",
+    "publicJobOffer.acceptedTitle": "Offer accepted",
+    "publicJobOffer.acceptedBody":
+      "Thank you. Your offer has been accepted and a system invitation will be sent to you so you can set up your account.",
+    "publicJobOffer.invitationSent": "Your account invitation has been sent.",
+    "publicJobOffer.invitationPending":
+      "Your account invitation will follow shortly.",
+    "publicJobOffer.onboardingReady":
+      "Your onboarding record is ready. Our HR team will take it from here.",
+    "publicJobOffer.attendanceSetupPending":
+      "Your onboarding is accepted. HR will complete device attendance setup.",
+    "publicJobOffer.rejectedTitle": "Offer declined",
+    "publicJobOffer.rejectedBody":
+      "Thank you for letting us know. Our HR team has been notified.",
+    "publicJobOffer.alreadyRespondedTitle":
+      "This offer has already been answered",
+    "publicJobOffer.alreadyRespondedBody":
+      "No further action is needed. Contact our HR team if you think this is a mistake.",
+    "publicJobOffer.invalidTitle": "This link is no longer valid",
+    "publicJobOffer.invalidBody":
+      "The offer link is invalid or has expired. Please contact our HR team for a new one.",
+    "publicJobOffer.missingToken": "This link is missing its offer reference.",
+    "publicJobOffer.submitFailed":
+      "We could not record your response. Please try again.",
+    // Hiring Requests
+    "layout.hiringRequests": "Hiring Requests",
+    "hiringRequests.title": "Hiring Requests",
+    "hiringRequests.subtitle": "Send candidates to the CEO for approval before drafting an offer.",
+    "hiringRequests.newRequest": "New Hiring Request",
+    "hiringRequests.searchPlaceholder": "Search by candidate, email or reference number",
+    "hiringRequests.countTag": "{count} requests",
+    "hiringRequests.loadFailed": "Could not load hiring requests.",
+    "hiringRequests.awaitingDecision": "Awaiting decision",
+    "hiringRequests.status.all": "All",
+    "hiringRequests.status.draft": "Draft",
+    "hiringRequests.status.submitted": "Submitted",
+    "hiringRequests.status.approved": "Approved",
+    "hiringRequests.status.rejected": "Rejected",
+    "hiringRequests.status.cancelled": "Cancelled",
+    "hiringRequests.status.converted": "Converted",
+    "hiringRequests.col.reference": "Reference",
+    "hiringRequests.col.candidate": "Candidate",
+    "hiringRequests.col.company": "Company",
+    "hiringRequests.col.salary": "Proposed Salary",
+    "hiringRequests.col.status": "Status",
+    "hiringRequests.col.requestedBy": "Requested By",
+    "hiringRequests.col.submittedAt": "Submitted",
+    "hiringRequests.col.ceoDecision": "CEO Decision",
+    "hiringRequests.col.actions": "Actions",
+    "hiringRequests.action.view": "View",
+    "hiringRequests.action.review": "Review",
+    "hiringRequests.action.edit": "Edit",
+    "hiringRequests.action.refresh": "Refresh",
+    "hiringRequests.action.backToList": "Back to Hiring Requests",
+    "hiringRequests.action.cancelRequest": "Cancel Request",
+    "hiringRequests.action.downloadCv": "Download CV",
+    "hiringRequests.action.createJobOffer": "Create Job Offer",
+    "hiringRequests.action.openJobOffer": "Open Job Offer",
+    "hiringRequests.empty.title": "No hiring requests yet",
+    "hiringRequests.empty.description": "Create the first request to start the approval flow.",
+    "hiringRequests.empty.filteredTitle": "No requests match these filters",
+    "hiringRequests.empty.filteredDescription": "Try a different status or clear the search.",
+    "hiringRequests.form.createTitle": "New Hiring Request",
+    "hiringRequests.form.createSubtitle": "Capture the candidate and their CV, then send it to the CEO.",
+    "hiringRequests.form.editTitle": "Edit Hiring Request",
+    "hiringRequests.form.editSubtitle": "Update the draft before it goes to the CEO.",
+    "hiringRequests.form.section.candidate": "Candidate",
+    "hiringRequests.form.section.cv": "CV",
+    "hiringRequests.form.saveDraft": "Save Draft",
+    "hiringRequests.form.submitToCeo": "Submit to CEO",
+    "hiringRequests.form.discard": "Discard",
+    "hiringRequests.form.created": "Hiring request saved as draft.",
+    "hiringRequests.form.updated": "Hiring request updated.",
+    "hiringRequests.form.saveFailed": "Could not save the hiring request.",
+    "hiringRequests.form.notEditable": "Only draft hiring requests can be edited.",
+    "hiringRequests.form.nationalityPlaceholder": "Select a nationality",
+    "hiringRequests.form.cvDropzone": "Drop the CV here, or click to choose a file",
+    "hiringRequests.form.cvHint": "PDF, DOC, DOCX, JPG or PNG. Up to 5 MB.",
+    "hiringRequests.form.cvTooLarge": "The CV must be 5 MB or smaller.",
+    "hiringRequests.form.cvWrongType": "The CV must be a PDF, DOC, DOCX, JPG or PNG file.",
+    "hiringRequests.form.cvRequiredForSubmit": "Attach a CV before submitting to the CEO.",
+    "hiringRequests.form.cvAlreadyAttached": "A CV is already attached. Upload another file only to replace it.",
+    "hiringRequests.field.joiningCompany": "Joining Company",
+    "hiringRequests.field.candidateFullName": "Candidate Full Name",
+    "hiringRequests.field.candidateEmail": "Candidate Email",
+    "hiringRequests.field.candidatePhone": "Candidate Phone Number",
+    "hiringRequests.field.nationality": "Nationality",
+    "hiringRequests.field.dateOfBirth": "Date of Birth",
+    "hiringRequests.field.proposedSalary": "Proposed Salary",
+    "hiringRequests.field.requestedBy": "Requested By",
+    "hiringRequests.validation.required": "This field is required.",
+    "hiringRequests.validation.emailInvalid": "Enter a valid email address.",
+    "hiringRequests.validation.phoneInvalid": "Enter a valid phone number for the selected country code.",
+    "hiringRequests.validation.negativeAmount": "Amount cannot be negative.",
+    "hiringRequests.detail.reference": "Reference {reference}",
+    "hiringRequests.detail.loadFailed": "Could not load the hiring request.",
+    "hiringRequests.detail.notFound": "Hiring request not found.",
+    "hiringRequests.detail.section.candidate": "Candidate",
+    "hiringRequests.detail.section.status": "Status",
+    "hiringRequests.detail.section.timeline": "Timeline",
+    "hiringRequests.detail.section.ceoDecision": "CEO Decision",
+    "hiringRequests.detail.decisionNote": "Note",
+    "hiringRequests.detail.noCv": "No CV attached.",
+    "hiringRequests.detail.currentStage": "Current stage",
+    "hiringRequests.detail.currentActor": "With",
+    "hiringRequests.detail.noStage": "No stage in progress",
+    "hiringRequests.detail.readyForOffer": "Approved. You can now create the job offer.",
+    "hiringRequests.timeline.created": "Request created",
+    "hiringRequests.timeline.submitted": "Submitted to CEO",
+    "hiringRequests.timeline.approved": "Approved by CEO",
+    "hiringRequests.timeline.rejected": "Rejected by CEO",
+    "hiringRequests.timeline.converted": "Converted to a job offer",
+    "hiringRequests.timeline.cancelled": "Cancelled",
+    "hiringRequests.submit.confirmTitle": "Submit this request to the CEO?",
+    "hiringRequests.submit.confirmBody": "The CEO is notified and the request can no longer be edited.",
+    "hiringRequests.submit.success": "Hiring request submitted to CEO.",
+    "hiringRequests.submit.failed": "Could not submit the hiring request.",
+    "hiringRequests.cancel.confirmTitle": "Cancel this hiring request?",
+    "hiringRequests.cancel.confirmBody": "The request is closed and cannot be submitted again.",
+    "hiringRequests.cancel.keep": "Keep Request",
+    "hiringRequests.cancel.success": "Hiring request cancelled.",
+    "hiringRequests.cancel.failed": "Could not cancel the hiring request.",
+    "hiringRequests.cv.downloaded": "CV downloaded.",
+    "hiringRequests.cv.failed": "Could not download the CV.",
+    "hiringRequests.decision.approvedBy": "Approved by {name}",
+    "hiringRequests.decision.rejectedBy": "Rejected by {name}",
+    "hiringRequests.decision.approveSuccess": "Hiring request approved.",
+    "hiringRequests.decision.approveFailed": "Could not approve the hiring request.",
+    "hiringRequests.decision.rejectSuccess": "Hiring request rejected.",
+    "hiringRequests.decision.rejectFailed": "Could not reject the hiring request.",
+    "hiringRequests.decision.rejectTitle": "Reject this hiring request",
+    "hiringRequests.ceo.title": "Hiring Requests",
+    "hiringRequests.ceo.subtitle": "Approve or reject candidates HR has put forward.",
+    "hiringRequests.ceo.emptyTitle": "Nothing to decide",
+    "hiringRequests.ceo.emptyDescription": "No hiring requests in this status.",
+    "hiringRequests.ceo.backToInbox": "Back to Hiring Requests",
+    "hiringRequests.ceo.decisionTitle": "Your decision",
+    "hiringRequests.ceo.decisionHint": "Approving lets HR draft the job offer. A rejection needs a reason.",
+    "hiringRequests.ceo.noActionAvailable": "This request is not waiting on you.",
+
+    // Job offer created from an approved hiring request
+    "jobOffers.createFromRequest": "Create from approved request",
+    "jobOffers.source.title": "Approved Hiring Request",
+    "jobOffers.source.reference": "Reference {reference}",
+    "jobOffers.source.approvedBy": "Approved by {name}",
+    "jobOffers.source.readOnlyHint": "These candidate details come from the approved request and cannot be edited here.",
+    "jobOffers.source.loadFailed": "Could not load the approved hiring request.",
+    "jobOffers.source.notApproved": "This hiring request is not approved, so it cannot become a job offer.",
+    "jobOffers.source.requiredTitle": "Start from an approved hiring request",
+    "jobOffers.source.requiredBody": "Job offers are created from a hiring request the CEO has approved.",
+    "jobOffers.source.goToRequests": "Go to Hiring Requests",
+    "jobOffers.delivery.candidateGroup": "Candidate",
+    "jobOffers.delivery.ceoGroup": "CEO copies",
+    "jobOffers.delivery.candidateText": "WhatsApp message",
+    "jobOffers.delivery.candidateWhatsappPdf": "WhatsApp PDF",
+    "jobOffers.delivery.candidateEmailPdf": "Email PDF",
+    "jobOffers.delivery.ceoWhatsappPdf": "WhatsApp PDF",
+    "jobOffers.delivery.ceoEmailPdf": "Email PDF",
+    "jobOffers.delivery.skipped": "Not attempted",
   },
 
   ar: {
@@ -2554,7 +3195,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "auth.loginFailedTitle": "تعذر تسجيل الدخول",
     "auth.loginLockedTitle": "تم قفل الحساب مؤقتاً",
     "auth.backendUnavailableTitle": "الخادم غير متاح",
-    "auth.backendNotConnected": "الخادم غير متصل. شغّل الـ Backend أو حدّد VITE_API_BASE_URL.",
+    "auth.backendNotConnected":
+      "الخادم غير متصل. شغّل الـ Backend أو حدّد VITE_API_BASE_URL.",
     "auth.tryAgain": "يرجى المحاولة مرة أخرى لاحقاً",
     "auth.invite.missingToken": "رمز الدعوة مفقود.",
     "auth.invite.invalidLink": "رابط الدعوة غير صالح.",
@@ -2577,7 +3219,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "auth.invite.backToLogin": "العودة لتسجيل الدخول",
     "auth.invite.phonePlaceholderRequired": "رقم الهاتف",
     "auth.invite.phoneRequired": "رقم الهاتف مطلوب",
-    "auth.invite.emailAlreadyRegistered": "هذا البريد الإلكتروني مسجّل بالفعل. يرجى تسجيل الدخول بدلاً من ذلك.",
+    "auth.invite.emailAlreadyRegistered":
+      "هذا البريد الإلكتروني مسجّل بالفعل. يرجى تسجيل الدخول بدلاً من ذلك.",
 
     // Change Password
     "changePassword.title": "تغيير كلمة المرور",
@@ -2589,8 +3232,10 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "changePassword.newRequired": "يرجى إدخال كلمة مرور جديدة",
     "changePassword.confirmRequired": "يرجى تأكيد كلمة المرور الجديدة",
     "changePassword.mismatch": "كلمتا المرور اللتان أدخلتهما غير متطابقتين!",
-    "changePassword.strengthError": "يجب أن تتكون كلمة المرور من 8 أحرف على الأقل وأن تحتوي على أحرف وأرقام",
-    "changePassword.success": "تم تغيير كلمة المرور بنجاح! يرجى تسجيل الدخول مرة أخرى.",
+    "changePassword.strengthError":
+      "يجب أن تتكون كلمة المرور من 8 أحرف على الأقل وأن تحتوي على أحرف وأرقام",
+    "changePassword.success":
+      "تم تغيير كلمة المرور بنجاح! يرجى تسجيل الدخول مرة أخرى.",
     "changePassword.enterCurrent": "أدخل كلمة المرور الحالية",
     "changePassword.enterNew": "أدخل كلمة المرور الجديدة",
     "changePassword.enterConfirm": "تأكيد كلمة المرور الجديدة",
@@ -2622,16 +3267,19 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "layout.rentTypes": "أنواع الإيجار",
     "layout.templateLibrary": "مكتبة النماذج",
     "templates.title": "مكتبة النماذج",
-    "templates.subtitle": "قم بتنزيل نماذج وخطابات الموارد البشرية الفارغة للطباعة أو التعبئة يدوياً.",
+    "templates.subtitle":
+      "قم بتنزيل نماذج وخطابات الموارد البشرية الفارغة للطباعة أو التعبئة يدوياً.",
     "templates.category.requests": "نماذج الطلبات",
     "templates.category.letters": "خطابات الموارد البشرية",
     "templates.download": "تنزيل",
-    "templates.unavailable": "النموذج غير متاح بعد. يرجى طلب إعادة توليد النماذج من المسؤول.",
+    "templates.unavailable":
+      "النموذج غير متاح بعد. يرجى طلب إعادة توليد النماذج من المسؤول.",
     "templates.downloadFailed": "تعذر تنزيل النموذج.",
     "templates.notGenerated": "لم يتم إنشاؤه بعد",
     "templates.emptyCategory": "لا توجد نماذج في هذه الفئة.",
     "templates.empty.title": "لا توجد نماذج",
-    "templates.empty.subtitle": "قم بتشغيل الأمر generate_blank_templates لتعبئة المكتبة.",
+    "templates.empty.subtitle":
+      "قم بتشغيل الأمر generate_blank_templates لتعبئة المكتبة.",
     "layout.myAssets": "عهدي",
     "layout.leaveInbox": "صندوق الإجازات",
     "layout.attendance": "الحضور",
@@ -2707,11 +3355,16 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "common.no": "لا",
     "common.loading": "جارٍ التحميل...",
     "common.error": "خطأ",
-    "common.error.serverDetailed": "تعذر إكمال طلبك بسبب مشكلة مؤقتة في الخادم. يرجى المحاولة مرة أخرى بعد بضع دقائق. إذا استمرت المشكلة، تواصل مع الدعم.",
-    "common.error.networkDetailed": "تعذر الاتصال بالخادم. يرجى التحقق من اتصال الإنترنت ثم المحاولة مرة أخرى.",
-    "common.error.timeoutDetailed": "الخادم يستغرق وقتاً أطول من المتوقع في الاستجابة. يرجى المحاولة مرة أخرى.",
-    "common.error.validationDetailed": "بعض البيانات المدخلة غير صحيحة. يرجى مراجعة الحقول ثم إعادة الإرسال.",
-    "common.error.unauthorizedDetailed": "قد تكون جلسة الدخول منتهية. يرجى تسجيل الدخول مرة أخرى ثم إعادة المحاولة.",
+    "common.error.serverDetailed":
+      "تعذر إكمال طلبك بسبب مشكلة مؤقتة في الخادم. يرجى المحاولة مرة أخرى بعد بضع دقائق. إذا استمرت المشكلة، تواصل مع الدعم.",
+    "common.error.networkDetailed":
+      "تعذر الاتصال بالخادم. يرجى التحقق من اتصال الإنترنت ثم المحاولة مرة أخرى.",
+    "common.error.timeoutDetailed":
+      "الخادم يستغرق وقتاً أطول من المتوقع في الاستجابة. يرجى المحاولة مرة أخرى.",
+    "common.error.validationDetailed":
+      "بعض البيانات المدخلة غير صحيحة. يرجى مراجعة الحقول ثم إعادة الإرسال.",
+    "common.error.unauthorizedDetailed":
+      "قد تكون جلسة الدخول منتهية. يرجى تسجيل الدخول مرة أخرى ثم إعادة المحاولة.",
     "common.error.forbiddenDetailed": "ليس لديك صلاحية لتنفيذ هذا الإجراء.",
     "common.error.genericDetailed": "تعذر إكمال طلبك. يرجى المحاولة مرة أخرى.",
     "common.retry": "إعادة المحاولة",
@@ -2746,10 +3399,14 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "bioTime.titles.mapped": "المستخدمون المرتبطون حالياً",
     "bioTime.titles.manualSync": "مزامنة يدوية",
     "bioTime.titles.syncResult": "نتيجة آخر مزامنة",
-    "bioTime.descriptions.unmapped": "هؤلاء المستخدمون موجودون على جهاز البصمة لكنهم غير مرتبطين بأي ملف موظف في النظام. يرجى اختيار الموظف المناسب لربطه.",
-    "bioTime.descriptions.mapped": "مستخدمو الجهاز المرتبطون بملفات الموظفين. يتم استيراد بصمات الحضور لهذه الأرقام تلقائياً.",
-    "bioTime.descriptions.manualSync": "استيراد بصمات الحضور من الجهاز لعدد الأيام السابقة المحدد.",
-    "bioTime.hints.passwordUnchanged": "اتركه فارغاً للإبقاء على كلمة المرور المحفوظة.",
+    "bioTime.descriptions.unmapped":
+      "هؤلاء المستخدمون موجودون على جهاز البصمة لكنهم غير مرتبطين بأي ملف موظف في النظام. يرجى اختيار الموظف المناسب لربطه.",
+    "bioTime.descriptions.mapped":
+      "مستخدمو الجهاز المرتبطون بملفات الموظفين. يتم استيراد بصمات الحضور لهذه الأرقام تلقائياً.",
+    "bioTime.descriptions.manualSync":
+      "استيراد بصمات الحضور من الجهاز لعدد الأيام السابقة المحدد.",
+    "bioTime.hints.passwordUnchanged":
+      "اتركه فارغاً للإبقاء على كلمة المرور المحفوظة.",
     "bioTime.placeholders.selectEmployee": "اختر موظفاً",
     "bioTime.placeholders.password": "اتركه فارغاً لعدم التغيير",
     "bioTime.placeholders.searchEmployees": "ابحث في موظفي النظام",
@@ -2760,7 +3417,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "bioTime.sync.unmapped": "غير مرتبطة",
     "bioTime.sync.invalid": "غير صالحة",
     "bioTime.confirm.unlinkTitle": "إلغاء هذا الربط؟",
-    "bioTime.confirm.unlinkDescription": "سيتوقف استيراد الحضور لرقم الجهاز {code} حتى يتم ربطه مرة أخرى.",
+    "bioTime.confirm.unlinkDescription":
+      "سيتوقف استيراد الحضور لرقم الجهاز {code} حتى يتم ربطه مرة أخرى.",
     "bioTime.empty.unmapped": "لا يوجد مستخدمو جهاز غير مرتبطين.",
     "bioTime.empty.mapped": "لا يوجد موظفون مرتبطون بعد.",
     "bioTime.validation.serverIpRequired": "عنوان السيرفر أو النطاق مطلوب.",
@@ -2822,19 +3480,31 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "common.submittedOn": "تاريخ التقديم",
     "organization.headOffice.badge": "عرض المكتب الرئيسي",
     "organization.headOffice.bannerTitle": "المكتب الرئيسي في وضع القراءة فقط",
-    "organization.headOffice.bannerDescription": "راجع البيانات المجمعة هنا، ثم انتقل إلى شركة لإجراء الإنشاء أو الاستيراد أو التعديل أو تشغيل الإجراءات الخاصة بالشركة.",
+    "organization.headOffice.bannerDescription":
+      "راجع البيانات المجمعة هنا، ثم انتقل إلى شركة لإجراء الإنشاء أو الاستيراد أو التعديل أو تشغيل الإجراءات الخاصة بالشركة.",
     "organization.headOffice.readOnlyTitle": "المكتب الرئيسي للقراءة فقط",
-    "organization.headOffice.switchToUseAction": "انتقل إلى شركة لاستخدام هذا الإجراء.",
-    "organization.headOffice.switchToCreateRecords": "انتقل إلى شركة لإنشاء السجلات.",
-    "organization.headOffice.switchToEditRecords": "انتقل إلى شركة لتعديل السجلات.",
-    "organization.headOffice.switchToCreateEmployees": "انتقل إلى شركة لإنشاء الموظفين.",
-    "organization.headOffice.switchToRemoveEmployees": "انتقل إلى شركة لطلب أرشفة الموظف.",
-    "organization.headOffice.createEmployeeDescription": "اختر FFI أو Aseco Pro أو Athroya لإنشاء موظف.",
-    "organization.headOffice.switchToCreatePayroll": "انتقل إلى شركة لإنشاء مسير رواتب.",
-    "organization.headOffice.createPayrollDescription": "انتقل إلى FFI أو Aseco Pro أو Athroya لإنشاء مسير رواتب.",
-    "organization.headOffice.selectCompanyBeforePayroll": "اختر شركة قبل تشغيل الرواتب.",
-    "organization.headOffice.switchToImportEmployees": "انتقل إلى شركة لاستيراد الموظفين.",
-    "organization.headOffice.importEmployeesDescription": "الاستيراد معطل هنا. انتقل إلى FFI أو Aseco Pro أو Athroya لرفع الموظفين.",
+    "organization.headOffice.switchToUseAction":
+      "انتقل إلى شركة لاستخدام هذا الإجراء.",
+    "organization.headOffice.switchToCreateRecords":
+      "انتقل إلى شركة لإنشاء السجلات.",
+    "organization.headOffice.switchToEditRecords":
+      "انتقل إلى شركة لتعديل السجلات.",
+    "organization.headOffice.switchToCreateEmployees":
+      "انتقل إلى شركة لإنشاء الموظفين.",
+    "organization.headOffice.switchToRemoveEmployees":
+      "انتقل إلى شركة لطلب أرشفة الموظف.",
+    "organization.headOffice.createEmployeeDescription":
+      "اختر FFI أو Aseco Pro أو Athroya لإنشاء موظف.",
+    "organization.headOffice.switchToCreatePayroll":
+      "انتقل إلى شركة لإنشاء مسير رواتب.",
+    "organization.headOffice.createPayrollDescription":
+      "انتقل إلى FFI أو Aseco Pro أو Athroya لإنشاء مسير رواتب.",
+    "organization.headOffice.selectCompanyBeforePayroll":
+      "اختر شركة قبل تشغيل الرواتب.",
+    "organization.headOffice.switchToImportEmployees":
+      "انتقل إلى شركة لاستيراد الموظفين.",
+    "organization.headOffice.importEmployeesDescription":
+      "الاستيراد معطل هنا. انتقل إلى FFI أو Aseco Pro أو Athroya لرفع الموظفين.",
 
     // Roles
     "role.SystemAdmin": "مدير النظام",
@@ -2945,7 +3615,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.dashboard.actionType": "نوع الإجراء",
     "hr.dashboard.dateTime": "تاريخ ووقت",
     "hr.dashboard.actor": "الموظف",
-    "hr.dashboard.recentActivityDesc": "عرض وتصفية جميع الأنشطة الأخيرة في النظام",
+    "hr.dashboard.recentActivityDesc":
+      "عرض وتصفية جميع الأنشطة الأخيرة في النظام",
     "hr.dashboard.filterByActor": "البحث باسم الموظف/البريد الإلكتروني",
     "hr.dashboard.filterByAction": "تصفية حسب نوع الإجراء",
     "hr.dashboard.overviewContext": "الموافقات والقوى العاملة والرواتب",
@@ -3001,7 +3672,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.expiringDocs.statusExpiring": "قارب على الانتهاء",
     "hr.expiringDocs.statusUnknown": "تاريخ الانتهاء غير متاح",
     "hr.expiringDocs.missingExpiryDate": "تاريخ الانتهاء غير متاح",
-    "hr.expiringDocs.automaticReminderInfo": "تُرسل تذكيرات واتساب تلقائياً إلى الموارد البشرية فقط عندما يكون موعد الانتهاء خلال 10 أيام.",
+    "hr.expiringDocs.automaticReminderInfo":
+      "تُرسل تذكيرات واتساب تلقائياً إلى الموارد البشرية فقط عندما يكون موعد الانتهاء خلال 10 أيام.",
     "hr.expiringDocs.docType.passport": "جواز السفر",
     "hr.expiringDocs.docType.id_card": "بطاقة الهوية",
     "hr.expiringDocs.docType.health_card": "البطاقة الصحية",
@@ -3120,17 +3792,20 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.announcements.smsLabel": "رسالة نصية",
     "hr.announcements.smsDesc": "إرسال إشعار رسالة نصية (يتطلب إعدادات)",
     "hr.announcements.whatsappLabel": "واتساب",
-    "hr.announcements.whatsappDesc": "إرسال إشعار عبر واتساب للمستخدمين المستهدفين",
+    "hr.announcements.whatsappDesc":
+      "إرسال إشعار عبر واتساب للمستخدمين المستهدفين",
     "hr.announcements.typeLabel": "نوع الإشعار",
     "hr.announcements.typeGeneral": "إعلان عام",
     "hr.announcements.typeMeeting": "اجتماع",
     "hr.announcements.meetingTitleLabel": "عنوان الاجتماع",
     "hr.announcements.meetingMessageLabel": "رسالة الاجتماع",
     "hr.announcements.selectedEmployeesLabel": "الموظفون المحددون",
-    "hr.announcements.selectedEmployeesRequired": "يرجى اختيار موظف واحد على الأقل",
+    "hr.announcements.selectedEmployeesRequired":
+      "يرجى اختيار موظف واحد على الأقل",
     "hr.announcements.selectedEmployeesPlaceholder": "اختر الموظفين",
     "hr.announcements.meetingStartsAt": "تاريخ ووقت الاجتماع",
-    "hr.announcements.meetingStartsAtRequired": "يرجى اختيار تاريخ ووقت الاجتماع",
+    "hr.announcements.meetingStartsAtRequired":
+      "يرجى اختيار تاريخ ووقت الاجتماع",
     "hr.announcements.meetingDuration": "المدة (بالدقائق)",
     "hr.announcements.meetingLocation": "المكان",
     "hr.announcements.meetingAgenda": "الأجندة",
@@ -3139,10 +3814,12 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.announcements.zoomUrl": "رابط Zoom",
     "hr.announcements.errorLoadEmployees": "فشل تحميل الموظفين",
     "hr.announcements.attachmentLabel": "مرفق PDF اختياري",
-    "hr.announcements.attachmentHelp": "ارفع ملف PDF واحد. سيكون قابلاً للمعاينة في لوحة التحكم وسيتم تضمينه في رسائل البريد الإلكتروني.",
+    "hr.announcements.attachmentHelp":
+      "ارفع ملف PDF واحد. سيكون قابلاً للمعاينة في لوحة التحكم وسيتم تضمينه في رسائل البريد الإلكتروني.",
     "hr.announcements.attachmentSelect": "اختر ملف PDF",
     "hr.announcements.attachmentPdfOnly": "يسمح فقط بملفات PDF.",
-    "hr.announcements.attachmentPreviewUnavailable": "المعاينة غير متاحة، لكن لا يزال بالإمكان تنزيل الملف.",
+    "hr.announcements.attachmentPreviewUnavailable":
+      "المعاينة غير متاحة، لكن لا يزال بالإمكان تنزيل الملف.",
     "hr.announcements.successCreated": "تم إنشاء الإعلان بنجاح",
     "hr.announcements.successDeleted": "تم حذف الإعلان بنجاح",
     "hr.announcements.errorLoad": "فشل تحميل الإعلانات",
@@ -3175,8 +3852,9 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "manager.dashboard.overviewContext": "كل ما ينتظر قرارك",
     "manager.dashboard.loadFailed": "تعذّر تحميل نظرة فريقك العامة",
     "manager.dashboard.loadFailedHint":
-        "تعذّرت قراءة أي من قوائم فريقك. تحقّق من الاتصال أو من صلاحياتك ثم أعد المحاولة.",
-    "manager.dashboard.partialData": "تعذّرت قراءة بعض القوائم، لذلك قد تكون الإجماليات غير مكتملة.",
+      "تعذّرت قراءة أي من قوائم فريقك. تحقّق من الاتصال أو من صلاحياتك ثم أعد المحاولة.",
+    "manager.dashboard.partialData":
+      "تعذّرت قراءة بعض القوائم، لذلك قد تكون الإجماليات غير مكتملة.",
     "manager.dashboard.pendingApprovals": "الموافقات المعلّقة",
     "manager.dashboard.pendingApprovalsCaption": "في جميع قوائم فريقك",
     "manager.dashboard.reviewPending": "مراجعة الطلبات المعلّقة",
@@ -3198,7 +3876,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "manager.dashboard.teamSnapshotHint": "مرؤوسوك المباشرون",
     "manager.dashboard.openMyTeam": "فتح فريقي",
     "manager.dashboard.teamPreviewMore": "و{count} آخرون في فريقي",
-    "manager.dashboard.teamPreviewUnavailable": "تعذّر تحميل قائمة الفريق حالياً.",
+    "manager.dashboard.teamPreviewUnavailable":
+      "تعذّر تحميل قائمة الفريق حالياً.",
 
     // صفوف قائمة عمل المدير المباشر
     "manager.queue.noDetail": "لا توجد تفاصيل",
@@ -3217,11 +3896,13 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "employees.list.title": "جميع الموظفين",
     "employees.list.subtitle": "إدارة أعضاء فريقك وصلاحيات حساباتهم.",
     "employees.list.createEmployee": "إنشاء موظف",
-    "employees.list.searchPlaceholder": "البحث بالاسم أو الرقم أو البريد الإلكتروني",
+    "employees.list.searchPlaceholder":
+      "البحث بالاسم أو الرقم أو البريد الإلكتروني",
     "employees.list.departmentPlaceholder": "القسم",
     "employees.list.statusPlaceholder": "الحالة",
     "employees.list.nationalityPlaceholder": "الجنسية",
-    "employees.list.moreFiltersHelp": "التصفية حسب الجنسية أو الترتيب حسب تاريخ الانضمام.",
+    "employees.list.moreFiltersHelp":
+      "التصفية حسب الجنسية أو الترتيب حسب تاريخ الانضمام.",
     "employees.list.joinDateDefault": "تاريخ الانضمام: الافتراضي",
     "employees.list.joinDateNewestFirst": "تاريخ الانضمام: الأحدث أولاً",
     "employees.list.joinDateOldestFirst": "تاريخ الانضمام: الأقدم أولاً",
@@ -3236,15 +3917,18 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "employees.list.actionView": "عرض التفاصيل",
     "employees.list.actionEdit": "تعديل",
     "employees.list.actionDelete": "أرشفة",
-    "employees.list.showingPagination": "عرض {from} إلى {to} من أصل {total} إدخال",
+    "employees.list.showingPagination":
+      "عرض {from} إلى {to} من أصل {total} إدخال",
 
     // طلب أرشفة الموظف (يعتمده الرئيس التنفيذي)
     "employees.removal.action": "طلب أرشفة",
     "employees.removal.actionPending": "بانتظار اعتماد الرئيس التنفيذي",
     "employees.removal.pendingTag": "بانتظار الرئيس التنفيذي",
     "employees.removal.modalTitle": "طلب أرشفة موظف",
-    "employees.removal.modalIntro": "أنت بصدد طلب أرشفة الموظف {name}. يجب اعتماد الرئيس التنفيذي قبل تعطيل الحساب.",
-    "employees.removal.modalNote": "يؤدي الاعتماد إلى أرشفة الموظف وتعطيل تسجيل الدخول مع الاحتفاظ بجميع السجلات المرتبطة، ويمكن للموارد البشرية أو مسؤول النظام استعادته.",
+    "employees.removal.modalIntro":
+      "أنت بصدد طلب أرشفة الموظف {name}. يجب اعتماد الرئيس التنفيذي قبل تعطيل الحساب.",
+    "employees.removal.modalNote":
+      "يؤدي الاعتماد إلى أرشفة الموظف وتعطيل تسجيل الدخول مع الاحتفاظ بجميع السجلات المرتبطة، ويمكن للموارد البشرية أو مسؤول النظام استعادته.",
     "employees.removal.preservationTitle": "يبقى الموظف في النظام",
     "employees.removal.archiveReasonLabel": "سبب الأرشفة",
     "employees.removal.archiveReasonPlaceholder": "اختر سبب الأرشفة",
@@ -3256,14 +3940,19 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "employees.removal.archiveReason.DECEASED": "وفاة",
     "employees.removal.archiveReason.OTHER": "أخرى",
     "employees.removal.reasonLabel": "تفاصيل الأرشفة",
-    "employees.removal.reasonPlaceholder": "أضف تفاصيل تدعم طلب أرشفة هذا الموظف.",
+    "employees.removal.reasonPlaceholder":
+      "أضف تفاصيل تدعم طلب أرشفة هذا الموظف.",
     "employees.removal.reasonRequired": "السبب مطلوب.",
     "employees.removal.confirmButton": "إرسال لاعتماد الرئيس التنفيذي",
-    "employees.removal.successSubmitted": "تم إرسال طلب الأرشفة إلى الرئيس التنفيذي للاعتماد.",
-    "employees.removal.errorAlreadyPending": "يوجد طلب أرشفة قيد الانتظار لهذا الموظف.",
+    "employees.removal.successSubmitted":
+      "تم إرسال طلب الأرشفة إلى الرئيس التنفيذي للاعتماد.",
+    "employees.removal.errorAlreadyPending":
+      "يوجد طلب أرشفة قيد الانتظار لهذا الموظف.",
     "employees.removal.errorForbidden": "ليست لديك صلاحية طلب أرشفة الموظف.",
-    "employees.removal.errorConflict": "لا يمكن أرشفة هذا الموظف في حالته الحالية.",
-    "employees.removal.errorGeneric": "تعذّر إرسال طلب الأرشفة. يرجى المحاولة مرة أخرى.",
+    "employees.removal.errorConflict":
+      "لا يمكن أرشفة هذا الموظف في حالته الحالية.",
+    "employees.removal.errorGeneric":
+      "تعذّر إرسال طلب الأرشفة. يرجى المحاولة مرة أخرى.",
 
     // الموظفون المؤرشفون (التصفية والعرض والاستعادة)
     "employees.archive.stateActive": "النشطون",
@@ -3275,24 +3964,30 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "employees.archive.archivedBy": "تمت الأرشفة بواسطة",
     "employees.archive.colArchivedBy": "تمت الأرشفة بواسطة",
     "employees.archive.archivedBanner": "هذا الموظف مؤرشف",
-    "employees.archive.archivedBannerDescription": "حساب تسجيل الدخول معطّل، وتبقى جميع السجلات التاريخية متاحة.",
+    "employees.archive.archivedBannerDescription":
+      "حساب تسجيل الدخول معطّل، وتبقى جميع السجلات التاريخية متاحة.",
     "employees.restore.action": "استعادة الموظف",
     "employees.restore.modalTitle": "استعادة الموظف",
-    "employees.restore.modalIntro": "هل تريد استعادة {name} إلى قائمة الموظفين النشطين؟",
-    "employees.restore.modalNote": "سيصبح ملف الموظف نشطاً مرة أخرى وسيتم تفعيل حساب تسجيل الدخول الخاص به.",
+    "employees.restore.modalIntro":
+      "هل تريد استعادة {name} إلى قائمة الموظفين النشطين؟",
+    "employees.restore.modalNote":
+      "سيصبح ملف الموظف نشطاً مرة أخرى وسيتم تفعيل حساب تسجيل الدخول الخاص به.",
     "employees.restore.confirmButton": "استعادة الموظف",
     "employees.restore.success": "تمت استعادة الموظف.",
     "employees.restore.errorForbidden": "ليست لديك صلاحية استعادة الموظفين.",
     "employees.restore.errorNotArchived": "هذا الموظف غير مؤرشف.",
-    "employees.restore.errorGeneric": "تعذّر استعادة الموظف. يرجى المحاولة مرة أخرى.",
+    "employees.restore.errorGeneric":
+      "تعذّر استعادة الموظف. يرجى المحاولة مرة أخرى.",
 
     // صندوق وارد طلبات أرشفة الموظفين (الرئيس التنفيذي)
     "employees.removalInbox.menu": "طلبات أرشفة الموظفين",
     "employees.removalInbox.title": "طلبات أرشفة الموظفين",
-    "employees.removalInbox.subtitle": "مراجعة طلبات أرشفة الموظفين المقدمة من الموارد البشرية واتخاذ القرار.",
+    "employees.removalInbox.subtitle":
+      "مراجعة طلبات أرشفة الموظفين المقدمة من الموارد البشرية واتخاذ القرار.",
     "employees.removalInbox.review": "مراجعة",
     "employees.removalInbox.empty": "لا توجد طلبات أرشفة في هذه الحالة.",
-    "employees.removalInbox.errorGeneric": "تعذّر تحميل طلبات الأرشفة. يرجى المحاولة مرة أخرى.",
+    "employees.removalInbox.errorGeneric":
+      "تعذّر تحميل طلبات الأرشفة. يرجى المحاولة مرة أخرى.",
     "employees.removalInbox.colEmployee": "الموظف",
     "employees.removalInbox.colDepartment": "الإدارة",
     "employees.removalInbox.colCompany": "الشركة",
@@ -3325,32 +4020,44 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "employees.removalDetail.assetAssignments": "العهد النشطة",
     "employees.removalDetail.loanRequests": "طلبات القروض",
     "employees.removalDetail.decisionTitle": "القرار",
-    "employees.removalDetail.decisionHint": "الاعتماد سيؤدي إلى أرشفة الموظف وتعطيل تسجيل الدخول مع الاحتفاظ بجميع السجلات المرتبطة. الرفض يتطلب ذكر سبب.",
+    "employees.removalDetail.decisionHint":
+      "الاعتماد سيؤدي إلى أرشفة الموظف وتعطيل تسجيل الدخول مع الاحتفاظ بجميع السجلات المرتبطة. الرفض يتطلب ذكر سبب.",
     "employees.removalDetail.approveButton": "اعتماد وأرشفة",
     "employees.removalDetail.rejectButton": "رفض",
     "employees.removalDetail.approveModalTitle": "اعتماد أرشفة الموظف",
-    "employees.removalDetail.approveModalIntro": "أنت بصدد أرشفة {name} وتعطيل حساب تسجيل الدخول الخاص به.",
+    "employees.removalDetail.approveModalIntro":
+      "أنت بصدد أرشفة {name} وتعطيل حساب تسجيل الدخول الخاص به.",
     "employees.removalDetail.approveConfirm": "اعتماد وأرشفة",
-    "employees.removalDetail.preservationNotice": "سيتم الاحتفاظ بجميع سجلات الموظف والسجلات التاريخية، ويمكن للموارد البشرية أو مسؤول النظام استعادة الوصول لاحقاً.",
+    "employees.removalDetail.preservationNotice":
+      "سيتم الاحتفاظ بجميع سجلات الموظف والسجلات التاريخية، ويمكن للموارد البشرية أو مسؤول النظام استعادة الوصول لاحقاً.",
     "employees.removalDetail.rejectModalTitle": "رفض طلب الأرشفة",
-    "employees.removalDetail.rejectModalIntro": "أنت بصدد رفض طلب أرشفة {name}. سيظل الموظف نشطاً.",
+    "employees.removalDetail.rejectModalIntro":
+      "أنت بصدد رفض طلب أرشفة {name}. سيظل الموظف نشطاً.",
     "employees.removalDetail.rejectConfirm": "تأكيد الرفض",
     "employees.removalDetail.rejectReasonLabel": "سبب الرفض",
-    "employees.removalDetail.rejectReasonPlaceholder": "اشرح سبب رفض طلب الأرشفة.",
+    "employees.removalDetail.rejectReasonPlaceholder":
+      "اشرح سبب رفض طلب الأرشفة.",
     "employees.removalDetail.rejectReasonRequired": "سبب الرفض مطلوب.",
     "employees.removalDetail.executedTitle": "تمت أرشفة الموظف",
-    "employees.removalDetail.executedDescription": "تم الاعتماد بواسطة {by} في {at}. تمت أرشفة الموظف وتعطيل تسجيل الدخول.",
+    "employees.removalDetail.executedDescription":
+      "تم الاعتماد بواسطة {by} في {at}. تمت أرشفة الموظف وتعطيل تسجيل الدخول.",
     "employees.removalDetail.rejectedTitle": "تم رفض الطلب",
     "employees.removalDetail.rejectedBy": "رُفض بواسطة {by} في {at}.",
     "employees.removalDetail.rejectionReasonLabel": "سبب الرفض",
-    "employees.removalDetail.successApproved": "تم اعتماد طلب الأرشفة وتمت أرشفة الموظف.",
+    "employees.removalDetail.successApproved":
+      "تم اعتماد طلب الأرشفة وتمت أرشفة الموظف.",
     "employees.removalDetail.successRejected": "تم رفض طلب الأرشفة.",
-    "employees.removalDetail.errorGeneric": "تعذّر تحميل طلب الأرشفة. يرجى المحاولة مرة أخرى.",
-    "employees.removalDetail.errorApprove": "تعذّر اعتماد طلب الأرشفة. يرجى المحاولة مرة أخرى.",
-    "employees.removalDetail.errorReject": "تعذّر رفض طلب الأرشفة. يرجى المحاولة مرة أخرى.",
-    "employees.removalDetail.errorForbidden": "ليست لديك صلاحية اتخاذ إجراء على هذا الطلب.",
+    "employees.removalDetail.errorGeneric":
+      "تعذّر تحميل طلب الأرشفة. يرجى المحاولة مرة أخرى.",
+    "employees.removalDetail.errorApprove":
+      "تعذّر اعتماد طلب الأرشفة. يرجى المحاولة مرة أخرى.",
+    "employees.removalDetail.errorReject":
+      "تعذّر رفض طلب الأرشفة. يرجى المحاولة مرة أخرى.",
+    "employees.removalDetail.errorForbidden":
+      "ليست لديك صلاحية اتخاذ إجراء على هذا الطلب.",
     "employees.removalDetail.errorNotFound": "طلب الأرشفة هذا لم يعد موجوداً.",
-    "employees.removalDetail.errorValidation": "تعذّر معالجة الطلب في حالته الحالية.",
+    "employees.removalDetail.errorValidation":
+      "تعذّر معالجة الطلب في حالته الحالية.",
 
     // Employees create/edit/view
     "employees.create.title": "اضافة موظف",
@@ -3359,11 +4066,14 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "employees.view.linkUser": "ربط حساب مستخدم",
     "employees.view.unlinkUser": "إلغاء ربط المستخدم",
     "employees.view.connectUser": "ربط المستخدم",
-    "employees.view.connectUserDesc": "اختر مستخدم من النظام لربطه بملف الموظف هذا.",
-    "employees.view.searchUserPlaceholder": "ابحث عن طريق الاسم أو البريد الإلكتروني",
+    "employees.view.connectUserDesc":
+      "اختر مستخدم من النظام لربطه بملف الموظف هذا.",
+    "employees.view.searchUserPlaceholder":
+      "ابحث عن طريق الاسم أو البريد الإلكتروني",
     "employees.view.linkedTo": "مرتبط بـ: {email}",
     "employees.view.notLinked": "غير مرتبط",
-    "employees.view.unlinkConfirm": "هل أنت متأكد من إلغاء ربط حساب المستخدم بهذا الموظف؟",
+    "employees.view.unlinkConfirm":
+      "هل أنت متأكد من إلغاء ربط حساب المستخدم بهذا الموظف؟",
     "employees.view.hours": "ساعة",
     "employees.view.doc": "وثيقة",
     "employees.view.idTag": "هوية",
@@ -3398,15 +4108,19 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "employees.form.sponsorPlaceholder": "اختر الشركاء",
     "employees.form.directManager": "المدير المباشر",
     "employees.form.managerPlaceholder": "اختر المدير المباشر (اختياري)",
-    "employees.form.managerTooltip": "يعتمد المدير المباشر طلبات الإجازة والسلف والحضور والعهد لهذا الموظف",
+    "employees.form.managerTooltip":
+      "يعتمد المدير المباشر طلبات الإجازة والسلف والحضور والعهد لهذا الموظف",
     "employees.form.managerHelp":
-        "تعيين مدير مباشر يمنح ذلك الشخص صلاحية اعتماد طلبات هذا الموظف، حتى لو كانت وظيفته موظفاً. اتركه فارغاً لتوجيه الطلبات مباشرة إلى الموارد البشرية.",
+      "تعيين مدير مباشر يمنح ذلك الشخص صلاحية اعتماد طلبات هذا الموظف، حتى لو كانت وظيفته موظفاً. اتركه فارغاً لتوجيه الطلبات مباشرة إلى الموارد البشرية.",
     "employees.form.managerAssignmentRejected": "لا يمكن تعيين هذا المدير",
     "employees.form.managerErrors.self": "لا يمكن أن يكون الموظف مديراً لنفسه.",
-    "employees.form.managerErrors.company": "يجب أن ينتمي المدير المختار إلى شركة الموظف.",
+    "employees.form.managerErrors.company":
+      "يجب أن ينتمي المدير المختار إلى شركة الموظف.",
     "employees.form.managerErrors.archived": "المدير المختار مؤرشف.",
-    "employees.form.managerErrors.inactive": "يجب أن يكون المدير المختار موظفاً نشطاً بحساب مستخدم نشط.",
-    "employees.form.managerErrors.cycle": "لا يمكن أن ينشئ تعيين المدير حلقة في التسلسل الإداري.",
+    "employees.form.managerErrors.inactive":
+      "يجب أن يكون المدير المختار موظفاً نشطاً بحساب مستخدم نشط.",
+    "employees.form.managerErrors.cycle":
+      "لا يمكن أن ينشئ تعيين المدير حلقة في التسلسل الإداري.",
     "employees.form.joiningDate": "تاريخ الانضمام",
     "employees.form.jobOffer": "عرض العمل",
     "employees.form.jobOfferPlaceholder": "تفاصيل عرض العمل",
@@ -3433,7 +4147,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "employees.form.workLicense": "انتهاء رخصة العمل",
     "employees.form.workLicenseTag": "رخصة العمل",
     "employees.form.expiryDate": "تاريخ الانتهاء",
-    "employees.form.requiredNameEn": "يرجى إدخال اسم الموظف بالكامل باللغة الإنجليزية",
+    "employees.form.requiredNameEn":
+      "يرجى إدخال اسم الموظف بالكامل باللغة الإنجليزية",
     "employees.form.requiredDept": "يرجى اختيار القسم",
     "employees.form.requiredPos": "يرجى اختيار المسمى الوظيفي",
     "employees.form.requiredJoinDate": "يرجى اختيار تاريخ الانضمام",
@@ -3445,7 +4160,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "leave.leaveBalance": "رصيد الإجازات",
     "leave.startDate": "تاريخ البدء",
     "leave.endDate": "تاريخ الانتهاء",
-    "leave.backdateHelper": "يمكن تقديم طلب الإجازة خلال مدة تصل إلى 7 أيام تقويمية من تاريخ بدئها.",
+    "leave.backdateHelper":
+      "يمكن تقديم طلب الإجازة خلال مدة تصل إلى 7 أيام تقويمية من تاريخ بدئها.",
     "leave.leaveType": "نوع الإجازة",
     "leave.reason": "السبب",
     "leave.days": "الأيام",
@@ -3549,16 +4265,21 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "leave.backToInbox": "العودة إلى صندوق الوارد",
     "leave.backToTeamReqs": "العودة إلى طلبات الفريق",
     "leave.requestDetailsTitle": "تفاصيل طلب الإجازة",
-    "leave.employeeDetailsSubtitle": "راجع حالة الطلب ومسار الموافقات وملف الملخص",
+    "leave.employeeDetailsSubtitle":
+      "راجع حالة الطلب ومسار الموافقات وملف الملخص",
     "leave.period": "الفترة",
     "leave.rejectionReason": "سبب الرفض",
     "leave.statusNote": "ملاحظة الحالة",
-    "leave.ceoApprovalWait": "هذا الطلب بانتظار موافقة المدير التنفيذي. لا يتطلب أي إجراء إضافي من الموارد البشرية.",
-    "leave.ceoApproveSuccess": "تمت الموافقة وأُرسل الطلب إلى الموارد البشرية لإتمام الإجراءات.",
+    "leave.ceoApprovalWait":
+      "هذا الطلب بانتظار موافقة المدير التنفيذي. لا يتطلب أي إجراء إضافي من الموارد البشرية.",
+    "leave.ceoApproveSuccess":
+      "تمت الموافقة وأُرسل الطلب إلى الموارد البشرية لإتمام الإجراءات.",
     "leave.rejected": "تم رفض طلب الإجازة",
-    "leave.hrCompletionWait": "وافق المدير التنفيذي على الطلب. يجب على الموارد البشرية إتمام الطلب لتأكيده.",
+    "leave.hrCompletionWait":
+      "وافق المدير التنفيذي على الطلب. يجب على الموارد البشرية إتمام الطلب لتأكيده.",
     "leave.hrCompletionRequired": "إتمام إجراءات الموارد البشرية مطلوب",
-    "leave.hrCompletionDesc": "وافق المدير التنفيذي على هذا الطلب. أتمم الإجراءات أدناه لتأكيده.",
+    "leave.hrCompletionDesc":
+      "وافق المدير التنفيذي على هذا الطلب. أتمم الإجراءات أدناه لتأكيده.",
     "leave.visaRequired": "وثيقة التأشيرة مطلوبة للموظفين غير السعوديين.",
     "leave.visaDocument": "وثيقة التأشيرة (PDF)",
     "leave.visaDocumentOptional": "وثيقة التأشيرة (اختياري)",
@@ -3569,14 +4290,16 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "leave.completeFail": "فشل إتمام الإجراءات",
     "leave.extractionWarnings": "تحذيرات الاستخراج",
     "leave.sendToCeoTitle": "إرسال الطلب إلى المدير التنفيذي",
-    "leave.sendToCeoDesc": "سيتم نقل الطلب إلى صندوق وارد المدير التنفيذي للمراجعة والقرار النهائي.",
+    "leave.sendToCeoDesc":
+      "سيتم نقل الطلب إلى صندوق وارد المدير التنفيذي للمراجعة والقرار النهائي.",
     "leave.sendToCeoBtn": "إرسال إلى المدير التنفيذي",
     "leave.sendFail": "فشل الإرسال",
     "leave.sendSuccess": "تم إرسال الطلب إلى المدير التنفيذي",
     "leave.sendError": "حدث خطأ في النظام أثناء الإرسال إلى المدير التنفيذي",
     "leave.rejectTitle": "رفض طلب الإجازة",
     "leave.rejectBtn": "رفض الطلب",
-    "leave.rejectWarning": "هذا الإجراء غير قابل للتراجع. يرجى تقديم سبب للموظف.",
+    "leave.rejectWarning":
+      "هذا الإجراء غير قابل للتراجع. يرجى تقديم سبب للموظف.",
     "leave.rejectPlaceholder": "سبب الرفض...",
     "leave.manual.badge": "سجل إجازة يدوي من الموارد البشرية",
     "leave.manual.addButton": "إضافة سجل يدوي",
@@ -3597,7 +4320,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "leave.docErrorTitle": "تعذر فتح المستند",
     "leave.docErrorDesc": "المستند غير متوفر أو تم حذفه من التخزين.",
     "leave.pdfDownloadFailed": "تعذر تنزيل ملف PDF الخاص بطلب الإجازة.",
-    "leave.pdfDownloadForbidden": "ليس لديك صلاحية لتنزيل ملف PDF الخاص بطلب الإجازة.",
+    "leave.pdfDownloadForbidden":
+      "ليس لديك صلاحية لتنزيل ملف PDF الخاص بطلب الإجازة.",
     "leave.requestSource": "مصدر الطلب",
     "leave.approvalMap.eyebrow": "مسار الموافقة",
     "leave.approvalMap.title": "تقدم الطلب",
@@ -3614,8 +4338,10 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "leave.approvalMap.hrApproval": "اعتماد الموارد البشرية",
     "leave.approvalMap.requestSent": "تم تقديم طلبك بنجاح.",
     "leave.approvalMap.employeeRequest": "طلب موظف",
-    "leave.approvalMap.recordedByHr": "تم تسجيله يدويًا بواسطة الموارد البشرية.",
-    "leave.approvalMap.autoApproved": "تم اعتماده أثناء الإدخال اليدوي من الموارد البشرية.",
+    "leave.approvalMap.recordedByHr":
+      "تم تسجيله يدويًا بواسطة الموارد البشرية.",
+    "leave.approvalMap.autoApproved":
+      "تم اعتماده أثناء الإدخال اليدوي من الموارد البشرية.",
     "leave.approvalMap.forwarded": "تمت مراجعته وتحويله إلى المرحلة التالية.",
     "leave.approvalMap.completed": "مكتمل",
     "leave.approvalMap.current": "قيد التنفيذ",
@@ -3625,9 +4351,11 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "leave.approvalMap.notRequired": "هذه المرحلة غير مطلوبة لهذا الطلب.",
     "leave.approvalMap.noDate": "بانتظار الإجراء",
     "leave.approvalMap.hrCompletion": "إتمام الموارد البشرية",
-    "leave.approvalMap.hrCompletionPending": "بانتظار قيام الموارد البشرية برفع التأشيرة وإتمام الطلب.",
+    "leave.approvalMap.hrCompletionPending":
+      "بانتظار قيام الموارد البشرية برفع التأشيرة وإتمام الطلب.",
     "pendingBanner.waitingForActor": "بانتظار {actor}",
-    "pendingBanner.waitingHrCompletion": "بانتظار الموارد البشرية لإتمام الطلب.",
+    "pendingBanner.waitingHrCompletion":
+      "بانتظار الموارد البشرية لإتمام الطلب.",
     "pendingBanner.waitingForStage": "بانتظار {stage}",
     "leave.visaDetails": "تفاصيل التأشيرة",
     "leave.visaNumber": "رقم التأشيرة",
@@ -3696,9 +4424,11 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "leave.delegatedTo": "الموظف البديل",
     "leave.delegationNote": "ملاحظة الموظف البديل",
     "leave.delegatedInboxTitle": "صندوق موافقات الموظف البديل",
-    "leave.delegatedInboxSubtitle": "طلبات الإجازات المسندة إليك كموظف بديل لتأكيد تغطية العمل.",
+    "leave.delegatedInboxSubtitle":
+      "طلبات الإجازات المسندة إليك كموظف بديل لتأكيد تغطية العمل.",
     "leave.delegatedPendingCount": "{count} قيد الانتظار",
-    "leave.delegatedInboxEmpty": "لا توجد موافقات إجازات مسندة إليك كموظف بديل.",
+    "leave.delegatedInboxEmpty":
+      "لا توجد موافقات إجازات مسندة إليك كموظف بديل.",
     "leave.backToDelegatedInbox": "العودة إلى صندوق الموظف البديل",
     "leave.ticketPayer.company": "الشركة",
     "leave.ticketPayer.employee": "الموظف",
@@ -3728,9 +4458,12 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "attendance.teamAttendance": "حضور الفريق",
     "attendance.maintenance.eyebrow": "جاري الصيانة",
     "attendance.maintenance.title": "الحضور غير متاح مؤقتًا",
-    "attendance.maintenance.description": "نحن نقوم بإصلاح هذا القسم حاليًا. يرجى العودة لاحقًا.",
-    "attendance.maintenance.managerDescription": "نحن نقوم بإصلاح هذا القسم حاليًا لجميع المستخدمين. ستعود طلبات وموافقات الحضور قريبًا.",
-    "attendance.maintenance.pageSubtitle": "هذا القسم غير متاح مؤقتًا حتى ننتهي من إصلاحه.",
+    "attendance.maintenance.description":
+      "نحن نقوم بإصلاح هذا القسم حاليًا. يرجى العودة لاحقًا.",
+    "attendance.maintenance.managerDescription":
+      "نحن نقوم بإصلاح هذا القسم حاليًا لجميع المستخدمين. ستعود طلبات وموافقات الحضور قريبًا.",
+    "attendance.maintenance.pageSubtitle":
+      "هذا القسم غير متاح مؤقتًا حتى ننتهي من إصلاحه.",
     "attendance.maintenance.back": "العودة",
     "attendance.submitCorrection": "تقديم تصحيح",
     "attendance.corrections": "التصحيحات",
@@ -3744,11 +4477,13 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.attendance.allRecords": "جميع السجلات",
     "hr.attendance.rejectTitle": "رفض الحضور",
     "hr.attendance.rejectReasonLabel": "يرجى تقديم سبب للرفض:",
-    "hr.attendance.rejectPlaceholder": "مثلاً: ليس في موقع العمل، إدخال مكرر...",
+    "hr.attendance.rejectPlaceholder":
+      "مثلاً: ليس في موقع العمل، إدخال مكرر...",
     "hr.attendance.approvedSuccess": "تمت الموافقة على حضور {name}!",
     "hr.attendance.rejectedSuccess": "تم رفض الحضور.",
     "hr.attendance.recordsTitle": "سجلات الحضور",
-    "attendancePreview.subtitle": "معاينة للقراءة فقط للموارد البشرية والرئيس التنفيذي مع بقاء خدمة الحضور الذاتية مغلقة.",
+    "attendancePreview.subtitle":
+      "معاينة للقراءة فقط للموارد البشرية والرئيس التنفيذي مع بقاء خدمة الحضور الذاتية مغلقة.",
     "attendancePreview.decision.approved": "تمت الموافقة على سجل الحضور",
     "attendancePreview.decision.rejected": "تم رفض سجل الحضور",
     "attendancePreview.decision.failed": "تعذّر حفظ القرار",
@@ -3766,7 +4501,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "attendancePreview.status.pendingCeo": "بانتظار الرئيس التنفيذي",
     "attendancePreview.status.rejected": "مرفوض",
     "attendancePreview.filters.statusAll": "كل الحالات",
-    "attendancePreview.filters.searchPlaceholder": "ابحث باسم الموظف أو بريده الإلكتروني",
+    "attendancePreview.filters.searchPlaceholder":
+      "ابحث باسم الموظف أو بريده الإلكتروني",
     "attendancePreview.filters.employeePlaceholder": "تصفية حسب الموظف",
     "attendancePreview.filters.sourcePlaceholder": "كل المصادر",
     "attendancePreview.columns.duration": "المدة",
@@ -3779,7 +4515,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "attendancePreview.range.thisMonth": "هذا الشهر",
     "attendancePreview.summary.total": "إجمالي السجلات",
     "attendancePreview.empty.title": "لا توجد سجلات حضور",
-    "attendancePreview.empty.description": "لا توجد سجلات مطابقة للفلاتر المحددة. جرّب تعديل النطاق الزمني أو مسح الفلاتر.",
+    "attendancePreview.empty.description":
+      "لا توجد سجلات مطابقة للفلاتر المحددة. جرّب تعديل النطاق الزمني أو مسح الفلاتر.",
     "attendancePreview.error.title": "تعذّر تحميل سجلات الحضور",
     "attendancePreview.source.employee": "تسجيل الموظف",
     "attendancePreview.source.hr": "إدخال الموارد البشرية",
@@ -3796,7 +4533,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.attendance.reasonPlaceholder": "لماذا يتم التجاوز؟",
     "hr.attendance.reasonRequired": "يرجى تقديم سبب لهذا التجاوز",
     "hr.attendance.auditedAction": "إجراء مدقق",
-    "hr.attendance.auditedDesc": "يتم تسجيل جميع التغييرات. 'سبب التجاوز' مطلوب عند تغيير الحالة أو الأوقات.",
+    "hr.attendance.auditedDesc":
+      "يتم تسجيل جميع التغييرات. 'سبب التجاوز' مطلوب عند تغيير الحالة أو الأوقات.",
     "hr.attendance.overrideReasonLabel": "سبب التجاوز",
     "hr.attendance.checkInTime": "وقت الحضور",
     "hr.attendance.checkOutTime": "وقت الانصراف",
@@ -3837,9 +4575,12 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "payroll.runDetails.backToDashboard": "العودة للرواتب",
     "payroll.runDetails.finalizeBtn": "إغلاق الدورة",
     "payroll.runDetails.finalizeConfirmTitle": "إغلاق دورة الرواتب",
-    "payroll.runDetails.finalizeConfirmText": "هل أنت متأكد من رغبتك في إغلاق دورة الرواتب هذه؟",
-    "payroll.runDetails.finalizeConfirmWarningTitle": "هذا الإجراء لا يمكن التراجع عنه",
-    "payroll.runDetails.finalizeConfirmWarningDesc": "بعد الإغلاق، ستُقفل قسائم الرواتب ولن يمكن إجراء أي تعديلات.",
+    "payroll.runDetails.finalizeConfirmText":
+      "هل أنت متأكد من رغبتك في إغلاق دورة الرواتب هذه؟",
+    "payroll.runDetails.finalizeConfirmWarningTitle":
+      "هذا الإجراء لا يمكن التراجع عنه",
+    "payroll.runDetails.finalizeConfirmWarningDesc":
+      "بعد الإغلاق، ستُقفل قسائم الرواتب ولن يمكن إجراء أي تعديلات.",
     "payroll.runDetails.finalizeConfirmOkBtn": "نعم، أغلق",
     "payroll.runDetails.finalizeFailed": "فشل إغلاق دورة الرواتب",
     "payroll.runDetails.finalizeSuccess": "تم إغلاق دورة الرواتب بنجاح",
@@ -3850,23 +4591,31 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "payroll.runDetails.notFound": "دورة الرواتب غير موجودة",
     "payroll.history.colRun": "دورة الرواتب",
     "payroll.runDetails.payslipsTitle": "قسائم الرواتب",
-    "payroll.runDetails.payslipRequiresFinalized": "يتطلب إنشاء القسائم إغلاق الدورة أولاً.",
+    "payroll.runDetails.payslipRequiresFinalized":
+      "يتطلب إنشاء القسائم إغلاق الدورة أولاً.",
     "payroll.runDetails.btnGeneratePayslips": "إنشاء القسائم",
-    "payroll.runDetails.generatePayslipsDesc": "إنشاء أو إعادة إنشاء جميع قسائم الرواتب لهذه الدورة. يمكن تشغيله عدة مرات بأمان.",
+    "payroll.runDetails.generatePayslipsDesc":
+      "إنشاء أو إعادة إنشاء جميع قسائم الرواتب لهذه الدورة. يمكن تشغيله عدة مرات بأمان.",
     "payroll.runDetails.payslipsGeneratedTitle": "القسائم جاهزة",
     "payroll.runDetails.payslipsReady": "تم تحديث قسائم الرواتب بنجاح",
     "payroll.runDetails.generationFailed": "فشل إنشاء قسائم الرواتب",
-    "payroll.runDetails.couldNotTriggerGeneration": "تعذّر بدء إنشاء القسائم. يرجى المحاولة مرة أخرى.",
-    "payroll.runDetails.reportsAvailability": "التقارير متاحة بعد إغلاق دورة الرواتب.",
-    "payroll.runDetails.reportsDesc": "تنزيل تقارير الرواتب بصيغ مختلفة لاحتياجات السجلات والمحاسبة.",
+    "payroll.runDetails.couldNotTriggerGeneration":
+      "تعذّر بدء إنشاء القسائم. يرجى المحاولة مرة أخرى.",
+    "payroll.runDetails.reportsAvailability":
+      "التقارير متاحة بعد إغلاق دورة الرواتب.",
+    "payroll.runDetails.reportsDesc":
+      "تنزيل تقارير الرواتب بصيغ مختلفة لاحتياجات السجلات والمحاسبة.",
     "payroll.runDetails.csvReportName": "تقرير CSV",
-    "payroll.runDetails.csvReportDesc": "بيانات الرواتب الكاملة بصيغة جداول البيانات، متوافقة مع جميع أدوات المحاسبة.",
+    "payroll.runDetails.csvReportDesc":
+      "بيانات الرواتب الكاملة بصيغة جداول البيانات، متوافقة مع جميع أدوات المحاسبة.",
     "payroll.runDetails.exportCsv": "تصدير CSV",
     "payroll.runDetails.excelReportName": "تقرير Excel",
-    "payroll.runDetails.excelReportDesc": "مصنف Excel منسّق يحتوي على ملخص ومفصل لبيانات الرواتب.",
+    "payroll.runDetails.excelReportDesc":
+      "مصنف Excel منسّق يحتوي على ملخص ومفصل لبيانات الرواتب.",
     "payroll.runDetails.exportExcel": "تصدير Excel",
     "payroll.runDetails.pdfReportName": "تقرير PDF",
-    "payroll.runDetails.pdfReportDesc": "ملخص PDF قابل للطباعة لدورة الرواتب، مناسب للسجلات الرسمية.",
+    "payroll.runDetails.pdfReportDesc":
+      "ملخص PDF قابل للطباعة لدورة الرواتب، مناسب للسجلات الرسمية.",
     "payroll.runDetails.exportPdf": "تصدير PDF",
     "payroll.runDetails.exportReady": "تم تنزيل التقرير بنجاح.",
     "payroll.runDetails.exportFailed": "فشل تنزيل التقرير.",
@@ -3882,16 +4631,19 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "payroll.gosi": "التأمينات الاجتماعية",
     "payroll.absence": "استقطاع الغياب",
     "payroll.processingTitle": "جاري معالجة الرواتب",
-    "payroll.processingDesc": "يتم حساب الرواتب وإنشاء قسائم جميع الموظفين النشطين...",
+    "payroll.processingDesc":
+      "يتم حساب الرواتب وإنشاء قسائم جميع الموظفين النشطين...",
     "payroll.runExists": "دورة الرواتب موجودة",
-    "payroll.runExistsDesc": "توجد دورة بالفعل لـ {month}/{year}. جاري فتحها...",
+    "payroll.runExistsDesc":
+      "توجد دورة بالفعل لـ {month}/{year}. جاري فتحها...",
     "payroll.alreadyExists": "موجودة مسبقاً",
     "payroll.alreadyExistsDesc": "توجد بالفعل دورة رواتب لهذه الفترة.",
     "payroll.creationFail": "فشل الإنشاء",
     "payroll.creationFailDesc": "تعذّر إنشاء دورة الرواتب.",
     "payroll.creationSuccess": "تم إنشاء دورة الرواتب بنجاح",
     "payroll.runExistsDesc2": "جاري فتح الدورة الموجودة لـ {month}/{year}...",
-    "payroll.alreadyExistsDesc2": "توجد بالفعل دورة رواتب لهذه الفترة، لكن تعذّر تحديدها تلقائياً.",
+    "payroll.alreadyExistsDesc2":
+      "توجد بالفعل دورة رواتب لهذه الفترة، لكن تعذّر تحديدها تلقائياً.",
     "payroll.unexpectedError": "حدث خطأ غير متوقع",
     "payroll.createTitle": "إنشاء دورة رواتب",
     "payroll.createDesc": "حدد الفترة لدورة الرواتب الجديدة",
@@ -3958,8 +4710,10 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "admin.invites.sendInvitation": "إرسال دعوة",
     "admin.invites.invitationHistory": "سجل الدعوات",
     "admin.invites.pendingInvitations": "الدعوات المعلّقة",
-    "admin.invites.searchByEmailOrPhone": "ابحث بالبريد الإلكتروني أو رقم الهاتف",
-    "admin.invites.emailAddedDuringSignup": "سيتم إضافة البريد الإلكتروني أثناء التسجيل.",
+    "admin.invites.searchByEmailOrPhone":
+      "ابحث بالبريد الإلكتروني أو رقم الهاتف",
+    "admin.invites.emailAddedDuringSignup":
+      "سيتم إضافة البريد الإلكتروني أثناء التسجيل.",
     "admin.invites.legacyManagerRole": "دور مدير قديم",
     "admin.invites.invited": "تاريخ الدعوة",
     "admin.invites.expires": "تاريخ الانتهاء",
@@ -3977,7 +4731,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "admin.invites.recipient": "المُستلِم",
     "admin.invites.phoneNumber": "رقم الهاتف",
     "admin.invites.phoneRequired": "رقم الهاتف مطلوب",
-    "admin.invites.phoneInvalid": "أدخل رقم هاتف صحيح بصيغة دولية، مثال: +201515091691",
+    "admin.invites.phoneInvalid":
+      "أدخل رقم هاتف صحيح بصيغة دولية، مثال: +201515091691",
     "admin.invites.delivery": "حالة التسليم",
     "admin.invites.deliveryPending": "قيد الانتظار",
     "admin.invites.deliveryQueued": "في قائمة الانتظار",
@@ -4010,7 +4765,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "admin.settings.saveSuccess": "تم حفظ الإعدادات بنجاح!",
     "admin.settings.saveError": "فشل في حفظ الإعدادات.",
     "admin.settings.secInvites": "إعدادات الدعوات",
-    "admin.settings.lblDefaultInviteExpiry": "صلاحية الدعوة الافتراضية (بالساعات)",
+    "admin.settings.lblDefaultInviteExpiry":
+      "صلاحية الدعوة الافتراضية (بالساعات)",
     "admin.settings.reqInviteExpiry": "الرجاء إدخال حد صلاحية الدعوة",
     "admin.settings.secSessions": "إدارة الجلسات",
     "admin.settings.lblSessionTimeout": "مهلة الجلسة الخاملة (بالدقائق)",
@@ -4023,8 +4779,10 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "admin.settings.lblReqNumber": "يتطلب رقماً",
     "admin.settings.lblReqSpecial": "يتطلب رمزاً خاصاً",
     "admin.settings.secSecurity": "ضوابط الأمان",
-    "admin.settings.lblMaxLoginAttempts": "الحد الأقصى لمحاولات تسجيل الدخول الفاشلة",
-    "admin.settings.reqMaxLoginAttempts": "الرجاء إدخال الحد الأقصى لمحاولات تسجيل الدخول",
+    "admin.settings.lblMaxLoginAttempts":
+      "الحد الأقصى لمحاولات تسجيل الدخول الفاشلة",
+    "admin.settings.reqMaxLoginAttempts":
+      "الرجاء إدخال الحد الأقصى لمحاولات تسجيل الدخول",
     "admin.settings.btnReset": "إعادة التعيين إلى الافتراضي",
 
     // Admin - Create User
@@ -4133,7 +4891,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.assets.assign": "تخصيص",
     "hr.assets.return": "إرجاع",
     "hr.assets.deleteAsset": "حذف العهدة",
-    "hr.assets.deleteConfirm": "هذا سيقوم بحذف العهدة نهائياً. هل ترغب في المتابعة؟",
+    "hr.assets.deleteConfirm":
+      "هذا سيقوم بحذف العهدة نهائياً. هل ترغب في المتابعة؟",
     "hr.assets.deleteSuccess": "تم حذف العهدة.",
     "hr.assets.deleteFailed": "فشل في حذف العهدة.",
     "hr.assets.createSuccess": "تم إنشاء العهدة بنجاح.",
@@ -4197,7 +4956,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.assets.printLabelsSelected": "طباعة ملصقات للمحدد ({count})",
     "hr.assets.printLabelDialogTitle": "طباعة ملصقات العهد",
     "hr.assets.printLabelsCount": "عدد الملصقات للطباعة: {count}",
-    "hr.assets.printLabelsHint": "سيتم تنزيل ملف PDF. اطبعه من نافذة نظام التشغيل إلى طابعة الملصقات.",
+    "hr.assets.printLabelsHint":
+      "سيتم تنزيل ملف PDF. اطبعه من نافذة نظام التشغيل إلى طابعة الملصقات.",
     "hr.assets.printLabelsSuccess": "تم إنشاء ملف PDF للملصقات.",
     "hr.assets.printLabelsFailed": "فشل إنشاء ملف PDF للملصقات.",
     "hr.assets.paperSize": "حجم الورق",
@@ -4222,7 +4982,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.assets.noDamageReports": "لا توجد تقارير ضرر لهذه العهدة.",
     "hr.assets.noReturnRequests": "لا توجد طلبات إرجاع لهذه العهدة.",
     "hr.assets.lookup.title": "البحث عن عهدة (ماسح)",
-    "hr.assets.lookup.subtitle": "امسح ملصق أو اكتب رمز العهدة لعرض حالتها الحالية.",
+    "hr.assets.lookup.subtitle":
+      "امسح ملصق أو اكتب رمز العهدة لعرض حالتها الحالية.",
     "hr.assets.lookup.placeholder": "امسح أو اكتب رمز العهدة...",
     "hr.assets.lookup.ready": "جاهز. امسح ملصق عهدة.",
     "hr.assets.lookup.loading": "جاري البحث...",
@@ -4234,7 +4995,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.assets.lookup.recentDamageReports": "تقارير الضرر الأخيرة",
     "hr.assets.lookup.recentReturnRequests": "طلبات الإرجاع الأخيرة",
     "hr.assets.labelJobs.title": "سجل طباعة الملصقات",
-    "hr.assets.labelJobs.subtitle": "إعادة تنزيل ملفات PDF للملصقات المطبوعة سابقاً.",
+    "hr.assets.labelJobs.subtitle":
+      "إعادة تنزيل ملفات PDF للملصقات المطبوعة سابقاً.",
     "hr.assets.labelJobs.redownload": "إعادة التنزيل",
     "hr.assets.labelJobs.assetCount": "العهد",
     "hr.assets.labelJobs.assetCodes": "رموز العهد",
@@ -4255,8 +5017,10 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "audit.action.leave_balance.viewed_hr": "عرض رصيد الإجازات",
     "audit.action.employee_import": "استيراد الموظفين",
     "audit.action.invite_sent": "إرسال دعوة",
-    "audit.action.loan_request_approved_cfo": "الموافقة على السلفة (المدير المالي)",
-    "audit.action.loan_request_approved_ceo": "الموافقة على السلفة (المدير التنفيذي)",
+    "audit.action.loan_request_approved_cfo":
+      "الموافقة على السلفة (المدير المالي)",
+    "audit.action.loan_request_approved_ceo":
+      "الموافقة على السلفة (المدير التنفيذي)",
     "audit.action.loan_request_rejected_cfo": "رفض السلفة (المدير المالي)",
     "audit.action.loan_request_rejected_ceo": "رفض السلفة (المدير التنفيذي)",
     "audit.action.approve": "موافقة",
@@ -4268,7 +5032,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "audit.action.payroll_exported_pdf": "تصدير مسير الرواتب PDF",
     "audit.action.submit": "إرسال طلب",
     "audit.action.invite_accepted": "قبول الدعوة",
-    "audit.action.employee_expiry_notification_sent": "إرسال إشعار انتهاء الصلاحية",
+    "audit.action.employee_expiry_notification_sent":
+      "إرسال إشعار انتهاء الصلاحية",
     "audit.action.payslips_generated": "توليد قسائم الراتب",
     "audit.action.manual_leave_record_created": "إنشاء سجل إجازة يدوي",
     "audit.action.payroll_exported_csv": "تصدير مسير الرواتب CSV",
@@ -4281,10 +5046,14 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "audit.action.announcement_created": "إنشاء إعلان",
     "audit.action.announcement_updated": "تحديث إعلان",
     "audit.action.announcement_deleted": "حذف إعلان",
-    "audit.action.loan_request_recommended_manager_approve": "الموافقة على السلفة (المدير المباشر)",
-    "audit.action.loan_request_recommended_manager_reject": "رفض السلفة (المدير المباشر)",
-    "audit.action.loan_request_recommended_hr_approve": "الموافقة على السلفة (الموارد البشرية)",
-    "audit.action.loan_request_recommended_hr_reject": "رفض السلفة (الموارد البشرية)",
+    "audit.action.loan_request_recommended_manager_approve":
+      "الموافقة على السلفة (المدير المباشر)",
+    "audit.action.loan_request_recommended_manager_reject":
+      "رفض السلفة (المدير المباشر)",
+    "audit.action.loan_request_recommended_hr_approve":
+      "الموافقة على السلفة (الموارد البشرية)",
+    "audit.action.loan_request_recommended_hr_reject":
+      "رفض السلفة (الموارد البشرية)",
     "audit.action.loan_request_referred_to_ceo": "إحالة السلفة للمدير التنفيذي",
     "audit.action.loan_request_cancelled": "إلغاء طلب السلفة",
     "audit.action.loan_request_disbursed": "صرف السلفة",
@@ -4331,7 +5100,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.employees.connectUserTitle": "ربط حساب مستخدم",
     "hr.employees.connectUserDesc": "اختر حساب نظام لربطه بملف هذا الموظف.",
     "hr.employees.searchUserPlaceholder": "ابحث بالاسم أو البريد الإلكتروني",
-    "hr.employees.unlinkUserConfirm": "هل أنت متأكد من رغبتك في إلغاء ربط حساب المستخدم من هذا الموظف؟",
+    "hr.employees.unlinkUserConfirm":
+      "هل أنت متأكد من رغبتك في إلغاء ربط حساب المستخدم من هذا الموظف؟",
     "hr.employees.linkSuccess": "تم ربط المستخدم بنجاح",
     "hr.employees.linkFailed": "فشل في ربط المستخدم",
     "hr.employees.unlinkSuccess": "تم إلغاء ربط المستخدم بنجاح",
@@ -4348,7 +5118,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.employees.balances.adjustFailed": "فشل في تعديل الرصيد",
     "hr.employees.balances.leaveType": "نوع الإجازة",
     "hr.employees.balances.totalQuota": "إجمالي الحصة (يتضمن التعديلات)",
-    "hr.employees.balances.availableAnnualYearDays": "الأيام المتاحة من الإجازة السنوية",
+    "hr.employees.balances.availableAnnualYearDays":
+      "الأيام المتاحة من الإجازة السنوية",
     "hr.employees.balances.used": "المستخدم",
     "hr.employees.balances.remaining": "المتبقي",
     "hr.employees.balances.title": "أرصدة الإجازات",
@@ -4357,11 +5128,13 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.employees.balances.selectLeaveType": "اختر نوع الإجازة",
     "hr.employees.balances.adjustmentDays": "أيام التعديل (+/-)",
     "hr.employees.balances.enterDays": "أدخل الأيام",
-    "hr.employees.balances.adjustmentHelp": "أدخل رقمًا موجبًا لإضافة أيام، أو سالبًا للخصم.",
+    "hr.employees.balances.adjustmentHelp":
+      "أدخل رقمًا موجبًا لإضافة أيام، أو سالبًا للخصم.",
     "hr.employees.balances.adjustmentPlaceholder": "مثال: 5 أو -2",
     "hr.employees.balances.reason": "السبب",
     "hr.employees.balances.reasonRequired": "السبب مطلوب",
-    "hr.employees.balances.reasonPlaceholder": "مثال: تعويض عن العمل في عطلة نهاية الأسبوع",
+    "hr.employees.balances.reasonPlaceholder":
+      "مثال: تعويض عن العمل في عطلة نهاية الأسبوع",
     "hr.employees.balances.submit": "تأكيد التعديل",
 
     // Import
@@ -4372,26 +5145,32 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "import.employees.download": "تنزيل القالب",
     "import.employees.start": "بدء الاستيراد",
     "import.employees.selectFile": "يرجى اختيار ملف للرفع",
-    "import.employees.successMsg": "تم الاستيراد بنجاح! تمت إضافة {inserted} موظفًا.",
+    "import.employees.successMsg":
+      "تم الاستيراد بنجاح! تمت إضافة {inserted} موظفًا.",
     "import.employees.excelOnly": "يمكنك رفع ملفات Excel (.xlsx) فقط!",
     "import.employees.sizeLimit": "يجب أن يكون حجم الملف أقل من 5MB!",
     "import.employees.viewHistory": "عرض سجل الاستيراد",
     "import.employees.alertTitle": "وضع الكل أو لا شيء",
-    "import.employees.alertDesc": "إذا فشل أي صف في التحقق، سيتم رفض كامل الاستيراد. يرجى التأكد من صحة البيانات.",
+    "import.employees.alertDesc":
+      "إذا فشل أي صف في التحقق، سيتم رفض كامل الاستيراد. يرجى التأكد من صحة البيانات.",
     "import.employees.instructionsTitle": "📋 التعليمات",
     "import.employees.requirements": "المتطلبات:",
     "import.employees.fileFormat": "صيغة الملف: .xlsx فقط",
     "import.employees.maxSize": "الحد الأقصى لحجم الملف: 5MB",
     "import.employees.maxRows": "الحد الأقصى للصفوف: 5,000",
-    "import.employees.headersMatch": "يجب أن تتطابق عناوين الأعمدة مع القالب تمامًا",
+    "import.employees.headersMatch":
+      "يجب أن تتطابق عناوين الأعمدة مع القالب تمامًا",
     "import.employees.autoCreation": "الإنشاء التلقائي:",
-    "import.employees.autoCreateDesc": "سيتم إنشاء الأقسام والمناصب تلقائيًا إذا لم تكن موجودة",
+    "import.employees.autoCreateDesc":
+      "سيتم إنشاء الأقسام والمناصب تلقائيًا إذا لم تكن موجودة",
     "import.employees.autoCreatedLabel": "تلقائيًا",
-    "import.employees.existDesc": "يجب أن تكون مجموعات المهام والكفلاء موجودة مسبقًا في النظام",
+    "import.employees.existDesc":
+      "يجب أن تكون مجموعات المهام والكفلاء موجودة مسبقًا في النظام",
     "import.employees.templateSuccess": "تم تنزيل القالب بنجاح",
     "import.employees.templateFail": "فشل تنزيل القالب",
     "import.employees.dragDrop": "انقر أو اسحب ملف Excel للرفع",
-    "import.employees.uploadHint": "يدعم ملفات .xlsx فقط. سيتم التحقق من الملف قبل الاستيراد.",
+    "import.employees.uploadHint":
+      "يدعم ملفات .xlsx فقط. سيتم التحقق من الملف قبل الاستيراد.",
     "import.employees.processing": "جارٍ معالجة الاستيراد...",
 
     // Profile pages
@@ -4445,7 +5224,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "profile.active": "نشط",
     "profile.inactive": "غير نشط",
     "profile.limitedProfile": "ملف شخصي محدود",
-    "profile.limitedProfileDesc": "أنت تعرض ملفًا شخصيًا أساسيًا للنظام لأنه ليس لديك سجل موظف مرتبط.",
+    "profile.limitedProfileDesc":
+      "أنت تعرض ملفًا شخصيًا أساسيًا للنظام لأنه ليس لديك سجل موظف مرتبط.",
     "profile.notFound": "لم يتم العثور على الملف الشخصي",
 
     // Manager Team & Requests
@@ -4465,8 +5245,10 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "manager.requests.rejectTitle": "رفض طلب الإجازة",
     "manager.requests.rejectAssetTitle": "رفض إرجاع العهدة",
     "manager.requests.rejectConfirm": "رفض الطلب",
-    "manager.requests.searchPlaceholder": "ابحث بالموظف أو نوع الإجازة أو السبب",
-    "manager.requests.searchAssetsPlaceholder": "ابحث بالموظف أو رمز العهدة أو اسمها",
+    "manager.requests.searchPlaceholder":
+      "ابحث بالموظف أو نوع الإجازة أو السبب",
+    "manager.requests.searchAssetsPlaceholder":
+      "ابحث بالموظف أو رمز العهدة أو اسمها",
     "manager.requests.expandHint": "وسّع الصف لعرض مسار الاعتماد كاملاً.",
     "manager.requests.noMatches": "لا توجد طلبات مطابقة لبحثك",
     "manager.requests.noMatchesDesc": "جرّب اسم موظف أو كلمة بحث مختلفة.",
@@ -4477,10 +5259,12 @@ export const translations: Record<AppLanguage, TranslationMap> = {
 
     // CEO Dashboard
     "ceo.dashboard.title": "النظرة التنفيذية العامة",
-    "ceo.dashboard.subtitle": "نظرة عامة على الطلبات المعلقة التي تتطلب موافقة المدير التنفيذي.",
+    "ceo.dashboard.subtitle":
+      "نظرة عامة على الطلبات المعلقة التي تتطلب موافقة المدير التنفيذي.",
     "ceo.dashboard.overviewContext": "كل ما ينتظر قرارك",
     "ceo.dashboard.loadFailed": "تعذّر تحميل نظرة الموافقات العامة",
-    "ceo.dashboard.loadFailedHint": "تعذّر قراءة أي من قوائم الموافقات. تحقّق من الاتصال أو صلاحياتك ثم أعد المحاولة.",
+    "ceo.dashboard.loadFailedHint":
+      "تعذّر قراءة أي من قوائم الموافقات. تحقّق من الاتصال أو صلاحياتك ثم أعد المحاولة.",
     "ceo.dashboard.awaitingDecision": "بانتظار قرارك",
     "ceo.dashboard.awaitingDecisionCaption": "في جميع قوائم الموافقات",
     "ceo.dashboard.openPendingInbox": "فتح صندوق الطلبات المعلّقة",
@@ -4490,7 +5274,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "ceo.dashboard.queueNonePending": "لا يوجد معلّق",
     "ceo.dashboard.queuePendingCount": "{count} بانتظار المراجعة",
     "ceo.dashboard.queueUnavailable": "غير متاح",
-    "ceo.dashboard.queueUnavailableHint": "ليس لديك صلاحية الوصول إلى هذه القائمة",
+    "ceo.dashboard.queueUnavailableHint":
+      "ليس لديك صلاحية الوصول إلى هذه القائمة",
     "ceo.dashboard.queue.leave": "طلبات الإجازة",
     "ceo.dashboard.queue.leaveCaption": "بانتظار موافقة المدير التنفيذي",
     "ceo.dashboard.queue.loan": "طلبات السلف",
@@ -4502,20 +5287,24 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "ceo.dashboard.queue.assetDamage": "بلاغات التلف",
     "ceo.dashboard.queue.assetDamageCaption": "أضرار الأصول المُبلّغ عنها",
     "ceo.dashboard.queue.assetReturn": "طلبات إرجاع الأصول",
-    "ceo.dashboard.queue.assetReturnCaption": "أصول بانتظار الموافقة على الإرجاع",
+    "ceo.dashboard.queue.assetReturnCaption":
+      "أصول بانتظار الموافقة على الإرجاع",
     "ceo.dashboard.queue.employeeArchive": "طلبات أرشفة الموظفين",
-    "ceo.dashboard.queue.employeeArchiveCaption": "طلبات أرشفة بحاجة إلى مراجعة",
+    "ceo.dashboard.queue.employeeArchiveCaption":
+      "طلبات أرشفة بحاجة إلى مراجعة",
 
     // شاشات موافقات المدير التنفيذي (صياغة مشتركة)
     "ceo.approvals.awaitingCount": "{count} بالانتظار",
-    "ceo.approvals.emptyDescription": "ستظهر الطلبات الجديدة هنا فور وصولها إليك.",
+    "ceo.approvals.emptyDescription":
+      "ستظهر الطلبات الجديدة هنا فور وصولها إليك.",
     "ceo.approvals.emptyFilteredDescription": "جرّب تصفية أو كلمة بحث مختلفة.",
     "ceo.approvals.approveTitle": "الموافقة على الطلب",
     "ceo.approvals.approveNoteLabel": "ملاحظة القرار (اختياري)",
     "ceo.approvals.approveNotePlaceholder": "أضف ملاحظة للسجل...",
     "ceo.approvals.approveSuccess": "تمت الموافقة على الطلب",
     "ceo.approvals.rejectSuccess": "تم رفض الطلب",
-    "ceo.approvals.rejectWarning": "الرفض نهائي لهذا الطلب. وضّح سبب القرار للموظف.",
+    "ceo.approvals.rejectWarning":
+      "الرفض نهائي لهذا الطلب. وضّح سبب القرار للموظف.",
     "ceo.approvals.rejectReasonLabel": "سبب الرفض",
     "ceo.approvals.rejectReasonPlaceholder": "اشرح سبب رفض هذا الطلب...",
     "ceo.approvals.rejectReasonRequired": "سبب الرفض مطلوب.",
@@ -4530,7 +5319,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
 
     // حضور المدير التنفيذي
     "ceo.attendance.title": "موافقات الحضور",
-    "ceo.attendance.subtitle": "مراجعة سجلات الحضور المُصعّدة إلى المدير التنفيذي.",
+    "ceo.attendance.subtitle":
+      "مراجعة سجلات الحضور المُصعّدة إلى المدير التنفيذي.",
 
     // تنقّل المدير التنفيذي
     "ceo.nav.overviewCaption": "ملخّص تنفيذي",
@@ -4539,21 +5329,26 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "ceo.nav.teamCaption": "الأشخاص والتحديثات",
     "ceo.nav.profileCaption": "الحساب",
     "manager.team.failedLoad": "فشل تحميل أعضاء الفريق",
-    "manager.team.searchPlaceholder": "ابحث بالاسم أو الرقم الوظيفي أو القسم أو المسمى",
+    "manager.team.searchPlaceholder":
+      "ابحث بالاسم أو الرقم الوظيفي أو القسم أو المسمى",
     "manager.team.departmentFilter": "كل الأقسام",
     "manager.team.viewProfile": "عرض الملف",
     "manager.team.noMatches": "لا يوجد أعضاء فريق مطابقون للفلاتر",
-    "manager.team.noMatchesDesc": "جرّب اسماً أو رقماً وظيفياً أو قسماً أو مسمى مختلفاً.",
+    "manager.team.noMatchesDesc":
+      "جرّب اسماً أو رقماً وظيفياً أو قسماً أو مسمى مختلفاً.",
     "manager.team.profile.title": "ملف الموظف",
     "manager.team.profile.back": "العودة إلى فريقي",
     "manager.team.profile.loadFailed": "فشل تحميل ملف الموظف",
     "manager.team.profile.notFound": "الموظف غير موجود",
-    "manager.team.profile.notFoundDesc": "هذا الموظف ليس ضمن فريقك أو غير موجود.",
-    "manager.team.profile.readOnlyNote": "هذا الملف للعرض فقط. سجلات الموظفين تُدار من قبل الموارد البشرية.",
+    "manager.team.profile.notFoundDesc":
+      "هذا الموظف ليس ضمن فريقك أو غير موجود.",
+    "manager.team.profile.readOnlyNote":
+      "هذا الملف للعرض فقط. سجلات الموظفين تُدار من قبل الموارد البشرية.",
     "manager.team.profile.identitySection": "الموظف",
     "manager.team.profile.detailsSection": "التفاصيل",
     "manager.team.profile.openRequests": "الطلبات المفتوحة",
-    "manager.team.profile.noOpenRequests": "لا يوجد لهذا الموظف أي طلب بانتظار موافقتك.",
+    "manager.team.profile.noOpenRequests":
+      "لا يوجد لهذا الموظف أي طلب بانتظار موافقتك.",
 
     // شاشات تفاصيل طلبات الفريق
     "manager.leaveDetails.employeeSection": "الموظف",
@@ -4569,17 +5364,19 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "manager.access.checking": "جارٍ التحقق من صلاحية إدارة الفريق...",
     "manager.access.forbiddenTitle": "صلاحية إدارة الفريق غير متاحة",
     "manager.access.forbiddenDesc":
-        "لا يتبعك أي موظف حالياً، لذلك صفحات إدارة الفريق غير متاحة. تواصل مع الموارد البشرية لتعيينك مديراً مباشراً إذا كان ذلك غير متوقع.",
+      "لا يتبعك أي موظف حالياً، لذلك صفحات إدارة الفريق غير متاحة. تواصل مع الموارد البشرية لتعيينك مديراً مباشراً إذا كان ذلك غير متوقع.",
     "manager.empty.noDirectReportsTitle": "لا يوجد موظفون معيّنون لك بعد",
     "manager.empty.noDirectReportsDesc":
-        "لا يوجد حالياً أي موظف معيّن لك كمدير مباشر. بمجرد أن تعيّن الموارد البشرية مرؤوسين لك سيظهرون هنا.",
+      "لا يوجد حالياً أي موظف معيّن لك كمدير مباشر. بمجرد أن تعيّن الموارد البشرية مرؤوسين لك سيظهرون هنا.",
     "manager.empty.noPendingRequestsTitle": "لا توجد طلبات فريق معلّقة",
-    "manager.empty.noPendingRequestsDesc": "لا توجد لدى فريقك طلبات بانتظار موافقتك حالياً.",
+    "manager.empty.noPendingRequestsDesc":
+      "لا توجد لدى فريقك طلبات بانتظار موافقتك حالياً.",
     "manager.empty.noAssetReturnsTitle": "لا توجد طلبات إرجاع عهد للمراجعة",
-    "manager.empty.noAssetReturnsDesc": "لم يطلب أي من أعضاء فريقك إرجاع معدات حالياً.",
+    "manager.empty.noAssetReturnsDesc":
+      "لم يطلب أي من أعضاء فريقك إرجاع معدات حالياً.",
     "manager.empty.noRequestPermissionTitle": "لا يمكنك مراجعة هذا الطلب",
     "manager.empty.noRequestPermissionDesc":
-        "هذا الطلب يخص موظفاً خارج فريقك، أو أنه انتقل بالفعل إلى مرحلة اعتماد أخرى.",
+      "هذا الطلب يخص موظفاً خارج فريقك، أو أنه انتقل بالفعل إلى مرحلة اعتماد أخرى.",
 
     // Announcements Widget
     "announcements.widget.title": "الإعلانات",
@@ -4591,7 +5388,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
 
     // CEO
     "ceo.leaveApprovals.title": "موافقات إجازات المدير التنفيذي",
-    "ceo.leaveApprovals.subtitle": "مراجعة والموافقة على طلبات الإجازة المعلّقة.",
+    "ceo.leaveApprovals.subtitle":
+      "مراجعة والموافقة على طلبات الإجازة المعلّقة.",
     "ceo.leaveApprovals.approveTitle": "الموافقة على طلب الإجازة",
     "ceo.leaveApprovals.employee": "الموظف",
     "ceo.leaveApprovals.period": "الفترة",
@@ -4599,10 +5397,12 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "ceo.leaveApprovals.noRequests": "لم يتم العثور على طلبات إجازة معلّقة.",
     "ceo.leaveApprovals.rejectTitle": "رفض طلب الإجازة",
     "ceo.leaveApprovals.rejectConfirm": "تأكيد الرفض",
-    "ceo.leaveApprovals.rejectWarning": "هذا الإجراء غير قابل للتراجع. يرجى التوضيح للموظف.",
+    "ceo.leaveApprovals.rejectWarning":
+      "هذا الإجراء غير قابل للتراجع. يرجى التوضيح للموظف.",
     "ceo.leaveApprovals.rejectComment": "سبب الرفض...",
     "ceo.team.title": "فريق القيادة",
-    "ceo.team.subtitle": "المدراء ومدراء الموارد البشرية والموظفين التابعين للمدير التنفيذي.",
+    "ceo.team.subtitle":
+      "المدراء ومدراء الموارد البشرية والموظفين التابعين للمدير التنفيذي.",
     "ceo.team.failedLoad": "فشل تحميل فريق القيادة",
     "ceo.team.roleEmail": "البريد الإلكتروني للدور",
     "ceo.team.searchPlaceholder": "ابحث بالاسم أو الرقم أو القسم...",
@@ -4652,29 +5452,47 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "loans.myLoans": "سلفي",
     "loans.noLoans": "لا توجد طلبات سلف",
     "loans.request.failedLoad": "فشل الطلب",
-    "loans.request.error.server": "تعذر تقديم طلب السلفة بسبب مشكلة مؤقتة في الخادم. يرجى المحاولة مرة أخرى بعد بضع دقائق. إذا استمرت المشكلة، تواصل مع الموارد البشرية.",
-    "loans.request.error.network": "تعذر الاتصال بالخادم. يرجى التحقق من اتصال الإنترنت ثم المحاولة مرة أخرى.",
-    "loans.request.error.timeout": "الخادم يستغرق وقتاً أطول من المتوقع في الاستجابة. يرجى المحاولة مرة أخرى.",
-    "loans.request.error.validation": "بعض البيانات المدخلة غير صحيحة. يرجى مراجعة الحقول ثم إعادة الإرسال.",
-    "loans.request.error.unauthorized": "قد تكون جلسة الدخول منتهية. يرجى تسجيل الدخول مرة أخرى ثم إعادة المحاولة.",
-    "loans.request.error.forbidden": "ليس لديك صلاحية تقديم طلب سلفة بهذا الحساب.",
-    "loans.request.error.generic": "تعذر تقديم طلب السلفة. يرجى المحاولة مرة أخرى.",
-    "loans.request.error.profileNotFound": "لم يتم العثور على ملفك الوظيفي. يرجى التواصل مع الموارد البشرية.",
-    "loans.request.error.inactiveEmployee": "يُسمح بطلب السلف للموظفين النشطين فقط.",
-    "loans.request.error.basicSalaryMissing": "الراتب الأساسي غير مُعد في ملفك. يرجى التواصل مع الموارد البشرية.",
-    "loans.request.error.openLoanWindow": "يُسمح بالسلفة المؤقتة فقط خلال آخر 10 أيام من الشهر.",
-    "loans.request.error.openExceedsLimit": "لا يمكن أن تتجاوز السلفة المؤقتة 25% من الراتب الأساسي ({limit}).",
-    "loans.request.error.installmentMonthsOnlyForInstallment": "عدد الأشهر يُستخدم فقط مع السلفة بالتقسيط.",
-    "loans.request.error.installmentMonthsRequired": "عدد الأشهر مطلوب للسلفة بالتقسيط.",
-    "loans.request.error.installmentNeedsJoinDate": "السلفة بالتقسيط تتطلب تاريخ انضمام مُعدّ.",
-    "loans.request.error.installmentMinService": "السلفة بالتقسيط متاحة بعد إكمال 6 أشهر خدمة على الأقل.",
-    "loans.request.error.exceedsBasicSalary": "لا يمكن أن يتجاوز مبلغ السلفة راتبك الأساسي.",
+    "loans.request.error.server":
+      "تعذر تقديم طلب السلفة بسبب مشكلة مؤقتة في الخادم. يرجى المحاولة مرة أخرى بعد بضع دقائق. إذا استمرت المشكلة، تواصل مع الموارد البشرية.",
+    "loans.request.error.network":
+      "تعذر الاتصال بالخادم. يرجى التحقق من اتصال الإنترنت ثم المحاولة مرة أخرى.",
+    "loans.request.error.timeout":
+      "الخادم يستغرق وقتاً أطول من المتوقع في الاستجابة. يرجى المحاولة مرة أخرى.",
+    "loans.request.error.validation":
+      "بعض البيانات المدخلة غير صحيحة. يرجى مراجعة الحقول ثم إعادة الإرسال.",
+    "loans.request.error.unauthorized":
+      "قد تكون جلسة الدخول منتهية. يرجى تسجيل الدخول مرة أخرى ثم إعادة المحاولة.",
+    "loans.request.error.forbidden":
+      "ليس لديك صلاحية تقديم طلب سلفة بهذا الحساب.",
+    "loans.request.error.generic":
+      "تعذر تقديم طلب السلفة. يرجى المحاولة مرة أخرى.",
+    "loans.request.error.profileNotFound":
+      "لم يتم العثور على ملفك الوظيفي. يرجى التواصل مع الموارد البشرية.",
+    "loans.request.error.inactiveEmployee":
+      "يُسمح بطلب السلف للموظفين النشطين فقط.",
+    "loans.request.error.basicSalaryMissing":
+      "الراتب الأساسي غير مُعد في ملفك. يرجى التواصل مع الموارد البشرية.",
+    "loans.request.error.openLoanWindow":
+      "يُسمح بالسلفة المؤقتة فقط خلال آخر 10 أيام من الشهر.",
+    "loans.request.error.openExceedsLimit":
+      "لا يمكن أن تتجاوز السلفة المؤقتة 25% من الراتب الأساسي ({limit}).",
+    "loans.request.error.installmentMonthsOnlyForInstallment":
+      "عدد الأشهر يُستخدم فقط مع السلفة بالتقسيط.",
+    "loans.request.error.installmentMonthsRequired":
+      "عدد الأشهر مطلوب للسلفة بالتقسيط.",
+    "loans.request.error.installmentNeedsJoinDate":
+      "السلفة بالتقسيط تتطلب تاريخ انضمام مُعدّ.",
+    "loans.request.error.installmentMinService":
+      "السلفة بالتقسيط متاحة بعد إكمال 6 أشهر خدمة على الأقل.",
+    "loans.request.error.exceedsBasicSalary":
+      "لا يمكن أن يتجاوز مبلغ السلفة راتبك الأساسي.",
     "loans.request.submittedSuccess": "تم تقديم طلب السلفة",
     "loans.details.back": "رجوع",
     "loans.request.title": "طلب سلفة",
     "loans.request.subtitle": "قدم طلب سلفة حتى حد راتبك الأساسي.",
     "loans.request.limitLabel": "حد الراتب الأساسي:",
-    "loans.request.openLimitLabel": "حد السلفة المؤقتة (25% من الراتب الأساسي):",
+    "loans.request.openLimitLabel":
+      "حد السلفة المؤقتة (25% من الراتب الأساسي):",
     "loans.request.formLoanType": "نوع السلفة",
     "loans.request.formLoanTypeReq": "يرجى اختيار نوع السلفة",
     "loans.request.loanTypeOpen": "سلفة مؤقتة",
@@ -4686,15 +5504,18 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "loans.request.formAmountPlaceholder": "أدخل المبلغ",
     "loans.request.formInstallmentMonths": "عدد الأشهر",
     "loans.request.formInstallmentMonthsReq": "يرجى إدخال عدد الأشهر",
-    "loans.request.formInstallmentMonthsRange": "عدد الأشهر يجب أن يكون بين 1 و 10",
-    "loans.request.formInstallmentMonthsPlaceholder": "أدخل عدد الأشهر (الحد الأقصى 10)",
+    "loans.request.formInstallmentMonthsRange":
+      "عدد الأشهر يجب أن يكون بين 1 و 10",
+    "loans.request.formInstallmentMonthsPlaceholder":
+      "أدخل عدد الأشهر (الحد الأقصى 10)",
     "loans.request.monthlyDeductionLabel": "الاستقطاع الشهري من الراتب:",
     "loans.request.formReason": "السبب",
     "loans.request.formReasonPlaceholder": "لماذا تطلب هذه السلفة؟",
     "loans.request.formSubmit": "تقديم الطلب",
     "loans.myRequests.failedLoad": "فشل تحميل الطلبات",
     "loans.myRequests.cancelTitle": "إلغاء طلب السلفة",
-    "loans.myRequests.cancelConfirm": "هل أنت متأكد أنك تريد إلغاء طلب السلفة هذا؟",
+    "loans.myRequests.cancelConfirm":
+      "هل أنت متأكد أنك تريد إلغاء طلب السلفة هذا؟",
     "loans.myRequests.cancelBtn": "نعم، إلغاء",
     "loans.myRequests.cancelFailed": "فشل الإلغاء",
     "loans.myRequests.cancelSuccess": "تم رفع الطلب بنجاح",
@@ -4705,7 +5526,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "loans.list.viewDetails": "عرض التفاصيل",
     "loans.list.cancelReq": "إلغاء الطلب",
     "loans.myRequests.title": "طلبات السلف الخاصة بي",
-    "loans.myRequests.subtitle": "تتبع طلبات السلف المرسلة وحالة الموافقة عليها.",
+    "loans.myRequests.subtitle":
+      "تتبع طلبات السلف المرسلة وحالة الموافقة عليها.",
     "loans.myRequests.newRequest": "طلب سلفة جديد",
     "loans.details.titlePrefix": "تفاصيل طلب السلفة",
     "loans.details.subtitle": "عرض حالة طلبك وسجل الموافقات.",
@@ -4739,7 +5561,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "loans.inbox.allStatuses": "كل الحالات",
     "loans.inbox.emptyTitle": "لا توجد طلبات سلف لعرضها",
     "loans.inbox.emptyDescription": "تظهر الطلبات هنا فور وصولها إلى مرحلتك.",
-    "loans.inbox.emptyFilteredDescription": "لا يوجد طلب مطابق للحالة المختارة.",
+    "loans.inbox.emptyFilteredDescription":
+      "لا يوجد طلب مطابق للحالة المختارة.",
     "loans.inbox.approveFailed": "فشلت الموافقة",
     "loans.inbox.requestApproved": "تمت الموافقة على الطلب",
     "loans.inbox.commentRequired": "التعليق مطلوب للرفض",
@@ -4754,9 +5577,12 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "loans.inbox.btnRecommendReject": "توصية بالرفض",
     "loans.inbox.btnReferToCEO": "إحالة للرئيس التنفيذي",
     "loans.inbox.btnMarkDisbursed": "تأكيد الصرف",
-    "loans.inbox.managerRecommendedApprove": "تم حفظ توصية المدير المباشر بالموافقة.",
-    "loans.inbox.managerRecommendedReject": "تم حفظ توصية المدير المباشر بالرفض.",
-    "loans.inbox.hrRecommendedApprove": "تم حفظ توصية الموارد البشرية بالموافقة.",
+    "loans.inbox.managerRecommendedApprove":
+      "تم حفظ توصية المدير المباشر بالموافقة.",
+    "loans.inbox.managerRecommendedReject":
+      "تم حفظ توصية المدير المباشر بالرفض.",
+    "loans.inbox.hrRecommendedApprove":
+      "تم حفظ توصية الموارد البشرية بالموافقة.",
     "loans.inbox.hrRecommendedReject": "تم حفظ توصية الموارد البشرية بالرفض.",
     "loans.inbox.referredToCEOSuccess": "تمت إحالة الطلب إلى الرئيس التنفيذي.",
     "loans.inbox.referFailed": "فشلت إحالة الطلب إلى الرئيس التنفيذي.",
@@ -4765,21 +5591,27 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "loans.inbox.disbursementReviewTitle": "مراجعة الصرف",
     "loans.inbox.disbursementSuccess": "تم تأكيد الصرف بنجاح.",
     "loans.inbox.financeApproveTitle": "صندوق سلف الشؤون المالية",
-    "loans.inbox.financeApproveSubtitle": "مراجعة الطلبات المعلقة لتوصية الموارد البشرية",
+    "loans.inbox.financeApproveSubtitle":
+      "مراجعة الطلبات المعلقة لتوصية الموارد البشرية",
     "loans.inbox.managerRequestsTitle": "طلبات السلف",
-    "loans.inbox.managerRequestsSubtitle": "مراجعة وتتبع سجل طلبات السلف لمرؤوسيك المباشرين",
+    "loans.inbox.managerRequestsSubtitle":
+      "مراجعة وتتبع سجل طلبات السلف لمرؤوسيك المباشرين",
     "loans.inbox.managerReviewTitle": "مراجعة طلب السلفة",
     "loans.inbox.financeReviewTitle": "مراجعة السلفة من قبل الشؤون المالية",
     "loans.inbox.ceoRequestsTitle": "صندوق سلف الرئيس التنفيذي",
-    "loans.inbox.ceoRequestsSubtitle": "قائمة الموافقات النهائية لطلبات السلف المقدمة من المدير المالي",
+    "loans.inbox.ceoRequestsSubtitle":
+      "قائمة الموافقات النهائية لطلبات السلف المقدمة من المدير المالي",
     "loans.inbox.ceoDecisionTitle": "قرار سلفة الرئيس التنفيذي",
     "loans.inbox.cfoRequestsTitle": "صندوق سلف المدير المالي",
     "loans.inbox.cfoRequestsSubtitle": "قائمة الموافقات النهائية لطلبات السلف",
     "loans.inbox.cfoDecisionTitle": "قرار سلفة المدير المالي",
     "loans.history.stage.submitted": "تم الإرسال",
-    "loans.history.stage.manager_recommended_approve": "توصية المدير المباشر بالموافقة",
-    "loans.history.stage.manager_recommended_reject": "توصية المدير المباشر بالرفض",
-    "loans.history.stage.hr_recommended_approve": "توصية الموارد البشرية بالموافقة",
+    "loans.history.stage.manager_recommended_approve":
+      "توصية المدير المباشر بالموافقة",
+    "loans.history.stage.manager_recommended_reject":
+      "توصية المدير المباشر بالرفض",
+    "loans.history.stage.hr_recommended_approve":
+      "توصية الموارد البشرية بالموافقة",
     "loans.history.stage.hr_recommended_reject": "توصية الموارد البشرية بالرفض",
     "loans.history.stage.cfo": "قرار المدير المالي",
     "loans.history.stage.ceo": "قرار الرئيس التنفيذي",
@@ -4795,14 +5627,16 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "common.noEndDate": "بدون تاريخ انتهاء",
     "common.notAvailable": "غير متوفر",
     "delegation.title": "خيار موظف بديل",
-    "delegation.subtitle": "إعادة إسناد مسؤوليات سير العمل أثناء الغياب أو التغطية المؤقتة.",
+    "delegation.subtitle":
+      "إعادة إسناد مسؤوليات سير العمل أثناء الغياب أو التغطية المؤقتة.",
     "delegation.create": "موظف بديل جديد",
     "delegation.createSuccess": "تم إنشاء خيار الموظف البديل.",
     "delegation.loading": "جارٍ تحميل خيار موظف بديل",
     "delegation.loadFailed": "تعذر تحميل خيار موظف بديل",
     "delegation.tryAgain": "يرجى المحاولة مرة أخرى.",
     "delegation.summaryTitle": "عمليات تسليم الموافقات النشطة",
-    "delegation.summaryBody": "تُطبّق هذه الخيارات بواسطة محرك سير العمل المشترك على تعيينات المديرين والموافقات المعتمدة على الأدوار.",
+    "delegation.summaryBody":
+      "تُطبّق هذه الخيارات بواسطة محرك سير العمل المشترك على تعيينات المديرين والموافقات المعتمدة على الأدوار.",
     "delegation.empty": "لا توجد خيارات موظف بديل بعد.",
     "delegation.deleteConfirm": "هل تريد حذف خيار الموظف البديل هذا؟",
     "delegation.fromRequired": "اختر المعتمد الأصلي.",
@@ -4810,7 +5644,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "delegation.startRequired": "اختر تاريخ البدء.",
     "obligations.title": "التزامات الطلب",
     "obligations.loadFailed": "تعذر تحميل الالتزامات.",
-    "obligations.blockingSummary": "يوجد {count} بند مانع يجب إنهاؤه أو التنازل عنه.",
+    "obligations.blockingSummary":
+      "يوجد {count} بند مانع يجب إنهاؤه أو التنازل عنه.",
     "obligations.clearSummary": "لا توجد التزامات مانعة متبقية.",
     "obligations.empty": "لا توجد التزامات لهذا الطلب.",
     "obligations.blocking": "مانع",
@@ -4823,7 +5658,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "obligations.delegateSaved": "تم حفظ الموظف البديل.",
     "obligations.saveDelegate": "حفظ الموظف البديل",
     "obligations.waiverReason": "سبب التنازل",
-    "obligations.ceoWaiverRequired": "يوجد {count} التزام مانع. أدخل سبب تنازل الرئيس التنفيذي للاعتماد.",
+    "obligations.ceoWaiverRequired":
+      "يوجد {count} التزام مانع. أدخل سبب تنازل الرئيس التنفيذي للاعتماد.",
     "obligations.waiverRequired": "سبب التنازل مطلوب.",
     "hr.assets.mustReturnBeforeTravel": "يجب إرجاعه قبل رحلة العمل",
 
@@ -4854,23 +5690,33 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "layout.requests": "الطلبات",
     "attendanceCorrections.page.tabLabel": "تصحيحات الحضور",
     "attendanceCorrections.page.employeeTitle": "تصحيحات الحضور",
-    "attendanceCorrections.page.employeeSubtitle": "قدّم طلبات تصحيح للسجلات الناقصة أو غير الصحيحة.",
+    "attendanceCorrections.page.employeeSubtitle":
+      "قدّم طلبات تصحيح للسجلات الناقصة أو غير الصحيحة.",
     "attendanceCorrections.page.managerTitle": "تصحيحات الحضور",
-    "attendanceCorrections.page.managerSubtitle": "راجع طلبات تصحيح الحضور المقدمة من فريقك.",
+    "attendanceCorrections.page.managerSubtitle":
+      "راجع طلبات تصحيح الحضور المقدمة من فريقك.",
     "attendanceCorrections.page.hrTitle": "طلبات تصحيح الحضور",
-    "attendanceCorrections.page.hrSubtitle": "راجع وطبّق تصحيحات الحضور التي وافق عليها المديرون.",
+    "attendanceCorrections.page.hrSubtitle":
+      "راجع وطبّق تصحيحات الحضور التي وافق عليها المديرون.",
     "attendanceCorrections.maintenance.title": "الحضور قيد الصيانة",
-    "attendanceCorrections.maintenance.description": "سجلات الحضور قيد الصيانة مؤقتًا. يمكنك تقديم طلبات تصحيح للسجلات الناقصة أو غير الصحيحة.",
-    "attendanceCorrections.maintenance.managerDescription": "وحدة الحضور قيد الصيانة. يمكنك الموافقة على طلبات التصحيح هنا وسيتم تحديث السجلات بعد عودتها.",
-    "attendanceCorrections.maintenance.hrDescription": "وحدة الحضور قيد الصيانة. ستطبق موافقات الموارد البشرية هنا التعديل على سجل الحضور بعد عودة الوحدة.",
+    "attendanceCorrections.maintenance.description":
+      "سجلات الحضور قيد الصيانة مؤقتًا. يمكنك تقديم طلبات تصحيح للسجلات الناقصة أو غير الصحيحة.",
+    "attendanceCorrections.maintenance.managerDescription":
+      "وحدة الحضور قيد الصيانة. يمكنك الموافقة على طلبات التصحيح هنا وسيتم تحديث السجلات بعد عودتها.",
+    "attendanceCorrections.maintenance.hrDescription":
+      "وحدة الحضور قيد الصيانة. ستطبق موافقات الموارد البشرية هنا التعديل على سجل الحضور بعد عودة الوحدة.",
     "attendanceCorrections.actions.create": "طلب تصحيح جديد",
     "attendanceCorrections.actions.submitTitle": "إرسال طلب التصحيح",
-    "attendanceCorrections.actions.submitConfirm": "سيتم إرسال هذا الطلب للموافقة. هل تريد المتابعة؟",
+    "attendanceCorrections.actions.submitConfirm":
+      "سيتم إرسال هذا الطلب للموافقة. هل تريد المتابعة؟",
     "attendanceCorrections.actions.cancelTitle": "إلغاء طلب التصحيح",
-    "attendanceCorrections.actions.cancelConfirm": "هل أنت متأكد من رغبتك في إلغاء هذا الطلب؟",
+    "attendanceCorrections.actions.cancelConfirm":
+      "هل أنت متأكد من رغبتك في إلغاء هذا الطلب؟",
     "attendanceCorrections.actions.rejectTitle": "رفض طلب التصحيح",
-    "attendanceCorrections.actions.rejectPrompt": "يرجى كتابة سبب الرفض. سيظهر هذا للموظف.",
-    "attendanceCorrections.actions.rejectPlaceholder": "مثلاً: الوقت المطلوب لا يطابق سجلاتنا.",
+    "attendanceCorrections.actions.rejectPrompt":
+      "يرجى كتابة سبب الرفض. سيظهر هذا للموظف.",
+    "attendanceCorrections.actions.rejectPlaceholder":
+      "مثلاً: الوقت المطلوب لا يطابق سجلاتنا.",
     "attendanceCorrections.form.title": "طلب تصحيح جديد",
     "attendanceCorrections.form.date": "التاريخ",
     "attendanceCorrections.form.dateRequired": "التاريخ مطلوب",
@@ -4879,7 +5725,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "attendanceCorrections.form.requestedStatus": "الحالة المطلوبة",
     "attendanceCorrections.form.requestedStatusPlaceholder": "اختياري",
     "attendanceCorrections.form.reason": "السبب",
-    "attendanceCorrections.form.reasonPlaceholder": "اشرح سبب الحاجة إلى هذا التصحيح (حضور ناقص، وقت غير صحيح، إلخ).",
+    "attendanceCorrections.form.reasonPlaceholder":
+      "اشرح سبب الحاجة إلى هذا التصحيح (حضور ناقص، وقت غير صحيح، إلخ).",
     "attendanceCorrections.form.submit": "إرسال الطلب",
     "attendanceCorrections.fields.currentCheckIn": "وقت الحضور الحالي",
     "attendanceCorrections.fields.currentCheckOut": "وقت الانصراف الحالي",
@@ -4911,10 +5758,14 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "attendanceCorrections.statusValue.REJECTED": "مرفوض",
     "attendanceCorrections.statusValue.PENDING": "قيد الانتظار",
     "attendanceCorrections.empty.title": "لا توجد طلبات تصحيح بعد",
-    "attendanceCorrections.empty.employeeDescription": "قدّم طلب تصحيح إذا كان حضورك في يوم معين ناقصاً أو غير صحيح.",
-    "attendanceCorrections.empty.approverDescription": "لا توجد طلبات تصحيح حضور مطابقة للتصفية الحالية.",
-    "attendanceCorrections.errors.atLeastOne": "يجب تقديم واحد على الأقل من: الحضور أو الانصراف أو الحالة.",
-    "attendanceCorrections.errors.checkOutBeforeCheckIn": "وقت الانصراف المطلوب لا يمكن أن يسبق وقت الحضور المطلوب.",
+    "attendanceCorrections.empty.employeeDescription":
+      "قدّم طلب تصحيح إذا كان حضورك في يوم معين ناقصاً أو غير صحيح.",
+    "attendanceCorrections.empty.approverDescription":
+      "لا توجد طلبات تصحيح حضور مطابقة للتصفية الحالية.",
+    "attendanceCorrections.errors.atLeastOne":
+      "يجب تقديم واحد على الأقل من: الحضور أو الانصراف أو الحالة.",
+    "attendanceCorrections.errors.checkOutBeforeCheckIn":
+      "وقت الانصراف المطلوب لا يمكن أن يسبق وقت الحضور المطلوب.",
     "attendanceCorrections.errors.reasonRequired": "السبب مطلوب",
     "attendanceCorrections.errors.rejectNoteRequired": "ملاحظة الرفض مطلوبة",
     "attendanceCorrections.errors.createFailed": "فشل إنشاء طلب التصحيح",
@@ -4924,7 +5775,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "attendanceCorrections.success.approved": "تمت الموافقة على التصحيح.",
     "attendanceCorrections.success.rejected": "تم رفض طلب التصحيح.",
     "attendanceCorrections.success.applied": "تم تطبيق التصحيح.",
-    "attendanceCorrections.notice.savedAsDraft": "تم الحفظ كمسودة. يمكنك إرسالها لاحقاً.",
+    "attendanceCorrections.notice.savedAsDraft":
+      "تم الحفظ كمسودة. يمكنك إرسالها لاحقاً.",
 
     // Notifications
     "notifications.title": "الإشعارات",
@@ -4941,7 +5793,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "notifications.refresh": "تحديث",
     "notifications.connecting": "جارٍ الاتصال…",
     "notifications.reconnecting": "جارٍ إعادة الاتصال…",
-    "notifications.pollingFallback": "جارٍ إعادة الاتصال… يتم عرض آخر التحديثات",
+    "notifications.pollingFallback":
+      "جارٍ إعادة الاتصال… يتم عرض آخر التحديثات",
     "notifications.blockedLink": "تم حظر هذا الرابط للحفاظ على أمانك.",
     "notifications.unread": "غير مقروء",
     "notifications.read": "مقروء",
@@ -4952,12 +5805,16 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "notifications.preferences.open": "فتح تفضيلات الإشعارات",
     "notifications.preferences.title": "تفضيلات الإشعارات",
     "notifications.preferences.explanationTitle": "كيف يتم إشعارك",
-    "notifications.preferences.explanation": "تتم تجربة واتساب أولاً. يُستخدم البريد الإلكتروني فقط إذا فشل واتساب أو كان غير متاح.",
+    "notifications.preferences.explanation":
+      "تتم تجربة واتساب أولاً. يُستخدم البريد الإلكتروني فقط إذا فشل واتساب أو كان غير متاح.",
     "notifications.preferences.whatsappLabel": "إشعارات واتساب",
-    "notifications.preferences.whatsappHelp": "استلام الإشعارات عبر واتساب عند توفّر رقم صالح.",
+    "notifications.preferences.whatsappHelp":
+      "استلام الإشعارات عبر واتساب عند توفّر رقم صالح.",
     "notifications.preferences.emailLabel": "البريد الإلكتروني كبديل",
-    "notifications.preferences.emailHelp": "إرسال بريد إلكتروني فقط عند فشل واتساب أو عدم توفره.",
-    "notifications.preferences.note": "قد تظل إعدادات مؤسستك سارية، وبعض الرسائل المهمة تُرسَل دائماً.",
+    "notifications.preferences.emailHelp":
+      "إرسال بريد إلكتروني فقط عند فشل واتساب أو عدم توفره.",
+    "notifications.preferences.note":
+      "قد تظل إعدادات مؤسستك سارية، وبعض الرسائل المهمة تُرسَل دائماً.",
     "notifications.preferences.save": "حفظ التفضيلات",
     "notifications.preferences.saving": "جارٍ الحفظ…",
     "notifications.preferences.saved": "تم حفظ التفضيلات.",
@@ -4999,5 +5856,391 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "notifications.category.employee": "موظف",
     "notifications.category.system": "النظام",
     "notifications.category.general": "عام",
+
+    // Job Offers (HR)
+    "layout.jobOffers": "عروض العمل",
+    "jobOffers.title": "عروض العمل",
+    "jobOffers.subtitle": "إدارة عروض المرشحين ودعوات الانضمام.",
+    "jobOffers.newOffer": "عرض جديد",
+    "jobOffers.searchPlaceholder":
+      "ابحث بالاسم أو البريد الإلكتروني أو الجوال أو الرقم المرجعي",
+    "jobOffers.filterStatus": "الحالة",
+    "jobOffers.countTag": "{count} عرض",
+    "jobOffers.loadFailed": "تعذر تحميل عروض العمل.",
+    "jobOffers.status.all": "الكل",
+    "jobOffers.status.draft": "مسودة",
+    "jobOffers.status.sent": "مُرسل",
+    "jobOffers.status.accepted": "مقبول",
+    "jobOffers.status.rejected": "مرفوض",
+    "jobOffers.status.expired": "منتهي الصلاحية",
+    "jobOffers.status.cancelled": "ملغى",
+    "jobOffers.col.candidate": "المرشح",
+    "jobOffers.col.position": "الوظيفة",
+    "jobOffers.col.departmentLocation": "القسم / الموقع",
+    "jobOffers.col.package": "إجمالي الحزمة",
+    "jobOffers.col.status": "الحالة",
+    "jobOffers.col.offerDate": "تاريخ العرض",
+    "jobOffers.col.expiryDate": "تاريخ الانتهاء",
+    "jobOffers.col.actions": "الإجراءات",
+    "jobOffers.action.view": "عرض",
+    "jobOffers.action.edit": "تعديل",
+    "jobOffers.action.send": "إرسال",
+    "jobOffers.action.sendOffer": "إرسال العرض",
+    "jobOffers.action.pdf": "PDF",
+    "jobOffers.action.downloadPdf": "تنزيل PDF",
+    "jobOffers.action.cancel": "إلغاء",
+    "jobOffers.action.cancelOffer": "إلغاء العرض",
+    "jobOffers.action.refresh": "تحديث",
+    "jobOffers.action.backToList": "العودة إلى عروض العمل",
+    "jobOffers.empty.title": "لا توجد عروض عمل بعد",
+    "jobOffers.empty.description": "أنشئ أول عرض لبدء إجراءات انضمام المرشح.",
+    "jobOffers.empty.filteredTitle": "لا توجد عروض مطابقة لعوامل التصفية",
+    "jobOffers.empty.filteredDescription": "جرّب حالة مختلفة أو امسح البحث.",
+    "jobOffers.form.createTitle": "عرض عمل جديد",
+    "jobOffers.form.createSubtitle":
+      "أنشئ مسودة العرض ثم أرسلها إلى المرشح عندما تكون جاهزة.",
+    "jobOffers.form.editTitle": "تعديل عرض العمل",
+    "jobOffers.form.editSubtitle": "حدّث المسودة قبل إرسالها إلى المرشح.",
+    "jobOffers.form.section.candidate": "المرشح وبيانات التواصل",
+    "jobOffers.form.section.job": "تفاصيل الوظيفة",
+    "jobOffers.form.section.compensation": "الأجور والبدلات",
+    "jobOffers.form.section.benefits": "المزايا والعقد",
+    "jobOffers.form.section.metadata": "بيانات العرض",
+    "jobOffers.form.automationHint":
+      "يتم تعيين الرقم المرجعي وموقّع الموارد البشرية تلقائياً عند حفظ العرض.",
+    "jobOffers.form.saveDraft": "حفظ كمسودة",
+    "jobOffers.form.saveChanges": "حفظ التغييرات",
+    "jobOffers.form.discard": "تجاهل",
+    "jobOffers.form.created": "تم حفظ عرض العمل كمسودة.",
+    "jobOffers.form.updated": "تم تحديث عرض العمل.",
+    "jobOffers.form.saveFailed": "تعذر حفظ عرض العمل.",
+    "jobOffers.form.notEditable": "يمكن تعديل العروض بحالة مسودة فقط.",
+    "jobOffers.form.contactHint":
+      "أدخل بريدًا إلكترونيًا أو رقم جوال أو كليهما. يلزم أحدهما على الأقل لإرسال العرض.",
+    "jobOffers.form.totalHint": "يُحسب تلقائيًا من مكوّنات الراتب أعلاه.",
+    "jobOffers.form.employeeProfileHint":
+      "اربط ملف موظف قيد التعيين ليُحدَّث تلقائيًا عند القبول.",
+    "jobOffers.form.employeeProfileNone": "غير مرتبط",
+    "jobOffers.form.employeeProfilePlaceholder": "ابحث في ملفات الموظفين",
+    "jobOffers.form.nationalityPlaceholder": "اختر الجنسية",
+    "jobOffers.form.profileAutomatic": "ملف الموظف يُنشأ تلقائيًا",
+    "jobOffers.form.profileAutomaticHint":
+      "يُنشأ ملف موظف ما قبل التعيين ويُربط تلقائيًا عند حفظ هذا العرض.",
+    "jobOffers.form.referenceHint":
+      "يُختار من البيانات المرجعية للموارد البشرية في شركتك.",
+    "jobOffers.form.departmentPlaceholder": "اختر القسم",
+    "jobOffers.form.positionPlaceholder": "اختر الوظيفة",
+    "jobOffers.field.candidateFullName": "اسم المرشح الكامل",
+    "jobOffers.field.candidateEmail": "البريد الإلكتروني للمرشح",
+    "jobOffers.field.candidatePhone": "رقم جوال المرشح",
+    "jobOffers.field.nationality": "الجنسية",
+    "jobOffers.field.idNumber": "رقم الهوية / الجواز / الإقامة",
+    "jobOffers.field.employeeProfile": "ملف الموظف المرتبط",
+    "jobOffers.field.positionTitle": "المسمى الوظيفي",
+    "jobOffers.field.classification": "التصنيف",
+    "jobOffers.field.department": "القسم",
+    "jobOffers.field.departmentRef": "القسم",
+    "jobOffers.field.position": "الوظيفة",
+    "jobOffers.field.location": "الموقع",
+    "jobOffers.field.basicSalary": "الراتب الأساسي",
+    "jobOffers.field.housingAllowance": "بدل السكن",
+    "jobOffers.field.transportationAllowance": "بدل النقل",
+    "jobOffers.field.otherAllowance": "بدلات أخرى",
+    "jobOffers.field.totalPackage": "إجمالي حزمة الراتب",
+    "jobOffers.field.vacation": "الإجازة",
+    "jobOffers.field.tickets": "التذاكر",
+    "jobOffers.field.contractStatus": "حالة العقد",
+    "jobOffers.field.contractType": "نوع العقد",
+    "jobOffers.field.contractDuration": "مدة العقد",
+    "jobOffers.field.medicalInsurance": "التأمين الطبي",
+    "jobOffers.field.offerDate": "تاريخ العرض",
+    "jobOffers.field.expiryDate": "تاريخ انتهاء العرض",
+    "jobOffers.field.referenceNumber": "الرقم المرجعي",
+    "jobOffers.field.hrSignerName": "اسم موقّع الموارد البشرية",
+    "jobOffers.field.hrSignerTitle": "منصب موقّع الموارد البشرية",
+    "jobOffers.validation.required": "هذا الحقل مطلوب.",
+    "jobOffers.validation.emailInvalid": "أدخل بريدًا إلكترونيًا صحيحًا.",
+    "jobOffers.validation.phoneInvalid":
+      "أدخل رقم جوال صحيحًا لرمز الدولة المحدد.",
+    "jobOffers.validation.contactRequired":
+      "أدخل بريد المرشح الإلكتروني أو رقم جواله.",
+    "jobOffers.validation.expiryBeforeOffer":
+      "لا يمكن أن يسبق تاريخ الانتهاء تاريخ العرض.",
+    "jobOffers.validation.negativeAmount": "لا يمكن أن يكون المبلغ سالبًا.",
+    "jobOffers.validation.departmentRequired": "اختر القسم.",
+    "jobOffers.validation.positionRequired": "اختر الوظيفة.",
+    "jobOffers.reference.emptyTitle": "البيانات المرجعية للموارد البشرية غير مكتملة",
+    "jobOffers.reference.emptyBoth":
+      "يحتاج هذا العرض إلى قسم ووظيفة من البيانات المرجعية للموارد البشرية في شركتك. أضِفهما أولًا ثم عُد إلى هذا العرض.",
+    "jobOffers.reference.emptyDepartments":
+      "لا توجد أقسام معرّفة لهذه الشركة بعد. أضِف قسمًا في البيانات المرجعية للموارد البشرية ثم عُد إلى هذا العرض.",
+    "jobOffers.reference.emptyPositions":
+      "لا توجد وظائف معرّفة لهذه الشركة بعد. أضِف وظيفة في البيانات المرجعية للموارد البشرية ثم عُد إلى هذا العرض.",
+    "jobOffers.reference.goToDepartments": "إدارة الأقسام",
+    "jobOffers.reference.goToPositions": "إدارة الوظائف",
+    "jobOffers.detail.reference": "المرجع {reference}",
+    "jobOffers.detail.loadFailed": "تعذر تحميل عرض العمل.",
+    "jobOffers.detail.notFound": "عرض العمل غير موجود.",
+    "jobOffers.detail.section.job": "تفاصيل الوظيفة",
+    "jobOffers.detail.section.compensation": "حزمة الأجور",
+    "jobOffers.detail.section.benefits": "المزايا والعقد",
+    "jobOffers.detail.section.delivery": "الإرسال",
+    "jobOffers.detail.section.onboarding": "الانضمام",
+    "jobOffers.detail.section.timeline": "مسار الحالة",
+    "jobOffers.detail.rejectionReason": "سبب الرفض",
+    "jobOffers.detail.noContact": "لا توجد بيانات تواصل مسجلة.",
+    "jobOffers.timeline.created": "تم إنشاء العرض",
+    "jobOffers.timeline.sent": "أُرسل إلى المرشح",
+    "jobOffers.timeline.accepted": "قبله المرشح",
+    "jobOffers.timeline.rejected": "رفضه المرشح",
+    "jobOffers.timeline.cancelled": "ألغته الموارد البشرية",
+    "jobOffers.timeline.expires": "ينتهي في",
+    "jobOffers.timeline.expired": "منتهي الصلاحية",
+    "jobOffers.timeline.awaitingSend": "بانتظار الإرسال",
+    "jobOffers.timeline.awaitingResponse": "بانتظار رد المرشح",
+    "jobOffers.delivery.whatsapp": "واتساب",
+    "jobOffers.delivery.email": "البريد الإلكتروني",
+    "jobOffers.delivery.sent": "تم تسليمه لخدمة الإرسال",
+    "jobOffers.delivery.failed": "لم يتم التسليم",
+    "jobOffers.delivery.notUsed": "لم تُستخدم هذه القناة",
+    "jobOffers.delivery.attemptedAt": "جرت المحاولة {time}",
+    "jobOffers.delivery.attachmentAttached": "تم إرفاق ملف العرض PDF",
+    "jobOffers.delivery.attachmentLinkOnly": "الرابط الآمن فقط",
+    "jobOffers.delivery.warningsTitle": "تنبيهات الإرسال",
+    "jobOffers.delivery.warningsHint":
+      "سُجّل العرض كمُرسل رغم ذلك. تابع مع المرشح عبر قناة أخرى عند الحاجة.",
+    "jobOffers.delivery.notSentYet": "لم يتم إرسال هذا العرض بعد.",
+    "jobOffers.delivery.warning.whatsappFailed": "تعذر تسليم رسالة واتساب.",
+    "jobOffers.delivery.warning.emailFailed": "تعذر تسليم البريد الإلكتروني.",
+    "jobOffers.delivery.warning.attachmentFailed":
+      "تعذر إرفاق ملف العرض؛ حمل البريد الرابط الآمن فقط.",
+    "jobOffers.delivery.warning.generic": "تعذر تسليم العرض.",
+    "jobOffers.onboarding.offerAccepted": "تم قبول العرض",
+    "jobOffers.onboarding.awaitingResponse": "بانتظار رد المرشح",
+    "jobOffers.onboarding.notAccepted":
+      "تبدأ إجراءات الانضمام بعد قبول المرشح.",
+    "jobOffers.onboarding.invitationSent": "تم إرسال دعوة النظام",
+    "jobOffers.onboarding.invitationPending": "لم تُرسل دعوة النظام بعد",
+    "jobOffers.onboarding.linkedProfile": "ملف الموظف المرتبط",
+    "jobOffers.onboarding.noLinkedProfile":
+      "لا يوجد ملف موظف مرتبط بهذا العرض.",
+    "jobOffers.onboarding.prehireProfileCreated": "تم إنشاء ملف ما قبل التعيين",
+    "jobOffers.onboarding.profileId": "الملف رقم {id}",
+    "jobOffers.onboarding.openEmployeeProfile": "فتح ملف الموظف",
+    "jobOffers.biotime.connected": "تم الربط مع BioTime",
+    "jobOffers.biotime.employeeCode": "رمز الموظف في الجهاز {code}",
+    "jobOffers.biotime.notConnected": "لم يتم ربط BioTime بعد",
+    "jobOffers.biotime.notConnectedHint":
+      "تم إشعار الموارد البشرية. يبدأ تسجيل الحضور بعد إضافة ربط الجهاز، ولا يتأثر قبول المرشح للعرض.",
+    "jobOffers.onboarding.acknowledgmentPending": "بانتظار حضور BioTime",
+    "jobOffers.onboarding.acknowledgmentHint":
+      "سيُنشأ هذا المستند بعد أول سجل حضور للموظف في BioTime.",
+    "jobOffers.onboarding.acknowledgmentGenerated": "تم الإنشاء",
+    "jobOffers.onboarding.acknowledgmentTitle": "إقرار مباشرة العمل",
+    "jobOffers.onboarding.downloadAcknowledgment": "تنزيل الإقرار",
+    "jobOffers.onboarding.acknowledgmentDownloadFailed": "تعذر تنزيل الإقرار.",
+    "jobOffers.onboarding.openDocumentArchive": "فتح أرشيف المستندات",
+    "archive.systemGenerated": "تم الإنشاء",
+    "archive.startingWorkAcknowledgment": "إقرار مباشرة العمل",
+    "jobOffers.send.confirmTitle": "إرسال عرض العمل هذا؟",
+    "jobOffers.send.confirmBody":
+      "سيصل المرشح رابط آمن لقبول العرض أو رفضه. بعد الإرسال لا يمكن تعديل العرض.",
+    "jobOffers.send.confirmOk": "إرسال العرض",
+    "jobOffers.send.success": "تم إرسال عرض العمل.",
+    "jobOffers.send.successWithWarnings":
+      "تم إرسال عرض العمل، لكن أبلغت قناة أو أكثر عن مشكلة.",
+    "jobOffers.send.failed": "تعذر إرسال عرض العمل.",
+    "jobOffers.cancel.confirmTitle": "إلغاء عرض العمل هذا؟",
+    "jobOffers.cancel.confirmBody":
+      "لن يتمكن المرشح من الرد بعد ذلك. لا يمكن التراجع عن هذا الإجراء.",
+    "jobOffers.cancel.confirmOk": "إلغاء العرض",
+    "jobOffers.cancel.keep": "الاحتفاظ بالعرض",
+    "jobOffers.cancel.success": "تم إلغاء عرض العمل.",
+    "jobOffers.cancel.failed": "تعذر إلغاء عرض العمل.",
+    "jobOffers.pdf.success": "تم تنزيل ملف عرض العمل.",
+    "jobOffers.pdf.failed": "تعذر تنزيل ملف عرض العمل.",
+
+    // Public job offer response (candidate facing, no auth)
+    "publicJobOffer.brand": "الموارد البشرية - FFI",
+    "publicJobOffer.title": "عرض العمل الخاص بك",
+    "publicJobOffer.greeting": "مرحبًا {name}",
+    "publicJobOffer.intro": "يرجى مراجعة تفاصيل عرضك أدناه وإبلاغنا بقرارك.",
+    "publicJobOffer.loading": "جارٍ تحميل عرضك...",
+    "publicJobOffer.position": "الوظيفة",
+    "publicJobOffer.department": "القسم",
+    "publicJobOffer.location": "الموقع",
+    "publicJobOffer.package": "إجمالي حزمة الراتب",
+    "publicJobOffer.offerDate": "تاريخ العرض",
+    "publicJobOffer.expiryDate": "ساري حتى",
+    "publicJobOffer.status": "الحالة",
+    "publicJobOffer.accept": "قبول العرض",
+    "publicJobOffer.reject": "رفض العرض",
+    "publicJobOffer.acceptConfirmTitle": "قبول هذا العرض؟",
+    "publicJobOffer.acceptConfirmBody":
+      "سنُبلغ فريق الموارد البشرية ونرسل إليك دعوة لإنشاء حسابك.",
+    "publicJobOffer.acceptConfirmOk": "نعم، أقبل",
+    "publicJobOffer.rejectTitle": "رفض هذا العرض",
+    "publicJobOffer.rejectPrompt":
+      "أخبرنا بسبب الرفض. يقرأ فريق الموارد البشرية كل رد.",
+    "publicJobOffer.reasonLabel": "السبب",
+    "publicJobOffer.reasonPlaceholder": "اكتب سببك هنا",
+    "publicJobOffer.reasonRequired": "يرجى كتابة السبب قبل الإرسال.",
+    "publicJobOffer.rejectSubmit": "إرسال الرفض",
+    "publicJobOffer.cancel": "إلغاء",
+    "publicJobOffer.acceptedTitle": "تم قبول العرض",
+    "publicJobOffer.acceptedBody":
+      "شكرًا لك. تم قبول عرضك وستصلك دعوة من النظام لإنشاء حسابك.",
+    "publicJobOffer.invitationSent": "تم إرسال دعوة الحساب إليك.",
+    "publicJobOffer.invitationPending": "ستصلك دعوة الحساب قريبًا.",
+    "publicJobOffer.onboardingReady":
+      "سجل انضمامك جاهز. سيتولى فريق الموارد البشرية الخطوات التالية.",
+    "publicJobOffer.attendanceSetupPending":
+      "تم قبول انضمامك. ستُكمل الموارد البشرية إعداد الحضور على الجهاز.",
+    "publicJobOffer.rejectedTitle": "تم رفض العرض",
+    "publicJobOffer.rejectedBody":
+      "شكرًا لإبلاغنا. تم إشعار فريق الموارد البشرية.",
+    "publicJobOffer.alreadyRespondedTitle": "تم الرد على هذا العرض مسبقًا",
+    "publicJobOffer.alreadyRespondedBody":
+      "لا حاجة لأي إجراء إضافي. تواصل مع فريق الموارد البشرية إذا كنت ترى أن هناك خطأ.",
+    "publicJobOffer.invalidTitle": "هذا الرابط لم يعد صالحًا",
+    "publicJobOffer.invalidBody":
+      "رابط العرض غير صالح أو انتهت صلاحيته. يرجى التواصل مع فريق الموارد البشرية للحصول على رابط جديد.",
+    "publicJobOffer.missingToken": "هذا الرابط ينقصه مرجع العرض.",
+    "publicJobOffer.submitFailed": "تعذر تسجيل ردك. يرجى المحاولة مرة أخرى.",
+    // Hiring Requests
+    "layout.hiringRequests": "طلبات التوظيف",
+    "hiringRequests.title": "طلبات التوظيف",
+    "hiringRequests.subtitle": "أرسل المرشحين لاعتماد الرئيس التنفيذي قبل إعداد العرض.",
+    "hiringRequests.newRequest": "طلب توظيف جديد",
+    "hiringRequests.searchPlaceholder": "ابحث بالاسم أو البريد الإلكتروني أو الرقم المرجعي",
+    "hiringRequests.countTag": "{count} طلب",
+    "hiringRequests.loadFailed": "تعذر تحميل طلبات التوظيف.",
+    "hiringRequests.awaitingDecision": "بانتظار القرار",
+    "hiringRequests.status.all": "الكل",
+    "hiringRequests.status.draft": "مسودة",
+    "hiringRequests.status.submitted": "مُرسل",
+    "hiringRequests.status.approved": "معتمد",
+    "hiringRequests.status.rejected": "مرفوض",
+    "hiringRequests.status.cancelled": "ملغى",
+    "hiringRequests.status.converted": "تم تحويله لعرض",
+    "hiringRequests.col.reference": "الرقم المرجعي",
+    "hiringRequests.col.candidate": "المرشح",
+    "hiringRequests.col.company": "الشركة",
+    "hiringRequests.col.salary": "الراتب المقترح",
+    "hiringRequests.col.status": "الحالة",
+    "hiringRequests.col.requestedBy": "مقدّم الطلب",
+    "hiringRequests.col.submittedAt": "تاريخ الإرسال",
+    "hiringRequests.col.ceoDecision": "قرار الرئيس التنفيذي",
+    "hiringRequests.col.actions": "الإجراءات",
+    "hiringRequests.action.view": "عرض",
+    "hiringRequests.action.review": "مراجعة",
+    "hiringRequests.action.edit": "تعديل",
+    "hiringRequests.action.refresh": "تحديث",
+    "hiringRequests.action.backToList": "العودة إلى طلبات التوظيف",
+    "hiringRequests.action.cancelRequest": "إلغاء الطلب",
+    "hiringRequests.action.downloadCv": "تنزيل السيرة الذاتية",
+    "hiringRequests.action.createJobOffer": "إنشاء عرض عمل",
+    "hiringRequests.action.openJobOffer": "فتح عرض العمل",
+    "hiringRequests.empty.title": "لا توجد طلبات توظيف بعد",
+    "hiringRequests.empty.description": "أنشئ أول طلب لبدء مسار الاعتماد.",
+    "hiringRequests.empty.filteredTitle": "لا توجد طلبات مطابقة لعوامل التصفية",
+    "hiringRequests.empty.filteredDescription": "جرّب حالة مختلفة أو امسح البحث.",
+    "hiringRequests.form.createTitle": "طلب توظيف جديد",
+    "hiringRequests.form.createSubtitle": "سجّل بيانات المرشح وسيرته الذاتية ثم أرسله للرئيس التنفيذي.",
+    "hiringRequests.form.editTitle": "تعديل طلب التوظيف",
+    "hiringRequests.form.editSubtitle": "حدّث المسودة قبل إرسالها للرئيس التنفيذي.",
+    "hiringRequests.form.section.candidate": "المرشح",
+    "hiringRequests.form.section.cv": "السيرة الذاتية",
+    "hiringRequests.form.saveDraft": "حفظ كمسودة",
+    "hiringRequests.form.submitToCeo": "إرسال للرئيس التنفيذي",
+    "hiringRequests.form.discard": "تجاهل",
+    "hiringRequests.form.created": "تم حفظ طلب التوظيف كمسودة.",
+    "hiringRequests.form.updated": "تم تحديث طلب التوظيف.",
+    "hiringRequests.form.saveFailed": "تعذر حفظ طلب التوظيف.",
+    "hiringRequests.form.notEditable": "يمكن تعديل الطلبات بحالة مسودة فقط.",
+    "hiringRequests.form.nationalityPlaceholder": "اختر الجنسية",
+    "hiringRequests.form.cvDropzone": "أفلت السيرة الذاتية هنا أو اضغط لاختيار ملف",
+    "hiringRequests.form.cvHint": "PDF أو DOC أو DOCX أو JPG أو PNG. بحد أقصى 5 ميجابايت.",
+    "hiringRequests.form.cvTooLarge": "يجب ألا يتجاوز حجم السيرة الذاتية 5 ميجابايت.",
+    "hiringRequests.form.cvWrongType": "يجب أن تكون السيرة الذاتية بصيغة PDF أو DOC أو DOCX أو JPG أو PNG.",
+    "hiringRequests.form.cvRequiredForSubmit": "أرفق السيرة الذاتية قبل الإرسال للرئيس التنفيذي.",
+    "hiringRequests.form.cvAlreadyAttached": "توجد سيرة ذاتية مرفقة. ارفع ملفًا آخر لاستبدالها فقط.",
+    "hiringRequests.field.joiningCompany": "الشركة المنضم إليها",
+    "hiringRequests.field.candidateFullName": "اسم المرشح الكامل",
+    "hiringRequests.field.candidateEmail": "البريد الإلكتروني للمرشح",
+    "hiringRequests.field.candidatePhone": "رقم جوال المرشح",
+    "hiringRequests.field.nationality": "الجنسية",
+    "hiringRequests.field.dateOfBirth": "تاريخ الميلاد",
+    "hiringRequests.field.proposedSalary": "الراتب المقترح",
+    "hiringRequests.field.requestedBy": "مقدّم الطلب",
+    "hiringRequests.validation.required": "هذا الحقل مطلوب.",
+    "hiringRequests.validation.emailInvalid": "أدخل بريدًا إلكترونيًا صحيحًا.",
+    "hiringRequests.validation.phoneInvalid": "أدخل رقم جوال صحيحًا لرمز الدولة المحدد.",
+    "hiringRequests.validation.negativeAmount": "لا يمكن أن يكون المبلغ سالبًا.",
+    "hiringRequests.detail.reference": "المرجع {reference}",
+    "hiringRequests.detail.loadFailed": "تعذر تحميل طلب التوظيف.",
+    "hiringRequests.detail.notFound": "طلب التوظيف غير موجود.",
+    "hiringRequests.detail.section.candidate": "المرشح",
+    "hiringRequests.detail.section.status": "الحالة",
+    "hiringRequests.detail.section.timeline": "المسار الزمني",
+    "hiringRequests.detail.section.ceoDecision": "قرار الرئيس التنفيذي",
+    "hiringRequests.detail.decisionNote": "ملاحظة",
+    "hiringRequests.detail.noCv": "لا توجد سيرة ذاتية مرفقة.",
+    "hiringRequests.detail.currentStage": "المرحلة الحالية",
+    "hiringRequests.detail.currentActor": "لدى",
+    "hiringRequests.detail.noStage": "لا توجد مرحلة جارية",
+    "hiringRequests.detail.readyForOffer": "تم الاعتماد. يمكنك الآن إنشاء عرض العمل.",
+    "hiringRequests.timeline.created": "تم إنشاء الطلب",
+    "hiringRequests.timeline.submitted": "أُرسل للرئيس التنفيذي",
+    "hiringRequests.timeline.approved": "اعتمده الرئيس التنفيذي",
+    "hiringRequests.timeline.rejected": "رفضه الرئيس التنفيذي",
+    "hiringRequests.timeline.converted": "تم تحويله إلى عرض عمل",
+    "hiringRequests.timeline.cancelled": "تم الإلغاء",
+    "hiringRequests.submit.confirmTitle": "إرسال هذا الطلب للرئيس التنفيذي؟",
+    "hiringRequests.submit.confirmBody": "سيتم إشعار الرئيس التنفيذي ولن يمكن تعديل الطلب بعد ذلك.",
+    "hiringRequests.submit.success": "تم إرسال طلب التوظيف للرئيس التنفيذي.",
+    "hiringRequests.submit.failed": "تعذر إرسال طلب التوظيف.",
+    "hiringRequests.cancel.confirmTitle": "إلغاء طلب التوظيف هذا؟",
+    "hiringRequests.cancel.confirmBody": "سيُغلق الطلب ولن يمكن إرساله مرة أخرى.",
+    "hiringRequests.cancel.keep": "الاحتفاظ بالطلب",
+    "hiringRequests.cancel.success": "تم إلغاء طلب التوظيف.",
+    "hiringRequests.cancel.failed": "تعذر إلغاء طلب التوظيف.",
+    "hiringRequests.cv.downloaded": "تم تنزيل السيرة الذاتية.",
+    "hiringRequests.cv.failed": "تعذر تنزيل السيرة الذاتية.",
+    "hiringRequests.decision.approvedBy": "اعتمده {name}",
+    "hiringRequests.decision.rejectedBy": "رفضه {name}",
+    "hiringRequests.decision.approveSuccess": "تم اعتماد طلب التوظيف.",
+    "hiringRequests.decision.approveFailed": "تعذر اعتماد طلب التوظيف.",
+    "hiringRequests.decision.rejectSuccess": "تم رفض طلب التوظيف.",
+    "hiringRequests.decision.rejectFailed": "تعذر رفض طلب التوظيف.",
+    "hiringRequests.decision.rejectTitle": "رفض طلب التوظيف هذا",
+    "hiringRequests.ceo.title": "طلبات التوظيف",
+    "hiringRequests.ceo.subtitle": "اعتمد أو ارفض المرشحين المقدمين من الموارد البشرية.",
+    "hiringRequests.ceo.emptyTitle": "لا شيء للبت فيه",
+    "hiringRequests.ceo.emptyDescription": "لا توجد طلبات توظيف بهذه الحالة.",
+    "hiringRequests.ceo.backToInbox": "العودة إلى طلبات التوظيف",
+    "hiringRequests.ceo.decisionTitle": "قرارك",
+    "hiringRequests.ceo.decisionHint": "الاعتماد يتيح للموارد البشرية إعداد عرض العمل. الرفض يتطلب ذكر السبب.",
+    "hiringRequests.ceo.noActionAvailable": "هذا الطلب ليس بانتظار قرارك.",
+
+    // Job offer created from an approved hiring request
+    "jobOffers.createFromRequest": "إنشاء من طلب معتمد",
+    "jobOffers.source.title": "طلب التوظيف المعتمد",
+    "jobOffers.source.reference": "المرجع {reference}",
+    "jobOffers.source.approvedBy": "اعتمده {name}",
+    "jobOffers.source.readOnlyHint": "بيانات المرشح هذه مأخوذة من الطلب المعتمد ولا يمكن تعديلها هنا.",
+    "jobOffers.source.loadFailed": "تعذر تحميل طلب التوظيف المعتمد.",
+    "jobOffers.source.notApproved": "طلب التوظيف هذا غير معتمد، لذا لا يمكن تحويله إلى عرض عمل.",
+    "jobOffers.source.requiredTitle": "ابدأ من طلب توظيف معتمد",
+    "jobOffers.source.requiredBody": "تُنشأ عروض العمل من طلب توظيف اعتمده الرئيس التنفيذي.",
+    "jobOffers.source.goToRequests": "الذهاب إلى طلبات التوظيف",
+    "jobOffers.delivery.candidateGroup": "المرشح",
+    "jobOffers.delivery.ceoGroup": "نسخ الرئيس التنفيذي",
+    "jobOffers.delivery.candidateText": "رسالة واتساب",
+    "jobOffers.delivery.candidateWhatsappPdf": "ملف PDF عبر واتساب",
+    "jobOffers.delivery.candidateEmailPdf": "ملف PDF عبر البريد",
+    "jobOffers.delivery.ceoWhatsappPdf": "ملف PDF عبر واتساب",
+    "jobOffers.delivery.ceoEmailPdf": "ملف PDF عبر البريد",
+    "jobOffers.delivery.skipped": "لم تتم المحاولة",
   },
 };

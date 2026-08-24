@@ -323,6 +323,7 @@ class EmployeeProfileWriteSerializer(serializers.ModelSerializer):
             "other_allowance",
             "total_salary",
             "data_source",
+            "employment_status",
             "user_id",
             "manager_profile_id",
         ]

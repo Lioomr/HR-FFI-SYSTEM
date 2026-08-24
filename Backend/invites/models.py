@@ -40,6 +40,13 @@ class Invite(models.Model):
         on_delete=models.PROTECT,
         related_name="created_invites",
     )
+    employee_profile = models.ForeignKey(
+        "employees.EmployeeProfile",
+        on_delete=models.SET_NULL,
+        related_name="account_invites",
+        null=True,
+        blank=True,
+    )
     revoked_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,

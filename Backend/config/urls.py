@@ -29,6 +29,7 @@ urlpatterns = [
     path("auth/", include("accounts.urls")),
     path("", include("admin_portal.urls")),
     path("", include("invites.urls")),
+    path("", include("job_offers.urls")),
     path("", include("audit.urls")),
     path("api/", include("audit.urls")),
     path("", include("employees.urls")),

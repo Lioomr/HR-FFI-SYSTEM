@@ -4,6 +4,7 @@ import { LockOutlined, ApartmentOutlined } from "@ant-design/icons";
 import { useLocation, useNavigate } from "react-router-dom";
 import { UserOutlined } from "@ant-design/icons";
 import { useAuthStore } from "../auth/authStore";
+import type { Role } from "../auth/authStore";
 import { loginApi } from "../services/api/authApi";
 import { isApiError } from "../services/api/apiTypes";
 import { getFirstApiErrorMessage } from "../utils/formErrors";
@@ -16,6 +17,29 @@ type LoginFormValues = {
   password: string;
   remember: boolean;
 };
+
+function defaultDestinationForRole(role?: string) {
+  if (role === "SystemAdmin") return "/admin/dashboard";
+  if (role === "HRManager") return "/hr/dashboard";
+  if (role === "Manager") return "/employee/dashboard";
+  if (role === "CEO") return "/ceo/leave/requests";
+  return "/employee/home";
+}
+
+function canRoleOpenPath(role: Role | string | undefined, path: string) {
+  if (!role) return false;
+  if (role === "SystemAdmin") return true;
+  if (path === "/unauthorized") return false;
+  if (path === "/login") return false;
+  if (path.startsWith("/admin")) return role === "SystemAdmin";
+  if (path.startsWith("/hr")) return role === "HRManager";
+  if (path.startsWith("/ceo")) return role === "CEO";
+  if (path.startsWith("/cfo")) return role === "CFO";
+  if (path.startsWith("/manager")) return ["CEO", "CFO", "Manager"].includes(role);
+  if (path.startsWith("/employee")) return ["Employee", "HRManager", "Manager"].includes(role);
+  if (path.startsWith("/hiring-requests/")) return ["CEO", "HRManager"].includes(role);
+  return true;
+}
 
 export default function LoginPage() {
   const [form] = Form.useForm<LoginFormValues>();
@@ -36,15 +60,12 @@ export default function LoginPage() {
       typeof requestedPath === "string" &&
       requestedPath.startsWith("/") &&
       !requestedPath.startsWith("//") &&
-      !requestedPath.includes("\\")
+      !requestedPath.includes("\\") &&
+      canRoleOpenPath(role, requestedPath)
     ) {
       return requestedPath;
     }
-    if (role === "SystemAdmin") return "/admin/dashboard";
-    if (role === "HRManager") return "/hr/dashboard";
-    if (role === "Manager") return "/employee/dashboard";
-    if (role === "CEO") return "/ceo/leave/requests";
-    return "/employee/home";
+    return defaultDestinationForRole(role);
   }, [location.search, location.state]);
   const { t, language, setLanguage, direction } = useI18n();
 

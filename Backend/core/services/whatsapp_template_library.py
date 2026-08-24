@@ -22,6 +22,34 @@ class WhatsAppTemplateDefinition:
 
 
 DEFAULT_WHATSAPP_TEMPLATES: dict[str, WhatsAppTemplateDefinition] = {
+    "job_offer": WhatsAppTemplateDefinition(
+        key="job_offer",
+        title="Job Offer",
+        description="Secure job offer response link sent to a candidate.",
+        variables=("candidate_name", "position_title", "reference_number", "expiry_date", "response_link"),
+        sample_variables={
+            "candidate_name": "Ahmed",
+            "position_title": "Engineer",
+            "reference_number": "JO-2026-001",
+            "expiry_date": "2026-08-31",
+            "response_link": "https://app.asecopro.com/job-offers/respond?token=sample",
+        },
+        default_body="""مرحباً {{ candidate_name }},
+
+لديك عرض وظيفي من FFI.
+المسمى الوظيفي: {{ position_title }}
+رقم المرجع: {{ reference_number }}
+تاريخ الانتهاء: {{ expiry_date }}
+رابط القبول أو الرفض: {{ response_link }}
+
+Hello {{ candidate_name }},
+
+You have received a job offer from FFI.
+Position: {{ position_title }}
+Reference: {{ reference_number }}
+Expiry date: {{ expiry_date }}
+Accept or reject: {{ response_link }}""",
+    ),
     "employee_invitation": WhatsAppTemplateDefinition(
         key="employee_invitation",
         title="Employee Invitation",
@@ -372,6 +400,7 @@ This message was sent only to verify WhatsApp configuration.""",
 
 def list_template_definitions() -> list[WhatsAppTemplateDefinition]:
     ordered_keys = [
+        "job_offer",
         "employee_invitation",
         "new_announcement_notification",
         "meeting_notification_v1",
