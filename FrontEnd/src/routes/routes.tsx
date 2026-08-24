@@ -8,6 +8,8 @@ import RequireCEOApprover from "./RequireCEOApprover";
 
 import LoginPage from "../pages/LoginPage";
 import RegisterInvitePage from "../pages/RegisterInvitePage";
+import JobOfferResponsePage from "../pages/public/JobOfferResponsePage";
+import HiringRequestRedirect from "./HiringRequestRedirect";
 import ChangePasswordPage from "../pages/ChangePasswordPage";
 import Unauthorized403Page from "../pages/Unauthorized403Page";
 import NotFound404Page from "../pages/NotFound404Page";
@@ -47,6 +49,12 @@ import AssetLookupPage from "../pages/hr/assets/AssetLookupPage";
 import LabelJobsHistoryPage from "../pages/hr/assets/LabelJobsHistoryPage";
 import HRRentsPage from "../pages/hr/rents/HRRentsPage";
 import TemplateLibraryPage from "../pages/hr/templates/TemplateLibraryPage";
+import JobOffersListPage from "../pages/hr/job-offers/JobOffersListPage";
+import JobOfferFormPage from "../pages/hr/job-offers/JobOfferFormPage";
+import JobOfferDetailPage from "../pages/hr/job-offers/JobOfferDetailPage";
+import HiringRequestsListPage from "../pages/hr/hiring-requests/HiringRequestsListPage";
+import HiringRequestFormPage from "../pages/hr/hiring-requests/HiringRequestFormPage";
+import HiringRequestDetailPage from "../pages/hr/hiring-requests/HiringRequestDetailPage";
 import EmployeePayslipsListPage from "../pages/employee/payslips/EmployeePayslipsListPage";
 import EmployeePayslipDetailsPage from "../pages/employee/payslips/EmployeePayslipDetailsPage";
 
@@ -93,6 +101,8 @@ import CEOAssetDamageReportsPage from "../pages/ceo/CEOAssetDamageReportsPage";
 import CEOAssetReturnRequestsPage from "../pages/ceo/CEOAssetReturnRequestsPage";
 import CEOEmployeeDeletionInboxPage from "../pages/ceo/CEOEmployeeDeletionInboxPage";
 import CEOEmployeeDeletionDetailPage from "../pages/ceo/CEOEmployeeDeletionDetailPage";
+import CEOHiringRequestsInboxPage from "../pages/ceo/CEOHiringRequestsInboxPage";
+import CEOHiringRequestDetailPage from "../pages/ceo/CEOHiringRequestDetailPage";
 import CFODashboardPage from "../pages/cfo/CFODashboardPage";
 import CFOLoanRequestsPage from "../pages/cfo/CFOLoanRequestsPage";
 import CFOLoanRequestDetailsPage from "../pages/cfo/CFOLoanRequestDetailsPage";
@@ -116,6 +126,16 @@ export const routes = [
   // Public
   { path: "/login", element: <LoginPage />, errorElement: <RouteErrorBoundary /> },
   { path: "/register", element: <RegisterInvitePage />, errorElement: <RouteErrorBoundary /> },
+  // Candidate-facing offer response. No auth, no app chrome: the recipient has
+  // only the tokenized link from their WhatsApp/email message.
+  { path: "/job-offers/respond", element: <JobOfferResponsePage />, errorElement: <RouteErrorBoundary /> },
+
+  // Compatibility route. Notifications and workflow deep links point at
+  // /hiring-requests/{id}, which is the API path rather than a screen; this
+  // forwards the visitor to the CEO or HR screen they can actually use.
+  // It owns its own auth handling so an unauthenticated visit keeps the link
+  // as the post-login destination.
+  { path: "/hiring-requests/:id", element: <HiringRequestRedirect />, errorElement: <RouteErrorBoundary /> },
 
 
   // Authenticated (all roles)
@@ -184,6 +204,18 @@ export const routes = [
               { path: "hr/rent-types", element: <RentTypesPage /> },
               { path: "hr/rents", element: <HRRentsPage /> },
               { path: "hr/templates", element: <TemplateLibraryPage /> },
+
+              // Job Offers
+              { path: "hr/job-offers", element: <JobOffersListPage /> },
+              { path: "hr/job-offers/new", element: <JobOfferFormPage /> },
+              { path: "hr/job-offers/:id", element: <JobOfferDetailPage /> },
+              { path: "hr/job-offers/:id/edit", element: <JobOfferFormPage /> },
+
+              // Hiring Requests — the approved-request gate in front of offers
+              { path: "hr/hiring-requests", element: <HiringRequestsListPage /> },
+              { path: "hr/hiring-requests/new", element: <HiringRequestFormPage /> },
+              { path: "hr/hiring-requests/:id", element: <HiringRequestDetailPage /> },
+              { path: "hr/hiring-requests/:id/edit", element: <HiringRequestFormPage /> },
 
               // Import Employees
               { path: "hr/import/employees", element: <ImportEmployeesEntryPage /> },
@@ -302,6 +334,8 @@ export const routes = [
               { path: "ceo/assets/return-requests", element: <CEOAssetReturnRequestsPage /> },
               { path: "ceo/employees/deletion-requests", element: <CEOEmployeeDeletionInboxPage /> },
               { path: "ceo/employees/deletion-requests/:id", element: <CEOEmployeeDeletionDetailPage /> },
+              { path: "ceo/hiring-requests", element: <CEOHiringRequestsInboxPage /> },
+              { path: "ceo/hiring-requests/:id", element: <CEOHiringRequestDetailPage /> },
             ],
           },
 

@@ -123,7 +123,8 @@ class SyncBioTimeService:
                 logger.warning("BioTime employee code %s is not mapped; skipped %s day(s).", emp_code, len(dates))
                 continue
 
-            for record_date, punches in dates.items():
+            for record_date in sorted(dates):
+                punches = dates[record_date]
                 counts["processed"] += 1
                 check_in_at = min(punches)
                 check_out_at = max(punches) if len(punches) > 1 else None
@@ -143,6 +144,15 @@ class SyncBioTimeService:
                 )
                 if created:
                     counts["created"] += 1
+                    try:
+                        from job_offers.starting_work_service import generate_starting_work_acknowledgment
+
+                        generate_starting_work_acknowledgment(record)
+                    except Exception:
+                        logger.exception(
+                            "starting_work_acknowledgment_generation_failed",
+                            extra={"attendance_record_id": record.id},
+                        )
                     continue
 
                 if record.source != AttendanceRecord.Source.SYSTEM:

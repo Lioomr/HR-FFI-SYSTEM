@@ -8,6 +8,11 @@ type Props = {
   /** Full phone number in E.164 form, e.g. "+966512345678". */
   value?: string;
   onChange?: (value: string) => void;
+  /**
+   * Injected by antd's Form.Item. Forwarded to the number field so the item's
+   * <label for=...> resolves to a real control instead of nothing.
+   */
+  id?: string;
   size?: SizeType;
   disabled?: boolean;
   /** Country dial code used when no value is set yet. Defaults to KSA (+966). */
@@ -50,6 +55,24 @@ const dialOptions = COUNTRIES.flatMap((c) => {
 /** Dial codes sorted longest-first so prefix matching picks the most specific one. */
 const dialCodesByLength = dialOptions.map((o) => o.value).sort((a, b) => b.length - a.length);
 
+/**
+ * Dial codes whose national numbers legitimately keep a leading zero, so the
+ * trunk-prefix strip below must leave them alone. Italy (shared by San Marino
+ * and Vatican City) is the practical case.
+ */
+const KEEP_LEADING_ZERO_DIALS = new Set(["+39"]);
+
+/**
+ * Drops the national trunk prefix people type out of habit ("050..." for a
+ * Saudi mobile). Left in place it produces a number that still satisfies the
+ * E.164 length check but is not reachable, so the message fails to deliver with
+ * nothing on screen to explain why.
+ */
+function stripTrunkPrefix(local: string, dial: string): string {
+  if (KEEP_LEADING_ZERO_DIALS.has(dial)) return local;
+  return local.replace(/^0+/, "");
+}
+
 function parsePhone(value: string | undefined, fallbackDial: string): { dial: string; local: string } {
   const raw = (value || "").trim();
   if (!raw.startsWith("+")) {
@@ -65,6 +88,7 @@ function parsePhone(value: string | undefined, fallbackDial: string): { dial: st
 export default function PhoneNumberInput({
   value,
   onChange,
+  id,
   size = "large",
   disabled,
   defaultDialCode = DEFAULT_DIAL,
@@ -87,7 +111,8 @@ export default function PhoneNumberInput({
   }, [value]);
 
   const emit = (nextDial: string, nextLocal: string) => {
-    onChange?.(nextLocal ? `${nextDial}${nextLocal}` : "");
+    const national = stripTrunkPrefix(nextLocal, nextDial);
+    onChange?.(national ? `${nextDial}${national}` : "");
   };
 
   return (
@@ -107,6 +132,7 @@ export default function PhoneNumberInput({
         options={dialOptions}
       />
       <Input
+        id={id}
         size={size}
         disabled={disabled}
         placeholder={placeholder}

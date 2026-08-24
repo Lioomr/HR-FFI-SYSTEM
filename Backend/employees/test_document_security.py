@@ -102,6 +102,7 @@ class EmployeeDocumentSecurityTests(TestCase):
         )
         self.assertEqual(other_profile_response.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(foreign_document_response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(b"".join(download_response.streaming_content).startswith(b"%PDF"))
 
     def test_hr_direct_document_routes_are_limited_to_active_company(self):
         foreign_document = self._document(self.other_profile)

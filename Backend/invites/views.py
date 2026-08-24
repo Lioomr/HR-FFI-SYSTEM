@@ -247,7 +247,23 @@ def _generate_invite_employee_id() -> str:
     raise IntegrityError("Failed to generate unique employee_id for invite acceptance.")
 
 
-def _ensure_invited_employee_profile(*, user, full_name: str, phone_number: str) -> EmployeeProfile:
+def _ensure_invited_employee_profile(
+    *, user, full_name: str, phone_number: str, employee_profile: EmployeeProfile | None = None
+) -> EmployeeProfile:
+    if employee_profile is not None:
+        if employee_profile.user_id and employee_profile.user_id != user.id:
+            raise IntegrityError("The invited employee profile already has a user account.")
+        employee_profile.user = user
+        employee_profile.full_name = full_name or employee_profile.full_name or getattr(user, "full_name", "") or ""
+        if phone_number:
+            employee_profile.mobile = phone_number
+        update_fields = ["user", "full_name", "mobile", "updated_at"]
+        if employee_profile.employment_status == EmployeeProfile.EmploymentStatus.PREHIRE:
+            employee_profile.employment_status = EmployeeProfile.EmploymentStatus.ACTIVE
+            update_fields.append("employment_status")
+        employee_profile.save(update_fields=update_fields)
+        return employee_profile
+
     profile, created = EmployeeProfile.objects.get_or_create(
         user=user,
         defaults={
@@ -587,7 +603,12 @@ class InviteAcceptView(APIView):
         group, _ = Group.objects.get_or_create(name=invite.role)
         user.groups.clear()
         user.groups.add(group)
-        profile = _ensure_invited_employee_profile(user=user, full_name=full_name, phone_number=phone_number)
+        profile = _ensure_invited_employee_profile(
+            user=user,
+            full_name=full_name,
+            phone_number=phone_number,
+            employee_profile=invite.employee_profile,
+        )
 
         invite.status = Invite.Status.ACCEPTED
         update_fields = ["status"]

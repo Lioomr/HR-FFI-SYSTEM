@@ -122,6 +122,46 @@ describe("NotificationBell", () => {
     expect(navigateMock).toHaveBeenCalledWith("/employee/leave/requests");
   });
 
+  it("normalizes a legacy hiring-request link onto the compatibility route", () => {
+    // The backend still sends the DRF path. Navigating there as-is would 404 in
+    // the app, so it must be rewritten before the router sees it.
+    useNotificationStore.setState({
+      recent: [
+        makeNotification({
+          id: 21,
+          title: "Hiring request submitted",
+          action_url: "/hiring-requests/1",
+        }),
+      ],
+      markRead: vi.fn(),
+    });
+    render(<NotificationBell />);
+    openPanel();
+    fireEvent.click(screen.getByRole("button", { name: /Hiring request submitted/i }));
+
+    expect(navigateMock).toHaveBeenCalledWith("/hiring-requests/1");
+    // Never the API path with its trailing slash.
+    expect(navigateMock).not.toHaveBeenCalledWith("/hiring-requests/1/");
+  });
+
+  it("never navigates the browser to a hiring-request API URL", () => {
+    useNotificationStore.setState({
+      recent: [
+        makeNotification({
+          id: 22,
+          title: "Hiring request submitted",
+          action_url: `${window.location.origin}/hiring-requests/1/cv/`,
+        }),
+      ],
+      markRead: vi.fn(),
+    });
+    render(<NotificationBell />);
+    openPanel();
+    fireEvent.click(screen.getByRole("button", { name: /Hiring request submitted/i }));
+
+    expect(navigateMock).toHaveBeenCalledWith("/hiring-requests/1");
+  });
+
   it("triggers mark-all-read", () => {
     const markAllRead = vi.fn();
     useNotificationStore.setState({

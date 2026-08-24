@@ -128,6 +128,24 @@ TEMPLATE_CATALOG = [
         "description_en": "Blank termination letter template.",
         "description_ar": "نموذج خطاب إنهاء خدمة فارغ.",
     },
+    {
+        "key": "job_offer",
+        "category": "letter",
+        "filename": "job_offer_blank.pdf",
+        "title_en": "Job Offer",
+        "title_ar": "عرض عمل",
+        "description_en": "Blank job offer template used as the base for candidate offers.",
+        "description_ar": "نموذج عرض عمل فارغ يُستخدم لإعداد عروض المرشحين.",
+    },
+    {
+        "key": "starting_work_acknowledgment",
+        "category": "letter",
+        "filename": "starting_work_acknowledgment_blank.pdf",
+        "title_en": "Acknowledgment of Starting Work",
+        "title_ar": "إقرار مباشرة العمل",
+        "description_en": "Blank acknowledgment used when an employee starts work.",
+        "description_ar": "نموذج إقرار فارغ يُستخدم عند مباشرة الموظف للعمل.",
+    },
 ]
 
 

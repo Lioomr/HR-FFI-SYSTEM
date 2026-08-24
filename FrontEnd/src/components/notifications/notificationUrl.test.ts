@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { resolveSafeNotificationUrl } from "./notificationUrl";
+import {
+  normalizeNotificationPath,
+  resolveSafeNotificationUrl,
+} from "./notificationUrl";
 
 // `window.location.origin` under jsdom — used to build a genuinely same-origin
 // absolute URL so the test stays correct regardless of the configured host.
@@ -108,5 +111,60 @@ describe("resolveSafeNotificationUrl", () => {
       allowed: false,
       kind: "blocked",
     });
+  });
+});
+
+describe("legacy hiring-request links", () => {
+  /**
+   * The backend still emits `/hiring-requests/{id}` — the DRF path, not a
+   * screen. It has to reach the compatibility route rather than 404 in the app
+   * or 401 against the API.
+   */
+  it("keeps a legacy hiring-request link on the compatibility route", () => {
+    expect(resolveSafeNotificationUrl("/hiring-requests/1")).toEqual({
+      allowed: true,
+      kind: "internal",
+      path: "/hiring-requests/1",
+    });
+  });
+
+  it("drops the API trailing slash", () => {
+    expect(normalizeNotificationPath("/hiring-requests/12/")).toBe("/hiring-requests/12");
+  });
+
+  it("drops an API-only suffix so the browser never opens the endpoint", () => {
+    expect(normalizeNotificationPath("/hiring-requests/12/cv/")).toBe("/hiring-requests/12");
+  });
+
+  it("preserves a query hint such as the CEO origin", () => {
+    expect(normalizeNotificationPath("/hiring-requests/7?from=ceo")).toBe(
+      "/hiring-requests/7?from=ceo",
+    );
+  });
+
+  it("normalizes the same-origin absolute form too", () => {
+    expect(resolveSafeNotificationUrl(`${ORIGIN}/hiring-requests/9/cv/`)).toEqual({
+      allowed: true,
+      kind: "internal",
+      path: "/hiring-requests/9",
+    });
+  });
+
+  it("still blocks a hiring-request link from another origin", () => {
+    expect(resolveSafeNotificationUrl("https://evil.example.com/hiring-requests/1")).toEqual({
+      allowed: false,
+      kind: "blocked",
+    });
+  });
+
+  it("leaves the already-correct screen paths alone", () => {
+    expect(normalizeNotificationPath("/ceo/hiring-requests/1")).toBe("/ceo/hiring-requests/1");
+    expect(normalizeNotificationPath("/hr/hiring-requests/1")).toBe("/hr/hiring-requests/1");
+  });
+
+  it("leaves unrelated paths alone", () => {
+    expect(normalizeNotificationPath("/employee/leave/requests")).toBe(
+      "/employee/leave/requests",
+    );
   });
 });

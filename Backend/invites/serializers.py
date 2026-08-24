@@ -186,6 +186,8 @@ class InviteAcceptSerializer(serializers.Serializer):
     def validate(self, attrs):
         token = attrs.get("token", "").strip()
         try:
+            # Lock only the invite row. ``employee_profile`` is nullable, and PostgreSQL
+            # rejects FOR UPDATE when it is applied to that side of an outer join.
             invite = Invite.objects.select_for_update().get(token=token)
         except Invite.DoesNotExist:
             raise serializers.ValidationError({"token": "Invalid invitation token."})
@@ -201,6 +203,8 @@ class InviteAcceptSerializer(serializers.Serializer):
             raise serializers.ValidationError({"token": "Invitation has expired."})
         if invite.role in UNSUPPORTED_ACCEPT_ROLES:
             raise serializers.ValidationError({"role": UNSUPPORTED_MANAGER_INVITE_MESSAGE})
+        if invite.employee_profile_id and invite.employee_profile.user_id:
+            raise serializers.ValidationError({"token": "The invited employee already has an account."})
 
         invite_email = (invite.email or "").strip().lower()
         submitted_email = (attrs.get("email") or "").strip().lower()

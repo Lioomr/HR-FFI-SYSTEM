@@ -12,6 +12,7 @@ from .storage import PrivateUploadStorage
 
 class EmployeeProfile(models.Model):
     class EmploymentStatus(models.TextChoices):
+        PREHIRE = "PREHIRE", _("Prehire")
         ACTIVE = "ACTIVE", _("Active")
         SUSPENDED = "SUSPENDED", _("Suspended")
         TERMINATED = "TERMINATED", _("Terminated")

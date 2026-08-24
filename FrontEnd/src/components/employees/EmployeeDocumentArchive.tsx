@@ -121,7 +121,22 @@ const HIDDEN_EXTRACTED_KEYS = new Set([
   "raw_data",
   "ocr_text",
   "full_text",
+  // Markers the backend stamps on documents it generates itself. They record
+  // that no OCR ran, which is not a field anyone reads off the document.
+  "ocr",
+  "generated_by_system",
 ]);
+
+/**
+ * True for a document the system produced rather than one HR uploaded — today
+ * the Starting Work Acknowledgment. These carry no scanned content, so every
+ * OCR affordance is meaningless for them.
+ */
+function isSystemGenerated(doc: EmployeeDocument): boolean {
+  const fields = doc.extracted_fields;
+  if (!fields) return false;
+  return fields.generated_by_system === true || fields.ocr === "skipped";
+}
 
 function documentTypeLabel(
   t: Translate,
@@ -736,11 +751,14 @@ export default function EmployeeDocumentArchive({
       dataIndex: "extraction_status",
       key: "extraction_status",
       width: 110,
-      render: (v: string) => (
-        <Tag color={extractionStatusColor[v] ?? "default"}>
-          {v.charAt(0).toUpperCase() + v.slice(1)}
-        </Tag>
-      ),
+      render: (v: string, r: EmployeeDocument) =>
+        isSystemGenerated(r) ? (
+          <Tag color="blue">{t("archive.systemGenerated", "Generated")}</Tag>
+        ) : (
+          <Tag color={extractionStatusColor[v] ?? "default"}>
+            {v.charAt(0).toUpperCase() + v.slice(1)}
+          </Tag>
+        ),
     },
     {
       title: t("archive.uploadedBy", "Uploaded By"),
@@ -772,6 +790,7 @@ export default function EmployeeDocumentArchive({
           </Tooltip>
           {(r.extraction_status === "pending" ||
             r.extraction_status === "failed") &&
+            !isSystemGenerated(r) &&
             !readonly && (
               <Tooltip title={t("archive.runExtraction", "Run OCR extraction")}>
                 <Button
