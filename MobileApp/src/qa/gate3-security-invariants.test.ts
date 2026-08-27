@@ -41,7 +41,14 @@ const ALLOWED_PATHS = [
   '/api/leaves/employee/leave-balance/',
   '/api/leaves/employee/leave-requests/',
   '/api/leaves/leave-types/',
+  // Approver surface (Phase 2). `/api/leaves/leave-requests/` is shared with the
+  // employee submit action: HR's wider view comes from the server-side queryset,
+  // not from a different path. The `{id}/approve/` and `{id}/reject/` suffixes are
+  // built at runtime from these bases, exactly like `{id}/cancel/`, so the literal
+  // scanner needs no separate entries. Neither string collides with the rejected
+  // legacy literal `/api/leaves/hr/`.
   '/api/leaves/leave-requests/',
+  '/api/leaves/ceo/leave-requests/',
   '/api/notifications/',
   '/api/notifications/unread-count/',
   '/api/notifications/read-all/',
@@ -119,6 +126,7 @@ describe('Gate 3 independent API and security invariants', () => {
 
   it('keeps the route surface bounded, token-free, and free of record identifiers', () => {
     expect(Object.keys(appRoutes)).toEqual([
+      'approvals',
       'attendance',
       'changePassword',
       'home',

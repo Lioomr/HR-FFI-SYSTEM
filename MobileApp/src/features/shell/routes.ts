@@ -2,6 +2,7 @@ import type { AuthStatus } from '@/providers';
 
 /** Public, token-free paths only. Sensitive values must never become route parameters. */
 export const appRoutes = Object.freeze({
+  approvals: '/approvals',
   attendance: '/attendance',
   changePassword: '/change-password',
   home: '/home',
