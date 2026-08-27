@@ -43,8 +43,11 @@ function contrastRatio(first: string, second: string): number {
 }
 
 describe('Gate 2 independent security invariants', () => {
-  it('keeps the public and protected route surface token-free and bounded to five tabs', () => {
+  // The tab set is role-derived (see `(tabs)/_layout.tsx`): employees and HR see the
+  // self-service tabs, approver roles see Approvals; the file surface stays bounded.
+  it('keeps the public and protected route surface token-free and bounded to the known tabs', () => {
     expect(Object.keys(appRoutes)).toEqual([
+      'approvals',
       'attendance',
       'changePassword',
       'home',
@@ -64,7 +67,14 @@ describe('Gate 2 independent security invariants', () => {
       .filter((file) => file.endsWith('.tsx') && file !== '_layout.tsx')
       .map((file) => basename(file, '.tsx'))
       .sort();
-    expect(tabScreens).toEqual(['attendance', 'home', 'leave', 'more', 'notifications']);
+    expect(tabScreens).toEqual([
+      'approvals',
+      'attendance',
+      'home',
+      'leave',
+      'more',
+      'notifications',
+    ]);
 
     const rootLayout = readFileSync(join(sourceRoot, 'app', '_layout.tsx'), 'utf8');
     expect(rootLayout).toContain('<Stack.Protected guard={hasBootstrapped && !isAuthenticated}>');

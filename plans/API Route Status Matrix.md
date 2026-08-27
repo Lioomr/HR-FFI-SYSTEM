@@ -1,6 +1,6 @@
 # API Route Status Matrix
 
-**Last reviewed:** 2026-07-30
+**Last reviewed:** 2026-08-28
 **Gate 1 status:** **Pass**; API/security blockers remediated and verified with Docker/PostgreSQL.  
 **Gate 3 status:** **Pass**; the employee mobile client now consumes these routes. No route, permission, or response contract was changed — the 2026-07-28 edits record verification only.  
 **Purpose:** reconciled mobile endpoint index. Django URL resolution, views, serializers, permissions, and tests are authoritative.
@@ -37,12 +37,30 @@
 | Notifications WebSocket | `WS /ws/notifications/` | Intentionally deferred; Gate 1 contained | Compatibility path remains routed but every handshake closes before acceptance with code `4403`. JWT query/header parsing and session authentication were removed. Web/mobile use recipient/company-scoped REST polling; a future realtime design needs approved opaque ticket, company binding, expiry, and revocation disconnect controls. |
 | Push registration | No route | Planned/missing | Define device registration/revocation and privacy-safe payload contracts only after security approval. |
 
+## Mobile approver routes — Leave domain
+
+Added 2026-08-28 as a deliberate, documented scope change: the mobile client now
+carries an HR/CEO leave-approval surface (roadmap phases 1–2). Only the Leave
+domain is in scope; attendance-correction, hiring, and loan approval families
+remain deferred. Delegation (`/api/core/workflow/delegations/`) is designed but
+**not yet built** — it lands with roadmap phase 3 and is not consumed today.
+
+| Area | Actual route and method | Status | Verified behavior / required action |
+|---|---|---|---|
+| HR leave list (all stages) | `GET /api/leaves/leave-requests/` | Current; verified 2026-08-28 against the running backend | Same path the employee submit action uses; the widening is server-side. `LeaveRequestViewSet.get_queryset` returns the whole `filter_queryset_by_company_scope` result for `SystemAdmin`/`HRManager` and `employee=user` for everyone else, so the client sends no scope selector. `list` is guarded by `IsOwnerOrHR`. Paginated as `data.items`. |
+| HR leave approve | `POST /api/leaves/leave-requests/{id}/approve/` | Current; verified 2026-08-28 | `get_permissions` overrides the decorator: the effective permission is `IsHRWorkflowApprover`, not `IsHRManagerOrAdmin`. Accepts only `submitted` and `pending_hr`; anything else is 422. Optional `comment`. Moves the record to `pending_ceo` (never straight to `approved`) and notifies CEO approvers. Requests originating from an HR manager are refused (422) — those must go to the CEO. |
+| HR leave reject | `POST /api/leaves/leave-requests/{id}/reject/` | Current; verified 2026-08-28 | Same `IsHRWorkflowApprover` permission. **Asymmetric with approve**: accepts `submitted`, `pending_hr`, *and* `pending_manager`. A non-empty `comment` is mandatory (422 otherwise). Sets `rejected` and notifies the requester. |
+| CEO leave list (pending only) | `GET /api/leaves/ceo/leave-requests/` | Current; verified 2026-08-28 | `CEOLeaveRequestViewSet` is a `ReadOnlyModelViewSet` whose queryset is hardcoded to `status=PENDING_CEO`. **This is why the CEO mobile view cannot show "all stages"** — there is no all-stage CEO list server-side, and the mobile client must not synthesize one from the HR path (the CEO lacks `IsOwnerOrHR`). Permission `IsDepartmentCEOApprover`; paginated as `data.items`. |
+| CEO leave approve | `POST /api/leaves/ceo/leave-requests/{id}/approve/` | Current; verified 2026-08-28 | Only `pending_ceo`; self-approval of an HR-manager-origin request is refused. Optional `comment` and `waiver_reason` (the latter is only consulted for Business Trip leave with open blocking obligations). Moves the record to `pending_hr_completion`, **not** `approved` — final approval is a separate HR completion step not exposed in mobile. |
+| CEO leave reject | `POST /api/leaves/ceo/leave-requests/{id}/reject/` | Current; verified 2026-08-28 | Only `pending_ceo`; non-empty `comment` mandatory (422 otherwise). Sets `rejected`. |
+| Delegation rules | `GET/POST /api/core/workflow/delegations/`, `GET/PATCH /{id}/` | In scope, not yet implemented | Reserved for roadmap phase 3. Field names must be read from `core.serializers.DelegationRuleSerializer` before coding. Its payload `role` field is a workflow-stage selector and will collide with the gate3 `role:`-in-body ban — that exception is to be added with the implementation, not in advance. |
+
 ## Contract reconciliation notes
 
 - Paginated mobile endpoints currently use `{status, data: {items, page, page_size, count, total_pages}}`; do not type them as DRF `{count,next,previous,results}` without verifying the target endpoint.
 - The employee payslip web DTO contains fields not emitted by the backend serializers. Mobile types must follow the reconciled backend contract.
 - Cross-company leave delegation is intentional in current tests but remains a security/product exception requiring explicit acceptance.
-- Loans, assets, agent memory, and all HR/admin/approval families are outside the first employee mobile release unless the master plan is changed explicitly.
+- Loans, assets, agent memory, and the HR/admin/approval families are outside the first employee mobile release unless the master plan is changed explicitly. **Amended 2026-08-28:** the master plan was changed explicitly for the **Leave** approval routes only — see "Mobile approver routes — Leave domain" above. Attendance-correction, hiring, and loan approval routes remain deferred (roadmap phases 5, 6, and 7 respectively); assets and agent memory remain out of scope entirely.
 - `payroll.permissions.IsEmployeeOnly` requires exactly the `Employee` role, while `leaves.permissions.IsEmployeeOnly` also allows `Manager` and `HRManager`. A Manager therefore reaches leave and attendance self-service but receives 403 on payslips. This asymmetry is existing intentional backend behavior; the mobile client surfaces it as a generic access-unavailable state. Product confirmation is outstanding.
 - Announcement detail returns its payload wrapped as `data.announcement`, unlike the list route which returns the standard `data.items` page. Type both shapes separately.
 - Protected binary downloads (`payslips/{id}/download/`, `documents/{id}/download/`, `announcements/{id}/attachment/`) remain current for the authenticated web application but are **not** consumed by `MobileApp` in the first release. Mobile renders authenticated structured payslip details, employee document metadata, and announcement/attachment metadata only. Mobile must not fetch, render, persist, share, export, use a WebView, deep-link, or use signed URLs for protected binaries. Any future mobile viewing requires a separate security-reviewed design. This approved product decision does not mark Gate 4 passed.
