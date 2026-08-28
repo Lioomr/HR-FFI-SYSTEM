@@ -100,3 +100,19 @@ export interface HiringRequestApproval {
   ceoDecisionNote: string | null;
   createdAt: string | null;
 }
+
+export interface LoanRequestApproval {
+  id: number | string | null;
+  employeeName: string | null;
+  employeeEmail: string | null;
+  requestedAmount: number | null;
+  approvedAmount: number | null;
+  loanType: string | null;
+  installmentMonths: number | null;
+  reason: string | null;
+  status: string | null;
+  createdAt: string | null;
+  hrDecisionNote: string | null;
+  cfoDecisionNote: string | null;
+  ceoDecisionNote: string | null;
+}

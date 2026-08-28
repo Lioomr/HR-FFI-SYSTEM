@@ -52,6 +52,9 @@ const ALLOWED_PATHS = [
   '/api/attendance-correction-requests/',
   '/api/core/workflow/delegations/',
   '/api/employees/delegation-candidates/',
+  '/api/loans/hr/loan-requests/',
+  '/api/loans/cfo/loan-requests/',
+  '/api/loans/ceo/loan-requests/',
   // Hiring is intentionally root-mounted by `Backend/job_offers/urls.py`.
   // Its action suffixes are built from this reviewed base at runtime.
   '/hiring-requests/',
