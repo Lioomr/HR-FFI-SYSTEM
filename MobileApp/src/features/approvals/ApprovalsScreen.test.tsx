@@ -9,6 +9,8 @@ import type { ApprovalLeaveRequest, ApprovalMutationOutcome } from './types';
 
 const mockLoad = jest.fn<() => Promise<ApprovalLeaveRequest[]>>();
 const mockAct = jest.fn<() => Promise<ApprovalMutationOutcome>>();
+const mockLoadDelegationRules = jest.fn();
+const mockLoadDelegationCandidates = jest.fn();
 
 jest.mock('./approvals-api', () => {
   const actual = jest.requireActual<typeof import('./approvals-api')>('./approvals-api');
@@ -16,6 +18,15 @@ jest.mock('./approvals-api', () => {
     ...actual,
     loadLeaveApprovals: () => mockLoad(),
     actOnLeaveApproval: () => mockAct(),
+  };
+});
+
+jest.mock('./delegations-api', () => {
+  const actual = jest.requireActual<typeof import('./delegations-api')>('./delegations-api');
+  return {
+    ...actual,
+    loadDelegationRules: () => mockLoadDelegationRules(),
+    loadDelegationCandidates: () => mockLoadDelegationCandidates(),
   };
 });
 
@@ -47,6 +58,10 @@ describe('ApprovalsScreen', () => {
   beforeEach(() => {
     mockLoad.mockReset();
     mockAct.mockReset();
+    mockLoadDelegationRules.mockReset();
+    mockLoadDelegationCandidates.mockReset();
+    mockLoadDelegationRules.mockResolvedValue([]);
+    mockLoadDelegationCandidates.mockResolvedValue([]);
   });
 
   it('lists every request with its requester and stage for HR', async () => {
@@ -84,6 +99,28 @@ describe('ApprovalsScreen', () => {
     expect(await view.findByTestId('approvals-leave-detail')).toBeTruthy();
     expect(view.getByText('Phase 2 approvals verification request')).toBeTruthy();
     expect(view.getByTestId('approvals-approve')).toBeTruthy();
+  });
+
+  it('opens delegation management on demand without adding a route', async () => {
+    mockLoad.mockResolvedValue([]);
+    mockLoadDelegationCandidates.mockResolvedValue([
+      {
+        id: 9,
+        employeeId: 'EMP-9',
+        fullName: 'Delegate Candidate',
+        fullNameEn: 'Delegate Candidate',
+        fullNameAr: null,
+        canDelegate: true,
+      },
+    ]);
+    const view = await renderWithProviders(<ApprovalsScreen />, asRole('HRManager'));
+
+    await fireEvent.press(await view.findByTestId('delegations-open'));
+
+    expect(await view.findByTestId('delegations-sheet')).toBeTruthy();
+    expect(view.getByTestId('delegation-candidate-9')).toBeTruthy();
+    expect(mockLoadDelegationRules).toHaveBeenCalledTimes(1);
+    expect(mockLoadDelegationCandidates).toHaveBeenCalledTimes(1);
   });
 
   it('approves a request and reloads the list from the server', async () => {

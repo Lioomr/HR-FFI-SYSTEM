@@ -3,6 +3,7 @@ import { RefreshControl, StyleSheet, View } from 'react-native';
 
 import { normalizeRole } from '@/auth/role';
 import {
+  Button,
   Card,
   EmptyState,
   ListRow,
@@ -25,6 +26,7 @@ import {
 } from '../shared';
 
 import { hasLeaveApprovalAccess, loadLeaveApprovals } from './approvals-api';
+import { DelegationRulesSheet } from './DelegationRulesSheet';
 import { LeaveApprovalDetail } from './LeaveApprovalDetail';
 import type { ApprovalLeaveRequest } from './types';
 
@@ -38,6 +40,7 @@ export function ApprovalsScreen() {
   const localization = useLocalization();
   const { t } = localization;
   const [selected, setSelected] = useState<ApprovalLeaveRequest | null>(null);
+  const [delegationsOpen, setDelegationsOpen] = useState(false);
 
   const approverRole = normalizeRole(user?.role);
   const canApprove = hasLeaveApprovalAccess(approverRole);
@@ -69,6 +72,15 @@ export function ApprovalsScreen() {
       }}
     >
       <ScreenHeader subtitle={t('approvals.subtitle')} title={t('approvals.title')} />
+
+      {canApprove ? (
+        <Button
+          label={t('delegations.manage')}
+          onPress={() => setDelegationsOpen(true)}
+          testID="delegations-open"
+          variant="secondary"
+        />
+      ) : null}
 
       {!canApprove ? (
         <EmptyState emoji="🗂️" message={t('state.unauthorizedBody')} title={t('approvals.title')} />
@@ -144,6 +156,9 @@ export function ApprovalsScreen() {
             onDecided={() => void afterDecision()}
             request={selected}
           />
+          {delegationsOpen ? (
+            <DelegationRulesSheet onClose={() => setDelegationsOpen(false)} />
+          ) : null}
         </View>
       ) : null}
     </Screen>
