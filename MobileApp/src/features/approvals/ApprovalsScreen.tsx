@@ -21,6 +21,7 @@ import {
   attendanceCorrectionStatusPresentation,
   formatDateValue,
   hiringRequestStatusPresentation,
+  loanRequestStatusPresentation,
   leaveStatusPresentation,
   localizedCount,
   ResourceFailure,
@@ -36,11 +37,14 @@ import { AttendanceCorrectionDetail } from './AttendanceCorrectionDetail';
 import { DelegationRulesSheet } from './DelegationRulesSheet';
 import { LeaveApprovalDetail } from './LeaveApprovalDetail';
 import { HiringRequestDetail } from './HiringRequestDetail';
+import { LoanRequestDetail } from './LoanRequestDetail';
 import { hasHiringApprovalAccess, loadHiringApprovals } from './hiring-approvals-api';
+import { hasLoanApprovalAccess, loadLoanApprovals } from './loan-approvals-api';
 import type {
   ApprovalLeaveRequest,
   AttendanceCorrectionApproval,
   HiringRequestApproval,
+  LoanRequestApproval,
 } from './types';
 
 /**
@@ -60,12 +64,15 @@ export function ApprovalsScreen() {
     null,
   );
   const [delegationsOpen, setDelegationsOpen] = useState(false);
+  const [selectedLoan, setSelectedLoan] = useState<LoanRequestApproval | null>(null);
 
   const approverRole = normalizeRole(user?.role);
   const canApproveLeave = hasLeaveApprovalAccess(approverRole);
   const canApproveCorrections = hasAttendanceCorrectionApprovalAccess(approverRole);
   const canApproveHiring = hasHiringApprovalAccess(approverRole);
-  const hasApprovalSurface = canApproveLeave || canApproveCorrections || canApproveHiring;
+  const canApproveLoans = hasLoanApprovalAccess(approverRole);
+  const hasApprovalSurface =
+    canApproveLeave || canApproveCorrections || canApproveHiring || canApproveLoans;
 
   const { isRefreshing, refresh, resource, retry } = useResource<ApprovalLeaveRequest[]>(
     useCallback(() => loadLeaveApprovals(approverRole), [approverRole]),
@@ -86,6 +93,14 @@ export function ApprovalsScreen() {
   } = useResource<HiringRequestApproval[]>(
     useCallback(() => loadHiringApprovals(approverRole), [approverRole]),
   );
+  const {
+    isRefreshing: isRefreshingLoans,
+    refresh: refreshLoans,
+    resource: loans,
+    retry: retryLoans,
+  } = useResource<LoanRequestApproval[]>(
+    useCallback(() => loadLoanApprovals(approverRole), [approverRole]),
+  );
 
   const afterDecision = useCallback(async () => {
     setSelected(null);
@@ -101,6 +116,10 @@ export function ApprovalsScreen() {
     setSelectedHiringRequest(null);
     await refreshHiring();
   }, [refreshHiring]);
+  const afterLoanDecision = useCallback(async () => {
+    setSelectedLoan(null);
+    await refreshLoans();
+  }, [refreshLoans]);
 
   return (
     <Screen
@@ -112,8 +131,12 @@ export function ApprovalsScreen() {
           <RefreshControl
             accessibilityLabel={t('common.refresh')}
             colors={[colors.text]}
-            onRefresh={() => void Promise.all([refresh(), refreshCorrections(), refreshHiring()])}
-            refreshing={isRefreshing || isRefreshingCorrections || isRefreshingHiring}
+            onRefresh={() =>
+              void Promise.all([refresh(), refreshCorrections(), refreshHiring(), refreshLoans()])
+            }
+            refreshing={
+              isRefreshing || isRefreshingCorrections || isRefreshingHiring || isRefreshingLoans
+            }
             tintColor={colors.text}
           />
         ),
@@ -336,6 +359,67 @@ export function ApprovalsScreen() {
             onClose={() => setSelectedHiringRequest(null)}
             onDecided={() => void afterHiringDecision()}
             request={selectedHiringRequest}
+          />
+        </View>
+      ) : null}
+
+      {canApproveLoans && loans.status === 'error' ? (
+        <ResourceFailure kind={loans.kind} onRetry={() => void retryLoans()} />
+      ) : null}
+      {canApproveLoans && loans.status === 'loading' ? (
+        <SkeletonList rows={3} testID="loan-requests-skeleton" />
+      ) : null}
+      {canApproveLoans && loans.status === 'ready' ? (
+        <View style={styles.section}>
+          <SectionHeader
+            hint={localizedCount(localization, 'loans.pendingCount', loans.data.length)}
+            title={t('loans.sectionTitle')}
+          />
+          {loans.data.length === 0 ? (
+            <EmptyState
+              compact
+              emoji="✅"
+              message={t('loans.empty')}
+              title={t('loans.sectionTitle')}
+            />
+          ) : (
+            <Card>
+              <View accessibilityRole="list" style={styles.list}>
+                {loans.data.map((request, index) => {
+                  const status = loanRequestStatusPresentation(request.status);
+                  return (
+                    <View
+                      key={String(request.id ?? index)}
+                      style={index > 0 ? styles.separated : undefined}
+                    >
+                      <ListRow
+                        accessibilityHint={t('accessibility.opensDetailHint')}
+                        onPress={() => setSelectedLoan(request)}
+                        subtitle={request.loanType ?? t('common.notAvailable')}
+                        testID={`loan-request-${request.id ?? index}`}
+                        title={
+                          request.employeeName ?? request.employeeEmail ?? t('common.notAvailable')
+                        }
+                        trailing={
+                          status ? (
+                            <StatusBadge
+                              glyph={status.glyph}
+                              label={t(status.labelKey)}
+                              tone={status.tone}
+                            />
+                          ) : null
+                        }
+                      />
+                    </View>
+                  );
+                })}
+              </View>
+            </Card>
+          )}
+          <LoanRequestDetail
+            onClose={() => setSelectedLoan(null)}
+            onDecided={() => void afterLoanDecision()}
+            request={selectedLoan}
           />
         </View>
       ) : null}

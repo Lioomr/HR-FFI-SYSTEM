@@ -12,6 +12,7 @@ import type {
   DelegationCandidate,
   DelegationRule,
   HiringRequestApproval,
+  LoanRequestApproval,
 } from './types';
 
 const mockLoad = jest.fn<() => Promise<ApprovalLeaveRequest[]>>();
@@ -20,6 +21,7 @@ const mockLoadDelegationRules = jest.fn<() => Promise<DelegationRule[]>>();
 const mockLoadDelegationCandidates = jest.fn<() => Promise<DelegationCandidate[]>>();
 const mockLoadAttendanceCorrections = jest.fn<() => Promise<AttendanceCorrectionApproval[]>>();
 const mockLoadHiring = jest.fn<() => Promise<HiringRequestApproval[]>>();
+const mockLoadLoans = jest.fn<() => Promise<LoanRequestApproval[]>>();
 
 jest.mock('./approvals-api', () => {
   const actual = jest.requireActual<typeof import('./approvals-api')>('./approvals-api');
@@ -55,6 +57,11 @@ jest.mock('./hiring-approvals-api', () => {
   return { ...actual, loadHiringApprovals: () => mockLoadHiring() };
 });
 
+jest.mock('./loan-approvals-api', () => {
+  const actual = jest.requireActual<typeof import('./loan-approvals-api')>('./loan-approvals-api');
+  return { ...actual, loadLoanApprovals: () => mockLoadLoans() };
+});
+
 const pendingHr: ApprovalLeaveRequest = {
   id: 1,
   employeeId: 1,
@@ -87,10 +94,12 @@ describe('ApprovalsScreen', () => {
     mockLoadDelegationCandidates.mockReset();
     mockLoadAttendanceCorrections.mockReset();
     mockLoadHiring.mockReset();
+    mockLoadLoans.mockReset();
     mockLoadDelegationRules.mockResolvedValue([]);
     mockLoadDelegationCandidates.mockResolvedValue([]);
     mockLoadAttendanceCorrections.mockResolvedValue([]);
     mockLoadHiring.mockResolvedValue([]);
+    mockLoadLoans.mockResolvedValue([]);
   });
 
   it('lists every request with its requester and stage for HR', async () => {

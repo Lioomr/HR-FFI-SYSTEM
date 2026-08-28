@@ -5,7 +5,9 @@ export { RejectReasonPrompt } from './RejectReasonPrompt';
 export { DelegationRulesSheet } from './DelegationRulesSheet';
 export { AttendanceCorrectionDetail } from './AttendanceCorrectionDetail';
 export { HiringRequestDetail } from './HiringRequestDetail';
+export { LoanRequestDetail } from './LoanRequestDetail';
 export * from './hiring-approvals-api';
+export * from './loan-approvals-api';
 export type {
   ApprovalAction,
   ApprovalFailureKey,
@@ -17,4 +19,5 @@ export type {
   DelegationUser,
   AttendanceCorrectionApproval,
   HiringRequestApproval,
+  LoanRequestApproval,
 } from './types';
