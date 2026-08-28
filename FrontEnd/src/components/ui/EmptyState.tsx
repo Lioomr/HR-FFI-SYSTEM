@@ -51,7 +51,13 @@ export default function EmptyState({
         {title}
       </div>
 
-      <div style={{ color: "#64748b", fontSize: 14, marginBottom: actionText ? 24 : 0 }}>
+      <div
+        style={{
+          color: "#64748b",
+          fontSize: 14,
+          marginBottom: actionText ? 24 : 0,
+        }}
+      >
         {description}
       </div>
 

@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core import signing
+from django.db.models import Q
 from django.utils import timezone
 
 from core.permissions import get_role
@@ -35,18 +36,29 @@ ANNOUNCEMENT_ROLE_TO_GROUP = {
 
 
 def _announcement_users(announcement):
+    if not getattr(announcement, "company_id", None):
+        return User.objects.none()
+
+    company_users = (
+        User.objects.filter(is_active=True)
+        .filter(
+            Q(
+                employee_profile__company_id=announcement.company_id,
+                employee_profile__is_archived=False,
+            )
+            | Q(organization_access_entries__organization_id=announcement.company_id)
+            | Q(groups__name="SystemAdmin")
+        )
+        .distinct()
+    )
     if getattr(announcement, "target_user_id", None):
-        return User.objects.filter(id=announcement.target_user_id, is_active=True)
+        return company_users.filter(id=announcement.target_user_id)
     expected_roles = {
         ANNOUNCEMENT_ROLE_TO_GROUP[role]
         for role in (announcement.target_roles or [])
         if role in ANNOUNCEMENT_ROLE_TO_GROUP
     }
-    queryset = User.objects.filter(
-        is_active=True,
-        organization_access_entries__organization=announcement.company,
-    ).distinct()
-    return [user for user in queryset if get_role(user) in expected_roles]
+    return [user for user in company_users if get_role(user) in expected_roles]
 
 
 def send_announcement_in_app(announcement):
@@ -58,7 +70,19 @@ def send_announcement_in_app(announcement):
     attachment_name = announcement.attachment.name.rsplit("/", 1)[-1] if announcement.attachment else None
     attachment_url = _announcement_attachment_url(announcement)
     dispatches = []
-    for user in _announcement_users(announcement):
+    users = list(_announcement_users(announcement))
+    dedup_key = f"announcement.created:{announcement.id}"
+    # One batch query up front to learn which recipients already have a
+    # notification for this announcement, instead of a per-recipient dedup
+    # SELECT inside create_notification for every one of (potentially)
+    # hundreds of company-wide recipients.
+    existing_recipient_ids = set(
+        Notification.objects.filter(
+            deduplication_key=dedup_key,
+            recipient_id__in=[user.pk for user in users],
+        ).values_list("recipient_id", flat=True)
+    )
+    for user in users:
         profile = getattr(user, "employee_profile", None)
         recipient_name = getattr(profile, "full_name", "") or getattr(user, "full_name", "") or user.email
         if is_meeting:
@@ -117,13 +141,14 @@ def send_announcement_in_app(announcement):
                 action_url="/employee/announcements",
                 related_object=announcement,
                 metadata={"announcement_type": announcement.announcement_type},
-                deduplication_key=f"announcement.created:{announcement.id}",
+                deduplication_key=dedup_key,
                 whatsapp_template=whatsapp_template,
                 whatsapp_variables=whatsapp_variables,
                 email_template=email_template,
                 email_context=email_context,
                 whatsapp_enabled=bool(announcement.publish_to_whatsapp),
                 email_enabled=bool(announcement.publish_to_email),
+                known_new=user.pk not in existing_recipient_ids,
             )
         )
     return dispatches
@@ -204,15 +229,7 @@ def send_announcement_email(announcement):
         )
         return {"sent": 0, "failed": 0, "reason": "publish_to_email_false"}
 
-    # Private targeted announcement
-    if getattr(announcement, "target_user_id", None):
-        users = User.objects.filter(id=announcement.target_user_id, is_active=True)
-    else:
-        expected_roles = {
-            ANNOUNCEMENT_ROLE_TO_GROUP[r] for r in (announcement.target_roles or []) if r in ANNOUNCEMENT_ROLE_TO_GROUP
-        }
-        users = [u for u in User.objects.filter(is_active=True) if get_role(u) in expected_roles]
-
+    users = _announcement_users(announcement)
     recipient_emails = [user.email for user in users if getattr(user, "email", None)]
 
     if not recipient_emails:
@@ -301,17 +318,7 @@ def send_announcement_whatsapp(announcement):
     if not announcement.publish_to_whatsapp:
         return
 
-    if getattr(announcement, "target_user_id", None):
-        users = User.objects.filter(id=announcement.target_user_id, is_active=True)
-    else:
-        role_map = {
-            "ADMIN": "SystemAdmin",
-            "HR_MANAGER": "HRManager",
-            "MANAGER": "Manager",
-            "EMPLOYEE": "Employee",
-        }
-        expected_roles = {role_map[r] for r in (announcement.target_roles or []) if r in role_map}
-        users = [u for u in User.objects.filter(is_active=True) if get_role(u) in expected_roles]
+    users = _announcement_users(announcement)
 
     service = WhatsAppService()
     sent_count = 0

@@ -26,7 +26,13 @@ function Harness(props: Omit<FormProps, "form">) {
 function renderForm(props: Partial<FormProps> = {}) {
   return render(
     <Harness
-      refOptions={{ departments: [], positions: [], taskGroups: [], sponsors: [], employees }}
+      refOptions={{
+        departments: [],
+        positions: [],
+        taskGroups: [],
+        sponsors: [],
+        employees,
+      }}
       {...props}
     />,
   );
@@ -50,17 +56,28 @@ describe("EmployeeForm direct manager assignment", () => {
   });
 
   it("renders a backend rejection inline on the manager field", async () => {
-    renderForm({ managerAssignmentError: "An employee cannot be their own manager." });
+    renderForm({
+      managerAssignmentError: "An employee cannot be their own manager.",
+    });
 
     // The tab holding the field is selected automatically so the message shows.
     expect(
-      await screen.findByRole("tab", { name: /Employment Information/, selected: true }),
+      await screen.findByRole("tab", {
+        name: /Employment Information/,
+        selected: true,
+      }),
     ).toBeInTheDocument();
     // Both the field-level help and the explanatory banner are announced.
     const alerts = screen.getAllByRole("alert");
-    expect(alerts.some((alert) => alert.textContent?.includes("This manager cannot be assigned"))).toBe(true);
     expect(
-      alerts.some((alert) => alert.textContent?.includes("An employee cannot be their own manager.")),
+      alerts.some((alert) =>
+        alert.textContent?.includes("This manager cannot be assigned"),
+      ),
+    ).toBe(true);
+    expect(
+      alerts.some((alert) =>
+        alert.textContent?.includes("An employee cannot be their own manager."),
+      ),
     ).toBe(true);
   });
 
@@ -73,7 +90,9 @@ describe("EmployeeForm direct manager assignment", () => {
     renderForm({ managerAssignmentError: message });
 
     const alerts = await screen.findAllByRole("alert");
-    expect(alerts.some((alert) => alert.textContent?.includes(message))).toBe(true);
+    expect(alerts.some((alert) => alert.textContent?.includes(message))).toBe(
+      true,
+    );
   });
 
   it("never offers the employee being edited as their own manager", async () => {

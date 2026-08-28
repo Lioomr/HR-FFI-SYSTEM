@@ -6,7 +6,7 @@ import type { ApiError } from "../services/api/apiTypes";
  * Per Global API Rules (v1), errors is contractually an array
  */
 export function toAntdFieldErrors(
-  apiError: ApiError
+  apiError: ApiError,
 ): { name: (string | number)[]; errors: string[] }[] {
   if (!apiError.errors || apiError.errors.length === 0) {
     // No field-specific errors, return form-level error
@@ -21,7 +21,11 @@ export function toAntdFieldErrors(
     apiError.errors.forEach((error) => {
       // Object format: { field?: string, message: string, code?: string }
       if (typeof error === "object" && error !== null && "message" in error) {
-        const errorObj = error as { field?: string; message: string; code?: string };
+        const errorObj = error as {
+          field?: string;
+          message: string;
+          code?: string;
+        };
         if (errorObj.field) {
           // Field-specific error
           fieldErrors.push({
@@ -74,13 +78,13 @@ export function toAntdFieldErrors(
 /**
  * Applies 422 validation errors to an Ant Design form
  * Safely handles various backend error formats
- * 
+ *
  * Per Global API Rules (v1), the contract format is array-based,
  * but this function also handles legacy object formats for backward compatibility.
- * 
+ *
  * @param form - Ant Design form instance
  * @param error - Error from API call (can be ApiError or Axios error)
- * 
+ *
  * @example
  * const handleSubmit = async (values) => {
  *   try {
@@ -111,7 +115,7 @@ export function apply422ToForm(form: FormInstance, error: unknown): void {
   // Check if it's an Axios error with 422 status
   if (apiError.response?.status === 422) {
     const responseData = apiError.response.data;
-    
+
     // If response data is already an ApiError
     if (responseData?.status === "error") {
       const fieldErrors = toAntdFieldErrors(responseData as ApiError);
@@ -135,7 +139,9 @@ export function apply422ToForm(form: FormInstance, error: unknown): void {
  * Extracts validation errors from an API error for display
  * Converts array-based contract format to object format for easier consumption
  */
-export function getValidationErrors(apiError: ApiError): Record<string, string[]> {
+export function getValidationErrors(
+  apiError: ApiError,
+): Record<string, string[]> {
   if (!apiError.errors || apiError.errors.length === 0) {
     return {};
   }
@@ -174,7 +180,10 @@ export function getValidationErrors(apiError: ApiError): Record<string, string[]
  * @example
  * const managerError = getFieldApiError(err, "manager_profile_id");
  */
-export function getFieldApiError(error: unknown, field: string): string | undefined {
+export function getFieldApiError(
+  error: unknown,
+  field: string,
+): string | undefined {
   if (!error || typeof error !== "object") {
     return undefined;
   }
@@ -200,7 +209,11 @@ export function getFieldApiError(error: unknown, field: string): string | undefi
       }
     } else if (typeof errors === "object") {
       const value = errors[field];
-      if (Array.isArray(value) && typeof value[0] === "string" && value[0].trim()) {
+      if (
+        Array.isArray(value) &&
+        typeof value[0] === "string" &&
+        value[0].trim()
+      ) {
         return value[0];
       }
       if (typeof value === "string" && value.trim()) {
@@ -234,7 +247,12 @@ export function getFirstApiErrorMessage(error: unknown): string | undefined {
       if (typeof item === "string" && item.trim()) {
         return item.replace(/^[a-z_]+\s*:\s*/i, "").trim();
       }
-      if (typeof item === "object" && item !== null && typeof item.message === "string" && item.message.trim()) {
+      if (
+        typeof item === "object" &&
+        item !== null &&
+        typeof item.message === "string" &&
+        item.message.trim()
+      ) {
         return item.message;
       }
     }
@@ -242,7 +260,11 @@ export function getFirstApiErrorMessage(error: unknown): string | undefined {
 
   if (errors && typeof errors === "object") {
     for (const value of Object.values(errors)) {
-      if (Array.isArray(value) && typeof value[0] === "string" && value[0].trim()) {
+      if (
+        Array.isArray(value) &&
+        typeof value[0] === "string" &&
+        value[0].trim()
+      ) {
         return value[0];
       }
       if (typeof value === "string" && value.trim()) {
@@ -255,7 +277,10 @@ export function getFirstApiErrorMessage(error: unknown): string | undefined {
     return responseData.detail;
   }
 
-  if (typeof responseData?.message === "string" && responseData.message.trim()) {
+  if (
+    typeof responseData?.message === "string" &&
+    responseData.message.trim()
+  ) {
     return responseData.message;
   }
 

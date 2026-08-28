@@ -6,14 +6,21 @@ import { formatDateTime } from "../../utils/dateTime";
 
 const { Text } = Typography;
 
-export default function ApprovalTimeline({ workflow }: { workflow?: WorkflowSnapshot }) {
+export default function ApprovalTimeline({
+  workflow,
+}: {
+  workflow?: WorkflowSnapshot;
+}) {
   if (!workflow?.history?.length) return null;
 
   return (
     <Card style={{ borderRadius: 16 }}>
       <Space direction="vertical" size={12} style={{ width: "100%" }}>
         {workflow.history.map((item, index) => (
-          <div key={item.id || `${item.action}-${index}`} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+          <div
+            key={item.id || `${item.action}-${index}`}
+            style={{ display: "flex", gap: 12, alignItems: "flex-start" }}
+          >
             <div
               style={{
                 width: 28,
@@ -36,7 +43,9 @@ export default function ApprovalTimeline({ workflow }: { workflow?: WorkflowSnap
                 <Text type="secondary">{formatDateTime(item.at)}</Text>
               </Space>
               <div style={{ marginTop: 4 }}>
-                <Text strong>{item.actor?.full_name || item.actor?.email || "System"}</Text>
+                <Text strong>
+                  {item.actor?.full_name || item.actor?.email || "System"}
+                </Text>
               </div>
               {item.note ? (
                 <div style={{ marginTop: 4 }}>

@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 
@@ -69,28 +70,29 @@ def record_login_failure(email, ip_address):
     settings_data = _get_settings()
     window = timedelta(seconds=settings_data["failure_window_seconds"])
 
-    attempt, _ = LoginAttempt.objects.get_or_create(
-        email=email,
-        ip_address=ip_address,
-        defaults={"failed_count": 0, "first_failed_at": now, "last_failed_at": now},
-    )
+    with transaction.atomic():
+        attempt, _ = LoginAttempt.objects.select_for_update().get_or_create(
+            email=email,
+            ip_address=ip_address,
+            defaults={"failed_count": 0, "first_failed_at": now, "last_failed_at": now},
+        )
 
-    if attempt.locked_until and attempt.locked_until <= now:
-        attempt.failed_count = 0
-        attempt.first_failed_at = now
-        attempt.locked_until = None
+        if attempt.locked_until and attempt.locked_until <= now:
+            attempt.failed_count = 0
+            attempt.first_failed_at = now
+            attempt.locked_until = None
 
-    if attempt.first_failed_at and now - attempt.first_failed_at > window:
-        attempt.failed_count = 0
-        attempt.first_failed_at = now
+        if attempt.first_failed_at and now - attempt.first_failed_at > window:
+            attempt.failed_count = 0
+            attempt.first_failed_at = now
 
-    attempt.failed_count += 1
-    attempt.last_failed_at = now
+        attempt.failed_count += 1
+        attempt.last_failed_at = now
 
-    if attempt.failed_count >= settings_data["failure_limit"]:
-        attempt.locked_until = now + timedelta(seconds=settings_data["lockout_seconds"])
+        if attempt.failed_count >= settings_data["failure_limit"]:
+            attempt.locked_until = now + timedelta(seconds=settings_data["lockout_seconds"])
 
-    attempt.save(update_fields=["failed_count", "first_failed_at", "last_failed_at", "locked_until"])
+        attempt.save(update_fields=["failed_count", "first_failed_at", "last_failed_at", "locked_until"])
 
 
 def clear_login_failures(email, ip_address):

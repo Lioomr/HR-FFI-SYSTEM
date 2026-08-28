@@ -62,6 +62,7 @@ Backend: Django 5.2 + PostgreSQL 16. All domain models carry a `company` FK for 
 
 ## Schema Rules
 
+- **Postgres triggers enforce some invariants below the ORM** — e.g. `ffi_validate_employee_profile_tenant()` rejects an `EmployeeProfile` UPDATE if the legacy `manager` (User FK) and `manager_profile` (EmployeeProfile FK) fields disagree. `Model.save()` normally keeps such fields in sync; `bulk_create()`/`bulk_update()` bypass `save()`, signals, and `clean()` entirely, so a raw bulk write can trip a trigger that a normal `.save()` would have silently satisfied. Before converting any per-row `.save()`/`.create()` loop to a bulk operation, read that model's `save()` override for denormalization logic to replicate. See `reliability_and_perf_fixes.md` for a worked example (`employees/services/importer.py`).
 - Use explicit model relationships and `db_index` / `unique_together` constraints rather than implicit conventions.
 - Any model involving approvals, payroll, attendance, or sensitive employee data must generate `AuditLog` entries.
 - Use migrations for all schema changes. Review generated operations before committing — never commit auto-squashed migrations without review.

@@ -78,7 +78,9 @@ export type UseManagerAccessResult = {
   refresh: () => void;
 };
 
-export function useManagerAccess(options?: { enabled?: boolean }): UseManagerAccessResult {
+export function useManagerAccess(options?: {
+  enabled?: boolean;
+}): UseManagerAccessResult {
   const enabled = options?.enabled ?? true;
   const user = useAuthStore((s) => s.user);
   const userKey = user?.id ? String(user.id) : "";
@@ -107,7 +109,12 @@ export function useManagerAccess(options?: { enabled?: boolean }): UseManagerAcc
   }, [userKey]);
 
   if (!enabled || !userKey) {
-    return { access: NO_MANAGER_ACCESS, loading: false, failed: false, refresh };
+    return {
+      access: NO_MANAGER_ACCESS,
+      loading: false,
+      failed: false,
+      refresh,
+    };
   }
 
   const entry = cache && cache.userKey === userKey ? cache : null;

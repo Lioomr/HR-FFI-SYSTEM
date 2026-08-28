@@ -8,7 +8,7 @@ const leavesApi = {
   getMyBalances: async (year: number): Promise<ApiResponse<LeaveBalance[]>> => {
     const response = await apiClient.get<ApiResponse<LeaveBalance[]>>(
       "/api/leaves/employee/leave-balance/",
-      { params: { year } }
+      { params: { year } },
     );
     return response.data;
   },
@@ -18,11 +18,11 @@ const leavesApi = {
    */
   getEmployeeBalances: async (
     employeeId: number | string,
-    year: number
+    year: number,
   ): Promise<ApiResponse<LeaveBalance[]>> => {
     const response = await apiClient.get<ApiResponse<LeaveBalance[]>>(
       "/api/leaves/leave-balances/",
-      { params: { employee_id: employeeId, year } }
+      { params: { employee_id: employeeId, year } },
     );
     return response.data;
   },
@@ -30,18 +30,25 @@ const leavesApi = {
   /**
    * Create a new leave request
    */
-  createLeaveRequest: async (data: {
-    leave_type: number;
-    start_date: string;
-    end_date: string;
-    reason?: string;
-    document?: File;
-  } | FormData): Promise<ApiResponse<any>> => {
-    const config = data instanceof FormData ? { headers: { "Content-Type": "multipart/form-data" } } : undefined;
+  createLeaveRequest: async (
+    data:
+      | {
+          leave_type: number;
+          start_date: string;
+          end_date: string;
+          reason?: string;
+          document?: File;
+        }
+      | FormData,
+  ): Promise<ApiResponse<any>> => {
+    const config =
+      data instanceof FormData
+        ? { headers: { "Content-Type": "multipart/form-data" } }
+        : undefined;
     const response = await apiClient.post<ApiResponse<any>>(
       `/api/leaves/leave-requests/`,
       data,
-      config
+      config,
     );
     return response.data;
   },

@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Avatar, Button, Select, Space, Table, Tooltip, notification } from "antd";
+import {
+  Avatar,
+  Button,
+  Select,
+  Space,
+  Table,
+  Tooltip,
+  notification,
+} from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { CheckOutlined, CloseOutlined, UserOutlined } from "@ant-design/icons";
 
@@ -52,11 +60,14 @@ export default function AttendanceCorrectionsApproverTable({
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [statusFilter, setStatusFilter] = useState<AttendanceCorrectionStatus | undefined>(defaultStatus);
+  const [statusFilter, setStatusFilter] = useState<
+    AttendanceCorrectionStatus | undefined
+  >(defaultStatus);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [actionId, setActionId] = useState<number | null>(null);
-  const [rejectTarget, setRejectTarget] = useState<AttendanceCorrectionRequest | null>(null);
+  const [rejectTarget, setRejectTarget] =
+    useState<AttendanceCorrectionRequest | null>(null);
   const [rejecting, setRejecting] = useState(false);
 
   const load = useCallback(async () => {
@@ -89,9 +100,18 @@ export default function AttendanceCorrectionsApproverTable({
   const handleApprove = useCallback(
     async (record: AttendanceCorrectionRequest) => {
       setActionId(record.id);
+      // Optimistic: drop the row immediately; restore it if the request fails.
+      setItems((current) => current.filter((item) => item.id !== record.id));
+      setTotal((current) => Math.max(0, current - 1));
       try {
         const res = await approveAttendanceCorrectionRequest(record.id);
         if (isApiError(res)) {
+          setItems((current) =>
+            current.some((item) => item.id === record.id)
+              ? current
+              : [record, ...current],
+          );
+          setTotal((current) => current + 1);
           notification.error({
             message: t("common.error", "Error"),
             description: getDetailedApiMessage(t, res.message),
@@ -102,11 +122,22 @@ export default function AttendanceCorrectionsApproverTable({
           message:
             successMessage ||
             (approverRole === "hr"
-              ? t("attendanceCorrections.success.applied", "Correction applied.")
-              : t("attendanceCorrections.success.approved", "Correction approved.")),
+              ? t(
+                  "attendanceCorrections.success.applied",
+                  "Correction applied.",
+                )
+              : t(
+                  "attendanceCorrections.success.approved",
+                  "Correction approved.",
+                )),
         });
-        load();
       } catch (err: unknown) {
+        setItems((current) =>
+          current.some((item) => item.id === record.id)
+            ? current
+            : [record, ...current],
+        );
+        setTotal((current) => current + 1);
         notification.error({
           message: t("common.error", "Error"),
           description: getDetailedHttpErrorMessage(t, err),
@@ -115,15 +146,26 @@ export default function AttendanceCorrectionsApproverTable({
         setActionId(null);
       }
     },
-    [approverRole, load, successMessage, t]
+    [approverRole, successMessage, t],
   );
 
   const handleReject = async (notes: string) => {
     if (!rejectTarget) return;
+    const record = rejectTarget;
     setRejecting(true);
+    setRejectTarget(null);
+    // Optimistic: drop the row immediately; restore it if the rejection fails.
+    setItems((current) => current.filter((item) => item.id !== record.id));
+    setTotal((current) => Math.max(0, current - 1));
     try {
-      const res = await rejectAttendanceCorrectionRequest(rejectTarget.id, { notes });
+      const res = await rejectAttendanceCorrectionRequest(record.id, { notes });
       if (isApiError(res)) {
+        setItems((current) =>
+          current.some((item) => item.id === record.id)
+            ? current
+            : [record, ...current],
+        );
+        setTotal((current) => current + 1);
         notification.error({
           message: t("common.error", "Error"),
           description: getDetailedApiMessage(t, res.message),
@@ -131,11 +173,18 @@ export default function AttendanceCorrectionsApproverTable({
         return;
       }
       notification.success({
-        message: t("attendanceCorrections.success.rejected", "Correction request rejected."),
+        message: t(
+          "attendanceCorrections.success.rejected",
+          "Correction request rejected.",
+        ),
       });
-      setRejectTarget(null);
-      load();
     } catch (err: unknown) {
+      setItems((current) =>
+        current.some((item) => item.id === record.id)
+          ? current
+          : [record, ...current],
+      );
+      setTotal((current) => current + 1);
       notification.error({
         message: t("common.error", "Error"),
         description: getDetailedHttpErrorMessage(t, err),
@@ -161,7 +210,9 @@ export default function AttendanceCorrectionsApproverTable({
               />
               <div>
                 <div style={{ fontWeight: 600, lineHeight: 1.2 }}>{name}</div>
-                <div style={{ fontSize: 12, color: "#8c8c8c", lineHeight: 1.2 }}>
+                <div
+                  style={{ fontSize: 12, color: "#8c8c8c", lineHeight: 1.2 }}
+                >
                   {record.employee_email || "—"}
                 </div>
               </div>
@@ -183,17 +234,26 @@ export default function AttendanceCorrectionsApproverTable({
           const inAt = formatTimeOnly(record.requested_check_in_at, "—");
           const outAt = formatTimeOnly(record.requested_check_out_at, "—");
           const statusValue = record.requested_status
-            ? t(`attendanceCorrections.statusValue.${record.requested_status}`, record.requested_status)
+            ? t(
+                `attendanceCorrections.statusValue.${record.requested_status}`,
+                record.requested_status,
+              )
             : "—";
           return (
             <div style={{ fontSize: 13, color: "#0f172a" }}>
               <div>
-                <span style={{ color: "#64748b" }}>{t("attendanceCorrections.fields.checkInShort", "In")}:</span>{" "}
+                <span style={{ color: "#64748b" }}>
+                  {t("attendanceCorrections.fields.checkInShort", "In")}:
+                </span>{" "}
                 {inAt} ·{" "}
-                <span style={{ color: "#64748b" }}>{t("attendanceCorrections.fields.checkOutShort", "Out")}:</span>{" "}
+                <span style={{ color: "#64748b" }}>
+                  {t("attendanceCorrections.fields.checkOutShort", "Out")}:
+                </span>{" "}
                 {outAt}
               </div>
-              <div style={{ color: "#64748b", fontSize: 12 }}>{statusValue}</div>
+              <div style={{ color: "#64748b", fontSize: 12 }}>
+                {statusValue}
+              </div>
             </div>
           );
         },
@@ -205,17 +265,26 @@ export default function AttendanceCorrectionsApproverTable({
           const inAt = formatTimeOnly(record.current_check_in_at, "—");
           const outAt = formatTimeOnly(record.current_check_out_at, "—");
           const statusValue = record.current_status
-            ? t(`attendanceCorrections.statusValue.${String(record.current_status).toUpperCase()}`, String(record.current_status))
+            ? t(
+                `attendanceCorrections.statusValue.${String(record.current_status).toUpperCase()}`,
+                String(record.current_status),
+              )
             : "—";
           return (
             <div style={{ fontSize: 13, color: "#0f172a" }}>
               <div>
-                <span style={{ color: "#64748b" }}>{t("attendanceCorrections.fields.checkInShort", "In")}:</span>{" "}
+                <span style={{ color: "#64748b" }}>
+                  {t("attendanceCorrections.fields.checkInShort", "In")}:
+                </span>{" "}
                 {inAt} ·{" "}
-                <span style={{ color: "#64748b" }}>{t("attendanceCorrections.fields.checkOutShort", "Out")}:</span>{" "}
+                <span style={{ color: "#64748b" }}>
+                  {t("attendanceCorrections.fields.checkOutShort", "Out")}:
+                </span>{" "}
                 {outAt}
               </div>
-              <div style={{ color: "#64748b", fontSize: 12 }}>{statusValue}</div>
+              <div style={{ color: "#64748b", fontSize: 12 }}>
+                {statusValue}
+              </div>
             </div>
           );
         },
@@ -235,7 +304,9 @@ export default function AttendanceCorrectionsApproverTable({
         title: t("common.status", "Status"),
         key: "status",
         width: 150,
-        render: (_: unknown, record) => <AttendanceCorrectionStatusTag status={record.status} />,
+        render: (_: unknown, record) => (
+          <AttendanceCorrectionStatusTag status={record.status} />
+        ),
       },
       {
         title: t("common.actions", "Actions"),
@@ -278,7 +349,7 @@ export default function AttendanceCorrectionsApproverTable({
         },
       },
     ],
-    [t, actionId, handleApprove]
+    [t, actionId, handleApprove],
   );
 
   const statusSelectOptions = statusOptions.map((s) => ({
@@ -312,10 +383,13 @@ export default function AttendanceCorrectionsApproverTable({
         />
       ) : items.length === 0 ? (
         <EmptyState
-          title={t("attendanceCorrections.empty.title", "No correction requests yet")}
+          title={t(
+            "attendanceCorrections.empty.title",
+            "No correction requests yet",
+          )}
           description={t(
             "attendanceCorrections.empty.approverDescription",
-            "No attendance correction requests match the current filter."
+            "No attendance correction requests match the current filter.",
           )}
         />
       ) : (
@@ -333,7 +407,9 @@ export default function AttendanceCorrectionsApproverTable({
             rowKey="id"
             loading={loading}
             expandable={{
-              expandedRowRender: (record) => <AttendanceCorrectionDetails request={record} />,
+              expandedRowRender: (record) => (
+                <AttendanceCorrectionDetails request={record} />
+              ),
             }}
             scroll={{ x: 1200 }}
             pagination={{

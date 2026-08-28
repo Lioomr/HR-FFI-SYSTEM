@@ -1,7 +1,12 @@
 import { api } from "./apiClient";
 import type { ApiResponse, PaginatedResponse } from "./apiTypes";
 
-export type PendingRequestType = "LEAVE" | "LOAN" | "ATTENDANCE" | "ASSET" | "EMPLOYEE_DELETION";
+export type PendingRequestType =
+  | "LEAVE"
+  | "LOAN"
+  | "ATTENDANCE"
+  | "ASSET"
+  | "EMPLOYEE_DELETION";
 
 export interface PendingRequestItem {
   id: number;
@@ -25,7 +30,7 @@ export interface PendingRequestsParams {
 }
 
 export function getPendingRequests(
-  params?: PendingRequestsParams
+  params?: PendingRequestsParams,
 ): Promise<ApiResponse<PaginatedResponse<PendingRequestItem>>> {
   return api.get("/api/core/pending-requests/", { params }).then((r) => r.data);
 }

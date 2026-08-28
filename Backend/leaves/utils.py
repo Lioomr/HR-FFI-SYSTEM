@@ -1,11 +1,31 @@
 from datetime import date, timedelta
-from decimal import Decimal
+from decimal import ROUND_FLOOR, ROUND_HALF_UP, Decimal
 
 from django.db.models import Q, Sum
+from django.utils import timezone
 
 from employees.models import EmployeeProfile
 
-from .models import LeaveBalanceAdjustment, LeaveRequest, LeaveType
+from .models import AnnualLeavePaymentRequest, LeaveBalanceAdjustment, LeaveRequest, LeaveType
+
+ANNUAL_ACCRUAL_DAYS_PER_PERIOD = Decimal("1.75")
+ANNUAL_ACCRUAL_PERIOD_DAYS = 30
+ANNUAL_MINIMUM_PERIODS = 6
+PENDING_RESERVATION_STATUSES = {
+    LeaveRequest.RequestStatus.SUBMITTED,
+    LeaveRequest.RequestStatus.PENDING_DELEGATE,
+    LeaveRequest.RequestStatus.PENDING_MANAGER,
+    LeaveRequest.RequestStatus.PENDING_HR,
+    LeaveRequest.RequestStatus.PENDING_CEO,
+    LeaveRequest.RequestStatus.PENDING_HR_COMPLETION,
+}
+ANNUAL_LEAVE_SETTLEMENT_EXISTS_REASON = "An annual leave settlement already exists for this contract year."
+ACTIVE_ANNUAL_LEAVE_SETTLEMENT_STATUSES = {
+    AnnualLeavePaymentRequest.Status.PENDING_HR,
+    AnnualLeavePaymentRequest.Status.PENDING_CEO,
+    AnnualLeavePaymentRequest.Status.APPROVED,
+    AnnualLeavePaymentRequest.Status.CARRIED_FORWARD,
+}
 
 SICK_MAX_DAYS_PER_YEAR = 120
 SICK_FULL_PAY_DAYS = 30
@@ -148,6 +168,8 @@ def leave_request_employee_filter(employee_subject):
         if profile:
             request_filter = request_filter | LeaveRequest.objects.filter(employee_profile=profile)
 
+    if request_filter is not None and profile and profile.company_id:
+        request_filter = request_filter.filter(company_id=profile.company_id)
     return request_filter
 
 
@@ -162,16 +184,9 @@ def _get_balance_leave_types(profile: EmployeeProfile | None):
     company_id = getattr(profile, "company_id", None)
 
     if not company_id:
-        return list(queryset.filter(company__isnull=True).order_by("id"))
+        return []
 
-    leave_types_by_code = {}
-    candidates = queryset.filter(Q(company_id=company_id) | Q(company__isnull=True)).order_by("company_id", "id")
-    for leave_type in candidates:
-        code = _normalized_leave_code(leave_type)
-        if code not in leave_types_by_code or leave_type.company_id == company_id:
-            leave_types_by_code[code] = leave_type
-
-    return list(leave_types_by_code.values())
+    return list(queryset.filter(company_id=company_id).order_by("id"))
 
 
 def _is_annual(code: str) -> bool:
@@ -262,6 +277,325 @@ def get_service_years(profile: EmployeeProfile, on_date: date):
     return get_service_days(profile, on_date) / 365.0
 
 
+def get_contract_start_date(profile: EmployeeProfile | None):
+    if not profile:
+        return None
+    return profile.contract_date or profile.hire_date
+
+
+def _anniversary_for_year(start_date: date, year: int) -> date:
+    try:
+        return start_date.replace(year=year)
+    except ValueError:
+        # Employees hired on 29 February use 28 February in non-leap years.
+        return start_date.replace(year=year, day=28)
+
+
+def get_contract_year_cycle(profile: EmployeeProfile, reference_date: date | None = None):
+    """Return the contract-year start/end surrounding ``reference_date``."""
+    start_date = get_contract_start_date(profile)
+    reference_date = reference_date or date.today()
+    if not start_date:
+        return None, None
+
+    if reference_date < start_date:
+        return start_date, _anniversary_for_year(start_date, start_date.year + 1) - timedelta(days=1)
+
+    anniversary = _anniversary_for_year(start_date, reference_date.year)
+    if anniversary > reference_date:
+        cycle_start = _anniversary_for_year(start_date, reference_date.year - 1)
+    else:
+        cycle_start = anniversary
+    next_anniversary = _anniversary_for_year(start_date, cycle_start.year + 1)
+    return cycle_start, next_anniversary - timedelta(days=1)
+
+
+def get_completed_annual_periods(cycle_start: date, as_of: date | None = None) -> int:
+    if not cycle_start or not as_of or as_of <= cycle_start:
+        return 0
+    return min(12, max(0, (as_of - cycle_start).days // ANNUAL_ACCRUAL_PERIOD_DAYS))
+
+
+def get_annual_accrual_details(profile: EmployeeProfile, as_of: date | None = None):
+    cycle_start, cycle_end = get_contract_year_cycle(profile, as_of or date.today())
+    if not cycle_start:
+        return {
+            "cycle_start": None,
+            "cycle_end": None,
+            "completed_periods": 0,
+            "accrued_days": Decimal("0.00"),
+        }
+    effective_date = min(as_of or date.today(), cycle_end)
+    periods = get_completed_annual_periods(cycle_start, effective_date)
+    return {
+        "cycle_start": cycle_start,
+        "cycle_end": cycle_end,
+        "completed_periods": periods,
+        "accrued_days": (ANNUAL_ACCRUAL_DAYS_PER_PERIOD * periods).quantize(Decimal("0.01")),
+    }
+
+
+def _annual_requests_for_period(employee_subject, cycle_start: date, cycle_end: date, statuses):
+    requests = leave_request_employee_filter(employee_subject)
+    if requests is None:
+        return []
+    return requests.filter(
+        is_active=True,
+        status__in=statuses,
+        start_date__lte=cycle_end,
+        end_date__gte=cycle_start,
+    )
+
+
+def get_period_days_for_leave_type(
+    employee_subject,
+    leave_type: LeaveType,
+    period_start: date,
+    period_end: date,
+    *,
+    statuses=None,
+    as_of: date | None = None,
+):
+    statuses = statuses or {LeaveRequest.RequestStatus.APPROVED}
+    total = 0
+    for req in _annual_requests_for_period(employee_subject, period_start, period_end, statuses).filter(
+        leave_type=leave_type
+    ):
+        request_start = max(req.start_date, period_start)
+        request_end = min(req.end_date, period_end, as_of) if as_of else min(req.end_date, period_end)
+        if request_start <= request_end:
+            total += get_leave_days(request_start, request_end)
+    return total
+
+
+def get_annual_used_days_for_cycle(employee_subject, cycle_start: date, cycle_end: date, *, as_of=None):
+    profile = resolve_employee_profile(employee_subject)
+    leave_types = _get_balance_leave_types(profile)
+    annual_type = next((item for item in leave_types if _is_annual(_normalized_leave_code(item))), None)
+    emergency_type = next((item for item in leave_types if _is_emergency(_normalized_leave_code(item))), None)
+    used = (
+        get_period_days_for_leave_type(
+            employee_subject,
+            annual_type,
+            cycle_start,
+            cycle_end,
+            as_of=as_of,
+        )
+        if annual_type
+        else 0
+    )
+    if emergency_type:
+        used += get_period_days_for_leave_type(
+            employee_subject,
+            emergency_type,
+            cycle_start,
+            cycle_end,
+            as_of=as_of,
+        )
+    return used
+
+
+def get_pending_days_for_type(employee_subject, leave_type: LeaveType, year: int, as_of: date | None = None):
+    year_start = date(year, 1, 1)
+    year_end = date(year, 12, 31)
+    requests = leave_request_employee_filter(employee_subject)
+    if requests is None:
+        return 0.0
+    total = 0
+    for req in requests.filter(
+        leave_type=leave_type,
+        is_active=True,
+        status__in=PENDING_RESERVATION_STATUSES,
+        start_date__lte=year_end,
+        end_date__gte=year_start,
+    ):
+        request_end = min(req.end_date, as_of) if as_of else req.end_date
+        if req.start_date <= request_end:
+            total += calculate_overlap_days(req.start_date, request_end, year)
+    return float(total)
+
+
+def get_annual_pending_days_for_cycle(employee_subject, cycle_start: date, cycle_end: date, *, as_of=None):
+    profile = resolve_employee_profile(employee_subject)
+    leave_types = _get_balance_leave_types(profile)
+    pending = 0
+    for leave_type in leave_types:
+        if _is_annual(_normalized_leave_code(leave_type)) or _is_emergency(_normalized_leave_code(leave_type)):
+            pending += get_period_days_for_leave_type(
+                employee_subject,
+                leave_type,
+                cycle_start,
+                cycle_end,
+                statuses=PENDING_RESERVATION_STATUSES,
+                as_of=as_of,
+            )
+    return pending
+
+
+def has_pending_annual_leave(employee_subject, *, company=None) -> bool:
+    """Return whether the employee has a blocking pending Annual Leave request."""
+    profile = resolve_employee_profile(employee_subject)
+    requests = leave_request_employee_filter(profile or employee_subject)
+    if requests is None:
+        return False
+
+    if company is None:
+        company = getattr(profile, "company", None)
+    if company is None:
+        return False
+
+    return (
+        requests.filter(
+            is_active=True,
+            company=company,
+            status__in=PENDING_RESERVATION_STATUSES,
+        )
+        .filter(Q(leave_type__code__in=["ANNUAL", "ANNUAL_LEAVE"]) | Q(leave_type__name__iexact="Annual Leave"))
+        .exists()
+    )
+
+
+def has_active_annual_leave_settlement(profile: EmployeeProfile | None, cycle_start, *, company=None) -> bool:
+    """Return whether the employee already has a blocking settlement for this company contract cycle."""
+    if profile is None or cycle_start is None:
+        return False
+
+    company_id = getattr(company, "id", company) or profile.company_id
+    if company_id is None:
+        return False
+
+    return AnnualLeavePaymentRequest.objects.filter(
+        employee_profile=profile,
+        company_id=company_id,
+        cycle_start=cycle_start,
+        status__in=ACTIVE_ANNUAL_LEAVE_SETTLEMENT_STATUSES,
+    ).exists()
+
+
+def build_annual_leave_eligibility(profile: EmployeeProfile | None, *, active_company=None, as_of=None):
+    """Build the server-owned eligibility/preview payload for Annual Leave payment."""
+    zero = Decimal("0.00")
+    today = as_of or timezone.localdate()
+    base = {
+        "can_request": False,
+        "window_open": False,
+        "cycle_start": None,
+        "cycle_end": None,
+        "eligible_unused_days": zero,
+        "fractional_days": zero,
+        "salary_at_year_end": zero,
+        "estimated_payment_amount": zero,
+        "has_pending_annual_leave": False,
+        "reason": "",
+    }
+
+    if profile is None:
+        base["reason"] = "Employee profile is required."
+        return base
+    if active_company is None or profile.company_id != active_company.id:
+        base["reason"] = "Employee does not belong to the active company."
+        return base
+
+    details = get_annual_accrual_details(profile, today)
+    cycle_start = details["cycle_start"]
+    cycle_end = details["cycle_end"]
+    base.update({"cycle_start": cycle_start, "cycle_end": cycle_end})
+    if cycle_start is None:
+        base["reason"] = "Employee contract date is required for Annual Leave payment."
+        return base
+
+    is_terminated = profile.employment_status == EmployeeProfile.EmploymentStatus.TERMINATED
+    window_open = is_terminated or cycle_end - timedelta(days=4) <= today <= cycle_end
+    pending = has_pending_annual_leave(profile, company=active_company)
+    base["window_open"] = window_open
+    base["has_pending_annual_leave"] = pending
+
+    termination_date = profile.archived_at.date() if is_terminated and profile.archived_at else None
+    snapshot = build_annual_leave_payment_snapshot(
+        profile,
+        as_of=termination_date or today,
+        termination_date=termination_date,
+    )
+    if snapshot:
+        base.update(
+            {
+                "eligible_unused_days": snapshot["eligible_unused_days"],
+                "fractional_days": snapshot["fractional_days"],
+                "salary_at_year_end": snapshot["salary_at_year_end"],
+                "estimated_payment_amount": snapshot["payment_amount"],
+            }
+        )
+
+    if has_active_annual_leave_settlement(profile, cycle_start, company=active_company):
+        base["reason"] = ANNUAL_LEAVE_SETTLEMENT_EXISTS_REASON
+        return base
+
+    reasons = []
+    if not is_terminated and get_completed_annual_periods(cycle_start, today) < ANNUAL_MINIMUM_PERIODS:
+        reasons.append("Annual Leave payment is available after completing 6 months of service.")
+    if not window_open:
+        reasons.append("The Annual Leave payment window opens only during the final 5 days of the contract year.")
+    if pending:
+        reasons.append("Annual Leave payment cannot be requested while Annual Leave requests are pending.")
+    if base["eligible_unused_days"] <= 0:
+        reasons.append("There are no eligible whole Annual Leave days available for payment.")
+    base["can_request"] = not reasons
+    base["reason"] = " ".join(reasons)
+    return base
+
+
+def get_annual_salary_at_year_end(profile: EmployeeProfile):
+    salary = profile.total_salary or profile.basic_salary or Decimal("0.00")
+    return Decimal(salary).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def get_prior_annual_carry_forward_days(profile: EmployeeProfile, cycle_start: date):
+    previous = (
+        AnnualLeavePaymentRequest.objects.filter(
+            employee_profile=profile,
+            cycle_end__lt=cycle_start,
+        )
+        .order_by("-cycle_end", "-id")
+        .first()
+    )
+    if not previous or previous.status == AnnualLeavePaymentRequest.Status.APPROVED:
+        return Decimal("0.00")
+    if previous.status == AnnualLeavePaymentRequest.Status.CARRIED_FORWARD:
+        return previous.carry_forward_days
+    # A rejected or still-pending payment must not erase the employee's balance.
+    return previous.eligible_unused_days
+
+
+def build_annual_leave_payment_snapshot(
+    profile: EmployeeProfile, *, as_of: date | None = None, termination_date: date | None = None
+):
+    effective_date = termination_date or as_of or date.today()
+    details = get_annual_accrual_details(profile, effective_date)
+    cycle_start = details["cycle_start"]
+    cycle_end = details["cycle_end"]
+    if not cycle_start:
+        return None
+    effective_cycle_end = min(cycle_end, effective_date)
+    opening = get_prior_annual_carry_forward_days(profile, cycle_start)
+    accrued = (opening + details["accrued_days"]).quantize(Decimal("0.01"))
+    used = Decimal(str(get_annual_used_days_for_cycle(profile, cycle_start, effective_cycle_end, as_of=effective_date)))
+    eligible_unused = max(Decimal("0.00"), accrued - used)
+    eligible_whole_days = eligible_unused.quantize(Decimal("1"), rounding=ROUND_FLOOR)
+    salary = get_annual_salary_at_year_end(profile)
+    amount = (eligible_whole_days * salary / Decimal("30")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return {
+        "cycle_start": cycle_start,
+        "cycle_end": cycle_end,
+        "accrued_days": accrued,
+        "used_days": used,
+        "eligible_unused_days": eligible_whole_days,
+        "fractional_days": (eligible_unused - eligible_whole_days).quantize(Decimal("0.01")),
+        "salary_at_year_end": salary,
+        "payment_amount": amount,
+        "termination_date": termination_date,
+    }
+
+
 def get_annual_entitlement(profile: EmployeeProfile, year: int):
     """
     Annual entitlement:
@@ -294,24 +628,12 @@ def get_annual_entitlement(profile: EmployeeProfile, year: int):
 
 
 def get_annual_accrued_days(profile: EmployeeProfile, year: int, as_of: date | None = None) -> float:
-    """Return the annual entitlement earned by ``as_of`` in the given year."""
-    if not profile or not profile.hire_date:
+    """Return 1.75 days for each completed 30-day period in the contract cycle."""
+    if not profile or not get_contract_start_date(profile):
         return 0.0
-
-    year_start = date(year, 1, 1)
-    year_end = date(year, 12, 31)
-    as_of = min(as_of or year_end, year_end)
-    if as_of < year_start or as_of < profile.hire_date:
-        return 0.0
-
-    # Accrual is based on the standard annual allowance, including in the
-    # employee's hire year. The separate entitlement function remains the
-    # full-year quota used for reporting and carry-over calculations.
-    entitlement = 30.0 if get_service_years(profile, as_of) >= 5 else 21.0
-    service_start = max(year_start, profile.hire_date)
-    started_months = (as_of.year - service_start.year) * 12 + as_of.month - service_start.month + 1
-    eligible_months = 12 - (service_start.month - 1)
-    return round(entitlement * min(started_months, eligible_months) / 12, 2)
+    effective_date = as_of or date(year, 12, 31)
+    details = get_annual_accrual_details(profile, effective_date)
+    return float(details["accrued_days"])
 
 
 def get_used_days_for_type(user, leave_type: LeaveType, year: int, as_of: date | None = None):
@@ -348,6 +670,12 @@ def get_adjustments_for_type(user, leave_type: LeaveType, year: int):
         adjustments = LeaveBalanceAdjustment.objects.filter(employee=user)
     else:
         return 0.0
+
+    if profile and profile.company_id:
+        adjustments = adjustments.filter(
+            company_id=profile.company_id,
+            leave_type__company_id=profile.company_id,
+        )
 
     adjs = adjustments.filter(leave_type=leave_type, created_at__year=year).aggregate(Sum("adjustment_days"))[
         "adjustment_days__sum"
@@ -471,20 +799,27 @@ def validate_leave_request_policy(
 
     # Annual leave eligibility: can start after 6 months.
     if _is_annual(code):
-        if profile.hire_date and start < (profile.hire_date + timedelta(days=182)):
+        contract_start = get_contract_start_date(profile)
+        if contract_start and get_completed_annual_periods(contract_start, date.today()) < ANNUAL_MINIMUM_PERIODS:
             return "Annual leave can be used only after completing 6 months of service."
 
         # Only enforce remaining balance when profile + hire date are available.
-        if profile.hire_date:
+        if contract_start:
             balances = calculate_leave_balance(user, year, as_of=date.today())
             annual_balance = next((b for b in balances if b["leave_code"] == code), None)
-            unpaid_balance = _find_balance_by_code(balances, "UNPAID", "UNPAID_LEAVE")
-            annual_remaining = annual_balance["remaining_days"] if annual_balance else 0
-            unpaid_remaining = unpaid_balance["remaining_days"] if unpaid_balance else 0
-            if requested_days > annual_remaining + unpaid_remaining:
+            annual_remaining = (
+                float(Decimal(str(annual_balance["remaining_days"])).quantize(Decimal("1"), rounding=ROUND_FLOOR))
+                if annual_balance
+                else 0
+            )
+            cycle_start, cycle_end = get_contract_year_cycle(profile, date.today())
+            pending_annual = get_annual_pending_days_for_cycle(user, cycle_start, cycle_end) if cycle_start else 0
+            annual_remaining = max(0.0, annual_remaining - pending_annual)
+            if requested_days > annual_remaining:
                 return (
                     "Annual leave exceeds available balance "
-                    f"(annual: {annual_remaining:.2f} days, unpaid fallback: {unpaid_remaining:.2f} days)."
+                    f"(annual: {annual_remaining:.2f} days, pending: "
+                    f"{pending_annual:.2f} days)."
                 )
 
     if _is_emergency(code):
@@ -500,14 +835,20 @@ def validate_leave_request_policy(
         if requested_days > SICK_MAX_DAYS_PER_YEAR:
             return "Sick leave request exceeds annual maximum of 120 days."
         used = get_used_days_for_type(user, leave_type, year)
-        if used + requested_days > SICK_MAX_DAYS_PER_YEAR:
-            return f"Sick leave exceeds annual maximum. Remaining: {max(0, SICK_MAX_DAYS_PER_YEAR - used):.0f} days."
+        pending = get_pending_days_for_type(user, leave_type, year)
+        if used + pending + requested_days > SICK_MAX_DAYS_PER_YEAR:
+            return (
+                f"Sick leave exceeds annual maximum. Remaining: "
+                f"{max(0, SICK_MAX_DAYS_PER_YEAR - used - pending):.0f} days."
+            )
 
     if _is_unpaid(code):
         used = get_used_days_for_type(user, leave_type, year)
-        if used + requested_days > UNPAID_MAX_DAYS_PER_YEAR:
+        pending = get_pending_days_for_type(user, leave_type, year)
+        if used + pending + requested_days > UNPAID_MAX_DAYS_PER_YEAR:
             return (
-                f"Unpaid leave exceeds annual maximum. Remaining: {max(0, UNPAID_MAX_DAYS_PER_YEAR - used):.0f} days."
+                f"Unpaid leave exceeds annual maximum. Remaining: "
+                f"{max(0, UNPAID_MAX_DAYS_PER_YEAR - used - pending):.0f} days."
             )
 
     if _is_marriage(code):
@@ -550,25 +891,43 @@ def calculate_leave_balance(user, year, profile=None, as_of: date | None = None)
     employee_subject = profile or user
 
     if profile:
-        hire_year = profile.hire_date.year if profile.hire_date else year
+        contract_start = get_contract_start_date(profile)
+        hire_year = contract_start.year if contract_start else year
     else:
         hire_year = year
 
     if year < hire_year:
         return []  # No balances before hire
 
-    if profile and profile.company_id:
-        ensure_policy_leave_types_for_company(profile.company)
-    else:
-        ensure_policy_leave_types()
+    if not profile or not profile.company_id:
+        return []
+    ensure_policy_leave_types_for_company(profile.company)
     leave_types = _get_balance_leave_types(profile)
     balances = []
 
-    balance_date = as_of or date(year, 12, 31)
+    balance_date = as_of or (date.today() if year == date.today().year else date(year, 12, 31))
 
     for lt in leave_types:
         code = _normalized_leave_code(lt)
-        used = get_used_days_for_type(employee_subject, lt, year, as_of=balance_date)
+        annual_cycle_start, annual_cycle_end = (
+            get_contract_year_cycle(profile, balance_date) if profile else (None, None)
+        )
+        if _is_annual(code) and annual_cycle_start:
+            used = get_annual_used_days_for_cycle(
+                employee_subject,
+                annual_cycle_start,
+                min(annual_cycle_end, balance_date),
+                as_of=balance_date,
+            )
+            pending_days = get_annual_pending_days_for_cycle(
+                employee_subject,
+                annual_cycle_start,
+                min(annual_cycle_end, balance_date),
+                as_of=balance_date,
+            )
+        else:
+            used = get_used_days_for_type(employee_subject, lt, year, as_of=balance_date)
+            pending_days = get_pending_days_for_type(employee_subject, lt, year, as_of=balance_date)
 
         # Opening Balance (Carry-over)
         opening = 0.0
@@ -640,7 +999,9 @@ def calculate_leave_balance(user, year, profile=None, as_of: date | None = None)
 
         available_annual_year_days = None
         if _is_annual(code):
-            available_annual_year_days = get_annual_accrued_days(profile, year, as_of=balance_date)
+            available_annual_year_days = (
+                float(get_annual_accrual_details(profile, balance_date)["accrued_days"]) if profile else 0.0
+            )
             if configured_quota > 0:
                 available_annual_year_days = min(available_annual_year_days, configured_quota)
 
@@ -652,14 +1013,31 @@ def calculate_leave_balance(user, year, profile=None, as_of: date | None = None)
                 None,
             )
             if annual_type:
+                annual_details = get_annual_accrual_details(profile, balance_date) if profile else {}
                 annual_total = (
-                    get_annual_accrued_days(profile, year, as_of=balance_date) if profile else 0.0
-                ) + get_adjustments_for_type(employee_subject, annual_type, year)
-                annual_used = get_used_days_for_type(employee_subject, annual_type, year, as_of=balance_date)
+                    (
+                        float(annual_details.get("accrued_days", 0.0))
+                        + float(get_prior_annual_carry_forward_days(profile, annual_details["cycle_start"]))
+                    )
+                    if profile and annual_details.get("cycle_start")
+                    else 0.0
+                )
+                annual_used_only = (
+                    get_period_days_for_leave_type(
+                        employee_subject,
+                        annual_type,
+                        annual_details["cycle_start"],
+                        min(annual_details["cycle_end"], balance_date),
+                        as_of=balance_date,
+                    )
+                    if profile and annual_details.get("cycle_start")
+                    else 0
+                )
                 emergency_used = used
-                annual_remaining_after_annual = max(0.0, annual_total - annual_used)
-                emergency_available_days = min(
-                    float(EMERGENCY_MAX_DAYS_PER_YEAR), max(0.0, annual_remaining_after_annual - emergency_used)
+                annual_remaining_after_annual = max(0.0, annual_total - annual_used_only)
+                emergency_available_days = (
+                    min(float(EMERGENCY_MAX_DAYS_PER_YEAR), max(0.0, annual_remaining_after_annual - emergency_used))
+                    + adjustments
                 )
 
         # Marriage leave is once during service.
@@ -677,20 +1055,33 @@ def calculate_leave_balance(user, year, profile=None, as_of: date | None = None)
 
         available_total = opening + quota + adjustments
         if available_annual_year_days is not None:
-            available_total = opening + available_annual_year_days + adjustments
+            prior_carry = (
+                float(get_prior_annual_carry_forward_days(profile, annual_cycle_start))
+                if profile and annual_cycle_start
+                else 0.0
+            )
+            available_total = prior_carry + available_annual_year_days + adjustments
         if emergency_available_days is not None:
             available_total = emergency_available_days
-        remaining = available_total - used
-        remaining = max(0.0, remaining)
+        remaining = max(0.0, available_total - used)
+        requestable_days = max(
+            0.0, float(Decimal(str(remaining)).quantize(Decimal("1"), rounding=ROUND_FLOOR)) - pending_days
+        )
+        fractional_days = max(
+            0.0, remaining - float(Decimal(str(remaining)).quantize(Decimal("1"), rounding=ROUND_FLOOR))
+        )
 
         balances.append(
             {
                 "leave_type_id": lt.id,
                 "leave_type": lt.name,
                 "leave_code": code,
-                "total_days": float(opening + quota + adjustments),
+                "total_days": float(available_total),
                 "used_days": float(used),
                 "remaining_days": float(remaining),
+                "pending_days": float(pending_days),
+                "requestable_days": requestable_days,
+                "fractional_days": fractional_days,
                 "adjustments": adjustments,  # Useful for UI
                 **(
                     {"available_annual_year_days": float(available_annual_year_days)}

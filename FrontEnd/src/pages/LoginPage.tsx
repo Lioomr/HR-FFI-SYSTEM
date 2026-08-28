@@ -20,7 +20,10 @@ type LoginFormValues = {
 export default function LoginPage() {
   const [form] = Form.useForm<LoginFormValues>();
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<{ title: string; description: string } | null>(null);
+  const [error, setError] = useState<{
+    title: string;
+    description: string;
+  } | null>(null);
 
   const login = useAuthStore((s) => s.login);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -28,31 +31,37 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const getPostLoginDestination = useCallback((role?: string) => {
-    const requestedPath =
-      new URLSearchParams(location.search).get("next") ||
-      (location.state as { from?: unknown } | null)?.from;
-    if (
-      typeof requestedPath === "string" &&
-      requestedPath.startsWith("/") &&
-      !requestedPath.startsWith("//") &&
-      !requestedPath.includes("\\")
-    ) {
-      return requestedPath;
-    }
-    if (role === "SystemAdmin") return "/admin/dashboard";
-    if (role === "HRManager") return "/hr/dashboard";
-    if (role === "Manager") return "/employee/dashboard";
-    if (role === "CEO") return "/ceo/leave/requests";
-    return "/employee/home";
-  }, [location.search, location.state]);
+  const getPostLoginDestination = useCallback(
+    (role?: string) => {
+      const requestedPath =
+        new URLSearchParams(location.search).get("next") ||
+        (location.state as { from?: unknown } | null)?.from;
+      if (
+        typeof requestedPath === "string" &&
+        requestedPath.startsWith("/") &&
+        !requestedPath.startsWith("//") &&
+        !requestedPath.includes("\\")
+      ) {
+        return requestedPath;
+      }
+      if (role === "SystemAdmin") return "/admin/dashboard";
+      if (role === "HRManager") return "/hr/dashboard";
+      if (role === "Manager") return "/employee/dashboard";
+      if (role === "CEO") return "/ceo/leave/requests";
+      return "/employee/home";
+    },
+    [location.search, location.state],
+  );
   const { t, language, setLanguage, direction } = useI18n();
 
   function buildLoginError(message?: string | null) {
     const description = message?.trim() || t("auth.loginFailed");
     const normalized = description.toLowerCase();
 
-    if (normalized.includes("too many failed login attempts") || normalized.includes("locked out")) {
+    if (
+      normalized.includes("too many failed login attempts") ||
+      normalized.includes("locked out")
+    ) {
       return {
         title: t("auth.loginLockedTitle"),
         description,
@@ -93,7 +102,10 @@ export default function LoginPage() {
     try {
       // Sent verbatim: the backend normalizes phone numbers itself, and reformatting
       // here would break local-format numbers such as "0554867964".
-      const res = await loginApi({ identifier: values.identifier.trim(), password: values.password });
+      const res = await loginApi({
+        identifier: values.identifier.trim(),
+        password: values.password,
+      });
       if (isApiError(res)) {
         setError(buildLoginError(res.message || t("auth.loginFailed")));
         return;
@@ -103,7 +115,9 @@ export default function LoginPage() {
       navigate(getPostLoginDestination(role), { replace: true });
     } catch (e: unknown) {
       if (typeof e === "object" && e !== null && "response" in e) {
-        setError(buildLoginError(getFirstApiErrorMessage(e) || t("auth.loginFailed")));
+        setError(
+          buildLoginError(getFirstApiErrorMessage(e) || t("auth.loginFailed")),
+        );
       } else {
         setError(buildLoginError(t("auth.backendNotConnected")));
       }
@@ -136,7 +150,10 @@ export default function LoginPage() {
       }}
     >
       {/* ── Brand panel (desktop only) ── */}
-      <div className="login-brand-panel" style={{ display: "none", flex: "0 0 40%", background: "#0d1117" }}>
+      <div
+        className="login-brand-panel"
+        style={{ display: "none", flex: "0 0 40%", background: "#0d1117" }}
+      >
         <div
           style={{
             height: "100%",
@@ -164,16 +181,46 @@ export default function LoginPage() {
               <ApartmentOutlined />
             </div>
             <div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: "#fff", letterSpacing: "-0.01em" }}>FFISYS</div>
-              <div style={{ fontSize: 12.5, color: "rgba(255,255,255,0.55)", marginTop: 1 }}>
+              <div
+                style={{
+                  fontSize: 18,
+                  fontWeight: 700,
+                  color: "#fff",
+                  letterSpacing: "-0.01em",
+                }}
+              >
+                FFISYS
+              </div>
+              <div
+                style={{
+                  fontSize: 12.5,
+                  color: "rgba(255,255,255,0.55)",
+                  marginTop: 1,
+                }}
+              >
                 {t("layout.hrPayroll")}
               </div>
             </div>
           </div>
 
           <div>
-            <div style={{ width: 28, height: 3, background: "#f97316", borderRadius: 2, marginBottom: 16 }} />
-            <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 13.5, lineHeight: 1.7, maxWidth: 280 }}>
+            <div
+              style={{
+                width: 28,
+                height: 3,
+                background: "#f97316",
+                borderRadius: 2,
+                marginBottom: 16,
+              }}
+            />
+            <div
+              style={{
+                color: "rgba(255,255,255,0.6)",
+                fontSize: 13.5,
+                lineHeight: 1.7,
+                maxWidth: 280,
+              }}
+            >
               {t("auth.internalSystemNotice")}
             </div>
           </div>
@@ -198,7 +245,15 @@ export default function LoginPage() {
       >
         <div style={{ width: "100%", maxWidth: 400 }}>
           {/* Mobile brand mark */}
-          <div className="login-mobile-brand" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 28 }}>
+          <div
+            className="login-mobile-brand"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              marginBottom: 28,
+            }}
+          >
             <div
               style={{
                 width: 40,
@@ -216,8 +271,12 @@ export default function LoginPage() {
               <ApartmentOutlined />
             </div>
             <div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: "#0f172a" }}>FFISYS</div>
-              <div style={{ fontSize: 12, color: "#64748b" }}>{t("layout.hrPayroll")}</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "#0f172a" }}>
+                FFISYS
+              </div>
+              <div style={{ fontSize: 12, color: "#64748b" }}>
+                {t("layout.hrPayroll")}
+              </div>
             </div>
           </div>
 
@@ -225,8 +284,19 @@ export default function LoginPage() {
             style={{ borderRadius: 16 }}
             title={
               <div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: "#0f172a" }}>{t("auth.signIn")}</div>
-                <div style={{ fontSize: 13, fontWeight: 400, color: "#64748b", marginTop: 2 }}>
+                <div
+                  style={{ fontSize: 18, fontWeight: 700, color: "#0f172a" }}
+                >
+                  {t("auth.signIn")}
+                </div>
+                <div
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 400,
+                    color: "#64748b",
+                    marginTop: 2,
+                  }}
+                >
                   {t("auth.signInToContinue")}
                 </div>
               </div>
@@ -253,7 +323,9 @@ export default function LoginPage() {
               <Form.Item
                 label={t("auth.emailOrPhone")}
                 name="identifier"
-                rules={[{ required: true, message: t("auth.emailOrPhoneRequired") }]}
+                rules={[
+                  { required: true, message: t("auth.emailOrPhoneRequired") },
+                ]}
               >
                 <Input
                   size="large"
@@ -266,7 +338,9 @@ export default function LoginPage() {
               <Form.Item
                 label={t("auth.password")}
                 name="password"
-                rules={[{ required: true, message: t("auth.passwordRequired") }]}
+                rules={[
+                  { required: true, message: t("auth.passwordRequired") },
+                ]}
                 style={{ marginBottom: 12 }}
               >
                 <Input.Password
@@ -277,17 +351,34 @@ export default function LoginPage() {
                 />
               </Form.Item>
 
-              <Form.Item name="remember" valuePropName="checked" style={{ marginBottom: 20 }}>
+              <Form.Item
+                name="remember"
+                valuePropName="checked"
+                style={{ marginBottom: 20 }}
+              >
                 <Checkbox>{t("auth.rememberMe")}</Checkbox>
               </Form.Item>
 
-              <Button type="primary" htmlType="submit" size="large" loading={submitting} block>
+              <Button
+                type="primary"
+                htmlType="submit"
+                size="large"
+                loading={submitting}
+                block
+              >
                 {t("auth.signIn")}
               </Button>
             </Form>
           </Card>
 
-          <div style={{ textAlign: "center", marginTop: 20, color: "#94a3b8", fontSize: 12 }}>
+          <div
+            style={{
+              textAlign: "center",
+              marginTop: 20,
+              color: "#94a3b8",
+              fontSize: 12,
+            }}
+          >
             &copy; {new Date().getFullYear()} FFISYS
           </div>
         </div>

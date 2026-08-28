@@ -10,6 +10,7 @@ from core.services.whatsapp_service import WhatsAppService
 from employees.models import EmployeeProfile
 from in_app_notifications.dispatcher import dispatch_notification_channels
 from in_app_notifications.models import Notification
+from organization.models import OrganizationNode
 
 User = get_user_model()
 WORK_LICENSE_NOTIFICATION_DAYS = 10
@@ -116,6 +117,8 @@ def notify_document_expiry_in_app(
 
 
 def _hr_recipients_for_company(company_id):
+    if not company_id:
+        return User.objects.none()
     company_filter = Q(employee_profile__company_id=company_id) | Q(
         organization_access_entries__organization_id=company_id
     )
@@ -129,6 +132,9 @@ def notify_expiring_work_licenses(*, today=None) -> dict:
     profiles = EmployeeProfile.objects.filter(
         is_archived=False,
         work_license_expiry__range=(today, cutoff_date),
+        company_id__isnull=False,
+        company__node_type=OrganizationNode.NodeType.COMPANY,
+        company__is_active=True,
     ).select_related("company")
 
     queued = 0

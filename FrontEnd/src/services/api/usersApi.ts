@@ -53,44 +53,44 @@ export async function createUser(payload: CreateUserRequest) {
 
 export async function updateUserStatus(
   userId: number | string,
-  payload: UpdateUserStatusRequest
+  payload: UpdateUserStatusRequest,
 ) {
   const { data } = await api.patch<ApiResponse<UserDto>>(
     `/users/${userId}/status/`,
-    payload
+    payload,
   );
   return data;
 }
 
 export async function updateUserRole(
   userId: number | string,
-  payload: UpdateUserRoleRequest
+  payload: UpdateUserRoleRequest,
 ) {
   const { data } = await api.put<ApiResponse<UserDto>>(
     `/users/${userId}/role/`,
-    payload
+    payload,
   );
   return data;
 }
 
 export async function resetUserPassword(
   userId: number | string,
-  payload: ResetPasswordRequest
+  payload: ResetPasswordRequest,
 ) {
   const { data } = await api.post<ApiResponse<ResetPasswordResponse>>(
     `/users/${userId}/reset-password/`,
-    payload
+    payload,
   );
   return data;
 }
 
 export async function updateUserOrganizations(
   userId: number | string,
-  payload: UpdateUserOrganizationsRequest
+  payload: UpdateUserOrganizationsRequest,
 ) {
   const { data } = await api.patch<ApiResponse<UserDto>>(
     `/users/${userId}/`,
-    payload
+    payload,
   );
   return data;
 }

@@ -3,6 +3,7 @@ from unittest.mock import Mock, patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework import status
@@ -51,9 +52,36 @@ class AttendanceTests(TestCase):
         self.ceo_approver = User.objects.create_user(email="ceo-approver@ffi.com", password="password")
         self.ceo_approver.groups.add(self.ceo_group)
 
-        self.ceo_dept = Department.objects.create(id=1, code="CEO", name="CEO Department")
-        self.base_dept = Department.objects.create(id=11, code="ENG", name="Engineering Department")
-        self.base_position = Position.objects.create(id=901, code="EMP", name="Employee")
+        self.ceo_dept = Department.objects.create(
+            id=1,
+            code="CEO",
+            name="CEO Department",
+            company=self.company,
+        )
+        self.base_dept = Department.objects.create(
+            id=11,
+            code="ENG",
+            name="Engineering Department",
+            company=self.company,
+        )
+        self.base_position = Position.objects.create(
+            id=901,
+            code="EMP",
+            name="Employee",
+            company=self.company,
+        )
+        self.other_dept = Department.objects.create(
+            id=12,
+            code="ENG-B",
+            name="Other Engineering Department",
+            company=self.other_company,
+        )
+        self.other_position = Position.objects.create(
+            id=902,
+            code="EMP-B",
+            name="Other Employee",
+            company=self.other_company,
+        )
         self.hr_profile = EmployeeProfile.objects.create(
             user=self.hr,
             company=self.company,
@@ -88,8 +116,8 @@ class AttendanceTests(TestCase):
             employee_id="EMP002",
             department="Engineering",
             job_title="Software Engineer",
-            department_ref=self.base_dept,
-            position_ref=self.base_position,
+            department_ref=self.other_dept,
+            position_ref=self.other_position,
             hire_date=date.today(),
         )
         self.ceo_profile = EmployeeProfile.objects.create(
@@ -191,10 +219,10 @@ class AttendanceTests(TestCase):
         self.assertTrue(AuditLog.objects.filter(action="attendance.check_in").exists())
 
     def test_employee_check_in_with_inactive_manager_falls_back_to_hr(self):
-        self.manager_profile.employment_status = EmployeeProfile.EmploymentStatus.SUSPENDED
-        self.manager_profile.save(update_fields=["employment_status", "updated_at"])
         self.profile1.manager_profile = self.manager_profile
         self.profile1.save(update_fields=["manager_profile", "updated_at"])
+        self.manager_profile.employment_status = EmployeeProfile.EmploymentStatus.SUSPENDED
+        self.manager_profile.save(update_fields=["employment_status", "updated_at"])
 
         self.client.force_authenticate(user=self.emp1)
         response = self.client.post("/api/attendance/me/check-in/")
@@ -230,9 +258,8 @@ class AttendanceTests(TestCase):
         profile = EmployeeProfile.objects.create(
             user=user,
             employee_id="EMP-NO-COMPANY",
-            department_ref=self.base_dept,
-            position_ref=self.base_position,
             hire_date=date.today(),
+            is_archived=True,
         )
         self.client.force_authenticate(user=user)
 
@@ -531,8 +558,11 @@ class AttendanceTests(TestCase):
         self.assertEqual(items[0]["id"], own_record.id)
 
     def test_manager_cannot_access_direct_report_in_another_company(self):
-        self.profile2.manager_profile = self.manager_profile
-        self.profile2.save(update_fields=["manager_profile"])
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            EmployeeProfile.objects.filter(pk=self.profile2.pk).update(
+                manager_id=self.manager_user.id,
+                manager_profile_id=self.manager_profile.id,
+            )
         other_company_record = AttendanceRecord.objects.create(
             employee_profile=self.profile2,
             date=timezone.localdate(),

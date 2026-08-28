@@ -1,7 +1,25 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeftOutlined, CheckCircleOutlined, CloseCircleOutlined, DownloadOutlined, EyeOutlined, FilePdfOutlined } from "@ant-design/icons";
-import { Button, Card, Descriptions, Divider, Input, Modal, Space, Tag, Typography, notification } from "antd";
+import {
+  ArrowLeftOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  DownloadOutlined,
+  EyeOutlined,
+  FilePdfOutlined,
+} from "@ant-design/icons";
+import {
+  Button,
+  Card,
+  Descriptions,
+  Divider,
+  Input,
+  Modal,
+  Space,
+  Tag,
+  Typography,
+  notification,
+} from "antd";
 
 import LeaveApprovalMap from "../../../components/leaves/LeaveApprovalMap";
 import ErrorState from "../../../components/ui/ErrorState";
@@ -22,6 +40,7 @@ import {
 import { getHttpStatus } from "../../../services/api/httpErrors";
 import { useI18n } from "../../../i18n/useI18n";
 import { formatDateTime } from "../../../utils/dateTime";
+import { downloadBlob, openOrDownloadBlob } from "../../../utils/download";
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -42,7 +61,10 @@ export default function EmployeeLeaveRequestDetailsPage() {
 
   const translateLeaveType = (name?: string): string => {
     if (!name) return "-";
-    const key = `leave.type.${name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z_]/g, "")}`;
+    const key = `leave.type.${name
+      .toLowerCase()
+      .replace(/\s+/g, "_")
+      .replace(/[^a-z_]/g, "")}`;
     const translated = t(key);
     return translated === key ? name : translated;
   };
@@ -95,7 +117,9 @@ export default function EmployeeLeaveRequestDetailsPage() {
   const statusLabel = (status?: string) => {
     const statusKey = `leave.status.${(status || "").toLowerCase()}`;
     const translated = t(statusKey);
-    return translated === statusKey ? (status || "").replace(/_/g, " ") : translated;
+    return translated === statusKey
+      ? (status || "").replace(/_/g, " ")
+      : translated;
   };
 
   const handlePdfDownload = async () => {
@@ -103,17 +127,12 @@ export default function EmployeeLeaveRequestDetailsPage() {
     setPdfLoading(true);
     try {
       const blob = await getLeaveRequestPdfBlob(request.id, true);
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `leave_request_${request.id}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setTimeout(() => window.URL.revokeObjectURL(url), 5000);
+      downloadBlob(blob, `leave_request_${request.id}.pdf`);
     } catch (err: unknown) {
       const description =
-        getHttpStatus(err) === 403 ? t("leave.pdfDownloadForbidden") : t("leave.pdfDownloadFailed");
+        getHttpStatus(err) === 403
+          ? t("leave.pdfDownloadForbidden")
+          : t("leave.pdfDownloadFailed");
       notification.error({ message: t("common.error"), description });
     } finally {
       setPdfLoading(false);
@@ -125,20 +144,12 @@ export default function EmployeeLeaveRequestDetailsPage() {
     setDocumentLoading(true);
     try {
       const blob = await getLeaveRequestDocumentBlob(request.id, download);
-      const url = window.URL.createObjectURL(blob);
-      if (download) {
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `leave_document_${request.id}`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      } else {
-        window.open(url, "_blank", "noopener,noreferrer");
-      }
-      setTimeout(() => window.URL.revokeObjectURL(url), 5000);
+      openOrDownloadBlob(blob, `leave_document_${request.id}`, download);
     } catch {
-      notification.error({ message: t("common.error"), description: t("leave.docErrorDesc") });
+      notification.error({
+        message: t("common.error"),
+        description: t("leave.docErrorDesc"),
+      });
     } finally {
       setDocumentLoading(false);
     }
@@ -150,13 +161,19 @@ export default function EmployeeLeaveRequestDetailsPage() {
     try {
       const res = await approveDelegatedLeaveRequest(request.id);
       if (isApiError(res)) {
-        notification.error({ message: t("leave.approveFail"), description: res.message });
+        notification.error({
+          message: t("leave.approveFail"),
+          description: res.message,
+        });
         return;
       }
       notification.success({ message: t("leave.approveSuccess") });
       setRequest(res.data);
     } catch {
-      notification.error({ message: t("common.error"), description: t("leave.approveError") });
+      notification.error({
+        message: t("common.error"),
+        description: t("leave.approveError"),
+      });
     } finally {
       setProcessing(false);
     }
@@ -164,14 +181,23 @@ export default function EmployeeLeaveRequestDetailsPage() {
 
   const handleDelegateReject = async () => {
     if (!request || !rejectionReason.trim()) {
-      notification.error({ message: t("leave.reasonReqTitle"), description: t("leave.reasonReqDesc") });
+      notification.error({
+        message: t("leave.reasonReqTitle"),
+        description: t("leave.reasonReqDesc"),
+      });
       return;
     }
     setProcessing(true);
     try {
-      const res = await rejectDelegatedLeaveRequest(request.id, rejectionReason);
+      const res = await rejectDelegatedLeaveRequest(
+        request.id,
+        rejectionReason,
+      );
       if (isApiError(res)) {
-        notification.error({ message: t("leave.rejectFail"), description: res.message });
+        notification.error({
+          message: t("leave.rejectFail"),
+          description: res.message,
+        });
         return;
       }
       notification.success({ message: t("leave.rejectSuccess") });
@@ -179,19 +205,43 @@ export default function EmployeeLeaveRequestDetailsPage() {
       setRejectionReason("");
       setRequest(res.data);
     } catch {
-      notification.error({ message: t("common.error"), description: t("leave.rejectError") });
+      notification.error({
+        message: t("common.error"),
+        description: t("leave.rejectError"),
+      });
     } finally {
       setProcessing(false);
     }
   };
 
-  if (loading) return <LoadingState title={t("leave.requestDetailsTitle", { id })} />;
-  if (error) return <ErrorState title={t("common.error")} description={error} onRetry={loadRequest} />;
-  if (!request) return <ErrorState title={t("common.error")} description={t("leave.loadFail")} />;
+  if (loading)
+    return <LoadingState title={t("leave.requestDetailsTitle", { id })} />;
+  if (error)
+    return (
+      <ErrorState
+        title={t("common.error")}
+        description={error}
+        onRetry={loadRequest}
+      />
+    );
+  if (!request)
+    return (
+      <ErrorState title={t("common.error")} description={t("leave.loadFail")} />
+    );
 
-  const rejectionNote = request.ceo_decision_note || request.hr_decision_note || request.manager_decision_note || request.delegate_decision_note || request.rejection_reason || "-";
-  const isDelegatedApprovalRoute = location.pathname.startsWith("/employee/delegated-approvals");
-  const backPath = isDelegatedApprovalRoute ? "/employee/delegated-approvals" : "/employee/leave/requests";
+  const rejectionNote =
+    request.ceo_decision_note ||
+    request.hr_decision_note ||
+    request.manager_decision_note ||
+    request.delegate_decision_note ||
+    request.rejection_reason ||
+    "-";
+  const isDelegatedApprovalRoute = location.pathname.startsWith(
+    "/employee/delegated-approvals",
+  );
+  const backPath = isDelegatedApprovalRoute
+    ? "/employee/delegated-approvals"
+    : "/employee/leave/requests";
   const canDelegateAction =
     request.status === "pending_delegate" &&
     request.workflow?.current_stage === "delegate" &&
@@ -199,25 +249,48 @@ export default function EmployeeLeaveRequestDetailsPage() {
 
   return (
     <div style={{ maxWidth: 1080, margin: "0 auto" }}>
-      <Button type="link" icon={<ArrowLeftOutlined />} onClick={() => navigate(backPath)} style={{ paddingInlineStart: 0 }}>
-        {isDelegatedApprovalRoute ? t("leave.backToDelegatedInbox", "Back to delegated inbox") : t("leave.backToRequests")}
+      <Button
+        type="link"
+        icon={<ArrowLeftOutlined />}
+        onClick={() => navigate(backPath)}
+        style={{ paddingInlineStart: 0 }}
+      >
+        {isDelegatedApprovalRoute
+          ? t("leave.backToDelegatedInbox", "Back to delegated inbox")
+          : t("leave.backToRequests")}
       </Button>
 
       <PageHeader
         title={t("leave.requestDetailsTitle", { id: request.id })}
         subtitle={t("leave.employeeDetailsSubtitle")}
-        tags={<Tag color={statusColor(request.status)}>{statusLabel(request.status)}</Tag>}
+        tags={
+          <Tag color={statusColor(request.status)}>
+            {statusLabel(request.status)}
+          </Tag>
+        }
         actions={
           <Space wrap>
-            <Button icon={<FilePdfOutlined />} onClick={handlePdfDownload} loading={pdfLoading}>
+            <Button
+              icon={<FilePdfOutlined />}
+              onClick={handlePdfDownload}
+              loading={pdfLoading}
+            >
               {t("leave.downloadRequestPdf")}
             </Button>
             {request.document ? (
               <>
-                <Button icon={<EyeOutlined />} onClick={() => handleDocumentAction(false)} loading={documentLoading}>
+                <Button
+                  icon={<EyeOutlined />}
+                  onClick={() => handleDocumentAction(false)}
+                  loading={documentLoading}
+                >
                   {t("leave.previewAttachment")}
                 </Button>
-                <Button icon={<DownloadOutlined />} onClick={() => handleDocumentAction(true)} loading={documentLoading}>
+                <Button
+                  icon={<DownloadOutlined />}
+                  onClick={() => handleDocumentAction(true)}
+                  loading={documentLoading}
+                >
                   {t("leave.downloadAttachment")}
                 </Button>
               </>
@@ -240,9 +313,13 @@ export default function EmployeeLeaveRequestDetailsPage() {
 
         <Card style={{ borderRadius: 20, border: "1px solid #e5e7eb" }}>
           <Descriptions column={{ xs: 1, md: 2 }} layout="vertical" bordered>
-            <Descriptions.Item label={t("leave.leaveType")}>{translateLeaveType(request.leave_type?.name)}</Descriptions.Item>
+            <Descriptions.Item label={t("leave.leaveType")}>
+              {translateLeaveType(request.leave_type?.name)}
+            </Descriptions.Item>
             <Descriptions.Item label={t("common.status")}>
-              <Tag color={statusColor(request.status)}>{statusLabel(request.status)}</Tag>
+              <Tag color={statusColor(request.status)}>
+                {statusLabel(request.status)}
+              </Tag>
             </Descriptions.Item>
             <Descriptions.Item label={t("leave.period")}>
               {request.start_date} {t("common.to")} {request.end_date}
@@ -254,14 +331,20 @@ export default function EmployeeLeaveRequestDetailsPage() {
               {formatDateTime(request.created_at)}
             </Descriptions.Item>
             <Descriptions.Item label={t("leave.requestSource")}>
-              {request.source === "hr_manual" ? t("leave.manual.badge") : t("leave.approvalMap.employeeRequest")}
+              {request.source === "hr_manual"
+                ? t("leave.manual.badge")
+                : t("leave.approvalMap.employeeRequest")}
             </Descriptions.Item>
             <Descriptions.Item label={t("common.reason")} span={2}>
-              <Text style={{ whiteSpace: "pre-wrap" }}>{request.reason || "-"}</Text>
+              <Text style={{ whiteSpace: "pre-wrap" }}>
+                {request.reason || "-"}
+              </Text>
             </Descriptions.Item>
             {request.status === "rejected" ? (
               <Descriptions.Item label={t("leave.rejectionReason")} span={2}>
-                <Text style={{ color: "#b91c1c", whiteSpace: "pre-wrap" }}>{rejectionNote}</Text>
+                <Text style={{ color: "#b91c1c", whiteSpace: "pre-wrap" }}>
+                  {rejectionNote}
+                </Text>
               </Descriptions.Item>
             ) : null}
             {request.source === "hr_manual" ? (
@@ -274,7 +357,14 @@ export default function EmployeeLeaveRequestDetailsPage() {
           {canDelegateAction ? (
             <>
               <Divider />
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, flexWrap: "wrap" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: 12,
+                  flexWrap: "wrap",
+                }}
+              >
                 <Button
                   danger
                   icon={<CloseCircleOutlined />}

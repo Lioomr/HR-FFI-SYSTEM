@@ -40,18 +40,30 @@ function ManagerAccessForbidden() {
         <LockOutlined style={{ fontSize: 32, color: "#f97316" }} />
       </div>
 
-      <div style={{ fontWeight: 700, fontSize: 18, color: "#0f172a", marginBottom: 8 }}>
+      <div
+        style={{
+          fontWeight: 700,
+          fontSize: 18,
+          color: "#0f172a",
+          marginBottom: 8,
+        }}
+      >
         {t("manager.access.forbiddenTitle", "Manager access not available")}
       </div>
 
       <div style={{ color: "#64748b", fontSize: 14, marginBottom: 24 }}>
         {t(
           "manager.access.forbiddenDesc",
-          "You do not have any employees reporting to you, so team management pages are unavailable. Ask HR to assign you as a direct manager if this is unexpected."
+          "You do not have any employees reporting to you, so team management pages are unavailable. Ask HR to assign you as a direct manager if this is unexpected.",
         )}
       </div>
 
-      <Button type="primary" size="large" onClick={() => navigate("/")} style={{ borderRadius: 10 }}>
+      <Button
+        type="primary"
+        size="large"
+        onClick={() => navigate("/")}
+        style={{ borderRadius: 10 }}
+      >
         {t("error.notFound.backHome", "Back to Home")}
       </Button>
     </div>
@@ -65,11 +77,17 @@ function ManagerAccessForbidden() {
  * mandate (CEO/CFO/SystemAdmin); everyone else — including Manager-group users —
  * is admitted only when the backend reports `has_access`.
  */
-export default function RequireManagerAccess({ allowRoles = [] }: { allowRoles?: Role[] }) {
+export default function RequireManagerAccess({
+  allowRoles = [],
+}: {
+  allowRoles?: Role[];
+}) {
   const { t } = useI18n();
   const user = useAuthStore((s) => s.user);
   const roleAllowed = Boolean(user?.role && allowRoles.includes(user.role));
-  const { access, loading } = useManagerAccess({ enabled: Boolean(user?.role) && !roleAllowed });
+  const { access, loading } = useManagerAccess({
+    enabled: Boolean(user?.role) && !roleAllowed,
+  });
 
   if (!user || !user.role) {
     return <Navigate to="/unauthorized" replace />;
@@ -80,7 +98,10 @@ export default function RequireManagerAccess({ allowRoles = [] }: { allowRoles?:
   }
 
   if (loading) {
-    const checkingLabel = t("manager.access.checking", "Checking manager access...");
+    const checkingLabel = t(
+      "manager.access.checking",
+      "Checking manager access...",
+    );
     return (
       <div
         role="status"

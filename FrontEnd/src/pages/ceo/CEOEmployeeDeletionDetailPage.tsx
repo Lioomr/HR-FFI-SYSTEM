@@ -7,7 +7,9 @@ import PageHeader from "../../components/ui/PageHeader";
 import LoadingState from "../../components/ui/LoadingState";
 import ErrorState from "../../components/ui/ErrorState";
 import ApprovalActions from "../../components/ceo/ApprovalActions";
-import ApprovalStatusTag, { type ApprovalStatusTone } from "../../components/ceo/ApprovalStatusTag";
+import ApprovalStatusTag, {
+  type ApprovalStatusTone,
+} from "../../components/ceo/ApprovalStatusTag";
 import ApprovalSurface from "../../components/ceo/ApprovalSurface";
 import RejectReasonModal from "../../components/ceo/RejectReasonModal";
 import Unauthorized403Page from "../Unauthorized403Page";
@@ -106,7 +108,10 @@ export default function CEOEmployeeDeletionDetailPage() {
     } else if (httpStatus === 404 || isNotFound(err)) {
       setActionError(t("employees.removalDetail.errorNotFound"));
     } else if (httpStatus === 422) {
-      setActionError(getFirstApiErrorMessage(err) || t("employees.removalDetail.errorValidation"));
+      setActionError(
+        getFirstApiErrorMessage(err) ||
+          t("employees.removalDetail.errorValidation"),
+      );
     } else {
       setActionError(getFirstApiErrorMessage(err) || t(fallbackKey));
     }
@@ -119,7 +124,9 @@ export default function CEOEmployeeDeletionDetailPage() {
     try {
       const response = await approveEmployeeArchiveRequest(data.id);
       if (isApiError(response)) {
-        setActionError(response.message || t("employees.removalDetail.errorApprove"));
+        setActionError(
+          response.message || t("employees.removalDetail.errorApprove"),
+        );
         return;
       }
       message.success(t("employees.removalDetail.successApproved"));
@@ -139,7 +146,9 @@ export default function CEOEmployeeDeletionDetailPage() {
     try {
       const response = await rejectEmployeeArchiveRequest(data.id, reason);
       if (isApiError(response)) {
-        setActionError(response.message || t("employees.removalDetail.errorReject"));
+        setActionError(
+          response.message || t("employees.removalDetail.errorReject"),
+        );
         return;
       }
       message.success(t("employees.removalDetail.successRejected"));
@@ -156,7 +165,13 @@ export default function CEOEmployeeDeletionDetailPage() {
   if (notFound) return <NotFound404Page />;
   if (loading) return <LoadingState title={t("loading.generic")} />;
   if (error) {
-    return <ErrorState title={t("common.error")} description={error} onRetry={load} />;
+    return (
+      <ErrorState
+        title={t("common.error")}
+        description={error}
+        onRetry={load}
+      />
+    );
   }
   if (!data) return null;
 
@@ -200,7 +215,9 @@ export default function CEOEmployeeDeletionDetailPage() {
       {/* ─── Decision first: the reason this page was opened ─────────────── */}
       {isPending && (
         <ApprovalSurface padding={18} style={{ marginBottom: 16 }}>
-          <SectionTitle>{t("employees.removalDetail.decisionTitle")}</SectionTitle>
+          <SectionTitle>
+            {t("employees.removalDetail.decisionTitle")}
+          </SectionTitle>
           <Paragraph type="secondary" style={{ marginBottom: 14 }}>
             {t("employees.removalDetail.decisionHint")}
           </Paragraph>
@@ -252,7 +269,9 @@ export default function CEOEmployeeDeletionDetailPage() {
               </div>
               {data.rejection_reason && (
                 <Paragraph style={{ marginTop: 8, marginBottom: 0 }}>
-                  <Text strong>{t("employees.removalDetail.rejectionReasonLabel")}: </Text>
+                  <Text strong>
+                    {t("employees.removalDetail.rejectionReasonLabel")}:{" "}
+                  </Text>
                   {data.rejection_reason}
                 </Paragraph>
               )}
@@ -262,9 +281,13 @@ export default function CEOEmployeeDeletionDetailPage() {
       )}
 
       <ApprovalSurface padding={18} style={{ marginBottom: 16 }}>
-        <SectionTitle>{t("employees.removalDetail.employeeSection")}</SectionTitle>
+        <SectionTitle>
+          {t("employees.removalDetail.employeeSection")}
+        </SectionTitle>
         <Descriptions column={{ xs: 1, sm: 1, md: 2 }} size="small" bordered>
-          <Descriptions.Item label={t("employees.removalDetail.fullName")}>{displayName}</Descriptions.Item>
+          <Descriptions.Item label={t("employees.removalDetail.fullName")}>
+            {displayName}
+          </Descriptions.Item>
           <Descriptions.Item label={t("employees.removalDetail.employeeId")}>
             {snapshot.employee_id || "—"}
           </Descriptions.Item>
@@ -280,14 +303,18 @@ export default function CEOEmployeeDeletionDetailPage() {
           <Descriptions.Item label={t("employees.removalDetail.position")}>
             {snapshot.position_name || "—"}
           </Descriptions.Item>
-          <Descriptions.Item label={t("employees.removalDetail.employmentStatus")}>
+          <Descriptions.Item
+            label={t("employees.removalDetail.employmentStatus")}
+          >
             {snapshot.employment_status || "—"}
           </Descriptions.Item>
         </Descriptions>
       </ApprovalSurface>
 
       <ApprovalSurface padding={18} style={{ marginBottom: 16 }}>
-        <SectionTitle>{t("employees.removalDetail.requestSection")}</SectionTitle>
+        <SectionTitle>
+          {t("employees.removalDetail.requestSection")}
+        </SectionTitle>
         <Descriptions column={1} size="small" bordered>
           <Descriptions.Item label={t("employees.removalDetail.requestedBy")}>
             {data.requested_by_name || "—"}
@@ -299,22 +326,32 @@ export default function CEOEmployeeDeletionDetailPage() {
             {t(`employees.removal.archiveReason.${data.archive_reason}`)}
           </Descriptions.Item>
           <Descriptions.Item label={t("employees.removalDetail.reason")}>
-            <Paragraph style={{ marginBottom: 0, whiteSpace: "pre-wrap" }}>{data.reason || "—"}</Paragraph>
+            <Paragraph style={{ marginBottom: 0, whiteSpace: "pre-wrap" }}>
+              {data.reason || "—"}
+            </Paragraph>
           </Descriptions.Item>
         </Descriptions>
       </ApprovalSurface>
 
       {hasLinkedRecords && (
         <ApprovalSurface padding={18}>
-          <SectionTitle>{t("employees.removalDetail.linkedRecords")}</SectionTitle>
+          <SectionTitle>
+            {t("employees.removalDetail.linkedRecords")}
+          </SectionTitle>
           <Descriptions column={{ xs: 1, sm: 3 }} size="small" bordered>
-            <Descriptions.Item label={t("employees.removalDetail.openLeaveRequests")}>
+            <Descriptions.Item
+              label={t("employees.removalDetail.openLeaveRequests")}
+            >
               {execution.open_leave_requests ?? "—"}
             </Descriptions.Item>
-            <Descriptions.Item label={t("employees.removalDetail.assetAssignments")}>
+            <Descriptions.Item
+              label={t("employees.removalDetail.assetAssignments")}
+            >
               {execution.asset_assignments ?? "—"}
             </Descriptions.Item>
-            <Descriptions.Item label={t("employees.removalDetail.loanRequests")}>
+            <Descriptions.Item
+              label={t("employees.removalDetail.loanRequests")}
+            >
               {execution.loan_requests ?? "—"}
             </Descriptions.Item>
           </Descriptions>
@@ -342,7 +379,11 @@ export default function CEOEmployeeDeletionDetailPage() {
         maskClosable={!actionLoading}
         destroyOnHidden
       >
-        <Paragraph>{t("employees.removalDetail.approveModalIntro", { name: displayName })}</Paragraph>
+        <Paragraph>
+          {t("employees.removalDetail.approveModalIntro", {
+            name: displayName,
+          })}
+        </Paragraph>
         <Alert
           type="info"
           showIcon
@@ -350,7 +391,12 @@ export default function CEOEmployeeDeletionDetailPage() {
           style={{ marginTop: 8, borderRadius: 10 }}
         />
         {actionError && (
-          <Alert type="error" showIcon message={actionError} style={{ marginTop: 12, borderRadius: 10 }} />
+          <Alert
+            type="error"
+            showIcon
+            message={actionError}
+            style={{ marginTop: 12, borderRadius: 10 }}
+          />
         )}
       </Modal>
 
@@ -358,7 +404,9 @@ export default function CEOEmployeeDeletionDetailPage() {
       <RejectReasonModal
         open={rejectOpen}
         title={t("employees.removalDetail.rejectModalTitle")}
-        subject={t("employees.removalDetail.rejectModalIntro", { name: displayName })}
+        subject={t("employees.removalDetail.rejectModalIntro", {
+          name: displayName,
+        })}
         confirmText={t("employees.removalDetail.rejectConfirm")}
         loading={actionLoading}
         errorMessage={actionError}

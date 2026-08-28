@@ -16,14 +16,22 @@ export default function Unauthorized403Page() {
         justifyContent: "center",
         alignItems: "center",
         direction,
-        background: "linear-gradient(145deg, #1a1a1a 0%, #2a2a2a 40%, #1f1f1f 70%, #333333 100%)",
+        background:
+          "linear-gradient(145deg, #1a1a1a 0%, #2a2a2a 40%, #1f1f1f 70%, #333333 100%)",
         position: "relative",
         overflow: "hidden",
         padding: 24,
       }}
     >
       {/* Background decorative circles */}
-      <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          overflow: "hidden",
+          pointerEvents: "none",
+        }}
+      >
         {[
           { w: 400, h: 400, top: -100, right: -100, op: 0.06 },
           { w: 300, h: 300, bottom: -80, left: -80, op: 0.05 },
@@ -109,7 +117,13 @@ export default function Unauthorized403Page() {
           {t("error.unauthorized.title")}
         </div>
 
-        <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 16, marginBottom: 32 }}>
+        <div
+          style={{
+            color: "rgba(255,255,255,0.6)",
+            fontSize: 16,
+            marginBottom: 32,
+          }}
+        >
           {t("error.unauthorized.desc")}
         </div>
 

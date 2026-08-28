@@ -11,8 +11,11 @@ import RegisterInvitePage from "./RegisterInvitePage";
 import * as invitesApi from "../services/api/invitesApi";
 import { useI18nStore } from "../i18n/i18nStore";
 
-const validateInviteToken = invitesApi.validateInviteToken as unknown as ReturnType<typeof vi.fn>;
-const acceptInvite = invitesApi.acceptInvite as unknown as ReturnType<typeof vi.fn>;
+const validateInviteToken =
+  invitesApi.validateInviteToken as unknown as ReturnType<typeof vi.fn>;
+const acceptInvite = invitesApi.acceptInvite as unknown as ReturnType<
+  typeof vi.fn
+>;
 
 const inviteMeta = (overrides: Record<string, unknown>) => ({
   status: "success" as const,
@@ -40,7 +43,9 @@ async function renderPage() {
       </Routes>
     </MemoryRouter>,
   );
-  await waitFor(() => expect(validateInviteToken).toHaveBeenCalledWith("tok-123"));
+  await waitFor(() =>
+    expect(validateInviteToken).toHaveBeenCalledWith("tok-123"),
+  );
   await waitFor(() => expect(document.querySelector("#email")).not.toBeNull());
   return document.querySelector<HTMLInputElement>("#email")!;
 }
@@ -62,7 +67,11 @@ function submitRegistration() {
 describe("RegisterInvitePage email lock", () => {
   it("locks the prefilled email on a WhatsApp invite HR supplied it for", async () => {
     validateInviteToken.mockResolvedValue(
-      inviteMeta({ channel: "whatsapp", email: "sara@ffi.test", phone_number: "+966512345678" }),
+      inviteMeta({
+        channel: "whatsapp",
+        email: "sara@ffi.test",
+        phone_number: "+966512345678",
+      }),
     );
 
     const emailInput = await renderPage();
@@ -73,7 +82,11 @@ describe("RegisterInvitePage email lock", () => {
 
   it("keeps the email editable and required on a WhatsApp invite without one", async () => {
     validateInviteToken.mockResolvedValue(
-      inviteMeta({ channel: "whatsapp", email: null, phone_number: "+966512345678" }),
+      inviteMeta({
+        channel: "whatsapp",
+        email: null,
+        phone_number: "+966512345678",
+      }),
     );
 
     const emailInput = await renderPage();
@@ -88,7 +101,9 @@ describe("RegisterInvitePage email lock", () => {
   });
 
   it("still locks the prefilled email on an email invite", async () => {
-    validateInviteToken.mockResolvedValue(inviteMeta({ email: "hire@ffi.test" }));
+    validateInviteToken.mockResolvedValue(
+      inviteMeta({ email: "hire@ffi.test" }),
+    );
 
     const emailInput = await renderPage();
 
@@ -100,17 +115,25 @@ describe("RegisterInvitePage email lock", () => {
 describe("RegisterInvitePage WhatsApp signup submission", () => {
   it("submits the entered email together with the invited phone number", async () => {
     validateInviteToken.mockResolvedValue(
-      inviteMeta({ channel: "whatsapp", email: null, phone_number: "+966512345678" }),
+      inviteMeta({
+        channel: "whatsapp",
+        email: null,
+        phone_number: "+966512345678",
+      }),
     );
-    acceptInvite.mockResolvedValue({ status: "success", data: { email: "sara@ffi.test", role: "Employee" } });
+    acceptInvite.mockResolvedValue({
+      status: "success",
+      data: { email: "sara@ffi.test", role: "Employee" },
+    });
 
     await renderPage();
 
     // The invited number is prefilled, so only the email needs filling in.
     await waitFor(() =>
-      expect(document.querySelector<HTMLInputElement>('input[autocomplete="tel"]')?.value).toBe(
-        "512345678",
-      ),
+      expect(
+        document.querySelector<HTMLInputElement>('input[autocomplete="tel"]')
+          ?.value,
+      ).toBe("512345678"),
     );
     setField("#email", "sara@ffi.test");
     submitRegistration();
@@ -128,9 +151,16 @@ describe("RegisterInvitePage WhatsApp signup submission", () => {
 
   it("submits the locked email and the invited phone number untouched", async () => {
     validateInviteToken.mockResolvedValue(
-      inviteMeta({ channel: "whatsapp", email: "sara@ffi.test", phone_number: "+966512345678" }),
+      inviteMeta({
+        channel: "whatsapp",
+        email: "sara@ffi.test",
+        phone_number: "+966512345678",
+      }),
     );
-    acceptInvite.mockResolvedValue({ status: "success", data: { email: "sara@ffi.test", role: "Employee" } });
+    acceptInvite.mockResolvedValue({
+      status: "success",
+      data: { email: "sara@ffi.test", role: "Employee" },
+    });
 
     const emailInput = await renderPage();
     await waitFor(() => expect(emailInput.value).toBe("sara@ffi.test"));
@@ -151,13 +181,19 @@ describe("RegisterInvitePage WhatsApp signup submission", () => {
 
   it("blocks submission when a WhatsApp invite has no phone number to fall back on", async () => {
     validateInviteToken.mockResolvedValue(
-      inviteMeta({ channel: "whatsapp", email: "sara@ffi.test", phone_number: null }),
+      inviteMeta({
+        channel: "whatsapp",
+        email: "sara@ffi.test",
+        phone_number: null,
+      }),
     );
 
     await renderPage();
     submitRegistration();
 
-    expect(await screen.findByText("Phone number is required")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Phone number is required"),
+    ).toBeInTheDocument();
     expect(acceptInvite).not.toHaveBeenCalled();
   });
 });

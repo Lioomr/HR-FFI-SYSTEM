@@ -45,12 +45,19 @@ const dialOptions = COUNTRIES.flatMap((c) => {
       ),
     },
   ];
-}).filter((opt, index, arr) => arr.findIndex((x) => x.value === opt.value) === index);
+}).filter(
+  (opt, index, arr) => arr.findIndex((x) => x.value === opt.value) === index,
+);
 
 /** Dial codes sorted longest-first so prefix matching picks the most specific one. */
-const dialCodesByLength = dialOptions.map((o) => o.value).sort((a, b) => b.length - a.length);
+const dialCodesByLength = dialOptions
+  .map((o) => o.value)
+  .sort((a, b) => b.length - a.length);
 
-function parsePhone(value: string | undefined, fallbackDial: string): { dial: string; local: string } {
+function parsePhone(
+  value: string | undefined,
+  fallbackDial: string,
+): { dial: string; local: string } {
   const raw = (value || "").trim();
   if (!raw.startsWith("+")) {
     return { dial: fallbackDial, local: raw.replace(/\D/g, "") };

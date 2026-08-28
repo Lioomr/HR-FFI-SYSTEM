@@ -49,7 +49,13 @@ export default function NotificationPreferences() {
         setPrefs(res.data);
         setDirty(false);
       } else {
-        setLoadError(res.message || t("notifications.preferences.loadError", "Couldn't load preferences."));
+        setLoadError(
+          res.message ||
+            t(
+              "notifications.preferences.loadError",
+              "Couldn't load preferences.",
+            ),
+        );
       }
     } catch (err) {
       const message =
@@ -84,7 +90,13 @@ export default function NotificationPreferences() {
         setDirty(false);
         setSaved(true);
       } else {
-        setSaveError(res.message || t("notifications.preferences.saveError", "Couldn't save preferences."));
+        setSaveError(
+          res.message ||
+            t(
+              "notifications.preferences.saveError",
+              "Couldn't save preferences.",
+            ),
+        );
       }
     } catch (err) {
       const message =
@@ -113,7 +125,10 @@ export default function NotificationPreferences() {
         <Alert
           type="warning"
           showIcon
-          title={t("notifications.preferences.loadError", "Couldn't load preferences.")}
+          title={t(
+            "notifications.preferences.loadError",
+            "Couldn't load preferences.",
+          )}
           description={loadError}
         />
         <Button style={{ marginTop: 12 }} onClick={() => void load()}>
@@ -126,18 +141,24 @@ export default function NotificationPreferences() {
   return (
     <div
       role="group"
-      aria-label={t("notifications.preferences.title", "Notification preferences")}
+      aria-label={t(
+        "notifications.preferences.title",
+        "Notification preferences",
+      )}
       style={{ display: "flex", flexDirection: "column", gap: 16 }}
     >
       <Alert
         type="info"
         showIcon
-        title={t("notifications.preferences.explanationTitle", "How you're notified")}
+        title={t(
+          "notifications.preferences.explanationTitle",
+          "How you're notified",
+        )}
         description={
           <span style={{ textWrap: "pretty" } as React.CSSProperties}>
             {t(
               "notifications.preferences.explanation",
-              "WhatsApp is tried first. Email is used only if WhatsApp fails or is unavailable."
+              "WhatsApp is tried first. Email is used only if WhatsApp fails or is unavailable.",
             )}
           </span>
         }
@@ -154,19 +175,30 @@ export default function NotificationPreferences() {
         </span>
         <div className="ffi-notif-pref-row__body">
           <Text strong style={{ display: "block" }}>
-            {t("notifications.preferences.whatsappLabel", "WhatsApp notifications")}
+            {t(
+              "notifications.preferences.whatsappLabel",
+              "WhatsApp notifications",
+            )}
           </Text>
-          <Text type="secondary" style={{ fontSize: 12.5, textWrap: "pretty" } as React.CSSProperties}>
+          <Text
+            type="secondary"
+            style={
+              { fontSize: 12.5, textWrap: "pretty" } as React.CSSProperties
+            }
+          >
             {t(
               "notifications.preferences.whatsappHelp",
-              "Receive notifications on WhatsApp when a valid number is on file."
+              "Receive notifications on WhatsApp when a valid number is on file.",
             )}
           </Text>
         </div>
         <Switch
           checked={prefs.whatsapp_enabled}
           onChange={(checked) => update({ whatsapp_enabled: checked })}
-          aria-label={t("notifications.preferences.whatsappLabel", "WhatsApp notifications")}
+          aria-label={t(
+            "notifications.preferences.whatsappLabel",
+            "WhatsApp notifications",
+          )}
         />
       </div>
 
@@ -182,24 +214,35 @@ export default function NotificationPreferences() {
           <Text strong style={{ display: "block" }}>
             {t("notifications.preferences.emailLabel", "Email fallback")}
           </Text>
-          <Text type="secondary" style={{ fontSize: 12.5, textWrap: "pretty" } as React.CSSProperties}>
+          <Text
+            type="secondary"
+            style={
+              { fontSize: 12.5, textWrap: "pretty" } as React.CSSProperties
+            }
+          >
             {t(
               "notifications.preferences.emailHelp",
-              "Send an email only when WhatsApp fails or is unavailable."
+              "Send an email only when WhatsApp fails or is unavailable.",
             )}
           </Text>
         </div>
         <Switch
           checked={prefs.email_enabled}
           onChange={(checked) => update({ email_enabled: checked })}
-          aria-label={t("notifications.preferences.emailLabel", "Email fallback")}
+          aria-label={t(
+            "notifications.preferences.emailLabel",
+            "Email fallback",
+          )}
         />
       </div>
 
-      <Text type="secondary" style={{ fontSize: 12, textWrap: "pretty" } as React.CSSProperties}>
+      <Text
+        type="secondary"
+        style={{ fontSize: 12, textWrap: "pretty" } as React.CSSProperties}
+      >
         {t(
           "notifications.preferences.note",
-          "Your organization's settings may still apply. Some critical messages are always sent."
+          "Your organization's settings may still apply. Some critical messages are always sent.",
         )}
       </Text>
 
@@ -207,7 +250,10 @@ export default function NotificationPreferences() {
         <Alert
           type="error"
           showIcon
-          title={t("notifications.preferences.saveError", "Couldn't save preferences.")}
+          title={t(
+            "notifications.preferences.saveError",
+            "Couldn't save preferences.",
+          )}
           description={saveError}
           style={{ borderRadius: 12 }}
         />

@@ -62,7 +62,11 @@ export interface HrRecentActivityParams {
   to?: string;
 }
 
-export async function getHrRecentActivity(params?: HrRecentActivityParams): Promise<ApiResponse<PaginatedResponse<HrRecentActivityItem>>> {
-  const { data } = await api.get<ApiResponse<PaginatedResponse<HrRecentActivityItem>>>("/api/hr/recent-activity/", { params });
+export async function getHrRecentActivity(
+  params?: HrRecentActivityParams,
+): Promise<ApiResponse<PaginatedResponse<HrRecentActivityItem>>> {
+  const { data } = await api.get<
+    ApiResponse<PaginatedResponse<HrRecentActivityItem>>
+  >("/api/hr/recent-activity/", { params });
   return data;
 }

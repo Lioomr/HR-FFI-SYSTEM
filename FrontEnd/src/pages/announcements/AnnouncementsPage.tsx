@@ -1,5 +1,15 @@
 import { useEffect, useState } from "react";
-import { List, Card, Tag, Typography, Space, Empty, Spin, Button, Modal } from "antd";
+import {
+  List,
+  Card,
+  Tag,
+  Typography,
+  Space,
+  Empty,
+  Spin,
+  Button,
+  Modal,
+} from "antd";
 import {
   getAnnouncements,
   getAnnouncement,
@@ -10,8 +20,16 @@ import {
 import { useAuthStore } from "../../auth/authStore";
 import { useNavigate } from "react-router-dom";
 import { useI18n } from "../../i18n/useI18n";
-import { CalendarOutlined, DownloadOutlined, EyeOutlined, FilePdfOutlined, GoogleOutlined, VideoCameraOutlined } from "@ant-design/icons";
+import {
+  CalendarOutlined,
+  DownloadOutlined,
+  EyeOutlined,
+  FilePdfOutlined,
+  GoogleOutlined,
+  VideoCameraOutlined,
+} from "@ant-design/icons";
 import { formatDateOnly, formatDateTime } from "../../utils/dateTime";
+import { openOrDownloadBlob } from "../../utils/download";
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -54,24 +72,58 @@ export default function AnnouncementsPage() {
 
   const isImportant = (title: string, content: string) => {
     const text = `${title} ${content}`.toLowerCase();
-    const importantKeywords = ["urgent", "important", "expiry", "expir", "reminder", "action required"];
+    const importantKeywords = [
+      "urgent",
+      "important",
+      "expiry",
+      "expir",
+      "reminder",
+      "action required",
+    ];
     return importantKeywords.some((keyword) => text.includes(keyword));
   };
 
-  const renderMeetingButtons = (announcement: Pick<Announcement, "google_meet_url" | "microsoft_teams_url" | "zoom_url">) => (
+  const renderMeetingButtons = (
+    announcement: Pick<
+      Announcement,
+      "google_meet_url" | "microsoft_teams_url" | "zoom_url"
+    >,
+  ) => (
     <Space wrap size={8}>
       {announcement.google_meet_url && (
-        <Button size="small" type="primary" icon={<GoogleOutlined />} href={announcement.google_meet_url} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>
+        <Button
+          size="small"
+          type="primary"
+          icon={<GoogleOutlined />}
+          href={announcement.google_meet_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(event) => event.stopPropagation()}
+        >
           {t("announcements.meeting.googleMeet")}
         </Button>
       )}
       {announcement.microsoft_teams_url && (
-        <Button size="small" icon={<VideoCameraOutlined />} href={announcement.microsoft_teams_url} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>
+        <Button
+          size="small"
+          icon={<VideoCameraOutlined />}
+          href={announcement.microsoft_teams_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(event) => event.stopPropagation()}
+        >
           {t("announcements.meeting.teams")}
         </Button>
       )}
       {announcement.zoom_url && (
-        <Button size="small" icon={<VideoCameraOutlined />} href={announcement.zoom_url} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>
+        <Button
+          size="small"
+          icon={<VideoCameraOutlined />}
+          href={announcement.zoom_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(event) => event.stopPropagation()}
+        >
           {t("announcements.meeting.zoom")}
         </Button>
       )}
@@ -108,20 +160,11 @@ export default function AnnouncementsPage() {
     try {
       setAttachmentLoading(true);
       const blob = await getAnnouncementAttachment(detail.id, download);
-      const objectUrl = URL.createObjectURL(blob);
-
-      if (download) {
-        const link = document.createElement("a");
-        link.href = objectUrl;
-        link.download = detail.attachment_name || "announcement.pdf";
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-      } else {
-        window.open(objectUrl, "_blank", "noopener,noreferrer");
-      }
-
-      setTimeout(() => URL.revokeObjectURL(objectUrl), 5000);
+      openOrDownloadBlob(
+        blob,
+        detail.attachment_name || "announcement.pdf",
+        download,
+      );
     } catch (error) {
       console.error("Failed to open announcement attachment", error);
     } finally {
@@ -131,7 +174,14 @@ export default function AnnouncementsPage() {
 
   return (
     <>
-      <div style={{ padding: 24, paddingBottom: 48, maxWidth: 1200, margin: "0 auto" }}>
+      <div
+        style={{
+          padding: 24,
+          paddingBottom: 48,
+          maxWidth: 1200,
+          margin: "0 auto",
+        }}
+      >
         <div style={{ textAlign: "center", marginBottom: 48 }}>
           <Title level={2} style={{ color: "#FF7F3E" }}>
             {t("announcements.title")}
@@ -141,7 +191,13 @@ export default function AnnouncementsPage() {
             <div style={{ marginTop: 12 }}>
               <Button
                 type="primary"
-                onClick={() => navigate(role === "CEO" ? "/ceo/announcements/create" : "/manager/announcements/create")}
+                onClick={() =>
+                  navigate(
+                    role === "CEO"
+                      ? "/ceo/announcements/create"
+                      : "/manager/announcements/create",
+                  )
+                }
               >
                 {t("announcements.create")}
               </Button>
@@ -174,32 +230,61 @@ export default function AnnouncementsPage() {
               showSizeChanger: false,
             }}
             locale={{
-              emptyText: <Empty description={t("announcements.noAnnouncements")} />,
+              emptyText: (
+                <Empty description={t("announcements.noAnnouncements")} />
+              ),
             }}
             renderItem={(item) => (
               <List.Item>
                 <Card
                   hoverable
                   onClick={() => handleOpen(item)}
-                  style={{ height: "100%", display: "flex", flexDirection: "column", cursor: "pointer" }}
-                  bodyStyle={{ flex: 1, display: "flex", flexDirection: "column" }}
+                  style={{
+                    height: "100%",
+                    display: "flex",
+                    flexDirection: "column",
+                    cursor: "pointer",
+                  }}
+                  bodyStyle={{
+                    flex: 1,
+                    display: "flex",
+                    flexDirection: "column",
+                  }}
                   title={
                     <Space size={8}>
                       <span style={{ color: "#1a1a1a" }}>{item.title}</span>
-                      <Tag color={isImportant(item.title, item.content_preview) ? "red" : "green"}>
+                      <Tag
+                        color={
+                          isImportant(item.title, item.content_preview)
+                            ? "red"
+                            : "green"
+                        }
+                      >
                         {isImportant(item.title, item.content_preview)
                           ? t("status.critical", "Important")
                           : t("status.info", "Normal")}
                       </Tag>
                       {item.has_attachment && <Tag color="red">PDF</Tag>}
-                      {item.announcement_type === "MEETING" && <Tag icon={<CalendarOutlined />} color="blue">{t("announcements.meeting.tag")}</Tag>}
+                      {item.announcement_type === "MEETING" && (
+                        <Tag icon={<CalendarOutlined />} color="blue">
+                          {t("announcements.meeting.tag")}
+                        </Tag>
+                      )}
                     </Space>
                   }
-                  extra={<Text type="secondary" style={{ fontSize: 12 }}>{formatDate(item.created_at)}</Text>}
+                  extra={
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {formatDate(item.created_at)}
+                    </Text>
+                  }
                 >
                   <div style={{ marginBottom: 16, flex: 1 }}>
                     <Paragraph
-                      ellipsis={{ rows: 4, expandable: true, symbol: t("announcements.readMore") }}
+                      ellipsis={{
+                        rows: 4,
+                        expandable: true,
+                        symbol: t("announcements.readMore"),
+                      }}
                       style={{ color: "#595959" }}
                     >
                       {item.content_preview}
@@ -208,7 +293,8 @@ export default function AnnouncementsPage() {
                       <Space direction="vertical" size={6}>
                         {item.meeting_starts_at && (
                           <Text type="secondary">
-                            <CalendarOutlined /> {formatDateTime(item.meeting_starts_at)}
+                            <CalendarOutlined />{" "}
+                            {formatDateTime(item.meeting_starts_at)}
                           </Text>
                         )}
                         {renderMeetingButtons(item)}
@@ -216,8 +302,24 @@ export default function AnnouncementsPage() {
                     )}
                   </div>
 
-                  <div style={{ borderTop: "1px solid #f0f0f0", paddingTop: 12, marginTop: "auto" }}>
-                    <Space split={<div style={{ width: 1, height: 10, background: "#d9d9d9" }} />}>
+                  <div
+                    style={{
+                      borderTop: "1px solid #f0f0f0",
+                      paddingTop: 12,
+                      marginTop: "auto",
+                    }}
+                  >
+                    <Space
+                      split={
+                        <div
+                          style={{
+                            width: 1,
+                            height: 10,
+                            background: "#d9d9d9",
+                          }}
+                        />
+                      }
+                    >
                       <Text type="secondary" style={{ fontSize: 12 }}>
                         {t("announcements.author", "By")} {item.created_by_name}
                       </Text>
@@ -251,30 +353,61 @@ export default function AnnouncementsPage() {
                 {t("announcements.widget.from")}
                 {detail.created_by_name}
               </Tag>
-              <Tag color={isImportant(detail.title, detail.content) ? "red" : "green"}>
+              <Tag
+                color={
+                  isImportant(detail.title, detail.content) ? "red" : "green"
+                }
+              >
                 {isImportant(detail.title, detail.content)
                   ? t("announcements.widget.important")
                   : t("announcements.widget.normal")}
               </Tag>
               <Tag>{formatDateTime(detail.created_at)}</Tag>
-              {detail.announcement_type === "MEETING" && <Tag icon={<CalendarOutlined />} color="blue">{t("announcements.meeting.tag")}</Tag>}
+              {detail.announcement_type === "MEETING" && (
+                <Tag icon={<CalendarOutlined />} color="blue">
+                  {t("announcements.meeting.tag")}
+                </Tag>
+              )}
             </div>
-            <Paragraph style={{ whiteSpace: "pre-wrap" }}>{detail.content}</Paragraph>
+            <Paragraph style={{ whiteSpace: "pre-wrap" }}>
+              {detail.content}
+            </Paragraph>
             {detail.announcement_type === "MEETING" && (
-              <div style={{ marginTop: 16, marginBottom: 16, padding: 12, background: "#fafafa", borderRadius: 8 }}>
+              <div
+                style={{
+                  marginTop: 16,
+                  marginBottom: 16,
+                  padding: 12,
+                  background: "#fafafa",
+                  borderRadius: 8,
+                }}
+              >
                 <Space direction="vertical" size={8} style={{ width: "100%" }}>
                   {detail.meeting_starts_at && (
-                    <Text><strong>{t("announcements.meeting.startsAt")}:</strong> {formatDateTime(detail.meeting_starts_at)}</Text>
+                    <Text>
+                      <strong>{t("announcements.meeting.startsAt")}:</strong>{" "}
+                      {formatDateTime(detail.meeting_starts_at)}
+                    </Text>
                   )}
                   {detail.meeting_duration_minutes && (
-                    <Text><strong>{t("announcements.meeting.duration")}:</strong> {detail.meeting_duration_minutes} {t("announcements.meeting.minutes")}</Text>
+                    <Text>
+                      <strong>{t("announcements.meeting.duration")}:</strong>{" "}
+                      {detail.meeting_duration_minutes}{" "}
+                      {t("announcements.meeting.minutes")}
+                    </Text>
                   )}
                   {detail.meeting_location && (
-                    <Text><strong>{t("announcements.meeting.location")}:</strong> {detail.meeting_location}</Text>
+                    <Text>
+                      <strong>{t("announcements.meeting.location")}:</strong>{" "}
+                      {detail.meeting_location}
+                    </Text>
                   )}
                   {detail.meeting_agenda && (
-                    <Paragraph style={{ marginBottom: 0, whiteSpace: "pre-wrap" }}>
-                      <strong>{t("announcements.meeting.agenda")}:</strong> {detail.meeting_agenda}
+                    <Paragraph
+                      style={{ marginBottom: 0, whiteSpace: "pre-wrap" }}
+                    >
+                      <strong>{t("announcements.meeting.agenda")}:</strong>{" "}
+                      {detail.meeting_agenda}
                     </Paragraph>
                   )}
                   {renderMeetingButtons(detail)}
@@ -285,12 +418,23 @@ export default function AnnouncementsPage() {
               <div style={{ marginTop: 16 }}>
                 <Space wrap size={10}>
                   <Tag icon={<FilePdfOutlined />} color="red">
-                    {detail.attachment_name || t("hr.announcements.attachmentLabel", "PDF Attachment")}
+                    {detail.attachment_name ||
+                      t("hr.announcements.attachmentLabel", "PDF Attachment")}
                   </Tag>
-                  <Button size="small" icon={<EyeOutlined />} loading={attachmentLoading} onClick={() => openAttachment(false)}>
+                  <Button
+                    size="small"
+                    icon={<EyeOutlined />}
+                    loading={attachmentLoading}
+                    onClick={() => openAttachment(false)}
+                  >
                     {t("common.preview")}
                   </Button>
-                  <Button size="small" icon={<DownloadOutlined />} loading={attachmentLoading} onClick={() => openAttachment(true)}>
+                  <Button
+                    size="small"
+                    icon={<DownloadOutlined />}
+                    loading={attachmentLoading}
+                    onClick={() => openAttachment(true)}
+                  >
                     {t("common.download")}
                   </Button>
                 </Space>
@@ -298,7 +442,9 @@ export default function AnnouncementsPage() {
             )}
           </div>
         ) : (
-          <div style={{ padding: 24, textAlign: "center" }}>{t("announcements.widget.failedLoad")}</div>
+          <div style={{ padding: 24, textAlign: "center" }}>
+            {t("announcements.widget.failedLoad")}
+          </div>
         )}
       </Modal>
     </>

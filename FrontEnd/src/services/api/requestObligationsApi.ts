@@ -44,18 +44,24 @@ export async function getRequestObligations(params: {
   parent_type: "leave_request";
   parent_id: number | string;
 }): Promise<ApiResponse<RequestObligationsResponse>> {
-  const { data } = await api.get<ApiResponse<RequestObligationsResponse>>("/api/core/request-obligations/", {
-    params,
-  });
+  const { data } = await api.get<ApiResponse<RequestObligationsResponse>>(
+    "/api/core/request-obligations/",
+    {
+      params,
+    },
+  );
   return data;
 }
 
 export async function waiveRequestObligation(
   id: number | string,
-  reason: string
+  reason: string,
 ): Promise<ApiResponse<RequestObligation>> {
-  const { data } = await api.post<ApiResponse<RequestObligation>>(`/api/core/request-obligations/${id}/waive/`, {
-    waiver_reason: reason,
-  });
+  const { data } = await api.post<ApiResponse<RequestObligation>>(
+    `/api/core/request-obligations/${id}/waive/`,
+    {
+      waiver_reason: reason,
+    },
+  );
   return data;
 }

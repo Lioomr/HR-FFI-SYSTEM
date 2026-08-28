@@ -1,5 +1,15 @@
 import { useEffect, useState } from "react";
-import { Alert, Button, Card, Form, Input, Select, Space, Switch, message } from "antd";
+import {
+  Alert,
+  Button,
+  Card,
+  Form,
+  Input,
+  Select,
+  Space,
+  Switch,
+  message,
+} from "antd";
 import { SaveOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 
@@ -35,13 +45,15 @@ export default function AdminUserCreatePage() {
   const { t } = useI18n();
   const currentUser = useAuthStore((state) => state.user);
   const selectedRole = Form.useWatch("role", form);
-  const organizationOptions = (currentUser?.accessible_organizations ?? []).map((organization) => ({
-    label:
-      organization.node_type === "head_office"
-        ? `${organization.name} (${t("admin.users.readOnly", "Read-only")})`
-        : organization.name,
-    value: Number(organization.id),
-  }));
+  const organizationOptions = (currentUser?.accessible_organizations ?? []).map(
+    (organization) => ({
+      label:
+        organization.node_type === "head_office"
+          ? `${organization.name} (${t("admin.users.readOnly", "Read-only")})`
+          : organization.name,
+      value: Number(organization.id),
+    }),
+  );
 
   useEffect(() => {
     if (selectedRole !== "HRManager") {
@@ -56,7 +68,8 @@ export default function AdminUserCreatePage() {
     try {
       await createUser({
         ...values,
-        organization_ids: values.role === "HRManager" ? values.organization_ids ?? [] : [],
+        organization_ids:
+          values.role === "HRManager" ? (values.organization_ids ?? []) : [],
       });
 
       // Success case
@@ -83,7 +96,8 @@ export default function AdminUserCreatePage() {
           } else if (apiData.errors && typeof apiData.errors === "object") {
             // Fallback: extract from field errors
             const firstFieldErrors = Object.values(apiData.errors).find(
-              (fieldErrors: any) => Array.isArray(fieldErrors) && fieldErrors.length > 0
+              (fieldErrors: any) =>
+                Array.isArray(fieldErrors) && fieldErrors.length > 0,
             );
             if (firstFieldErrors && Array.isArray(firstFieldErrors)) {
               errorMessage = firstFieldErrors[0];
@@ -106,11 +120,19 @@ export default function AdminUserCreatePage() {
 
   return (
     <div>
-      <PageHeader title={t("layout.createUser")} subtitle={t("admin.userCreate.subtitle")} />
+      <PageHeader
+        title={t("layout.createUser")}
+        subtitle={t("admin.userCreate.subtitle")}
+      />
 
       <Card style={{ borderRadius: 16 }} bodyStyle={{ padding: 24 }}>
         {error && (
-          <Alert style={{ marginBottom: 16 }} type="error" showIcon message={error} />
+          <Alert
+            style={{ marginBottom: 16 }}
+            type="error"
+            showIcon
+            message={error}
+          />
         )}
 
         <Form<FormValues>
@@ -118,13 +140,19 @@ export default function AdminUserCreatePage() {
           layout="vertical"
           requiredMark={false}
           onFinish={onSave}
-          initialValues={{ role: "Employee", is_active: true, organization_ids: [] }}
+          initialValues={{
+            role: "Employee",
+            is_active: true,
+            organization_ids: [],
+          }}
         >
           <Space style={{ width: "100%" }} align="start" wrap>
             <Form.Item
               label={t("admin.userCreate.lblFullName")}
               name="full_name"
-              rules={[{ required: true, message: t("admin.userCreate.reqFullName") }]}
+              rules={[
+                { required: true, message: t("admin.userCreate.reqFullName") },
+              ]}
               style={{ minWidth: 260, flex: 1 }}
             >
               <Input placeholder={t("admin.userCreate.placeholderFullName")} />
@@ -139,16 +167,27 @@ export default function AdminUserCreatePage() {
               ]}
               style={{ minWidth: 260, flex: 1 }}
             >
-              <Input placeholder={t("admin.userCreate.placeholderEmail")} autoComplete="email" />
+              <Input
+                placeholder={t("admin.userCreate.placeholderEmail")}
+                autoComplete="email"
+              />
             </Form.Item>
 
             <Form.Item
               label={t("admin.userCreate.lblRole")}
               name="role"
-              rules={[{ required: true, message: t("admin.userCreate.reqRole") }]}
+              rules={[
+                { required: true, message: t("admin.userCreate.reqRole") },
+              ]}
               style={{ minWidth: 220 }}
             >
-              <Select options={roleOptions.filter(r => r.value !== "SystemAdmin" || useAuthStore.getState().user?.role === "SystemAdmin")} />
+              <Select
+                options={roleOptions.filter(
+                  (r) =>
+                    r.value !== "SystemAdmin" ||
+                    useAuthStore.getState().user?.role === "SystemAdmin",
+                )}
+              />
             </Form.Item>
 
             <Form.Item
@@ -169,17 +208,20 @@ export default function AdminUserCreatePage() {
                 selectedRole === "HRManager"
                   ? t(
                       "admin.users.companyAccessHint",
-                      "Select the companies and head office contexts this HR Manager can switch between."
+                      "Select the companies and head office contexts this HR Manager can switch between.",
                     )
                   : t(
                       "admin.users.companyAccessAuto",
-                      "Organization access is managed from the linked employee profile for non-HR users."
+                      "Organization access is managed from the linked employee profile for non-HR users.",
                     )
               }
             >
               <Select
                 mode="multiple"
-                placeholder={t("admin.users.selectCompanies", "Select companies")}
+                placeholder={t(
+                  "admin.users.selectCompanies",
+                  "Select companies",
+                )}
                 options={organizationOptions}
                 disabled={selectedRole !== "HRManager"}
               />

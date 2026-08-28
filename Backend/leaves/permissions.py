@@ -53,7 +53,11 @@ class IsManagerOfEmployee(BasePermission):
 
     def has_object_permission(self, request, view, obj):
         profile = getattr(obj.employee, "employee_profile", None)
-        return bool(manager_approval_actor_source(request.user, profile, allow_admin=True))
+        return bool(
+            manager_approval_actor_source(
+                request.user, profile, capability="leaves.approve", allow_admin=True
+            )
+        )
 
 
 class IsEmployeeOnly(BasePermission):
@@ -66,4 +70,15 @@ class IsEmployeeOnly(BasePermission):
             request.user
             and request.user.is_authenticated
             and get_role(request.user) in ["Employee", "Manager", "HRManager"]
+        )
+
+
+class IsAnnualLeavePaymentCreator(BasePermission):
+    """Allows employee self-service plus HR/SystemAdmin settlement creation."""
+
+    def has_permission(self, request, view):
+        return (
+            request.user
+            and request.user.is_authenticated
+            and get_role(request.user) in ["Employee", "Manager", "HRManager", "SystemAdmin"]
         )

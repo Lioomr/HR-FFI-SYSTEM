@@ -24,7 +24,9 @@ const markAllNotificationsRead =
 
 const ok = <T>(data: T) => ({ status: "success" as const, data });
 
-function makeNotification(overrides: Partial<NotificationDto> = {}): NotificationDto {
+function makeNotification(
+  overrides: Partial<NotificationDto> = {},
+): NotificationDto {
   return {
     id: 1,
     title: "Leave approved",
@@ -52,7 +54,7 @@ describe("notificationStore", () => {
   it("fetches the recent list for the bell", async () => {
     const items = [makeNotification({ id: 1 }), makeNotification({ id: 2 })];
     listNotifications.mockResolvedValue(
-      ok({ items, page: 1, page_size: 8, count: 2, total_pages: 1 })
+      ok({ items, page: 1, page_size: 8, count: 2, total_pages: 1 }),
     );
 
     await useNotificationStore.getState().fetchRecent();
@@ -69,11 +71,11 @@ describe("notificationStore", () => {
 
   it("requests unread-only when the filter is 'unread'", async () => {
     listNotifications.mockResolvedValue(
-      ok({ items: [], page: 1, page_size: 20, count: 0, total_pages: 1 })
+      ok({ items: [], page: 1, page_size: 20, count: 0, total_pages: 1 }),
     );
     await useNotificationStore.getState().fetchList({ filter: "unread" });
     expect(listNotifications).toHaveBeenCalledWith(
-      expect.objectContaining({ unread: true, page: 1 })
+      expect.objectContaining({ unread: true, page: 1 }),
     );
   });
 
@@ -85,7 +87,7 @@ describe("notificationStore", () => {
         page_size: 20,
         count: 3,
         total_pages: 2,
-      })
+      }),
     );
     await useNotificationStore.getState().fetchList({ page: 1 });
 
@@ -96,7 +98,7 @@ describe("notificationStore", () => {
         page_size: 20,
         count: 3,
         total_pages: 2,
-      })
+      }),
     );
     await useNotificationStore.getState().fetchList({ page: 2, append: true });
 
@@ -129,7 +131,7 @@ describe("notificationStore", () => {
       unreadCount: 2,
     });
     markAllNotificationsRead.mockResolvedValue(
-      ok({ updated_count: 2, unread_count: 0 })
+      ok({ updated_count: 2, unread_count: 0 }),
     );
 
     await useNotificationStore.getState().markAllRead();
@@ -164,7 +166,7 @@ describe("notificationStore", () => {
 
     // 2. A REST refresh returns the same notification (now persisted server-side).
     listNotifications.mockResolvedValue(
-      ok({ items: [live], page: 1, page_size: 8, count: 1, total_pages: 1 })
+      ok({ items: [live], page: 1, page_size: 8, count: 1, total_pages: 1 }),
     );
     await useNotificationStore.getState().fetchRecent();
 

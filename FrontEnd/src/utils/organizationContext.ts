@@ -1,12 +1,18 @@
 import type { AuthUser } from "../auth/authStore";
 import type { OrganizationNodeDto } from "../services/api/apiTypes";
 
-export function getActiveOrganization(user?: AuthUser | null): OrganizationNodeDto | null {
+export function getActiveOrganization(
+  user?: AuthUser | null,
+): OrganizationNodeDto | null {
   if (!user) return null;
   const organizations = user.accessible_organizations ?? [];
-  const activeOrganizationId = user.active_organization_id ?? user.default_organization_id ?? null;
+  const activeOrganizationId =
+    user.active_organization_id ?? user.default_organization_id ?? null;
   return (
-    organizations.find((organization) => String(organization.id) === String(activeOrganizationId)) ?? null
+    organizations.find(
+      (organization) =>
+        String(organization.id) === String(activeOrganizationId),
+    ) ?? null
   );
 }
 

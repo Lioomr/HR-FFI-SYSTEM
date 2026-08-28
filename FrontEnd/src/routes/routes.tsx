@@ -61,6 +61,7 @@ import EmployeeLoanRequestDetailsPage from "../pages/employee/loan/LoanRequestDe
 import MyAssetsPage from "../pages/employee/assets/MyAssetsPage";
 
 import LeaveInboxPage from "../pages/hr/leave/LeaveInboxPage";
+import AnnualLeaveSettlementsPage from "../pages/hr/leave/AnnualLeaveSettlementsPage";
 import LeaveRequestDetailsPage from "../pages/hr/leave/LeaveRequestDetailsPage";
 import LoanInboxPage from "../pages/hr/loan/LoanInboxPage";
 import HrLoanRequestDetailsPage from "../pages/hr/loan/LoanRequestDetailsPage";
@@ -86,6 +87,7 @@ import AnnouncementsPage from "../pages/announcements/AnnouncementsPage";
 // CEO
 import CEODashboardPage from "../pages/ceo/CEODashboardPage";
 import CEOLeaveInboxPage from "../pages/ceo/CEOLeaveInboxPage";
+import CEOAnnualLeaveSettlementsPage from "../pages/ceo/CEOAnnualLeaveSettlementsPage";
 import CEOTeamPage from "../pages/ceo/CEOTeamPage";
 import CEOLoanRequestsPage from "../pages/ceo/CEOLoanRequestsPage";
 import CEOLoanRequestDetailsPage from "../pages/ceo/CEOLoanRequestDetailsPage";
@@ -106,17 +108,20 @@ import RouteErrorBoundary from "./RouteErrorBoundary";
 import PendingInboxPage from "../pages/shared/PendingInboxPage";
 import NotificationsPage from "../pages/shared/NotificationsPage";
 
-
-
 import BaseLayout from "../layouts/BaseLayout";
-
-
 
 export const routes = [
   // Public
-  { path: "/login", element: <LoginPage />, errorElement: <RouteErrorBoundary /> },
-  { path: "/register", element: <RegisterInvitePage />, errorElement: <RouteErrorBoundary /> },
-
+  {
+    path: "/login",
+    element: <LoginPage />,
+    errorElement: <RouteErrorBoundary />,
+  },
+  {
+    path: "/register",
+    element: <RegisterInvitePage />,
+    errorElement: <RouteErrorBoundary />,
+  },
 
   // Authenticated (all roles)
   {
@@ -144,7 +149,10 @@ export const routes = [
           {
             element: <RequireRole roles={["SystemAdmin"]} />,
             children: [
-              { path: "admin", element: <Navigate to="/admin/dashboard" replace /> },
+              {
+                path: "admin",
+                element: <Navigate to="/admin/dashboard" replace />,
+              },
               { path: "admin/dashboard", element: <AdminDashboardPage /> },
               { path: "admin/users", element: <AdminUsersListPage /> },
               { path: "admin/users/create", element: <AdminUserCreatePage /> },
@@ -152,8 +160,14 @@ export const routes = [
               { path: "admin/audit-logs", element: <AdminAuditLogsPage /> },
               { path: "admin/settings", element: <AdminSettingsPage /> },
               { path: "admin/biotime", element: <BioTimeSettingsPage /> },
-              { path: "admin/whatsapp", element: <AdminWhatsAppIntegrationPage /> },
-              { path: "admin/workflow/delegations", element: <DelegationRulesPage /> },
+              {
+                path: "admin/whatsapp",
+                element: <AdminWhatsAppIntegrationPage />,
+              },
+              {
+                path: "admin/workflow/delegations",
+                element: <DelegationRulesPage />,
+              },
               { path: "admin/profile", element: <UserProfilePage /> },
             ],
           },
@@ -166,7 +180,10 @@ export const routes = [
               { path: "hr/dashboard", element: <HRDashboardPage /> },
               { path: "hr/activity", element: <RecentActivityPage /> },
               { path: "hr/profile", element: <UserProfilePage /> },
-              { path: "hr/attendance", element: <AttendancePreviewPage role="hr" /> },
+              {
+                path: "hr/attendance",
+                element: <AttendancePreviewPage role="hr" />,
+              },
               { path: "hr/invites", element: <AdminInvitesPage /> },
 
               // Employee Management
@@ -174,7 +191,10 @@ export const routes = [
               { path: "hr/employees/create", element: <CreateEmployeePage /> },
               { path: "hr/employees/:id", element: <ViewEmployeePage /> },
               { path: "hr/employees/:id/edit", element: <EditEmployeePage /> },
-              { path: "hr/employees/expiries", element: <ExpiringDocumentsPage /> },
+              {
+                path: "hr/employees/expiries",
+                element: <ExpiringDocumentsPage />,
+              },
 
               // Reference Data
               { path: "hr/departments", element: <DepartmentsPage /> },
@@ -186,86 +206,210 @@ export const routes = [
               { path: "hr/templates", element: <TemplateLibraryPage /> },
 
               // Import Employees
-              { path: "hr/import/employees", element: <ImportEmployeesEntryPage /> },
-              { path: "hr/import/employees/:import_id/result", element: <ImportResultPage /> },
-              { path: "hr/import/employees/history", element: <ImportHistoryPage /> },
+              {
+                path: "hr/import/employees",
+                element: <ImportEmployeesEntryPage />,
+              },
+              {
+                path: "hr/import/employees/:import_id/result",
+                element: <ImportResultPage />,
+              },
+              {
+                path: "hr/import/employees/history",
+                element: <ImportHistoryPage />,
+              },
 
               // Payroll
               { path: "hr/payroll", element: <PayrollDashboardPage /> },
               { path: "hr/payroll/create", element: <CreatePayrollRunPage /> },
-              { path: "hr/payroll/:run_id", element: <PayrollRunDetailsPage /> },
+              {
+                path: "hr/payroll/:run_id",
+                element: <PayrollRunDetailsPage />,
+              },
               { path: "hr/assets", element: <HRAssetsPage /> },
               { path: "hr/assets/lookup", element: <AssetLookupPage /> },
-              { path: "hr/assets/label-jobs", element: <LabelJobsHistoryPage /> },
+              {
+                path: "hr/assets/label-jobs",
+                element: <LabelJobsHistoryPage />,
+              },
 
               // Leave Management (HR)
               { path: "hr/leave/requests", element: <LeaveInboxPage /> },
-              { path: "hr/leave/requests/:id", element: <LeaveRequestDetailsPage /> },
+              {
+                path: "hr/leave/requests/:id",
+                element: <LeaveRequestDetailsPage />,
+              },
+              // Annual Leave settlement queue; ":id" is the deep link carried by
+              // the HR year-end notification.
+              {
+                path: "hr/annual-leave-payments",
+                element: <AnnualLeaveSettlementsPage />,
+              },
+              {
+                path: "hr/annual-leave-payments/:id",
+                element: <AnnualLeaveSettlementsPage />,
+              },
               { path: "hr/loan-requests", element: <LoanInboxPage /> },
-              { path: "hr/loan-requests/:id", element: <HrLoanRequestDetailsPage /> },
-              { path: "hr/workflow/delegations", element: <DelegationRulesPage /> },
+              {
+                path: "hr/loan-requests/:id",
+                element: <HrLoanRequestDetailsPage />,
+              },
+              {
+                path: "hr/workflow/delegations",
+                element: <DelegationRulesPage />,
+              },
 
               // Announcements (HR)
-              { path: "hr/announcements", element: <AnnouncementsManagementPage /> },
-              { path: "hr/announcements/create", element: <CreateAnnouncementPage /> },
-              { path: "hr/announcements/:id/edit", element: <EditAnnouncementPage /> },
+              {
+                path: "hr/announcements",
+                element: <AnnouncementsManagementPage />,
+              },
+              {
+                path: "hr/announcements/create",
+                element: <CreateAnnouncementPage />,
+              },
+              {
+                path: "hr/announcements/:id/edit",
+                element: <EditAnnouncementPage />,
+              },
 
               // Existing pages
-              { path: "hr/attendance", element: <AttendancePreviewPage role="hr" /> },
-              { path: "hr/attendance-correction-requests", element: <HRAttendanceCorrectionRequestsPage /> },
+              {
+                path: "hr/attendance",
+                element: <AttendancePreviewPage role="hr" />,
+              },
+              {
+                path: "hr/attendance-correction-requests",
+                element: <HRAttendanceCorrectionRequestsPage />,
+              },
               { path: "hr/leave-balances", element: <HrLeaveBalancesPage /> },
             ],
           },
 
-
           // Employee (placeholders)
           {
-            element: <RequireRole roles={["Employee", "SystemAdmin", "HRManager", "Manager"]} />,
+            element: (
+              <RequireRole
+                roles={["Employee", "SystemAdmin", "HRManager", "Manager"]}
+              />
+            ),
             children: [
-              { path: "employee", element: <Navigate to="/employee/dashboard" replace /> },
-              { path: "employee/home", element: <Navigate to="/employee/dashboard" replace /> },
+              {
+                path: "employee",
+                element: <Navigate to="/employee/dashboard" replace />,
+              },
+              {
+                path: "employee/home",
+                element: <Navigate to="/employee/dashboard" replace />,
+              },
               { path: "employee/dashboard", element: <DashboardPage /> },
               { path: "employee/profile", element: <MyProfilePage /> },
-              { path: "employee/attendance", element: <AttendanceMaintenancePage titleKey="attendance.myAttendance" backPath="/employee/dashboard" /> },
-              { path: "employee/attendance-corrections", element: <EmployeeAttendanceCorrectionRequestsPage /> },
+              {
+                path: "employee/attendance",
+                element: (
+                  <AttendanceMaintenancePage
+                    titleKey="attendance.myAttendance"
+                    backPath="/employee/dashboard"
+                  />
+                ),
+              },
+              {
+                path: "employee/attendance-corrections",
+                element: <EmployeeAttendanceCorrectionRequestsPage />,
+              },
               { path: "employee/leaves", element: <EmployeeLeavesPage /> },
-              { path: "employee/payslips", element: <EmployeePayslipsListPage /> },
-              { path: "employee/payslips/:id", element: <EmployeePayslipDetailsPage /> },
+              {
+                path: "employee/payslips",
+                element: <EmployeePayslipsListPage />,
+              },
+              {
+                path: "employee/payslips/:id",
+                element: <EmployeePayslipDetailsPage />,
+              },
 
               // Employee Leave
               { path: "employee/leave/request", element: <RequestLeavePage /> },
-              { path: "employee/leave/requests", element: <MyLeaveRequestsPage /> },
-              { path: "employee/leave/requests/:id", element: <EmployeeLeaveRequestDetailsPage /> },
-              { path: "employee/delegated-approvals", element: <DelegatedLeaveInboxPage /> },
-              { path: "employee/delegated-approvals/:id", element: <EmployeeLeaveRequestDetailsPage /> },
-              { path: "employee/leave/balance", element: <MyLeaveBalancePage /> },
+              {
+                path: "employee/leave/requests",
+                element: <MyLeaveRequestsPage />,
+              },
+              {
+                path: "employee/leave/requests/:id",
+                element: <EmployeeLeaveRequestDetailsPage />,
+              },
+              {
+                path: "employee/delegated-approvals",
+                element: <DelegatedLeaveInboxPage />,
+              },
+              {
+                path: "employee/delegated-approvals/:id",
+                element: <EmployeeLeaveRequestDetailsPage />,
+              },
+              {
+                path: "employee/leave/balance",
+                element: <MyLeaveBalancePage />,
+              },
               { path: "employee/loans/request", element: <RequestLoanPage /> },
               { path: "employee/loans", element: <MyLoanRequestsPage /> },
-              { path: "employee/loans/:id", element: <EmployeeLoanRequestDetailsPage /> },
+              {
+                path: "employee/loans/:id",
+                element: <EmployeeLoanRequestDetailsPage />,
+              },
               { path: "employee/assets", element: <MyAssetsPage /> },
 
               // Announcements
-              { path: "employee/announcements", element: <AnnouncementsPage /> },
+              {
+                path: "employee/announcements",
+                element: <AnnouncementsPage />,
+              },
             ],
           },
 
           // Manager Routes — capability driven: any user the backend reports
           // manager access for (assigned direct reports) reaches these pages.
           {
-            element: <RequireManagerAccess allowRoles={["CEO", "CFO", "SystemAdmin"]} />,
+            element: (
+              <RequireManagerAccess
+                allowRoles={["CEO", "CFO", "SystemAdmin"]}
+              />
+            ),
             children: [
-              { path: "manager", element: <Navigate to="/manager/dashboard" replace /> },
+              {
+                path: "manager",
+                element: <Navigate to="/manager/dashboard" replace />,
+              },
               { path: "manager/dashboard", element: <ManagerDashboardPage /> },
-              { path: "manager/team-requests", element: <ManagerTeamRequestsPage /> },
-              { path: "manager/attendance-corrections", element: <ManagerAttendanceCorrectionRequestsPage /> },
+              {
+                path: "manager/team-requests",
+                element: <ManagerTeamRequestsPage />,
+              },
+              {
+                path: "manager/attendance-corrections",
+                element: <ManagerAttendanceCorrectionRequestsPage />,
+              },
               { path: "manager/team", element: <ManagerTeamPage /> },
-              { path: "manager/team/:id", element: <ManagerEmployeeProfilePage /> },
-              { path: "manager/leave/requests/:id", element: <ManagerLeaveRequestDetailsPage /> },
-              { path: "manager/loan-requests", element: <ManagerLoanRequestsPage /> },
-              { path: "manager/loan-requests/:id", element: <ManagerLoanRequestDetailsPage /> },
+              {
+                path: "manager/team/:id",
+                element: <ManagerEmployeeProfilePage />,
+              },
+              {
+                path: "manager/leave/requests/:id",
+                element: <ManagerLeaveRequestDetailsPage />,
+              },
+              {
+                path: "manager/loan-requests",
+                element: <ManagerLoanRequestsPage />,
+              },
+              {
+                path: "manager/loan-requests/:id",
+                element: <ManagerLoanRequestDetailsPage />,
+              },
               { path: "manager/announcements", element: <AnnouncementsPage /> },
-              { path: "manager/announcements/create", element: <CreateTeamAnnouncementPage /> },
-            ]
+              {
+                path: "manager/announcements/create",
+                element: <CreateTeamAnnouncementPage />,
+              },
+            ],
           },
 
           // Admin Announcements
@@ -273,22 +417,41 @@ export const routes = [
             element: <RequireRole roles={["SystemAdmin"]} />,
             children: [
               { path: "admin/announcements", element: <AnnouncementsPage /> },
-            ]
+            ],
           },
 
           // CEO Routes
           {
             element: <RequireRole roles={["CEO", "SystemAdmin"]} />,
             children: [
-              { path: "ceo", element: <Navigate to="/ceo/dashboard" replace /> },
+              {
+                path: "ceo",
+                element: <Navigate to="/ceo/dashboard" replace />,
+              },
               { path: "ceo/dashboard", element: <CEODashboardPage /> },
               { path: "ceo/leave/requests", element: <CEOLeaveInboxPage /> },
-              { path: "ceo/team-requests", element: <ManagerTeamRequestsPage /> },
+              // The queue itself is scoped to pending_ceo; ":id" only exists so
+              // the notification deep link resolves to the queue.
+              {
+                path: "ceo/annual-leave-payments",
+                element: <CEOAnnualLeaveSettlementsPage />,
+              },
+              {
+                path: "ceo/annual-leave-payments/:id",
+                element: <CEOAnnualLeaveSettlementsPage />,
+              },
+              {
+                path: "ceo/team-requests",
+                element: <ManagerTeamRequestsPage />,
+              },
               { path: "ceo/team", element: <CEOTeamPage /> },
               { path: "ceo/announcements", element: <AnnouncementsPage /> },
-              { path: "ceo/announcements/create", element: <CreateTeamAnnouncementPage /> },
+              {
+                path: "ceo/announcements/create",
+                element: <CreateTeamAnnouncementPage />,
+              },
               { path: "ceo/profile", element: <UserProfilePage /> },
-            ]
+            ],
           },
 
           // CEO Loan Approver Routes (role OR profile-based approver)
@@ -296,12 +459,30 @@ export const routes = [
             element: <RequireCEOApprover />,
             children: [
               { path: "ceo/loan-requests", element: <CEOLoanRequestsPage /> },
-              { path: "ceo/loan-requests/:id", element: <CEOLoanRequestDetailsPage /> },
-              { path: "ceo/attendance", element: <AttendancePreviewPage role="ceo" /> },
-              { path: "ceo/assets/damage-reports", element: <CEOAssetDamageReportsPage /> },
-              { path: "ceo/assets/return-requests", element: <CEOAssetReturnRequestsPage /> },
-              { path: "ceo/employees/deletion-requests", element: <CEOEmployeeDeletionInboxPage /> },
-              { path: "ceo/employees/deletion-requests/:id", element: <CEOEmployeeDeletionDetailPage /> },
+              {
+                path: "ceo/loan-requests/:id",
+                element: <CEOLoanRequestDetailsPage />,
+              },
+              {
+                path: "ceo/attendance",
+                element: <AttendancePreviewPage role="ceo" />,
+              },
+              {
+                path: "ceo/assets/damage-reports",
+                element: <CEOAssetDamageReportsPage />,
+              },
+              {
+                path: "ceo/assets/return-requests",
+                element: <CEOAssetReturnRequestsPage />,
+              },
+              {
+                path: "ceo/employees/deletion-requests",
+                element: <CEOEmployeeDeletionInboxPage />,
+              },
+              {
+                path: "ceo/employees/deletion-requests/:id",
+                element: <CEOEmployeeDeletionDetailPage />,
+              },
             ],
           },
 
@@ -309,10 +490,16 @@ export const routes = [
           {
             element: <RequireCFOApprover />,
             children: [
-              { path: "cfo", element: <Navigate to="/cfo/dashboard" replace /> },
+              {
+                path: "cfo",
+                element: <Navigate to="/cfo/dashboard" replace />,
+              },
               { path: "cfo/dashboard", element: <CFODashboardPage /> },
               { path: "cfo/loan-requests", element: <CFOLoanRequestsPage /> },
-              { path: "cfo/loan-requests/:id", element: <CFOLoanRequestDetailsPage /> },
+              {
+                path: "cfo/loan-requests/:id",
+                element: <CFOLoanRequestDetailsPage />,
+              },
               { path: "cfo/profile", element: <UserProfilePage /> },
             ],
           },
@@ -322,13 +509,27 @@ export const routes = [
             element: <RequireFinanceApprover />,
             children: [
               { path: "finance/loan-requests", element: <LoanInboxPage /> },
-              { path: "finance/loan-requests/:id", element: <HrLoanRequestDetailsPage /> },
+              {
+                path: "finance/loan-requests/:id",
+                element: <HrLoanRequestDetailsPage />,
+              },
             ],
           },
 
           // Unified pending inbox + notification inbox (all authenticated roles)
           {
-            element: <RequireRole roles={["SystemAdmin", "HRManager", "Manager", "CEO", "CFO", "Employee"]} />,
+            element: (
+              <RequireRole
+                roles={[
+                  "SystemAdmin",
+                  "HRManager",
+                  "Manager",
+                  "CEO",
+                  "CFO",
+                  "Employee",
+                ]}
+              />
+            ),
             children: [
               { path: "pending-inbox", element: <PendingInboxPage /> },
               { path: "notifications", element: <NotificationsPage /> },
@@ -344,6 +545,3 @@ export const routes = [
   // 404
   { path: "*", element: <NotFound404Page /> },
 ];
-
-
-

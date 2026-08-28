@@ -21,7 +21,8 @@ export default function LoadingState({
             height: 20,
             width: 180,
             borderRadius: 8,
-            background: "linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%)",
+            background:
+              "linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%)",
             backgroundSize: "200% 100%",
             animation: "shimmer 1.5s infinite",
             marginBottom: 20,
@@ -34,7 +35,8 @@ export default function LoadingState({
           style={{
             height: 14,
             borderRadius: 7,
-            background: "linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%)",
+            background:
+              "linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%)",
             backgroundSize: "200% 100%",
             animation: "shimmer 1.5s infinite",
             marginBottom: i < lines - 1 ? 12 : 0,

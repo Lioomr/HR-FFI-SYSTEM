@@ -1,17 +1,33 @@
-
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Alert, Button, Card, Checkbox, Input, Modal, Segmented, Select, Table, Tag, Dropdown, Typography, Tooltip, Popover, Form, message } from "antd";
+import {
+  Alert,
+  Button,
+  Card,
+  Checkbox,
+  Input,
+  Modal,
+  Segmented,
+  Select,
+  Table,
+  Tag,
+  Dropdown,
+  Typography,
+  Tooltip,
+  Popover,
+  Form,
+  message,
+} from "antd";
 import type { MenuProps } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
-    PlusOutlined,
-    SearchOutlined,
-    FilterOutlined,
-    DownloadOutlined,
-    EllipsisOutlined,
-    SortAscendingOutlined,
-    SettingOutlined,
+  PlusOutlined,
+  SearchOutlined,
+  FilterOutlined,
+  DownloadOutlined,
+  EllipsisOutlined,
+  SortAscendingOutlined,
+  SettingOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { getCountryCode } from "../../../utils/countries";
@@ -23,22 +39,22 @@ import { isHeadOfficeOrganization } from "../../../utils/organizationContext";
  * Custom debounce hook
  */
 function useDebounce<T extends (...args: any[]) => any>(
-    callback: T,
-    delay: number
+  callback: T,
+  delay: number,
 ): (...args: Parameters<T>) => void {
-    const timeoutRef = useRef<number | undefined>(undefined);
+  const timeoutRef = useRef<number | undefined>(undefined);
 
-    return useCallback(
-        (...args: Parameters<T>) => {
-            if (timeoutRef.current) {
-                clearTimeout(timeoutRef.current);
-            }
-            timeoutRef.current = setTimeout(() => {
-                callback(...args);
-            }, delay);
-        },
-        [callback, delay]
-    );
+  return useCallback(
+    (...args: Parameters<T>) => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      timeoutRef.current = setTimeout(() => {
+        callback(...args);
+      }, delay);
+    },
+    [callback, delay],
+  );
 }
 
 import LoadingState from "../../../components/ui/LoadingState";
@@ -46,1169 +62,1380 @@ import ErrorState from "../../../components/ui/ErrorState";
 import Unauthorized403Page from "../../Unauthorized403Page";
 
 import { useHrEmployeeListStore } from "../../../stores/hrEmployeeListStore";
-import type { Employee, EmployeeArchiveReason } from "../../../services/api/employeesApi";
+import type {
+  Employee,
+  EmployeeArchiveReason,
+} from "../../../services/api/employeesApi";
 import {
-    exportEmployees,
-    listEmployees,
-    listEmployeeArchiveRequests,
-    requestEmployeeArchive,
-    restoreEmployee,
+  exportEmployees,
+  listEmployees,
+  listEmployeeArchiveRequests,
+  requestEmployeeArchive,
+  restoreEmployee,
 } from "../../../services/api/employeesApi";
 import { listDepartments } from "../../../services/api/departmentsApi";
 import { isApiError } from "../../../services/api/apiTypes";
 import { triggerBlobDownload } from "../../../services/api/downloads";
 import { isForbidden } from "../../../services/api/httpErrors";
 import { getFirstApiErrorMessage } from "../../../utils/formErrors";
-import { getUserPreference, saveUserPreference } from "../../../services/api/preferencesApi";
+import {
+  getUserPreference,
+  saveUserPreference,
+} from "../../../services/api/preferencesApi";
 
 const { Option } = Select;
 const { Title, Text } = Typography;
 
-const AVATAR_BG_COLORS = ["#f56a00", "#1677ff", "#389e0d", "#722ed1", "#d46b08", "#08979c"];
+const AVATAR_BG_COLORS = [
+  "#f56a00",
+  "#1677ff",
+  "#389e0d",
+  "#722ed1",
+  "#d46b08",
+  "#08979c",
+];
 const PREFERENCE_SCOPE = "tables";
 const PREFERENCE_KEY = "hr-employees-list";
 const DEFAULT_VISIBLE_COLUMNS = [
-    "full_name",
-    "nationality",
-    "position",
-    "department",
-    "manager",
-    "hire_date",
-    "employment_status",
-    "action",
+  "full_name",
+  "nationality",
+  "position",
+  "department",
+  "manager",
+  "hire_date",
+  "employment_status",
+  "action",
 ];
 
 /** Only these roles may list archived employees or restore them (mirrors the backend check). */
-const ARCHIVE_MANAGER_ROLES: ReadonlyArray<string> = ["SystemAdmin", "HRManager"];
+const ARCHIVE_MANAGER_ROLES: ReadonlyArray<string> = [
+  "SystemAdmin",
+  "HRManager",
+];
 
 const ARCHIVE_REASON_VALUES: EmployeeArchiveReason[] = [
-    "FIRED",
-    "RESIGNED",
-    "RETIRED",
-    "END_OF_CONTRACT",
-    "DECEASED",
-    "OTHER",
+  "FIRED",
+  "RESIGNED",
+  "RETIRED",
+  "END_OF_CONTRACT",
+  "DECEASED",
+  "OTHER",
 ];
 
 function getInitials(name?: string) {
-    if (!name) return "U";
-    const parts = name.trim().split(/\s+/).filter(Boolean);
-    if (parts.length === 0) return "U";
-    if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
-    return `${parts[0].charAt(0)}${parts[1].charAt(0)}`.toUpperCase();
+  if (!name) return "U";
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "U";
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return `${parts[0].charAt(0)}${parts[1].charAt(0)}`.toUpperCase();
 }
 
 function getAvatarColor(name?: string) {
-    const source = name || "";
-    let hash = 0;
-    for (let i = 0; i < source.length; i += 1) {
-        hash = source.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const index = Math.abs(hash) % AVATAR_BG_COLORS.length;
-    return AVATAR_BG_COLORS[index];
+  const source = name || "";
+  let hash = 0;
+  for (let i = 0; i < source.length; i += 1) {
+    hash = source.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % AVATAR_BG_COLORS.length;
+  return AVATAR_BG_COLORS[index];
 }
 
 function FlagBadge({ nationality }: { nationality?: string }) {
-    const code = getCountryCode(nationality);
+  const code = getCountryCode(nationality);
 
-    if (!code) {
-        return (
-            <span style={{ minWidth: 24, textAlign: "center", color: "#8c8c8c", fontWeight: 600 }}>--</span>
-        );
-    }
-
+  if (!code) {
     return (
-        <span
-            className={`fi fi-${code.toLowerCase()}`}
-            aria-label={`${code} flag`}
-            title={code}
-            style={{
-                width: 24,
-                height: 18,
-                borderRadius: 3,
-                display: "inline-flex",
-                backgroundSize: "cover",
-                backgroundPosition: "center",
-                boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.08)",
-            }}
-        />
+      <span
+        style={{
+          minWidth: 24,
+          textAlign: "center",
+          color: "#8c8c8c",
+          fontWeight: 600,
+        }}
+      >
+        --
+      </span>
     );
+  }
+
+  return (
+    <span
+      className={`fi fi-${code.toLowerCase()}`}
+      aria-label={`${code} flag`}
+      title={code}
+      style={{
+        width: 24,
+        height: 18,
+        borderRadius: 3,
+        display: "inline-flex",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.08)",
+      }}
+    />
+  );
 }
 
 // Status Badge Helper
-const StatusBadge = ({ status, t }: { status?: string; t: (k: string, f?: string) => string }) => {
-    let color = '';
-    let text = status || t("status.unknown");
-    let bg = '';
+const StatusBadge = ({
+  status,
+  t,
+}: {
+  status?: string;
+  t: (k: string, f?: string) => string;
+}) => {
+  let color = "";
+  let text = status || t("status.unknown");
+  let bg = "";
 
-    switch (status) {
-        case 'ACTIVE':
-            color = '#389e0d';
-            bg = 'rgba(82, 196, 26, 0.1)';
-            text = t("status.active");
-            break;
-        case 'ON_LEAVE':
-            color = '#d46b08';
-            bg = 'rgba(250, 140, 22, 0.1)';
-            text = t("status.onLeave");
-            break;
-        case 'TERMINATED':
-            color = '#cf1322';
-            bg = 'rgba(255, 77, 79, 0.1)';
-            text = t("status.terminated");
-            break;
-        case 'SUSPENDED':
-            color = '#cf1322';
-            bg = 'rgba(255, 77, 79, 0.1)';
-            text = t("status.suspended");
-            break;
-        default:
-            color = '#595959';
-            bg = '#f5f5f5';
-    }
+  switch (status) {
+    case "ACTIVE":
+      color = "#389e0d";
+      bg = "rgba(82, 196, 26, 0.1)";
+      text = t("status.active");
+      break;
+    case "ON_LEAVE":
+      color = "#d46b08";
+      bg = "rgba(250, 140, 22, 0.1)";
+      text = t("status.onLeave");
+      break;
+    case "TERMINATED":
+      color = "#cf1322";
+      bg = "rgba(255, 77, 79, 0.1)";
+      text = t("status.terminated");
+      break;
+    case "SUSPENDED":
+      color = "#cf1322";
+      bg = "rgba(255, 77, 79, 0.1)";
+      text = t("status.suspended");
+      break;
+    default:
+      color = "#595959";
+      bg = "#f5f5f5";
+  }
 
-    return (
-        <span style={{
-            color: color,
-            backgroundColor: bg,
-            padding: '4px 12px',
-            borderRadius: '6px',
-            fontSize: '12px',
-            fontWeight: 500,
-            display: 'inline-block',
-            textAlign: 'center',
-            minWidth: 80
-        }}>
-            • {text}
-        </span>
-    );
+  return (
+    <span
+      style={{
+        color: color,
+        backgroundColor: bg,
+        padding: "4px 12px",
+        borderRadius: "6px",
+        fontSize: "12px",
+        fontWeight: 500,
+        display: "inline-block",
+        textAlign: "center",
+        minWidth: 80,
+      }}
+    >
+      • {text}
+    </span>
+  );
 };
 
 export default function EmployeesListPage() {
-    const navigate = useNavigate();
-    const { t } = useI18n();
-    const user = useAuthStore((state) => state.user);
-    const activeOrganizationId = useAuthStore((state) => state.user?.active_organization_id ?? state.user?.default_organization_id ?? null);
-    const isHeadOffice = isHeadOfficeOrganization(user);
-    const previousOrganizationIdRef = useRef<string | number | null>(null);
+  const navigate = useNavigate();
+  const { t } = useI18n();
+  const user = useAuthStore((state) => state.user);
+  const activeOrganizationId = useAuthStore(
+    (state) =>
+      state.user?.active_organization_id ??
+      state.user?.default_organization_id ??
+      null,
+  );
+  const isHeadOffice = isHeadOfficeOrganization(user);
+  const previousOrganizationIdRef = useRef<string | number | null>(null);
 
-    // State from Zustand store (persisted)
-    const {
-        search,
-        filters,
+  // State from Zustand store (persisted)
+  const {
+    search,
+    filters,
+    page,
+    pageSize,
+    setSearch,
+    setFilters,
+    setPage,
+    setPageSize,
+    hydrate,
+  } = useHrEmployeeListStore();
+
+  // Local state
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [forbidden, setForbidden] = useState(false);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [total, setTotal] = useState(0);
+  const [visibleColumnKeys, setVisibleColumnKeys] = useState<string[]>(
+    DEFAULT_VISIBLE_COLUMNS,
+  );
+  const [searchInput, setSearchInput] = useState("");
+
+  // Filter options state
+  const [departments, setDepartments] = useState<
+    { code: string; name: string }[]
+  >([]);
+  const [nationalities, setNationalities] = useState<string[]>([]);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [savingPreference, setSavingPreference] = useState(false);
+  const preferenceLoadedRef = useRef(false);
+
+  // Employee removal flow
+  const [pendingDeletionIds, setPendingDeletionIds] = useState<Set<number>>(
+    new Set(),
+  );
+  const [deletionTarget, setDeletionTarget] = useState<Employee | null>(null);
+  const [deletionReason, setDeletionReason] = useState("");
+  const [archiveReason, setArchiveReason] = useState<
+    EmployeeArchiveReason | undefined
+  >(undefined);
+  const [archiveReasonError, setArchiveReasonError] = useState<string | null>(
+    null,
+  );
+  const [deletionSubmitting, setDeletionSubmitting] = useState(false);
+  const [deletionError, setDeletionError] = useState<string | null>(null);
+  const [deletionReasonError, setDeletionReasonError] = useState<string | null>(
+    null,
+  );
+
+  // Employee restore flow
+  const [restoreTarget, setRestoreTarget] = useState<Employee | null>(null);
+  const [restoreSubmitting, setRestoreSubmitting] = useState(false);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
+
+  const canManageArchive = ARCHIVE_MANAGER_ROLES.includes(user?.role ?? "");
+  // Annotated so the literal type survives into the request params object.
+  const archiveState: "active" | "archived" =
+    canManageArchive && filters.archiveState === "archived"
+      ? "archived"
+      : "active";
+  const viewingArchived = archiveState === "archived";
+
+  /**
+   * Fetch filter options
+   */
+  const loadFilterOptions = useCallback(async () => {
+    try {
+      const [deptRes, employeeRes] = await Promise.all([
+        listDepartments(),
+        listEmployees({ page: 1, page_size: 1000 }),
+      ]);
+
+      if (!isApiError(deptRes) && Array.isArray(deptRes.data)) {
+        setDepartments(
+          deptRes.data.map((d: any) => ({ code: d.code, name: d.name })),
+        );
+      }
+      if (!isApiError(employeeRes)) {
+        const uniqueNationalities = Array.from(
+          new Set(
+            (employeeRes.data.results || [])
+              .map(
+                (employee) =>
+                  employee.nationality ||
+                  employee.nationality_en ||
+                  employee.nationality_ar,
+              )
+              .filter((value): value is string => Boolean(value?.trim())),
+          ),
+        ).sort((a, b) => a.localeCompare(b));
+        setNationalities(uniqueNationalities);
+      }
+    } catch (err) {
+      console.error("Failed to load filter options:", err);
+    }
+  }, []);
+
+  /**
+   * Fetch employees list
+   */
+  const loadEmployees = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    setForbidden(false);
+
+    try {
+      const params = {
         page,
-        pageSize,
-        setSearch,
-        setFilters,
-        setPage,
-        setPageSize,
-        hydrate,
-    } = useHrEmployeeListStore();
+        page_size: pageSize,
+        search: search || undefined,
+        department: filters.department || undefined,
+        position: filters.position || undefined,
+        status: filters.status || undefined,
+        nationality: filters.nationality || undefined,
+        join_date_order: filters.joinDateOrder || undefined,
+        archive_state: archiveState,
+      };
 
-    // Local state
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [forbidden, setForbidden] = useState(false);
-    const [employees, setEmployees] = useState<Employee[]>([]);
-    const [total, setTotal] = useState(0);
-    const [visibleColumnKeys, setVisibleColumnKeys] = useState<string[]>(DEFAULT_VISIBLE_COLUMNS);
-    const [searchInput, setSearchInput] = useState("");
+      const response = await listEmployees(params);
 
-    // Filter options state
-    const [departments, setDepartments] = useState<{ code: string; name: string }[]>([]);
-    const [nationalities, setNationalities] = useState<string[]>([]);
-    const [filtersOpen, setFiltersOpen] = useState(false);
-    const [savingPreference, setSavingPreference] = useState(false);
-    const preferenceLoadedRef = useRef(false);
-
-    // Employee removal flow
-    const [pendingDeletionIds, setPendingDeletionIds] = useState<Set<number>>(new Set());
-    const [deletionTarget, setDeletionTarget] = useState<Employee | null>(null);
-    const [deletionReason, setDeletionReason] = useState("");
-    const [archiveReason, setArchiveReason] = useState<EmployeeArchiveReason | undefined>(undefined);
-    const [archiveReasonError, setArchiveReasonError] = useState<string | null>(null);
-    const [deletionSubmitting, setDeletionSubmitting] = useState(false);
-    const [deletionError, setDeletionError] = useState<string | null>(null);
-    const [deletionReasonError, setDeletionReasonError] = useState<string | null>(null);
-
-    // Employee restore flow
-    const [restoreTarget, setRestoreTarget] = useState<Employee | null>(null);
-    const [restoreSubmitting, setRestoreSubmitting] = useState(false);
-    const [restoreError, setRestoreError] = useState<string | null>(null);
-
-    const canManageArchive = ARCHIVE_MANAGER_ROLES.includes(user?.role ?? "");
-    // Annotated so the literal type survives into the request params object.
-    const archiveState: "active" | "archived" =
-        canManageArchive && filters.archiveState === "archived" ? "archived" : "active";
-    const viewingArchived = archiveState === "archived";
-
-    /**
-     * Fetch filter options
-     */
-    const loadFilterOptions = useCallback(async () => {
-        try {
-            const [deptRes, employeeRes] = await Promise.all([
-                listDepartments(),
-                listEmployees({ page: 1, page_size: 1000 }),
-            ]);
-
-            if (!isApiError(deptRes) && Array.isArray(deptRes.data)) {
-                setDepartments(deptRes.data.map((d: any) => ({ code: d.code, name: d.name })));
-            }
-            if (!isApiError(employeeRes)) {
-                const uniqueNationalities = Array.from(
-                    new Set(
-                        (employeeRes.data.results || [])
-                            .map((employee) => employee.nationality || employee.nationality_en || employee.nationality_ar)
-                            .filter((value): value is string => Boolean(value?.trim()))
-                    )
-                ).sort((a, b) => a.localeCompare(b));
-                setNationalities(uniqueNationalities);
-            }
-        } catch (err) {
-            console.error("Failed to load filter options:", err);
+      if (isApiError(response)) {
+        if (
+          (response.message || "").toLowerCase().includes("invalid page") &&
+          page > 1
+        ) {
+          setPage(1);
+          return;
         }
-    }, []);
+        setError(response.message || t("error.generic"));
+        setLoading(false);
+        return;
+      }
 
-    /**
-     * Fetch employees list
-     */
-    const loadEmployees = useCallback(async () => {
-        setLoading(true);
-        setError(null);
-        setForbidden(false);
+      setEmployees(response.data.results || []);
+      setTotal(response.data.count || 0);
+      setLoading(false);
+    } catch (err: any) {
+      if (isForbidden(err)) {
+        setForbidden(true);
+        setLoading(false);
+        return;
+      }
 
-        try {
-            const params = {
-                page,
-                page_size: pageSize,
-                search: search || undefined,
-                department: filters.department || undefined,
-                position: filters.position || undefined,
-                status: filters.status || undefined,
-                nationality: filters.nationality || undefined,
-                join_date_order: filters.joinDateOrder || undefined,
-                archive_state: archiveState,
-            };
+      if (
+        (err?.message || "").toLowerCase().includes("invalid page") &&
+        page > 1
+      ) {
+        setPage(1);
+        setLoading(false);
+        return;
+      }
 
-            const response = await listEmployees(params);
+      setError(err.message || t("error.generic"));
+      setLoading(false);
+    }
+  }, [page, pageSize, search, filters, archiveState]);
 
-            if (isApiError(response)) {
-                if ((response.message || "").toLowerCase().includes("invalid page") && page > 1) {
-                    setPage(1);
-                    return;
-                }
-                setError(response.message || t("error.generic"));
-                setLoading(false);
-                return;
-            }
+  useEffect(() => {
+    loadFilterOptions();
+  }, [loadFilterOptions]);
 
-            setEmployees(response.data.results || []);
-            setTotal(response.data.count || 0);
-            setLoading(false);
-        } catch (err: any) {
-            if (isForbidden(err)) {
-                setForbidden(true);
-                setLoading(false);
-                return;
-            }
+  const loadPendingDeletions = useCallback(async () => {
+    try {
+      const ids = new Set<number>();
+      let nextPage = 1;
+      let totalPages = 1;
 
-            if ((err?.message || "").toLowerCase().includes("invalid page") && page > 1) {
-                setPage(1);
-                setLoading(false);
-                return;
-            }
-
-            setError(err.message || t("error.generic"));
-            setLoading(false);
-        }
-    }, [page, pageSize, search, filters, archiveState]);
-
-    useEffect(() => {
-        loadFilterOptions();
-    }, [loadFilterOptions]);
-
-    const loadPendingDeletions = useCallback(async () => {
-        try {
-            const ids = new Set<number>();
-            let nextPage = 1;
-            let totalPages = 1;
-
-            while (nextPage <= totalPages) {
-                const response = await listEmployeeArchiveRequests({
-                    status: "PENDING_CEO",
-                    page: nextPage,
-                    page_size: 200,
-                });
-                if (isApiError(response)) return;
-
-                const items = response.data.items || [];
-                items.forEach((item) => {
-                    if (typeof item.employee_profile_id === "number") {
-                        ids.add(item.employee_profile_id);
-                    }
-                });
-
-                totalPages = Math.max(response.data.total_pages || 1, 1);
-                nextPage += 1;
-            }
-
-            setPendingDeletionIds(ids);
-        } catch {
-            // Non-fatal: list still works without the pending overlay.
-        }
-    }, []);
-
-    useEffect(() => {
-        loadPendingDeletions();
-    }, [loadPendingDeletions]);
-
-    useEffect(() => {
-        let active = true;
-
-        async function loadPreference() {
-            try {
-                const response = await getUserPreference(PREFERENCE_SCOPE, PREFERENCE_KEY);
-                if (!active || isApiError(response)) {
-                    preferenceLoadedRef.current = true;
-                    return;
-                }
-
-                const value = response.data.value || {};
-                const nextVisibleColumns = Array.isArray(value.visibleColumns)
-                    ? value.visibleColumns.filter((item): item is string => typeof item === "string" && item.length > 0)
-                    : DEFAULT_VISIBLE_COLUMNS;
-
-                hydrate({
-                    search: typeof value.search === "string" ? value.search : undefined,
-                    filters: typeof value.filters === "object" && value.filters ? value.filters as any : undefined,
-                    pageSize: typeof value.pageSize === "number" ? value.pageSize : undefined,
-                });
-                setVisibleColumnKeys(nextVisibleColumns.length > 0 ? nextVisibleColumns : DEFAULT_VISIBLE_COLUMNS);
-            } catch {
-                // Local state remains usable even if the preference request fails.
-            } finally {
-                if (active) {
-                    preferenceLoadedRef.current = true;
-                }
-            }
-        }
-
-        loadPreference();
-        return () => {
-            active = false;
-        };
-    }, [hydrate]);
-
-    useEffect(() => {
-        loadEmployees();
-    }, [loadEmployees]);
-
-    useEffect(() => {
-        if (previousOrganizationIdRef.current === null) {
-            previousOrganizationIdRef.current = activeOrganizationId;
-            return;
-        }
-
-        if (previousOrganizationIdRef.current !== activeOrganizationId) {
-            previousOrganizationIdRef.current = activeOrganizationId;
-            setPage(1);
-        }
-    }, [activeOrganizationId, setPage]);
-
-    const debouncedSearch = useDebounce((value: string) => {
-        setSearch(value);
-    }, 300);
-
-    useEffect(() => {
-        setSearchInput(search);
-    }, [search]);
-
-    const persistPreference = useCallback(async (payload: Record<string, unknown>) => {
-        setSavingPreference(true);
-        try {
-            await saveUserPreference(PREFERENCE_SCOPE, PREFERENCE_KEY, payload);
-        } catch {
-            // Keep the page functional if preference sync fails.
-        } finally {
-            setSavingPreference(false);
-        }
-    }, []);
-
-    const debouncedSavePreference = useDebounce(persistPreference, 500);
-
-    useEffect(() => {
-        if (!preferenceLoadedRef.current) return;
-        debouncedSavePreference({
-            search,
-            filters,
-            pageSize,
-            visibleColumns: visibleColumnKeys,
+      while (nextPage <= totalPages) {
+        const response = await listEmployeeArchiveRequests({
+          status: "PENDING_CEO",
+          page: nextPage,
+          page_size: 200,
         });
-    }, [search, filters, pageSize, visibleColumnKeys, debouncedSavePreference]);
+        if (isApiError(response)) return;
 
-    const handleRowClick = (record: Employee) => {
-        navigate(`/hr/employees/${record.id}`);
-    };
+        const items = response.data.items || [];
+        items.forEach((item) => {
+          if (typeof item.employee_profile_id === "number") {
+            ids.add(item.employee_profile_id);
+          }
+        });
 
-    const openDeletionModal = (record: Employee) => {
-        if (isHeadOffice) {
-            message.warning(t("organization.headOffice.switchToRemoveEmployees"));
-            return;
-        }
-        setDeletionTarget(record);
-        setDeletionReason("");
-        setArchiveReason(undefined);
-        setDeletionError(null);
-        setDeletionReasonError(null);
-        setArchiveReasonError(null);
-    };
+        totalPages = Math.max(response.data.total_pages || 1, 1);
+        nextPage += 1;
+      }
 
-    const closeDeletionModal = () => {
-        if (deletionSubmitting) return;
-        setDeletionTarget(null);
-        setDeletionReason("");
-        setArchiveReason(undefined);
-        setDeletionError(null);
-        setDeletionReasonError(null);
-        setArchiveReasonError(null);
-    };
+      setPendingDeletionIds(ids);
+    } catch {
+      // Non-fatal: list still works without the pending overlay.
+    }
+  }, []);
 
-    const submitDeletionRequest = async () => {
-        if (!deletionTarget) return;
-        const trimmed = deletionReason.trim();
-        let invalid = false;
-        if (!archiveReason) {
-            setArchiveReasonError(t("employees.removal.archiveReasonRequired"));
-            invalid = true;
-        } else {
-            setArchiveReasonError(null);
-        }
-        if (!trimmed) {
-            setDeletionReasonError(t("employees.removal.reasonRequired"));
-            invalid = true;
-        } else {
-            setDeletionReasonError(null);
-        }
-        if (invalid || !archiveReason) return;
-        setDeletionError(null);
-        setDeletionSubmitting(true);
-        try {
-            const response = await requestEmployeeArchive({
-                employee_profile_id: deletionTarget.id,
-                archive_reason: archiveReason,
-                reason: trimmed,
-            });
-            if (isApiError(response)) {
-                const friendly = response.message || t("employees.removal.errorGeneric");
-                setDeletionError(friendly);
-                setDeletionSubmitting(false);
-                return;
-            }
-            setPendingDeletionIds((prev) => {
-                const next = new Set(prev);
-                next.add(deletionTarget.id);
-                return next;
-            });
-            message.success(t("employees.removal.successSubmitted"));
-            setDeletionTarget(null);
-            setDeletionReason("");
-            setArchiveReason(undefined);
-            setDeletionSubmitting(false);
-        } catch (err: any) {
-            const httpStatus = err?.response?.status;
-            if (httpStatus === 403 || isForbidden(err)) {
-                setDeletionError(t("employees.removal.errorForbidden"));
-            } else if (httpStatus === 422) {
-                const apiMessage = getFirstApiErrorMessage(err);
-                setDeletionError(apiMessage || t("employees.removal.errorAlreadyPending"));
-            } else if (httpStatus === 409) {
-                setDeletionError(t("employees.removal.errorConflict"));
-            } else {
-                const apiMessage = getFirstApiErrorMessage(err);
-                setDeletionError(apiMessage || t("employees.removal.errorGeneric"));
-            }
-            setDeletionSubmitting(false);
-        }
-    };
+  useEffect(() => {
+    loadPendingDeletions();
+  }, [loadPendingDeletions]);
 
-    const openRestoreModal = (record: Employee) => {
-        setRestoreTarget(record);
-        setRestoreError(null);
-    };
+  useEffect(() => {
+    let active = true;
 
-    const closeRestoreModal = () => {
-        if (restoreSubmitting) return;
-        setRestoreTarget(null);
-        setRestoreError(null);
-    };
-
-    const submitRestore = async () => {
-        if (!restoreTarget) return;
-        setRestoreError(null);
-        setRestoreSubmitting(true);
-        try {
-            const response = await restoreEmployee(restoreTarget.id);
-            if (isApiError(response)) {
-                setRestoreError(response.message || t("employees.restore.errorGeneric"));
-                setRestoreSubmitting(false);
-                return;
-            }
-            message.success(t("employees.restore.success"));
-            setRestoreTarget(null);
-            setRestoreSubmitting(false);
-            // The employee moved between the active and archived views, so refetch.
-            loadEmployees();
-        } catch (err: any) {
-            const httpStatus = err?.response?.status;
-            if (httpStatus === 403 || isForbidden(err)) {
-                setRestoreError(t("employees.restore.errorForbidden"));
-            } else if (httpStatus === 422) {
-                const apiMessage = getFirstApiErrorMessage(err);
-                setRestoreError(apiMessage || t("employees.restore.errorNotArchived"));
-            } else {
-                const apiMessage = getFirstApiErrorMessage(err);
-                setRestoreError(apiMessage || t("employees.restore.errorGeneric"));
-            }
-            setRestoreSubmitting(false);
-        }
-    };
-
-    const getActionItems = (record: Employee): MenuProps['items'] => {
-        const isPending = pendingDeletionIds.has(record.id);
-        const removalDisabled = isPending || isHeadOffice;
-
-        if (record.is_archived) {
-            const archivedItems: MenuProps['items'] = [
-                {
-                    key: 'view',
-                    label: t("employees.list.actionView"),
-                    onClick: ({ domEvent }) => {
-                        domEvent.stopPropagation();
-                        navigate(`/hr/employees/${record.id}`);
-                    }
-                },
-            ];
-            if (canManageArchive) {
-                archivedItems.push({
-                    key: 'restore',
-                    label: t("employees.restore.action"),
-                    onClick: ({ domEvent }) => {
-                        domEvent.stopPropagation();
-                        openRestoreModal(record);
-                    }
-                });
-            }
-            return archivedItems;
+    async function loadPreference() {
+      try {
+        const response = await getUserPreference(
+          PREFERENCE_SCOPE,
+          PREFERENCE_KEY,
+        );
+        if (!active || isApiError(response)) {
+          preferenceLoadedRef.current = true;
+          return;
         }
 
-        return [
-            {
-                key: 'view',
-                label: t("employees.list.actionView"),
-                onClick: ({ domEvent }) => {
-                    domEvent.stopPropagation();
-                    navigate(`/hr/employees/${record.id}`);
-                }
-            },
-            {
-                key: 'edit',
-                label: t("employees.list.actionEdit"),
-                onClick: ({ domEvent }) => {
-                    domEvent.stopPropagation();
-                    navigate(`/hr/employees/${record.id}/edit`);
-                }
-            },
-            {
-                key: 'request-removal',
-                label: removalDisabled ? (
-                    <span title={isHeadOffice ? t("organization.headOffice.switchToRemoveEmployees") : undefined}>
-                        {isPending ? t("employees.removal.actionPending") : t("employees.removal.action")}
-                    </span>
-                ) : (
-                    isPending ? t("employees.removal.actionPending") : t("employees.removal.action")
-                ),
-                disabled: removalDisabled,
-                onClick: ({ domEvent }) => {
-                    domEvent.stopPropagation();
-                    if (removalDisabled) return;
-                    openDeletionModal(record);
-                }
-            },
-        ];
-    };
-
-    const toggleJoinDateOrder = () => {
-        const nextOrder = filters.joinDateOrder === "desc" ? "asc" : "desc";
-        setFilters({ joinDateOrder: nextOrder });
-    };
-
-    const clearExtraFilters = () => {
-        setFilters({ nationality: undefined, joinDateOrder: undefined });
-    };
-
-    const joinDateSortLabel =
-        filters.joinDateOrder === "asc"
-            ? t("employees.list.joinDateOldestFirst", "Joining Date: Oldest First")
-            : filters.joinDateOrder === "desc"
-              ? t("employees.list.joinDateNewestFirst", "Joining Date: Newest First")
-              : t("employees.list.joinDateDefault", "Joining Date: Default");
-
-    const moreFiltersContent = (
-        <div style={{ width: 260, display: "flex", flexDirection: "column", gap: 12 }}>
-            <div>
-                <Text strong style={{ display: "block", marginBottom: 8 }}>
-                    {t("common.moreFilters")}
-                </Text>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                    {t("employees.list.moreFiltersHelp", "Filter by nationality or sort by joining date.")}
-                </Text>
-            </div>
-
-            <Select
-                placeholder={t("employees.list.nationalityPlaceholder", "Nationality")}
-                value={filters.nationality || undefined}
-                onChange={(value) => setFilters({ nationality: value })}
-                allowClear
-                showSearch
-                optionFilterProp="label"
-                options={nationalities.map((nationality) => ({
-                    value: nationality,
-                    label: nationality,
-                }))}
-            />
-
-            <Button icon={<SortAscendingOutlined />} onClick={toggleJoinDateOrder}>
-                {joinDateSortLabel}
-            </Button>
-
-            <Button onClick={clearExtraFilters}>
-                {t("common.clear", "Clear")}
-            </Button>
-        </div>
-    );
-
-    const allColumns: ColumnsType<Employee> = [
-        {
-            title: t("employees.list.colName"),
-            key: "full_name",
-            width: 250,
-            render: (_, record) => (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div
-                        style={{
-                            width: 48,
-                            height: 48,
-                            minWidth: 48,
-                            borderRadius: "50%",
-                            backgroundColor: getAvatarColor(record.full_name),
-                            color: "#fff",
-                            fontWeight: 700,
-                            fontSize: 24,
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            lineHeight: 1,
-                            boxSizing: "border-box",
-                        }}
-                    >
-                        {getInitials(record.full_name)}
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <Text strong style={{ fontSize: 14 }}>{record.full_name}</Text>
-                            {record.is_archived && (
-                                <Tag color="default" style={{ fontSize: 11, marginInlineStart: 0 }}>
-                                    {t("employees.archive.archivedTag")}
-                                </Tag>
-                            )}
-                            {!record.is_archived && pendingDeletionIds.has(record.id) && (
-                                <Tag color="warning" style={{ fontSize: 11, marginInlineStart: 0 }}>
-                                    {t("employees.removal.pendingTag")}
-                                </Tag>
-                            )}
-                        </div>
-                        <Text type="secondary" style={{ fontSize: 12 }}>{record.email}</Text>
-                    </div>
-                </div>
+        const value = response.data.value || {};
+        const nextVisibleColumns = Array.isArray(value.visibleColumns)
+          ? value.visibleColumns.filter(
+              (item): item is string =>
+                typeof item === "string" && item.length > 0,
             )
-        },
-        {
-            title: t("employees.list.colNationality"),
-            key: "nationality",
-            width: 150,
-            render: (_, record) => (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <FlagBadge nationality={record.nationality} />
-                    <Text>{record.nationality || t("employees.list.saudiArabia")}</Text>
-                </div>
-            )
-        },
-        {
-            title: t("common.company", "Company"),
-            dataIndex: "company_name",
-            key: "company",
-            width: 170,
-            render: (text) => <Text strong>{text || "-"}</Text>
-        },
-        {
-            title: t("employees.list.colPosition"),
-            dataIndex: "position",
-            key: "position",
-            width: 180,
-            render: (text) => <Text strong>{text || "-"}</Text>
-        },
-        {
-            title: t("employees.list.colDepartment"),
-            dataIndex: "department",
-            key: "department",
-            width: 160,
-            render: (text) => <Text>{text || "-"}</Text>
-        },
-        {
-            title: t("employees.list.colManager"),
-            key: "manager",
-            width: 220,
-            render: (_, record) => <Text>{record.manager_profile_name || record.manager_name || "-"}</Text>
-        },
-        {
-            title: t("employees.list.colJoiningDate"),
-            key: "hire_date",
-            width: 140,
-            render: (_, record) => {
-                const joiningDate = record.hire_date;
-                return joiningDate ? dayjs(joiningDate).format("MMM DD, YYYY") : "-";
-            }
-        },
-        {
-            title: t("employees.list.colStatus"),
-            dataIndex: "employment_status",
-            key: "employment_status",
-            width: 120,
-            render: (status) => <StatusBadge status={status} t={t} />
-        },
-        {
-            title: t("employees.archive.colArchiveReason"),
-            key: "archive_reason",
-            width: 160,
-            render: (_, record) => (
-                <Text>
-                    {record.archive_reason
-                        ? t(`employees.removal.archiveReason.${record.archive_reason}`)
-                        : "-"}
-                </Text>
-            )
-        },
-        {
-            title: t("employees.archive.colArchivedBy"),
-            key: "archived_by_name",
-            width: 180,
-            render: (_, record) => <Text>{record.archived_by_name?.trim() || "-"}</Text>
-        },
-        {
-            title: t("employees.list.colAction"),
-            key: "action",
-            width: 80,
-            align: 'center',
-            render: (_, record) => (
-                <div onClick={(e) => e.stopPropagation()}>
-                    <Dropdown menu={{ items: getActionItems(record) }} trigger={['click']}>
-                        <Button type="text" icon={<EllipsisOutlined style={{ fontSize: 20, color: '#8c8c8c' }} />} />
-                    </Dropdown>
-                </div>
-            )
-        }
-    ];
+          : DEFAULT_VISIBLE_COLUMNS;
 
-    const columns = useMemo(() => {
-        let keys = visibleColumnKeys;
-        if (isHeadOffice && !keys.includes("company")) {
-            keys = ["company", ...keys];
+        hydrate({
+          search: typeof value.search === "string" ? value.search : undefined,
+          filters:
+            typeof value.filters === "object" && value.filters
+              ? (value.filters as any)
+              : undefined,
+          pageSize:
+            typeof value.pageSize === "number" ? value.pageSize : undefined,
+        });
+        setVisibleColumnKeys(
+          nextVisibleColumns.length > 0
+            ? nextVisibleColumns
+            : DEFAULT_VISIBLE_COLUMNS,
+        );
+      } catch {
+        // Local state remains usable even if the preference request fails.
+      } finally {
+        if (active) {
+          preferenceLoadedRef.current = true;
         }
-        // Archive metadata only carries meaning in the archived view, so surface it there.
-        const archiveColumns = ["archive_reason", "archived_by_name"];
-        if (viewingArchived) {
-            keys = [...keys, ...archiveColumns.filter((key) => !keys.includes(key))];
-        } else {
-            keys = keys.filter((key) => !archiveColumns.includes(key));
-        }
-        return allColumns.filter((column) => keys.includes(String(column.key)));
-    }, [allColumns, visibleColumnKeys, isHeadOffice, viewingArchived]);
-
-    const columnOptions = [
-        { label: t("employees.list.colName"), value: "full_name" },
-        { label: t("common.company", "Company"), value: "company" },
-        { label: t("employees.list.colNationality"), value: "nationality" },
-        { label: t("employees.list.colPosition"), value: "position" },
-        { label: t("employees.list.colDepartment"), value: "department" },
-        { label: t("employees.list.colManager"), value: "manager" },
-        { label: t("employees.list.colJoiningDate"), value: "hire_date" },
-        { label: t("employees.list.colStatus"), value: "employment_status" },
-        ...(viewingArchived
-            ? [
-                { label: t("employees.archive.colArchiveReason"), value: "archive_reason" },
-                { label: t("employees.archive.colArchivedBy"), value: "archived_by_name" },
-            ]
-            : []),
-        { label: t("employees.list.colAction"), value: "action" },
-    ];
-
-    async function handleExport() {
-        try {
-            const blob = await exportEmployees({
-                search: search || undefined,
-                department: filters.department || undefined,
-                position: filters.position || undefined,
-                status: filters.status || undefined,
-                nationality: filters.nationality || undefined,
-                join_date_order: filters.joinDateOrder || undefined,
-                archive_state: archiveState,
-            });
-            triggerBlobDownload(blob, `employees_${new Date().toISOString().slice(0, 10)}.xlsx`);
-            message.success(t("common.success"));
-        } catch (err: any) {
-            if (isForbidden(err)) {
-                setForbidden(true);
-                return;
-            }
-            message.error(t("common.error"));
-        }
+      }
     }
 
-    const columnsPopoverContent = (
-        <div style={{ width: 240, display: "flex", flexDirection: "column", gap: 12 }}>
-            <Text strong>{t("common.columns", "Columns")}</Text>
-            <Checkbox.Group
-                options={columnOptions}
-                value={visibleColumnKeys}
-                onChange={(values) => {
-                    const selected = values.map(String);
-                    if (selected.length > 0) {
-                        setVisibleColumnKeys(selected);
-                    }
-                }}
-            />
-            <Text type="secondary" style={{ fontSize: 12 }}>
-                {savingPreference ? t("common.saving", "Saving...") : t("common.saved", "Saved automatically")}
-            </Text>
-        </div>
-    );
+    loadPreference();
+    return () => {
+      active = false;
+    };
+  }, [hydrate]);
 
-    if (forbidden) return <Unauthorized403Page />;
+  useEffect(() => {
+    loadEmployees();
+  }, [loadEmployees]);
 
-    return (
-        <div style={{ padding: '0 12px' }}>
-            {/* Header Section */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
-                <div>
-                    <Title level={2} style={{ margin: 0, fontWeight: 700 }}>{t("employees.list.title")}</Title>
-                    <Text type="secondary">{t("employees.list.subtitle")}</Text>
-                </div>
-                <Button
-                    type="primary"
-                    size="large"
-                    icon={<PlusOutlined />}
-                    onClick={() => navigate("/hr/employees/create")}
-                    disabled={isHeadOffice}
-                    title={isHeadOffice ? t("organization.headOffice.switchToCreateEmployees") : undefined}
-                    style={{
-                        backgroundColor: '#fa8c16',
-                        borderColor: '#fa8c16',
-                        borderRadius: 8,
-                        height: 44,
-                        paddingLeft: 24,
-                        paddingRight: 24,
-                        boxShadow: '0 4px 10px rgba(250, 140, 22, 0.2)',
-                        opacity: isHeadOffice ? 0.65 : 1,
-                    }}
+  useEffect(() => {
+    if (previousOrganizationIdRef.current === null) {
+      previousOrganizationIdRef.current = activeOrganizationId;
+      return;
+    }
+
+    if (previousOrganizationIdRef.current !== activeOrganizationId) {
+      previousOrganizationIdRef.current = activeOrganizationId;
+      setPage(1);
+    }
+  }, [activeOrganizationId, setPage]);
+
+  const debouncedSearch = useDebounce((value: string) => {
+    setSearch(value);
+  }, 300);
+
+  useEffect(() => {
+    setSearchInput(search);
+  }, [search]);
+
+  const persistPreference = useCallback(
+    async (payload: Record<string, unknown>) => {
+      setSavingPreference(true);
+      try {
+        await saveUserPreference(PREFERENCE_SCOPE, PREFERENCE_KEY, payload);
+      } catch {
+        // Keep the page functional if preference sync fails.
+      } finally {
+        setSavingPreference(false);
+      }
+    },
+    [],
+  );
+
+  const debouncedSavePreference = useDebounce(persistPreference, 500);
+
+  useEffect(() => {
+    if (!preferenceLoadedRef.current) return;
+    debouncedSavePreference({
+      search,
+      filters,
+      pageSize,
+      visibleColumns: visibleColumnKeys,
+    });
+  }, [search, filters, pageSize, visibleColumnKeys, debouncedSavePreference]);
+
+  const handleRowClick = (record: Employee) => {
+    navigate(`/hr/employees/${record.id}`);
+  };
+
+  const openDeletionModal = (record: Employee) => {
+    if (isHeadOffice) {
+      message.warning(t("organization.headOffice.switchToRemoveEmployees"));
+      return;
+    }
+    setDeletionTarget(record);
+    setDeletionReason("");
+    setArchiveReason(undefined);
+    setDeletionError(null);
+    setDeletionReasonError(null);
+    setArchiveReasonError(null);
+  };
+
+  const closeDeletionModal = () => {
+    if (deletionSubmitting) return;
+    setDeletionTarget(null);
+    setDeletionReason("");
+    setArchiveReason(undefined);
+    setDeletionError(null);
+    setDeletionReasonError(null);
+    setArchiveReasonError(null);
+  };
+
+  const submitDeletionRequest = async () => {
+    if (!deletionTarget) return;
+    const trimmed = deletionReason.trim();
+    let invalid = false;
+    if (!archiveReason) {
+      setArchiveReasonError(t("employees.removal.archiveReasonRequired"));
+      invalid = true;
+    } else {
+      setArchiveReasonError(null);
+    }
+    if (!trimmed) {
+      setDeletionReasonError(t("employees.removal.reasonRequired"));
+      invalid = true;
+    } else {
+      setDeletionReasonError(null);
+    }
+    if (invalid || !archiveReason) return;
+    setDeletionError(null);
+    setDeletionSubmitting(true);
+    try {
+      const response = await requestEmployeeArchive({
+        employee_profile_id: deletionTarget.id,
+        archive_reason: archiveReason,
+        reason: trimmed,
+      });
+      if (isApiError(response)) {
+        const friendly =
+          response.message || t("employees.removal.errorGeneric");
+        setDeletionError(friendly);
+        setDeletionSubmitting(false);
+        return;
+      }
+      setPendingDeletionIds((prev) => {
+        const next = new Set(prev);
+        next.add(deletionTarget.id);
+        return next;
+      });
+      message.success(t("employees.removal.successSubmitted"));
+      setDeletionTarget(null);
+      setDeletionReason("");
+      setArchiveReason(undefined);
+      setDeletionSubmitting(false);
+    } catch (err: any) {
+      const httpStatus = err?.response?.status;
+      if (httpStatus === 403 || isForbidden(err)) {
+        setDeletionError(t("employees.removal.errorForbidden"));
+      } else if (httpStatus === 422) {
+        const apiMessage = getFirstApiErrorMessage(err);
+        setDeletionError(
+          apiMessage || t("employees.removal.errorAlreadyPending"),
+        );
+      } else if (httpStatus === 409) {
+        setDeletionError(t("employees.removal.errorConflict"));
+      } else {
+        const apiMessage = getFirstApiErrorMessage(err);
+        setDeletionError(apiMessage || t("employees.removal.errorGeneric"));
+      }
+      setDeletionSubmitting(false);
+    }
+  };
+
+  const openRestoreModal = (record: Employee) => {
+    setRestoreTarget(record);
+    setRestoreError(null);
+  };
+
+  const closeRestoreModal = () => {
+    if (restoreSubmitting) return;
+    setRestoreTarget(null);
+    setRestoreError(null);
+  };
+
+  const submitRestore = async () => {
+    if (!restoreTarget) return;
+    setRestoreError(null);
+    setRestoreSubmitting(true);
+    try {
+      const response = await restoreEmployee(restoreTarget.id);
+      if (isApiError(response)) {
+        setRestoreError(
+          response.message || t("employees.restore.errorGeneric"),
+        );
+        setRestoreSubmitting(false);
+        return;
+      }
+      message.success(t("employees.restore.success"));
+      setRestoreTarget(null);
+      setRestoreSubmitting(false);
+      // The employee moved between the active and archived views, so refetch.
+      loadEmployees();
+    } catch (err: any) {
+      const httpStatus = err?.response?.status;
+      if (httpStatus === 403 || isForbidden(err)) {
+        setRestoreError(t("employees.restore.errorForbidden"));
+      } else if (httpStatus === 422) {
+        const apiMessage = getFirstApiErrorMessage(err);
+        setRestoreError(apiMessage || t("employees.restore.errorNotArchived"));
+      } else {
+        const apiMessage = getFirstApiErrorMessage(err);
+        setRestoreError(apiMessage || t("employees.restore.errorGeneric"));
+      }
+      setRestoreSubmitting(false);
+    }
+  };
+
+  const getActionItems = (record: Employee): MenuProps["items"] => {
+    const isPending = pendingDeletionIds.has(record.id);
+    const removalDisabled = isPending || isHeadOffice;
+
+    if (record.is_archived) {
+      const archivedItems: MenuProps["items"] = [
+        {
+          key: "view",
+          label: t("employees.list.actionView"),
+          onClick: ({ domEvent }) => {
+            domEvent.stopPropagation();
+            navigate(`/hr/employees/${record.id}`);
+          },
+        },
+      ];
+      if (canManageArchive) {
+        archivedItems.push({
+          key: "restore",
+          label: t("employees.restore.action"),
+          onClick: ({ domEvent }) => {
+            domEvent.stopPropagation();
+            openRestoreModal(record);
+          },
+        });
+      }
+      return archivedItems;
+    }
+
+    return [
+      {
+        key: "view",
+        label: t("employees.list.actionView"),
+        onClick: ({ domEvent }) => {
+          domEvent.stopPropagation();
+          navigate(`/hr/employees/${record.id}`);
+        },
+      },
+      {
+        key: "edit",
+        label: t("employees.list.actionEdit"),
+        onClick: ({ domEvent }) => {
+          domEvent.stopPropagation();
+          navigate(`/hr/employees/${record.id}/edit`);
+        },
+      },
+      {
+        key: "request-removal",
+        label: removalDisabled ? (
+          <span
+            title={
+              isHeadOffice
+                ? t("organization.headOffice.switchToRemoveEmployees")
+                : undefined
+            }
+          >
+            {isPending
+              ? t("employees.removal.actionPending")
+              : t("employees.removal.action")}
+          </span>
+        ) : isPending ? (
+          t("employees.removal.actionPending")
+        ) : (
+          t("employees.removal.action")
+        ),
+        disabled: removalDisabled,
+        onClick: ({ domEvent }) => {
+          domEvent.stopPropagation();
+          if (removalDisabled) return;
+          openDeletionModal(record);
+        },
+      },
+    ];
+  };
+
+  const toggleJoinDateOrder = () => {
+    const nextOrder = filters.joinDateOrder === "desc" ? "asc" : "desc";
+    setFilters({ joinDateOrder: nextOrder });
+  };
+
+  const clearExtraFilters = () => {
+    setFilters({ nationality: undefined, joinDateOrder: undefined });
+  };
+
+  const joinDateSortLabel =
+    filters.joinDateOrder === "asc"
+      ? t("employees.list.joinDateOldestFirst", "Joining Date: Oldest First")
+      : filters.joinDateOrder === "desc"
+        ? t("employees.list.joinDateNewestFirst", "Joining Date: Newest First")
+        : t("employees.list.joinDateDefault", "Joining Date: Default");
+
+  const moreFiltersContent = (
+    <div
+      style={{ width: 260, display: "flex", flexDirection: "column", gap: 12 }}
+    >
+      <div>
+        <Text strong style={{ display: "block", marginBottom: 8 }}>
+          {t("common.moreFilters")}
+        </Text>
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          {t(
+            "employees.list.moreFiltersHelp",
+            "Filter by nationality or sort by joining date.",
+          )}
+        </Text>
+      </div>
+
+      <Select
+        placeholder={t("employees.list.nationalityPlaceholder", "Nationality")}
+        value={filters.nationality || undefined}
+        onChange={(value) => setFilters({ nationality: value })}
+        allowClear
+        showSearch
+        optionFilterProp="label"
+        options={nationalities.map((nationality) => ({
+          value: nationality,
+          label: nationality,
+        }))}
+      />
+
+      <Button icon={<SortAscendingOutlined />} onClick={toggleJoinDateOrder}>
+        {joinDateSortLabel}
+      </Button>
+
+      <Button onClick={clearExtraFilters}>{t("common.clear", "Clear")}</Button>
+    </div>
+  );
+
+  const allColumns: ColumnsType<Employee> = [
+    {
+      title: t("employees.list.colName"),
+      key: "full_name",
+      width: 250,
+      render: (_, record) => (
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div
+            style={{
+              width: 48,
+              height: 48,
+              minWidth: 48,
+              borderRadius: "50%",
+              backgroundColor: getAvatarColor(record.full_name),
+              color: "#fff",
+              fontWeight: 700,
+              fontSize: 24,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              lineHeight: 1,
+              boxSizing: "border-box",
+            }}
+          >
+            {getInitials(record.full_name)}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Text strong style={{ fontSize: 14 }}>
+                {record.full_name}
+              </Text>
+              {record.is_archived && (
+                <Tag
+                  color="default"
+                  style={{ fontSize: 11, marginInlineStart: 0 }}
                 >
-                    {t("employees.list.createEmployee")}
-                </Button>
+                  {t("employees.archive.archivedTag")}
+                </Tag>
+              )}
+              {!record.is_archived && pendingDeletionIds.has(record.id) && (
+                <Tag
+                  color="warning"
+                  style={{ fontSize: 11, marginInlineStart: 0 }}
+                >
+                  {t("employees.removal.pendingTag")}
+                </Tag>
+              )}
             </div>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {record.email}
+            </Text>
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: t("employees.list.colNationality"),
+      key: "nationality",
+      width: 150,
+      render: (_, record) => (
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <FlagBadge nationality={record.nationality} />
+          <Text>{record.nationality || t("employees.list.saudiArabia")}</Text>
+        </div>
+      ),
+    },
+    {
+      title: t("common.company", "Company"),
+      dataIndex: "company_name",
+      key: "company",
+      width: 170,
+      render: (text) => <Text strong>{text || "-"}</Text>,
+    },
+    {
+      title: t("employees.list.colPosition"),
+      dataIndex: "position",
+      key: "position",
+      width: 180,
+      render: (text) => <Text strong>{text || "-"}</Text>,
+    },
+    {
+      title: t("employees.list.colDepartment"),
+      dataIndex: "department",
+      key: "department",
+      width: 160,
+      render: (text) => <Text>{text || "-"}</Text>,
+    },
+    {
+      title: t("employees.list.colManager"),
+      key: "manager",
+      width: 220,
+      render: (_, record) => (
+        <Text>{record.manager_profile_name || record.manager_name || "-"}</Text>
+      ),
+    },
+    {
+      title: t("employees.list.colJoiningDate"),
+      key: "hire_date",
+      width: 140,
+      render: (_, record) => {
+        const joiningDate = record.hire_date;
+        return joiningDate ? dayjs(joiningDate).format("MMM DD, YYYY") : "-";
+      },
+    },
+    {
+      title: t("employees.list.colStatus"),
+      dataIndex: "employment_status",
+      key: "employment_status",
+      width: 120,
+      render: (status) => <StatusBadge status={status} t={t} />,
+    },
+    {
+      title: t("employees.archive.colArchiveReason"),
+      key: "archive_reason",
+      width: 160,
+      render: (_, record) => (
+        <Text>
+          {record.archive_reason
+            ? t(`employees.removal.archiveReason.${record.archive_reason}`)
+            : "-"}
+        </Text>
+      ),
+    },
+    {
+      title: t("employees.archive.colArchivedBy"),
+      key: "archived_by_name",
+      width: 180,
+      render: (_, record) => (
+        <Text>{record.archived_by_name?.trim() || "-"}</Text>
+      ),
+    },
+    {
+      title: t("employees.list.colAction"),
+      key: "action",
+      width: 80,
+      align: "center",
+      render: (_, record) => (
+        <div onClick={(e) => e.stopPropagation()}>
+          <Dropdown
+            menu={{ items: getActionItems(record) }}
+            trigger={["click"]}
+          >
+            <Button
+              type="text"
+              icon={
+                <EllipsisOutlined style={{ fontSize: 20, color: "#8c8c8c" }} />
+              }
+            />
+          </Dropdown>
+        </div>
+      ),
+    },
+  ];
 
-            {/* Filter Section */}
-            <Card bordered={false} style={{ borderRadius: 12, marginBottom: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }} bodyStyle={{ padding: 16 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
-                    <div style={{ flex: 1, minWidth: 200 }}>
-                        <Input
-                            placeholder={t("employees.list.searchPlaceholder")}
-                            prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
-                            value={searchInput}
-                            onChange={(e) => {
-                                const value = e.target.value;
-                                setSearchInput(value);
-                                debouncedSearch(value);
-                            }}
-                            size="large"
-                            style={{
-                                borderRadius: 8,
-                                backgroundColor: '#f9f9f9',
-                                border: '1px solid #f0f0f0',
-                                width: '100%',
-                                maxWidth: 400
-                            }}
-                            bordered={false}
-                        />
-                    </div>
+  const columns = useMemo(() => {
+    let keys = visibleColumnKeys;
+    if (isHeadOffice && !keys.includes("company")) {
+      keys = ["company", ...keys];
+    }
+    // Archive metadata only carries meaning in the archived view, so surface it there.
+    const archiveColumns = ["archive_reason", "archived_by_name"];
+    if (viewingArchived) {
+      keys = [...keys, ...archiveColumns.filter((key) => !keys.includes(key))];
+    } else {
+      keys = keys.filter((key) => !archiveColumns.includes(key));
+    }
+    return allColumns.filter((column) => keys.includes(String(column.key)));
+  }, [allColumns, visibleColumnKeys, isHeadOffice, viewingArchived]);
 
-                    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                        {canManageArchive && (
-                            <Segmented
-                                aria-label={t("employees.archive.stateFilterLabel")}
-                                size="large"
-                                value={archiveState}
-                                onChange={(value) => setFilters({ archiveState: value as "active" | "archived" })}
-                                options={[
-                                    { label: t("employees.archive.stateActive"), value: "active" },
-                                    { label: t("employees.archive.stateArchived"), value: "archived" },
-                                ]}
-                            />
-                        )}
+  const columnOptions = [
+    { label: t("employees.list.colName"), value: "full_name" },
+    { label: t("common.company", "Company"), value: "company" },
+    { label: t("employees.list.colNationality"), value: "nationality" },
+    { label: t("employees.list.colPosition"), value: "position" },
+    { label: t("employees.list.colDepartment"), value: "department" },
+    { label: t("employees.list.colManager"), value: "manager" },
+    { label: t("employees.list.colJoiningDate"), value: "hire_date" },
+    { label: t("employees.list.colStatus"), value: "employment_status" },
+    ...(viewingArchived
+      ? [
+          {
+            label: t("employees.archive.colArchiveReason"),
+            value: "archive_reason",
+          },
+          {
+            label: t("employees.archive.colArchivedBy"),
+            value: "archived_by_name",
+          },
+        ]
+      : []),
+    { label: t("employees.list.colAction"), value: "action" },
+  ];
 
-                        <Select
-                            placeholder={t("employees.list.departmentPlaceholder")}
-                            value={filters.department || undefined}
-                            onChange={(value) => setFilters({ department: value })}
-                            size="large"
-                            style={{ flex: '0 1 160px', minWidth: 120 }}
-                            allowClear
-                            bordered={false}
-                            className="custom-select-filter"
-                            dropdownStyle={{ borderRadius: 8 }}
-                        >
-                            {departments.map((dept) => (
-                                <Option key={dept.code} value={dept.code}>{dept.name}</Option>
-                            ))}
-                        </Select>
+  async function handleExport() {
+    try {
+      const blob = await exportEmployees({
+        search: search || undefined,
+        department: filters.department || undefined,
+        position: filters.position || undefined,
+        status: filters.status || undefined,
+        nationality: filters.nationality || undefined,
+        join_date_order: filters.joinDateOrder || undefined,
+        archive_state: archiveState,
+      });
+      triggerBlobDownload(
+        blob,
+        `employees_${new Date().toISOString().slice(0, 10)}.xlsx`,
+      );
+      message.success(t("common.success"));
+    } catch (err: any) {
+      if (isForbidden(err)) {
+        setForbidden(true);
+        return;
+      }
+      message.error(t("common.error"));
+    }
+  }
 
-                        <Select
-                            placeholder={t("employees.list.statusPlaceholder")}
-                            value={filters.status || undefined}
-                            onChange={(value) => setFilters({ status: value })}
-                            size="large"
-                            style={{ flex: '0 1 140px', minWidth: 110 }}
-                            allowClear
-                            bordered={false}
-                            className="custom-select-filter"
-                        >
-                            <Option value="ACTIVE">{t("status.active")}</Option>
-                            <Option value="ON_LEAVE">{t("status.onLeave")}</Option>
-                            <Option value="SUSPENDED">{t("status.suspended")}</Option>
-                            <Option value="TERMINATED">{t("status.terminated")}</Option>
-                        </Select>
+  const columnsPopoverContent = (
+    <div
+      style={{ width: 240, display: "flex", flexDirection: "column", gap: 12 }}
+    >
+      <Text strong>{t("common.columns", "Columns")}</Text>
+      <Checkbox.Group
+        options={columnOptions}
+        value={visibleColumnKeys}
+        onChange={(values) => {
+          const selected = values.map(String);
+          if (selected.length > 0) {
+            setVisibleColumnKeys(selected);
+          }
+        }}
+      />
+      <Text type="secondary" style={{ fontSize: 12 }}>
+        {savingPreference
+          ? t("common.saving", "Saving...")
+          : t("common.saved", "Saved automatically")}
+      </Text>
+    </div>
+  );
 
-                        <Popover
-                            content={columnsPopoverContent}
-                            trigger="click"
-                            placement="bottomRight"
-                        >
-                            <Tooltip title={t("common.columns", "Columns")}>
-                                <Button size="large" icon={<SettingOutlined />} style={{ borderRadius: 8 }} />
-                            </Tooltip>
-                        </Popover>
+  if (forbidden) return <Unauthorized403Page />;
 
-                        <Popover
-                            content={moreFiltersContent}
-                            trigger="click"
-                            open={filtersOpen}
-                            onOpenChange={setFiltersOpen}
-                            placement="bottomRight"
-                        >
-                            <Tooltip title={t("common.moreFilters")}>
-                                <Button
-                                    size="large"
-                                    icon={<FilterOutlined />}
-                                    style={{
-                                        borderRadius: 8,
-                                        borderColor: filters.nationality || filters.joinDateOrder ? "#fa8c16" : undefined,
-                                        color: filters.nationality || filters.joinDateOrder ? "#fa8c16" : undefined,
-                                    }}
-                                />
-                            </Tooltip>
-                        </Popover>
+  return (
+    <div style={{ padding: "0 12px" }}>
+      {/* Header Section */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          marginBottom: 24,
+          flexWrap: "wrap",
+          gap: 12,
+        }}
+      >
+        <div>
+          <Title level={2} style={{ margin: 0, fontWeight: 700 }}>
+            {t("employees.list.title")}
+          </Title>
+          <Text type="secondary">{t("employees.list.subtitle")}</Text>
+        </div>
+        <Button
+          type="primary"
+          size="large"
+          icon={<PlusOutlined />}
+          onClick={() => navigate("/hr/employees/create")}
+          disabled={isHeadOffice}
+          title={
+            isHeadOffice
+              ? t("organization.headOffice.switchToCreateEmployees")
+              : undefined
+          }
+          style={{
+            backgroundColor: "#fa8c16",
+            borderColor: "#fa8c16",
+            borderRadius: 8,
+            height: 44,
+            paddingLeft: 24,
+            paddingRight: 24,
+            boxShadow: "0 4px 10px rgba(250, 140, 22, 0.2)",
+            opacity: isHeadOffice ? 0.65 : 1,
+          }}
+        >
+          {t("employees.list.createEmployee")}
+        </Button>
+      </div>
 
-                        <Tooltip title={t("common.export")}>
-                            <Button size="large" icon={<DownloadOutlined />} style={{ borderRadius: 8 }} onClick={handleExport} />
-                        </Tooltip>
-                    </div>
-                </div>
-            </Card>
+      {/* Filter Section */}
+      <Card
+        bordered={false}
+        style={{
+          borderRadius: 12,
+          marginBottom: 24,
+          boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
+        }}
+        bodyStyle={{ padding: 16 }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 16,
+          }}
+        >
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <Input
+              placeholder={t("employees.list.searchPlaceholder")}
+              prefix={<SearchOutlined style={{ color: "#bfbfbf" }} />}
+              value={searchInput}
+              onChange={(e) => {
+                const value = e.target.value;
+                setSearchInput(value);
+                debouncedSearch(value);
+              }}
+              size="large"
+              style={{
+                borderRadius: 8,
+                backgroundColor: "#f9f9f9",
+                border: "1px solid #f0f0f0",
+                width: "100%",
+                maxWidth: 400,
+              }}
+              bordered={false}
+            />
+          </div>
 
-            {/* Table Section */}
-            <Card bordered={false} style={{ borderRadius: 16, boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }} bodyStyle={{ padding: 0 }}>
-                {loading && employees.length === 0 ? (
-                    <div style={{ padding: 40 }}><LoadingState /></div>
-                ) : error ? (
-                    <div style={{ padding: 40 }}><ErrorState title={t("common.error")} description={error} onRetry={loadEmployees} /></div>
-                ) : (
-                    <Table
-                        dataSource={employees}
-                        columns={columns}
-                        rowKey="id"
-                        pagination={{
-                            current: page,
-                            pageSize: pageSize,
-                            total: total,
-                            onChange: (newPage, newPageSize) => {
-                                if (newPageSize !== pageSize) {
-                                    setPageSize(newPageSize);
-                                } else {
-                                    setPage(newPage);
-                                }
-                            },
-                            showTotal: (total, range) => `${t("common.showing")} ${range[0]} ${t("common.to")} ${range[1]} ${t("common.of")} ${total} ${t("common.entries")}`,
-                            style: { padding: '24px' }
-                        }}
-                        onRow={(record) => ({
-                            onClick: () => handleRowClick(record),
-                            style: { cursor: 'pointer' }
-                        })}
-                        scroll={{ x: "max-content" }}
-                    />
-                )}
-            </Card>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            {canManageArchive && (
+              <Segmented
+                aria-label={t("employees.archive.stateFilterLabel")}
+                size="large"
+                value={archiveState}
+                onChange={(value) =>
+                  setFilters({ archiveState: value as "active" | "archived" })
+                }
+                options={[
+                  {
+                    label: t("employees.archive.stateActive"),
+                    value: "active",
+                  },
+                  {
+                    label: t("employees.archive.stateArchived"),
+                    value: "archived",
+                  },
+                ]}
+              />
+            )}
 
-            <Modal
-                open={deletionTarget !== null}
-                title={t("employees.removal.modalTitle")}
-                okText={t("employees.removal.confirmButton")}
-                okButtonProps={{ loading: deletionSubmitting }}
-                cancelText={t("common.cancel")}
-                cancelButtonProps={{ disabled: deletionSubmitting }}
-                onOk={submitDeletionRequest}
-                onCancel={closeDeletionModal}
-                closable={!deletionSubmitting}
-                maskClosable={!deletionSubmitting}
-                destroyOnClose
-                width="min(520px, 96vw)"
-                style={{ top: 16 }}
+            <Select
+              placeholder={t("employees.list.departmentPlaceholder")}
+              value={filters.department || undefined}
+              onChange={(value) => setFilters({ department: value })}
+              size="large"
+              style={{ flex: "0 1 160px", minWidth: 120 }}
+              allowClear
+              bordered={false}
+              className="custom-select-filter"
+              dropdownStyle={{ borderRadius: 8 }}
             >
-                {deletionTarget && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                        <Text>
-                            {t("employees.removal.modalIntro", { name: deletionTarget.full_name || deletionTarget.email })}
-                        </Text>
-                        <Alert
-                            type="info"
-                            showIcon
-                            message={t("employees.removal.preservationTitle")}
-                            description={t("employees.removal.modalNote")}
-                        />
-                        <Form layout="vertical">
-                            <Form.Item
-                                label={t("employees.removal.archiveReasonLabel")}
-                                required
-                                validateStatus={archiveReasonError ? "error" : undefined}
-                                help={archiveReasonError || undefined}
-                            >
-                                <Select
-                                    aria-label={t("employees.removal.archiveReasonLabel")}
-                                    placeholder={t("employees.removal.archiveReasonPlaceholder")}
-                                    value={archiveReason}
-                                    onChange={(value) => {
-                                        setArchiveReason(value as EmployeeArchiveReason);
-                                        if (archiveReasonError) setArchiveReasonError(null);
-                                    }}
-                                    disabled={deletionSubmitting}
-                                    options={ARCHIVE_REASON_VALUES.map((value) => ({
-                                        value,
-                                        label: t(`employees.removal.archiveReason.${value}`),
-                                    }))}
-                                />
-                            </Form.Item>
-                            <Form.Item
-                                label={t("employees.removal.reasonLabel")}
-                                required
-                                validateStatus={deletionReasonError ? "error" : undefined}
-                                help={deletionReasonError || undefined}
-                            >
-                                <Input.TextArea
-                                    rows={4}
-                                    value={deletionReason}
-                                    placeholder={t("employees.removal.reasonPlaceholder")}
-                                    onChange={(e) => {
-                                        setDeletionReason(e.target.value);
-                                        if (deletionReasonError) setDeletionReasonError(null);
-                                    }}
-                                    maxLength={500}
-                                    disabled={deletionSubmitting}
-                                    showCount
-                                />
-                            </Form.Item>
-                        </Form>
-                        {deletionError && (
-                            <div
-                                role="alert"
-                                style={{
-                                    background: "rgba(255, 77, 79, 0.08)",
-                                    border: "1px solid rgba(255, 77, 79, 0.24)",
-                                    color: "#cf1322",
-                                    padding: "8px 12px",
-                                    borderRadius: 8,
-                                    fontSize: 13,
-                                }}
-                            >
-                                {deletionError}
-                            </div>
-                        )}
-                    </div>
-                )}
-            </Modal>
+              {departments.map((dept) => (
+                <Option key={dept.code} value={dept.code}>
+                  {dept.name}
+                </Option>
+              ))}
+            </Select>
 
-            <Modal
-                open={restoreTarget !== null}
-                title={t("employees.restore.modalTitle")}
-                okText={t("employees.restore.confirmButton")}
-                okButtonProps={{ loading: restoreSubmitting }}
-                cancelText={t("common.cancel")}
-                cancelButtonProps={{ disabled: restoreSubmitting }}
-                onOk={submitRestore}
-                onCancel={closeRestoreModal}
-                closable={!restoreSubmitting}
-                maskClosable={!restoreSubmitting}
-                destroyOnClose
-                width="min(480px, 96vw)"
-                style={{ top: 16 }}
+            <Select
+              placeholder={t("employees.list.statusPlaceholder")}
+              value={filters.status || undefined}
+              onChange={(value) => setFilters({ status: value })}
+              size="large"
+              style={{ flex: "0 1 140px", minWidth: 110 }}
+              allowClear
+              bordered={false}
+              className="custom-select-filter"
             >
-                {restoreTarget && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                        <Text>
-                            {t("employees.restore.modalIntro", { name: restoreTarget.full_name || restoreTarget.email })}
-                        </Text>
-                        <Text type="secondary" style={{ fontSize: 12 }}>
-                            {t("employees.restore.modalNote")}
-                        </Text>
-                        {restoreTarget.archive_reason && (
-                            <Text type="secondary" style={{ fontSize: 12 }}>
-                                {t("employees.archive.colArchiveReason")}:{" "}
-                                {t(`employees.removal.archiveReason.${restoreTarget.archive_reason}`)}
-                            </Text>
-                        )}
-                        {restoreTarget.archived_by_name?.trim() && (
-                            <Text type="secondary" style={{ fontSize: 12 }}>
-                                {t("employees.archive.archivedBy")}: {restoreTarget.archived_by_name}
-                            </Text>
-                        )}
-                        {restoreError && (
-                            <div
-                                role="alert"
-                                style={{
-                                    background: "rgba(255, 77, 79, 0.08)",
-                                    border: "1px solid rgba(255, 77, 79, 0.24)",
-                                    color: "#cf1322",
-                                    padding: "8px 12px",
-                                    borderRadius: 8,
-                                    fontSize: 13,
-                                }}
-                            >
-                                {restoreError}
-                            </div>
-                        )}
-                    </div>
-                )}
-            </Modal>
+              <Option value="ACTIVE">{t("status.active")}</Option>
+              <Option value="ON_LEAVE">{t("status.onLeave")}</Option>
+              <Option value="SUSPENDED">{t("status.suspended")}</Option>
+              <Option value="TERMINATED">{t("status.terminated")}</Option>
+            </Select>
 
-            <style>{`
+            <Popover
+              content={columnsPopoverContent}
+              trigger="click"
+              placement="bottomRight"
+            >
+              <Tooltip title={t("common.columns", "Columns")}>
+                <Button
+                  size="large"
+                  icon={<SettingOutlined />}
+                  style={{ borderRadius: 8 }}
+                />
+              </Tooltip>
+            </Popover>
+
+            <Popover
+              content={moreFiltersContent}
+              trigger="click"
+              open={filtersOpen}
+              onOpenChange={setFiltersOpen}
+              placement="bottomRight"
+            >
+              <Tooltip title={t("common.moreFilters")}>
+                <Button
+                  size="large"
+                  icon={<FilterOutlined />}
+                  style={{
+                    borderRadius: 8,
+                    borderColor:
+                      filters.nationality || filters.joinDateOrder
+                        ? "#fa8c16"
+                        : undefined,
+                    color:
+                      filters.nationality || filters.joinDateOrder
+                        ? "#fa8c16"
+                        : undefined,
+                  }}
+                />
+              </Tooltip>
+            </Popover>
+
+            <Tooltip title={t("common.export")}>
+              <Button
+                size="large"
+                icon={<DownloadOutlined />}
+                style={{ borderRadius: 8 }}
+                onClick={handleExport}
+              />
+            </Tooltip>
+          </div>
+        </div>
+      </Card>
+
+      {/* Table Section */}
+      <Card
+        bordered={false}
+        style={{ borderRadius: 16, boxShadow: "0 4px 20px rgba(0,0,0,0.02)" }}
+        bodyStyle={{ padding: 0 }}
+      >
+        {loading && employees.length === 0 ? (
+          <div style={{ padding: 40 }}>
+            <LoadingState />
+          </div>
+        ) : error ? (
+          <div style={{ padding: 40 }}>
+            <ErrorState
+              title={t("common.error")}
+              description={error}
+              onRetry={loadEmployees}
+            />
+          </div>
+        ) : (
+          <Table
+            dataSource={employees}
+            columns={columns}
+            rowKey="id"
+            pagination={{
+              current: page,
+              pageSize: pageSize,
+              total: total,
+              onChange: (newPage, newPageSize) => {
+                if (newPageSize !== pageSize) {
+                  setPageSize(newPageSize);
+                } else {
+                  setPage(newPage);
+                }
+              },
+              showTotal: (total, range) =>
+                `${t("common.showing")} ${range[0]} ${t("common.to")} ${range[1]} ${t("common.of")} ${total} ${t("common.entries")}`,
+              style: { padding: "24px" },
+            }}
+            onRow={(record) => ({
+              onClick: () => handleRowClick(record),
+              style: { cursor: "pointer" },
+            })}
+            scroll={{ x: "max-content" }}
+          />
+        )}
+      </Card>
+
+      <Modal
+        open={deletionTarget !== null}
+        title={t("employees.removal.modalTitle")}
+        okText={t("employees.removal.confirmButton")}
+        okButtonProps={{ loading: deletionSubmitting }}
+        cancelText={t("common.cancel")}
+        cancelButtonProps={{ disabled: deletionSubmitting }}
+        onOk={submitDeletionRequest}
+        onCancel={closeDeletionModal}
+        closable={!deletionSubmitting}
+        maskClosable={!deletionSubmitting}
+        destroyOnClose
+        width="min(520px, 96vw)"
+        style={{ top: 16 }}
+      >
+        {deletionTarget && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <Text>
+              {t("employees.removal.modalIntro", {
+                name: deletionTarget.full_name || deletionTarget.email,
+              })}
+            </Text>
+            <Alert
+              type="info"
+              showIcon
+              message={t("employees.removal.preservationTitle")}
+              description={t("employees.removal.modalNote")}
+            />
+            <Form layout="vertical">
+              <Form.Item
+                label={t("employees.removal.archiveReasonLabel")}
+                required
+                validateStatus={archiveReasonError ? "error" : undefined}
+                help={archiveReasonError || undefined}
+              >
+                <Select
+                  aria-label={t("employees.removal.archiveReasonLabel")}
+                  placeholder={t("employees.removal.archiveReasonPlaceholder")}
+                  value={archiveReason}
+                  onChange={(value) => {
+                    setArchiveReason(value as EmployeeArchiveReason);
+                    if (archiveReasonError) setArchiveReasonError(null);
+                  }}
+                  disabled={deletionSubmitting}
+                  options={ARCHIVE_REASON_VALUES.map((value) => ({
+                    value,
+                    label: t(`employees.removal.archiveReason.${value}`),
+                  }))}
+                />
+              </Form.Item>
+              <Form.Item
+                label={t("employees.removal.reasonLabel")}
+                required
+                validateStatus={deletionReasonError ? "error" : undefined}
+                help={deletionReasonError || undefined}
+              >
+                <Input.TextArea
+                  rows={4}
+                  value={deletionReason}
+                  placeholder={t("employees.removal.reasonPlaceholder")}
+                  onChange={(e) => {
+                    setDeletionReason(e.target.value);
+                    if (deletionReasonError) setDeletionReasonError(null);
+                  }}
+                  maxLength={500}
+                  disabled={deletionSubmitting}
+                  showCount
+                />
+              </Form.Item>
+            </Form>
+            {deletionError && (
+              <div
+                role="alert"
+                style={{
+                  background: "rgba(255, 77, 79, 0.08)",
+                  border: "1px solid rgba(255, 77, 79, 0.24)",
+                  color: "#cf1322",
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  fontSize: 13,
+                }}
+              >
+                {deletionError}
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={restoreTarget !== null}
+        title={t("employees.restore.modalTitle")}
+        okText={t("employees.restore.confirmButton")}
+        okButtonProps={{ loading: restoreSubmitting }}
+        cancelText={t("common.cancel")}
+        cancelButtonProps={{ disabled: restoreSubmitting }}
+        onOk={submitRestore}
+        onCancel={closeRestoreModal}
+        closable={!restoreSubmitting}
+        maskClosable={!restoreSubmitting}
+        destroyOnClose
+        width="min(480px, 96vw)"
+        style={{ top: 16 }}
+      >
+        {restoreTarget && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <Text>
+              {t("employees.restore.modalIntro", {
+                name: restoreTarget.full_name || restoreTarget.email,
+              })}
+            </Text>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {t("employees.restore.modalNote")}
+            </Text>
+            {restoreTarget.archive_reason && (
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {t("employees.archive.colArchiveReason")}:{" "}
+                {t(
+                  `employees.removal.archiveReason.${restoreTarget.archive_reason}`,
+                )}
+              </Text>
+            )}
+            {restoreTarget.archived_by_name?.trim() && (
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {t("employees.archive.archivedBy")}:{" "}
+                {restoreTarget.archived_by_name}
+              </Text>
+            )}
+            {restoreError && (
+              <div
+                role="alert"
+                style={{
+                  background: "rgba(255, 77, 79, 0.08)",
+                  border: "1px solid rgba(255, 77, 79, 0.24)",
+                  color: "#cf1322",
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  fontSize: 13,
+                }}
+              >
+                {restoreError}
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      <style>{`
                 .custom-select-filter .ant-select-selector {
                     background-color: #fff !important;
                     border: 1px solid #d9d9d9 !important;
@@ -1229,6 +1456,6 @@ export default function EmployeesListPage() {
                     background: #fafafa !important;
                 }
             `}</style>
-        </div>
-    );
+    </div>
+  );
 }

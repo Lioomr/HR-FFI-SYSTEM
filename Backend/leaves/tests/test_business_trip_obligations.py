@@ -37,6 +37,13 @@ class BusinessTripObligationsTests(TestCase):
             full_name="Business Traveller",
             employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
         )
+        EmployeeProfile.objects.create(
+            user=self.delegate,
+            company=self.company,
+            employee_id="BT-DELEGATE-001",
+            full_name="Business Trip Delegate",
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        )
         self.business_trip_type = LeaveType.objects.create(
             company=self.company,
             name="Business Trip",

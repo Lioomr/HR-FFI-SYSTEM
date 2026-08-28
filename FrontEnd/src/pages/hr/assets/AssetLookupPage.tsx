@@ -1,5 +1,19 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Button, Card, Col, Descriptions, Empty, Input, Row, Space, Spin, Table, Tag, Typography } from "antd";
+import {
+  Alert,
+  Button,
+  Card,
+  Col,
+  Descriptions,
+  Empty,
+  Input,
+  Row,
+  Space,
+  Spin,
+  Table,
+  Tag,
+  Typography,
+} from "antd";
 import type { InputRef } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { ScanOutlined } from "@ant-design/icons";
@@ -102,7 +116,13 @@ export default function AssetLookupPage() {
         const status = (response as { status_code?: number }).status_code;
         if (status === 404 || /not found/i.test(response.message)) {
           setResult(null);
-          setNotFoundCode(code || t("hr.assets.lookup.invalidLabel", "Invalid or expired asset label."));
+          setNotFoundCode(
+            code ||
+              t(
+                "hr.assets.lookup.invalidLabel",
+                "Invalid or expired asset label.",
+              ),
+          );
         } else {
           setResult(null);
           setError(response.message || t("common.error"));
@@ -114,10 +134,18 @@ export default function AssetLookupPage() {
       const status = err?.response?.status;
       if (status === 404) {
         setResult(null);
-        setNotFoundCode(code || t("hr.assets.lookup.invalidLabel", "Invalid or expired asset label."));
+        setNotFoundCode(
+          code ||
+            t(
+              "hr.assets.lookup.invalidLabel",
+              "Invalid or expired asset label.",
+            ),
+        );
       } else {
         setResult(null);
-        setError(err?.response?.data?.message || err?.message || t("common.error"));
+        setError(
+          err?.response?.data?.message || err?.message || t("common.error"),
+        );
       }
     } finally {
       setLoading(false);
@@ -138,7 +166,9 @@ export default function AssetLookupPage() {
       dataIndex: "status",
       key: "status",
       width: 140,
-      render: (value: string) => <Tag color={requestStatusColorMap[value] || "default"}>{value}</Tag>,
+      render: (value: string) => (
+        <Tag color={requestStatusColorMap[value] || "default"}>{value}</Tag>
+      ),
     },
     {
       title: t("hr.assets.reportedAt", "Reported At"),
@@ -162,7 +192,9 @@ export default function AssetLookupPage() {
       dataIndex: "status",
       key: "status",
       width: 140,
-      render: (value: string) => <Tag color={requestStatusColorMap[value] || "default"}>{value}</Tag>,
+      render: (value: string) => (
+        <Tag color={requestStatusColorMap[value] || "default"}>{value}</Tag>
+      ),
     },
     {
       title: t("hr.assets.requestedAt", "Requested At"),
@@ -212,15 +244,26 @@ export default function AssetLookupPage() {
 
       {loading && (
         <Card>
-          <Space direction="vertical" align="center" style={{ width: "100%", padding: 24 }}>
+          <Space
+            direction="vertical"
+            align="center"
+            style={{ width: "100%", padding: 24 }}
+          >
             <Spin />
-            <Typography.Text type="secondary">{t("hr.assets.lookup.loading")}</Typography.Text>
+            <Typography.Text type="secondary">
+              {t("hr.assets.lookup.loading")}
+            </Typography.Text>
           </Space>
         </Card>
       )}
 
       {!loading && error && (
-        <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />
+        <Alert
+          type="error"
+          showIcon
+          message={error}
+          style={{ marginBottom: 16 }}
+        />
       )}
 
       {!loading && notFoundCode && (
@@ -243,21 +286,29 @@ export default function AssetLookupPage() {
           <Card title={t("hr.assets.lookup.assetDetails", "Asset Details")}>
             <Descriptions bordered size="small" column={2}>
               <Descriptions.Item label={t("assets.assetCode")}>
-                <Typography.Text strong>{result.asset.asset_code}</Typography.Text>
+                <Typography.Text strong>
+                  {result.asset.asset_code}
+                </Typography.Text>
               </Descriptions.Item>
               <Descriptions.Item label={t("common.name")}>
                 {language === "ar"
                   ? result.asset.name_ar || result.asset.name_en || "-"
                   : result.asset.name_en || "-"}
               </Descriptions.Item>
-              <Descriptions.Item label={t("common.type")}>{result.asset.type || "-"}</Descriptions.Item>
+              <Descriptions.Item label={t("common.type")}>
+                {result.asset.type || "-"}
+              </Descriptions.Item>
               <Descriptions.Item label={t("common.status")}>
-                <Tag color={statusColorMap[result.asset.status] || "default"}>{result.asset.status}</Tag>
+                <Tag color={statusColorMap[result.asset.status] || "default"}>
+                  {result.asset.status}
+                </Tag>
               </Descriptions.Item>
               <Descriptions.Item label={t("assets.serialNumber")}>
                 {result.asset.serial_number || "-"}
               </Descriptions.Item>
-              <Descriptions.Item label={t("assets.vendor")}>{result.asset.vendor || "-"}</Descriptions.Item>
+              <Descriptions.Item label={t("assets.vendor")}>
+                {result.asset.vendor || "-"}
+              </Descriptions.Item>
               <Descriptions.Item label={t("assets.purchaseDate")}>
                 {result.asset.purchase_date || "-"}
               </Descriptions.Item>
@@ -285,7 +336,9 @@ export default function AssetLookupPage() {
                 <Descriptions.Item label={t("hr.assets.assignedAt")}>
                   {formatDateTime(result.active_assignment.assigned_at)}
                 </Descriptions.Item>
-                <Descriptions.Item label={t("hr.assets.assignedBy", "Assigned By")}>
+                <Descriptions.Item
+                  label={t("hr.assets.assignedBy", "Assigned By")}
+                >
                   {result.active_assignment.assigned_by_name || "-"}
                 </Descriptions.Item>
               </Descriptions>
@@ -294,7 +347,9 @@ export default function AssetLookupPage() {
             )}
           </Card>
 
-          <Card title={`${t("hr.assets.lookup.recentDamageReports")} (${result.recent_damage_reports.length})`}>
+          <Card
+            title={`${t("hr.assets.lookup.recentDamageReports")} (${result.recent_damage_reports.length})`}
+          >
             <Table
               rowKey="id"
               size="small"
@@ -302,11 +357,18 @@ export default function AssetLookupPage() {
               dataSource={result.recent_damage_reports}
               pagination={false}
               scroll={{ x: "max-content" }}
-              locale={{ emptyText: t("hr.assets.noDamageReports", "No damage reports for this asset.") }}
+              locale={{
+                emptyText: t(
+                  "hr.assets.noDamageReports",
+                  "No damage reports for this asset.",
+                ),
+              }}
             />
           </Card>
 
-          <Card title={`${t("hr.assets.lookup.recentReturnRequests")} (${result.recent_return_requests.length})`}>
+          <Card
+            title={`${t("hr.assets.lookup.recentReturnRequests")} (${result.recent_return_requests.length})`}
+          >
             <Table
               rowKey="id"
               size="small"
@@ -314,7 +376,12 @@ export default function AssetLookupPage() {
               dataSource={result.recent_return_requests}
               pagination={false}
               scroll={{ x: "max-content" }}
-              locale={{ emptyText: t("hr.assets.noReturnRequests", "No return requests for this asset.") }}
+              locale={{
+                emptyText: t(
+                  "hr.assets.noReturnRequests",
+                  "No return requests for this asset.",
+                ),
+              }}
             />
           </Card>
         </Space>

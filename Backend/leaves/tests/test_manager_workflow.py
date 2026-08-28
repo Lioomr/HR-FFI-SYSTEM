@@ -13,6 +13,7 @@ from audit.models import AuditLog
 from core.models import DelegationRule
 from employees.models import EmployeeDocument, EmployeeProfile
 from leaves.models import LeaveRequest, LeaveType
+from organization.models import UserOrganizationAccess
 from organization.services import get_default_company
 
 User = get_user_model()
@@ -65,6 +66,7 @@ class ManagerWorkflowTests(APITestCase):
         self.indep_employee_user = User.objects.create_user(email="independent@example.com", password="password")
         self.indep_employee_profile = EmployeeProfile.objects.create(
             user=self.indep_employee_user,
+            company=self.company,
             employee_id="EMP-002",
             department="HR",
             job_title="Recruiter",
@@ -75,11 +77,21 @@ class ManagerWorkflowTests(APITestCase):
         # Create HR User
         self.hr_user = User.objects.create_user(email="hr@example.com", password="password")
         self.hr_user.groups.add(self.hr_group)
+        UserOrganizationAccess.objects.create(user=self.hr_user, organization=self.company)
+        self.hr_profile = EmployeeProfile.objects.create(
+            user=self.hr_user,
+            company=self.company,
+            employee_id="EMP-HR",
+            department="HR",
+            job_title="HR Manager",
+            hire_date=date(2020, 1, 1),
+        )
 
         self.ceo_user = User.objects.create_user(email="ceo@example.com", password="password")
         self.ceo_user.groups.add(self.ceo_group)
         self.ceo_profile = EmployeeProfile.objects.create(
             user=self.ceo_user,
+            company=self.company,
             employee_id="EMP-CEO",
             department="Executive",
             job_title="CEO",
@@ -89,6 +101,7 @@ class ManagerWorkflowTests(APITestCase):
         self.ceo_report_user = User.objects.create_user(email="ceo-report@example.com", password="password")
         self.ceo_report_profile = EmployeeProfile.objects.create(
             user=self.ceo_report_user,
+            company=self.company,
             employee_id="EMP-CEO-REPORT",
             department="Ops",
             job_title="Lead",
@@ -100,6 +113,7 @@ class ManagerWorkflowTests(APITestCase):
         self.cfo_user.groups.add(self.cfo_group)
         self.cfo_profile = EmployeeProfile.objects.create(
             user=self.cfo_user,
+            company=self.company,
             employee_id="EMP-CFO",
             department="Finance",
             job_title="CFO",
@@ -109,6 +123,7 @@ class ManagerWorkflowTests(APITestCase):
         self.cfo_report_user = User.objects.create_user(email="cfo-report@example.com", password="password")
         self.cfo_report_profile = EmployeeProfile.objects.create(
             user=self.cfo_report_user,
+            company=self.company,
             employee_id="EMP-CFO-REPORT",
             department="Finance",
             job_title="Analyst",
@@ -119,6 +134,7 @@ class ManagerWorkflowTests(APITestCase):
         self.employee_manager_user = User.objects.create_user(email="employee-manager@example.com", password="password")
         self.employee_manager_profile = EmployeeProfile.objects.create(
             user=self.employee_manager_user,
+            company=self.company,
             employee_id="EMP-EMP-MGR",
             department="Operations",
             job_title="Supervisor",
@@ -129,6 +145,7 @@ class ManagerWorkflowTests(APITestCase):
         )
         self.employee_manager_report_profile = EmployeeProfile.objects.create(
             user=self.employee_manager_report_user,
+            company=self.company,
             employee_id="EMP-EMP-REPORT",
             department="Operations",
             job_title="Coordinator",
@@ -187,15 +204,19 @@ class ManagerWorkflowTests(APITestCase):
         Employee with manager_profile but no resolvable manager user -> Status PENDING_HR
         """
         orphan_manager = EmployeeProfile.objects.create(
+            company=self.company,
             employee_id="EMP-ORPHAN-MGR",
             full_name="Orphan Manager",
             department="IT",
             job_title="Manager",
             hire_date=date(2021, 1, 1),
         )
-        self.employee_profile.manager_profile = orphan_manager
-        self.employee_profile.manager = None
-        self.employee_profile.save(update_fields=["manager_profile", "manager", "updated_at"])
+        # Simulate a legacy relationship that predates manager validation.
+        EmployeeProfile.objects.filter(pk=self.employee_profile.pk).update(
+            manager_profile_id=orphan_manager.id,
+            manager_id=None,
+        )
+        self.employee_user = User.objects.get(pk=self.employee_user.pk)
 
         self.client.force_authenticate(user=self.employee_user)
         start = timezone.localdate() + timedelta(days=1)

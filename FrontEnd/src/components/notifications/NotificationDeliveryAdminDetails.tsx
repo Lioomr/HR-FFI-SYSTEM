@@ -19,21 +19,30 @@ interface Props {
  * is the backend's single-line, privacy-filtered value — raw provider errors are
  * never exposed even to admins.
  */
-export default function NotificationDeliveryAdminDetails({ deliveries }: Props) {
+export default function NotificationDeliveryAdminDetails({
+  deliveries,
+}: Props) {
   const { t } = useI18n();
   const role = useAuthStore((s) => s.user?.role);
 
   const ordered = orderDeliveries(deliveries);
-  if (ordered.length === 0 || !canViewDeliveryTechnicalDetails(role)) return null;
+  if (ordered.length === 0 || !canViewDeliveryTechnicalDetails(role))
+    return null;
 
   return (
     <details className="ffi-notif-delivery-details">
       <summary className="ffi-notif-delivery-details__summary">
-        {t("notifications.delivery.technicalDetails", "Delivery details (admin)")}
+        {t(
+          "notifications.delivery.technicalDetails",
+          "Delivery details (admin)",
+        )}
       </summary>
       <div className="ffi-notif-delivery-details__body">
         {ordered.map((d, i) => (
-          <div key={`${d.channel}-${i}`} className="ffi-notif-delivery-details__row">
+          <div
+            key={`${d.channel}-${i}`}
+            className="ffi-notif-delivery-details__row"
+          >
             <div className="ffi-notif-delivery-details__label">
               {deliveryLabel(t, d.channel, d.status)}
             </div>

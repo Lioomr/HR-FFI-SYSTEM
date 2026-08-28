@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react";
-import { DatePicker, Form, Input, Modal, Select, TimePicker, notification } from "antd";
+import {
+  DatePicker,
+  Form,
+  Input,
+  Modal,
+  Select,
+  TimePicker,
+  notification,
+} from "antd";
 import dayjs from "dayjs";
 
 import { useI18n } from "../../i18n/useI18n";
@@ -11,7 +19,10 @@ import {
   type CreateAttendanceCorrectionPayload,
 } from "../../services/api/attendanceCorrectionsApi";
 import { isApiError } from "../../services/api/apiTypes";
-import { getDetailedApiMessage, getDetailedHttpErrorMessage } from "../../services/api/userErrorMessages";
+import {
+  getDetailedApiMessage,
+  getDetailedHttpErrorMessage,
+} from "../../services/api/userErrorMessages";
 
 const { TextArea } = Input;
 
@@ -58,7 +69,7 @@ export default function AttendanceCorrectionFormModal({
         notification.error({
           message: t(
             "attendanceCorrections.errors.atLeastOne",
-            "Provide at least one of: check-in, check-out, or status."
+            "Provide at least one of: check-in, check-out, or status.",
           ),
         });
         return;
@@ -68,7 +79,7 @@ export default function AttendanceCorrectionFormModal({
         notification.error({
           message: t(
             "attendanceCorrections.errors.checkOutBeforeCheckIn",
-            "Requested check-out cannot be before requested check-in."
+            "Requested check-out cannot be before requested check-in.",
           ),
         });
         return;
@@ -77,8 +88,12 @@ export default function AttendanceCorrectionFormModal({
       const payload: CreateAttendanceCorrectionPayload = {
         date: datePart,
         reason: values.reason.trim(),
-        requested_check_in_at: checkIn ? `${datePart}T${checkIn.format("HH:mm:00")}` : null,
-        requested_check_out_at: checkOut ? `${datePart}T${checkOut.format("HH:mm:00")}` : null,
+        requested_check_in_at: checkIn
+          ? `${datePart}T${checkIn.format("HH:mm:00")}`
+          : null,
+        requested_check_out_at: checkOut
+          ? `${datePart}T${checkOut.format("HH:mm:00")}`
+          : null,
         requested_status: values.requested_status || "",
       };
 
@@ -86,7 +101,10 @@ export default function AttendanceCorrectionFormModal({
       const res = await createAttendanceCorrectionRequest(payload);
       if (isApiError(res)) {
         notification.error({
-          message: t("attendanceCorrections.errors.createFailed", "Failed to create correction request"),
+          message: t(
+            "attendanceCorrections.errors.createFailed",
+            "Failed to create correction request",
+          ),
           description: getDetailedApiMessage(t, res.message),
         });
         return;
@@ -96,7 +114,9 @@ export default function AttendanceCorrectionFormModal({
 
       if (submitImmediately) {
         try {
-          const submitRes = await submitAttendanceCorrectionRequest(res.data.id);
+          const submitRes = await submitAttendanceCorrectionRequest(
+            res.data.id,
+          );
           if (!isApiError(submitRes)) {
             finalRequest = submitRes.data;
           }
@@ -104,7 +124,7 @@ export default function AttendanceCorrectionFormModal({
           notification.warning({
             message: t(
               "attendanceCorrections.notice.savedAsDraft",
-              "Saved as draft. You can submit it later."
+              "Saved as draft. You can submit it later.",
             ),
           });
         }
@@ -112,8 +132,14 @@ export default function AttendanceCorrectionFormModal({
 
       notification.success({
         message: submitImmediately
-          ? t("attendanceCorrections.success.submitted", "Correction request submitted.")
-          : t("attendanceCorrections.success.created", "Correction request created."),
+          ? t(
+              "attendanceCorrections.success.submitted",
+              "Correction request submitted.",
+            )
+          : t(
+              "attendanceCorrections.success.created",
+              "Correction request created.",
+            ),
       });
       onCreated?.(finalRequest);
       onClose();
@@ -122,7 +148,10 @@ export default function AttendanceCorrectionFormModal({
         return;
       }
       notification.error({
-        message: t("attendanceCorrections.errors.createFailed", "Failed to create correction request"),
+        message: t(
+          "attendanceCorrections.errors.createFailed",
+          "Failed to create correction request",
+        ),
         description: getDetailedHttpErrorMessage(t, err),
       });
     } finally {
@@ -160,7 +189,10 @@ export default function AttendanceCorrectionFormModal({
           rules={[
             {
               required: true,
-              message: t("attendanceCorrections.form.dateRequired", "Date is required"),
+              message: t(
+                "attendanceCorrections.form.dateRequired",
+                "Date is required",
+              ),
             },
           ]}
         >
@@ -173,30 +205,60 @@ export default function AttendanceCorrectionFormModal({
 
         <Form.Item
           name="requested_check_in_at"
-          label={t("attendanceCorrections.form.requestedCheckIn", "Requested check-in")}
+          label={t(
+            "attendanceCorrections.form.requestedCheckIn",
+            "Requested check-in",
+          )}
         >
           <TimePicker style={{ width: "100%" }} format="HH:mm" minuteStep={5} />
         </Form.Item>
 
         <Form.Item
           name="requested_check_out_at"
-          label={t("attendanceCorrections.form.requestedCheckOut", "Requested check-out")}
+          label={t(
+            "attendanceCorrections.form.requestedCheckOut",
+            "Requested check-out",
+          )}
         >
           <TimePicker style={{ width: "100%" }} format="HH:mm" minuteStep={5} />
         </Form.Item>
 
         <Form.Item
           name="requested_status"
-          label={t("attendanceCorrections.form.requestedStatus", "Requested status")}
+          label={t(
+            "attendanceCorrections.form.requestedStatus",
+            "Requested status",
+          )}
         >
           <Select
             allowClear
-            placeholder={t("attendanceCorrections.form.requestedStatusPlaceholder", "Optional")}
+            placeholder={t(
+              "attendanceCorrections.form.requestedStatusPlaceholder",
+              "Optional",
+            )}
             options={[
-              { value: "PRESENT", label: t("attendanceCorrections.statusValue.PRESENT", "Present") },
-              { value: "ABSENT", label: t("attendanceCorrections.statusValue.ABSENT", "Absent") },
-              { value: "LATE", label: t("attendanceCorrections.statusValue.LATE", "Late") },
-              { value: "REJECTED", label: t("attendanceCorrections.statusValue.REJECTED", "Rejected") },
+              {
+                value: "PRESENT",
+                label: t(
+                  "attendanceCorrections.statusValue.PRESENT",
+                  "Present",
+                ),
+              },
+              {
+                value: "ABSENT",
+                label: t("attendanceCorrections.statusValue.ABSENT", "Absent"),
+              },
+              {
+                value: "LATE",
+                label: t("attendanceCorrections.statusValue.LATE", "Late"),
+              },
+              {
+                value: "REJECTED",
+                label: t(
+                  "attendanceCorrections.statusValue.REJECTED",
+                  "Rejected",
+                ),
+              },
             ]}
           />
         </Form.Item>
@@ -207,7 +269,10 @@ export default function AttendanceCorrectionFormModal({
           rules={[
             {
               required: true,
-              message: t("attendanceCorrections.errors.reasonRequired", "Reason is required"),
+              message: t(
+                "attendanceCorrections.errors.reasonRequired",
+                "Reason is required",
+              ),
             },
           ]}
         >
@@ -217,7 +282,7 @@ export default function AttendanceCorrectionFormModal({
             showCount
             placeholder={t(
               "attendanceCorrections.form.reasonPlaceholder",
-              "Explain why this correction is needed (missing check-in, wrong time, etc.)."
+              "Explain why this correction is needed (missing check-in, wrong time, etc.).",
             )}
           />
         </Form.Item>

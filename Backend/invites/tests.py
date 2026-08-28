@@ -8,6 +8,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from employees.models import EmployeeProfile
+from organization.models import OrganizationNode, UserOrganizationAccess
 
 from .models import Invite
 
@@ -20,6 +21,11 @@ class InvitePermissionTests(TestCase):
         self.client = APIClient()
         self.hr_group, _ = Group.objects.get_or_create(name="HRManager")
         self.employee_group, _ = Group.objects.get_or_create(name="Employee")
+        self.company = OrganizationNode.objects.create(
+            code="INVITE_TEST_COMPANY",
+            name="Invite Test Company",
+            node_type=OrganizationNode.NodeType.COMPANY,
+        )
 
         self.hr_user = User.objects.create_user(
             email="hr-invite@test.com",
@@ -27,6 +33,7 @@ class InvitePermissionTests(TestCase):
             full_name="HR Inviter",
         )
         self.hr_user.groups.add(self.hr_group)
+        UserOrganizationAccess.objects.create(user=self.hr_user, organization=self.company)
 
         self.employee_user = User.objects.create_user(
             email="employee@test.com",
@@ -372,6 +379,7 @@ class InvitePermissionTests(TestCase):
             sent_at=now,
             expires_at=now + timedelta(hours=72),
             created_by=self.hr_user,
+            company=self.company,
         )
         self.client.force_authenticate(user=self.hr_user)
 
@@ -390,6 +398,7 @@ class InvitePermissionTests(TestCase):
             sent_at=now,
             expires_at=now + timedelta(hours=72),
             created_by=self.hr_user,
+            company=self.company,
         )
         self.client.force_authenticate(user=self.hr_user)
 
@@ -413,6 +422,7 @@ class InvitePermissionTests(TestCase):
             sent_at=now,
             expires_at=now + timedelta(hours=72),
             created_by=self.hr_user,
+            company=self.company,
             last_delivery_channel=Invite.Channel.WHATSAPP,
             last_delivery_sent=False,
             last_delivery_provider="evolution_whatsapp",
@@ -460,6 +470,7 @@ class InvitePermissionTests(TestCase):
             sent_at=now,
             expires_at=now + timedelta(hours=72),
             created_by=self.hr_user,
+            company=self.company,
         )
 
         response = self.client.post(
@@ -489,6 +500,7 @@ class InvitePermissionTests(TestCase):
             sent_at=now,
             expires_at=now + timedelta(hours=72),
             created_by=self.hr_user,
+            company=self.company,
         )
 
         response = self.client.post(
@@ -546,6 +558,7 @@ class InvitePermissionTests(TestCase):
             sent_at=now,
             expires_at=now + timedelta(hours=72),
             created_by=self.hr_user,
+            company=self.company,
         )
 
         response = self.client.post(
@@ -580,6 +593,7 @@ class InvitePermissionTests(TestCase):
             sent_at=now,
             expires_at=now + timedelta(hours=72),
             created_by=self.hr_user,
+            company=self.company,
         )
 
         response = self.client.post(
@@ -612,6 +626,7 @@ class InvitePermissionTests(TestCase):
             sent_at=now,
             expires_at=now + timedelta(hours=72),
             created_by=self.hr_user,
+            company=self.company,
         )
 
         response = self.client.post(
@@ -646,6 +661,7 @@ class InvitePermissionTests(TestCase):
             sent_at=now,
             expires_at=now + timedelta(hours=72),
             created_by=self.hr_user,
+            company=self.company,
         )
 
         response = self.client.get("/invites/accept/", {"token": invite.token})
@@ -666,6 +682,7 @@ class InvitePermissionTests(TestCase):
             sent_at=now,
             expires_at=now + timedelta(hours=72),
             created_by=self.hr_user,
+            company=self.company,
         )
 
         response = self.client.post(
@@ -701,6 +718,7 @@ class InvitePermissionTests(TestCase):
             sent_at=now,
             expires_at=now + timedelta(hours=72),
             created_by=self.hr_user,
+            company=self.company,
         )
         self.client.force_authenticate(user=self.hr_user)
 
@@ -738,6 +756,7 @@ class InvitePermissionTests(TestCase):
             sent_at=now,
             expires_at=now + timedelta(hours=72),
             created_by=self.hr_user,
+            company=self.company,
         )
         self.client.force_authenticate(user=self.hr_user)
 

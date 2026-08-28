@@ -4,7 +4,7 @@ import { getFirstApiErrorMessage } from "../../utils/formErrors";
 /**
  * Extracts HTTP status code from various error formats
  * Handles Axios errors and objects with status property
- * 
+ *
  * @param err - Error of any type
  * @returns HTTP status code or undefined if not found
  */
@@ -30,7 +30,7 @@ export function getHttpStatus(err: unknown): number | undefined {
 
 /**
  * Type guard to check if error is a 401 Unauthorized
- * 
+ *
  * @example
  * catch (err) {
  *   if (isUnauthorized(err)) {
@@ -45,7 +45,7 @@ export function isUnauthorized(err: unknown): boolean {
 /**
  * Type guard to check if error is a 403 Forbidden
  * Per Global API Rules, 403 means stay logged in but show unauthorized UI
- * 
+ *
  * @example
  * catch (err) {
  *   if (isForbidden(err)) {
@@ -66,7 +66,7 @@ export function isNotFound(err: unknown): boolean {
 
 /**
  * Type guard to check if error is a 422 Unprocessable Entity (validation error)
- * 
+ *
  * @example
  * catch (err) {
  *   if (isValidationError(err)) {
@@ -114,7 +114,9 @@ export function getHttpErrorMessage(err: unknown): string {
   }
 
   if (status === 422) {
-    return getFirstApiErrorMessage(err) || "Please check your input and try again.";
+    return (
+      getFirstApiErrorMessage(err) || "Please check your input and try again."
+    );
   }
 
   // Handle Axios errors cleanly
@@ -122,7 +124,9 @@ export function getHttpErrorMessage(err: unknown): string {
     const data = err.response?.data as any;
     if (data && data.message) {
       const msg = data.message;
-      return typeof msg === "string" ? msg : "An unexpected server response occurred.";
+      return typeof msg === "string"
+        ? msg
+        : "An unexpected server response occurred.";
     }
   }
 

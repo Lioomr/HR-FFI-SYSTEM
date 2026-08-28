@@ -59,7 +59,9 @@ describe("LoginPage identifier field", () => {
     renderLogin();
 
     expect(screen.getByText("Email or phone")).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("Email or phone number")).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText("Email or phone number"),
+    ).toBeInTheDocument();
   });
 
   it("requires an identifier before submitting", async () => {
@@ -70,7 +72,9 @@ describe("LoginPage identifier field", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Sign In" }));
 
-    expect(await screen.findByText("Email or phone number is required")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Email or phone number is required"),
+    ).toBeInTheDocument();
     expect(loginApi).not.toHaveBeenCalled();
   });
 
@@ -81,7 +85,10 @@ describe("LoginPage identifier field", () => {
     signIn("sara@ffi.test");
 
     await waitFor(() =>
-      expect(loginApi).toHaveBeenCalledWith({ identifier: "sara@ffi.test", password: PASSWORD }),
+      expect(loginApi).toHaveBeenCalledWith({
+        identifier: "sara@ffi.test",
+        password: PASSWORD,
+      }),
     );
   });
 
@@ -103,14 +110,18 @@ describe("LoginPage identifier field", () => {
     signIn(phone);
 
     await waitFor(() =>
-      expect(loginApi).toHaveBeenCalledWith({ identifier: phone, password: PASSWORD }),
+      expect(loginApi).toHaveBeenCalledWith({
+        identifier: phone,
+        password: PASSWORD,
+      }),
     );
   });
 
   it("explains how to disambiguate a phone number shared by several accounts", async () => {
     loginApi.mockResolvedValue({
       status: "error" as const,
-      message: "Phone number matches more than one account. Use full international format including country code.",
+      message:
+        "Phone number matches more than one account. Use full international format including country code.",
     });
     renderLogin();
 

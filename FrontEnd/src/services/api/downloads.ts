@@ -1,10 +1,5 @@
-export function triggerBlobDownload(blob: Blob, filename: string): void {
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.setAttribute("download", filename);
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.URL.revokeObjectURL(url);
-}
+// Compatibility shim: triggerBlobDownload is the historical name used across
+// pages and mocked in tests. The canonical implementation lives in
+// utils/download.ts (delayed revoke — safer than the old immediate revoke,
+// which could abort downloads in Safari).
+export { downloadBlob as triggerBlobDownload } from "../../utils/download";

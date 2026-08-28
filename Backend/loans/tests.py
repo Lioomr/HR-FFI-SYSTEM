@@ -11,6 +11,7 @@ from core.models import DelegationRule
 from employees.models import EmployeeProfile
 from hr_reference.models import Department, Position
 from loans.models import LoanRequest, LoanWorkflowConfig
+from organization.models import OrganizationNode, UserOrganizationAccess
 from payroll.models import PayrollRun
 
 User = get_user_model()
@@ -25,13 +26,25 @@ class LoanWorkflowTests(APITestCase):
         self.cfo_group, _ = Group.objects.get_or_create(name="CFO")
         self.ceo_group, _ = Group.objects.get_or_create(name="CEO")
 
-        self.finance_dept = Department.objects.create(id=8, code="ACCOUNTANT", name="Accounting Department")
-        self.it_dept = Department.objects.create(id=4, code="IT", name="IT Department")
-        self.ceo_dept = Department.objects.create(id=1, code="CEO", name="CEO Department")
-        self.finance_position = Position.objects.create(id=24, code="ACCOUNTANT", name="Accountant")
-        self.cfo_position = Position.objects.create(id=3, code="CFO", name="CFO")
-        self.ceo_position = Position.objects.create(id=1, code="CEO", name="Chief Executive Officer")
-        self.other_position = Position.objects.create(id=12, code="ENG", name="Engineer")
+        self.company = OrganizationNode.objects.create(
+            code="LOAN_WORKFLOW_TEST",
+            name="Loan Workflow Test Company",
+            node_type=OrganizationNode.NodeType.COMPANY,
+        )
+
+        self.finance_dept = Department.objects.create(
+            id=8, company=self.company, code="ACCOUNTANT", name="Accounting Department"
+        )
+        self.it_dept = Department.objects.create(id=4, company=self.company, code="IT", name="IT Department")
+        self.ceo_dept = Department.objects.create(id=1, company=self.company, code="CEO", name="CEO Department")
+        self.finance_position = Position.objects.create(
+            id=24, company=self.company, code="ACCOUNTANT", name="Accountant"
+        )
+        self.cfo_position = Position.objects.create(id=3, company=self.company, code="CFO", name="CFO")
+        self.ceo_position = Position.objects.create(
+            id=1, company=self.company, code="CEO", name="Chief Executive Officer"
+        )
+        self.other_position = Position.objects.create(id=12, company=self.company, code="ENG", name="Engineer")
 
         LoanWorkflowConfig.objects.create(
             finance_department_id=8,
@@ -46,6 +59,7 @@ class LoanWorkflowTests(APITestCase):
         self.manager.groups.add(self.manager_group)
         self.manager_profile = EmployeeProfile.objects.create(
             user=self.manager,
+            company=self.company,
             employee_id="EMP-MANAGER-1",
             full_name="Manager One",
             basic_salary=Decimal("10000.00"),
@@ -58,6 +72,7 @@ class LoanWorkflowTests(APITestCase):
         self.employee.groups.add(self.employee_group)
         self.employee_profile = EmployeeProfile.objects.create(
             user=self.employee,
+            company=self.company,
             employee_id="EMP-EMP-1",
             full_name="Employee One",
             basic_salary=Decimal("5000.00"),
@@ -71,17 +86,20 @@ class LoanWorkflowTests(APITestCase):
         self.hr_user.groups.add(self.hr_group)
         self.hr_profile = EmployeeProfile.objects.create(
             user=self.hr_user,
+            company=self.company,
             employee_id="EMP-HR-1",
             full_name="HR One",
             department_ref=self.it_dept,
             position_ref=self.other_position,
             hire_date=date(2024, 1, 1),
         )
+        UserOrganizationAccess.objects.create(user=self.hr_user, organization=self.company)
 
         self.accountant = User.objects.create_user(email="accountant@ffi.test", password="password")
         self.accountant.groups.add(self.employee_group)
         self.accountant_profile = EmployeeProfile.objects.create(
             user=self.accountant,
+            company=self.company,
             employee_id="EMP-ACC-1",
             full_name="Accountant One",
             department_ref=self.finance_dept,
@@ -95,6 +113,7 @@ class LoanWorkflowTests(APITestCase):
         self.cfo.groups.add(self.cfo_group)
         self.cfo_profile = EmployeeProfile.objects.create(
             user=self.cfo,
+            company=self.company,
             employee_id="EMP-CFO-1",
             full_name="CFO User",
             department_ref=self.finance_dept,
@@ -108,6 +127,7 @@ class LoanWorkflowTests(APITestCase):
         self.ceo.groups.add(self.ceo_group)
         self.ceo_profile = EmployeeProfile.objects.create(
             user=self.ceo,
+            company=self.company,
             employee_id="EMP-CEO-1",
             full_name="CEO User",
             department_ref=self.ceo_dept,
@@ -127,6 +147,7 @@ class LoanWorkflowTests(APITestCase):
         self.ceo_direct_employee.groups.add(self.employee_group)
         self.ceo_direct_profile = EmployeeProfile.objects.create(
             user=self.ceo_direct_employee,
+            company=self.company,
             employee_id="EMP-CEO-REPORT",
             full_name="CEO Direct Report",
             basic_salary=Decimal("4500.00"),
@@ -140,6 +161,7 @@ class LoanWorkflowTests(APITestCase):
         self.cfo_direct_employee.groups.add(self.employee_group)
         self.cfo_direct_profile = EmployeeProfile.objects.create(
             user=self.cfo_direct_employee,
+            company=self.company,
             employee_id="EMP-CFO-REPORT",
             full_name="CFO Direct Report",
             basic_salary=Decimal("4300.00"),
@@ -152,6 +174,7 @@ class LoanWorkflowTests(APITestCase):
         self.employee_manager.groups.add(self.employee_group)
         self.employee_manager_profile = EmployeeProfile.objects.create(
             user=self.employee_manager,
+            company=self.company,
             employee_id="EMP-EMP-MGR",
             full_name="Employee Manager",
             basic_salary=Decimal("5200.00"),
@@ -165,6 +188,7 @@ class LoanWorkflowTests(APITestCase):
         self.employee_manager_direct_employee.groups.add(self.employee_group)
         self.employee_manager_direct_profile = EmployeeProfile.objects.create(
             user=self.employee_manager_direct_employee,
+            company=self.company,
             employee_id="EMP-EMP-REPORT",
             full_name="Employee Manager Report",
             basic_salary=Decimal("4100.00"),
@@ -176,6 +200,7 @@ class LoanWorkflowTests(APITestCase):
         self.delegate_user = User.objects.create_user(email="delegate-approver@ffi.test", password="password")
         self.delegate_profile = EmployeeProfile.objects.create(
             user=self.delegate_user,
+            company=self.company,
             employee_id="EMP-DEL-1",
             full_name="Delegate Approver",
             basic_salary=Decimal("4700.00"),
@@ -188,6 +213,7 @@ class LoanWorkflowTests(APITestCase):
         return LoanRequest.objects.create(
             employee=self.employee,
             employee_profile=self.employee_profile,
+            company=self.company,
             requested_amount=Decimal("1000.00"),
             status=LoanRequest.RequestStatus.PENDING_MANAGER,
         )
@@ -196,6 +222,7 @@ class LoanWorkflowTests(APITestCase):
         return LoanRequest.objects.create(
             employee=self.employee,
             employee_profile=self.employee_profile,
+            company=self.company,
             requested_amount=Decimal("1000.00"),
             status=LoanRequest.RequestStatus.PENDING_HR,
         )
@@ -204,6 +231,7 @@ class LoanWorkflowTests(APITestCase):
         return LoanRequest.objects.create(
             employee=self.employee,
             employee_profile=self.employee_profile,
+            company=self.company,
             requested_amount=Decimal("1000.00"),
             status=LoanRequest.RequestStatus.PENDING_CFO,
         )
@@ -212,6 +240,7 @@ class LoanWorkflowTests(APITestCase):
         return LoanRequest.objects.create(
             employee=self.employee,
             employee_profile=self.employee_profile,
+            company=self.company,
             requested_amount=Decimal("1000.00"),
             status=LoanRequest.RequestStatus.PENDING_CEO,
         )
@@ -220,6 +249,7 @@ class LoanWorkflowTests(APITestCase):
         return LoanRequest.objects.create(
             employee=self.employee,
             employee_profile=self.employee_profile,
+            company=self.company,
             requested_amount=Decimal("1000.00"),
             approved_amount=Decimal("1000.00"),
             status=LoanRequest.RequestStatus.PENDING_DISBURSEMENT,
@@ -229,6 +259,7 @@ class LoanWorkflowTests(APITestCase):
         return LoanRequest.objects.create(
             employee=employee,
             employee_profile=profile,
+            company=profile.company,
             requested_amount=Decimal("1000.00"),
             status=LoanRequest.RequestStatus.PENDING_MANAGER,
         )
@@ -287,6 +318,7 @@ class LoanWorkflowTests(APITestCase):
         request_obj = LoanRequest.objects.create(
             employee=self.employee,
             employee_profile=self.employee_profile,
+            company=self.company,
             requested_amount=Decimal("1400.00"),
             status=LoanRequest.RequestStatus.PENDING_MANAGER,
         )
@@ -356,7 +388,12 @@ class LoanWorkflowTests(APITestCase):
 
     def test_cfo_approve_sets_next_month_target_if_current_payroll_closed(self):
         today = date.today()
-        PayrollRun.objects.create(year=today.year, month=today.month, status=PayrollRun.Status.COMPLETED)
+        PayrollRun.objects.create(
+            company=self.company,
+            year=today.year,
+            month=today.month,
+            status=PayrollRun.Status.COMPLETED,
+        )
         request_obj = self._create_pending_cfo_request()
 
         self.client.force_authenticate(user=self.cfo)
@@ -474,6 +511,7 @@ class LoanWorkflowTests(APITestCase):
         request_obj = LoanRequest.objects.create(
             employee=self.employee,
             employee_profile=self.employee_profile,
+            company=self.company,
             requested_amount=Decimal("1000.00"),
             status=LoanRequest.RequestStatus.PENDING_FINANCE,
         )
@@ -544,6 +582,7 @@ class LoanWorkflowTests(APITestCase):
         unrelated_user.groups.add(self.manager_group)
         EmployeeProfile.objects.create(
             user=unrelated_user,
+            company=self.company,
             employee_id="EMP-UNRELATED-LOAN",
             full_name="Unrelated Loan Manager",
             department_ref=self.it_dept,
@@ -566,10 +605,11 @@ class LoanWorkflowTests(APITestCase):
     def test_payroll_deducts_open_loan_when_target_month_is_due(self):
         from payroll.views import _generate_payroll_items
 
-        run = PayrollRun.objects.create(year=2026, month=2)
+        run = PayrollRun.objects.create(company=self.company, year=2026, month=2)
         loan = LoanRequest.objects.create(
             employee=self.employee,
             employee_profile=self.employee_profile,
+            company=self.company,
             requested_amount=Decimal("500.00"),
             approved_amount=Decimal("500.00"),
             status=LoanRequest.RequestStatus.APPROVED,
@@ -584,10 +624,11 @@ class LoanWorkflowTests(APITestCase):
     def test_payroll_does_not_deduct_open_loan_before_target_month(self):
         from payroll.views import _generate_payroll_items
 
-        run = PayrollRun.objects.create(year=2026, month=2)
+        run = PayrollRun.objects.create(company=self.company, year=2026, month=2)
         loan = LoanRequest.objects.create(
             employee=self.employee,
             employee_profile=self.employee_profile,
+            company=self.company,
             requested_amount=Decimal("500.00"),
             approved_amount=Decimal("500.00"),
             status=LoanRequest.RequestStatus.APPROVED,

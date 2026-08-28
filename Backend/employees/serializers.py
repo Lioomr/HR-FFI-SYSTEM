@@ -3,7 +3,6 @@ from pathlib import Path
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import models
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -213,6 +212,53 @@ class EmployeeProfileReadSerializer(serializers.ModelSerializer):
         return LeaveBalanceSerializer(balances, many=True).data
 
 
+class ScopedEmployeeReadSerializer(serializers.ModelSerializer):
+    """Least-privilege employee shape for delegated and manager-team reads.
+
+    This deliberately omits identifiers, contact details, compensation, documents,
+    leave/payroll data, archival state, and audit timestamps.  Do not add a field
+    here merely to mirror EmployeeProfileReadSerializer without a policy review.
+    """
+
+    department = serializers.SerializerMethodField()
+    position = serializers.SerializerMethodField()
+    task_group = serializers.SerializerMethodField()
+    employment_status = serializers.CharField(read_only=True)
+    department_id = serializers.PrimaryKeyRelatedField(source="department_ref", read_only=True)
+    position_id = serializers.PrimaryKeyRelatedField(source="position_ref", read_only=True)
+    task_group_id = serializers.PrimaryKeyRelatedField(source="task_group_ref", read_only=True)
+    company_id = serializers.PrimaryKeyRelatedField(source="company", read_only=True)
+    company_name = serializers.CharField(source="company.name", read_only=True)
+    manager_profile_id = serializers.PrimaryKeyRelatedField(source="manager_profile", read_only=True)
+    manager_profile_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = EmployeeProfile
+        fields = [
+            "id", "employee_id", "full_name", "full_name_en", "full_name_ar", "employee_number",
+            "department", "department_id", "position", "position_id", "task_group", "task_group_id",
+            "job_title", "company_id", "company_name", "employment_status", "manager_profile_id",
+            "manager_profile_name",
+        ]
+
+    @staticmethod
+    def _display_name(ref_obj, fallback=""):
+        return (ref_obj.name or ref_obj.code) if ref_obj else (fallback or "")
+
+    def get_department(self, obj):
+        return self._display_name(obj.department_ref, obj.department)
+
+    def get_position(self, obj):
+        return self._display_name(obj.position_ref, obj.job_title)
+
+    def get_task_group(self, obj):
+        return self._display_name(obj.task_group_ref)
+
+    def get_manager_profile_name(self, obj):
+        manager = obj.manager_profile
+        return (manager.full_name_en or manager.full_name or manager.employee_id) if manager else None
+
+
 class DelegationCandidateSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(source="user.id", read_only=True, allow_null=True)
     employee_profile_id = serializers.IntegerField(source="pk", read_only=True)
@@ -336,19 +382,19 @@ class EmployeeProfileWriteSerializer(serializers.ModelSerializer):
             company = self.instance.company
         if company is not None:
             self.fields["department_id"].queryset = Department.objects.filter(
-                models.Q(company=company) | models.Q(company__isnull=True),
+                company=company,
                 is_active=True,
             )
             self.fields["position_id"].queryset = Position.objects.filter(
-                models.Q(company=company) | models.Q(company__isnull=True),
+                company=company,
                 is_active=True,
             )
             self.fields["task_group_id"].queryset = TaskGroup.objects.filter(
-                models.Q(company=company) | models.Q(company__isnull=True),
+                company=company,
                 is_active=True,
             )
             self.fields["sponsor_id"].queryset = Sponsor.objects.filter(
-                models.Q(company=company) | models.Q(company__isnull=True),
+                company=company,
                 is_active=True,
             )
             self.fields["manager_profile_id"].queryset = EmployeeProfile.objects.filter(
@@ -384,6 +430,7 @@ class EmployeeImportSerializer(serializers.ModelSerializer):
         model = EmployeeImport
         fields = [
             "id",
+            "company",
             "status",
             "inserted_rows",
             "row_count",
@@ -391,6 +438,7 @@ class EmployeeImportSerializer(serializers.ModelSerializer):
             "uploader",
             "error_summary",
         ]
+        read_only_fields = ["company"]
 
     def get_uploader(self, obj):
         if obj.uploader:

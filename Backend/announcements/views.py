@@ -4,7 +4,7 @@ import re
 
 from django.core import signing
 from django.core.files.base import ContentFile
-from django.db import connection
+from django.db import connection, transaction
 from django.db.models import Min, Q
 from django.db.models.functions import TruncMinute
 from django.http import FileResponse
@@ -63,8 +63,9 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated()]
 
     def _manager_team_user_ids(self, user):
-        reports_qs = EmployeeProfile.objects.filter(manager_scope_q(user))
-        reports_qs = filter_queryset_by_company_scope(reports_qs, self.request)
+        reports_qs = EmployeeProfile.objects.filter(
+            manager_scope_q(user, cross_company_capability="announcements.manage")
+        )
         return (
             reports_qs.filter(
                 is_archived=False,
@@ -147,7 +148,8 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
 
         # Managers can also see what they created for their team.
         if user_role == "MANAGER" or (
-            user_role not in {"ADMIN", "HR_MANAGER", "CEO"} and has_manager_access(user)
+            user_role not in {"ADMIN", "HR_MANAGER", "CEO"}
+            and has_manager_access(user, cross_company_capability="announcements.manage")
         ):
             base_qs = scoped_announcements.filter(
                 Q(created_by=user) | Q(target_user=user) | self._role_target_filter("MANAGER")
@@ -217,7 +219,7 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         active_company = get_active_company_for_request(request)
         user_role = get_role(request.user)
         manager_capability = user_role not in ["SystemAdmin", "HRManager", "CEO"] and has_manager_access(
-            request.user
+            request.user, cross_company_capability="announcements.manage"
         )
         serializer_context = self.get_serializer_context()
         if user_role in ["Manager", "CEO"] or manager_capability:
@@ -253,22 +255,23 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
                 attachment.seek(0)
 
             created_announcements = []
-            for user_id in target_user_ids:
-                announcement_data = {
-                    key: value
-                    for key, value in validated.items()
-                    if key not in {"target_roles", "target_user", "attachment"}
-                }
-                announcement = Announcement.objects.create(
-                    **announcement_data,
-                    target_roles=[],
-                    target_user_id=user_id,
-                    created_by=request.user,
-                    company=active_company,
-                )
-                if attachment_name and attachment_bytes is not None:
-                    announcement.attachment.save(attachment_name, ContentFile(attachment_bytes), save=True)
-                created_announcements.append(announcement)
+            with transaction.atomic():
+                for user_id in target_user_ids:
+                    announcement_data = {
+                        key: value
+                        for key, value in validated.items()
+                        if key not in {"target_roles", "target_user", "attachment"}
+                    }
+                    announcement = Announcement.objects.create(
+                        **announcement_data,
+                        target_roles=[],
+                        target_user_id=user_id,
+                        created_by=request.user,
+                        company=active_company,
+                    )
+                    if attachment_name and attachment_bytes is not None:
+                        announcement.attachment.save(attachment_name, ContentFile(attachment_bytes), save=True)
+                    created_announcements.append(announcement)
         # Manager can only target own team (direct reports), never global roles.
         elif user_role in ["Manager", "CEO"] or manager_capability:
             if validated.get("target_roles"):
@@ -298,20 +301,21 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
                     attachment_name = attachment.name
                     attachment_bytes = attachment.read()
                     attachment.seek(0)
-                    for user_id in team_user_ids:
-                        announcement = Announcement.objects.create(
-                            title=validated["title"],
-                            content=validated["content"],
-                            target_roles=[],
-                            target_user_id=user_id,
-                            publish_to_dashboard=validated.get("publish_to_dashboard", True),
-                            publish_to_email=validated.get("publish_to_email", False),
-                            publish_to_sms=validated.get("publish_to_sms", False),
-                            created_by=request.user,
-                            company=active_company,
-                        )
-                        announcement.attachment.save(attachment_name, ContentFile(attachment_bytes), save=True)
-                        created_announcements.append(announcement)
+                    with transaction.atomic():
+                        for user_id in team_user_ids:
+                            announcement = Announcement.objects.create(
+                                title=validated["title"],
+                                content=validated["content"],
+                                target_roles=[],
+                                target_user_id=user_id,
+                                publish_to_dashboard=validated.get("publish_to_dashboard", True),
+                                publish_to_email=validated.get("publish_to_email", False),
+                                publish_to_sms=validated.get("publish_to_sms", False),
+                                created_by=request.user,
+                                company=active_company,
+                            )
+                            announcement.attachment.save(attachment_name, ContentFile(attachment_bytes), save=True)
+                            created_announcements.append(announcement)
                 else:
                     now = timezone.now()
                     payloads = []
