@@ -3,10 +3,22 @@ from decimal import Decimal
 from django.utils import timezone
 from rest_framework import serializers
 
-from core.services import get_workflow_snapshot
+from core.services import get_workflow_snapshot_read_only, get_workflow_snapshots
 from employees.models import EmployeeProfile
 
 from .models import LoanRequest
+
+
+class LoanRequestListSerializer(serializers.ListSerializer):
+    def to_representation(self, data):
+        instances = list(data)
+        request = self.context.get("request")
+        actor = getattr(request, "user", None) if request else None
+        self.child._workflow_snapshot_cache = get_workflow_snapshots(instances, actor=actor)
+        try:
+            return super().to_representation(instances)
+        finally:
+            self.child._workflow_snapshot_cache = None
 
 
 class LoanRequestReadSerializer(serializers.ModelSerializer):
@@ -19,6 +31,7 @@ class LoanRequestReadSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = LoanRequest
+        list_serializer_class = LoanRequestListSerializer
         fields = [
             "id",
             "employee",
@@ -148,7 +161,10 @@ class LoanRequestReadSerializer(serializers.ModelSerializer):
     def get_workflow(self, obj):
         request = self.context.get("request")
         actor = getattr(request, "user", None) if request else None
-        return get_workflow_snapshot(obj, actor=actor)
+        cache = getattr(self, "_workflow_snapshot_cache", None)
+        if cache is not None and obj.pk in cache:
+            return cache[obj.pk]
+        return get_workflow_snapshot_read_only(obj, actor=actor)
 
 
 class LoanRequestCreateSerializer(serializers.Serializer):

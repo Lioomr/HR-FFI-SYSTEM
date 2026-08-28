@@ -286,6 +286,32 @@ def get_obligations_summary(parent) -> dict[str, Any]:
     }
 
 
+def get_obligations_summaries(parents) -> dict[int, dict[str, Any]]:
+    """Return obligation summaries for multiple parents with one read query."""
+    parents = list(parents)
+    if not parents:
+        return {}
+    parent_content_type = _parent_content_type(parents[0])
+    parent_ids = [parent.pk for parent in parents]
+    rows = RequestObligation.objects.filter(
+        parent_content_type=parent_content_type,
+        parent_object_id__in=parent_ids,
+    ).values_list("parent_object_id", "status", "severity")
+    summaries = {
+        parent_id: {"total": 0, "open": 0, "resolved": 0, "waived": 0, "blocking_open": 0, "can_final_approve": True}
+        for parent_id in parent_ids
+    }
+    for parent_id, status, severity in rows:
+        summary = summaries[parent_id]
+        summary["total"] += 1
+        summary[status] += 1
+        if status == RequestObligation.Status.OPEN:
+            if severity == RequestObligation.Severity.BLOCKING:
+                summary["blocking_open"] += 1
+                summary["can_final_approve"] = False
+    return summaries
+
+
 def waive_open_blocking_obligations(parent, *, actor, reason: str, request=None) -> list[RequestObligation]:
     reason = (reason or "").strip()
     if not reason:

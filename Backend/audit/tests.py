@@ -31,9 +31,11 @@ class AuditExportTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response["Content-Type"],
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/octet-stream",
         )
         self.assertIn('filename="audit_logs.xlsx"', response["Content-Disposition"])
+        self.assertEqual(response["X-Content-Type-Options"], "nosniff")
+        self.assertEqual(response["Cache-Control"], "private, no-store")
         self.assertTrue(response.content.startswith(b"PK"))
 
     def test_audit_logs_export_rejects_unsupported_format(self):

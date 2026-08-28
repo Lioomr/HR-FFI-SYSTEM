@@ -18,7 +18,7 @@ from organization.models import OrganizationNode, UserOrganizationAccess
 from organization.services import get_default_company
 
 from .models import EmployeeDeletionRequest, EmployeeDocument, EmployeeProfile
-from .serializers import EmployeeProfileReadSerializer
+from .serializers import EmployeeDeletionRequestReadSerializer, EmployeeProfileReadSerializer
 
 User = get_user_model()
 
@@ -349,6 +349,18 @@ class EmployeeProfileTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
         whatsapp_send.assert_not_called()
+
+    @patch("employees.views.notify_document_expiry_in_app", side_effect=RuntimeError("provider unavailable"))
+    def test_document_notification_failure_keeps_success_response_and_logs(self, _notify):
+        profile = self._document_notify_profile()
+        document = self._document_for_notify(profile, exit_before=timezone.localdate() + timedelta(days=10))
+
+        self.client.force_authenticate(user=self.hr_user)
+        with self.assertLogs("employees.views", level="ERROR") as logs:
+            response = self.client.post(f"/api/employees/{profile.id}/documents/{document.id}/notify-expiry/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertTrue(any("employee_document_expiry_notification_failed" in message for message in logs.output))
 
     @patch("employees.notifications.WhatsAppService.send_template_message")
     def test_employee_document_without_expiry_date_is_rejected(self, whatsapp_send):
@@ -766,7 +778,10 @@ class EmployeeProfileTests(TestCase):
         response = self.client.get("/api/employees/export/?nationality=saudi")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", response["Content-Type"])
+        self.assertEqual(response["Content-Type"], "application/octet-stream")
+        self.assertIn("attachment", response["Content-Disposition"].lower())
+        self.assertEqual(response["X-Content-Type-Options"], "nosniff")
+        self.assertEqual(response["Cache-Control"], "private, no-store")
 
         workbook = load_workbook(filename=BytesIO(response.content))
         worksheet = workbook.active
@@ -1156,6 +1171,105 @@ class EmployeeDeletionWorkflowTests(TestCase):
         self.assertIsNone(self.profile.archive_reason)
         self.assertTrue(self.employee_user.is_active)
         self.assertTrue(AuditLog.objects.filter(action="employee_restored", entity_id=self.profile.id).exists())
+
+    def test_hr_manager_cannot_patch_deletion_request_to_executed(self):
+        request_obj = EmployeeDeletionRequest.objects.create(
+            company=self.company,
+            employee_profile=self.profile,
+            target_user=self.employee_user,
+            requested_by=self.hr_user,
+            reason="Attempted forgery",
+            archive_reason=EmployeeProfile.ArchiveReason.OTHER,
+            request_snapshot={"employee_id": self.profile.employee_id, "full_name": self.profile.full_name},
+        )
+
+        self.client.force_authenticate(user=self.hr_user)
+        patch_response = self.client.patch(
+            f"/api/employees/deletion-requests/{request_obj.id}/",
+            {
+                "status": EmployeeDeletionRequest.Status.EXECUTED,
+                "approved_by": self.hr_user.id,
+                "execution_snapshot": {"forged": True},
+            },
+            format="json",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+        self.assertEqual(patch_response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED, patch_response.data)
+
+        put_response = self.client.put(
+            f"/api/employees/deletion-requests/{request_obj.id}/",
+            {"status": EmployeeDeletionRequest.Status.EXECUTED},
+            format="json",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+        self.assertEqual(put_response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED, put_response.data)
+
+        request_obj.refresh_from_db()
+        self.assertEqual(request_obj.status, EmployeeDeletionRequest.Status.PENDING_CEO)
+        self.assertIsNone(request_obj.approved_by_id)
+        self.assertEqual(request_obj.execution_snapshot, {})
+
+        # The dedicated approve/reject workflow must still work correctly after
+        # the forged PATCH/PUT attempts were rejected.
+        self.client.force_authenticate(user=self.ceo_user)
+        approve_response = self.client.post(
+            f"/api/employees/deletion-requests/{request_obj.id}/approve/",
+            {},
+            format="json",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+        self.assertEqual(approve_response.status_code, status.HTTP_200_OK, approve_response.data)
+        request_obj.refresh_from_db()
+        self.profile.refresh_from_db()
+        self.employee_user.refresh_from_db()
+        self.assertEqual(request_obj.status, EmployeeDeletionRequest.Status.EXECUTED)
+        self.assertEqual(request_obj.approved_by_id, self.ceo_user.id)
+        self.assertTrue(self.profile.is_archived)
+        self.assertFalse(self.employee_user.is_active)
+
+    def test_deletion_request_read_serializer_keeps_workflow_fields_read_only(self):
+        # Defense-in-depth: even if the view-level 405 guard were ever relaxed,
+        # the serializer itself must refuse to let these fields be written.
+        request_obj = EmployeeDeletionRequest.objects.create(
+            company=self.company,
+            employee_profile=self.profile,
+            target_user=self.employee_user,
+            requested_by=self.hr_user,
+            reason="Attempted forgery",
+            archive_reason=EmployeeProfile.ArchiveReason.OTHER,
+            request_snapshot={"employee_id": self.profile.employee_id, "full_name": self.profile.full_name},
+        )
+
+        serializer = EmployeeDeletionRequestReadSerializer(
+            request_obj,
+            data={
+                "status": EmployeeDeletionRequest.Status.EXECUTED,
+                "approved_by": self.hr_user.id,
+                "approved_at": timezone.now().isoformat(),
+                "rejected_by": self.hr_user.id,
+                "rejected_at": timezone.now().isoformat(),
+                "rejection_reason": "forged",
+                "execution_snapshot": {"forged": True},
+                "request_snapshot": {"forged": True},
+                "reason": "forged reason",
+                "archive_reason": EmployeeProfile.ArchiveReason.RESIGNED,
+            },
+            partial=True,
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        saved = serializer.save()
+        saved.refresh_from_db()
+
+        self.assertEqual(saved.status, EmployeeDeletionRequest.Status.PENDING_CEO)
+        self.assertIsNone(saved.approved_by_id)
+        self.assertIsNone(saved.approved_at)
+        self.assertIsNone(saved.rejected_by_id)
+        self.assertIsNone(saved.rejected_at)
+        self.assertEqual(saved.rejection_reason, "")
+        self.assertEqual(saved.execution_snapshot, {})
+        self.assertEqual(saved.request_snapshot["employee_id"], self.profile.employee_id)
+        self.assertEqual(saved.reason, "Attempted forgery")
+        self.assertEqual(saved.archive_reason, EmployeeProfile.ArchiveReason.OTHER)
 
     def test_cfo_group_user_is_global_cfo_approver(self):
         from loans.permissions import is_cfo_approver_user

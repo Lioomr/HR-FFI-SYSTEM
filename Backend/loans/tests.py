@@ -1,8 +1,11 @@
 from datetime import date
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -11,6 +14,7 @@ from core.models import DelegationRule
 from employees.models import EmployeeProfile
 from hr_reference.models import Department, Position
 from loans.models import LoanRequest, LoanWorkflowConfig
+from loans.serializers import LoanRequestReadSerializer
 from organization.models import OrganizationNode, UserOrganizationAccess
 from payroll.models import PayrollRun
 
@@ -269,6 +273,70 @@ class LoanWorkflowTests(APITestCase):
         response = self.client.post(self.loan_requests_url, {"amount": "1200", "reason": "Medical"}, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["data"]["status"], LoanRequest.RequestStatus.PENDING_MANAGER)
+
+    def test_notification_failure_does_not_fail_loan_submission(self):
+        self.client.force_authenticate(user=self.employee)
+        with self.assertLogs("loans.views", level="ERROR") as logs, patch(
+            "loans.views.send_request_submission_email", side_effect=RuntimeError("provider unavailable")
+        ), patch("loans.views.notify_users_for_pending_status", side_effect=RuntimeError("provider unavailable")):
+            response = self.client.post(self.loan_requests_url, {"amount": "1200", "reason": "Medical"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(any("loan_submission_email_failed" in message for message in logs.output))
+
+    def test_loan_list_serialization_does_not_query_decision_makers_per_row(self):
+        decision_time = timezone.now()
+        request_ids = []
+        for index in range(3):
+            request_obj = LoanRequest.objects.create(
+                employee=self.employee,
+                employee_profile=self.employee_profile,
+                company=self.company,
+                requested_amount=Decimal("1000.00"),
+                status=LoanRequest.RequestStatus.PENDING_CFO,
+                manager_decision_by=self.manager,
+                manager_decision_at=decision_time,
+                finance_decision_by=self.hr_user,
+                finance_decision_at=decision_time,
+                cfo_decision_by=self.cfo,
+                cfo_decision_at=decision_time,
+                ceo_decision_by=self.ceo,
+                ceo_decision_at=decision_time,
+                disbursed_by=self.accountant,
+                disbursed_at=decision_time,
+            )
+            request_ids.append(request_obj.id)
+
+        queryset = LoanRequest.objects.filter(id__in=request_ids).select_related(
+            "employee",
+            "employee_profile",
+            "company",
+            "manager_decision_by",
+            "finance_decision_by",
+            "cfo_decision_by",
+            "ceo_decision_by",
+            "disbursed_by",
+        )
+        instances = list(queryset)
+        with CaptureQueriesContext(connection) as queries:
+            LoanRequestReadSerializer(instances, many=True).data
+
+        user_table = User._meta.db_table
+        user_queries = [query["sql"] for query in queries if user_table in query["sql"]]
+        self.assertLessEqual(len(user_queries), 1)
+
+    def test_payroll_generation_fetches_employee_users_with_profiles(self):
+        from payroll.views import _generate_payroll_items
+
+        run = PayrollRun.objects.create(company=self.company, year=2026, month=3)
+        with CaptureQueriesContext(connection) as queries:
+            _generate_payroll_items(run)
+
+        profile_queries = [
+            query["sql"] for query in queries if EmployeeProfile._meta.db_table in query["sql"]
+        ]
+        self.assertEqual(len(profile_queries), 1)
+        self.assertIn(User._meta.db_table, profile_queries[0])
 
     def test_employee_submission_without_manager_sets_pending_hr(self):
         self.employee_profile.manager_profile = None

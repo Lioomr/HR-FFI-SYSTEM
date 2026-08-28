@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.test import TestCase
+from django.test import RequestFactory, TestCase
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -11,6 +11,7 @@ from employees.models import EmployeeProfile
 from organization.models import OrganizationNode
 
 from .models import PayrollRun, Payslip
+from .views import _export_payroll_run_response
 
 User = get_user_model()
 
@@ -148,8 +149,8 @@ class EmployeePayslipSecurityTests(TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response["Content-Type"], "application/pdf")
-        self.assertIn("attachment", response["Content-Disposition"].lower())
+        self.assertEqual(response["Content-Type"], "application/octet-stream")
+        self.assertEqual(response["Content-Disposition"], f'attachment; filename="payslip_{self.current.id}.pdf"')
         self.assertEqual(response["X-Content-Type-Options"], "nosniff")
         self.assertEqual(response["Cache-Control"], "private, no-store")
         self.assertEqual(response["Pragma"], "no-cache")
@@ -159,3 +160,20 @@ class EmployeePayslipSecurityTests(TestCase):
             ).exists()
         )
         self.assertEqual(foreign_response.status_code, status.HTTP_404_NOT_FOUND)
+
+    @patch("payroll.views._build_payroll_report_pdf", return_value=b"%PDF-1.4\nsecure")
+    def test_payroll_exports_force_sensitive_download_headers(self, _build_pdf):
+        factory = RequestFactory()
+        for export_format in ("csv", "xlsx", "pdf"):
+            request = factory.get(
+                f"/payroll-runs/{self.completed_run.id}/export/",
+                {"file_format": export_format},
+            )
+            request.user = self.employee
+            request.query_params = request.GET
+            response = _export_payroll_run_response(request, self.completed_run)
+
+            self.assertEqual(response["Content-Type"], "application/octet-stream")
+            self.assertTrue(response["Content-Disposition"].startswith("attachment; filename=\""))
+            self.assertEqual(response["X-Content-Type-Options"], "nosniff")
+            self.assertEqual(response["Cache-Control"], "private, no-store")

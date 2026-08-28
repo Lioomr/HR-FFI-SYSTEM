@@ -720,7 +720,7 @@ class JobOfferPdfView(APIView):
             entity_id=offer.id,
             metadata=_offer_audit_metadata(offer),
         )
-        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response = HttpResponse(pdf_bytes, content_type="application/octet-stream")
         response["Content-Disposition"] = f'attachment; filename="job-offer-{offer.reference_number}.pdf"'
         response["X-Content-Type-Options"] = "nosniff"
         response["Cache-Control"] = "private, no-store"

@@ -1,3 +1,4 @@
+from collections import defaultdict
 from datetime import date, timedelta
 from decimal import ROUND_FLOOR, ROUND_HALF_UP, Decimal
 
@@ -694,6 +695,7 @@ def get_payment_breakdown(
     requested_days: int,
     employee_subject=None,
     year: int | None = None,
+    balances=None,
 ):
     """
     Returns payment segments for the request:
@@ -706,8 +708,9 @@ def get_payment_breakdown(
         paid_remaining = float(requested_days)
         unpaid_remaining_before_request = 0.0
 
-        if employee_subject is not None and year is not None:
+        if balances is None and employee_subject is not None and year is not None:
             balances = calculate_leave_balance(employee_subject, year)
+        if balances is not None:
             annual_balance = _find_balance_by_code(balances, "ANNUAL", "ANNUAL_LEAVE")
             unpaid_balance = _find_balance_by_code(balances, "UNPAID", "UNPAID_LEAVE")
 
@@ -772,6 +775,373 @@ def get_payment_breakdown(
 
     # Default paid leave.
     return [{"days": requested_days, "pay_percent": 100, "label": "Paid leave"}]
+
+
+def _batch_request_matches_profile(row, profile):
+    return row["employee_profile_id"] == profile.id or (
+        profile.user_id is not None and row["employee_id"] == profile.user_id
+    )
+
+
+def _batch_period_days(rows, leave_type_id, period_start, period_end, statuses, *, active_only=False, as_of=None):
+    total = 0
+    for row in rows:
+        if row["leave_type_id"] != leave_type_id or row["status"] not in statuses:
+            continue
+        if active_only and not row["is_active"]:
+            continue
+        if row["start_date"] > period_end or row["end_date"] < period_start:
+            continue
+        request_start = max(row["start_date"], period_start)
+        request_end = min(row["end_date"], period_end)
+        if as_of is not None:
+            request_end = min(request_end, as_of)
+        if request_start <= request_end:
+            total += get_leave_days(request_start, request_end)
+    return total
+
+
+def _batch_calendar_days(rows, leave_type_id, year, statuses, *, active_only=False, as_of=None):
+    return _batch_period_days(
+        rows,
+        leave_type_id,
+        date(year, 1, 1),
+        date(year, 12, 31),
+        statuses,
+        active_only=active_only,
+        as_of=as_of,
+    )
+
+
+def _batch_prior_annual_carry_forward(payment_rows, profile_id, cycle_start):
+    previous = [
+        row
+        for row in payment_rows
+        if row["employee_profile_id"] == profile_id and row["cycle_end"] < cycle_start
+    ]
+    if not previous:
+        return Decimal("0.00")
+    previous.sort(key=lambda row: (row["cycle_end"], row["id"]), reverse=True)
+    previous = previous[0]
+    if previous["status"] == AnnualLeavePaymentRequest.Status.APPROVED:
+        return Decimal("0.00")
+    if previous["status"] == AnnualLeavePaymentRequest.Status.CARRIED_FORWARD:
+        return previous["carry_forward_days"]
+    return previous["eligible_unused_days"]
+
+
+def _calculate_leave_balance_from_batch(profile, year, batch, memo, as_of=None):
+    key = (profile.id, year, as_of)
+    if key in memo:
+        return memo[key]
+
+    contract_start = get_contract_start_date(profile)
+    hire_year = contract_start.year if contract_start else year
+    if year < hire_year:
+        memo[key] = []
+        return memo[key]
+
+    leave_types = batch["leave_types_by_company"].get(profile.company_id, [])
+    balance_date = as_of or (date.today() if year == date.today().year else date(year, 12, 31))
+    rows = batch["rows_by_profile"].get(profile.id, [])
+    balances = []
+
+    for leave_type in leave_types:
+        code = _normalized_leave_code(leave_type)
+        annual_cycle_start, annual_cycle_end = get_contract_year_cycle(profile, balance_date)
+        if _is_annual(code) and annual_cycle_start:
+            used = 0
+            annual_type = next(
+                (item for item in leave_types if _is_annual(_normalized_leave_code(item))), None
+            )
+            emergency_type = next(
+                (item for item in leave_types if _is_emergency(_normalized_leave_code(item))), None
+            )
+            if annual_type:
+                used += _batch_period_days(
+                    rows,
+                    annual_type.id,
+                    annual_cycle_start,
+                    min(annual_cycle_end, balance_date),
+                    {LeaveRequest.RequestStatus.APPROVED},
+                    active_only=True,
+                    as_of=balance_date,
+                )
+            if emergency_type:
+                used += _batch_period_days(
+                    rows,
+                    emergency_type.id,
+                    annual_cycle_start,
+                    min(annual_cycle_end, balance_date),
+                    {LeaveRequest.RequestStatus.APPROVED},
+                    active_only=True,
+                    as_of=balance_date,
+                )
+            pending_days = 0
+            for item in leave_types:
+                if _is_annual(_normalized_leave_code(item)) or _is_emergency(_normalized_leave_code(item)):
+                    pending_days += _batch_period_days(
+                        rows,
+                        item.id,
+                        annual_cycle_start,
+                        min(annual_cycle_end, balance_date),
+                        PENDING_RESERVATION_STATUSES,
+                        active_only=True,
+                        as_of=balance_date,
+                    )
+        else:
+            used = _batch_calendar_days(
+                rows,
+                leave_type.id,
+                year,
+                {LeaveRequest.RequestStatus.APPROVED},
+                as_of=balance_date,
+            )
+            pending_days = _batch_calendar_days(
+                rows,
+                leave_type.id,
+                year,
+                PENDING_RESERVATION_STATUSES,
+                active_only=True,
+                as_of=balance_date,
+            )
+
+        opening = 0.0
+        if leave_type.allow_carry_over and year > hire_year:
+            previous_balances = _calculate_leave_balance_from_batch(profile, year - 1, batch, memo)
+            previous = next(
+                (item for item in previous_balances if item["leave_type_id"] == leave_type.id), None
+            )
+            if previous:
+                opening = float(previous["remaining_days"])
+                if leave_type.max_carry_over is not None:
+                    opening = min(opening, float(leave_type.max_carry_over))
+
+        configured_quota = float(leave_type.annual_quota or 0.0)
+        if _is_annual(code):
+            quota = configured_quota if configured_quota > 0 else get_annual_entitlement(profile, year)
+        elif _is_sick(code):
+            quota = configured_quota if configured_quota > 0 else float(SICK_MAX_DAYS_PER_YEAR)
+        elif _is_emergency(code):
+            quota = configured_quota if configured_quota > 0 else float(EMERGENCY_MAX_DAYS_PER_YEAR)
+        elif _is_unpaid(code):
+            quota = configured_quota if configured_quota > 0 else float(UNPAID_MAX_DAYS_PER_YEAR)
+        elif _is_marriage(code):
+            quota = configured_quota if configured_quota > 0 else float(MARRIAGE_MAX_DAYS)
+        elif _is_death(code):
+            quota = configured_quota if configured_quota > 0 else float(DEATH_MAX_DAYS)
+        elif _is_birth(code):
+            quota = configured_quota if configured_quota > 0 else float(BIRTH_MAX_DAYS)
+        else:
+            quota = configured_quota
+
+        adjustments = batch["adjustments"].get((profile.id, leave_type.id, year), 0.0)
+        available_annual_year_days = None
+        if _is_annual(code):
+            available_annual_year_days = float(get_annual_accrual_details(profile, balance_date)["accrued_days"])
+            if configured_quota > 0:
+                available_annual_year_days = min(available_annual_year_days, configured_quota)
+
+        emergency_available_days = None
+        if _is_emergency(code):
+            annual_type = next(
+                (item for item in leave_types if _is_annual(_normalized_leave_code(item))), None
+            )
+            annual_details = get_annual_accrual_details(profile, balance_date) if annual_type else {}
+            if annual_type and annual_details.get("cycle_start"):
+                annual_total = float(annual_details["accrued_days"]) + float(
+                    _batch_prior_annual_carry_forward(
+                        batch["payment_rows"], profile.id, annual_details["cycle_start"]
+                    )
+                )
+                annual_used_only = _batch_period_days(
+                    rows,
+                    annual_type.id,
+                    annual_details["cycle_start"],
+                    min(annual_details["cycle_end"], balance_date),
+                    {LeaveRequest.RequestStatus.APPROVED},
+                    active_only=True,
+                    as_of=balance_date,
+                )
+                annual_remaining_after_annual = max(0.0, annual_total - annual_used_only)
+                emergency_available_days = (
+                    min(float(EMERGENCY_MAX_DAYS_PER_YEAR), max(0.0, annual_remaining_after_annual - used))
+                    + adjustments
+                )
+
+        if _is_marriage(code) and any(
+            row["leave_type_id"] == leave_type.id and row["status"] == LeaveRequest.RequestStatus.APPROVED
+            for row in rows
+        ):
+            quota = 0.0
+
+        available_total = opening + quota + adjustments
+        if available_annual_year_days is not None:
+            prior_carry = float(
+                _batch_prior_annual_carry_forward(
+                    batch["payment_rows"], profile.id, annual_cycle_start
+                )
+            ) if annual_cycle_start else 0.0
+            available_total = prior_carry + available_annual_year_days + adjustments
+        if emergency_available_days is not None:
+            available_total = emergency_available_days
+
+        remaining = max(0.0, available_total - used)
+        requestable_days = max(
+            0.0,
+            float(Decimal(str(remaining)).quantize(Decimal("1"), rounding=ROUND_FLOOR)) - pending_days,
+        )
+        fractional_days = max(
+            0.0,
+            remaining - float(Decimal(str(remaining)).quantize(Decimal("1"), rounding=ROUND_FLOOR)),
+        )
+        balances.append(
+            {
+                "leave_type_id": leave_type.id,
+                "leave_type": leave_type.name,
+                "leave_code": code,
+                "total_days": float(available_total),
+                "used_days": float(used),
+                "remaining_days": float(remaining),
+                "pending_days": float(pending_days),
+                "requestable_days": requestable_days,
+                "fractional_days": fractional_days,
+                "adjustments": adjustments,
+                **(
+                    {"available_annual_year_days": float(available_annual_year_days)}
+                    if available_annual_year_days is not None
+                    else {}
+                ),
+            }
+        )
+
+    annual_balance = _find_balance_by_code(balances, "ANNUAL", "ANNUAL_LEAVE")
+    unpaid_balance = _find_balance_by_code(balances, "UNPAID", "UNPAID_LEAVE")
+    if annual_balance and unpaid_balance:
+        annual_overflow = max(0.0, float(annual_balance["used_days"]) - float(annual_balance["total_days"]))
+        unpaid_balance["used_days"] = float(unpaid_balance["used_days"]) + annual_overflow
+        unpaid_balance["remaining_days"] = max(
+            0.0, float(unpaid_balance["total_days"]) - float(unpaid_balance["used_days"])
+        )
+
+    memo[key] = balances
+    return balances
+
+
+def get_leave_request_payment_context(instances):
+    """Batch payment/balance inputs for a leave list without mutating database state."""
+    instances = list(instances)
+    profile_by_instance = {}
+    profiles = {}
+    years = set()
+    for instance in instances:
+        profile = instance.employee_profile or resolve_employee_profile(instance.employee)
+        if profile is None:
+            continue
+        profile_by_instance[instance.pk] = profile
+        profiles[profile.id] = profile
+        years.add(instance.start_date.year)
+
+    if not profiles:
+        return {}
+
+    minimum_year = min(
+        [*years, *[(get_contract_start_date(profile) or date(min(years), 1, 1)).year for profile in profiles.values()]]
+    )
+    maximum_year = max(years)
+    user_ids = [profile.user_id for profile in profiles.values() if profile.user_id]
+    profile_ids = list(profiles)
+    request_rows = list(
+        LeaveRequest.objects.filter(
+            Q(employee_id__in=user_ids) | Q(employee_profile_id__in=profile_ids),
+            start_date__lte=date(maximum_year, 12, 31),
+            end_date__gte=date(minimum_year, 1, 1),
+            status__in=set(PENDING_RESERVATION_STATUSES) | {LeaveRequest.RequestStatus.APPROVED},
+        ).values(
+            "id",
+            "employee_id",
+            "employee_profile_id",
+            "leave_type_id",
+            "start_date",
+            "end_date",
+            "status",
+            "is_active",
+        )
+    )
+
+    rows_by_profile = defaultdict(list)
+    for profile in profiles.values():
+        rows_by_profile[profile.id] = [row for row in request_rows if _batch_request_matches_profile(row, profile)]
+
+    company_ids = {profile.company_id for profile in profiles.values() if profile.company_id}
+    leave_types_by_company = defaultdict(list)
+    for leave_type in LeaveType.objects.filter(company_id__in=company_ids, is_active=True).order_by("id"):
+        leave_types_by_company[leave_type.company_id].append(leave_type)
+
+    adjustment_rows = LeaveBalanceAdjustment.objects.filter(
+        Q(employee_profile_id__in=profile_ids) | Q(employee_id__in=user_ids),
+        company_id__in=company_ids,
+        leave_type__company_id__in=company_ids,
+        created_at__year__gte=minimum_year,
+        created_at__year__lte=maximum_year,
+    ).values(
+        "id",
+        "employee_id",
+        "employee_profile_id",
+        "leave_type_id",
+        "adjustment_days",
+        "created_at",
+        "company_id",
+        "leave_type__company_id",
+    )
+    adjustments = defaultdict(float)
+    for row in adjustment_rows:
+        for profile in profiles.values():
+            if (
+                _batch_request_matches_profile(row, profile)
+                and row["company_id"] == profile.company_id
+                and row["leave_type__company_id"] == profile.company_id
+            ):
+                adjustments[(profile.id, row["leave_type_id"], row["created_at"].year)] += float(row["adjustment_days"])
+
+    payment_rows = list(
+        AnnualLeavePaymentRequest.objects.filter(employee_profile_id__in=profile_ids).values(
+            "id", "employee_profile_id", "cycle_end", "status", "carry_forward_days", "eligible_unused_days"
+        )
+    )
+    batch = {
+        "rows_by_profile": rows_by_profile,
+        "leave_types_by_company": leave_types_by_company,
+        "adjustments": adjustments,
+        "payment_rows": payment_rows,
+    }
+    balance_memo = {}
+    context = {}
+    for instance in instances:
+        profile = profile_by_instance.get(instance.pk)
+        if profile is None:
+            continue
+        year = instance.start_date.year
+        balances = _calculate_leave_balance_from_batch(profile, year, batch, balance_memo)
+        rows = rows_by_profile[profile.id]
+        used_total = _batch_calendar_days(
+            rows,
+            instance.leave_type_id,
+            year,
+            {LeaveRequest.RequestStatus.APPROVED},
+        )
+        current_days = get_leave_days(instance.start_date, instance.end_date)
+        used_before = max(0.0, used_total - current_days) if instance.status == LeaveRequest.RequestStatus.APPROVED else used_total
+        breakdown = get_payment_breakdown(
+            instance.leave_type,
+            used_before,
+            current_days,
+            employee_subject=profile,
+            year=year,
+            balances=balances,
+        )
+        context[instance.pk] = {"breakdown": breakdown}
+    return context
 
 
 def validate_leave_request_policy(

@@ -376,7 +376,10 @@ class JobOfferApiTests(APITestCase):
         self.authenticate_hr()
         response = self.client.get(f"/job-offers/{offer.id}/pdf/", **self.headers)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertEqual(response["Content-Type"], "application/octet-stream")
+        self.assertIn("attachment", response["Content-Disposition"].lower())
+        self.assertEqual(response["X-Content-Type-Options"], "nosniff")
+        self.assertEqual(response["Cache-Control"], "private, no-store")
         self.assertTrue(response.content.startswith(b"%PDF"))
         self.assertTrue(AuditLog.objects.filter(action="job_offer_pdf_downloaded", entity_id=str(offer.id)).exists())
 

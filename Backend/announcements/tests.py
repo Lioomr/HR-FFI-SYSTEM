@@ -472,6 +472,26 @@ class MeetingAnnouncementTests(APITestCase):
         self.assertEqual(result["reason"], "no_recipients")
         self.assertIn("announcement_email_skipped_no_recipients", "\n".join(logs.output))
 
+    def test_send_announcement_email_logs_provider_failure_without_hiding_it(self):
+        announcement = Announcement.objects.create(
+            company=self.company,
+            title="Provider Failure Notice",
+            content="The delivery provider is unavailable.",
+            target_roles=[],
+            target_user=self.employee_one,
+            publish_to_dashboard=True,
+            publish_to_email=True,
+            created_by=self.hr,
+        )
+
+        with patch("announcements.utils.send_announcement_notification_email") as send_email:
+            send_email.return_value = {"success": False, "status_code": 503}
+            with self.assertLogs("announcements.utils", level="ERROR") as logs:
+                result = send_announcement_email(announcement)
+
+        self.assertEqual(result, {"sent": 0, "failed": 1, "reason": None})
+        self.assertIn("announcement_email_failed", "\n".join(logs.output))
+
     @override_settings(EMAIL_DISPLAY_TIME_ZONE="Asia/Riyadh")
     def test_announcement_email_timestamp_uses_configured_display_timezone(self):
         published_at = timezone.make_aware(timezone.datetime(2026, 5, 1, 11, 54))

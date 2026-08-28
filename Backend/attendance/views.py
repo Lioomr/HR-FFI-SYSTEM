@@ -1,3 +1,4 @@
+import logging
 from datetime import date as date_type
 from datetime import timedelta
 
@@ -46,6 +47,17 @@ from .serializers import (
     CheckInResponseSerializer,
     CheckOutResponseSerializer,
 )
+
+logger = logging.getLogger(__name__)
+
+
+def _log_notification_failure(event_name, *, entity_id, notification_type, actor_id=None, channel=None):
+    extra = {"entity_id": entity_id, "notification_type": notification_type}
+    if actor_id is not None:
+        extra["actor_id"] = actor_id
+    if channel is not None:
+        extra["channel"] = channel
+    logger.exception(event_name, extra=extra)
 
 User = get_user_model()
 
@@ -368,7 +380,12 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
                     action_path="/ceo/attendance",
                 )
         except Exception:
-            pass
+            _log_notification_failure(
+                "attendance_check_in_notification_failed",
+                entity_id=record.id,
+                notification_type="attendance_submitted",
+                actor_id=request.user.id,
+            )
         return success(CheckInResponseSerializer(record).data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=["post"], url_path="me/check-out", throttle_classes=[AttendanceThrottle])
@@ -556,7 +573,11 @@ class AttendanceCorrectionRequestViewSet(viewsets.ModelViewSet):
                     action_path="/hr/attendance-correction-requests",
                 )
         except Exception:
-            pass
+            _log_notification_failure(
+                "attendance_correction_pending_notification_failed",
+                entity_id=instance.id,
+                notification_type="pending_status",
+            )
 
     @action(detail=True, methods=["post"])
     def submit(self, request, pk=None):
@@ -646,7 +667,12 @@ class AttendanceCorrectionRequestViewSet(viewsets.ModelViewSet):
                     action_path="/employee/attendance",
                 )
             except Exception:
-                pass
+                _log_notification_failure(
+                    "attendance_correction_approval_notification_failed",
+                    entity_id=instance.id,
+                    notification_type="attendance_correction_approved",
+                    actor_id=request.user.id,
+                )
             return success(self._serialize(instance))
 
         return error("Request is not in an approvable state.", status=status.HTTP_422_UNPROCESSABLE_ENTITY)
@@ -704,7 +730,12 @@ class AttendanceCorrectionRequestViewSet(viewsets.ModelViewSet):
                 action_path="/employee/attendance",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "attendance_correction_rejection_notification_failed",
+                entity_id=instance.id,
+                notification_type="attendance_correction_rejected",
+                actor_id=request.user.id,
+            )
         return success(self._serialize(instance))
 
     @action(detail=True, methods=["post"])
@@ -857,7 +888,12 @@ class ManagerAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
                 action_path="/hr/attendance",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "attendance_manager_approval_notification_failed",
+                entity_id=instance.id,
+                notification_type="pending_status",
+                actor_id=request.user.id,
+            )
         return success(AttendanceRecordSerializer(instance).data)
 
     @action(detail=True, methods=["post"])
@@ -910,7 +946,12 @@ class ManagerAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
                 action_path="/employee/attendance",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "attendance_manager_rejection_notification_failed",
+                entity_id=instance.id,
+                notification_type="attendance_rejected",
+                actor_id=request.user.id,
+            )
         return success(AttendanceRecordSerializer(instance).data)
 
 
@@ -990,7 +1031,12 @@ class CEOAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
                 action_path="/employee/attendance",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "attendance_ceo_approval_notification_failed",
+                entity_id=instance.id,
+                notification_type="attendance_approved",
+                actor_id=request.user.id,
+            )
         return success(AttendanceRecordSerializer(instance).data)
 
     @action(detail=True, methods=["post"])
@@ -1031,5 +1077,10 @@ class CEOAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
                 action_path="/employee/attendance",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "attendance_ceo_rejection_notification_failed",
+                entity_id=instance.id,
+                notification_type="attendance_rejected",
+                actor_id=request.user.id,
+            )
         return success(AttendanceRecordSerializer(instance).data)

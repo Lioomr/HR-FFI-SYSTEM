@@ -484,6 +484,27 @@ class EmployeeDeletionRequestReadSerializer(serializers.ModelSerializer):
             "updated_at",
             "workflow",
         ]
+        # This serializer is output-only in practice (the view blocks direct update/
+        # partial_update with 405 and routes state changes through the approve/reject
+        # actions), but every workflow/system field is read-only here too so it stays
+        # safe to use for writes even if that view-level guard is ever relaxed.
+        read_only_fields = [
+            "reason",
+            "archive_reason",
+            "status",
+            "request_snapshot",
+            "execution_snapshot",
+            "rejection_reason",
+            "requested_by",
+            "approved_by",
+            "rejected_by",
+            "approved_at",
+            "rejected_at",
+            "executed_at",
+            "company",
+            "employee_profile",
+            "target_user",
+        ]
 
     def get_workflow(self, obj):
         request = self.context.get("request")

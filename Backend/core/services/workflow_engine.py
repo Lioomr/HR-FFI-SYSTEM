@@ -7,7 +7,7 @@ from typing import Any
 from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Prefetch, Q
 from django.utils import timezone
 
 from audit.utils import audit
@@ -1296,35 +1296,75 @@ def sync_workflow(instance, *, actor=None, workflow_key: str | None = None) -> W
     return workflow
 
 
-def get_workflow_snapshot(instance, *, actor=None) -> dict[str, Any]:
-    workflow = sync_workflow(instance, actor=actor)
-    history = []
-    for action in workflow.actions.all().order_by("created_at", "id"):
-        stage = action.from_stage or action.approver_role
-        if action.action != WorkflowAction.Action.SUBMIT:
-            stage = stage or action.to_stage
-        history.append(
-            {
-                "id": action.id,
-                "action": action.action,
-                "stage": stage,
-                "approver_role": action.approver_role,
-                "actor": {
-                    "id": action.actor_id,
-                    "email": getattr(action.actor, "email", None),
-                    "full_name": getattr(action.actor, "full_name", None),
-                }
-                if action.actor_id
-                else None,
-                "at": action.created_at,
-                "note": action.note,
-                "from_status": action.from_status,
-                "to_status": action.to_status,
-                "from_stage": action.from_stage,
-                "to_stage": action.to_stage,
-                "metadata": action.metadata,
-            }
+def _workflow_action_snapshot(action) -> dict[str, Any]:
+    stage = action.from_stage or action.approver_role
+    if action.action != WorkflowAction.Action.SUBMIT:
+        stage = stage or action.to_stage
+    return {
+        "id": action.id,
+        "action": action.action,
+        "stage": stage,
+        "approver_role": action.approver_role,
+        "actor": {
+            "id": action.actor_id,
+            "email": getattr(action.actor, "email", None),
+            "full_name": getattr(action.actor, "full_name", None),
+        }
+        if action.actor_id
+        else None,
+        "at": action.created_at,
+        "note": action.note,
+        "from_status": action.from_status,
+        "to_status": action.to_status,
+        "from_stage": action.from_stage,
+        "to_stage": action.to_stage,
+        "metadata": action.metadata,
+    }
+
+
+def _workflow_snapshot_from_instance(instance, workflow, *, actor=None, use_prefetched_actions=False) -> dict[str, Any]:
+    if workflow is None:
+        _, snapshot_builder, events_builder = _adapter_for_instance(instance)
+        legacy_snapshot = snapshot_builder(instance)
+        workflow = WorkflowInstance(
+            status=legacy_snapshot["status"],
+            current_stage=legacy_snapshot["current_stage"],
+            current_approver_role=legacy_snapshot["current_role"],
+            current_actor_user_id=getattr(legacy_snapshot["current_actor_user"], "id", None),
         )
+        workflow.current_actor_user = legacy_snapshot["current_actor_user"]
+        history = []
+        for event in events_builder(instance):
+            stage = event.from_stage or event.approver_role
+            if event.action != WorkflowAction.Action.SUBMIT:
+                stage = stage or event.to_stage
+            history.append(
+                {
+                    "id": None,
+                    "action": event.action,
+                    "stage": stage,
+                    "approver_role": event.approver_role,
+                    "actor": {
+                        "id": getattr(event.actor, "id", None),
+                        "email": getattr(event.actor, "email", None),
+                        "full_name": getattr(event.actor, "full_name", None),
+                    }
+                    if event.actor
+                    else None,
+                    "at": event.at,
+                    "note": event.note,
+                    "from_status": event.from_status,
+                    "to_status": event.to_status,
+                    "from_stage": event.from_stage,
+                    "to_stage": event.to_stage,
+                    "metadata": event.metadata,
+                }
+            )
+    else:
+        actions = workflow.actions.all()
+        if not use_prefetched_actions:
+            actions = actions.order_by("created_at", "id")
+        history = [_workflow_action_snapshot(action) for action in actions]
     current_actor = None
     if workflow.current_actor_user_id:
         current_actor = {
@@ -1353,6 +1393,52 @@ def get_workflow_snapshot(instance, *, actor=None) -> dict[str, Any]:
         ),
         "history": history,
     }
+
+
+def get_workflow_snapshots(instances, *, actor=None) -> dict[int, dict[str, Any]]:
+    """Return workflow snapshots for a collection without synchronizing or writing."""
+    instances = list(instances)
+    if not instances:
+        return {}
+
+    grouped = {}
+    for instance in instances:
+        content_type_id = ContentType.objects.get_for_model(instance.__class__).id
+        grouped.setdefault(content_type_id, []).append(instance)
+
+    workflows = {}
+    for content_type_id, grouped_instances in grouped.items():
+        queryset = (
+            WorkflowInstance.objects.select_related("current_actor_user", "submitted_by")
+            .prefetch_related(
+                Prefetch(
+                    "actions",
+                    queryset=WorkflowAction.objects.select_related("actor").order_by("created_at", "id"),
+                )
+            )
+            .filter(content_type_id=content_type_id, object_id__in=[item.pk for item in grouped_instances])
+        )
+        workflows.update({(content_type_id, workflow.object_id): workflow for workflow in queryset})
+
+    snapshots = {}
+    for instance in instances:
+        content_type_id = ContentType.objects.get_for_model(instance.__class__).id
+        snapshots[instance.pk] = _workflow_snapshot_from_instance(
+            instance,
+            workflows.get((content_type_id, instance.pk)),
+            actor=actor,
+            use_prefetched_actions=True,
+        )
+    return snapshots
+
+
+def get_workflow_snapshot(instance, *, actor=None) -> dict[str, Any]:
+    workflow = sync_workflow(instance, actor=actor)
+    return _workflow_snapshot_from_instance(instance, workflow, actor=actor)
+
+
+def get_workflow_snapshot_read_only(instance, *, actor=None) -> dict[str, Any]:
+    return get_workflow_snapshots([instance], actor=actor)[instance.pk]
 
 
 def get_pending_approvals_for_role(role: str, *, limit: int | None = 10) -> list[WorkflowInstance]:

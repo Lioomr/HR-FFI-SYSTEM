@@ -9,7 +9,12 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from core.permissions import get_role
-from core.services import get_obligations_summary, get_workflow_snapshot, sync_leave_obligations
+from core.services import (
+    get_obligations_summaries,
+    get_obligations_summary,
+    get_workflow_snapshot_read_only,
+    get_workflow_snapshots,
+)
 from employees.models import EmployeeProfile
 
 from .models import AnnualLeavePaymentRequest, LeaveBalanceAdjustment, LeaveRequest, LeaveType
@@ -19,6 +24,7 @@ from .utils import (
     build_annual_leave_payment_snapshot,
     get_contract_year_cycle,
     get_leave_days,
+    get_leave_request_payment_context,
     get_payment_breakdown,
     get_used_days_for_type,
     has_active_annual_leave_settlement,
@@ -72,6 +78,22 @@ class LeaveBalanceSerializer(serializers.Serializer):
     fractional_days = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
 
 
+class LeaveRequestListSerializer(serializers.ListSerializer):
+    def to_representation(self, data):
+        instances = list(data)
+        request = self.context.get("request")
+        actor = getattr(request, "user", None) if request else None
+        self.child._workflow_snapshot_cache = get_workflow_snapshots(instances, actor=actor)
+        self.child._obligations_summary_cache = get_obligations_summaries(instances)
+        self.child._payment_context_cache = get_leave_request_payment_context(instances)
+        try:
+            return super().to_representation(instances)
+        finally:
+            self.child._workflow_snapshot_cache = None
+            self.child._obligations_summary_cache = None
+            self.child._payment_context_cache = None
+
+
 class LeaveRequestSerializer(serializers.ModelSerializer):
     employee = serializers.SerializerMethodField()
     leave_type = LeaveTypeSerializer(read_only=True)
@@ -100,6 +122,7 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+        list_serializer_class = LeaveRequestListSerializer
 
     def get_days(self, obj):
         return get_leave_days(obj.start_date, obj.end_date)
@@ -121,6 +144,9 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
         }
 
     def get_payment_breakdown(self, obj):
+        payment_cache = getattr(self, "_payment_context_cache", None)
+        if payment_cache is not None and obj.pk in payment_cache:
+            return payment_cache[obj.pk]["breakdown"]
         year = obj.start_date.year
         employee_subject = obj.employee_profile or obj.employee
         current_days = get_leave_days(obj.start_date, obj.end_date)
@@ -161,15 +187,16 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
     def get_workflow(self, obj):
         request = self.context.get("request")
         actor = getattr(request, "user", None) if request else None
-        return get_workflow_snapshot(obj, actor=actor)
+        cache = getattr(self, "_workflow_snapshot_cache", None)
+        if cache is not None and obj.pk in cache:
+            return cache[obj.pk]
+        return get_workflow_snapshot_read_only(obj, actor=actor)
 
     def get_obligations_summary(self, obj):
-        request = self.context.get("request")
-        actor = getattr(request, "user", None) if request else None
-        try:
-            return sync_leave_obligations(obj, actor=actor)
-        except Exception:
-            return get_obligations_summary(obj)
+        cache = getattr(self, "_obligations_summary_cache", None)
+        if cache is not None and obj.pk in cache:
+            return cache[obj.pk]
+        return get_obligations_summary(obj)
 
     def get_requires_hr_completion_visa(self, obj):
         profile = obj.employee_profile or resolve_employee_profile(obj.employee)
@@ -178,7 +205,9 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
     def get_employee_documents(self, obj):
         from employees.serializers import EmployeeDocumentSerializer
 
-        documents = obj.employee_documents.select_related("uploaded_by", "company", "leave_request")
+        documents = getattr(obj, "_prefetched_objects_cache", {}).get("employee_documents")
+        if documents is None:
+            documents = obj.employee_documents.select_related("uploaded_by", "company", "leave_request")
         return EmployeeDocumentSerializer(documents, many=True, context=self.context).data
 
 

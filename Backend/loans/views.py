@@ -1,3 +1,5 @@
+import logging
+
 from django.db import transaction
 from django.http import HttpResponse
 from django.utils import timezone
@@ -45,6 +47,36 @@ from .permissions import (
     is_hr_approver_user,
 )
 from .serializers import LoanRequestActionSerializer, LoanRequestCreateSerializer, LoanRequestReadSerializer
+
+logger = logging.getLogger(__name__)
+
+LOAN_READ_SELECT_RELATED = (
+    "employee",
+    "employee_profile",
+    "company",
+    "manager_decision_by",
+    "finance_decision_by",
+    "cfo_decision_by",
+    "ceo_decision_by",
+    "disbursed_by",
+)
+
+
+def _log_notification_failure(event_name, *, entity_id, notification_type, actor_id=None, channel=None):
+    extra = {"entity_id": entity_id, "notification_type": notification_type}
+    if actor_id is not None:
+        extra["actor_id"] = actor_id
+    if channel is not None:
+        extra["channel"] = channel
+    logger.exception(event_name, extra=extra)
+
+
+def _configure_sensitive_download(response, filename):
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    response["Content-Type"] = "application/octet-stream"
+    response["X-Content-Type-Options"] = "nosniff"
+    response["Cache-Control"] = "private, no-store"
+    return response
 
 LEGACY_PENDING_HR_STATUSES = [
     LoanRequest.RequestStatus.PENDING_HR,
@@ -546,7 +578,7 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        qs = LoanRequest.objects.filter(is_active=True).select_related("employee", "employee_profile", "company")
+        qs = LoanRequest.objects.filter(is_active=True).select_related(*LOAN_READ_SELECT_RELATED)
         if self.action == "list":
             return filter_queryset_by_company_scope(qs, self.request)
         return filter_queryset_by_accessible_companies(qs, self.request)
@@ -605,7 +637,13 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
                 action_path=f"/employee/loans/{instance.id}",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "loan_submission_email_failed",
+                entity_id=instance.id,
+                notification_type="loan_submitted",
+                actor_id=request.user.id,
+                channel="email",
+            )
         try:
             requester_name = request.user.full_name or request.user.email
             details = [f"Loan Type: {instance.loan_type}", f"Requested Amount: {instance.requested_amount}"]
@@ -642,7 +680,12 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
                     action_path=f"/ceo/loan-requests/{instance.id}",
                 )
         except Exception:
-            pass
+            _log_notification_failure(
+                "loan_submission_pending_notification_failed",
+                entity_id=instance.id,
+                notification_type="pending_status",
+                actor_id=request.user.id,
+            )
         return success(LoanRequestReadSerializer(instance).data, status=status.HTTP_201_CREATED)
 
     def list(self, request, *args, **kwargs):
@@ -741,7 +784,12 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
                 action_path=f"/cfo/loan-requests/{instance.id}",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "loan_hr_approval_notification_failed",
+                entity_id=instance.id,
+                notification_type="pending_status",
+                actor_id=request.user.id,
+            )
         return success(LoanRequestReadSerializer(instance).data)
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsHRApproverOrAdmin])
@@ -791,7 +839,12 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
                 action_path=f"/cfo/loan-requests/{instance.id}",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "loan_hr_rejection_notification_failed",
+                entity_id=instance.id,
+                notification_type="pending_status",
+                actor_id=request.user.id,
+            )
         return success(LoanRequestReadSerializer(instance).data)
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsEmployeeOnly])
@@ -833,11 +886,8 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
             entity="LoanRequest",
             entity_id=instance.id,
         )
-        response = HttpResponse(pdf_bytes, content_type="application/pdf")
         filename = f"loan_request_{instance.id}.pdf"
-        disposition = "attachment" if _to_bool(request.query_params.get("download", "1")) else "inline"
-        response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
-        return response
+        return _configure_sensitive_download(HttpResponse(pdf_bytes, content_type="application/octet-stream"), filename)
 
 
 class EmployeeLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
@@ -847,7 +897,7 @@ class EmployeeLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         return LoanRequest.objects.filter(employee=self.request.user, is_active=True).select_related(
-            "employee", "employee_profile", "company"
+            *LOAN_READ_SELECT_RELATED
         )
 
     def list(self, request, *args, **kwargs):
@@ -876,7 +926,7 @@ class ManagerLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         role = get_role(self.request.user)
-        qs = LoanRequest.objects.filter(is_active=True).select_related("employee", "employee_profile", "company")
+        qs = LoanRequest.objects.filter(is_active=True).select_related(*LOAN_READ_SELECT_RELATED)
         if self.action == "list":
             base_qs = filter_queryset_by_company_scope(qs, self.request)
         else:
@@ -954,7 +1004,12 @@ class ManagerLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
                 action_path=f"/finance/loan-requests/{instance.id}",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "loan_manager_approval_notification_failed",
+                entity_id=instance.id,
+                notification_type="pending_status",
+                actor_id=request.user.id,
+            )
         return success(LoanRequestReadSerializer(instance).data)
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsManagerOrAdmin])
@@ -1016,7 +1071,12 @@ class ManagerLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
                 action_path=f"/finance/loan-requests/{instance.id}",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "loan_manager_rejection_notification_failed",
+                entity_id=instance.id,
+                notification_type="pending_status",
+                actor_id=request.user.id,
+            )
         return success(LoanRequestReadSerializer(instance).data)
 
 
@@ -1030,7 +1090,7 @@ class CFOLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ["-created_at"]
 
     def get_queryset(self):
-        qs = LoanRequest.objects.filter(is_active=True).select_related("employee", "employee_profile", "company")
+        qs = LoanRequest.objects.filter(is_active=True).select_related(*LOAN_READ_SELECT_RELATED)
         if self.action == "list":
             qs = filter_queryset_by_company_scope(qs, self.request)
         else:
@@ -1103,7 +1163,12 @@ class CFOLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
                 action_path=f"/finance/loan-requests/{instance.id}",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "loan_cfo_approval_notification_failed",
+                entity_id=instance.id,
+                notification_type="pending_status",
+                actor_id=request.user.id,
+            )
         return success(LoanRequestReadSerializer(instance).data)
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsCFOApproverOrAdmin])
@@ -1152,7 +1217,12 @@ class CFOLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
                 action_path="/employee/loans",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "loan_cfo_rejection_notification_failed",
+                entity_id=instance.id,
+                notification_type="loan_rejected",
+                actor_id=request.user.id,
+            )
         return success(LoanRequestReadSerializer(instance).data)
 
     @action(
@@ -1206,7 +1276,12 @@ class CFOLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
                 action_path=f"/ceo/loan-requests/{instance.id}",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "loan_ceo_referral_notification_failed",
+                entity_id=instance.id,
+                notification_type="pending_status",
+                actor_id=request.user.id,
+            )
         return success(LoanRequestReadSerializer(instance).data)
 
 
@@ -1220,7 +1295,7 @@ class CEOLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ["-created_at"]
 
     def get_queryset(self):
-        qs = LoanRequest.objects.filter(is_active=True).select_related("employee", "employee_profile", "company")
+        qs = LoanRequest.objects.filter(is_active=True).select_related(*LOAN_READ_SELECT_RELATED)
         if self.action == "list":
             qs = filter_queryset_by_company_scope(qs, self.request)
         else:
@@ -1293,7 +1368,12 @@ class CEOLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
                 action_path=f"/finance/loan-requests/{instance.id}",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "loan_ceo_approval_notification_failed",
+                entity_id=instance.id,
+                notification_type="pending_status",
+                actor_id=request.user.id,
+            )
         return success(LoanRequestReadSerializer(instance).data)
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsCEOApproverOrAdmin])
@@ -1342,7 +1422,12 @@ class CEOLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
                 action_path="/employee/loans",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "loan_ceo_rejection_notification_failed",
+                entity_id=instance.id,
+                notification_type="loan_rejected",
+                actor_id=request.user.id,
+            )
         return success(LoanRequestReadSerializer(instance).data)
 
 
@@ -1356,7 +1441,7 @@ class DisbursementLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ["-created_at"]
 
     def get_queryset(self):
-        qs = LoanRequest.objects.filter(is_active=True).select_related("employee", "employee_profile", "company")
+        qs = LoanRequest.objects.filter(is_active=True).select_related(*LOAN_READ_SELECT_RELATED)
         if self.action == "list":
             qs = filter_queryset_by_company_scope(qs, self.request)
         else:
@@ -1382,20 +1467,25 @@ class DisbursementLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
         if not serializer.is_valid():
             return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
 
-        instance.status = LoanRequest.RequestStatus.APPROVED
-        instance.disbursed_by = request.user
-        instance.disbursed_at = timezone.now()
-        instance.disbursement_note = serializer.validated_data.get("comment", "")
-        instance.save(
-            update_fields=[
-                "status",
-                "disbursed_by",
-                "disbursed_at",
-                "disbursement_note",
-                "updated_at",
-            ]
-        )
-        sync_workflow(instance, actor=request.user)
+        with transaction.atomic():
+            instance = LoanRequest.objects.select_for_update().get(pk=instance.pk)
+            if instance.status != LoanRequest.RequestStatus.PENDING_DISBURSEMENT:
+                return error("Validation error", errors=["Request is not pending disbursement."], status=422)
+
+            instance.status = LoanRequest.RequestStatus.APPROVED
+            instance.disbursed_by = request.user
+            instance.disbursed_at = timezone.now()
+            instance.disbursement_note = serializer.validated_data.get("comment", "")
+            instance.save(
+                update_fields=[
+                    "status",
+                    "disbursed_by",
+                    "disbursed_at",
+                    "disbursement_note",
+                    "updated_at",
+                ]
+            )
+            sync_workflow(instance, actor=request.user)
         audit(request, "loan_request_disbursed", entity="LoanRequest", entity_id=instance.id)
         try:
             notify_profile_request_status_whatsapp(
@@ -1407,5 +1497,10 @@ class DisbursementLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
                 action_path="/employee/loans",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "loan_disbursement_notification_failed",
+                entity_id=instance.id,
+                notification_type="loan_disbursed",
+                actor_id=request.user.id,
+            )
         return success(LoanRequestReadSerializer(instance).data)
