@@ -34,3 +34,35 @@ export type ApprovalMutationOutcome =
   | { status: 'success' }
   /** `details` holds only server validation text sanitized by the API client. */
   | { status: 'failed'; messageKey: ApprovalFailureKey; details: readonly string[] };
+
+export interface DelegationUser {
+  id: number | string | null;
+  email: string | null;
+  fullName: string | null;
+}
+
+export interface DelegationRule {
+  id: number | string | null;
+  fromUser: DelegationUser;
+  toUser: DelegationUser;
+  startAt: string | null;
+  endAt: string | null;
+  reason: string | null;
+  isActive: boolean;
+}
+
+export interface DelegationCandidate {
+  id: number | string | null;
+  employeeId: string | null;
+  fullName: string | null;
+  fullNameEn: string | null;
+  fullNameAr: string | null;
+  canDelegate: boolean;
+}
+
+export interface DelegationDraft {
+  toUserId: number | string | null;
+  startDate: string;
+  endDate: string;
+  reason: string;
+}
