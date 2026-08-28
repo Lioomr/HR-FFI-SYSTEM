@@ -3,6 +3,7 @@ export { ApprovalsScreen } from './ApprovalsScreen';
 export { LeaveApprovalDetail } from './LeaveApprovalDetail';
 export { RejectReasonPrompt } from './RejectReasonPrompt';
 export { DelegationRulesSheet } from './DelegationRulesSheet';
+export { AttendanceCorrectionDetail } from './AttendanceCorrectionDetail';
 export type {
   ApprovalAction,
   ApprovalFailureKey,
@@ -12,4 +13,5 @@ export type {
   DelegationDraft,
   DelegationRule,
   DelegationUser,
+  AttendanceCorrectionApproval,
 } from './types';

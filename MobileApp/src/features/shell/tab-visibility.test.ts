@@ -25,6 +25,17 @@ describe('tabsForRole', () => {
     ]);
   });
 
+  it('gives managers an approvals tab for their attendance-correction stage', () => {
+    expect(names('Manager')).toEqual([
+      'home',
+      'attendance',
+      'leave',
+      'approvals',
+      'notifications',
+      'more',
+    ]);
+  });
+
   it('gives approver-only roles approvals, notifications, and more', () => {
     for (const role of ['CEO', 'CFO', 'SystemAdmin']) {
       expect(names(role)).toEqual(['approvals', 'notifications', 'more']);

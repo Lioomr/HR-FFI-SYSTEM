@@ -35,6 +35,19 @@ const LEAVE_STATUS: Readonly<Record<string, StatusPresentation>> = Object.freeze
   cancelled: { labelKey: 'leaveStatus.cancelled', tone: 'neutral', glyph: '–' },
 });
 
+const ATTENDANCE_CORRECTION_STATUS: Readonly<Record<string, StatusPresentation>> = Object.freeze({
+  draft: { labelKey: 'attendanceCorrectionStatus.draft', tone: 'neutral', glyph: '–' },
+  pending_manager: {
+    labelKey: 'attendanceCorrectionStatus.pending_manager',
+    tone: 'warning',
+    glyph: '⋯',
+  },
+  pending_hr: { labelKey: 'attendanceCorrectionStatus.pending_hr', tone: 'warning', glyph: '⋯' },
+  approved: { labelKey: 'attendanceCorrectionStatus.approved', tone: 'success', glyph: '✓' },
+  rejected: { labelKey: 'attendanceCorrectionStatus.rejected', tone: 'error', glyph: '×' },
+  cancelled: { labelKey: 'attendanceCorrectionStatus.cancelled', tone: 'neutral', glyph: '–' },
+});
+
 const EMPLOYMENT_STATUS: Readonly<Record<string, StatusPresentation>> = Object.freeze({
   ACTIVE: { labelKey: 'employmentStatus.ACTIVE', tone: 'success', glyph: '✓' },
   ON_LEAVE: { labelKey: 'employmentStatus.ON_LEAVE', tone: 'info', glyph: 'i' },
@@ -75,6 +88,12 @@ export function attendanceStatusPresentation(value: string | null): StatusPresen
 
 export function leaveStatusPresentation(value: string | null): StatusPresentation | null {
   return presentation(LEAVE_STATUS, value);
+}
+
+export function attendanceCorrectionStatusPresentation(
+  value: string | null,
+): StatusPresentation | null {
+  return presentation(ATTENDANCE_CORRECTION_STATUS, value);
 }
 
 export function employmentStatusPresentation(value: string | null): StatusPresentation | null {

@@ -46,5 +46,11 @@ export function isLeaveCeoApprover(role: Role): boolean {
 }
 
 export function hasAnyApprovalAccess(role: Role): boolean {
-  return role === 'HRManager' || role === 'CEO' || role === 'CFO' || role === 'SystemAdmin';
+  return (
+    role === 'HRManager' ||
+    role === 'CEO' ||
+    role === 'CFO' ||
+    role === 'SystemAdmin' ||
+    role === 'Manager'
+  );
 }
