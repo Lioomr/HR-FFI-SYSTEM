@@ -12,14 +12,14 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "annualPayment.hrSubtitle":
       "Review employee Annual Leave settlement requests.",
     "annualPayment.hrEmpty": "No settlements are awaiting HR review.",
-    "annualPayment.hrCreateButton": "Open Settlement",
+    "annualPayment.hrCreateButton": "New Settlement",
     "annualPayment.hrCreateTitle": "Open Annual Leave Settlement",
     "annualPayment.hrCreateNotice":
       "Create a settlement for an employee who did not submit one.",
-    "annualPayment.hrDecision": "HR decision",
-    "annualPayment.hrComment": "HR comment",
+    "annualPayment.hrDecision": "HR Decision",
+    "annualPayment.hrComment": "HR Comment",
     "annualPayment.hrPendingLeaveWarning":
-      "This employee has a pending Annual Leave request.",
+      "This employee has Annual Leave requests still awaiting a decision. Those days are reserved and are not part of the settlement.",
     "annualPayment.hrSettlementCreated":
       "Settlement created and sent to the CEO.",
     "annualPayment.review": "Review",
@@ -28,7 +28,7 @@ export const translations: Record<AppLanguage, TranslationMap> = {
       "Choose whether the eligible days are paid or carried forward.",
     "annualPayment.forwardToCeo": "Forward to CEO",
     "annualPayment.forwardSuccess": "Settlement forwarded to the CEO.",
-    "annualPayment.carryForward": "Carry forward",
+    "annualPayment.carryForward": "Carry Forward",
     "annualPayment.carryForwardSuccess":
       "Days marked to carry forward and sent to the CEO.",
     "annualPayment.pay": "Pay",
@@ -40,17 +40,17 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "annualPayment.status.rejected": "Rejected",
     "annualPayment.status.carriedForward": "Carried Forward",
     "annualPayment.employee": "Employee",
-    "annualPayment.requestNumber": "Request #",
+    "annualPayment.requestNumber": "Settlement #{id}",
     "annualPayment.contractYear": "Contract year",
     "annualPayment.eligibleDays": "Eligible days",
     "annualPayment.eligibleWholeDays": "Eligible whole days",
     "annualPayment.fractionalDays": "Fractional days",
     "annualPayment.yearEndSalary": "Year-end salary",
     "annualPayment.paymentAmount": "Payment amount",
-    "annualPayment.estimatedPaymentAmount": "Estimated payment amount",
+    "annualPayment.estimatedPaymentAmount": "Estimated Payment Amount",
     "annualPayment.resolution": "Resolution",
     "annualPayment.pendingAnnualLeave": "Pending Annual Leave",
-    "annualPayment.employeeNote": "Employee note",
+    "annualPayment.employeeNote": "Note to HR",
     "annualPayment.ceoComment": "CEO comment",
     "annualPayment.carryForwardDays": "Carry-forward days",
     "annualPayment.settlementType": "Settlement type",
@@ -58,31 +58,35 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "annualPayment.ceoTitle": "Annual Leave Settlements",
     "annualPayment.ceoSubtitle":
       "Make the final decision on reviewed settlements.",
-    "annualPayment.ceoEmpty": "No settlements are awaiting CEO approval.",
-    "annualPayment.approveTitle": "Approve settlement",
+    "annualPayment.ceoEmpty":
+      "No Annual Leave settlements are awaiting your decision.",
+    "annualPayment.approveTitle": "Approve Annual Leave Settlement",
     "annualPayment.approvePayNotice":
-      "This will approve payment for the eligible days.",
+      "Approving marks this settlement as approved for payment.",
     "annualPayment.approveCarryForwardNotice":
-      "This will carry the eligible days into the next contract year.",
+      "Approving carries the days into the next contract year. Nothing is paid.",
     "annualPayment.approveSuccess": "Settlement approved for payment.",
     "annualPayment.carriedForwardSuccess":
       "Settlement approved for carry-forward.",
-    "annualPayment.rejectTitle": "Reject settlement",
-    "annualPayment.rejectConfirm": "Reject this Annual Leave settlement?",
+    "annualPayment.resolution.pay": "Pay",
+    "annualPayment.resolution.carryForward": "Carry Forward",
+    "annualPayment.rejectTitle": "Reject Annual Leave Settlement",
+    "annualPayment.rejectConfirm": "Reject Settlement",
     "annualPayment.rejectSuccess": "Settlement rejected.",
     "annualPayment.title": "Annual Leave Payment",
     "annualPayment.description":
       "Request settlement of eligible unused Annual Leave days.",
-    "annualPayment.requestButton": "Request payment",
+    "annualPayment.requestButton": "Request Annual Leave Payment",
     "annualPayment.requestTitle": "Request Annual Leave Payment",
     "annualPayment.submitSuccess": "Annual Leave payment request submitted.",
-    "annualPayment.notAvailable": "Annual Leave payment is not available.",
+    "annualPayment.notAvailable":
+      "Annual Leave payment is not available for you right now.",
     "annualPayment.windowNotice":
-      "The request window opens during the final five days of the contract year.",
+      "Annual Leave payment can only be requested during the final 5 days of the contract year.",
     "annualPayment.activeRequestNotice":
-      "An Annual Leave settlement already exists for this contract year.",
+      "You already have an Annual Leave settlement in progress. A new request can be submitted only after it is resolved.",
     "annualPayment.employeePendingLeaveNotice":
-      "Payment cannot be requested while Annual Leave is pending.",
+      "You have Annual Leave requests still awaiting a decision. Annual Leave payment cannot be requested until they are resolved.",
     "annualPayment.employeeEmpty": "No Annual Leave settlements yet.",
 
     // Language
@@ -1866,11 +1870,11 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "leave.type.birth_leave": "Birth Leave",
     "leave.type.other": "Other Leave",
     "leave.type.business_trip": "Business Trip",
-    "leave.reservedDays": "Reserved Days",
+    "leave.reservedDays": "Reserved (Pending)",
     "leave.requestableDays": "Requestable Days",
     "leave.fractionalDays": "Fractional Days",
     "leave.requestableDaysHint":
-      "Requestable days exclude days already reserved by pending requests and any fractional (non-whole) days.",
+      "Requestable days are calculated by the system: whole remaining days minus days already reserved by pending requests.",
     "leave.reservedDaysHint":
       "{days} day(s) are reserved by your pending requests and cannot be requested again.",
     "leave.fractionalBalanceHint":
@@ -3262,13 +3266,13 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "annualPayment.hrTitle": "تسويات الإجازة السنوية",
     "annualPayment.hrSubtitle": "مراجعة طلبات تسوية الإجازة السنوية للموظفين.",
     "annualPayment.hrEmpty": "لا توجد تسويات بانتظار مراجعة الموارد البشرية.",
-    "annualPayment.hrCreateButton": "فتح تسوية",
+    "annualPayment.hrCreateButton": "تسوية جديدة",
     "annualPayment.hrCreateTitle": "فتح تسوية إجازة سنوية",
     "annualPayment.hrCreateNotice": "إنشاء تسوية لموظف لم يقدّم طلباً.",
     "annualPayment.hrDecision": "قرار الموارد البشرية",
     "annualPayment.hrComment": "ملاحظة الموارد البشرية",
     "annualPayment.hrPendingLeaveWarning":
-      "لدى هذا الموظف طلب إجازة سنوية قيد الانتظار.",
+      "لدى هذا الموظف طلبات إجازة سنوية ما زالت بانتظار قرار. هذه الأيام محجوزة وليست جزءاً من التسوية.",
     "annualPayment.hrSettlementCreated":
       "تم إنشاء التسوية وإرسالها للرئيس التنفيذي.",
     "annualPayment.review": "مراجعة",
@@ -3288,7 +3292,7 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "annualPayment.status.rejected": "مرفوض",
     "annualPayment.status.carriedForward": "تم الترحيل",
     "annualPayment.employee": "الموظف",
-    "annualPayment.requestNumber": "رقم الطلب",
+    "annualPayment.requestNumber": "تسوية رقم {id}",
     "annualPayment.contractYear": "سنة العقد",
     "annualPayment.eligibleDays": "الأيام المستحقة",
     "annualPayment.eligibleWholeDays": "الأيام الكاملة المستحقة",
@@ -3298,36 +3302,38 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "annualPayment.estimatedPaymentAmount": "مبلغ الدفع التقديري",
     "annualPayment.resolution": "القرار",
     "annualPayment.pendingAnnualLeave": "إجازة سنوية معلقة",
-    "annualPayment.employeeNote": "ملاحظة الموظف",
+    "annualPayment.employeeNote": "ملاحظة للموارد البشرية",
     "annualPayment.ceoComment": "ملاحظة الرئيس التنفيذي",
     "annualPayment.carryForwardDays": "أيام الترحيل",
     "annualPayment.settlementType": "نوع التسوية",
     "annualPayment.terminationSettlement": "تسوية إنهاء الخدمة",
     "annualPayment.ceoTitle": "تسويات الإجازة السنوية",
     "annualPayment.ceoSubtitle": "اتخاذ القرار النهائي للتسويات المراجعة.",
-    "annualPayment.ceoEmpty": "لا توجد تسويات بانتظار اعتماد الرئيس التنفيذي.",
-    "annualPayment.approveTitle": "اعتماد التسوية",
-    "annualPayment.approvePayNotice": "سيتم اعتماد دفع الأيام المستحقة.",
+    "annualPayment.ceoEmpty": "لا توجد تسويات إجازة سنوية بانتظار قرارك.",
+    "annualPayment.approveTitle": "اعتماد تسوية الإجازة السنوية",
+    "annualPayment.approvePayNotice": "الاعتماد يمثل الموافقة على دفع هذه التسوية.",
     "annualPayment.approveCarryForwardNotice":
-      "سيتم ترحيل الأيام المستحقة إلى سنة العقد التالية.",
+      "الاعتماد يرحّل الأيام إلى سنة العقد التالية. لا يُدفع أي مبلغ.",
     "annualPayment.approveSuccess": "تم اعتماد التسوية للدفع.",
     "annualPayment.carriedForwardSuccess": "تم اعتماد التسوية للترحيل.",
-    "annualPayment.rejectTitle": "رفض التسوية",
-    "annualPayment.rejectConfirm": "هل تريد رفض تسوية الإجازة السنوية؟",
+    "annualPayment.resolution.pay": "دفع",
+    "annualPayment.resolution.carryForward": "ترحيل",
+    "annualPayment.rejectTitle": "رفض تسوية الإجازة السنوية",
+    "annualPayment.rejectConfirm": "رفض التسوية",
     "annualPayment.rejectSuccess": "تم رفض التسوية.",
     "annualPayment.title": "دفع الإجازة السنوية",
     "annualPayment.description":
       "طلب تسوية أيام الإجازة السنوية غير المستخدمة والمستحقة.",
-    "annualPayment.requestButton": "طلب دفع",
+    "annualPayment.requestButton": "طلب دفع الإجازة السنوية",
     "annualPayment.requestTitle": "طلب دفع الإجازة السنوية",
     "annualPayment.submitSuccess": "تم إرسال طلب دفع الإجازة السنوية.",
     "annualPayment.notAvailable": "دفع الإجازة السنوية غير متاح.",
     "annualPayment.windowNotice":
-      "تفتح نافذة الطلب في آخر خمسة أيام من سنة العقد.",
+      "لا يمكن طلب دفع الإجازة السنوية إلا خلال آخر 5 أيام من سنة العقد.",
     "annualPayment.activeRequestNotice":
-      "توجد تسوية إجازة سنوية بالفعل لسنة العقد هذه.",
+      "لديك بالفعل تسوية إجازة سنوية قيد التنفيذ. يمكن تقديم طلب جديد فقط بعد حسمها.",
     "annualPayment.employeePendingLeaveNotice":
-      "لا يمكن طلب الدفع أثناء وجود إجازة سنوية معلقة.",
+      "لديك طلبات إجازة سنوية ما زالت بانتظار قرار. لا يمكن طلب دفع الإجازة السنوية حتى تُحسم.",
     "annualPayment.employeeEmpty": "لا توجد تسويات إجازة سنوية حتى الآن.",
     // App
     "app.title": "نظام الموارد البشرية FFI",
@@ -4415,7 +4421,7 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "leave.requestableDays": "الأيام القابلة للطلب",
     "leave.fractionalDays": "الأيام الجزئية",
     "leave.requestableDaysHint":
-      "لا تشمل الأيام القابلة للطلب الأيام المحجوزة بطلبات معلّقة أو أي أيام جزئية (غير كاملة).",
+      "تُحسب الأيام القابلة للطلب تلقائياً: الأيام المتبقية الكاملة ناقص الأيام المحجوزة بالفعل بطلبات معلّقة.",
     "leave.reservedDaysHint":
       "{days} يوم/أيام محجوزة بطلباتك المعلّقة ولا يمكن طلبها مرة أخرى.",
     "leave.fractionalBalanceHint":
