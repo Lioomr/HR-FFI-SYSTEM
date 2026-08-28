@@ -106,9 +106,10 @@ class AnnualLeavePaymentFollowUpTests(APITestCase):
         self.assertTrue(payload["can_request"])
         self.assertTrue(payload["window_open"])
         self.assertEqual(payload["cycle_start"], str(self.profile.contract_date))
-        self.assertEqual(payload["eligible_unused_days"], "21.00")
+        # 360-day contract → today is 5 days before cycle end → 11 periods =19 eligible
+        self.assertEqual(payload["eligible_unused_days"], "19.00")
         self.assertEqual(payload["salary_at_year_end"], "3500.00")
-        self.assertEqual(payload["estimated_payment_amount"], "2450.00")
+        self.assertEqual(payload["estimated_payment_amount"], "2216.67")
         self.assertFalse(payload["has_pending_annual_leave"])
 
     def test_active_settlement_statuses_block_eligibility(self):
