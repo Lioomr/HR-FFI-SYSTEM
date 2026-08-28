@@ -60,10 +60,11 @@ class IsManagerOfEmployee(BasePermission):
 
 class IsHRManagerOnly(BasePermission):
     """
-    Allows access only to HRManager.
+    Allows access to HRManager, plus SystemAdmin (consistent with other
+    admin-tier permission classes in this codebase).
     """
 
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
-        return get_role(request.user) == "HRManager"
+        return get_role(request.user) in ("HRManager", "SystemAdmin")

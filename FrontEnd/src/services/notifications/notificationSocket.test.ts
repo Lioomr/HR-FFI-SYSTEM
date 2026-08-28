@@ -32,10 +32,18 @@ describe("NotificationPollingManager", () => {
 
     manager.start();
 
-    expect(onStatus).toHaveBeenCalledWith("reconnecting");
+    expect(onStatus).toHaveBeenCalledWith("connecting");
     expect(onPoll).toHaveBeenCalledTimes(1);
     vi.advanceTimersByTime(10000);
     expect(onPoll).toHaveBeenCalledTimes(3);
+    manager.stop();
+  });
+
+  it("reports connected after a successful poll", async () => {
+    const manager = makeManager();
+
+    manager.start();
+    await vi.waitFor(() => expect(onStatus).toHaveBeenLastCalledWith("connected"));
     manager.stop();
   });
 
@@ -63,13 +71,14 @@ describe("NotificationPollingManager", () => {
     expect(onStatus).toHaveBeenLastCalledWith("offline");
   });
 
-  it("continues polling after a non-fatal callback error", () => {
+  it("continues polling after a non-fatal callback error", async () => {
     onPoll.mockImplementationOnce(() => {
       throw new Error("temporary REST failure");
     });
     const manager = makeManager();
 
     expect(() => manager.start()).not.toThrow();
+    await vi.waitFor(() => expect(onStatus).toHaveBeenLastCalledWith("reconnecting"));
     vi.advanceTimersByTime(5000);
 
     expect(onPoll).toHaveBeenCalledTimes(2);

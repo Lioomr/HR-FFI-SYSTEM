@@ -859,6 +859,7 @@ class PayrollRunViewSet(
 
 class PayrollRunExportView(APIView):
     permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
+    throttle_classes = [PayrollExportThrottle]
 
     def get(self, request, pk):
         run = get_object_or_404(filter_queryset_by_accessible_companies(PayrollRun.objects.all(), request), pk=pk)

@@ -2,7 +2,7 @@ import type { ConnectionStatus } from "../../stores/notificationStore";
 
 export interface NotificationPollingOptions {
   onStatus: (status: ConnectionStatus) => void;
-  onPoll: () => void;
+  onPoll: () => void | Promise<void>;
   pollIntervalMs?: number;
 }
 
@@ -31,9 +31,9 @@ export class NotificationPollingManager {
   start(): void {
     if (this.running) return;
     this.running = true;
-    this.opts.onStatus("reconnecting");
-    this.poll();
-    this.pollTimer = setInterval(() => this.poll(), this.opts.pollIntervalMs);
+    this.opts.onStatus("connecting");
+    void this.poll();
+    this.pollTimer = setInterval(() => void this.poll(), this.opts.pollIntervalMs);
   }
 
   stop(): void {
@@ -45,12 +45,13 @@ export class NotificationPollingManager {
     this.opts.onStatus("offline");
   }
 
-  private poll(): void {
+  private async poll(): Promise<void> {
     if (!this.running) return;
     try {
-      this.opts.onPoll();
+      await this.opts.onPoll();
+      if (this.running) this.opts.onStatus("connected");
     } catch {
-      /* polling errors are non-fatal and retried on the next interval */
+      if (this.running) this.opts.onStatus("reconnecting");
     }
   }
 }

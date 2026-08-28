@@ -8,6 +8,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.cache import cache
 from django.db.models import Q
+from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
 from django.utils import timezone
 from rest_framework import status
@@ -170,15 +171,16 @@ class UserDetailView(APIView):
     permission_classes = [IsSystemAdmin]
 
     def get(self, request, user_id):
-        user = (
-            User.objects.select_related("employee_profile")
-            .prefetch_related("groups", "organization_access_entries__organization")
-            .get(pk=user_id)
+        user = get_object_or_404(
+            User.objects.select_related("employee_profile").prefetch_related(
+                "groups", "organization_access_entries__organization"
+            ),
+            pk=user_id,
         )
         return success(UserListSerializer(user).data)
 
     def patch(self, request, user_id):
-        user = User.objects.get(pk=user_id)
+        user = get_object_or_404(User, pk=user_id)
         serializer = UpdateUserOrganizationsSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -208,7 +210,7 @@ class UserStatusView(APIView):
     permission_classes = [IsSystemAdmin]
 
     def patch(self, request, user_id):
-        user = User.objects.get(pk=user_id)
+        user = get_object_or_404(User, pk=user_id)
         s = UpdateStatusSerializer(data=request.data)
         s.is_valid(raise_exception=True)
 
@@ -234,7 +236,7 @@ class UserRoleView(APIView):
     permission_classes = [IsSystemAdmin]
 
     def put(self, request, user_id):
-        user = User.objects.get(pk=user_id)
+        user = get_object_or_404(User, pk=user_id)
         s = UpdateRoleSerializer(data=request.data, context={"request": request})
         s.is_valid(raise_exception=True)
 
@@ -258,7 +260,7 @@ class UserResetPasswordView(APIView):
     permission_classes = [IsSystemAdmin]
 
     def post(self, request, user_id):
-        user = User.objects.get(pk=user_id)
+        user = get_object_or_404(User, pk=user_id)
         s = ResetPasswordSerializer(data=request.data)
         s.is_valid(raise_exception=True)
 

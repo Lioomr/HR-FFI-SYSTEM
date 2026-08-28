@@ -1866,6 +1866,18 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "leave.type.birth_leave": "Birth Leave",
     "leave.type.other": "Other Leave",
     "leave.type.business_trip": "Business Trip",
+    "leave.reservedDays": "Reserved Days",
+    "leave.requestableDays": "Requestable Days",
+    "leave.fractionalDays": "Fractional Days",
+    "leave.requestableDaysHint":
+      "Requestable days exclude days already reserved by pending requests and any fractional (non-whole) days.",
+    "leave.reservedDaysHint":
+      "{days} day(s) are reserved by your pending requests and cannot be requested again.",
+    "leave.fractionalBalanceHint":
+      "{days} day(s) of your balance are fractional and cannot be requested as whole days.",
+    "leave.annual.wholeDaysOnly": "Annual leave can only be requested in whole days.",
+    "leave.annual.exceedsRequestable":
+      "You can request at most {requestable} day(s); {pending} day(s) are already reserved by pending requests.",
 
     // Assets (Employee)
     "assets.myAssets": "My Assets",
@@ -4399,6 +4411,18 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "leave.type.birth_leave": "إجازة مولود",
     "leave.type.other": "إجازة أخرى",
     "leave.type.business_trip": "مهمة عمل",
+    "leave.reservedDays": "الأيام المحجوزة",
+    "leave.requestableDays": "الأيام القابلة للطلب",
+    "leave.fractionalDays": "الأيام الجزئية",
+    "leave.requestableDaysHint":
+      "لا تشمل الأيام القابلة للطلب الأيام المحجوزة بطلبات معلّقة أو أي أيام جزئية (غير كاملة).",
+    "leave.reservedDaysHint":
+      "{days} يوم/أيام محجوزة بطلباتك المعلّقة ولا يمكن طلبها مرة أخرى.",
+    "leave.fractionalBalanceHint":
+      "{days} يوم/أيام من رصيدك جزئية ولا يمكن طلبها كأيام كاملة.",
+    "leave.annual.wholeDaysOnly": "لا يمكن طلب الإجازة السنوية إلا بأيام كاملة.",
+    "leave.annual.exceedsRequestable":
+      "يمكنك طلب {requestable} يوم/أيام كحد أقصى؛ {pending} يوم/أيام محجوزة بالفعل بطلبات معلّقة.",
     "leave.backToRequests": "العودة إلى طلباتي",
     "leave.requestTitle": "طلب إجازة",
     "leave.requestSubtitle": "تقديم طلب إجازة جديد",
