@@ -29,8 +29,8 @@ class AttendanceCorrectionRequestTests(TestCase):
             node_type=OrganizationNode.NodeType.COMPANY,
         )
 
-        self.department = Department.objects.create(code="ENG", name="Engineering")
-        self.position = Position.objects.create(code="DEV", name="Developer")
+        self.department = Department.objects.create(company=self.company, code="ENG", name="Engineering")
+        self.position = Position.objects.create(company=self.company, code="DEV", name="Developer")
 
         self.hr_user = User.objects.create_user(email="hr-corrections@ffi.com", password="password")
         self.hr_user.groups.add(self.hr_group)

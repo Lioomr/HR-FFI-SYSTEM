@@ -90,7 +90,8 @@ export default function AdminSettingsPage() {
   }
 
   if (unauthorized) return <Unauthorized403Page />;
-  if (mode === "loading") return <LoadingState title={t("admin.settings.loading")} />;
+  if (mode === "loading")
+    return <LoadingState title={t("admin.settings.loading")} />;
   if (mode === "error") {
     return (
       <ErrorState
@@ -103,11 +104,19 @@ export default function AdminSettingsPage() {
 
   return (
     <div>
-      <PageHeader title={t("layout.systemSettings")} subtitle={t("admin.settings.subtitle")} />
+      <PageHeader
+        title={t("layout.systemSettings")}
+        subtitle={t("admin.settings.subtitle")}
+      />
 
       <Card style={{ borderRadius: 16 }} bodyStyle={{ padding: 24 }}>
         {error && (
-          <Alert style={{ marginBottom: 16 }} type="error" showIcon message={error} />
+          <Alert
+            style={{ marginBottom: 16 }}
+            type="error"
+            showIcon
+            message={error}
+          />
         )}
 
         <Form<FormValues>
@@ -124,10 +133,20 @@ export default function AdminSettingsPage() {
             <Form.Item
               label={t("admin.settings.lblDefaultInviteExpiry")}
               name={["invites", "default_expiry_hours"]}
-              rules={[{ required: true, message: t("admin.settings.reqInviteExpiry") }]}
+              rules={[
+                {
+                  required: true,
+                  message: t("admin.settings.reqInviteExpiry"),
+                },
+              ]}
               style={{ minWidth: 260 }}
             >
-              <InputNumber min={1} max={720} style={{ width: "100%" }} placeholder="e.g. 168" />
+              <InputNumber
+                min={1}
+                max={720}
+                style={{ width: "100%" }}
+                placeholder="e.g. 168"
+              />
             </Form.Item>
           </Space>
 
@@ -141,10 +160,20 @@ export default function AdminSettingsPage() {
             <Form.Item
               label={t("admin.settings.lblSessionTimeout")}
               name={["session", "timeout_minutes"]}
-              rules={[{ required: true, message: t("admin.settings.reqSessionTimeout") }]}
+              rules={[
+                {
+                  required: true,
+                  message: t("admin.settings.reqSessionTimeout"),
+                },
+              ]}
               style={{ minWidth: 260 }}
             >
-              <InputNumber min={5} max={1440} style={{ width: "100%" }} placeholder="e.g. 60" />
+              <InputNumber
+                min={5}
+                max={1440}
+                style={{ width: "100%" }}
+                placeholder="e.g. 60"
+              />
             </Form.Item>
           </Space>
 
@@ -158,10 +187,17 @@ export default function AdminSettingsPage() {
             <Form.Item
               label={t("admin.settings.lblMinLength")}
               name={["password_policy", "min_length"]}
-              rules={[{ required: true, message: t("admin.settings.reqMinLength") }]}
+              rules={[
+                { required: true, message: t("admin.settings.reqMinLength") },
+              ]}
               style={{ minWidth: 260 }}
             >
-              <InputNumber min={6} max={128} style={{ width: "100%" }} placeholder="e.g. 12" />
+              <InputNumber
+                min={6}
+                max={128}
+                style={{ width: "100%" }}
+                placeholder="e.g. 12"
+              />
             </Form.Item>
 
             <Form.Item
@@ -211,10 +247,20 @@ export default function AdminSettingsPage() {
             <Form.Item
               label={t("admin.settings.lblMaxLoginAttempts")}
               name={["security", "max_login_attempts"]}
-              rules={[{ required: true, message: t("admin.settings.reqMaxLoginAttempts") }]}
+              rules={[
+                {
+                  required: true,
+                  message: t("admin.settings.reqMaxLoginAttempts"),
+                },
+              ]}
               style={{ minWidth: 260 }}
             >
-              <InputNumber min={1} max={50} style={{ width: "100%" }} placeholder="e.g. 5" />
+              <InputNumber
+                min={1}
+                max={50}
+                style={{ width: "100%" }}
+                placeholder="e.g. 5"
+              />
             </Form.Item>
           </Space>
 
@@ -231,7 +277,11 @@ export default function AdminSettingsPage() {
               {t("common.save")}
             </Button>
 
-            <Button size="large" onClick={() => form.resetFields()} disabled={saving}>
+            <Button
+              size="large"
+              onClick={() => form.resetFields()}
+              disabled={saving}
+            >
               {t("admin.settings.btnReset")}
             </Button>
           </Space>

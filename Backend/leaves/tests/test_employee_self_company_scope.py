@@ -25,6 +25,8 @@ class EmployeeSelfLeaveCompanyScopeTests(APITestCase):
         self.user.groups.add(employee_group)
         self.other_user = User.objects.create_user(email="other-leave@test.com", password="password")
         self.other_user.groups.add(employee_group)
+        self.cross_company_user = User.objects.create_user(email="cross-leave@test.com", password="password")
+        self.cross_company_user.groups.add(employee_group)
         EmployeeProfile.objects.create(
             user=self.user,
             company=self.company,
@@ -37,10 +39,21 @@ class EmployeeSelfLeaveCompanyScopeTests(APITestCase):
             employee_id="SELF-LEAVE-002",
             employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
         )
+        EmployeeProfile.objects.create(
+            user=self.cross_company_user,
+            company=self.other_company,
+            employee_id="SELF-LEAVE-003",
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        )
         self.leave_type = LeaveType.objects.create(company=self.company, name="Annual A", code="ANNUAL_A")
         self.other_leave_type = LeaveType.objects.create(company=self.other_company, name="Annual B", code="ANNUAL_B")
         self.own = self._leave(self.user, self.company, self.leave_type, date(2026, 8, 1))
-        self.cross_company = self._leave(self.user, self.other_company, self.other_leave_type, date(2026, 9, 1))
+        self.cross_company = self._leave(
+            self.cross_company_user,
+            self.other_company,
+            self.other_leave_type,
+            date(2026, 9, 1),
+        )
         self.other_owner = self._leave(self.other_user, self.company, self.leave_type, date(2026, 10, 1))
 
     @staticmethod

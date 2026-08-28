@@ -1,11 +1,26 @@
 import { useEffect, useState } from "react";
-import { Form, Input, Button, Select, Switch, message, Radio, Upload } from "antd";
+import {
+  Form,
+  Input,
+  Button,
+  Select,
+  Switch,
+  message,
+  Radio,
+  Upload,
+} from "antd";
 import type { UploadFile } from "antd/es/upload/interface";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "../../components/ui/PageHeader";
 import ApprovalSurface from "../../components/ceo/ApprovalSurface";
-import { createAnnouncement, type CreateAnnouncementData } from "../../services/api/announcementApi";
-import { getManagerTeam, type ManagerTeamMember } from "../../services/api/managerApi";
+import {
+  createAnnouncement,
+  type CreateAnnouncementData,
+} from "../../services/api/announcementApi";
+import {
+  getManagerTeam,
+  type ManagerTeamMember,
+} from "../../services/api/managerApi";
 import { isApiError } from "../../services/api/apiTypes";
 import { useAuthStore } from "../../auth/authStore";
 import { useI18n } from "../../i18n/useI18n";
@@ -14,7 +29,8 @@ import { UploadOutlined } from "@ant-design/icons";
 export default function CreateTeamAnnouncementPage() {
   const navigate = useNavigate();
   const role = useAuthStore((s) => s.user?.role);
-  const announcementsPath = role === "CEO" ? "/ceo/announcements" : "/manager/announcements";
+  const announcementsPath =
+    role === "CEO" ? "/ceo/announcements" : "/manager/announcements";
   const [form] = Form.useForm();
   const { t } = useI18n();
   const [loading, setLoading] = useState(false);
@@ -60,7 +76,9 @@ export default function CreateTeamAnnouncementPage() {
       message.success(t("announcements.sendSuccess"));
       navigate(announcementsPath);
     } catch (e: any) {
-      message.error(e?.response?.data?.message || t("announcements.createFail"));
+      message.error(
+        e?.response?.data?.message || t("announcements.createFail"),
+      );
     } finally {
       setLoading(false);
     }
@@ -69,10 +87,17 @@ export default function CreateTeamAnnouncementPage() {
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", paddingBottom: 24 }}>
       <PageHeader
-        title={role === "CEO" ? t("announcements.ceoTitle") : t("announcements.teamTitle")}
+        title={
+          role === "CEO"
+            ? t("announcements.ceoTitle")
+            : t("announcements.teamTitle")
+        }
         subtitle={t("announcements.createSubtitle")}
         actions={
-          <Button onClick={() => navigate(announcementsPath)} style={{ borderRadius: 10, minHeight: 40 }}>
+          <Button
+            onClick={() => navigate(announcementsPath)}
+            style={{ borderRadius: 10, minHeight: 40 }}
+          >
             {t("common.cancel")}
           </Button>
         }
@@ -88,25 +113,61 @@ export default function CreateTeamAnnouncementPage() {
             publish_to_whatsapp: false,
           }}
         >
-          <Form.Item name="title" label={t("hr.announcements.titleLabel")} rules={[{ required: true, message: t("hr.announcements.titleRequired") }]}>
-            <Input placeholder={t("hr.announcements.titlePlaceholder")} size="large" />
-          </Form.Item>
-
-          <Form.Item name="content" label={t("hr.announcements.contentLabel")} rules={[{ required: true, message: t("hr.announcements.contentRequired") }]}>
-            <Input.TextArea rows={6} placeholder={t("hr.announcements.contentPlaceholder")} showCount maxLength={2000} />
+          <Form.Item
+            name="title"
+            label={t("hr.announcements.titleLabel")}
+            rules={[
+              { required: true, message: t("hr.announcements.titleRequired") },
+            ]}
+          >
+            <Input
+              placeholder={t("hr.announcements.titlePlaceholder")}
+              size="large"
+            />
           </Form.Item>
 
           <Form.Item
-            label={t("hr.announcements.attachmentLabel", "PDF Attachment (Optional)")}
-            extra={t("hr.announcements.attachmentHelp", "Upload one PDF file. It will be previewable in the dashboard and included in email notifications.")}
+            name="content"
+            label={t("hr.announcements.contentLabel")}
+            rules={[
+              {
+                required: true,
+                message: t("hr.announcements.contentRequired"),
+              },
+            ]}
+          >
+            <Input.TextArea
+              rows={6}
+              placeholder={t("hr.announcements.contentPlaceholder")}
+              showCount
+              maxLength={2000}
+            />
+          </Form.Item>
+
+          <Form.Item
+            label={t(
+              "hr.announcements.attachmentLabel",
+              "PDF Attachment (Optional)",
+            )}
+            extra={t(
+              "hr.announcements.attachmentHelp",
+              "Upload one PDF file. It will be previewable in the dashboard and included in email notifications.",
+            )}
           >
             <Upload
               accept="application/pdf,.pdf"
               maxCount={1}
               beforeUpload={(file) => {
-                const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+                const isPdf =
+                  file.type === "application/pdf" ||
+                  file.name.toLowerCase().endsWith(".pdf");
                 if (!isPdf) {
-                  message.error(t("hr.announcements.attachmentPdfOnly", "Only PDF files are allowed."));
+                  message.error(
+                    t(
+                      "hr.announcements.attachmentPdfOnly",
+                      "Only PDF files are allowed.",
+                    ),
+                  );
                   return Upload.LIST_IGNORE;
                 }
                 setAttachmentFile(file);
@@ -126,9 +187,16 @@ export default function CreateTeamAnnouncementPage() {
           </Form.Item>
 
           <Form.Item label={t("announcements.audience")}>
-            <Radio.Group value={targetMode} onChange={(e) => setTargetMode(e.target.value)}>
-              <Radio.Button value="all">{t("announcements.allTeam")}</Radio.Button>
-              <Radio.Button value="single">{t("announcements.singleMember")}</Radio.Button>
+            <Radio.Group
+              value={targetMode}
+              onChange={(e) => setTargetMode(e.target.value)}
+            >
+              <Radio.Button value="all">
+                {t("announcements.allTeam")}
+              </Radio.Button>
+              <Radio.Button value="single">
+                {t("announcements.singleMember")}
+              </Radio.Button>
             </Radio.Group>
           </Form.Item>
 
@@ -136,7 +204,9 @@ export default function CreateTeamAnnouncementPage() {
             <Form.Item
               name="target_user"
               label={t("announcements.teamMember")}
-              rules={[{ required: true, message: t("announcements.memberReq") }]}
+              rules={[
+                { required: true, message: t("announcements.memberReq") },
+              ]}
             >
               <Select
                 showSearch
@@ -150,17 +220,38 @@ export default function CreateTeamAnnouncementPage() {
             </Form.Item>
           )}
 
-          <div style={{ background: "#fafafa", padding: 16, borderRadius: 8, marginBottom: 24 }}>
-            <Form.Item name="publish_to_email" valuePropName="checked" style={{ marginBottom: 12 }}>
+          <div
+            style={{
+              background: "#fafafa",
+              padding: 16,
+              borderRadius: 8,
+              marginBottom: 24,
+            }}
+          >
+            <Form.Item
+              name="publish_to_email"
+              valuePropName="checked"
+              style={{ marginBottom: 12 }}
+            >
               <Switch /> {t("announcements.emailNotif")}
             </Form.Item>
-            <Form.Item name="publish_to_whatsapp" valuePropName="checked" style={{ marginBottom: 0 }}>
+            <Form.Item
+              name="publish_to_whatsapp"
+              valuePropName="checked"
+              style={{ marginBottom: 0 }}
+            >
               <Switch /> {t("announcements.whatsappNotif")}
             </Form.Item>
           </div>
 
           <Form.Item>
-            <Button type="primary" htmlType="submit" loading={loading} block size="large">
+            <Button
+              type="primary"
+              htmlType="submit"
+              loading={loading}
+              block
+              size="large"
+            >
               {t("announcements.sendToTeam")}
             </Button>
           </Form.Item>

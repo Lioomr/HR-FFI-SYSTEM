@@ -13,6 +13,7 @@ from decimal import Decimal, InvalidOperation
 from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.db import transaction
+from django.utils import timezone
 
 from employees.models import EmployeeImport, EmployeeProfile
 from employees.services.manager_relationships import (
@@ -224,11 +225,12 @@ class EmployeeImporter:
                     break
         return header_map
 
-    def _store_import_record(self, uploader, upload, file_hash, row_count):
+    def _store_import_record(self, uploader, upload, file_hash, row_count, company):
         upload.seek(0)
         stored_name = self.storage.save(f"employee_imports/{uuid.uuid4().hex}.xlsx", upload)
         return EmployeeImport.objects.create(
             uploader=uploader,
+            company=company,
             original_filename=upload.name,
             stored_file=stored_name,
             status=EmployeeImport.Status.FAILED,
@@ -348,9 +350,13 @@ class EmployeeImporter:
 
     def execute(self, upload, uploader, company: OrganizationNode | None = None):
         file_hash = ""
-        if company is None:
+        if (
+            company is None
+            or company.node_type != OrganizationNode.NodeType.COMPANY
+            or not company.is_active
+        ):
             return ImportExecutionResult(
-                ok=False, status_code=422, errors=["Active company is required."], result="failed"
+                ok=False, status_code=422, errors=["A valid active company is required."], result="failed"
             )
         if upload is None:
             return ImportExecutionResult(ok=False, status_code=400, errors=["File is required."], result="failed")
@@ -397,7 +403,7 @@ class EmployeeImporter:
         missing = [key for key in required if key not in header_map]
         if missing:
             workbook.close()
-            record = self._store_import_record(uploader, upload, file_hash, 0)
+            record = self._store_import_record(uploader, upload, file_hash, 0, company)
             errors = [f"row 1: Missing required headers: {', '.join(missing)}."]
             detail = [{"row": 1, "column": "Header", "message": errors[0]}]
             self._save_import_failure(record, errors, detail)
@@ -415,7 +421,7 @@ class EmployeeImporter:
         workbook.close()
         row_count = len(rows)
         if row_count == 0:
-            record = self._store_import_record(uploader, upload, file_hash, 0)
+            record = self._store_import_record(uploader, upload, file_hash, 0, company)
             errors = ["row 0: No data rows found."]
             detail = [{"row": 0, "column": "Sheet", "message": "No data rows found."}]
             self._save_import_failure(record, errors, detail)
@@ -423,7 +429,7 @@ class EmployeeImporter:
                 ok=False, status_code=422, errors=errors, row_count=0, file_hash=file_hash, result="failed"
             )
         if row_count > MAX_IMPORT_ROWS:
-            record = self._store_import_record(uploader, upload, file_hash, row_count)
+            record = self._store_import_record(uploader, upload, file_hash, row_count, company)
             errors = [f"row 0: Row limit exceeded (max {MAX_IMPORT_ROWS})."]
             detail = [{"row": 0, "column": "Sheet", "message": errors[0]}]
             self._save_import_failure(record, errors, detail)
@@ -666,7 +672,7 @@ class EmployeeImporter:
                     }
                 )
 
-        import_record = self._store_import_record(uploader, upload, file_hash, row_count)
+        import_record = self._store_import_record(uploader, upload, file_hash, row_count, company)
         if errors:
             self._save_import_failure(import_record, errors, errors_detail)
             return ImportExecutionResult(
@@ -751,11 +757,18 @@ class EmployeeImporter:
 
                 manager_errors = []
                 manager_error_details = []
+                changed_manager_profiles = []
                 for profile, manager_ref, row_index in manager_links:
                     previous_manager = profile.manager_profile
                     if not manager_ref:
                         profile.manager_profile = None
-                        profile.save(update_fields=["manager_profile", "updated_at"])
+                        # EmployeeProfile.save() keeps the legacy `manager` (User FK) field in
+                        # sync with `manager_profile` whenever the latter changes; bulk_update()
+                        # bypasses save() entirely, so that sync has to happen here or the DB's
+                        # tenant-integrity trigger rejects the batch with a manager-mismatch error.
+                        profile.manager_id = None
+                        profile.updated_at = timezone.now()
+                        changed_manager_profiles.append(profile)
                         log_manager_assignment_change(
                             employee=profile,
                             previous_manager=previous_manager,
@@ -793,13 +806,22 @@ class EmployeeImporter:
                         continue
 
                     profile.manager_profile = manager_profile
-                    profile.save(update_fields=["manager_profile", "updated_at"])
+                    profile.manager_id = manager_profile.user_id
+                    profile.updated_at = timezone.now()
+                    changed_manager_profiles.append(profile)
                     log_manager_assignment_change(
                         employee=profile,
                         previous_manager=previous_manager,
                         new_manager=manager_profile,
                         changed_by=uploader,
                         source="employee_import",
+                    )
+
+                # A single bulk_update replaces what was one UPDATE query per row
+                # (up to MAX_IMPORT_ROWS individual writes for a full re-org import).
+                if changed_manager_profiles:
+                    EmployeeProfile.objects.bulk_update(
+                        changed_manager_profiles, ["manager_profile", "manager", "updated_at"]
                     )
 
                 if manager_errors:

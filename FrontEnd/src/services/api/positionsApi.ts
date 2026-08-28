@@ -44,11 +44,11 @@ export interface ListPositionsParams {
  * List all positions
  */
 export async function listPositions(
-  params?: ListPositionsParams
+  params?: ListPositionsParams,
 ): Promise<ApiResponse<Position[]>> {
   const { data } = await api.get<ApiResponse<Position[]>>(
     "/api/hr/positions/",
-    { params }
+    { params },
   );
   return data;
 }
@@ -57,11 +57,11 @@ export async function listPositions(
  * Create a new position
  */
 export async function createPosition(
-  payload: CreatePositionDto
+  payload: CreatePositionDto,
 ): Promise<ApiResponse<Position>> {
   const { data } = await api.post<ApiResponse<Position>>(
     "/api/hr/positions/",
-    payload
+    payload,
   );
   return data;
 }
@@ -71,11 +71,11 @@ export async function createPosition(
  */
 export async function updatePosition(
   id: string | number,
-  payload: UpdatePositionDto
+  payload: UpdatePositionDto,
 ): Promise<ApiResponse<Position>> {
   const { data } = await api.patch<ApiResponse<Position>>(
     `/api/hr/positions/${id}/`,
-    payload
+    payload,
   );
   return data;
 }

@@ -4,6 +4,7 @@ from datetime import date, timedelta
 
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError
+from django.db.models import Q
 from django.utils import timezone
 
 from announcements.models import Announcement
@@ -101,8 +102,17 @@ def get_last_reminder_sent_at(rent: Rent):
     return last_log.sent_at if last_log else None
 
 
-def get_hr_manager_users():
-    return User.objects.filter(groups__name="HRManager", is_active=True).distinct()
+def get_hr_manager_users(company_id=None):
+    if not company_id:
+        return User.objects.none()
+    return (
+        User.objects.filter(groups__name="HRManager", is_active=True)
+        .filter(
+            Q(employee_profile__company_id=company_id)
+            | Q(organization_access_entries__organization_id=company_id)
+        )
+        .distinct()
+    )
 
 
 def _notify_via_announcement(*, rent: Rent, due_date: date, days_remaining: int):
@@ -115,7 +125,7 @@ def _notify_via_announcement(*, rent: Rent, due_date: date, days_remaining: int)
     content = (
         f"{rent.rent_type.name_en}: {source_name} is due on {due_date.isoformat()} ({days_remaining} day(s) remaining)."
     )
-    creator = rent.updated_by or rent.created_by or get_hr_manager_users().first()
+    creator = rent.updated_by or rent.created_by or get_hr_manager_users(rent.company_id).first()
     if not creator:
         return {"sent": False, "reason": "No HR manager user available for announcement creation."}
 
@@ -131,7 +141,21 @@ def _notify_via_announcement(*, rent: Rent, due_date: date, days_remaining: int)
         created_by=creator,
     )
     dispatches = send_announcement_in_app(announcement)
-    return {"sent": True, "announcement_id": announcement.id, "dispatches": dispatches}
+    # Dispatcher results contain a Notification model instance for internal
+    # callers. Rent delivery data is returned over the API and stored in an
+    # AuditLog JSON field, so expose only its stable identifier here.
+    safe_dispatches = []
+    for dispatch in dispatches:
+        notification = dispatch.get("notification") if isinstance(dispatch, dict) else None
+        safe_dispatches.append(
+            {
+                "notification_id": getattr(notification, "id", None),
+                "created": bool(dispatch.get("created")) if isinstance(dispatch, dict) else False,
+                "whatsapp": dispatch.get("whatsapp") if isinstance(dispatch, dict) else None,
+                "email": dispatch.get("email") if isinstance(dispatch, dict) else None,
+            }
+        )
+    return {"sent": True, "announcement_id": announcement.id, "dispatches": safe_dispatches}
 
 
 def _notify_via_email(*, rent: Rent, due_date: date, days_remaining: int):

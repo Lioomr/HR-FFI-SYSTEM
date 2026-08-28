@@ -307,7 +307,7 @@ export async function getImportStatus(
   id: string,
 ): Promise<ApiResponse<ImportResult>> {
   const { data } = await api.get<ApiResponse<ImportResult>>(
-    `/imports/employees/${id}`,
+    `/imports/employees/history/${id}`,
   );
   return data;
 }
@@ -346,9 +346,12 @@ export async function getImportHistory(params?: {
  * Download error file as Blob (Authenticated)
  */
 export async function downloadImportErrors(importId: string): Promise<Blob> {
-  const response = await api.get(`/imports/employees/${importId}/errors-file`, {
-    responseType: "blob",
-  });
+  const response = await api.get(
+    `/imports/employees/history/${importId}/errors-file`,
+    {
+      responseType: "blob",
+    },
+  );
   return response.data;
 }
 

@@ -85,7 +85,10 @@ export default function NotificationsPage() {
   const connLabel =
     connection === "connecting"
       ? t("notifications.connecting", "Connecting…")
-      : t("notifications.pollingFallback", "Reconnecting… showing latest updates");
+      : t(
+          "notifications.pollingFallback",
+          "Reconnecting… showing latest updates",
+        );
 
   const body = () => {
     if (loading && items.length === 0) {
@@ -187,7 +190,10 @@ export default function NotificationsPage() {
             <Button
               icon={<SettingOutlined />}
               onClick={() => setPrefsOpen(true)}
-              aria-label={t("notifications.preferences.open", "Notification preferences")}
+              aria-label={t(
+                "notifications.preferences.open",
+                "Notification preferences",
+              )}
             >
               {t("notifications.preferences.button", "Preferences")}
             </Button>
@@ -259,7 +265,7 @@ export default function NotificationsPage() {
       >
         {t(
           "notifications.retentionNote",
-          "Notifications are kept for 90 days."
+          "Notifications are kept for 90 days.",
         )}
       </Text>
 

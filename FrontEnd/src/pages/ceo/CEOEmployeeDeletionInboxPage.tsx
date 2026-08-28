@@ -4,7 +4,9 @@ import { Button, Grid, Segmented, Table, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 
 import ApprovalQueuePage from "../../components/ceo/ApprovalQueuePage";
-import ApprovalStatusTag, { type ApprovalStatusTone } from "../../components/ceo/ApprovalStatusTag";
+import ApprovalStatusTag, {
+  type ApprovalStatusTone,
+} from "../../components/ceo/ApprovalStatusTag";
 import Unauthorized403Page from "../Unauthorized403Page";
 
 import {
@@ -20,7 +22,11 @@ import { formatDateTimeShort } from "../../utils/dateTime";
 const { Text } = Typography;
 const { useBreakpoint } = Grid;
 
-const STATUS_TABS: EmployeeArchiveStatus[] = ["PENDING_CEO", "REJECTED", "EXECUTED"];
+const STATUS_TABS: EmployeeArchiveStatus[] = [
+  "PENDING_CEO",
+  "REJECTED",
+  "EXECUTED",
+];
 
 const STATUS_TONE: Record<EmployeeArchiveStatus, ApprovalStatusTone> = {
   PENDING_CEO: "pending",
@@ -36,7 +42,8 @@ export default function CEOEmployeeDeletionInboxPage() {
   const screens = useBreakpoint();
   const isNarrow = !screens.lg;
 
-  const [statusFilter, setStatusFilter] = useState<EmployeeArchiveStatus>("PENDING_CEO");
+  const [statusFilter, setStatusFilter] =
+    useState<EmployeeArchiveStatus>("PENDING_CEO");
   const [page, setPage] = useState(1);
   const [items, setItems] = useState<EmployeeArchiveRequest[]>([]);
   const [total, setTotal] = useState(0);
@@ -58,7 +65,9 @@ export default function CEOEmployeeDeletionInboxPage() {
           page_size: PAGE_SIZE,
         });
         if (isApiError(response)) {
-          setError(response.message || t("employees.removalInbox.errorGeneric"));
+          setError(
+            response.message || t("employees.removalInbox.errorGeneric"),
+          );
           return;
         }
         setItems(response.data.items || []);
@@ -110,10 +119,15 @@ export default function CEOEmployeeDeletionInboxPage() {
       render: (_, record) => {
         const snapshot = record.request_snapshot || {};
         return (
-          <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+          <div
+            style={{ display: "flex", flexDirection: "column", minWidth: 0 }}
+          >
             <Text strong>{employeeName(record)}</Text>
             <Text type="secondary" style={{ fontSize: 12 }}>
-              {snapshot.email || snapshot.target_user_email || snapshot.employee_id || "—"}
+              {snapshot.email ||
+                snapshot.target_user_email ||
+                snapshot.employee_id ||
+                "—"}
             </Text>
           </div>
         );
@@ -122,7 +136,9 @@ export default function CEOEmployeeDeletionInboxPage() {
     {
       title: t("employees.removalInbox.colDepartment"),
       key: "department",
-      render: (_, record) => <Text>{record.request_snapshot?.department_name || "—"}</Text>,
+      render: (_, record) => (
+        <Text>{record.request_snapshot?.department_name || "—"}</Text>
+      ),
     },
     {
       title: t("employees.removalInbox.colCompany"),
@@ -230,7 +246,8 @@ export default function CEOEmployeeDeletionInboxPage() {
           style: { paddingInline: 16 },
         }}
         onRow={(record) => ({
-          onClick: () => navigate(`/ceo/employees/deletion-requests/${record.id}`),
+          onClick: () =>
+            navigate(`/ceo/employees/deletion-requests/${record.id}`),
           style: { cursor: "pointer" },
         })}
       />

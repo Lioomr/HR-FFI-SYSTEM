@@ -71,7 +71,8 @@ class IsEmployeeOnly(BasePermission):
 class IsManagerOrAdmin(BasePermission):
     def has_permission(self, request, view):
         return request.user.is_authenticated and (
-            get_role(request.user) == "SystemAdmin" or has_manager_access(request.user)
+            get_role(request.user) == "SystemAdmin"
+            or has_manager_access(request.user, cross_company_capability="loans.approve")
         )
 
 

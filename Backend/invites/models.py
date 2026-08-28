@@ -4,6 +4,8 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
+from organization.models import OrganizationNode
+
 
 class Invite(models.Model):
     class Status(models.TextChoices):
@@ -44,6 +46,13 @@ class Invite(models.Model):
         "employees.EmployeeProfile",
         on_delete=models.SET_NULL,
         related_name="account_invites",
+        null=True,
+        blank=True,
+    )
+    company = models.ForeignKey(
+        OrganizationNode,
+        on_delete=models.PROTECT,
+        related_name="invites",
         null=True,
         blank=True,
     )

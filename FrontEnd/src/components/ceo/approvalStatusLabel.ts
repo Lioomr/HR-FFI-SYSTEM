@@ -1,6 +1,15 @@
-type TranslateFn = (key: string, params?: Record<string, unknown> | string, fallback?: string) => string;
+type TranslateFn = (
+  key: string,
+  params?: Record<string, unknown> | string,
+  fallback?: string,
+) => string;
 
-export type ApprovalStatusTone = "pending" | "approved" | "rejected" | "neutral" | "inProgress";
+export type ApprovalStatusTone =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "neutral"
+  | "inProgress";
 
 /** Maps the raw backend status strings used across CEO queues onto a tone. */
 export function toneForStatus(status?: string): ApprovalStatusTone {
@@ -8,7 +17,12 @@ export function toneForStatus(status?: string): ApprovalStatusTone {
   if (!value) return "neutral";
   if (value.startsWith("PENDING")) return "pending";
   if (value === "REJECTED" || value === "CANCELLED") return "rejected";
-  if (value === "APPROVED" || value === "EXECUTED" || value === "PROCESSED" || value === "PRESENT") {
+  if (
+    value === "APPROVED" ||
+    value === "EXECUTED" ||
+    value === "PROCESSED" ||
+    value === "PRESENT"
+  ) {
     return "approved";
   }
   if (value === "SUBMITTED") return "inProgress";
@@ -49,7 +63,10 @@ function humanize(status: string) {
     .join(" ");
 }
 
-export function approvalStatusLabel(status: string | undefined, t: TranslateFn): string {
+export function approvalStatusLabel(
+  status: string | undefined,
+  t: TranslateFn,
+): string {
   if (!status) return "—";
   const key = STATUS_KEYS[status.toUpperCase()];
   return key ? t(key) : humanize(status);

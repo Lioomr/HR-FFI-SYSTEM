@@ -18,7 +18,7 @@ function d(overrides: Partial<NotificationDelivery>): NotificationDelivery {
 }
 
 function makeNotification(
-  deliveries?: NotificationDelivery[]
+  deliveries?: NotificationDelivery[],
 ): NotificationDto {
   return {
     id: 1,
@@ -61,19 +61,23 @@ describe("NotificationDeliveryStatus", () => {
           d({ channel: "whatsapp", status: "failed" }),
           d({ channel: "email", status: "sent" }),
         ]}
-      />
+      />,
     );
     expect(screen.getByText("WhatsApp failed")).toBeInTheDocument();
     expect(screen.getByText("Email fallback sent")).toBeInTheDocument();
   });
 
   it("renders pending WhatsApp", () => {
-    render(<NotificationDeliveryStatus deliveries={[d({ status: "pending" })]} />);
+    render(
+      <NotificationDeliveryStatus deliveries={[d({ status: "pending" })]} />,
+    );
     expect(screen.getByText("WhatsApp pending")).toBeInTheDocument();
   });
 
   it("renders skipped WhatsApp", () => {
-    render(<NotificationDeliveryStatus deliveries={[d({ status: "skipped" })]} />);
+    render(
+      <NotificationDeliveryStatus deliveries={[d({ status: "skipped" })]} />,
+    );
     expect(screen.getByText("WhatsApp skipped")).toBeInTheDocument();
   });
 
@@ -84,14 +88,16 @@ describe("NotificationDeliveryStatus", () => {
           d({ channel: "whatsapp", status: "failed" }),
           d({ channel: "email", status: "failed" }),
         ]}
-      />
+      />,
     );
     expect(screen.getByText("WhatsApp failed")).toBeInTheDocument();
     expect(screen.getByText("Email fallback failed")).toBeInTheDocument();
   });
 
   it("renders nothing for empty deliveries", () => {
-    const { container } = render(<NotificationDeliveryStatus deliveries={[]} />);
+    const { container } = render(
+      <NotificationDeliveryStatus deliveries={[]} />,
+    );
     expect(container).toBeEmptyDOMElement();
   });
 
@@ -107,7 +113,7 @@ describe("NotificationDeliveryStatus", () => {
           d({ channel: "email", status: "sent" }),
           d({ channel: "whatsapp", status: "failed" }),
         ]}
-      />
+      />,
     );
     const chips = screen.getAllByText(/WhatsApp failed|Email fallback sent/);
     expect(chips[0]).toHaveTextContent("WhatsApp failed");
@@ -118,9 +124,13 @@ describe("NotificationDeliveryStatus", () => {
     render(
       <NotificationDeliveryStatus
         deliveries={[
-          d({ channel: "whatsapp", status: "failed", error: "TOP SECRET raw provider trace" }),
+          d({
+            channel: "whatsapp",
+            status: "failed",
+            error: "TOP SECRET raw provider trace",
+          }),
         ]}
-      />
+      />,
     );
     expect(screen.getByText("WhatsApp failed")).toBeInTheDocument();
     expect(screen.queryByText(/TOP SECRET/)).not.toBeInTheDocument();
@@ -134,7 +144,7 @@ describe("NotificationDeliveryStatus", () => {
           d({ channel: "whatsapp", status: "failed" }),
           d({ channel: "email", status: "sent" }),
         ]}
-      />
+      />,
     );
     expect(screen.getByText("فشل الإرسال عبر واتساب")).toBeInTheDocument();
     expect(screen.getByText("تم الإرسال عبر البريد كبديل")).toBeInTheDocument();
@@ -147,10 +157,10 @@ describe("NotificationDeliveryStatus", () => {
           d({ channel: "whatsapp", status: "failed" }),
           d({ channel: "email", status: "sent" }),
         ]}
-      />
+      />,
     );
     expect(screen.getByTestId("summary")).toHaveTextContent(
-      "Delivery status: WhatsApp failed, Email fallback sent."
+      "Delivery status: WhatsApp failed, Email fallback sent.",
     );
   });
 
@@ -167,7 +177,7 @@ describe("NotificationDeliveryStatus", () => {
           d({ channel: "email", status: "sent" }),
         ])}
         onSelect={() => {}}
-      />
+      />,
     );
     const button = screen.getByRole("button");
     expect(button.getAttribute("aria-label")).toContain("WhatsApp failed");

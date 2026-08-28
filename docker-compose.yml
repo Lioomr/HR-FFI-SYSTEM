@@ -113,7 +113,7 @@ services:
     container_name: ffi_hr_notification_worker
     restart: unless-stopped
     user: "app"
-    command: ["celery", "-A", "config", "worker", "-B", "--loglevel=INFO"]
+    command: ["celery", "-A", "config", "worker", "--loglevel=INFO"]
     env_file:
       - ./Backend/.env.docker
     environment:
@@ -145,6 +145,35 @@ services:
       retries: 5
       start_period: 30s
 
+  celery-beat:
+    build:
+      context: ./Backend
+    container_name: ffi_hr_celery_beat
+    restart: unless-stopped
+    user: "app"
+    command: ["celery", "-A", "config", "beat", "--loglevel=INFO"]
+    env_file:
+      - ./Backend/.env.docker
+    environment:
+      DB_ENGINE: django.db.backends.postgresql
+      DB_NAME: ffi_hr_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_HOST: db
+      DB_PORT: 5432
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/2
+      CELERY_RESULT_BACKEND: redis://redis:6379/3
+    depends_on:
+      backend:
+        condition: service_started
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    volumes:
+      - private_uploads:/app/private_uploads
+
   frontend:
     build:
       context: ./FrontEnd
@@ -156,6 +185,15 @@ services:
       - backend
     ports:
       - "5173:80"
+
+  cinematic-site:
+    build:
+      context: ./CinematicSite
+    container_name: ffi_cinematic_site
+    restart: unless-stopped
+    profiles: ["marketing"]
+    ports:
+      - "5174:80"
 
   evolution-db:
     image: postgres:16-alpine
@@ -188,7 +226,7 @@ services:
       retries: 10
 
   evolution-api:
-    image: atendai/evolution-api:latest
+    image: evoapicloud/evolution-api:v2.3.7
     container_name: ffi_hr_evolution_api
     restart: unless-stopped
     profiles: ["messaging-trial"]

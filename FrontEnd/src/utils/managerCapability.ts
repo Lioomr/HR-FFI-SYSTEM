@@ -1,4 +1,8 @@
-type Translate = (key: string, params?: Record<string, any> | string, fallback?: string) => string;
+type Translate = (
+  key: string,
+  params?: Record<string, any> | string,
+  fallback?: string,
+) => string;
 
 /**
  * Team-size caption for manager surfaces. The translator does simple token

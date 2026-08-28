@@ -26,7 +26,12 @@ export default function ApprovalActionPanel({
   return (
     <Card style={{ borderRadius: 16 }}>
       <Space direction="vertical" size={12} style={{ width: "100%" }}>
-        <Input.TextArea rows={4} value={note} onChange={(e) => onNoteChange(e.target.value)} placeholder="Add approval note" />
+        <Input.TextArea
+          rows={4}
+          value={note}
+          onChange={(e) => onNoteChange(e.target.value)}
+          placeholder="Add approval note"
+        />
         <Space>
           {canApprove ? (
             <Button type="primary" onClick={onApprove} loading={approveLoading}>

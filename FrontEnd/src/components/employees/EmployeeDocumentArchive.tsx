@@ -36,6 +36,7 @@ import {
 } from "../../services/api/employeesApi";
 import { isApiError } from "../../services/api/apiTypes";
 import { useI18n } from "../../i18n/useI18n";
+import { downloadBlob } from "../../utils/download";
 
 const { Text } = Typography;
 
@@ -367,14 +368,16 @@ const METADATA_FIELDS: Record<DocumentType, MetadataField[]> = {
       // The visa extractor promotes these onto the model, so prefer the stored
       // column and fall back to the raw extraction for older records.
       value: (doc) =>
-        textValue(doc.visa_number) || textValue(readExtracted(doc, "visa_number")),
+        textValue(doc.visa_number) ||
+        textValue(readExtracted(doc, "visa_number")),
       width: 130,
     },
     {
       key: "exit_before",
       labelKey: EXTRACTED_FIELD_LABEL_KEYS.exit_before,
       value: (doc) =>
-        dateValue(doc.exit_before) || dateValue(readExtracted(doc, "exit_before")),
+        dateValue(doc.exit_before) ||
+        dateValue(readExtracted(doc, "exit_before")),
       width: 120,
     },
     {
@@ -545,14 +548,7 @@ export default function EmployeeDocumentArchive({
     setDownloadingId(doc.id);
     try {
       const blob = await downloadEmployeeDocument(employeeId, doc.id);
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = doc.original_filename || `document_${doc.id}`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setTimeout(() => window.URL.revokeObjectURL(url), 5000);
+      downloadBlob(blob, doc.original_filename || `document_${doc.id}`);
     } catch {
       notification.error({
         message: t("common.error"),
@@ -738,9 +734,7 @@ export default function EmployeeDocumentArchive({
     ...metadataFieldsFor(documentType, items)
       .filter((field) => items.some((doc) => field.value(doc) !== ""))
       .map((field) => ({
-        title: field.labelKey
-          ? t(field.labelKey)
-          : humanizeFieldKey(field.key),
+        title: field.labelKey ? t(field.labelKey) : humanizeFieldKey(field.key),
         key: field.key,
         width: field.width ?? 130,
         render: (_: unknown, r: EmployeeDocument) =>

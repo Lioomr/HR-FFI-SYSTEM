@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
@@ -205,6 +206,22 @@ class BioTimeEmployeeMap(models.Model):
 
     def __str__(self):
         return f"BioTime {self.biotime_emp_code} -> {self.employee_profile}"
+
+    def clean(self):
+        super().clean()
+        profile = self.employee_profile
+        if (
+            not profile.company_id
+            or profile.company.node_type != profile.company.NodeType.COMPANY
+            or not profile.company.is_active
+        ):
+            raise ValidationError({"employee_profile": "Mapped employees must belong to an active company."})
+        if profile.is_archived:
+            raise ValidationError({"employee_profile": "Archived employees cannot be mapped to BioTime."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
 
 
 class BioTimeDeviceEmployee(models.Model):

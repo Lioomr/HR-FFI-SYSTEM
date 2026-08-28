@@ -1,20 +1,41 @@
-import ApprovalFlowMap, { type ApprovalFlowStage } from "../requests/ApprovalFlowMap";
+import ApprovalFlowMap, {
+  type ApprovalFlowStage,
+} from "../requests/ApprovalFlowMap";
 
 import type { AssetReturnRequest } from "../../services/api/assetsApi";
 
-type TranslateFn = (key: string, params?: Record<string, unknown> | string, fallback?: string) => string;
+type TranslateFn = (
+  key: string,
+  params?: Record<string, unknown> | string,
+  fallback?: string,
+) => string;
 
-function isRejectedAtStage(request: AssetReturnRequest, stage: "manager" | "hr" | "ceo") {
+function isRejectedAtStage(
+  request: AssetReturnRequest,
+  stage: "manager" | "hr" | "ceo",
+) {
   if (request.status !== "REJECTED") return false;
-  if (stage === "manager") return Boolean(request.manager_decision_at && !request.hr_decision_at && !request.ceo_decision_at);
-  if (stage === "hr") return Boolean(request.hr_decision_at && !request.ceo_decision_at);
+  if (stage === "manager")
+    return Boolean(
+      request.manager_decision_at &&
+      !request.hr_decision_at &&
+      !request.ceo_decision_at,
+    );
+  if (stage === "hr")
+    return Boolean(request.hr_decision_at && !request.ceo_decision_at);
   return Boolean(request.ceo_decision_at);
 }
 
-function buildStages(request: AssetReturnRequest, t: TranslateFn): ApprovalFlowStage[] {
+function buildStages(
+  request: AssetReturnRequest,
+  t: TranslateFn,
+): ApprovalFlowStage[] {
   const needsManager =
-    request.status === "PENDING_MANAGER" || Boolean(request.manager_decision_at || request.manager_decision_note);
-  const needsCeo = request.status === "PENDING_CEO" || Boolean(request.ceo_decision_at || request.ceo_decision_note);
+    request.status === "PENDING_MANAGER" ||
+    Boolean(request.manager_decision_at || request.manager_decision_note);
+  const needsCeo =
+    request.status === "PENDING_CEO" ||
+    Boolean(request.ceo_decision_at || request.ceo_decision_note);
 
   const managerState: ApprovalFlowStage["state"] = !needsManager
     ? "skipped"
@@ -32,7 +53,9 @@ function buildStages(request: AssetReturnRequest, t: TranslateFn): ApprovalFlowS
       ? "completed"
       : request.status === "PENDING"
         ? "current"
-        : request.status === "PENDING_CEO" || request.status === "APPROVED" || request.status === "PROCESSED"
+        : request.status === "PENDING_CEO" ||
+            request.status === "APPROVED" ||
+            request.status === "PROCESSED"
           ? "completed"
           : needsManager && !request.manager_decision_at
             ? "upcoming"
@@ -70,7 +93,8 @@ function buildStages(request: AssetReturnRequest, t: TranslateFn): ApprovalFlowS
       note:
         managerState === "skipped"
           ? t("assets.approvalMap.notRequired", "Not required")
-          : request.manager_decision_note || t(`leave.approvalMap.${managerState}`),
+          : request.manager_decision_note ||
+            t(`leave.approvalMap.${managerState}`),
       at: request.manager_decision_at,
     },
     {
@@ -80,7 +104,10 @@ function buildStages(request: AssetReturnRequest, t: TranslateFn): ApprovalFlowS
       note:
         request.hr_decision_note ||
         (hrState === "completed"
-          ? t("assets.approvalMap.approvedForReturn", "Ready for HR processing.")
+          ? t(
+              "assets.approvalMap.approvedForReturn",
+              "Ready for HR processing.",
+            )
           : t(`leave.approvalMap.${hrState}`)),
       at: request.hr_decision_at,
     },
@@ -100,16 +127,28 @@ function buildStages(request: AssetReturnRequest, t: TranslateFn): ApprovalFlowS
       state: processedState,
       note:
         request.status === "PROCESSED"
-          ? t("assets.approvalMap.returnCompleted", "Asset return has been processed.")
+          ? t(
+              "assets.approvalMap.returnCompleted",
+              "Asset return has been processed.",
+            )
           : request.status === "APPROVED"
-            ? t("assets.approvalMap.awaitingHandOff", "Waiting for HR to receive the asset.")
+            ? t(
+                "assets.approvalMap.awaitingHandOff",
+                "Waiting for HR to receive the asset.",
+              )
             : t("workflow.noUpdate", "No update yet"),
       at: request.processed_at,
     },
   ];
 }
 
-export default function AssetReturnApprovalMap({ request, t }: { request: AssetReturnRequest; t: TranslateFn }) {
+export default function AssetReturnApprovalMap({
+  request,
+  t,
+}: {
+  request: AssetReturnRequest;
+  t: TranslateFn;
+}) {
   return (
     <ApprovalFlowMap
       eyebrow={t("assets.approvalMap.eyebrow", "Asset Return Workflow")}

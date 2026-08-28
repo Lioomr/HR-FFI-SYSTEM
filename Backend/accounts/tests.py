@@ -12,6 +12,7 @@ from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
 from admin_portal.models import SystemSettings
 from audit.models import AuditLog
 from employees.models import EmployeeProfile
+from organization.models import OrganizationNode
 
 User = get_user_model()
 
@@ -23,12 +24,18 @@ class AccountTests(TestCase):
         self.client = APIClient()
         self.password = "strongpass123"
         self.user = User.objects.create_user(email="test@ffi.com", password=self.password)
+        self.company = OrganizationNode.objects.create(
+            code="ACCOUNT_TEST_COMPANY",
+            name="Account Test Company",
+            node_type=OrganizationNode.NodeType.COMPANY,
+        )
         self.settings_obj = SystemSettings.get_solo()
 
     def _create_phone_user(self, *, email: str, mobile: str, employee_id: str, is_active: bool = True):
         user = User.objects.create_user(email=email, password=self.password, is_active=is_active)
         EmployeeProfile.objects.create(
             user=user,
+            company=self.company,
             employee_id=employee_id,
             full_name=email,
             mobile=mobile,

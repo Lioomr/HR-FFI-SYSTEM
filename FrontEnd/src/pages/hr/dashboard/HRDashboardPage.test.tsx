@@ -25,8 +25,11 @@ import * as pendingApi from "../../../services/api/pendingRequestsApi";
 import { useI18nStore } from "../../../i18n/i18nStore";
 import { useAuthStore } from "../../../auth/authStore";
 
-const getHrSummary = hrSummaryApi.getHrSummary as unknown as ReturnType<typeof vi.fn>;
-const getPendingRequests = pendingApi.getPendingRequests as unknown as ReturnType<typeof vi.fn>;
+const getHrSummary = hrSummaryApi.getHrSummary as unknown as ReturnType<
+  typeof vi.fn
+>;
+const getPendingRequests =
+  pendingApi.getPendingRequests as unknown as ReturnType<typeof vi.fn>;
 
 function makeSummary(overrides: Partial<HRSummary> = {}): HRSummary {
   return {
@@ -36,12 +39,19 @@ function makeSummary(overrides: Partial<HRSummary> = {}): HRSummary {
     pending_leaves: 3,
     pending_approvals: [],
     recent_activity: [],
-    latest_payroll: { latest_total_net: 250000, latest_period: "7/2026", trend_percentage: 4.2 },
+    latest_payroll: {
+      latest_total_net: 250000,
+      latest_period: "7/2026",
+      trend_percentage: 4.2,
+    },
     ...overrides,
   };
 }
 
-const summaryResponse = (summary: HRSummary) => ({ status: "success" as const, data: summary });
+const summaryResponse = (summary: HRSummary) => ({
+  status: "success" as const,
+  data: summary,
+});
 const pendingResponse = (count: number) => ({
   status: "success" as const,
   data: { items: [], page: 1, page_size: 1, count, total_pages: 1 },
@@ -67,13 +77,21 @@ describe("HRDashboardPage", () => {
 
     expect(await screen.findByText("142")).toBeInTheDocument();
     expect(screen.getByText("130 currently active")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Pending Requests: 7/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Leave Awaiting HR: 3/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Expiring Docs: 4/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Pending Requests: 7/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Leave Awaiting HR: 3/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Expiring Docs: 4/ }),
+    ).toBeInTheDocument();
   });
 
   it("flags expiring documents with text, not colour alone", async () => {
-    getHrSummary.mockResolvedValue(summaryResponse(makeSummary({ expiring_docs: 9 })));
+    getHrSummary.mockResolvedValue(
+      summaryResponse(makeSummary({ expiring_docs: 9 })),
+    );
     getPendingRequests.mockResolvedValue(pendingResponse(0));
 
     render(<HRDashboardPage />);
@@ -82,7 +100,9 @@ describe("HRDashboardPage", () => {
   });
 
   it("omits the expiry warning when nothing is expiring", async () => {
-    getHrSummary.mockResolvedValue(summaryResponse(makeSummary({ expiring_docs: 0 })));
+    getHrSummary.mockResolvedValue(
+      summaryResponse(makeSummary({ expiring_docs: 0 })),
+    );
     getPendingRequests.mockResolvedValue(pendingResponse(0));
 
     render(<HRDashboardPage />);
@@ -95,9 +115,13 @@ describe("HRDashboardPage", () => {
     getHrSummary.mockResolvedValue(
       summaryResponse(
         makeSummary({
-          latest_payroll: { latest_total_net: null, latest_period: null, trend_percentage: null },
-        })
-      )
+          latest_payroll: {
+            latest_total_net: null,
+            latest_period: null,
+            trend_percentage: null,
+          },
+        }),
+      ),
     );
     getPendingRequests.mockResolvedValue(pendingResponse(0));
 
@@ -112,15 +136,21 @@ describe("HRDashboardPage", () => {
     getHrSummary.mockResolvedValue(
       summaryResponse(
         makeSummary({
-          latest_payroll: { latest_total_net: 120000, latest_period: "1/2026", trend_percentage: null },
-        })
-      )
+          latest_payroll: {
+            latest_total_net: 120000,
+            latest_period: "1/2026",
+            trend_percentage: null,
+          },
+        }),
+      ),
     );
     getPendingRequests.mockResolvedValue(pendingResponse(0));
 
     render(<HRDashboardPage />);
 
-    expect(await screen.findByText("No previous run to compare")).toBeInTheDocument();
+    expect(
+      await screen.findByText("No previous run to compare"),
+    ).toBeInTheDocument();
     expect(screen.getByText(/January 2026/)).toBeInTheDocument();
   });
 
@@ -142,8 +172,8 @@ describe("HRDashboardPage", () => {
               current_approver_role: "HRManager",
             },
           ],
-        })
-      )
+        }),
+      ),
     );
     getPendingRequests.mockResolvedValue(pendingResponse(1));
 
@@ -172,8 +202,8 @@ describe("HRDashboardPage", () => {
               current_approver_role: "HRManager",
             },
           ],
-        })
-      )
+        }),
+      ),
     );
     getPendingRequests.mockResolvedValue(pendingResponse(6));
 
@@ -188,7 +218,9 @@ describe("HRDashboardPage", () => {
 
     render(<HRDashboardPage />);
 
-    const tile = await screen.findByRole("button", { name: /Total Employees: 142/ });
+    const tile = await screen.findByRole("button", {
+      name: /Total Employees: 142/,
+    });
     fireEvent.click(tile);
     expect(navigateMock).toHaveBeenCalledWith("/hr/employees");
   });
@@ -200,7 +232,9 @@ describe("HRDashboardPage", () => {
     render(<HRDashboardPage />);
     await screen.findByText("142");
 
-    getHrSummary.mockResolvedValue(summaryResponse(makeSummary({ total_employees: 143 })));
+    getHrSummary.mockResolvedValue(
+      summaryResponse(makeSummary({ total_employees: 143 })),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
 
     await waitFor(() => expect(screen.getByText("143")).toBeInTheDocument());

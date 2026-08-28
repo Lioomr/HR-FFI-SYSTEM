@@ -21,13 +21,19 @@ const ok = <T,>(data: T) => ({ status: "success" as const, data });
 beforeEach(() => {
   vi.clearAllMocks();
   useI18nStore.getState().setLanguage("en");
-  getPrefs.mockResolvedValue(ok({ whatsapp_enabled: true, email_enabled: true }));
-  savePrefs.mockResolvedValue(ok({ whatsapp_enabled: true, email_enabled: true }));
+  getPrefs.mockResolvedValue(
+    ok({ whatsapp_enabled: true, email_enabled: true }),
+  );
+  savePrefs.mockResolvedValue(
+    ok({ whatsapp_enabled: true, email_enabled: true }),
+  );
 });
 
 describe("NotificationPreferences", () => {
   it("loads and reflects the stored preferences", async () => {
-    getPrefs.mockResolvedValue(ok({ whatsapp_enabled: true, email_enabled: false }));
+    getPrefs.mockResolvedValue(
+      ok({ whatsapp_enabled: true, email_enabled: false }),
+    );
     render(<NotificationPreferences />);
 
     const whatsapp = await screen.findByRole("switch", { name: /whatsapp/i });
@@ -39,12 +45,14 @@ describe("NotificationPreferences", () => {
   it("explains WhatsApp-first / email-fallback behavior", async () => {
     render(<NotificationPreferences />);
     expect(
-      await screen.findByText(/whatsapp is tried first/i)
+      await screen.findByText(/whatsapp is tried first/i),
     ).toBeInTheDocument();
   });
 
   it("enables Save only after a change and persists it", async () => {
-    getPrefs.mockResolvedValue(ok({ whatsapp_enabled: true, email_enabled: false }));
+    getPrefs.mockResolvedValue(
+      ok({ whatsapp_enabled: true, email_enabled: false }),
+    );
     render(<NotificationPreferences />);
 
     const saveBtn = await screen.findByRole("button", {
@@ -60,7 +68,7 @@ describe("NotificationPreferences", () => {
       expect(savePrefs).toHaveBeenCalledWith({
         whatsapp_enabled: true,
         email_enabled: true,
-      })
+      }),
     );
     expect(await screen.findByText(/preferences saved/i)).toBeInTheDocument();
   });
@@ -70,14 +78,16 @@ describe("NotificationPreferences", () => {
     render(<NotificationPreferences />);
 
     expect(
-      await screen.findByText(/couldn't load preferences/i)
+      await screen.findByText(/couldn't load preferences/i),
     ).toBeInTheDocument();
     const retry = screen.getByRole("button", { name: /retry/i });
 
-    getPrefs.mockResolvedValue(ok({ whatsapp_enabled: true, email_enabled: true }));
+    getPrefs.mockResolvedValue(
+      ok({ whatsapp_enabled: true, email_enabled: true }),
+    );
     fireEvent.click(retry);
     expect(
-      await screen.findByRole("switch", { name: /whatsapp/i })
+      await screen.findByRole("switch", { name: /whatsapp/i }),
     ).toBeInTheDocument();
   });
 
@@ -90,7 +100,7 @@ describe("NotificationPreferences", () => {
     fireEvent.click(screen.getByRole("button", { name: /save preferences/i }));
 
     expect(
-      await screen.findByText(/couldn't save preferences/i)
+      await screen.findByText(/couldn't save preferences/i),
     ).toBeInTheDocument();
   });
 
@@ -105,7 +115,7 @@ describe("NotificationPreferences", () => {
     render(<NotificationPreferences />);
     await screen.findByRole("switch", { name: /whatsapp/i });
     expect(
-      screen.getByRole("group", { name: /notification preferences/i })
+      screen.getByRole("group", { name: /notification preferences/i }),
     ).toBeInTheDocument();
   });
 });

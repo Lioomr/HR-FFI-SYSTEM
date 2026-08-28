@@ -130,8 +130,10 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
   const [pagination, setPagination] = useState({ current: 1, pageSize: 20 });
 
   const isCeoApprover = role === "ceo";
-  const [approvingRecord, setApprovingRecord] = useState<AttendanceRecord | null>(null);
-  const [rejectingRecord, setRejectingRecord] = useState<AttendanceRecord | null>(null);
+  const [approvingRecord, setApprovingRecord] =
+    useState<AttendanceRecord | null>(null);
+  const [rejectingRecord, setRejectingRecord] =
+    useState<AttendanceRecord | null>(null);
   const [deciding, setDeciding] = useState(false);
 
   const [employeeOptionsSource, setEmployeeOptionsSource] = useState<
@@ -364,7 +366,9 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
     try {
       const response = await approveCEOAttendance(record.id, {});
       if (isApiError(response)) {
-        message.error(response.message || t("attendancePreview.decision.failed"));
+        message.error(
+          response.message || t("attendancePreview.decision.failed"),
+        );
         return;
       }
       message.success(t("attendancePreview.decision.approved"));
@@ -381,9 +385,13 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
     if (!rejectingRecord) return;
     setDeciding(true);
     try {
-      const response = await rejectCEOAttendance(rejectingRecord.id, { notes: reason });
+      const response = await rejectCEOAttendance(rejectingRecord.id, {
+        notes: reason,
+      });
       if (isApiError(response)) {
-        message.error(response.message || t("attendancePreview.decision.failed"));
+        message.error(
+          response.message || t("attendancePreview.decision.failed"),
+        );
         return;
       }
       message.success(t("attendancePreview.decision.rejected"));
@@ -594,8 +602,16 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
   return (
     <div>
       <PageHeader
-        title={isCeoApprover ? t("ceo.attendance.title") : t("hr.attendance.recordsTitle")}
-        subtitle={isCeoApprover ? t("ceo.attendance.subtitle") : t("attendancePreview.subtitle")}
+        title={
+          isCeoApprover
+            ? t("ceo.attendance.title")
+            : t("hr.attendance.recordsTitle")
+        }
+        subtitle={
+          isCeoApprover
+            ? t("ceo.attendance.subtitle")
+            : t("attendancePreview.subtitle")
+        }
         actions={
           <Button
             icon={<ReloadOutlined />}
@@ -784,7 +800,9 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
         <RejectReasonModal
           open={Boolean(rejectingRecord)}
           title={t("attendancePreview.decision.rejectTitle")}
-          subject={rejectingRecord ? getEmployeeName(rejectingRecord) : undefined}
+          subject={
+            rejectingRecord ? getEmployeeName(rejectingRecord) : undefined
+          }
           loading={deciding}
           onCancel={() => setRejectingRecord(null)}
           onSubmit={handleReject}

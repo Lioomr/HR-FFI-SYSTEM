@@ -1,5 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Card, Descriptions, Form, Input, Modal, Row, Col, Select, Space, Table, Tabs, Tag, Typography, message } from "antd";
+import {
+  Button,
+  Card,
+  Descriptions,
+  Form,
+  Input,
+  Modal,
+  Row,
+  Col,
+  Select,
+  Space,
+  Table,
+  Tabs,
+  Tag,
+  Typography,
+  message,
+} from "antd";
 import type { ColumnsType } from "antd/es/table";
 
 import EmptyState from "../../../components/ui/EmptyState";
@@ -18,7 +34,10 @@ import {
 } from "../../../services/api/assetsApi";
 import { isApiError } from "../../../services/api/apiTypes";
 import { useI18n } from "../../../i18n/useI18n";
-import { getDetailedApiMessage, getDetailedHttpErrorMessage } from "../../../services/api/userErrorMessages";
+import {
+  getDetailedApiMessage,
+  getDetailedHttpErrorMessage,
+} from "../../../services/api/userErrorMessages";
 
 const statusColorMap: Record<string, string> = {
   AVAILABLE: "green",
@@ -65,18 +84,24 @@ export default function MyAssetsPage() {
   const [returnForm] = Form.useForm();
   const [returnOpen, setReturnOpen] = useState(false);
 
-  const [requestAssetFilter, setRequestAssetFilter] = useState<number | undefined>();
+  const [requestAssetFilter, setRequestAssetFilter] = useState<
+    number | undefined
+  >();
   const [damageReports, setDamageReports] = useState<AssetDamageReport[]>([]);
   const [damagePage, setDamagePage] = useState(1);
   const [damagePageSize, setDamagePageSize] = useState(5);
   const [damageTotal, setDamageTotal] = useState(0);
-  const [returnRequests, setReturnRequests] = useState<AssetReturnRequest[]>([]);
+  const [returnRequests, setReturnRequests] = useState<AssetReturnRequest[]>(
+    [],
+  );
   const [returnPage, setReturnPage] = useState(1);
   const [returnPageSize, setReturnPageSize] = useState(5);
   const [returnTotal, setReturnTotal] = useState(0);
 
   const getAssetDisplayName = (asset: Asset) =>
-    language === "ar" ? (asset.name_ar || asset.name_en || "-") : (asset.name_en || asset.name_ar || "-");
+    language === "ar"
+      ? asset.name_ar || asset.name_en || "-"
+      : asset.name_en || asset.name_ar || "-";
 
   const loadAssets = async () => {
     setAssetLoading(true);
@@ -119,11 +144,17 @@ export default function MyAssetsPage() {
       ]);
 
       if (isApiError(damageRes)) {
-        setRequestError(damageRes.message || t("common.error.generic", "Failed to load request history."));
+        setRequestError(
+          damageRes.message ||
+            t("common.error.generic", "Failed to load request history."),
+        );
         return;
       }
       if (isApiError(returnRes)) {
-        setRequestError(returnRes.message || t("common.error.generic", "Failed to load request history."));
+        setRequestError(
+          returnRes.message ||
+            t("common.error.generic", "Failed to load request history."),
+        );
         return;
       }
 
@@ -133,7 +164,10 @@ export default function MyAssetsPage() {
       setReturnTotal(returnRes.data.count || 0);
       setRequestError(null);
     } catch (err: any) {
-      setRequestError(err?.message || t("common.error.generic", "Failed to load request history."));
+      setRequestError(
+        err?.message ||
+          t("common.error.generic", "Failed to load request history."),
+      );
     } finally {
       setRequestLoading(false);
     }
@@ -145,16 +179,25 @@ export default function MyAssetsPage() {
 
   useEffect(() => {
     void loadRequestHistory();
-  }, [damagePage, damagePageSize, returnPage, returnPageSize, requestAssetFilter]);
+  }, [
+    damagePage,
+    damagePageSize,
+    returnPage,
+    returnPageSize,
+    requestAssetFilter,
+  ]);
 
-  const dataSource = useMemo(() => assets.map((item) => ({ ...item, key: item.id })), [assets]);
+  const dataSource = useMemo(
+    () => assets.map((item) => ({ ...item, key: item.id })),
+    [assets],
+  );
   const requestAssetOptions = useMemo(
     () =>
       assets.map((item) => ({
         label: `${item.asset_code} - ${getAssetDisplayName(item)}`,
         value: item.id,
       })),
-    [assets, language]
+    [assets, language],
   );
 
   const openDetails = (asset: Asset) => {
@@ -171,40 +214,71 @@ export default function MyAssetsPage() {
   };
 
   const damageColumns: ColumnsType<AssetDamageReport> = [
-    { title: t("assets.assetCode"), dataIndex: "asset_code", key: "asset_code", width: 140 },
-    { title: t("common.details"), dataIndex: "description", key: "description", ellipsis: true, responsive: ["md"] },
+    {
+      title: t("assets.assetCode"),
+      dataIndex: "asset_code",
+      key: "asset_code",
+      width: 140,
+    },
+    {
+      title: t("common.details"),
+      dataIndex: "description",
+      key: "description",
+      ellipsis: true,
+      responsive: ["md"],
+    },
     {
       title: t("common.status"),
       dataIndex: "status",
       key: "status",
       width: 140,
-      render: (value: string) => <Tag color={requestStatusColorMap[value] || "default"}>{value}</Tag>,
+      render: (value: string) => (
+        <Tag color={requestStatusColorMap[value] || "default"}>{value}</Tag>
+      ),
     },
     {
       title: t("assets.lastUpdated", "Decision"),
       key: "decision",
       ellipsis: true,
       responsive: ["lg"],
-      render: (_, record) => record.ceo_decision_note || record.hr_decision_note || "-",
+      render: (_, record) =>
+        record.ceo_decision_note || record.hr_decision_note || "-",
     },
   ];
 
   const returnColumns: ColumnsType<AssetReturnRequest> = [
-    { title: t("assets.assetCode"), dataIndex: "asset_code", key: "asset_code", width: 140 },
-    { title: t("common.notes"), dataIndex: "note", key: "note", ellipsis: true, responsive: ["md"] },
+    {
+      title: t("assets.assetCode"),
+      dataIndex: "asset_code",
+      key: "asset_code",
+      width: 140,
+    },
+    {
+      title: t("common.notes"),
+      dataIndex: "note",
+      key: "note",
+      ellipsis: true,
+      responsive: ["md"],
+    },
     {
       title: t("common.status"),
       dataIndex: "status",
       key: "status",
       width: 140,
-      render: (value: string) => <Tag color={requestStatusColorMap[value] || "default"}>{value}</Tag>,
+      render: (value: string) => (
+        <Tag color={requestStatusColorMap[value] || "default"}>{value}</Tag>
+      ),
     },
     {
       title: t("assets.lastUpdated", "Decision"),
       key: "decision",
       ellipsis: true,
       responsive: ["lg"],
-      render: (_, record) => record.ceo_decision_note || record.hr_decision_note || record.manager_decision_note || "-",
+      render: (_, record) =>
+        record.ceo_decision_note ||
+        record.hr_decision_note ||
+        record.manager_decision_note ||
+        "-",
     },
   ];
 
@@ -243,13 +317,21 @@ export default function MyAssetsPage() {
         </Button>
       ),
     },
-    { title: t("common.type"), dataIndex: "type", key: "type", width: 120, responsive: ["md"] },
+    {
+      title: t("common.type"),
+      dataIndex: "type",
+      key: "type",
+      width: 120,
+      responsive: ["md"],
+    },
     {
       title: t("common.status"),
       dataIndex: "status",
       key: "status",
       width: 160,
-      render: (status: string) => <Tag color={statusColorMap[status] || "default"}>{status}</Tag>,
+      render: (status: string) => (
+        <Tag color={statusColorMap[status] || "default"}>{status}</Tag>
+      ),
     },
     {
       title: t("assets.serialNumber"),
@@ -319,9 +401,17 @@ export default function MyAssetsPage() {
       const description = (values.description || "").trim();
       const payloadDescription = `[${reportType}] ${description}`;
 
-      const response = await reportAssetIssue(selectedAsset.id, { description: payloadDescription });
+      const response = await reportAssetIssue(selectedAsset.id, {
+        description: payloadDescription,
+      });
       if (isApiError(response)) {
-        await apiMessage.error(getDetailedApiMessage(t, response.message, "assets.submitIssueFailed"));
+        await apiMessage.error(
+          getDetailedApiMessage(
+            t,
+            response.message,
+            "assets.submitIssueFailed",
+          ),
+        );
         return;
       }
 
@@ -332,7 +422,9 @@ export default function MyAssetsPage() {
       await Promise.all([loadAssets(), loadRequestHistory()]);
     } catch (err: any) {
       if (!err?.errorFields) {
-        await apiMessage.error(getDetailedHttpErrorMessage(t, err, "assets.submitIssueFailed"));
+        await apiMessage.error(
+          getDetailedHttpErrorMessage(t, err, "assets.submitIssueFailed"),
+        );
       }
     } finally {
       setReporting(false);
@@ -344,19 +436,31 @@ export default function MyAssetsPage() {
     try {
       const values = await returnForm.validateFields();
       setReturning(true);
-      const response = await requestAssetReturn(selectedAsset.id, { note: (values.note || "").trim() });
+      const response = await requestAssetReturn(selectedAsset.id, {
+        note: (values.note || "").trim(),
+      });
       if (isApiError(response)) {
-        await apiMessage.error(getDetailedApiMessage(t, response.message, "assets.submitIssueFailed"));
+        await apiMessage.error(
+          getDetailedApiMessage(
+            t,
+            response.message,
+            "assets.submitIssueFailed",
+          ),
+        );
         return;
       }
-      await apiMessage.success(t("assets.returnRequested", "Return request submitted"));
+      await apiMessage.success(
+        t("assets.returnRequested", "Return request submitted"),
+      );
       setReturnOpen(false);
       returnForm.resetFields();
       setReturnPage(1);
       await Promise.all([loadAssets(), loadRequestHistory()]);
     } catch (err: any) {
       if (!err?.errorFields) {
-        await apiMessage.error(getDetailedHttpErrorMessage(t, err, "assets.submitIssueFailed"));
+        await apiMessage.error(
+          getDetailedHttpErrorMessage(t, err, "assets.submitIssueFailed"),
+        );
       }
     } finally {
       setReturning(false);
@@ -366,12 +470,22 @@ export default function MyAssetsPage() {
   if (assetLoading && assets.length === 0 && !error) {
     return <LoadingState title={t("assets.loadingMyAssets")} lines={5} />;
   }
-  if (error) return <ErrorState title={t("assets.unableToLoad")} description={error} onRetry={() => void loadAssets()} />;
+  if (error)
+    return (
+      <ErrorState
+        title={t("assets.unableToLoad")}
+        description={error}
+        onRetry={() => void loadAssets()}
+      />
+    );
 
   return (
     <div>
       {contextHolder}
-      <PageHeader title={t("assets.myAssets")} subtitle={t("assets.myAssetsDesc")} />
+      <PageHeader
+        title={t("assets.myAssets")}
+        subtitle={t("assets.myAssetsDesc")}
+      />
 
       <Card style={{ marginBottom: 16 }}>
         <Row gutter={[12, 12]}>
@@ -379,7 +493,10 @@ export default function MyAssetsPage() {
             <Input.Search
               allowClear
               value={searchText}
-              placeholder={t("assets.searchPlaceholder", "Search by asset code, serial number, or name")}
+              placeholder={t(
+                "assets.searchPlaceholder",
+                "Search by asset code, serial number, or name",
+              )}
               onChange={(e) => setSearchText(e.target.value)}
               onSearch={(value) => {
                 setAppliedSearch(value.trim());
@@ -433,7 +550,10 @@ export default function MyAssetsPage() {
       </Card>
 
       {assetTotal === 0 ? (
-        <EmptyState title={t("assets.noAssets")} description={t("assets.noAssetsDesc")} />
+        <EmptyState
+          title={t("assets.noAssets")}
+          description={t("assets.noAssetsDesc")}
+        />
       ) : (
         <Card style={{ marginBottom: 16 }}>
           <Table
@@ -464,7 +584,9 @@ export default function MyAssetsPage() {
         title={t("assets.requestsHistory", "Request History")}
         extra={
           <Space wrap>
-            <Typography.Text type="secondary">{t("assets.filterRequestsByAsset", "Filter by asset")}</Typography.Text>
+            <Typography.Text type="secondary">
+              {t("assets.filterRequestsByAsset", "Filter by asset")}
+            </Typography.Text>
             <Select
               allowClear
               value={requestAssetFilter}
@@ -482,7 +604,10 @@ export default function MyAssetsPage() {
       >
         {requestError ? (
           <ErrorState
-            title={t("assets.requestHistoryUnavailable", "Unable to load request history")}
+            title={t(
+              "assets.requestHistoryUnavailable",
+              "Unable to load request history",
+            )}
             description={requestError}
             onRetry={() => void loadRequestHistory()}
           />
@@ -565,52 +690,95 @@ export default function MyAssetsPage() {
       >
         {selectedAsset && (
           <Descriptions bordered size="small" column={{ xs: 1, sm: 2 }}>
-            <Descriptions.Item label={t("assets.assetCode")}>{selectedAsset.asset_code}</Descriptions.Item>
-            <Descriptions.Item label={t("common.name")}>{getAssetDisplayName(selectedAsset)}</Descriptions.Item>
-            <Descriptions.Item label={t("common.type")}>{selectedAsset.type || "-"}</Descriptions.Item>
-            <Descriptions.Item label={t("common.status")}>
-              <Tag color={statusColorMap[selectedAsset.status] || "default"}>{selectedAsset.status}</Tag>
+            <Descriptions.Item label={t("assets.assetCode")}>
+              {selectedAsset.asset_code}
             </Descriptions.Item>
-            <Descriptions.Item label={t("assets.serialNumber")}>{selectedAsset.serial_number || "-"}</Descriptions.Item>
-            <Descriptions.Item label={t("assets.vendor")}>{selectedAsset.vendor || "-"}</Descriptions.Item>
-            <Descriptions.Item label={t("assets.purchaseDate")}>{selectedAsset.purchase_date || "-"}</Descriptions.Item>
-            <Descriptions.Item label={t("assets.warrantyExpiry")}>{selectedAsset.warranty_expiry || "-"}</Descriptions.Item>
+            <Descriptions.Item label={t("common.name")}>
+              {getAssetDisplayName(selectedAsset)}
+            </Descriptions.Item>
+            <Descriptions.Item label={t("common.type")}>
+              {selectedAsset.type || "-"}
+            </Descriptions.Item>
+            <Descriptions.Item label={t("common.status")}>
+              <Tag color={statusColorMap[selectedAsset.status] || "default"}>
+                {selectedAsset.status}
+              </Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label={t("assets.serialNumber")}>
+              {selectedAsset.serial_number || "-"}
+            </Descriptions.Item>
+            <Descriptions.Item label={t("assets.vendor")}>
+              {selectedAsset.vendor || "-"}
+            </Descriptions.Item>
+            <Descriptions.Item label={t("assets.purchaseDate")}>
+              {selectedAsset.purchase_date || "-"}
+            </Descriptions.Item>
+            <Descriptions.Item label={t("assets.warrantyExpiry")}>
+              {selectedAsset.warranty_expiry || "-"}
+            </Descriptions.Item>
             <Descriptions.Item label={t("common.notes")} span={2}>
               {selectedAsset.notes || "-"}
             </Descriptions.Item>
 
             {selectedAsset.type === "VEHICLE" && (
               <>
-                <Descriptions.Item label={t("assets.plateNumber")}>{selectedAsset.plate_number || "-"}</Descriptions.Item>
-                <Descriptions.Item label={t("assets.chassisNumber")}>{selectedAsset.chassis_number || "-"}</Descriptions.Item>
-                <Descriptions.Item label={t("assets.engineNumber")}>{selectedAsset.engine_number || "-"}</Descriptions.Item>
-                <Descriptions.Item label={t("assets.fuelType")}>{selectedAsset.fuel_type || "-"}</Descriptions.Item>
+                <Descriptions.Item label={t("assets.plateNumber")}>
+                  {selectedAsset.plate_number || "-"}
+                </Descriptions.Item>
+                <Descriptions.Item label={t("assets.chassisNumber")}>
+                  {selectedAsset.chassis_number || "-"}
+                </Descriptions.Item>
+                <Descriptions.Item label={t("assets.engineNumber")}>
+                  {selectedAsset.engine_number || "-"}
+                </Descriptions.Item>
+                <Descriptions.Item label={t("assets.fuelType")}>
+                  {selectedAsset.fuel_type || "-"}
+                </Descriptions.Item>
               </>
             )}
 
             {selectedAsset.type === "LAPTOP" && (
               <>
-                <Descriptions.Item label={t("assets.cpu")}>{selectedAsset.cpu || "-"}</Descriptions.Item>
-                <Descriptions.Item label={t("assets.ram")}>{selectedAsset.ram || "-"}</Descriptions.Item>
-                <Descriptions.Item label={t("assets.storage")}>{selectedAsset.storage || "-"}</Descriptions.Item>
-                <Descriptions.Item label={t("assets.os")}>{selectedAsset.operating_system || "-"}</Descriptions.Item>
+                <Descriptions.Item label={t("assets.cpu")}>
+                  {selectedAsset.cpu || "-"}
+                </Descriptions.Item>
+                <Descriptions.Item label={t("assets.ram")}>
+                  {selectedAsset.ram || "-"}
+                </Descriptions.Item>
+                <Descriptions.Item label={t("assets.storage")}>
+                  {selectedAsset.storage || "-"}
+                </Descriptions.Item>
+                <Descriptions.Item label={t("assets.os")}>
+                  {selectedAsset.operating_system || "-"}
+                </Descriptions.Item>
               </>
             )}
 
             {selectedAsset.type === "OTHER" && (
               <>
-                {selectedAsset.flexible_attributes && Object.keys(selectedAsset.flexible_attributes).length > 0 ? (
-                  Object.entries(selectedAsset.flexible_attributes).map(([title, value]) => {
-                    const details = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
-                    const valueType = details.type === "date" ? "date" : "body";
-                    const bodyValue = typeof details.body === "string" ? details.body : null;
-                    const dateValue = typeof details.date === "string" ? details.date : null;
-                    return (
-                      <Descriptions.Item key={title} label={title} span={2}>
-                        {valueType === "date" ? (dateValue || "-") : (bodyValue || "-")}
-                      </Descriptions.Item>
-                    );
-                  })
+                {selectedAsset.flexible_attributes &&
+                Object.keys(selectedAsset.flexible_attributes).length > 0 ? (
+                  Object.entries(selectedAsset.flexible_attributes).map(
+                    ([title, value]) => {
+                      const details =
+                        value && typeof value === "object"
+                          ? (value as Record<string, unknown>)
+                          : {};
+                      const valueType =
+                        details.type === "date" ? "date" : "body";
+                      const bodyValue =
+                        typeof details.body === "string" ? details.body : null;
+                      const dateValue =
+                        typeof details.date === "string" ? details.date : null;
+                      return (
+                        <Descriptions.Item key={title} label={title} span={2}>
+                          {valueType === "date"
+                            ? dateValue || "-"
+                            : bodyValue || "-"}
+                        </Descriptions.Item>
+                      );
+                    },
+                  )
                 ) : (
                   <Descriptions.Item label={t("assets.customDetails")} span={2}>
                     -
@@ -653,7 +821,9 @@ export default function MyAssetsPage() {
           <Form.Item
             name="description"
             label={t("common.details")}
-            rules={[{ required: true, message: t("assets.provideIssueDetails") }]}
+            rules={[
+              { required: true, message: t("assets.provideIssueDetails") },
+            ]}
           >
             <Input.TextArea rows={4} placeholder={t("assets.describeIssue")} />
           </Form.Item>
@@ -677,7 +847,9 @@ export default function MyAssetsPage() {
           <Form.Item
             name="note"
             label={t("common.notes")}
-            rules={[{ required: true, message: t("assets.provideIssueDetails") }]}
+            rules={[
+              { required: true, message: t("assets.provideIssueDetails") },
+            ]}
           >
             <Input.TextArea rows={3} placeholder={t("assets.describeIssue")} />
           </Form.Item>

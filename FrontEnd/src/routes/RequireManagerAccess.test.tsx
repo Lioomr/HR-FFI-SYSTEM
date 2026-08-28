@@ -5,7 +5,10 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import RequireManagerAccess from "./RequireManagerAccess";
 import { useAuthStore, type Role } from "../auth/authStore";
 import { resetManagerAccessCache } from "../hooks/useManagerAccess";
-import { getManagerAccess, type ManagerAccess } from "../services/api/managerApi";
+import {
+  getManagerAccess,
+  type ManagerAccess,
+} from "../services/api/managerApi";
 
 vi.mock("../services/api/managerApi", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../services/api/managerApi")>()),
@@ -30,7 +33,12 @@ function grantAccess(overrides: Partial<ManagerAccess> = {}) {
 function denyAccess() {
   mockedGetManagerAccess.mockResolvedValue({
     status: "success",
-    data: { has_access: false, managed_employee_count: 0, source: "none", scopes: [] },
+    data: {
+      has_access: false,
+      managed_employee_count: 0,
+      source: "none",
+      scopes: [],
+    },
   });
 }
 
@@ -45,8 +53,15 @@ function renderGuard() {
   return render(
     <MemoryRouter initialEntries={["/manager/dashboard"]}>
       <Routes>
-        <Route element={<RequireManagerAccess allowRoles={["CEO", "CFO", "SystemAdmin"]} />}>
-          <Route path="/manager/dashboard" element={<div>Team dashboard content</div>} />
+        <Route
+          element={
+            <RequireManagerAccess allowRoles={["CEO", "CFO", "SystemAdmin"]} />
+          }
+        >
+          <Route
+            path="/manager/dashboard"
+            element={<div>Team dashboard content</div>}
+          />
         </Route>
         <Route path="/unauthorized" element={<div>Unauthorized page</div>} />
       </Routes>
@@ -70,7 +85,9 @@ describe("RequireManagerAccess", () => {
 
     renderGuard();
 
-    expect(await screen.findByText("Team dashboard content")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Team dashboard content"),
+    ).toBeInTheDocument();
   });
 
   it("shows a loading state while the capability is being resolved", async () => {
@@ -79,8 +96,12 @@ describe("RequireManagerAccess", () => {
 
     renderGuard();
 
-    expect(screen.getByRole("status", { name: "Checking manager access..." })).toBeInTheDocument();
-    expect(await screen.findByText("Team dashboard content")).toBeInTheDocument();
+    expect(
+      screen.getByRole("status", { name: "Checking manager access..." }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByText("Team dashboard content"),
+    ).toBeInTheDocument();
   });
 
   it("blocks an Employee without manager capability", async () => {
@@ -89,8 +110,12 @@ describe("RequireManagerAccess", () => {
 
     renderGuard();
 
-    expect(await screen.findByText("Manager access not available")).toBeInTheDocument();
-    expect(screen.queryByText("Team dashboard content")).not.toBeInTheDocument();
+    expect(
+      await screen.findByText("Manager access not available"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Team dashboard content"),
+    ).not.toBeInTheDocument();
   });
 
   it("blocks a Manager-role user who has no direct reports", async () => {
@@ -99,8 +124,12 @@ describe("RequireManagerAccess", () => {
 
     renderGuard();
 
-    expect(await screen.findByText("Manager access not available")).toBeInTheDocument();
-    expect(screen.queryByText("Team dashboard content")).not.toBeInTheDocument();
+    expect(
+      await screen.findByText("Manager access not available"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Team dashboard content"),
+    ).not.toBeInTheDocument();
   });
 
   it("admits a Manager-role user who has direct reports", async () => {
@@ -109,7 +138,9 @@ describe("RequireManagerAccess", () => {
 
     renderGuard();
 
-    expect(await screen.findByText("Team dashboard content")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Team dashboard content"),
+    ).toBeInTheDocument();
   });
 
   it.each<Role>(["CEO", "CFO", "SystemAdmin"])(
@@ -120,7 +151,9 @@ describe("RequireManagerAccess", () => {
 
       renderGuard();
 
-      expect(await screen.findByText("Team dashboard content")).toBeInTheDocument();
+      expect(
+        await screen.findByText("Team dashboard content"),
+      ).toBeInTheDocument();
       expect(mockedGetManagerAccess).not.toHaveBeenCalled();
     },
   );
@@ -131,7 +164,9 @@ describe("RequireManagerAccess", () => {
 
     renderGuard();
 
-    expect(await screen.findByText("Manager access not available")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Manager access not available"),
+    ).toBeInTheDocument();
   });
 
   it("redirects to /unauthorized when there is no signed-in user", () => {

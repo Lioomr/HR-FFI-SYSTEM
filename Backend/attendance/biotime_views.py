@@ -2,16 +2,22 @@ import logging
 import secrets
 
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 from rest_framework import status, views, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 
 from audit.utils import audit
 from core.pagination import StandardPagination
 from core.permissions import IsHRManagerOrAdmin
 from core.responses import error, success
-from organization.services import filter_queryset_by_company_scope
+from organization.services import (
+    filter_queryset_by_company_scope,
+    is_head_office_context,
+    user_has_all_company_access,
+)
 
 from .biotime_client import BioTimeClient
 from .models import BioTimeConfig, BioTimeDeviceEmployee, BioTimeEmployeeMap
@@ -86,10 +92,11 @@ class BioTimeAgentIngestView(views.APIView):
         transactions = request.data.get("transactions") if isinstance(request.data, dict) else None
         if not isinstance(transactions, list) or len(transactions) > 5000:
             return error("transactions must be a list of at most 5000 items.", status=status.HTTP_400_BAD_REQUEST)
-        result = SyncBioTimeService.ingest_transactions(transactions)
-        config = BioTimeConfig.get_solo()
-        config.last_sync_time = timezone.now()
-        config.save(update_fields=["last_sync_time", "updated_at"])
+        with transaction.atomic():
+            result = SyncBioTimeService.ingest_transactions(transactions)
+            config = BioTimeConfig.get_solo()
+            config.last_sync_time = timezone.now()
+            config.save(update_fields=["last_sync_time", "updated_at"])
         return success(result, message="BioTime transactions ingested.")
 
 
@@ -180,6 +187,11 @@ class BioTimeEmployeeMapViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"])
     def unmapped(self, request):
+        # Device roster rows do not carry a company key, so they cannot be
+        # safely tenant-filtered. Expose them only as an explicit all-company
+        # head-office workflow; ordinary company contexts must fail closed.
+        if not is_head_office_context(request) or not user_has_all_company_access(request.user):
+            raise PermissionDenied("Unmapped BioTime employees require all-company head-office access.")
         try:
             mapped_codes = set(BioTimeEmployeeMap.objects.values_list("biotime_emp_code", flat=True))
             employees = [

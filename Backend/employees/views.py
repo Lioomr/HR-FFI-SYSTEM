@@ -36,12 +36,15 @@ from organization.services import (
     filter_queryset_by_accessible_companies,
     filter_queryset_by_company_scope,
     get_active_company_for_request,
+    get_requested_company_id,
+    get_requested_organization_scope,
+    get_scope_company_ids,
 )
 
 from .document_extraction import extract_document_fields
 from .models import EmployeeDeletionRequest, EmployeeDocument, EmployeeImport, EmployeeProfile
 from .notifications import notify_document_expiry_in_app
-from .permissions import IsEmployeeOwner, IsHRManagerOnly, IsHRManagerOrAdmin, IsManagerOfEmployee
+from .permissions import IsEmployeeOwner, IsHRManagerOnly, IsHRManagerOrAdmin
 from .serializers import (
     DelegationCandidateSerializer,
     EmployeeDeletionRequestCreateSerializer,
@@ -50,6 +53,7 @@ from .serializers import (
     EmployeeImportSerializer,
     EmployeeProfileReadSerializer,
     EmployeeProfileWriteSerializer,
+    ScopedEmployeeReadSerializer,
 )
 from .services import (
     MANAGER_SCOPES,
@@ -58,7 +62,11 @@ from .services import (
     managed_reports_queryset,
     manager_scope_q,
 )
-from .services.manager_relationships import log_manager_assignment_change, reroute_pending_manager_requests
+from .services.manager_relationships import (
+    active_cross_company_manager_assignments,
+    log_manager_assignment_change,
+    reroute_pending_manager_requests,
+)
 from .storage import PrivateUploadStorage
 from .tasks import extract_employee_document
 from .throttles import EmployeeImportThrottle
@@ -69,6 +77,34 @@ try:
     from openpyxl import load_workbook
 except Exception:  # pragma: no cover - fallback for missing dependency
     load_workbook = None
+
+
+def _cross_company_employee_scope_for_request(request):
+    """Return delegated-read and exceptional-manager access for one requested scope."""
+    scope = get_requested_organization_scope(request)
+    if scope is None:
+        return None, set(), set()
+
+    from core.delegation import get_active_employee_read_scope_ids
+    read_scope_ids = get_active_employee_read_scope_ids(request.user)
+    from core.models import CrossCompanyManagerAssignment
+
+    manager_assignment_ids = set(
+        active_cross_company_manager_assignments(
+            request.user,
+            capability=CrossCompanyManagerAssignment.Capability.EMPLOYEE_VIEW,
+        ).filter(scope=scope).values_list("employee_id", flat=True)
+    )
+    if scope.id not in read_scope_ids and not manager_assignment_ids:
+        from rest_framework.exceptions import PermissionDenied
+
+        raise PermissionDenied("You do not have an active grant for the requested organization scope.")
+
+    company_ids = get_scope_company_ids(scope)
+    selected_company_id = get_requested_company_id(request)
+    if selected_company_id is not None:
+        company_ids &= {selected_company_id}
+    return scope, company_ids if scope.id in read_scope_ids else set(), manager_assignment_ids
 
 
 def _queue_document_extraction(document: EmployeeDocument) -> list[str]:
@@ -312,10 +348,12 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action == "import_excel":
             permission_classes = [IsAuthenticated, IsHRManagerOnly]
-        elif self.action in ["manager_access", "manager_team", "delegation_candidates"]:
+        elif self.action in ["list", "manager_access", "manager_team", "delegation_candidates"]:
             permission_classes = [IsAuthenticated]
         elif self.action == "retrieve":
-            permission_classes = [IsAuthenticated, IsHRManagerOrAdmin | IsEmployeeOwner | IsManagerOfEmployee]
+            # get_queryset is the object-level authorization boundary.  A separate
+            # manager-only permission would incorrectly reject scoped delegation.
+            permission_classes = [IsAuthenticated]
         elif self.action == "me":
             permission_classes = [IsAuthenticated, IsHRManagerOrAdmin | IsEmployeeOwner]
         elif self.action in ["documents", "download_document", "update_document"]:
@@ -354,16 +392,25 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             base_qs = base_qs.filter(is_archived=False)
 
         if role in ["SystemAdmin", "HRManager"]:
-            if self.action in ["list", "export", "expiries"]:
-                scoped_qs = filter_queryset_by_company_scope(base_qs.all(), self.request)
-            else:
-                scoped_qs = filter_queryset_by_accessible_companies(base_qs.all(), self.request)
-            return scoped_qs | base_qs.filter(company__isnull=True)
+            return filter_queryset_by_company_scope(base_qs, self.request)
+
+        scope, delegated_company_ids, manager_assignment_ids = _cross_company_employee_scope_for_request(self.request)
+        if scope is not None:
+            scope_company_ids = get_scope_company_ids(scope)
+            selected_company_id = get_requested_company_id(self.request)
+            if selected_company_id is not None:
+                scope_company_ids &= {selected_company_id}
+            return base_qs.filter(
+                Q(company_id__in=delegated_company_ids)
+                | Q(pk__in=manager_assignment_ids, company_id__in=scope_company_ids)
+            ).distinct()
 
         if self.action == "retrieve":
-            return base_qs.filter(Q(user=user) | manager_scope_q(user)).distinct()
+            return filter_queryset_by_company_scope(base_qs, self.request).filter(
+                Q(user=user) | manager_scope_q(user)
+            ).distinct()
 
-        return base_qs.filter(user=user)
+        return filter_queryset_by_company_scope(base_qs, self.request).filter(user=user)
 
     def get_serializer_class(self):
         if self.action == "delegation_candidates":
@@ -371,6 +418,8 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         if self.action == "documents":
             return EmployeeDocumentSerializer
         if self.action in ["list", "retrieve", "me"]:
+            if self.action != "me" and get_requested_organization_scope(self.request) is not None:
+                return ScopedEmployeeReadSerializer
             return EmployeeProfileReadSerializer
         return EmployeeProfileWriteSerializer
 
@@ -559,6 +608,8 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get", "post"], url_path="documents")
     def documents(self, request, pk=None):
+        if get_requested_organization_scope(request) is not None and get_role(request.user) not in {"HRManager", "SystemAdmin"}:
+            return error("Forbidden", errors=["Scoped employee access does not include documents."], status=status.HTTP_403_FORBIDDEN)
         profile, error_response = self._document_profile_for_request(request, pk)
         if error_response:
             return error_response
@@ -576,10 +627,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         if not serializer.is_valid():
             return error("Validation error", errors=serializer.errors, status=422)
 
-        try:
-            ensure_company_write_allowed(request)
-        except ValueError as exc:
-            return error("Validation error", errors=[str(exc)], status=422)
+        ensure_company_write_allowed(request)
         document = serializer.save(
             employee_profile=profile,
             company=profile.company,
@@ -607,6 +655,8 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get"], url_path=r"documents/(?P<document_id>[^/.]+)/download")
     def download_document(self, request, pk=None, document_id=None):
+        if get_requested_organization_scope(request) is not None and get_role(request.user) not in {"HRManager", "SystemAdmin"}:
+            return error("Forbidden", errors=["Scoped employee access does not include documents."], status=status.HTTP_403_FORBIDDEN)
         profile, error_response = self._document_profile_for_request(request, pk)
         if error_response:
             return error_response
@@ -640,6 +690,8 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["patch"], url_path=r"documents/(?P<document_id>[^/.]+)")
     def update_document(self, request, pk=None, document_id=None):
+        if get_requested_organization_scope(request) is not None and get_role(request.user) not in {"HRManager", "SystemAdmin"}:
+            return error("Forbidden", errors=["Scoped employee access does not include documents."], status=status.HTTP_403_FORBIDDEN)
         profile, error_response = self._document_profile_for_request(request, pk)
         if error_response:
             return error_response
@@ -841,12 +893,16 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         qs = EmployeeProfile.objects.select_related("user", "company").filter(
             employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
             is_archived=False,
+            user__isnull=False,
+            user__is_active=True,
         )
 
-        if request.query_params.get("scope") == "all":
-            qs = qs.filter(company__is_active=True)
+        requested_scope = (request.query_params.get("scope") or "active").strip().lower()
+        if requested_scope in {"all", "accessible"}:
+            if get_role(request.user) not in {"SystemAdmin", "HRManager"}:
+                return error("Forbidden", status=status.HTTP_403_FORBIDDEN)
+            qs = filter_queryset_by_accessible_companies(qs, request)
         else:
-            qs = qs.filter(user__isnull=False, user__is_active=True)
             qs = filter_queryset_by_company_scope(qs, request)
 
         qs = qs.exclude(user=request.user).order_by("company__name", "full_name_en", "full_name", "employee_id")
@@ -861,7 +917,12 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
     )
     def manager_access(self, request):
         role = get_role(request.user)
-        reports = managed_reports_queryset(request.user)
+        from core.models import CrossCompanyManagerAssignment
+
+        reports = managed_reports_queryset(
+            request.user,
+            cross_company_capability=CrossCompanyManagerAssignment.Capability.EMPLOYEE_VIEW,
+        )
         managed_employee_count = reports.count()
         if managed_employee_count:
             direct_report_count = reports.filter(manager_profile__user=request.user).count()
@@ -890,7 +951,12 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
     )
     def manager_team(self, request):
         role = get_role(request.user)
-        if role != "SystemAdmin" and not has_manager_access(request.user):
+        from core.models import CrossCompanyManagerAssignment
+
+        if role != "SystemAdmin" and not has_manager_access(
+            request.user,
+            cross_company_capability=CrossCompanyManagerAssignment.Capability.EMPLOYEE_VIEW,
+        ):
             return error("Forbidden", status=status.HTTP_403_FORBIDDEN)
 
         base_qs = EmployeeProfile.objects.select_related(
@@ -906,9 +972,27 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         )
         base_qs = _with_effective_status(base_qs).filter(is_archived=False)
         if role == "SystemAdmin":
-            qs = base_qs
+            qs = filter_queryset_by_company_scope(base_qs, request)
         else:
-            qs = base_qs.filter(manager_scope_q(request.user)).distinct()
+            scope, _, manager_assignment_ids = _cross_company_employee_scope_for_request(request)
+            if scope is not None:
+                scope_company_ids = get_scope_company_ids(scope)
+                selected_company_id = get_requested_company_id(request)
+                if selected_company_id is not None:
+                    scope_company_ids &= {selected_company_id}
+                base_qs = base_qs.filter(company_id__in=scope_company_ids)
+                from core.models import CrossCompanyManagerAssignment
+
+                qs = base_qs.filter(
+                    manager_scope_q(
+                        request.user,
+                        cross_company_capability=CrossCompanyManagerAssignment.Capability.EMPLOYEE_VIEW,
+                    ),
+                    pk__in=manager_assignment_ids,
+                ).distinct()
+            else:
+                base_qs = filter_queryset_by_company_scope(base_qs, request)
+                qs = base_qs.filter(manager_scope_q(request.user)).distinct()
 
         search = request.query_params.get("search")
         if search:
@@ -922,7 +1006,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             )
 
         page = self.paginate_queryset(qs)
-        serializer = EmployeeProfileReadSerializer(page if page is not None else qs, many=True)
+        serializer = ScopedEmployeeReadSerializer(page if page is not None else qs, many=True)
         if page is not None:
             return self.get_paginated_response(serializer.data)
         return success({"results": serializer.data, "count": qs.count()})
@@ -1285,9 +1369,6 @@ class EmployeeDeletionRequestViewSet(viewsets.ModelViewSet):
             "approved_by",
             "rejected_by",
         )
-        role = get_role(self.request.user)
-        if role in ["CEO", "SystemAdmin"]:
-            return base_qs
         if self.action == "list":
             return filter_queryset_by_company_scope(base_qs, self.request)
         return filter_queryset_by_accessible_companies(base_qs, self.request)
@@ -1541,7 +1622,8 @@ class EmployeeImportHistoryViewSet(mixins.ListModelMixin, mixins.RetrieveModelMi
     serializer_class = EmployeeImportSerializer
 
     def get_queryset(self):
-        return EmployeeImport.objects.select_related("uploader").order_by("-created_at").all()
+        queryset = EmployeeImport.objects.select_related("uploader", "company").order_by("-created_at")
+        return filter_queryset_by_company_scope(queryset, self.request)
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())

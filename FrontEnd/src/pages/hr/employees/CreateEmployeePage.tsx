@@ -8,7 +8,10 @@ import { isApiError } from "../../../services/api/apiTypes";
 import { apply422ToForm, getFieldApiError } from "../../../utils/formErrors";
 import { notifyError } from "../../../utils/notify";
 import { isForbidden } from "../../../services/api/httpErrors";
-import { createEmployee, listEmployees } from "../../../services/api/employeesApi";
+import {
+  createEmployee,
+  listEmployees,
+} from "../../../services/api/employeesApi";
 import type { CreateEmployeeDto } from "../../../services/api/employeesApi";
 import type { Employee } from "../../../services/api/employeesApi";
 import { listDepartments } from "../../../services/api/departmentsApi";
@@ -26,196 +29,203 @@ import { useAuthStore } from "../../../auth/authStore";
 import { isHeadOfficeOrganization } from "../../../utils/organizationContext";
 
 export default function CreateEmployeePage() {
-    const { t } = useI18n();
-    const navigate = useNavigate();
-    const user = useAuthStore((state) => state.user);
-    const [form] = Form.useForm();
-    const isHeadOffice = isHeadOfficeOrganization(user);
+  const { t } = useI18n();
+  const navigate = useNavigate();
+  const user = useAuthStore((state) => state.user);
+  const [form] = Form.useForm();
+  const isHeadOffice = isHeadOfficeOrganization(user);
 
-    // State
-    const [loading, setLoading] = useState(true);
-    const [submitting, setSubmitting] = useState(false);
-    const [forbidden, setForbidden] = useState(false);
-    const [managerAssignmentError, setManagerAssignmentError] = useState<string | null>(null);
+  // State
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [forbidden, setForbidden] = useState(false);
+  const [managerAssignmentError, setManagerAssignmentError] = useState<
+    string | null
+  >(null);
 
-    // Reference data
-    const [departments, setDepartments] = useState<Department[]>([]);
-    const [positions, setPositions] = useState<Position[]>([]);
-    const [taskGroups, setTaskGroups] = useState<TaskGroup[]>([]);
-    const [sponsors, setSponsors] = useState<Sponsor[]>([]);
-    const [employees, setEmployees] = useState<Employee[]>([]);
+  // Reference data
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [taskGroups, setTaskGroups] = useState<TaskGroup[]>([]);
+  const [sponsors, setSponsors] = useState<Sponsor[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
 
-    /**
-     * Load reference data on mount
-     */
-    useEffect(() => {
-        const loadReferenceData = async () => {
-            setLoading(true);
-            setForbidden(false);
+  /**
+   * Load reference data on mount
+   */
+  useEffect(() => {
+    const loadReferenceData = async () => {
+      setLoading(true);
+      setForbidden(false);
 
-            try {
-                // Fetch all reference data in parallel
-                const [deptRes, posRes, tgRes, sponsorRes, employeesRes] = await Promise.all([
-                    listDepartments(),
-                    listPositions(),
-                    listTaskGroups(),
-                    listSponsors(),
-                    listEmployees({ page: 1, page_size: 1000 }),
-                ]);
+      try {
+        // Fetch all reference data in parallel
+        const [deptRes, posRes, tgRes, sponsorRes, employeesRes] =
+          await Promise.all([
+            listDepartments(),
+            listPositions(),
+            listTaskGroups(),
+            listSponsors(),
+            listEmployees({ page: 1, page_size: 1000 }),
+          ]);
 
-                // Check for errors
-                if (
-                    isApiError(deptRes) ||
-                    isApiError(posRes) ||
-                    isApiError(tgRes) ||
-                    isApiError(sponsorRes) ||
-                    isApiError(employeesRes)
-                ) {
-                    notifyError(t("hr.employees.fetchRefDataFailed"));
-                    setLoading(false);
-                    return;
-                }
-
-                // Set reference data (handle both array and object responses)
-                setDepartments(Array.isArray(deptRes.data) ? deptRes.data : []);
-                setPositions(Array.isArray(posRes.data) ? posRes.data : []);
-                setTaskGroups(Array.isArray(tgRes.data) ? tgRes.data : []);
-                setSponsors(Array.isArray(sponsorRes.data) ? sponsorRes.data : []);
-                const managerCandidates =
-                    (employeesRes.data as any)?.results ||
-                    (employeesRes.data as any)?.items ||
-                    [];
-                setEmployees(Array.isArray(managerCandidates) ? managerCandidates : []);
-
-                setLoading(false);
-            } catch (err: any) {
-                if (isForbidden(err)) {
-                    setForbidden(true);
-                    setLoading(false);
-                    return;
-                }
-
-                notifyError(err.message || "Failed to load reference data");
-                setLoading(false);
-            }
-        };
-
-        loadReferenceData();
-    }, []);
-
-    /**
-     * Handle form submission
-     */
-    const handleSubmit = async () => {
-        if (isHeadOffice) {
-            notifyError(t("organization.headOffice.switchToCreateEmployees"));
-            return;
+        // Check for errors
+        if (
+          isApiError(deptRes) ||
+          isApiError(posRes) ||
+          isApiError(tgRes) ||
+          isApiError(sponsorRes) ||
+          isApiError(employeesRes)
+        ) {
+          notifyError(t("hr.employees.fetchRefDataFailed"));
+          setLoading(false);
+          return;
         }
-        setManagerAssignmentError(null);
-        try {
-            // Validate form
-            const values = await form.validateFields();
 
-            // Transform form values to API payload
-            const payload = toPayload(values) as CreateEmployeeDto;
+        // Set reference data (handle both array and object responses)
+        setDepartments(Array.isArray(deptRes.data) ? deptRes.data : []);
+        setPositions(Array.isArray(posRes.data) ? posRes.data : []);
+        setTaskGroups(Array.isArray(tgRes.data) ? tgRes.data : []);
+        setSponsors(Array.isArray(sponsorRes.data) ? sponsorRes.data : []);
+        const managerCandidates =
+          (employeesRes.data as any)?.results ||
+          (employeesRes.data as any)?.items ||
+          [];
+        setEmployees(Array.isArray(managerCandidates) ? managerCandidates : []);
 
-            setSubmitting(true);
-            const response = await createEmployee(payload);
-
-            if (isApiError(response)) {
-                // Apply 422 field errors
-                apply422ToForm(form, response);
-                setManagerAssignmentError(getFieldApiError(response, "manager_profile_id") ?? null);
-                notifyError(response.message || "Failed to create employee");
-                setSubmitting(false);
-                return;
-            }
-
-            // Success - extract ID and redirect
-            const employeeId = response.data?.id || response.data?.employee_id;
-            if (employeeId) {
-                navigate(`/hr/employees/${employeeId}`);
-            } else {
-                // Fallback to list if no ID returned
-                navigate("/hr/employees");
-            }
-        } catch (err: any) {
-            setSubmitting(false);
-
-            // Handle form validation errors
-            if (err.errorFields) {
-                return;
-            }
-
-            // Apply backend 422 errors
-            apply422ToForm(form, err);
-            setManagerAssignmentError(getFieldApiError(err, "manager_profile_id") ?? null);
-
-            if (isForbidden(err)) {
-                setForbidden(true);
-                return;
-            }
-
-            if (!err.response || err.response.status !== 422) {
-                notifyError(err.message || "Failed to create employee");
-            }
+        setLoading(false);
+      } catch (err: any) {
+        if (isForbidden(err)) {
+          setForbidden(true);
+          setLoading(false);
+          return;
         }
+
+        notifyError(err.message || "Failed to load reference data");
+        setLoading(false);
+      }
     };
 
-    /**
-     * Handle cancel
-     */
-    const handleCancel = () => {
+    loadReferenceData();
+  }, []);
+
+  /**
+   * Handle form submission
+   */
+  const handleSubmit = async () => {
+    if (isHeadOffice) {
+      notifyError(t("organization.headOffice.switchToCreateEmployees"));
+      return;
+    }
+    setManagerAssignmentError(null);
+    try {
+      // Validate form
+      const values = await form.validateFields();
+
+      // Transform form values to API payload
+      const payload = toPayload(values) as CreateEmployeeDto;
+
+      setSubmitting(true);
+      const response = await createEmployee(payload);
+
+      if (isApiError(response)) {
+        // Apply 422 field errors
+        apply422ToForm(form, response);
+        setManagerAssignmentError(
+          getFieldApiError(response, "manager_profile_id") ?? null,
+        );
+        notifyError(response.message || "Failed to create employee");
+        setSubmitting(false);
+        return;
+      }
+
+      // Success - extract ID and redirect
+      const employeeId = response.data?.id || response.data?.employee_id;
+      if (employeeId) {
+        navigate(`/hr/employees/${employeeId}`);
+      } else {
+        // Fallback to list if no ID returned
         navigate("/hr/employees");
-    };
+      }
+    } catch (err: any) {
+      setSubmitting(false);
 
-    // Render 403 page
-    if (forbidden) {
-        return <Unauthorized403Page />;
+      // Handle form validation errors
+      if (err.errorFields) {
+        return;
+      }
+
+      // Apply backend 422 errors
+      apply422ToForm(form, err);
+      setManagerAssignmentError(
+        getFieldApiError(err, "manager_profile_id") ?? null,
+      );
+
+      if (isForbidden(err)) {
+        setForbidden(true);
+        return;
+      }
+
+      if (!err.response || err.response.status !== 422) {
+        notifyError(err.message || "Failed to create employee");
+      }
     }
+  };
 
-    // Render loading state
-    if (loading) {
-        return <LoadingState title="Loading form..." />;
-    }
+  /**
+   * Handle cancel
+   */
+  const handleCancel = () => {
+    navigate("/hr/employees");
+  };
 
-    return (
-        <div>
-            <PageHeader
-                title="Create Employee"
-                actions={
-                    <Space>
-                        <Button onClick={handleCancel}>Cancel</Button>
-                        <Button type="primary" onClick={handleSubmit} loading={submitting}>
-                            Save
-                        </Button>
-                    </Space>
-                }
-            />
+  // Render 403 page
+  if (forbidden) {
+    return <Unauthorized403Page />;
+  }
 
-            {isHeadOffice && (
-                <Alert
-                    type="info"
-                    showIcon
-                    style={{ marginBottom: 16, borderRadius: 14 }}
-                    message={t("organization.headOffice.readOnlyTitle")}
-                    description={t("organization.headOffice.createEmployeeDescription")}
-                />
-            )}
+  // Render loading state
+  if (loading) {
+    return <LoadingState title="Loading form..." />;
+  }
 
-            <Card style={{ borderRadius: 16 }}>
-                <EmployeeForm
-                    form={form}
-                    managerAssignmentError={managerAssignmentError}
-                    refOptions={{
-                        departments,
-                        positions,
-                        taskGroups,
-                        sponsors,
-                        employees,
-                    }}
-                />
-            </Card>
-        </div>
-    );
+  return (
+    <div>
+      <PageHeader
+        title="Create Employee"
+        actions={
+          <Space>
+            <Button onClick={handleCancel}>Cancel</Button>
+            <Button type="primary" onClick={handleSubmit} loading={submitting}>
+              Save
+            </Button>
+          </Space>
+        }
+      />
+
+      {isHeadOffice && (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16, borderRadius: 14 }}
+          message={t("organization.headOffice.readOnlyTitle")}
+          description={t("organization.headOffice.createEmployeeDescription")}
+        />
+      )}
+
+      <Card style={{ borderRadius: 16 }}>
+        <EmployeeForm
+          form={form}
+          managerAssignmentError={managerAssignmentError}
+          refOptions={{
+            departments,
+            positions,
+            taskGroups,
+            sponsors,
+            employees,
+          }}
+        />
+      </Card>
+    </div>
+  );
 }

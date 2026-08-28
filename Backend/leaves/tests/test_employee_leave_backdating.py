@@ -7,6 +7,7 @@ from rest_framework.test import APIRequestFactory, APITestCase
 from employees.models import EmployeeProfile
 from leaves.models import LeaveType
 from leaves.serializers import HRManualLeaveRequestSerializer, LeaveRequestCreateSerializer
+from organization.models import OrganizationNode
 
 User = get_user_model()
 
@@ -14,14 +15,25 @@ User = get_user_model()
 class EmployeeLeaveBackdatingTests(APITestCase):
     def setUp(self):
         self.today = date(2026, 8, 11)
+        self.company = OrganizationNode.objects.create(
+            code="LEAVE_BACKDATE_TEST",
+            name="Leave Backdate Test Company",
+            node_type=OrganizationNode.NodeType.COMPANY,
+        )
         self.user = User.objects.create_user(email="leave-backdating@ffi.test", password="password")
         EmployeeProfile.objects.create(
             user=self.user,
+            company=self.company,
             employee_id="LEAVE-BACKDATE-001",
             hire_date=date(2020, 1, 1),
             employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
         )
-        self.leave_type = LeaveType.objects.create(name="Other Leave", code="OTHER", is_active=True)
+        self.leave_type = LeaveType.objects.create(
+            company=self.company,
+            name="Other Leave",
+            code="OTHER",
+            is_active=True,
+        )
         self.request = APIRequestFactory().post("/api/leaves/leave-requests/")
         self.request.user = self.user
 

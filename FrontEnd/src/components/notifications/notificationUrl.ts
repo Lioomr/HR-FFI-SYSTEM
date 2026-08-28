@@ -67,7 +67,7 @@ function splitPath(path: string): [string, string] {
  * This function performs no navigation and has no side effects.
  */
 export function resolveSafeNotificationUrl(
-  url: string | null | undefined
+  url: string | null | undefined,
 ): SafeNotificationUrl {
   if (typeof url !== "string") return { allowed: false, kind: "empty" };
   const trimmed = url.trim();
@@ -98,8 +98,7 @@ export function resolveSafeNotificationUrl(
     return { allowed: false, kind: "blocked" };
   }
 
-  const origin =
-    typeof window !== "undefined" ? window.location.origin : "";
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
   if (!origin || parsed.origin !== origin) {
     return { allowed: false, kind: "blocked" };
   }
@@ -133,13 +132,13 @@ export function useNotificationNavigate() {
         message.warning(
           t(
             "notifications.blockedLink",
-            "This link was blocked for your security."
-          )
+            "This link was blocked for your security.",
+          ),
         );
         return;
       }
       navigate(resolved.path);
     },
-    [navigate, t]
+    [navigate, t],
   );
 }

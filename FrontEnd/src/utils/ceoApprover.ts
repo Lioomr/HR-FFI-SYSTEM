@@ -8,9 +8,12 @@ export function isCEOApproverRole(user: AuthUser | null | undefined): boolean {
   return user.role === "CEO" || user.role === "SystemAdmin";
 }
 
-export function isCEOApproverEmployee(employee: Employee | null | undefined): boolean {
+export function isCEOApproverEmployee(
+  employee: Employee | null | undefined,
+): boolean {
   if (!employee) return false;
-  if ((employee.employment_status || "").toUpperCase() !== "ACTIVE") return false;
+  if ((employee.employment_status || "").toUpperCase() !== "ACTIVE")
+    return false;
 
   return employee.department_id === CEO_DEPARTMENT_ID;
 }

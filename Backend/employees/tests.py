@@ -15,6 +15,7 @@ from audit.models import AuditLog
 from hr_reference.models import Department, Position
 from leaves.models import LeaveRequest, LeaveType
 from organization.models import OrganizationNode, UserOrganizationAccess
+from organization.services import get_default_company
 
 from .models import EmployeeDeletionRequest, EmployeeDocument, EmployeeProfile
 from .serializers import EmployeeProfileReadSerializer
@@ -25,6 +26,8 @@ User = get_user_model()
 class EmployeeProfileTests(TestCase):
     def setUp(self):
         self.client = APIClient()
+        self.company = get_default_company()
+        self.client.defaults["HTTP_X_ACTIVE_COMPANY_ID"] = str(self.company.id)
 
         # Setup Roles
         self.admin_group = Group.objects.create(name="SystemAdmin")
@@ -38,6 +41,7 @@ class EmployeeProfileTests(TestCase):
         # HR User
         self.hr_user = User.objects.create_user(email="hr@ffi.com", password="password")
         self.hr_user.groups.add(self.hr_group)
+        UserOrganizationAccess.objects.create(user=self.hr_user, organization=self.company)
 
         # Employee User 1
         self.employee_user = User.objects.create_user(email="emp1@ffi.com", password="password")
@@ -45,10 +49,14 @@ class EmployeeProfileTests(TestCase):
         self.employee_user_2 = User.objects.create_user(email="emp2@ffi.com", password="password")
 
         # Reference Data
-        self.dept = Department.objects.create(name="Engineering", code="ENG")
-        self.pos = Position.objects.create(name="Developer", code="DEV")
-        self.pos_senior = Position.objects.create(name="Senior Dev", code="S-DEV")
-        self.annual_leave_type = LeaveType.objects.create(name="Annual Leave", code="ANNUAL")
+        self.dept = Department.objects.create(company=self.company, name="Engineering", code="ENG")
+        self.pos = Position.objects.create(company=self.company, name="Developer", code="DEV")
+        self.pos_senior = Position.objects.create(company=self.company, name="Senior Dev", code="S-DEV")
+        self.annual_leave_type = LeaveType.objects.create(
+            company=self.company,
+            name="Annual Leave",
+            code="ANNUAL",
+        )
 
     def test_admin_create_profile(self):
         self.client.force_authenticate(user=self.admin_user)
@@ -94,6 +102,7 @@ class EmployeeProfileTests(TestCase):
     def test_read_serializer_returns_null_archiver_for_non_archived_employee(self):
         profile = EmployeeProfile.objects.create(
             user=self.employee_user,
+            company=self.company,
             employee_id="EMP-ACT-SERIAL",
         )
 
@@ -106,6 +115,7 @@ class EmployeeProfileTests(TestCase):
         # Create profile first
         profile = EmployeeProfile.objects.create(
             user=self.employee_user,
+            company=self.company,
             department_ref=self.dept,
             department=self.dept.name,
             position_ref=self.pos,
@@ -137,6 +147,7 @@ class EmployeeProfileTests(TestCase):
     def test_employee_me_endpoint(self):
         EmployeeProfile.objects.create(
             user=self.employee_user,
+            company=self.company,
             department="Engineering",
             job_title="Dev",
             hire_date="2024-01-01",
@@ -150,6 +161,7 @@ class EmployeeProfileTests(TestCase):
     def test_hr_me_endpoint_includes_own_leave_balances(self):
         EmployeeProfile.objects.create(
             user=self.hr_user,
+            company=self.company,
             department="HR",
             job_title="HR Manager",
             hire_date=date(2024, 1, 1),
@@ -169,6 +181,7 @@ class EmployeeProfileTests(TestCase):
         # Create profile first
         profile = EmployeeProfile.objects.create(
             user=self.employee_user,
+            company=self.company,
             department="Engineering",
             job_title="Dev",
             hire_date="2024-01-01",
@@ -183,6 +196,7 @@ class EmployeeProfileTests(TestCase):
     def test_employee_view_own_profile(self):
         profile = EmployeeProfile.objects.create(
             user=self.employee_user,
+            company=self.company,
             department="Engineering",
             job_title="Dev",
             hire_date="2024-01-01",
@@ -198,6 +212,7 @@ class EmployeeProfileTests(TestCase):
         # Profile for emp1
         EmployeeProfile.objects.create(
             user=self.employee_user,
+            company=self.company,
             department="Engineering",
             job_title="Dev",
             hire_date="2024-01-01",
@@ -206,6 +221,7 @@ class EmployeeProfileTests(TestCase):
         # Profile for emp2
         profile2 = EmployeeProfile.objects.create(
             user=self.employee_user_2,
+            company=self.company,
             department="Sales",
             job_title="Salesman",
             hire_date="2024-01-01",
@@ -222,6 +238,7 @@ class EmployeeProfileTests(TestCase):
     def test_hr_can_upload_list_and_download_employee_document(self):
         profile = EmployeeProfile.objects.create(
             user=self.employee_user,
+            company=self.company,
             department="Engineering",
             job_title="Dev",
             hire_date="2024-01-01",
@@ -251,6 +268,7 @@ class EmployeeProfileTests(TestCase):
     def test_other_employee_document_requires_custom_name(self):
         profile = EmployeeProfile.objects.create(
             user=self.employee_user,
+            company=self.company,
             department="Engineering",
             job_title="Dev",
             hire_date="2024-01-01",
@@ -270,6 +288,7 @@ class EmployeeProfileTests(TestCase):
     def _document_notify_profile(self, *, mobile="+201013530963"):
         return EmployeeProfile.objects.create(
             user=self.employee_user,
+            company=self.company,
             department="Engineering",
             job_title="Dev",
             hire_date="2024-01-01",
@@ -281,6 +300,7 @@ class EmployeeProfileTests(TestCase):
     def _document_for_notify(self, profile, *, exit_before, document_type=EmployeeDocument.DocumentType.PASSPORT):
         return EmployeeDocument.objects.create(
             employee_profile=profile,
+            company=profile.company,
             document_type=document_type,
             custom_name="",
             file=SimpleUploadedFile("document.pdf", b"%PDF-1.4\ncontent", content_type="application/pdf"),
@@ -377,6 +397,7 @@ class EmployeeProfileTests(TestCase):
     def test_permanent_delete_forbidden(self):
         profile = EmployeeProfile.objects.create(
             user=self.employee_user,
+            company=self.company,
             department="Engineering",
             job_title="Dev",
             hire_date="2024-01-01",
@@ -438,6 +459,7 @@ class EmployeeProfileTests(TestCase):
     def test_list_filters_by_nationality_and_orders_by_joining_date(self):
         EmployeeProfile.objects.create(
             user=self.employee_user,
+            company=self.company,
             employee_id="EMP-FLT-01",
             department_ref=self.dept,
             position_ref=self.pos,
@@ -449,6 +471,7 @@ class EmployeeProfileTests(TestCase):
         )
         EmployeeProfile.objects.create(
             user=self.employee_user_2,
+            company=self.company,
             employee_id="EMP-FLT-02",
             department_ref=self.dept,
             position_ref=self.pos_senior,
@@ -461,6 +484,7 @@ class EmployeeProfileTests(TestCase):
         outsider_user = User.objects.create_user(email="emp3@ffi.com", password="password")
         EmployeeProfile.objects.create(
             user=outsider_user,
+            company=self.company,
             employee_id="EMP-FLT-03",
             department_ref=self.dept,
             position_ref=self.pos,
@@ -484,6 +508,7 @@ class EmployeeProfileTests(TestCase):
     def test_employee_role_direct_manager_can_access_manager_team(self):
         manager_profile = EmployeeProfile.objects.create(
             user=self.employee_user,
+            company=self.company,
             employee_id="EMP-MGR-EMP",
             department_ref=self.dept,
             department=self.dept.name,
@@ -494,6 +519,7 @@ class EmployeeProfileTests(TestCase):
         )
         EmployeeProfile.objects.create(
             user=self.employee_user_2,
+            company=self.company,
             employee_id="EMP-REP-EMP",
             department_ref=self.dept,
             department=self.dept.name,
@@ -515,6 +541,7 @@ class EmployeeProfileTests(TestCase):
     def test_direct_manager_can_view_report_profile_detail(self):
         manager_profile = EmployeeProfile.objects.create(
             user=self.employee_user,
+            company=self.company,
             employee_id="EMP-MGR-DETAIL",
             department_ref=self.dept,
             department=self.dept.name,
@@ -525,6 +552,7 @@ class EmployeeProfileTests(TestCase):
         )
         report_profile = EmployeeProfile.objects.create(
             user=self.employee_user_2,
+            company=self.company,
             employee_id="EMP-REP-DETAIL",
             department_ref=self.dept,
             department=self.dept.name,
@@ -545,6 +573,7 @@ class EmployeeProfileTests(TestCase):
     def test_direct_manager_cannot_view_non_report_profile_detail(self):
         EmployeeProfile.objects.create(
             user=self.employee_user,
+            company=self.company,
             employee_id="EMP-MGR-NONREPORT",
             department_ref=self.dept,
             department=self.dept.name,
@@ -555,6 +584,7 @@ class EmployeeProfileTests(TestCase):
         )
         non_report_profile = EmployeeProfile.objects.create(
             user=self.employee_user_2,
+            company=self.company,
             employee_id="EMP-NONREPORT",
             department_ref=self.dept,
             department=self.dept.name,
@@ -582,6 +612,7 @@ class EmployeeProfileTests(TestCase):
     def test_employee_manager_access_probe_returns_true_for_direct_manager(self):
         manager_profile = EmployeeProfile.objects.create(
             user=self.employee_user,
+            company=self.company,
             employee_id="EMP-MGR-ACCESS",
             department_ref=self.dept,
             department=self.dept.name,
@@ -592,6 +623,7 @@ class EmployeeProfileTests(TestCase):
         )
         EmployeeProfile.objects.create(
             user=self.employee_user_2,
+            company=self.company,
             employee_id="EMP-REP-ACCESS",
             department_ref=self.dept,
             department=self.dept.name,
@@ -663,7 +695,7 @@ class EmployeeProfileTests(TestCase):
         self.assertEqual(candidates[0]["employee_id"], "EMP-DELEGATE")
         self.assertNotIn(requester_profile.id, [item["employee_profile_id"] for item in candidates])
 
-    def test_employee_can_list_all_company_delegation_candidates_with_no_login_disabled(self):
+    def test_employee_cannot_request_all_company_delegation_candidates(self):
         company = OrganizationNode.objects.create(
             code="ALL_CO",
             name="All Co",
@@ -683,7 +715,7 @@ class EmployeeProfileTests(TestCase):
             employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
         )
         other_user = User.objects.create_user(email="delegate-all-other@ffi.com", password="password")
-        other_profile = EmployeeProfile.objects.create(
+        EmployeeProfile.objects.create(
             user=other_user,
             company=other_company,
             employee_id="EMP-ALL-OTHER",
@@ -691,7 +723,7 @@ class EmployeeProfileTests(TestCase):
             hire_date="2024-01-01",
             employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
         )
-        no_login_profile = EmployeeProfile.objects.create(
+        EmployeeProfile.objects.create(
             company=other_company,
             employee_id="EMP-ALL-NOLOGIN",
             full_name="No Login Delegate",
@@ -702,19 +734,12 @@ class EmployeeProfileTests(TestCase):
         self.client.force_authenticate(user=self.employee_user)
         response = self.client.get("/api/employees/delegation-candidates/?scope=all")
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        candidates_by_profile = {item["employee_profile_id"]: item for item in response.data["data"]}
-        self.assertIn(other_profile.id, candidates_by_profile)
-        self.assertEqual(candidates_by_profile[other_profile.id]["id"], other_user.id)
-        self.assertTrue(candidates_by_profile[other_profile.id]["can_delegate"])
-        self.assertIn(no_login_profile.id, candidates_by_profile)
-        self.assertIsNone(candidates_by_profile[no_login_profile.id]["id"])
-        self.assertFalse(candidates_by_profile[no_login_profile.id]["can_delegate"])
-        self.assertEqual(candidates_by_profile[no_login_profile.id]["disabled_reason"], "No login account")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_hr_can_export_filtered_employees_as_xlsx(self):
         EmployeeProfile.objects.create(
             user=self.employee_user,
+            company=self.company,
             employee_id="EMP-EXPORT-01",
             department_ref=self.dept,
             position_ref=self.pos,
@@ -726,6 +751,7 @@ class EmployeeProfileTests(TestCase):
         )
         EmployeeProfile.objects.create(
             user=self.employee_user_2,
+            company=self.company,
             employee_id="EMP-EXPORT-02",
             department_ref=self.dept,
             position_ref=self.pos_senior,
@@ -753,6 +779,7 @@ class EmployeeProfileTests(TestCase):
     def test_list_marks_employee_on_leave_when_approved_leave_is_active_today(self):
         profile = EmployeeProfile.objects.create(
             user=self.employee_user,
+            company=self.company,
             employee_id="EMP-LEAVE-01",
             department_ref=self.dept,
             position_ref=self.pos,
@@ -765,6 +792,7 @@ class EmployeeProfileTests(TestCase):
         LeaveRequest.objects.create(
             employee=self.employee_user,
             employee_profile=profile,
+            company=self.company,
             leave_type=self.annual_leave_type,
             start_date=timezone.localdate(),
             end_date=timezone.localdate(),
@@ -782,6 +810,7 @@ class EmployeeProfileTests(TestCase):
     def test_status_filter_can_return_only_on_leave_employees(self):
         on_leave_profile = EmployeeProfile.objects.create(
             user=self.employee_user,
+            company=self.company,
             employee_id="EMP-LEAVE-FILTER-01",
             department_ref=self.dept,
             position_ref=self.pos,
@@ -793,6 +822,7 @@ class EmployeeProfileTests(TestCase):
         )
         active_profile = EmployeeProfile.objects.create(
             user=self.employee_user_2,
+            company=self.company,
             employee_id="EMP-LEAVE-FILTER-02",
             department_ref=self.dept,
             position_ref=self.pos,
@@ -805,6 +835,7 @@ class EmployeeProfileTests(TestCase):
         LeaveRequest.objects.create(
             employee=self.employee_user,
             employee_profile=on_leave_profile,
+            company=self.company,
             leave_type=self.annual_leave_type,
             start_date=timezone.localdate(),
             end_date=timezone.localdate(),
@@ -999,6 +1030,12 @@ class EmployeeDeletionWorkflowTests(TestCase):
         )
         self.ceo_user.groups.add(self.ceo_group)
         UserOrganizationAccess.objects.create(user=self.ceo_user, organization=self.other_company)
+        self.ceo_profile = EmployeeProfile.objects.create(
+            user=self.ceo_user,
+            company=self.company,
+            employee_id="DEL-CEO-001",
+            full_name="CEO Delete",
+        )
 
         self.cfo_user = User.objects.create_user(
             email="cfo-delete@test.com", password="password", full_name="CFO Delete"
@@ -1071,7 +1108,7 @@ class EmployeeDeletionWorkflowTests(TestCase):
             f"/api/employees/deletion-requests/{request_obj.id}/approve/",
             {},
             format="json",
-            HTTP_X_ACTIVE_COMPANY_ID=str(self.other_company.id),
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)

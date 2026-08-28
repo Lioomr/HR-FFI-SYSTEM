@@ -1,7 +1,8 @@
 import { create } from "zustand";
+import { STORAGE_KEYS } from "../utils/storageKeys";
 import type { AppLanguage, Direction } from "./types";
 
-const STORAGE_KEY = "ffi_app_language";
+const STORAGE_KEY = STORAGE_KEYS.appLanguage;
 
 const resolveInitialLanguage = (): AppLanguage => {
   const stored = localStorage.getItem(STORAGE_KEY);
@@ -29,7 +30,10 @@ export const useI18nStore = create<I18nState>((set) => {
       set((state) => {
         const nextLanguage: AppLanguage = state.language === "en" ? "ar" : "en";
         localStorage.setItem(STORAGE_KEY, nextLanguage);
-        return { language: nextLanguage, direction: nextLanguage === "ar" ? "rtl" : "ltr" };
+        return {
+          language: nextLanguage,
+          direction: nextLanguage === "ar" ? "rtl" : "ltr",
+        };
       }),
   };
 });

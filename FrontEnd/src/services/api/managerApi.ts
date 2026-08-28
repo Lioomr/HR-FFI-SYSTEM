@@ -5,118 +5,146 @@ import type { AssetReturnRequest } from "./assetsApi";
 // -- Leave Requests --
 
 export type ManagerLeaveRequest = {
+  id: number;
+  employee: {
     id: number;
-    employee: {
-        id: number;
-        email: string;
-        full_name: string;
-    };
-    leave_type: {
-        id: number;
-        name: string;
-        code: string;
-    };
-    start_date: string;
-    end_date: string;
-    days?: number;
-    reason: string;
-    document?: string | null;
-    status: string;
-    created_at: string;
+    email: string;
+    full_name: string;
+  };
+  leave_type: {
+    id: number;
+    name: string;
+    code: string;
+  };
+  start_date: string;
+  end_date: string;
+  days?: number;
+  reason: string;
+  document?: string | null;
+  status: string;
+  created_at: string;
 };
 
 export async function getManagerLeaveRequests(status?: string) {
-    const params = status ? { status } : {};
-    const { data } = await api.get<ApiResponse<any>>("/api/leaves/manager/leave-requests/", { params });
-    if (data?.status === "success" && data?.data?.items) {
-        return { ...data, data: data.data.items as ManagerLeaveRequest[] } as ApiResponse<ManagerLeaveRequest[]>;
-    }
-    if (Array.isArray((data as any)?.results)) {
-        return { status: "success", data: (data as any).results } as ApiResponse<ManagerLeaveRequest[]>;
-    }
-    if (Array.isArray(data)) {
-        return { status: "success", data: data as ManagerLeaveRequest[] } as ApiResponse<ManagerLeaveRequest[]>;
-    }
-    return data as ApiResponse<ManagerLeaveRequest[]>;
+  const params = status ? { status } : {};
+  const { data } = await api.get<ApiResponse<any>>(
+    "/api/leaves/manager/leave-requests/",
+    { params },
+  );
+  if (data?.status === "success" && data?.data?.items) {
+    return {
+      ...data,
+      data: data.data.items as ManagerLeaveRequest[],
+    } as ApiResponse<ManagerLeaveRequest[]>;
+  }
+  if (Array.isArray((data as any)?.results)) {
+    return { status: "success", data: (data as any).results } as ApiResponse<
+      ManagerLeaveRequest[]
+    >;
+  }
+  if (Array.isArray(data)) {
+    return {
+      status: "success",
+      data: data as ManagerLeaveRequest[],
+    } as ApiResponse<ManagerLeaveRequest[]>;
+  }
+  return data as ApiResponse<ManagerLeaveRequest[]>;
 }
 
 export async function getManagerLeaveRequest(id: number | string) {
-    const { data } = await api.get<any>(`/api/leaves/manager/leave-requests/${id}/`);
-    if (data?.status === "success") {
-        return data as ApiResponse<ManagerLeaveRequest>;
-    }
-    if (data?.id) {
-        return { status: "success", data: data as ManagerLeaveRequest } as ApiResponse<ManagerLeaveRequest>;
-    }
+  const { data } = await api.get<any>(
+    `/api/leaves/manager/leave-requests/${id}/`,
+  );
+  if (data?.status === "success") {
     return data as ApiResponse<ManagerLeaveRequest>;
+  }
+  if (data?.id) {
+    return {
+      status: "success",
+      data: data as ManagerLeaveRequest,
+    } as ApiResponse<ManagerLeaveRequest>;
+  }
+  return data as ApiResponse<ManagerLeaveRequest>;
 }
 
 export async function getManagerLeaveRequestDocumentBlob(
-    id: number | string,
-    download = false
+  id: number | string,
+  download = false,
 ) {
-    const { data } = await api.get(`/api/leaves/manager/leave-requests/${id}/document/`, {
-        params: download ? { download: 1 } : undefined,
-        responseType: "blob",
-    });
-    return data as Blob;
+  const { data } = await api.get(
+    `/api/leaves/manager/leave-requests/${id}/document/`,
+    {
+      params: download ? { download: 1 } : undefined,
+      responseType: "blob",
+    },
+  );
+  return data as Blob;
 }
 
 export async function getManagerLeaveRequestPdfBlob(
-    id: number | string,
-    download = true
+  id: number | string,
+  download = true,
 ) {
-    const { data } = await api.get(`/api/leaves/manager/leave-requests/${id}/pdf/`, {
-        params: download ? { download: 1 } : { download: 0 },
-        responseType: "blob",
-    });
-    return data as Blob;
+  const { data } = await api.get(
+    `/api/leaves/manager/leave-requests/${id}/pdf/`,
+    {
+      params: download ? { download: 1 } : { download: 0 },
+      responseType: "blob",
+    },
+  );
+  return data as Blob;
 }
 
 export async function approveLeaveRequestManager(id: number, comment?: string) {
-    const { data } = await api.post<ApiResponse<any>>(`/api/leaves/manager/leave-requests/${id}/approve/`, { comment });
-    return data;
+  const { data } = await api.post<ApiResponse<any>>(
+    `/api/leaves/manager/leave-requests/${id}/approve/`,
+    { comment },
+  );
+  return data;
 }
 
 export async function rejectLeaveRequestManager(id: number, comment: string) {
-    const { data } = await api.post<ApiResponse<any>>(`/api/leaves/manager/leave-requests/${id}/reject/`, { comment });
-    return data;
+  const { data } = await api.post<ApiResponse<any>>(
+    `/api/leaves/manager/leave-requests/${id}/reject/`,
+    { comment },
+  );
+  return data;
 }
 
 // -- Attendance Requests --
 
 export type ManagerAttendanceRecord = {
+  id: number;
+  employee_profile: {
     id: number;
-    employee_profile: {
-        id: number;
-        user: {
-            id: number;
-            email: string;
-            full_name: string;
-        };
+    user: {
+      id: number;
+      email: string;
+      full_name: string;
     };
-    date: string;
-    check_in_at: string | null;
-    check_out_at: string | null;
-    status: string;
-    source: string;
-    created_at: string;
+  };
+  date: string;
+  check_in_at: string | null;
+  check_out_at: string | null;
+  status: string;
+  source: string;
+  created_at: string;
 };
 
 export type ManagerTeamMember = {
-    id: number;
-    user_id?: number;
-    employee_id: string;
-    full_name?: string;
-    full_name_en?: string;
-    full_name_ar?: string;
-    email?: string;
-    mobile?: string;
-    department?: string;
-    position?: string;
-    manager_name?: string;
-    /** Present only on deployments whose team serializer exposes it. */
-    employment_status?: string;
+  id: number;
+  user_id?: number;
+  employee_id: string;
+  full_name?: string;
+  full_name_en?: string;
+  full_name_ar?: string;
+  email?: string;
+  mobile?: string;
+  department?: string;
+  position?: string;
+  manager_name?: string;
+  /** Present only on deployments whose team serializer exposes it. */
+  employment_status?: string;
 };
 
 /**
@@ -128,113 +156,178 @@ export type ManagerTeamMember = {
  * - none: no manager capability
  */
 export type ManagerAccessSource =
-    | "direct_reports"
-    | "delegation"
-    | "role_compat"
-    | "admin"
-    | "none";
+  | "direct_reports"
+  | "delegation"
+  | "role_compat"
+  | "admin"
+  | "none";
 
 export type ManagerAccess = {
-    has_access: boolean;
-    managed_employee_count: number;
-    source: ManagerAccessSource;
-    scopes: string[];
+  has_access: boolean;
+  managed_employee_count: number;
+  source: ManagerAccessSource;
+  scopes: string[];
 };
 
 /** Safe default used whenever the capability cannot be established. */
 export const NO_MANAGER_ACCESS: ManagerAccess = {
-    has_access: false,
-    managed_employee_count: 0,
-    source: "none",
-    scopes: [],
+  has_access: false,
+  managed_employee_count: 0,
+  source: "none",
+  scopes: [],
 };
 
 /** Fills in any field the backend omits so callers never have to guard. */
 export function normalizeManagerAccess(raw: unknown): ManagerAccess {
-    const value = (raw ?? {}) as Partial<ManagerAccess>;
-    return {
-        has_access: Boolean(value.has_access),
-        managed_employee_count: Number(value.managed_employee_count) || 0,
-        source: value.source ?? (value.has_access ? "direct_reports" : "none"),
-        scopes: Array.isArray(value.scopes) ? value.scopes : [],
-    };
+  const value = (raw ?? {}) as Partial<ManagerAccess>;
+  return {
+    has_access: Boolean(value.has_access),
+    managed_employee_count: Number(value.managed_employee_count) || 0,
+    source: value.source ?? (value.has_access ? "direct_reports" : "none"),
+    scopes: Array.isArray(value.scopes) ? value.scopes : [],
+  };
 }
 
 export async function getManagerAttendance(status?: string) {
-    const params = status ? { status } : {};
-    const { data } = await api.get<ApiResponse<any>>("/api/manager/attendance/", { params });
-    if (data?.status === "success" && data?.data?.items) {
-        return { ...data, data: data.data.items as ManagerAttendanceRecord[] } as ApiResponse<ManagerAttendanceRecord[]>;
-    }
-    if (Array.isArray((data as any)?.results)) {
-        return { status: "success", data: (data as any).results } as ApiResponse<ManagerAttendanceRecord[]>;
-    }
-    if (Array.isArray(data)) {
-        return { status: "success", data: data as ManagerAttendanceRecord[] } as ApiResponse<ManagerAttendanceRecord[]>;
-    }
-    return data as ApiResponse<ManagerAttendanceRecord[]>;
+  const params = status ? { status } : {};
+  const { data } = await api.get<ApiResponse<any>>("/api/manager/attendance/", {
+    params,
+  });
+  if (data?.status === "success" && data?.data?.items) {
+    return {
+      ...data,
+      data: data.data.items as ManagerAttendanceRecord[],
+    } as ApiResponse<ManagerAttendanceRecord[]>;
+  }
+  if (Array.isArray((data as any)?.results)) {
+    return { status: "success", data: (data as any).results } as ApiResponse<
+      ManagerAttendanceRecord[]
+    >;
+  }
+  if (Array.isArray(data)) {
+    return {
+      status: "success",
+      data: data as ManagerAttendanceRecord[],
+    } as ApiResponse<ManagerAttendanceRecord[]>;
+  }
+  return data as ApiResponse<ManagerAttendanceRecord[]>;
 }
 
 export async function approveAttendanceManager(id: number, notes?: string) {
-    const { data } = await api.post<ApiResponse<any>>(`/api/manager/attendance/${id}/approve/`, { notes });
-    return data;
+  const { data } = await api.post<ApiResponse<any>>(
+    `/api/manager/attendance/${id}/approve/`,
+    { notes },
+  );
+  return data;
 }
 
 export async function rejectAttendanceManager(id: number, notes: string) {
-    const { data } = await api.post<ApiResponse<any>>(`/api/manager/attendance/${id}/reject/`, { notes });
-    return data;
+  const { data } = await api.post<ApiResponse<any>>(
+    `/api/manager/attendance/${id}/reject/`,
+    { notes },
+  );
+  return data;
 }
 
 export async function getManagerTeam(search?: string) {
-    const params = search ? { search } : {};
-    const { data } = await api.get<ApiResponse<any>>("/employees/manager/team", { params });
-    if (data?.status === "success" && Array.isArray((data as any)?.data?.results)) {
-        return { status: "success", data: (data as any).data.results as ManagerTeamMember[] } as ApiResponse<ManagerTeamMember[]>;
-    }
-    if (data?.status === "success" && Array.isArray((data as any)?.data?.items)) {
-        return { status: "success", data: (data as any).data.items as ManagerTeamMember[] } as ApiResponse<ManagerTeamMember[]>;
-    }
-    if (Array.isArray((data as any)?.results)) {
-        return { status: "success", data: (data as any).results as ManagerTeamMember[] } as ApiResponse<ManagerTeamMember[]>;
-    }
-    if (Array.isArray(data)) {
-        return { status: "success", data: data as ManagerTeamMember[] } as ApiResponse<ManagerTeamMember[]>;
-    }
-    return data as ApiResponse<ManagerTeamMember[]>;
+  const params = search ? { search } : {};
+  const { data } = await api.get<ApiResponse<any>>("/employees/manager/team", {
+    params,
+  });
+  if (
+    data?.status === "success" &&
+    Array.isArray((data as any)?.data?.results)
+  ) {
+    return {
+      status: "success",
+      data: (data as any).data.results as ManagerTeamMember[],
+    } as ApiResponse<ManagerTeamMember[]>;
+  }
+  if (data?.status === "success" && Array.isArray((data as any)?.data?.items)) {
+    return {
+      status: "success",
+      data: (data as any).data.items as ManagerTeamMember[],
+    } as ApiResponse<ManagerTeamMember[]>;
+  }
+  if (Array.isArray((data as any)?.results)) {
+    return {
+      status: "success",
+      data: (data as any).results as ManagerTeamMember[],
+    } as ApiResponse<ManagerTeamMember[]>;
+  }
+  if (Array.isArray(data)) {
+    return {
+      status: "success",
+      data: data as ManagerTeamMember[],
+    } as ApiResponse<ManagerTeamMember[]>;
+  }
+  return data as ApiResponse<ManagerTeamMember[]>;
 }
 
 export async function getManagerAccess() {
-    const { data } = await api.get<ApiResponse<ManagerAccess>>("/api/employees/manager/access/");
-    if (data?.status === "success") {
-        return { ...data, data: normalizeManagerAccess(data.data) } as ApiResponse<ManagerAccess>;
-    }
-    if (data && typeof data === "object" && "has_access" in data) {
-        return { status: "success", data: normalizeManagerAccess(data) } as ApiResponse<ManagerAccess>;
-    }
-    return data as ApiResponse<ManagerAccess>;
+  const { data } = await api.get<ApiResponse<ManagerAccess>>(
+    "/api/employees/manager/access/",
+  );
+  if (data?.status === "success") {
+    return {
+      ...data,
+      data: normalizeManagerAccess(data.data),
+    } as ApiResponse<ManagerAccess>;
+  }
+  if (data && typeof data === "object" && "has_access" in data) {
+    return {
+      status: "success",
+      data: normalizeManagerAccess(data),
+    } as ApiResponse<ManagerAccess>;
+  }
+  return data as ApiResponse<ManagerAccess>;
 }
 
 export async function getManagerAssetReturnRequests(status?: string) {
-    const params = status ? { status } : {};
-    const { data } = await api.get<ApiResponse<any>>("/api/assets/manager/return-requests/", { params });
-    if (data?.status === "success" && data?.data?.items) {
-        return { ...data, data: data.data.items as AssetReturnRequest[] } as ApiResponse<AssetReturnRequest[]>;
-    }
-    if (Array.isArray((data as any)?.results)) {
-        return { status: "success", data: (data as any).results as AssetReturnRequest[] } as ApiResponse<AssetReturnRequest[]>;
-    }
-    if (Array.isArray(data)) {
-        return { status: "success", data: data as AssetReturnRequest[] } as ApiResponse<AssetReturnRequest[]>;
-    }
-    return data as ApiResponse<AssetReturnRequest[]>;
+  const params = status ? { status } : {};
+  const { data } = await api.get<ApiResponse<any>>(
+    "/api/assets/manager/return-requests/",
+    { params },
+  );
+  if (data?.status === "success" && data?.data?.items) {
+    return {
+      ...data,
+      data: data.data.items as AssetReturnRequest[],
+    } as ApiResponse<AssetReturnRequest[]>;
+  }
+  if (Array.isArray((data as any)?.results)) {
+    return {
+      status: "success",
+      data: (data as any).results as AssetReturnRequest[],
+    } as ApiResponse<AssetReturnRequest[]>;
+  }
+  if (Array.isArray(data)) {
+    return {
+      status: "success",
+      data: data as AssetReturnRequest[],
+    } as ApiResponse<AssetReturnRequest[]>;
+  }
+  return data as ApiResponse<AssetReturnRequest[]>;
 }
 
-export async function approveManagerAssetReturnRequest(id: number, comment?: string) {
-    const { data } = await api.post<ApiResponse<AssetReturnRequest>>(`/api/assets/manager/return-requests/${id}/approve/`, { comment });
-    return data;
+export async function approveManagerAssetReturnRequest(
+  id: number,
+  comment?: string,
+) {
+  const { data } = await api.post<ApiResponse<AssetReturnRequest>>(
+    `/api/assets/manager/return-requests/${id}/approve/`,
+    { comment },
+  );
+  return data;
 }
 
-export async function rejectManagerAssetReturnRequest(id: number, comment: string) {
-    const { data } = await api.post<ApiResponse<AssetReturnRequest>>(`/api/assets/manager/return-requests/${id}/reject/`, { comment });
-    return data;
+export async function rejectManagerAssetReturnRequest(
+  id: number,
+  comment: string,
+) {
+  const { data } = await api.post<ApiResponse<AssetReturnRequest>>(
+    `/api/assets/manager/return-requests/${id}/reject/`,
+    { comment },
+  );
+  return data;
 }

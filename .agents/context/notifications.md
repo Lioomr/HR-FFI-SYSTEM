@@ -120,6 +120,17 @@ NOTIFICATION_WORKER_READINESS_REQUEST_TIMEOUT_SECONDS
 - Worker startup requires Redis and Evolution HTTP reachability when WhatsApp is enabled. A connected WhatsApp account is not
   required, and globally disabling WhatsApp skips Evolution readiness.
 
+## Dedup Batching for Bulk Dispatch
+
+`create_notification()` and `dispatch_notification_channels()` both accept an optional `known_new: bool = False`.
+When a caller is about to dispatch to many recipients sharing one `deduplication_key` (e.g. a company-wide
+announcement), it can run ONE upfront query to learn which recipients already have a notification for that key,
+then pass `known_new=True` for the rest — skipping the per-recipient dedup SELECT `get_or_create()` would
+otherwise run. See `send_announcement_in_app()` in `announcements/utils.py` for the reference implementation.
+Default is `False` everywhere else — do not pass `known_new=True` unless you've actually done the batch
+pre-check yourself, or you can create duplicate notifications on a redelivery. Full writeup in
+`reliability_and_perf_fixes.md`.
+
 ## Rules for New Notifications
 
 - Call notification functions from views/services, not models or serializers.

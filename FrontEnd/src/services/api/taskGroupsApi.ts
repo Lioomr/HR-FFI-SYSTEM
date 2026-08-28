@@ -44,11 +44,11 @@ export interface ListTaskGroupsParams {
  * List all task groups
  */
 export async function listTaskGroups(
-  params?: ListTaskGroupsParams
+  params?: ListTaskGroupsParams,
 ): Promise<ApiResponse<TaskGroup[]>> {
   const { data } = await api.get<ApiResponse<TaskGroup[]>>(
     "/api/hr/task-groups/",
-    { params }
+    { params },
   );
   return data;
 }
@@ -57,11 +57,11 @@ export async function listTaskGroups(
  * Create a new task group
  */
 export async function createTaskGroup(
-  payload: CreateTaskGroupDto
+  payload: CreateTaskGroupDto,
 ): Promise<ApiResponse<TaskGroup>> {
   const { data } = await api.post<ApiResponse<TaskGroup>>(
     "/api/hr/task-groups/",
-    payload
+    payload,
   );
   return data;
 }
@@ -71,11 +71,11 @@ export async function createTaskGroup(
  */
 export async function updateTaskGroup(
   id: string | number,
-  payload: UpdateTaskGroupDto
+  payload: UpdateTaskGroupDto,
 ): Promise<ApiResponse<TaskGroup>> {
   const { data } = await api.patch<ApiResponse<TaskGroup>>(
     `/api/hr/task-groups/${id}/`,
-    payload
+    payload,
   );
   return data;
 }

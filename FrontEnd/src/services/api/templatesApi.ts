@@ -23,7 +23,9 @@ export interface TemplateListResponse {
 }
 
 export async function listTemplates(): Promise<TemplateItem[]> {
-  const response = await api.get<ApiResponse<TemplateListResponse>>("/api/core/templates/");
+  const response = await api.get<ApiResponse<TemplateListResponse>>(
+    "/api/core/templates/",
+  );
   const body = response.data;
   if (isApiError(body)) {
     throw new Error(body.message || "Failed to load templates");
@@ -31,7 +33,10 @@ export async function listTemplates(): Promise<TemplateItem[]> {
   return body.data.items;
 }
 
-export async function downloadTemplate(key: string, filename?: string): Promise<void> {
+export async function downloadTemplate(
+  key: string,
+  filename?: string,
+): Promise<void> {
   const response = await api.get<Blob>(`/api/core/templates/${key}/download/`, {
     responseType: "blob",
   });

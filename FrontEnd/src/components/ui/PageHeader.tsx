@@ -64,7 +64,10 @@ export default function PageHeader({
             }}
           />
           <div>
-            <Space align="center" style={{ marginBottom: (subtitle || secondarySubtitle) ? 0 : 0 }}>
+            <Space
+              align="center"
+              style={{ marginBottom: subtitle || secondarySubtitle ? 0 : 0 }}
+            >
               <Typography.Title
                 level={3}
                 style={{
@@ -98,7 +101,15 @@ export default function PageHeader({
               )}
             </Space>
             {(subtitle || secondarySubtitle) && (
-              <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, marginTop: -2 }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: 8,
+                  marginTop: -2,
+                }}
+              >
                 {subtitle && (
                   <Typography.Text
                     style={{ color: "#64748b", fontSize: 16, fontWeight: 500 }}
@@ -123,7 +134,14 @@ export default function PageHeader({
 
         {/* Right: action buttons */}
         {actions && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 4 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              paddingTop: 4,
+            }}
+          >
             {actions}
           </div>
         )}

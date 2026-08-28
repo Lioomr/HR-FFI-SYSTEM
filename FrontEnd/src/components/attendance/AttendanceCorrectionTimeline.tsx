@@ -35,9 +35,18 @@ export default function AttendanceCorrectionTimeline({
     return (
       <Card
         size="small"
-        style={{ background: "#f8fafc", borderRadius: 12, border: "1px dashed #cbd5e1" }}
+        style={{
+          background: "#f8fafc",
+          borderRadius: 12,
+          border: "1px dashed #cbd5e1",
+        }}
       >
-        <Text type="secondary">{t("attendanceCorrections.timeline.empty", "No workflow history yet.")}</Text>
+        <Text type="secondary">
+          {t(
+            "attendanceCorrections.timeline.empty",
+            "No workflow history yet.",
+          )}
+        </Text>
       </Card>
     );
   }
@@ -60,7 +69,10 @@ export default function AttendanceCorrectionTimeline({
                 <div style={{ fontWeight: 600, color: "#0f172a" }}>
                   {entry.action.replace(/_/g, " ")}
                   {stageLabel ? (
-                    <Text type="secondary" style={{ marginInlineStart: 8, fontWeight: 400 }}>
+                    <Text
+                      type="secondary"
+                      style={{ marginInlineStart: 8, fontWeight: 400 }}
+                    >
                       ({stageLabel})
                     </Text>
                   ) : null}
@@ -71,7 +83,9 @@ export default function AttendanceCorrectionTimeline({
                   </div>
                 ) : null}
                 {entry.note ? (
-                  <div style={{ marginTop: 4, color: "#334155", fontSize: 13 }}>{entry.note}</div>
+                  <div style={{ marginTop: 4, color: "#334155", fontSize: 13 }}>
+                    {entry.note}
+                  </div>
                 ) : null}
               </div>
             ),

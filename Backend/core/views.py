@@ -20,7 +20,13 @@ from audit.utils import audit
 from audit.views import AuditPagination, apply_filters
 from core.permissions import IsDepartmentCEOApprover, IsHRManagerOrAdmin
 from core.responses import success
-from core.serializers import DelegationRuleSerializer, RequestObligationSerializer, UserPreferenceSerializer
+from core.serializers import (
+    CrossCompanyManagerAssignmentSerializer,
+    DelegationRuleSerializer,
+    OrganizationScopeSerializer,
+    RequestObligationSerializer,
+    UserPreferenceSerializer,
+)
 from core.services import (
     build_pending_approval_item,
     get_pending_approvals_for_user,
@@ -31,16 +37,16 @@ from core.services import (
 from employees.models import EmployeeDeletionRequest, EmployeeProfile
 from leaves.models import LeaveRequest
 from loans.models import LoanRequest
-from organization.models import OrganizationNode
+from organization.models import OrganizationNode, OrganizationScope
 from organization.services import (
     filter_queryset_by_accessible_companies,
     filter_queryset_by_company_scope,
-    get_active_organization_for_request,
+    get_active_company_for_request,
     get_user_accessible_company_ids,
 )
 from payroll.models import PayrollRun
 
-from .models import DelegationRule, RequestObligation, UserPreference, WorkflowInstance
+from .models import CrossCompanyManagerAssignment, DelegationRule, RequestObligation, UserPreference, WorkflowInstance
 from .permissions import get_role
 
 
@@ -218,14 +224,9 @@ def _sync_pending_request_workflows_for_request(request, *, limit_per_type: int 
 
 
 def _is_dashboard_object_in_active_scope(obj, request) -> bool:
-    active_org = get_active_organization_for_request(request)
-    accessible_company_ids = get_user_accessible_company_ids(request.user)
+    active_company = get_active_company_for_request(request)
     workflow_company_id = _get_company_id_for_dashboard_object(obj)
-    if workflow_company_id is None:
-        return False
-    if active_org and active_org.node_type == OrganizationNode.NodeType.HEAD_OFFICE:
-        return workflow_company_id in accessible_company_ids
-    return workflow_company_id == getattr(active_org, "id", None)
+    return bool(active_company and workflow_company_id == active_company.id)
 
 
 def _build_pending_request_items_for_request(request, *, limit: int | None = None) -> list[dict]:
@@ -279,20 +280,16 @@ class HrSummaryView(APIView):
     def get(self, request):
         today = timezone.now().date()
         warning_date = today + timedelta(days=30)
-        active_org = get_active_organization_for_request(request)
-        accessible_company_ids = get_user_accessible_company_ids(request.user)
+        active_company = get_active_company_for_request(request)
 
         employee_qs = filter_queryset_by_company_scope(EmployeeProfile.objects.all(), request)
         leave_qs = filter_queryset_by_company_scope(LeaveRequest.objects.all(), request)
         payroll_qs = filter_queryset_by_company_scope(PayrollRun.objects.all(), request)
 
-        if active_org and active_org.node_type == OrganizationNode.NodeType.HEAD_OFFICE:
-            hr_activity_filter = Q(
-                actor__groups__name="HRManager", actor__employee_profile__company_id__in=accessible_company_ids
-            )
-        else:
-            company_id = getattr(active_org, "id", None)
-            hr_activity_filter = Q(actor__groups__name="HRManager", actor__employee_profile__company_id=company_id)
+        hr_activity_filter = Q(
+            actor__groups__name="HRManager",
+            actor__employee_profile__company_id=getattr(active_company, "id", None),
+        )
 
         # 1. Employee Stats
         total_employees = employee_qs.count()
@@ -414,13 +411,8 @@ class HrRecentActivityView(APIView):
     permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
 
     def get(self, request):
-        active_org = get_active_organization_for_request(request)
-        accessible_company_ids = get_user_accessible_company_ids(request.user)
-
-        if active_org and active_org.node_type == OrganizationNode.NodeType.HEAD_OFFICE:
-            company_filter = Q(actor__employee_profile__company_id__in=accessible_company_ids)
-        else:
-            company_filter = Q(actor__employee_profile__company_id=getattr(active_org, "id", None))
+        active_company = get_active_company_for_request(request)
+        company_filter = Q(actor__employee_profile__company_id=getattr(active_company, "id", None))
 
         qs = (
             AuditLog.objects.filter(actor__groups__name="HRManager")
@@ -593,9 +585,19 @@ class DelegationRuleListCreateView(APIView):
 
     def get(self, request):
         queryset = DelegationRule.objects.select_related("from_user", "to_user", "created_by")
-        if get_role(request.user) not in {"HRManager", "SystemAdmin"}:
+        if get_role(request.user) in {"HRManager", "SystemAdmin"}:
+            queryset = filter_queryset_by_company_scope(
+                queryset,
+                request,
+                field_name="from_user__employee_profile__company_id",
+            )
+        else:
             queryset = queryset.filter(Q(from_user=request.user) | Q(to_user=request.user))
-        data = DelegationRuleSerializer(queryset.order_by("-updated_at", "-id"), many=True).data
+        data = DelegationRuleSerializer(
+            queryset.order_by("-updated_at", "-id"),
+            many=True,
+            context={"request": request},
+        ).data
         return success({"items": data})
 
     def post(self, request):
@@ -607,7 +609,7 @@ class DelegationRuleListCreateView(APIView):
             if requested_from_user_id != request.user.id:
                 raise PermissionDenied("You can only create delegation rules for your own approvals.")
 
-        serializer = DelegationRuleSerializer(data=request.data)
+        serializer = DelegationRuleSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
 
         from_user = serializer.validated_data["from_user"]
@@ -638,7 +640,16 @@ class DelegationRuleDetailView(APIView):
 
     def _get_rule(self, request, pk):
         try:
-            rule = DelegationRule.objects.select_related("from_user", "to_user", "created_by").get(pk=pk)
+            queryset = DelegationRule.objects.select_related("from_user", "to_user", "created_by")
+            if get_role(request.user) in {"HRManager", "SystemAdmin"}:
+                queryset = filter_queryset_by_company_scope(
+                    queryset,
+                    request,
+                    field_name="from_user__employee_profile__company_id",
+                )
+            else:
+                queryset = queryset.filter(Q(from_user=request.user) | Q(to_user=request.user))
+            rule = queryset.get(pk=pk)
         except DelegationRule.DoesNotExist:
             raise NotFound("Delegation rule not found.")
 
@@ -653,7 +664,12 @@ class DelegationRuleDetailView(APIView):
         if get_role(request.user) not in {"HRManager", "SystemAdmin"} and rule.from_user_id != request.user.id:
             raise PermissionDenied("You can only update delegation rules you created for yourself.")
 
-        serializer = DelegationRuleSerializer(rule, data=request.data, partial=True)
+        serializer = DelegationRuleSerializer(
+            rule,
+            data=request.data,
+            partial=True,
+            context={"request": request},
+        )
         serializer.is_valid(raise_exception=True)
 
         from_user = serializer.validated_data.get("from_user", rule.from_user)
@@ -680,16 +696,194 @@ class DelegationRuleDetailView(APIView):
         if get_role(request.user) not in {"HRManager", "SystemAdmin"} and rule.from_user_id != request.user.id:
             raise PermissionDenied("You can only delete delegation rules you created for yourself.")
 
-        rule_id = rule.id
-        metadata = {
-            "from_user_id": rule.from_user_id,
-            "to_user_id": rule.to_user_id,
-            "is_active": rule.is_active,
-        }
         with transaction.atomic():
-            rule.delete()
-            audit(request, "delegation_rule_deleted", entity="delegation_rule", entity_id=rule_id, metadata=metadata)
-        return success(message="Delegation rule deleted.")
+            rule.is_active = False
+            rule.revoked_at = timezone.now()
+            rule.revoked_by = request.user
+            rule.save(update_fields=["is_active", "revoked_at", "revoked_by", "updated_at"])
+            audit(
+                request,
+                "delegation_rule_revoked",
+                entity="delegation_rule",
+                entity_id=rule.id,
+                metadata={"from_user_id": rule.from_user_id, "to_user_id": rule.to_user_id},
+            )
+        return success(message="Delegation rule revoked.")
+
+
+class OrganizationScopeListCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def _queryset(self, request):
+        role = get_role(request.user)
+        queryset = OrganizationScope.objects.prefetch_related("memberships__company")
+        if role == "SystemAdmin":
+            return queryset
+        if role == "HRManager":
+            # HRManagers administer only scopes entirely covered by their
+            # organization-access entries; SystemAdmin remains the audit role.
+            allowed_company_ids = get_user_accessible_company_ids(request.user)
+            unavailable_company_ids = OrganizationNode.objects.filter(
+                node_type=OrganizationNode.NodeType.COMPANY,
+                is_active=True,
+            ).exclude(pk__in=allowed_company_ids)
+            return queryset.filter(memberships__company_id__in=allowed_company_ids).exclude(
+                memberships__company_id__in=unavailable_company_ids
+            ).distinct()
+
+        from core.delegation import get_current_scope_ids_for_user
+
+        return queryset.filter(pk__in=get_current_scope_ids_for_user(request.user), is_active=True)
+
+    @staticmethod
+    def _validate_scope_companies(request, serializer, existing_scope=None):
+        if get_role(request.user) == "SystemAdmin":
+            return
+        requested_company_ids = serializer.validated_data.get("company_ids")
+        if requested_company_ids is None and existing_scope is not None:
+            requested_company_ids = list(existing_scope.memberships.values_list("company_id", flat=True))
+        if requested_company_ids is None:
+            return
+        allowed_company_ids = get_user_accessible_company_ids(request.user)
+        if not set(requested_company_ids).issubset(allowed_company_ids):
+            raise PermissionDenied("HRManager can only administer scopes covered by authorized companies.")
+
+    def get(self, request):
+        return success({"items": OrganizationScopeSerializer(self._queryset(request), many=True).data})
+
+    def post(self, request):
+        if get_role(request.user) not in {"HRManager", "SystemAdmin"}:
+            raise PermissionDenied("Only HRManager or SystemAdmin can create organization scopes.")
+        serializer = OrganizationScopeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self._validate_scope_companies(request, serializer)
+        with transaction.atomic():
+            scope = serializer.save(created_by=request.user)
+            audit(
+                request,
+                "organization_scope_created",
+                entity="organization_scope",
+                entity_id=scope.id,
+                metadata={"company_ids": list(scope.memberships.values_list("company_id", flat=True))},
+            )
+        return success(OrganizationScopeSerializer(scope).data, status=201)
+
+
+class OrganizationScopeDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def _get_scope(self, request, pk):
+        try:
+            return OrganizationScopeListCreateView()._queryset(request).get(pk=pk)
+        except OrganizationScope.DoesNotExist as exc:
+            raise NotFound("Organization scope not found.") from exc
+
+    def get(self, request, pk):
+        return success(OrganizationScopeSerializer(self._get_scope(request, pk)).data)
+
+    def patch(self, request, pk):
+        if get_role(request.user) not in {"HRManager", "SystemAdmin"}:
+            raise PermissionDenied("Only HRManager or SystemAdmin can change organization scopes.")
+        scope = self._get_scope(request, pk)
+        serializer = OrganizationScopeSerializer(scope, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        OrganizationScopeListCreateView._validate_scope_companies(request, serializer, scope)
+        with transaction.atomic():
+            updated_scope = serializer.save()
+            audit(
+                request,
+                "organization_scope_updated",
+                entity="organization_scope",
+                entity_id=updated_scope.id,
+                metadata={"company_ids": list(updated_scope.memberships.values_list("company_id", flat=True))},
+            )
+        return success(OrganizationScopeSerializer(updated_scope).data)
+
+
+class CrossCompanyManagerAssignmentListCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        queryset = CrossCompanyManagerAssignment.objects.select_related(
+            "employee", "manager_profile", "scope", "created_by", "revoked_by"
+        )
+        role = get_role(request.user)
+        if role == "HRManager":
+            scope_ids = OrganizationScopeListCreateView()._queryset(request).values_list("id", flat=True)
+            queryset = queryset.filter(scope_id__in=scope_ids)
+        elif role != "SystemAdmin":
+            from employees.services.manager_relationships import active_cross_company_manager_assignments
+
+            queryset = active_cross_company_manager_assignments(
+                request.user,
+                capability=CrossCompanyManagerAssignment.Capability.EMPLOYEE_VIEW,
+            )
+        return success({"items": CrossCompanyManagerAssignmentSerializer(queryset, many=True).data})
+
+    def post(self, request):
+        if get_role(request.user) not in {"HRManager", "SystemAdmin"}:
+            raise PermissionDenied("Only HRManager or SystemAdmin can create cross-company manager assignments.")
+        serializer = CrossCompanyManagerAssignmentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        with transaction.atomic():
+            assignment = serializer.save(created_by=request.user)
+            audit(
+                request,
+                "cross_company_manager_assignment_created",
+                entity="cross_company_manager_assignment",
+                entity_id=assignment.id,
+                metadata={
+                    "employee_profile_id": assignment.employee_id,
+                    "manager_profile_id": assignment.manager_profile_id,
+                    "scope_id": assignment.scope_id,
+                },
+            )
+        return success(CrossCompanyManagerAssignmentSerializer(assignment).data, status=201)
+
+
+class CrossCompanyManagerAssignmentDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def _get_assignment(self, request, pk):
+        queryset = CrossCompanyManagerAssignment.objects.select_related(
+            "employee", "manager_profile", "scope", "created_by", "revoked_by"
+        )
+        role = get_role(request.user)
+        if role == "HRManager":
+            scope_ids = OrganizationScopeListCreateView()._queryset(request).values_list("id", flat=True)
+            queryset = queryset.filter(scope_id__in=scope_ids)
+        elif role != "SystemAdmin":
+            from employees.services.manager_relationships import active_cross_company_manager_assignments
+
+            queryset = active_cross_company_manager_assignments(
+                request.user,
+                capability=CrossCompanyManagerAssignment.Capability.EMPLOYEE_VIEW,
+            )
+        try:
+            return queryset.get(pk=pk)
+        except CrossCompanyManagerAssignment.DoesNotExist as exc:
+            raise NotFound("Cross-company manager assignment not found.") from exc
+
+    def patch(self, request, pk):
+        if get_role(request.user) not in {"HRManager", "SystemAdmin"}:
+            raise PermissionDenied("Only HRManager or SystemAdmin can change cross-company manager assignments.")
+        assignment = self._get_assignment(request, pk)
+        serializer = CrossCompanyManagerAssignmentSerializer(assignment, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        updated_assignment = serializer.save()
+        audit(request, "cross_company_manager_assignment_updated", entity="cross_company_manager_assignment", entity_id=updated_assignment.id)
+        return success(CrossCompanyManagerAssignmentSerializer(updated_assignment).data)
+
+    def delete(self, request, pk):
+        if get_role(request.user) not in {"HRManager", "SystemAdmin"}:
+            raise PermissionDenied("Only HRManager or SystemAdmin can revoke cross-company manager assignments.")
+        assignment = self._get_assignment(request, pk)
+        assignment.is_active = False
+        assignment.revoked_at = timezone.now()
+        assignment.revoked_by = request.user
+        assignment.save(update_fields=["is_active", "revoked_at", "revoked_by", "updated_at"])
+        audit(request, "cross_company_manager_assignment_revoked", entity="cross_company_manager_assignment", entity_id=assignment.id)
+        return success(message="Cross-company manager assignment revoked.")
 
 
 def _resolve_obligation_parent(parent_type: str, parent_id: str):

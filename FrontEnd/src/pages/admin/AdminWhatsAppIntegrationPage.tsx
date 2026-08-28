@@ -1,6 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Card, Col, Form, Input, QRCode, Row, Space, Spin, Tag, Typography, message } from "antd";
-import { DisconnectOutlined, ReloadOutlined, SendOutlined, WhatsAppOutlined } from "@ant-design/icons";
+import {
+  Button,
+  Card,
+  Col,
+  Form,
+  Input,
+  QRCode,
+  Row,
+  Space,
+  Spin,
+  Tag,
+  Typography,
+  message,
+} from "antd";
+import {
+  DisconnectOutlined,
+  ReloadOutlined,
+  SendOutlined,
+  WhatsAppOutlined,
+} from "@ant-design/icons";
 import {
   connectWhatsAppIntegration,
   getWhatsAppIntegrationQr,
@@ -22,7 +40,8 @@ function statusColor(status?: WhatsAppIntegrationStatus) {
   const state = (status?.connection_state || "").toLowerCase();
   if (!status?.configured) return "red";
   if (status?.connected || state === "open") return "green";
-  if (state === "connecting" || state === "qr" || state === "close") return "gold";
+  if (state === "connecting" || state === "qr" || state === "close")
+    return "gold";
   if (state === "unreachable") return "red";
   return "default";
 }
@@ -130,18 +149,35 @@ export default function AdminWhatsAppIntegrationPage() {
   return (
     <div style={{ maxWidth: 1180, margin: "0 auto" }}>
       <Space direction="vertical" size={18} style={{ width: "100%" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 16,
+            flexWrap: "wrap",
+          }}
+        >
           <div>
             <Title level={3} style={{ margin: 0 }}>
               WhatsApp Integration
             </Title>
-            <Text type="secondary">Evolution API device pairing and delivery test</Text>
+            <Text type="secondary">
+              Evolution API device pairing and delivery test
+            </Text>
           </div>
           <Space wrap>
-            <Tag color={statusColor(status)} style={{ padding: "4px 10px", fontSize: 13 }}>
+            <Tag
+              color={statusColor(status)}
+              style={{ padding: "4px 10px", fontSize: 13 }}
+            >
               {statusLabel(status)}
             </Tag>
-            <Button icon={<ReloadOutlined />} onClick={refreshStatus} loading={loading}>
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={refreshStatus}
+              loading={loading}
+            >
               Refresh
             </Button>
           </Space>
@@ -152,21 +188,44 @@ export default function AdminWhatsAppIntegrationPage() {
             <Col xs={24} lg={14}>
               <Card style={{ borderRadius: 8 }}>
                 <Space direction="vertical" size={16} style={{ width: "100%" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      flexWrap: "wrap",
+                    }}
+                  >
                     <Space>
-                      <WhatsAppOutlined style={{ color: "#16a34a", fontSize: 22 }} />
+                      <WhatsAppOutlined
+                        style={{ color: "#16a34a", fontSize: 22 }}
+                      />
                       <div>
                         <Text strong>Device pairing</Text>
                         <div>
-                          <Text type="secondary">Instance: {status?.instance_name || "Not set"}</Text>
+                          <Text type="secondary">
+                            Instance: {status?.instance_name || "Not set"}
+                          </Text>
                         </div>
                       </div>
                     </Space>
                     <Space wrap>
-                      <Button type="primary" icon={<WhatsAppOutlined />} onClick={connect} loading={actionLoading === "connect"} disabled={!status?.configured}>
+                      <Button
+                        type="primary"
+                        icon={<WhatsAppOutlined />}
+                        onClick={connect}
+                        loading={actionLoading === "connect"}
+                        disabled={!status?.configured}
+                      >
                         Generate QR
                       </Button>
-                      <Button icon={<ReloadOutlined />} onClick={refreshQr} loading={actionLoading === "qr"} disabled={!status?.configured}>
+                      <Button
+                        icon={<ReloadOutlined />}
+                        onClick={refreshQr}
+                        loading={actionLoading === "qr"}
+                        disabled={!status?.configured}
+                      >
                         Refresh QR
                       </Button>
                     </Space>
@@ -186,21 +245,45 @@ export default function AdminWhatsAppIntegrationPage() {
                   >
                     {hasQr ? (
                       qrAsImage ? (
-                        <img src={qrCode} alt="WhatsApp pairing QR" style={{ width: 280, height: 280, objectFit: "contain" }} />
+                        <img
+                          src={qrCode}
+                          alt="WhatsApp pairing QR"
+                          style={{
+                            width: 280,
+                            height: 280,
+                            objectFit: "contain",
+                          }}
+                        />
                       ) : (
                         <QRCode value={qrCode} size={280} bordered={false} />
                       )
                     ) : (
                       <Space direction="vertical" align="center" size={8}>
-                        <WhatsAppOutlined style={{ color: "#16a34a", fontSize: 44 }} />
-                        <Text strong>{status?.connected ? "Device is connected" : "Generate a QR code"}</Text>
-                        <Text type="secondary">{status?.connected ? "WhatsApp notifications can be sent." : "Scan the QR code from WhatsApp Linked devices."}</Text>
+                        <WhatsAppOutlined
+                          style={{ color: "#16a34a", fontSize: 44 }}
+                        />
+                        <Text strong>
+                          {status?.connected
+                            ? "Device is connected"
+                            : "Generate a QR code"}
+                        </Text>
+                        <Text type="secondary">
+                          {status?.connected
+                            ? "WhatsApp notifications can be sent."
+                            : "Scan the QR code from WhatsApp Linked devices."}
+                        </Text>
                       </Space>
                     )}
                   </div>
 
                   <Space wrap>
-                    <Button danger icon={<DisconnectOutlined />} onClick={disconnect} loading={actionLoading === "disconnect"} disabled={!status?.configured}>
+                    <Button
+                      danger
+                      icon={<DisconnectOutlined />}
+                      onClick={disconnect}
+                      loading={actionLoading === "disconnect"}
+                      disabled={!status?.configured}
+                    >
                       Disconnect device
                     </Button>
                   </Space>
@@ -211,20 +294,50 @@ export default function AdminWhatsAppIntegrationPage() {
             <Col xs={24} lg={10}>
               <Space direction="vertical" size={16} style={{ width: "100%" }}>
                 <Card title="Configuration" style={{ borderRadius: 8 }}>
-                  <Space direction="vertical" size={10} style={{ width: "100%" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                  <Space
+                    direction="vertical"
+                    size={10}
+                    style={{ width: "100%" }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: 12,
+                      }}
+                    >
                       <Text type="secondary">API URL</Text>
-                      <Tag color={status?.base_url_configured ? "green" : "red"}>{status?.base_url_configured ? "Set" : "Missing"}</Tag>
+                      <Tag
+                        color={status?.base_url_configured ? "green" : "red"}
+                      >
+                        {status?.base_url_configured ? "Set" : "Missing"}
+                      </Tag>
                     </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: 12,
+                      }}
+                    >
                       <Text type="secondary">API key</Text>
-                      <Tag color={status?.api_key_configured ? "green" : "red"}>{status?.api_key_configured ? "Set" : "Missing"}</Tag>
+                      <Tag color={status?.api_key_configured ? "green" : "red"}>
+                        {status?.api_key_configured ? "Set" : "Missing"}
+                      </Tag>
                     </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: 12,
+                      }}
+                    >
                       <Text type="secondary">Provider status</Text>
                       <Text>{status?.provider_status_code || "-"}</Text>
                     </div>
-                    {status?.error ? <Text type="danger">{status.error}</Text> : null}
+                    {status?.error ? (
+                      <Text type="danger">{status.error}</Text>
+                    ) : null}
                   </Space>
                 </Card>
 
@@ -233,11 +346,22 @@ export default function AdminWhatsAppIntegrationPage() {
                     <Form.Item
                       name="phone_number"
                       label="Phone number"
-                      rules={[{ required: true, message: "Enter a phone number in E.164 format." }]}
+                      rules={[
+                        {
+                          required: true,
+                          message: "Enter a phone number in E.164 format.",
+                        },
+                      ]}
                     >
                       <Input placeholder="+9665XXXXXXXX" />
                     </Form.Item>
-                    <Button type="primary" htmlType="submit" icon={<SendOutlined />} loading={actionLoading === "test"} block>
+                    <Button
+                      type="primary"
+                      htmlType="submit"
+                      icon={<SendOutlined />}
+                      loading={actionLoading === "test"}
+                      block
+                    >
                       Send test WhatsApp
                     </Button>
                   </Form>

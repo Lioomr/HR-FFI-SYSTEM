@@ -1,5 +1,8 @@
 import { isApiError } from "./apiTypes";
-import { getCEOAssetDamageReports, getCEOAssetReturnRequests } from "./assetsApi";
+import {
+  getCEOAssetDamageReports,
+  getCEOAssetReturnRequests,
+} from "./assetsApi";
 import { getCEOAttendance } from "./attendanceApi";
 import { listEmployeeArchiveRequests } from "./employeesApi";
 import { getCEOLeaveRequests } from "./leaveApi";
@@ -55,7 +58,11 @@ function readCount(payload: unknown): number {
   if (!payload) return 0;
   if (Array.isArray(payload)) return payload.length;
   if (typeof payload === "object") {
-    const record = payload as { count?: unknown; items?: unknown; results?: unknown };
+    const record = payload as {
+      count?: unknown;
+      items?: unknown;
+      results?: unknown;
+    };
     if (typeof record.count === "number") return record.count;
     if (Array.isArray(record.items)) return record.items.length;
     if (Array.isArray(record.results)) return record.results.length;
@@ -66,7 +73,9 @@ function readCount(payload: unknown): number {
 async function probe(loader: () => Promise<unknown>): Promise<number> {
   const response = (await loader()) as { status?: string; data?: unknown };
   if (response && isApiError(response as never)) {
-    throw new Error((response as { message?: string }).message || "Request failed");
+    throw new Error(
+      (response as { message?: string }).message || "Request failed",
+    );
   }
   return readCount(response?.data);
 }
@@ -76,12 +85,17 @@ export async function getCeoApprovalSummary(): Promise<CeoApprovalSummary> {
     leave: () => getCEOLeaveRequests({ ...PROBE }),
     loan: () => getCEOLoanRequests({ status: "pending_ceo", ...PROBE }),
     attendance: () => getCEOAttendance({ status: "PENDING_CEO", ...PROBE }),
-    assetDamage: () => getCEOAssetDamageReports({ status: "PENDING_CEO", ...PROBE }),
-    assetReturn: () => getCEOAssetReturnRequests({ status: "PENDING_CEO", ...PROBE }),
-    employeeArchive: () => listEmployeeArchiveRequests({ status: "PENDING_CEO", ...PROBE }),
+    assetDamage: () =>
+      getCEOAssetDamageReports({ status: "PENDING_CEO", ...PROBE }),
+    assetReturn: () =>
+      getCEOAssetReturnRequests({ status: "PENDING_CEO", ...PROBE }),
+    employeeArchive: () =>
+      listEmployeeArchiveRequests({ status: "PENDING_CEO", ...PROBE }),
   };
 
-  const settled = await Promise.allSettled(CEO_QUEUE_KEYS.map((key) => probe(loaders[key])));
+  const settled = await Promise.allSettled(
+    CEO_QUEUE_KEYS.map((key) => probe(loaders[key])),
+  );
 
   const queues = {} as Record<CeoQueueKey, CeoQueueCount>;
   let totalPending = 0;

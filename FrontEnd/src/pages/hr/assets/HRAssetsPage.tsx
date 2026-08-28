@@ -1,8 +1,35 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Card, Checkbox, Col, DatePicker, Descriptions, Form, Input, InputNumber, Modal, Popconfirm, Radio, Row, Select, Space, Table, Tabs, Tag, Typography, message } from "antd";
+import {
+  Button,
+  Card,
+  Checkbox,
+  Col,
+  DatePicker,
+  Descriptions,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Popconfirm,
+  Radio,
+  Row,
+  Select,
+  Space,
+  Table,
+  Tabs,
+  Tag,
+  Typography,
+  message,
+} from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { TableRowSelection } from "antd/es/table/interface";
-import { DeleteOutlined, HistoryOutlined, PlusOutlined, PrinterOutlined, ScanOutlined } from "@ant-design/icons";
+import {
+  DeleteOutlined,
+  HistoryOutlined,
+  PlusOutlined,
+  PrinterOutlined,
+  ScanOutlined,
+} from "@ant-design/icons";
 import { Link } from "react-router-dom";
 import dayjs from "dayjs";
 
@@ -32,7 +59,10 @@ import {
 } from "../../../services/api/assetsApi";
 import { triggerBlobDownload } from "../../../services/api/downloads";
 import { isApiError } from "../../../services/api/apiTypes";
-import { listEmployees, type Employee } from "../../../services/api/employeesApi";
+import {
+  listEmployees,
+  type Employee,
+} from "../../../services/api/employeesApi";
 
 import { useI18n } from "../../../i18n/useI18n";
 import AssetReturnApprovalMap from "../../../components/assets/AssetReturnApprovalMap";
@@ -68,14 +98,20 @@ function StatCard({
           ? {
               cursor: "pointer",
               borderColor: active ? "#fa8c16" : undefined,
-              boxShadow: active ? "0 0 0 2px rgba(250, 140, 22, 0.12)" : undefined,
+              boxShadow: active
+                ? "0 0 0 2px rgba(250, 140, 22, 0.12)"
+                : undefined,
             }
           : undefined
       }
       bodyStyle={{ paddingBlock: 20 }}
     >
       <Typography.Text type="secondary">{title}</Typography.Text>
-      <div style={{ fontSize: 28, fontWeight: 700, lineHeight: 1.1, marginTop: 6 }}>{value}</div>
+      <div
+        style={{ fontSize: 28, fontWeight: 700, lineHeight: 1.1, marginTop: 6 }}
+      >
+        {value}
+      </div>
     </Card>
   );
 }
@@ -97,10 +133,18 @@ export default function HRAssetsPage() {
   const [statusFilter, setStatusFilter] = useState<string | undefined>();
   const [ordering, setOrdering] = useState<string | undefined>();
   const [warrantySoonOnly, setWarrantySoonOnly] = useState(false);
-  const [labelStatusFilter, setLabelStatusFilter] = useState<"printed" | "never_printed" | undefined>(undefined);
-  const [activeKpi, setActiveKpi] = useState<"total" | "assigned" | "available" | "damaged" | "lost" | "warrantySoon" | null>(
-    null
-  );
+  const [labelStatusFilter, setLabelStatusFilter] = useState<
+    "printed" | "never_printed" | undefined
+  >(undefined);
+  const [activeKpi, setActiveKpi] = useState<
+    | "total"
+    | "assigned"
+    | "available"
+    | "damaged"
+    | "lost"
+    | "warrantySoon"
+    | null
+  >(null);
   const [summary, setSummary] = useState<AssetDashboardSummary | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
 
@@ -113,7 +157,9 @@ export default function HRAssetsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [requestHistoryLoading, setRequestHistoryLoading] = useState(false);
   const [damageReports, setDamageReports] = useState<AssetDamageReport[]>([]);
-  const [returnRequests, setReturnRequests] = useState<AssetReturnRequest[]>([]);
+  const [returnRequests, setReturnRequests] = useState<AssetReturnRequest[]>(
+    [],
+  );
 
   const [createForm] = Form.useForm();
   const [assignForm] = Form.useForm();
@@ -125,7 +171,8 @@ export default function HRAssetsPage() {
   const [printModalOpen, setPrintModalOpen] = useState(false);
   const [printTargetIds, setPrintTargetIds] = useState<number[]>([]);
   const [printPaperSize, setPrintPaperSize] = useState<LabelPaperSize>("50X30");
-  const [printNameLanguage, setPrintNameLanguage] = useState<LabelNameLanguage>("en");
+  const [printNameLanguage, setPrintNameLanguage] =
+    useState<LabelNameLanguage>("en");
   const [printSubmitting, setPrintSubmitting] = useState(false);
 
   const loadData = async () => {
@@ -179,20 +226,32 @@ export default function HRAssetsPage() {
 
   useEffect(() => {
     void loadData();
-  }, [assetPage, assetPageSize, appliedSearch, typeFilter, statusFilter, ordering, warrantySoonOnly, labelStatusFilter]);
+  }, [
+    assetPage,
+    assetPageSize,
+    appliedSearch,
+    typeFilter,
+    statusFilter,
+    ordering,
+    warrantySoonOnly,
+    labelStatusFilter,
+  ]);
 
   useEffect(() => {
     void loadEmployees();
   }, []);
 
-  const dataSource = useMemo(() => assets.map((item) => ({ ...item, key: item.id })), [assets]);
+  const dataSource = useMemo(
+    () => assets.map((item) => ({ ...item, key: item.id })),
+    [assets],
+  );
   const employeeOptions = useMemo(
     () =>
       employees.map((item) => ({
         label: `${item.full_name || item.full_name_en || item.employee_id} (${item.employee_id})`,
         value: item.id,
       })),
-    [employees]
+    [employees],
   );
 
   const columns: ColumnsType<Asset> = [
@@ -227,7 +286,9 @@ export default function HRAssetsPage() {
             setDetailsModalOpen(true);
           }}
         >
-          {language === "ar" ? (record.name_ar || record.name_en) : record.name_en}
+          {language === "ar"
+            ? record.name_ar || record.name_en
+            : record.name_en}
         </Button>
       ),
     },
@@ -237,18 +298,29 @@ export default function HRAssetsPage() {
       dataIndex: "status",
       key: "status",
       width: 180,
-      render: (status: string) => <Tag color={statusColorMap[status] || "default"}>{status}</Tag>,
+      render: (status: string) => (
+        <Tag color={statusColorMap[status] || "default"}>{status}</Tag>
+      ),
     },
     ...(isHeadOffice
-      ? [{
-          title: t("common.company", "Company"),
-          dataIndex: "company_name",
-          key: "company_name",
-          width: 170,
-          render: (value?: string) => value ? <Tag color="blue">{value}</Tag> : "-",
-        }]
+      ? [
+          {
+            title: t("common.company", "Company"),
+            dataIndex: "company_name",
+            key: "company_name",
+            width: 170,
+            render: (value?: string) =>
+              value ? <Tag color="blue">{value}</Tag> : "-",
+          },
+        ]
       : []),
-    { title: t("assets.vendor"), dataIndex: "vendor", key: "vendor", width: 180, render: (value?: string) => value || "-" },
+    {
+      title: t("assets.vendor"),
+      dataIndex: "vendor",
+      key: "vendor",
+      width: 180,
+      render: (value?: string) => value || "-",
+    },
     {
       title: t("assets.warrantyExpiry"),
       dataIndex: "warranty_expiry",
@@ -276,7 +348,11 @@ export default function HRAssetsPage() {
           <Button
             size="small"
             disabled={isHeadOffice}
-            title={isHeadOffice ? t("organization.headOffice.switchToEditRecords") : undefined}
+            title={
+              isHeadOffice
+                ? t("organization.headOffice.switchToEditRecords")
+                : undefined
+            }
             onClick={(e) => {
               if (isHeadOffice) return;
               e.stopPropagation();
@@ -288,10 +364,15 @@ export default function HRAssetsPage() {
                 type: record.type,
                 vendor: record.vendor || undefined,
                 asset_value: record.asset_value ?? undefined,
-                purchase_date: record.purchase_date ? dayjs(record.purchase_date) : undefined,
-                warranty_expiry: record.warranty_expiry ? dayjs(record.warranty_expiry) : undefined,
+                purchase_date: record.purchase_date
+                  ? dayjs(record.purchase_date)
+                  : undefined,
+                warranty_expiry: record.warranty_expiry
+                  ? dayjs(record.warranty_expiry)
+                  : undefined,
                 serial_number: record.serial_number || undefined,
-                must_return_before_travel: record.must_return_before_travel || false,
+                must_return_before_travel:
+                  record.must_return_before_travel || false,
                 notes: record.notes || undefined,
                 plate_number: record.plate_number || undefined,
                 chassis_number: record.chassis_number || undefined,
@@ -309,13 +390,19 @@ export default function HRAssetsPage() {
               if (record.type === "OTHER") {
                 const details = record.flexible_attributes || {};
                 const rows = Object.entries(details).map(([title, value]) => {
-                  const item = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+                  const item =
+                    value && typeof value === "object"
+                      ? (value as Record<string, unknown>)
+                      : {};
                   const valueType = item.type === "date" ? "date" : "body";
                   return {
                     title,
                     value_type: valueType,
                     body: typeof item.body === "string" ? item.body : undefined,
-                    date: typeof item.date === "string" ? dayjs(item.date) : undefined,
+                    date:
+                      typeof item.date === "string"
+                        ? dayjs(item.date)
+                        : undefined,
                   };
                 });
                 baseValues.other_custom_details = rows;
@@ -340,7 +427,11 @@ export default function HRAssetsPage() {
           <Button
             size="small"
             disabled={isHeadOffice || record.status !== "AVAILABLE"}
-            title={isHeadOffice ? t("organization.headOffice.switchToUseAction") : undefined}
+            title={
+              isHeadOffice
+                ? t("organization.headOffice.switchToUseAction")
+                : undefined
+            }
             onClick={(e) => {
               if (isHeadOffice) return;
               e.stopPropagation();
@@ -354,7 +445,11 @@ export default function HRAssetsPage() {
           <Button
             size="small"
             disabled={isHeadOffice || record.status !== "ASSIGNED"}
-            title={isHeadOffice ? t("organization.headOffice.switchToUseAction") : undefined}
+            title={
+              isHeadOffice
+                ? t("organization.headOffice.switchToUseAction")
+                : undefined
+            }
             onClick={(e) => {
               if (isHeadOffice) return;
               e.stopPropagation();
@@ -377,7 +472,9 @@ export default function HRAssetsPage() {
                 await apiMessage.success(t("hr.assets.deleteSuccess"));
                 await loadData();
               } catch (err: any) {
-                await apiMessage.error(err?.message || t("hr.assets.deleteFailed"));
+                await apiMessage.error(
+                  err?.message || t("hr.assets.deleteFailed"),
+                );
               }
             }}
           >
@@ -385,7 +482,11 @@ export default function HRAssetsPage() {
               danger
               size="small"
               disabled={isHeadOffice}
-              title={isHeadOffice ? t("organization.headOffice.switchToEditRecords") : undefined}
+              title={
+                isHeadOffice
+                  ? t("organization.headOffice.switchToEditRecords")
+                  : undefined
+              }
               onClick={(e) => {
                 e.stopPropagation();
               }}
@@ -460,7 +561,15 @@ export default function HRAssetsPage() {
     setAssetPage(1);
   };
 
-  const applyKpiFilter = (kpi: "total" | "assigned" | "available" | "damaged" | "lost" | "warrantySoon") => {
+  const applyKpiFilter = (
+    kpi:
+      | "total"
+      | "assigned"
+      | "available"
+      | "damaged"
+      | "lost"
+      | "warrantySoon",
+  ) => {
     setAssetPage(1);
     setActiveKpi(kpi);
 
@@ -493,24 +602,45 @@ export default function HRAssetsPage() {
     REJECTED: "red",
   };
 
-  const handleHRReturnRequestAction = async (requestItem: AssetReturnRequest, action: "approve" | "reject") => {
+  const handleHRReturnRequestAction = async (
+    requestItem: AssetReturnRequest,
+    action: "approve" | "reject",
+  ) => {
     if (isHeadOffice) return;
-    try {
-      let comment = "";
-      if (action === "reject") {
-        comment = window.prompt(t("manager.requests.reasonPrompt")) || "";
-        if (!comment.trim()) return;
-      }
+    let comment = "";
+    if (action === "reject") {
+      comment = window.prompt(t("manager.requests.reasonPrompt")) || "";
+      if (!comment.trim()) return;
+    }
 
+    // Optimistic: drop the row from the history table immediately; restore it
+    // if the request fails.
+    setReturnRequests((current) =>
+      current.filter((item) => item.id !== requestItem.id),
+    );
+    try {
       if (action === "approve") {
         const response = await approveHRAssetReturnRequest(requestItem.id);
         if (isApiError(response)) {
+          setReturnRequests((current) =>
+            current.some((item) => item.id === requestItem.id)
+              ? current
+              : [requestItem, ...current],
+          );
           await apiMessage.error(response.message || t("common.error"));
           return;
         }
       } else {
-        const response = await rejectHRAssetReturnRequest(requestItem.id, comment.trim());
+        const response = await rejectHRAssetReturnRequest(
+          requestItem.id,
+          comment.trim(),
+        );
         if (isApiError(response)) {
+          setReturnRequests((current) =>
+            current.some((item) => item.id === requestItem.id)
+              ? current
+              : [requestItem, ...current],
+          );
           await apiMessage.error(response.message || t("common.error"));
           return;
         }
@@ -519,12 +649,14 @@ export default function HRAssetsPage() {
       await apiMessage.success(
         action === "approve"
           ? t("assets.approvalMap.approvedForReturn", "Return request approved")
-          : t("assets.returnRequestRejected", "Return request rejected")
+          : t("assets.returnRequestRejected", "Return request rejected"),
       );
-      if (activeAsset) {
-        await loadAssetRequestHistory(activeAsset.id);
-      }
     } catch (err: any) {
+      setReturnRequests((current) =>
+        current.some((item) => item.id === requestItem.id)
+          ? current
+          : [requestItem, ...current],
+      );
       await apiMessage.error(err?.message || t("common.error"));
     }
   };
@@ -546,7 +678,9 @@ export default function HRAssetsPage() {
       dataIndex: "status",
       key: "status",
       width: 140,
-      render: (value: string) => <Tag color={requestStatusColorMap[value] || "default"}>{value}</Tag>,
+      render: (value: string) => (
+        <Tag color={requestStatusColorMap[value] || "default"}>{value}</Tag>
+      ),
     },
     {
       title: t("hr.assets.reportedAt", "Reported At"),
@@ -556,13 +690,16 @@ export default function HRAssetsPage() {
       render: (value: string) => formatDateTime(value),
     },
     ...(isHeadOffice
-      ? [{
-          title: t("common.company", "Company"),
-          dataIndex: "company_name",
-          key: "company_name",
-          width: 170,
-          render: (value?: string) => value ? <Tag color="blue">{value}</Tag> : "-",
-        }]
+      ? [
+          {
+            title: t("common.company", "Company"),
+            dataIndex: "company_name",
+            key: "company_name",
+            width: 170,
+            render: (value?: string) =>
+              value ? <Tag color="blue">{value}</Tag> : "-",
+          },
+        ]
       : []),
   ];
 
@@ -583,7 +720,9 @@ export default function HRAssetsPage() {
       dataIndex: "status",
       key: "status",
       width: 140,
-      render: (value: string) => <Tag color={requestStatusColorMap[value] || "default"}>{value}</Tag>,
+      render: (value: string) => (
+        <Tag color={requestStatusColorMap[value] || "default"}>{value}</Tag>
+      ),
     },
     {
       title: t("hr.assets.requestedAt", "Requested At"),
@@ -593,13 +732,16 @@ export default function HRAssetsPage() {
       render: (value: string) => formatDateTime(value),
     },
     ...(isHeadOffice
-      ? [{
-          title: t("common.company", "Company"),
-          dataIndex: "company_name",
-          key: "company_name",
-          width: 170,
-          render: (value?: string) => value ? <Tag color="blue">{value}</Tag> : "-",
-        }]
+      ? [
+          {
+            title: t("common.company", "Company"),
+            dataIndex: "company_name",
+            key: "company_name",
+            width: 170,
+            render: (value?: string) =>
+              value ? <Tag color="blue">{value}</Tag> : "-",
+          },
+        ]
       : []),
     {
       title: t("common.actions"),
@@ -613,8 +755,14 @@ export default function HRAssetsPage() {
                 size="small"
                 type="primary"
                 disabled={isHeadOffice}
-                title={isHeadOffice ? t("organization.headOffice.switchToUseAction") : undefined}
-                onClick={() => void handleHRReturnRequestAction(record, "approve")}
+                title={
+                  isHeadOffice
+                    ? t("organization.headOffice.switchToUseAction")
+                    : undefined
+                }
+                onClick={() =>
+                  void handleHRReturnRequestAction(record, "approve")
+                }
               >
                 {t("common.approve")}
               </Button>
@@ -622,8 +770,14 @@ export default function HRAssetsPage() {
                 size="small"
                 danger
                 disabled={isHeadOffice}
-                title={isHeadOffice ? t("organization.headOffice.switchToUseAction") : undefined}
-                onClick={() => void handleHRReturnRequestAction(record, "reject")}
+                title={
+                  isHeadOffice
+                    ? t("organization.headOffice.switchToUseAction")
+                    : undefined
+                }
+                onClick={() =>
+                  void handleHRReturnRequestAction(record, "reject")
+                }
               >
                 {t("common.reject")}
               </Button>
@@ -644,16 +798,28 @@ export default function HRAssetsPage() {
 
       let flexibleAttributes: Record<string, unknown> | undefined;
       if (values.type === "OTHER") {
-        const customRows = Array.isArray(values.other_custom_details) ? values.other_custom_details : [];
+        const customRows = Array.isArray(values.other_custom_details)
+          ? values.other_custom_details
+          : [];
         const normalizedRows = customRows
-          .map((row: { title?: string; value_type?: "body" | "date"; body?: string; date?: any }) => {
-            const title = (row?.title || "").trim();
-            const valueType = row?.value_type === "date" ? "date" : "body";
-            const body = (row?.body || "").trim();
-            const rawDate = row?.date;
-            const dateValue = rawDate && typeof rawDate.format === "function" ? rawDate.format("YYYY-MM-DD") : null;
-            return { title, valueType, body, date: dateValue };
-          })
+          .map(
+            (row: {
+              title?: string;
+              value_type?: "body" | "date";
+              body?: string;
+              date?: any;
+            }) => {
+              const title = (row?.title || "").trim();
+              const valueType = row?.value_type === "date" ? "date" : "body";
+              const body = (row?.body || "").trim();
+              const rawDate = row?.date;
+              const dateValue =
+                rawDate && typeof rawDate.format === "function"
+                  ? rawDate.format("YYYY-MM-DD")
+                  : null;
+              return { title, valueType, body, date: dateValue };
+            },
+          )
           .filter((row: { title: string }) => row.title.length > 0);
 
         if (normalizedRows.length === 0) {
@@ -670,7 +836,12 @@ export default function HRAssetsPage() {
         flexibleAttributes = normalizedRows.reduce(
           (
             acc: Record<string, unknown>,
-            row: { title: string; valueType: "body" | "date"; body: string; date: string | null }
+            row: {
+              title: string;
+              valueType: "body" | "date";
+              body: string;
+              date: string | null;
+            },
           ) => {
             if (row.valueType === "date") {
               acc[row.title] = { type: "date", date: row.date };
@@ -679,22 +850,26 @@ export default function HRAssetsPage() {
             }
             return acc;
           },
-          {}
+          {},
         );
 
-        const hasAnyValidValue = Object.values(flexibleAttributes || {}).some((item) => {
-          if (!item || typeof item !== "object") return false;
-          const details = item as Record<string, unknown>;
-          if (details.type === "date") return Boolean(details.date);
-          if (details.type === "body") return Boolean(details.body);
-          return false;
-        });
+        const hasAnyValidValue = Object.values(flexibleAttributes || {}).some(
+          (item) => {
+            if (!item || typeof item !== "object") return false;
+            const details = item as Record<string, unknown>;
+            if (details.type === "date") return Boolean(details.date);
+            if (details.type === "body") return Boolean(details.body);
+            return false;
+          },
+        );
 
         if (!hasAnyValidValue) {
           createForm.setFields([
             {
               name: "other_custom_details",
-              errors: ["Please provide a body or a date in at least one custom detail."],
+              errors: [
+                "Please provide a body or a date in at least one custom detail.",
+              ],
             },
           ]);
           setSubmitting(false);
@@ -736,11 +911,20 @@ export default function HRAssetsPage() {
       setCreateModalOpen(false);
       createForm.resetFields();
       setEditingAsset(null);
-      await apiMessage.success(editingAsset ? t("hr.assets.updateSuccess") : t("hr.assets.createSuccess"));
+      await apiMessage.success(
+        editingAsset
+          ? t("hr.assets.updateSuccess")
+          : t("hr.assets.createSuccess"),
+      );
       await loadData();
     } catch (err: any) {
       if (!err?.errorFields) {
-        await apiMessage.error(err?.message || (editingAsset ? t("hr.assets.updateFailed") : t("hr.assets.createFailed")));
+        await apiMessage.error(
+          err?.message ||
+            (editingAsset
+              ? t("hr.assets.updateFailed")
+              : t("hr.assets.createFailed")),
+        );
       }
     } finally {
       setSubmitting(false);
@@ -791,7 +975,11 @@ export default function HRAssetsPage() {
       setPrintTargetIds([]);
       setSelectedAssetIds([]);
     } catch (err: any) {
-      await apiMessage.error(err?.response?.data?.message || err?.message || t("hr.assets.printLabelsFailed"));
+      await apiMessage.error(
+        err?.response?.data?.message ||
+          err?.message ||
+          t("hr.assets.printLabelsFailed"),
+      );
     } finally {
       setPrintSubmitting(false);
     }
@@ -820,8 +1008,16 @@ export default function HRAssetsPage() {
     }
   };
 
-  if (loading) return <LoadingState title={t("hr.assets.loadingAssets")} lines={6} />;
-  if (error) return <ErrorState title={t("assets.unableToLoad")} description={error} onRetry={() => void loadData()} />;
+  if (loading)
+    return <LoadingState title={t("hr.assets.loadingAssets")} lines={6} />;
+  if (error)
+    return (
+      <ErrorState
+        title={t("assets.unableToLoad")}
+        description={error}
+        onRetry={() => void loadData()}
+      />
+    );
 
   return (
     <div>
@@ -840,7 +1036,11 @@ export default function HRAssetsPage() {
               setCreateModalOpen(true);
             }}
             disabled={isHeadOffice}
-            title={isHeadOffice ? t("organization.headOffice.switchToCreateRecords") : undefined}
+            title={
+              isHeadOffice
+                ? t("organization.headOffice.switchToCreateRecords")
+                : undefined
+            }
           >
             {t("hr.assets.createAsset")}
           </Button>
@@ -906,7 +1106,10 @@ export default function HRAssetsPage() {
             <Input.Search
               allowClear
               value={searchText}
-              placeholder={t("assets.searchPlaceholder", "Search by asset code, serial number, or name")}
+              placeholder={t(
+                "assets.searchPlaceholder",
+                "Search by asset code, serial number, or name",
+              )}
               onChange={(e) => setSearchText(e.target.value)}
               onSearch={(value) => {
                 setAppliedSearch(value.trim());
@@ -965,7 +1168,10 @@ export default function HRAssetsPage() {
                 setAssetPage(1);
               }}
               options={[
-                { label: t("hr.assets.labelStatusNeverPrinted"), value: "never_printed" },
+                {
+                  label: t("hr.assets.labelStatusNeverPrinted"),
+                  value: "never_printed",
+                },
                 { label: t("hr.assets.labelStatusPrinted"), value: "printed" },
               ]}
             />
@@ -979,26 +1185,39 @@ export default function HRAssetsPage() {
       </Card>
 
       <Card>
-        <Row justify="space-between" align="middle" style={{ marginBottom: 12 }} gutter={[12, 12]}>
+        <Row
+          justify="space-between"
+          align="middle"
+          style={{ marginBottom: 12 }}
+          gutter={[12, 12]}
+        >
           <Col>
             <Space wrap>
               <Button
                 type="primary"
                 icon={<PrinterOutlined />}
                 disabled={selectedAssetIds.length === 0}
-                onClick={() => openPrintModal(selectedAssetIds.map((k) => Number(k)))}
+                onClick={() =>
+                  openPrintModal(selectedAssetIds.map((k) => Number(k)))
+                }
               >
-                {t("hr.assets.printLabelsSelected", { count: selectedAssetIds.length })}
+                {t("hr.assets.printLabelsSelected", {
+                  count: selectedAssetIds.length,
+                })}
               </Button>
             </Space>
           </Col>
           <Col>
             <Space wrap>
               <Link to="/hr/assets/lookup">
-                <Button icon={<ScanOutlined />}>{t("hr.assets.lookup.title")}</Button>
+                <Button icon={<ScanOutlined />}>
+                  {t("hr.assets.lookup.title")}
+                </Button>
               </Link>
               <Link to="/hr/assets/label-jobs">
-                <Button icon={<HistoryOutlined />}>{t("hr.assets.labelJobs.title")}</Button>
+                <Button icon={<HistoryOutlined />}>
+                  {t("hr.assets.labelJobs.title")}
+                </Button>
               </Link>
             </Space>
           </Col>
@@ -1006,11 +1225,13 @@ export default function HRAssetsPage() {
         <Table
           columns={columns}
           dataSource={dataSource}
-          rowSelection={{
-            selectedRowKeys: selectedAssetIds,
-            onChange: (keys) => setSelectedAssetIds(keys),
-            preserveSelectedRowKeys: true,
-          } as TableRowSelection<Asset>}
+          rowSelection={
+            {
+              selectedRowKeys: selectedAssetIds,
+              onChange: (keys) => setSelectedAssetIds(keys),
+              preserveSelectedRowKeys: true,
+            } as TableRowSelection<Asset>
+          }
           pagination={{
             current: assetPage,
             pageSize: assetPageSize,
@@ -1034,7 +1255,11 @@ export default function HRAssetsPage() {
       </Card>
 
       <Modal
-        title={activeAsset ? `${t("assets.details")}: ${activeAsset.asset_code}` : t("assets.details")}
+        title={
+          activeAsset
+            ? `${t("assets.details")}: ${activeAsset.asset_code}`
+            : t("assets.details")
+        }
         open={detailsModalOpen}
         onCancel={() => {
           setDetailsModalOpen(false);
@@ -1061,26 +1286,55 @@ export default function HRAssetsPage() {
         {activeAsset && (
           <Space direction="vertical" size="large" style={{ width: "100%" }}>
             <Descriptions bordered size="small" column={{ xs: 1, sm: 2 }}>
-              <Descriptions.Item label={t("assets.assetCode")}>{activeAsset.asset_code}</Descriptions.Item>
-              <Descriptions.Item label={t("common.name")}>{language === "ar" ? (activeAsset.name_ar || activeAsset.name_en || "-") : (activeAsset.name_en || "-")}</Descriptions.Item>
-              <Descriptions.Item label={t("common.type")}>{activeAsset.type || "-"}</Descriptions.Item>
-              <Descriptions.Item label={t("common.status")}>
-                <Tag color={statusColorMap[activeAsset.status] || "default"}>{activeAsset.status}</Tag>
+              <Descriptions.Item label={t("assets.assetCode")}>
+                {activeAsset.asset_code}
               </Descriptions.Item>
-              <Descriptions.Item label={t("assets.vendor")}>{activeAsset.vendor || "-"}</Descriptions.Item>
-              <Descriptions.Item label={t("hr.assets.assetValue")}>{activeAsset.asset_value ?? "-"}</Descriptions.Item>
-              <Descriptions.Item label={t("assets.serialNumber")}>{activeAsset.serial_number || "-"}</Descriptions.Item>
-              <Descriptions.Item label={t("assets.purchaseDate")}>{activeAsset.purchase_date || "-"}</Descriptions.Item>
-              <Descriptions.Item label={t("assets.warrantyExpiry")}>{activeAsset.warranty_expiry || "-"}</Descriptions.Item>
-              <Descriptions.Item label={t("hr.assets.mustReturnBeforeTravel", "Must return before Business Trip")}>
-                {activeAsset.must_return_before_travel ? t("common.yes") : t("common.no")}
+              <Descriptions.Item label={t("common.name")}>
+                {language === "ar"
+                  ? activeAsset.name_ar || activeAsset.name_en || "-"
+                  : activeAsset.name_en || "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label={t("common.type")}>
+                {activeAsset.type || "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label={t("common.status")}>
+                <Tag color={statusColorMap[activeAsset.status] || "default"}>
+                  {activeAsset.status}
+                </Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label={t("assets.vendor")}>
+                {activeAsset.vendor || "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label={t("hr.assets.assetValue")}>
+                {activeAsset.asset_value ?? "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label={t("assets.serialNumber")}>
+                {activeAsset.serial_number || "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label={t("assets.purchaseDate")}>
+                {activeAsset.purchase_date || "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label={t("assets.warrantyExpiry")}>
+                {activeAsset.warranty_expiry || "-"}
+              </Descriptions.Item>
+              <Descriptions.Item
+                label={t(
+                  "hr.assets.mustReturnBeforeTravel",
+                  "Must return before Business Trip",
+                )}
+              >
+                {activeAsset.must_return_before_travel
+                  ? t("common.yes")
+                  : t("common.no")}
               </Descriptions.Item>
               <Descriptions.Item label={t("hr.assets.lastLabelPrintedAt")}>
                 {activeAsset.last_label_printed_at
                   ? `${formatDateTime(activeAsset.last_label_printed_at)} (×${activeAsset.label_print_count ?? 0})`
                   : t("hr.assets.labelNeverPrinted")}
               </Descriptions.Item>
-              <Descriptions.Item label={t("common.notes")} span={2}>{activeAsset.notes || "-"}</Descriptions.Item>
+              <Descriptions.Item label={t("common.notes")} span={2}>
+                {activeAsset.notes || "-"}
+              </Descriptions.Item>
 
               {activeAsset.active_assignment && (
                 <>
@@ -1094,48 +1348,90 @@ export default function HRAssetsPage() {
                     {formatDateTime(activeAsset.active_assignment.assigned_at)}
                   </Descriptions.Item>
                   <Descriptions.Item label={t("hr.assets.assignmentActive")}>
-                    {activeAsset.active_assignment.is_active ? t("common.yes") : t("common.no")}
+                    {activeAsset.active_assignment.is_active
+                      ? t("common.yes")
+                      : t("common.no")}
                   </Descriptions.Item>
                 </>
               )}
 
               {activeAsset.type === "VEHICLE" && (
                 <>
-                  <Descriptions.Item label={t("assets.plateNumber")}>{activeAsset.plate_number || "-"}</Descriptions.Item>
-                  <Descriptions.Item label={t("assets.chassisNumber")}>{activeAsset.chassis_number || "-"}</Descriptions.Item>
-                  <Descriptions.Item label={t("assets.engineNumber")}>{activeAsset.engine_number || "-"}</Descriptions.Item>
-                  <Descriptions.Item label={t("assets.fuelType")}>{activeAsset.fuel_type || "-"}</Descriptions.Item>
-                  <Descriptions.Item label={t("hr.assets.insuranceExpiry")}>{activeAsset.insurance_expiry || "-"}</Descriptions.Item>
-                  <Descriptions.Item label={t("hr.assets.registrationExpiry")}>{activeAsset.registration_expiry || "-"}</Descriptions.Item>
+                  <Descriptions.Item label={t("assets.plateNumber")}>
+                    {activeAsset.plate_number || "-"}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t("assets.chassisNumber")}>
+                    {activeAsset.chassis_number || "-"}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t("assets.engineNumber")}>
+                    {activeAsset.engine_number || "-"}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t("assets.fuelType")}>
+                    {activeAsset.fuel_type || "-"}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t("hr.assets.insuranceExpiry")}>
+                    {activeAsset.insurance_expiry || "-"}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t("hr.assets.registrationExpiry")}>
+                    {activeAsset.registration_expiry || "-"}
+                  </Descriptions.Item>
                 </>
               )}
 
               {activeAsset.type === "LAPTOP" && (
                 <>
-                  <Descriptions.Item label={t("assets.cpu")}>{activeAsset.cpu || "-"}</Descriptions.Item>
-                  <Descriptions.Item label={t("assets.ram")}>{activeAsset.ram || "-"}</Descriptions.Item>
-                  <Descriptions.Item label={t("assets.storage")}>{activeAsset.storage || "-"}</Descriptions.Item>
-                  <Descriptions.Item label={t("hr.assets.macAddress")}>{activeAsset.mac_address || "-"}</Descriptions.Item>
-                  <Descriptions.Item label={t("assets.os")}>{activeAsset.operating_system || "-"}</Descriptions.Item>
+                  <Descriptions.Item label={t("assets.cpu")}>
+                    {activeAsset.cpu || "-"}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t("assets.ram")}>
+                    {activeAsset.ram || "-"}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t("assets.storage")}>
+                    {activeAsset.storage || "-"}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t("hr.assets.macAddress")}>
+                    {activeAsset.mac_address || "-"}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t("assets.os")}>
+                    {activeAsset.operating_system || "-"}
+                  </Descriptions.Item>
                 </>
               )}
 
               {activeAsset.type === "OTHER" && (
                 <>
-                  {activeAsset.flexible_attributes && Object.keys(activeAsset.flexible_attributes).length > 0 ? (
-                    Object.entries(activeAsset.flexible_attributes).map(([title, value]) => {
-                      const details = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
-                      const valueType = details.type === "date" ? "date" : "body";
-                      const dateValue = typeof details.date === "string" ? details.date : null;
-                      const bodyValue = typeof details.body === "string" ? details.body : null;
-                      return (
-                        <Descriptions.Item key={title} label={title} span={2}>
-                          {valueType === "date" ? (dateValue || "-") : (bodyValue || "-")}
-                        </Descriptions.Item>
-                      );
-                    })
+                  {activeAsset.flexible_attributes &&
+                  Object.keys(activeAsset.flexible_attributes).length > 0 ? (
+                    Object.entries(activeAsset.flexible_attributes).map(
+                      ([title, value]) => {
+                        const details =
+                          value && typeof value === "object"
+                            ? (value as Record<string, unknown>)
+                            : {};
+                        const valueType =
+                          details.type === "date" ? "date" : "body";
+                        const dateValue =
+                          typeof details.date === "string"
+                            ? details.date
+                            : null;
+                        const bodyValue =
+                          typeof details.body === "string"
+                            ? details.body
+                            : null;
+                        return (
+                          <Descriptions.Item key={title} label={title} span={2}>
+                            {valueType === "date"
+                              ? dateValue || "-"
+                              : bodyValue || "-"}
+                          </Descriptions.Item>
+                        );
+                      },
+                    )
                   ) : (
-                    <Descriptions.Item label={t("assets.customDetails")} span={2}>
+                    <Descriptions.Item
+                      label={t("assets.customDetails")}
+                      span={2}
+                    >
                       -
                     </Descriptions.Item>
                   )}
@@ -1157,7 +1453,12 @@ export default function HRAssetsPage() {
                       pagination={false}
                       size="small"
                       scroll={{ x: "max-content" }}
-                      locale={{ emptyText: t("hr.assets.noDamageReports", "No damage reports for this asset.") }}
+                      locale={{
+                        emptyText: t(
+                          "hr.assets.noDamageReports",
+                          "No damage reports for this asset.",
+                        ),
+                      }}
                     />
                   ),
                 },
@@ -1174,9 +1475,16 @@ export default function HRAssetsPage() {
                       size="small"
                       scroll={{ x: "max-content" }}
                       expandable={{
-                        expandedRowRender: (record) => <AssetReturnApprovalMap request={record} t={t} />,
+                        expandedRowRender: (record) => (
+                          <AssetReturnApprovalMap request={record} t={t} />
+                        ),
                       }}
-                      locale={{ emptyText: t("hr.assets.noReturnRequests", "No return requests for this asset.") }}
+                      locale={{
+                        emptyText: t(
+                          "hr.assets.noReturnRequests",
+                          "No return requests for this asset.",
+                        ),
+                      }}
                     />
                   ),
                 },
@@ -1187,7 +1495,11 @@ export default function HRAssetsPage() {
       </Modal>
 
       <Modal
-        title={editingAsset ? `${t("hr.assets.editAsset")}: ${editingAsset.asset_code}` : t("hr.assets.createAsset")}
+        title={
+          editingAsset
+            ? `${t("hr.assets.editAsset")}: ${editingAsset.asset_code}`
+            : t("hr.assets.createAsset")
+        }
         open={createModalOpen}
         onCancel={() => {
           setCreateModalOpen(false);
@@ -1195,7 +1507,9 @@ export default function HRAssetsPage() {
           setEditingAsset(null);
         }}
         onOk={handleCreateAsset}
-        okText={editingAsset ? t("hr.assets.saveChanges") : t("hr.assets.create")}
+        okText={
+          editingAsset ? t("hr.assets.saveChanges") : t("hr.assets.create")
+        }
         confirmLoading={submitting}
         width="min(760px, 96vw)"
         style={{ top: 16 }}
@@ -1203,19 +1517,30 @@ export default function HRAssetsPage() {
         <Form form={createForm} layout="vertical">
           <Row gutter={12}>
             <Col xs={24} md={12}>
-              <Form.Item name="name_en" label={t("common.name")} rules={[{ required: true, message: t("hr.assets.nameReq") }]}>
+              <Form.Item
+                name="name_en"
+                label={t("common.name")}
+                rules={[{ required: true, message: t("hr.assets.nameReq") }]}
+              >
                 <Input placeholder="Name (English)" />
               </Form.Item>
             </Col>
             <Col xs={24} md={12}>
-              <Form.Item name="name_ar" label={t("common.nameAr", "Name (Arabic)")}>
+              <Form.Item
+                name="name_ar"
+                label={t("common.nameAr", "Name (Arabic)")}
+              >
                 <Input placeholder="Name (Arabic)" />
               </Form.Item>
             </Col>
           </Row>
           <Row gutter={12}>
             <Col xs={24} md={12}>
-              <Form.Item name="type" label={t("common.type")} rules={[{ required: true, message: t("hr.assets.typeReq") }]}>
+              <Form.Item
+                name="type"
+                label={t("common.type")}
+                rules={[{ required: true, message: t("hr.assets.typeReq") }]}
+              >
                 <Select
                   options={[
                     { label: t("hr.assets.vehicle"), value: "VEHICLE" },
@@ -1247,7 +1572,10 @@ export default function HRAssetsPage() {
               </Form.Item>
             </Col>
             <Col xs={24} md={12}>
-              <Form.Item name="warranty_expiry" label={t("assets.warrantyExpiry")}>
+              <Form.Item
+                name="warranty_expiry"
+                label={t("assets.warrantyExpiry")}
+              >
                 <DatePicker style={{ width: "100%" }} format="YYYY-MM-DD" />
               </Form.Item>
             </Col>
@@ -1260,31 +1588,60 @@ export default function HRAssetsPage() {
             <Input.TextArea rows={2} />
           </Form.Item>
           <Form.Item name="must_return_before_travel" valuePropName="checked">
-            <Checkbox>{t("hr.assets.mustReturnBeforeTravel", "Must return before Business Trip")}</Checkbox>
+            <Checkbox>
+              {t(
+                "hr.assets.mustReturnBeforeTravel",
+                "Must return before Business Trip",
+              )}
+            </Checkbox>
           </Form.Item>
 
           {selectedType === "VEHICLE" && (
             <>
               <Row gutter={12}>
                 <Col xs={24} md={12}>
-                  <Form.Item name="plate_number" label={t("assets.plateNumber")} rules={[{ required: true, message: t("hr.assets.plateReq") }]}>
+                  <Form.Item
+                    name="plate_number"
+                    label={t("assets.plateNumber")}
+                    rules={[
+                      { required: true, message: t("hr.assets.plateReq") },
+                    ]}
+                  >
                     <Input />
                   </Form.Item>
                 </Col>
                 <Col xs={24} md={12}>
-                  <Form.Item name="chassis_number" label={t("assets.chassisNumber")} rules={[{ required: true, message: t("hr.assets.chassisReq") }]}>
+                  <Form.Item
+                    name="chassis_number"
+                    label={t("assets.chassisNumber")}
+                    rules={[
+                      { required: true, message: t("hr.assets.chassisReq") },
+                    ]}
+                  >
                     <Input />
                   </Form.Item>
                 </Col>
               </Row>
               <Row gutter={12}>
                 <Col xs={24} md={12}>
-                  <Form.Item name="engine_number" label={t("assets.engineNumber")} rules={[{ required: true, message: t("hr.assets.engineReq") }]}>
+                  <Form.Item
+                    name="engine_number"
+                    label={t("assets.engineNumber")}
+                    rules={[
+                      { required: true, message: t("hr.assets.engineReq") },
+                    ]}
+                  >
                     <Input />
                   </Form.Item>
                 </Col>
                 <Col xs={24} md={12}>
-                  <Form.Item name="fuel_type" label={t("assets.fuelType")} rules={[{ required: true, message: t("hr.assets.fuelReq") }]}>
+                  <Form.Item
+                    name="fuel_type"
+                    label={t("assets.fuelType")}
+                    rules={[
+                      { required: true, message: t("hr.assets.fuelReq") },
+                    ]}
+                  >
                     <Input />
                   </Form.Item>
                 </Col>
@@ -1296,29 +1653,51 @@ export default function HRAssetsPage() {
             <>
               <Row gutter={12}>
                 <Col xs={24} md={12}>
-                  <Form.Item name="cpu" label={t("assets.cpu")} rules={[{ required: true, message: t("hr.assets.cpuReq") }]}>
+                  <Form.Item
+                    name="cpu"
+                    label={t("assets.cpu")}
+                    rules={[{ required: true, message: t("hr.assets.cpuReq") }]}
+                  >
                     <Input />
                   </Form.Item>
                 </Col>
                 <Col xs={24} md={12}>
-                  <Form.Item name="ram" label={t("assets.ram")} rules={[{ required: true, message: t("hr.assets.ramReq") }]}>
+                  <Form.Item
+                    name="ram"
+                    label={t("assets.ram")}
+                    rules={[{ required: true, message: t("hr.assets.ramReq") }]}
+                  >
                     <Input />
                   </Form.Item>
                 </Col>
               </Row>
               <Row gutter={12}>
                 <Col xs={24} md={12}>
-                  <Form.Item name="storage" label={t("assets.storage")} rules={[{ required: true, message: t("hr.assets.storageReq") }]}>
+                  <Form.Item
+                    name="storage"
+                    label={t("assets.storage")}
+                    rules={[
+                      { required: true, message: t("hr.assets.storageReq") },
+                    ]}
+                  >
                     <Input />
                   </Form.Item>
                 </Col>
                 <Col xs={24} md={12}>
-                  <Form.Item name="mac_address" label={t("hr.assets.macAddress")} rules={[{ required: true, message: t("hr.assets.macReq") }]}>
+                  <Form.Item
+                    name="mac_address"
+                    label={t("hr.assets.macAddress")}
+                    rules={[{ required: true, message: t("hr.assets.macReq") }]}
+                  >
                     <Input />
                   </Form.Item>
                 </Col>
               </Row>
-              <Form.Item name="operating_system" label={t("assets.os")} rules={[{ required: true, message: t("hr.assets.osReq") }]}>
+              <Form.Item
+                name="operating_system"
+                label={t("assets.os")}
+                rules={[{ required: true, message: t("hr.assets.osReq") }]}
+              >
                 <Input />
               </Form.Item>
             </>
@@ -1330,16 +1709,28 @@ export default function HRAssetsPage() {
                 {(fields, { add, remove }) => (
                   <>
                     {fields.map(({ key, name, ...restField }) => (
-                      <Row gutter={12} key={key} align="middle" style={{ marginBottom: 8 }}>
+                      <Row
+                        gutter={12}
+                        key={key}
+                        align="middle"
+                        style={{ marginBottom: 8 }}
+                      >
                         <Col span={8}>
                           <Form.Item
                             {...restField}
                             name={[name, "title"]}
                             label={name === 0 ? "Title" : ""}
-                            rules={[{ required: true, message: t("hr.assets.titleReq") }]}
+                            rules={[
+                              {
+                                required: true,
+                                message: t("hr.assets.titleReq"),
+                              },
+                            ]}
                             style={{ marginBottom: 0 }}
                           >
-                            <Input placeholder={t("hr.assets.customDetailTitle")} />
+                            <Input
+                              placeholder={t("hr.assets.customDetailTitle")}
+                            />
                           </Form.Item>
                         </Col>
                         <Col span={6}>
@@ -1348,7 +1739,12 @@ export default function HRAssetsPage() {
                             name={[name, "value_type"]}
                             label={name === 0 ? t("hr.assets.fieldType") : ""}
                             initialValue="body"
-                            rules={[{ required: true, message: t("hr.assets.typeReq") }]}
+                            rules={[
+                              {
+                                required: true,
+                                message: t("hr.assets.typeReq"),
+                              },
+                            ]}
                             style={{ marginBottom: 0 }}
                           >
                             <Select
@@ -1362,17 +1758,32 @@ export default function HRAssetsPage() {
                         <Col span={8}>
                           <Form.Item noStyle shouldUpdate>
                             {({ getFieldValue }) => {
-                              const valueType = getFieldValue(["other_custom_details", name, "value_type"]) || "body";
+                              const valueType =
+                                getFieldValue([
+                                  "other_custom_details",
+                                  name,
+                                  "value_type",
+                                ]) || "body";
                               if (valueType === "date") {
                                 return (
                                   <Form.Item
                                     {...restField}
                                     name={[name, "date"]}
-                                    label={name === 0 ? t("hr.assets.date") : ""}
-                                    rules={[{ required: true, message: t("hr.assets.dateReq") }]}
+                                    label={
+                                      name === 0 ? t("hr.assets.date") : ""
+                                    }
+                                    rules={[
+                                      {
+                                        required: true,
+                                        message: t("hr.assets.dateReq"),
+                                      },
+                                    ]}
                                     style={{ marginBottom: 0 }}
                                   >
-                                    <DatePicker style={{ width: "100%" }} format="YYYY-MM-DD" />
+                                    <DatePicker
+                                      style={{ width: "100%" }}
+                                      format="YYYY-MM-DD"
+                                    />
                                   </Form.Item>
                                 );
                               }
@@ -1382,10 +1793,19 @@ export default function HRAssetsPage() {
                                   {...restField}
                                   name={[name, "body"]}
                                   label={name === 0 ? t("hr.assets.body") : ""}
-                                  rules={[{ required: true, message: t("hr.assets.bodyReq") }]}
+                                  rules={[
+                                    {
+                                      required: true,
+                                      message: t("hr.assets.bodyReq"),
+                                    },
+                                  ]}
                                   style={{ marginBottom: 0 }}
                                 >
-                                  <Input placeholder={t("hr.assets.customDetailBody")} />
+                                  <Input
+                                    placeholder={t(
+                                      "hr.assets.customDetailBody",
+                                    )}
+                                  />
                                 </Form.Item>
                               );
                             }}
@@ -1420,7 +1840,11 @@ export default function HRAssetsPage() {
       </Modal>
 
       <Modal
-        title={activeAsset ? `${t("hr.assets.assignAsset")}: ${activeAsset.asset_code}` : t("hr.assets.assignAsset")}
+        title={
+          activeAsset
+            ? `${t("hr.assets.assignAsset")}: ${activeAsset.asset_code}`
+            : t("hr.assets.assignAsset")
+        }
         open={assignModalOpen}
         onCancel={() => {
           setAssignModalOpen(false);
@@ -1435,7 +1859,9 @@ export default function HRAssetsPage() {
           <Form.Item
             name="employee_id"
             label={t("hr.assets.employee")}
-            rules={[{ required: true, message: t("hr.assets.pleaseSelectEmployee") }]}
+            rules={[
+              { required: true, message: t("hr.assets.pleaseSelectEmployee") },
+            ]}
           >
             <Select
               showSearch
@@ -1464,12 +1890,17 @@ export default function HRAssetsPage() {
             {t("hr.assets.printLabelsCount", { count: printTargetIds.length })}
           </Typography.Text>
           <div>
-            <Typography.Text strong style={{ display: "block", marginBottom: 8 }}>
+            <Typography.Text
+              strong
+              style={{ display: "block", marginBottom: 8 }}
+            >
               {t("hr.assets.paperSize")}
             </Typography.Text>
             <Radio.Group
               value={printPaperSize}
-              onChange={(e) => setPrintPaperSize(e.target.value as LabelPaperSize)}
+              onChange={(e) =>
+                setPrintPaperSize(e.target.value as LabelPaperSize)
+              }
             >
               <Space direction="vertical">
                 <Radio value="2X1">{t("hr.assets.paperSize2x1")}</Radio>
@@ -1482,12 +1913,17 @@ export default function HRAssetsPage() {
             </Radio.Group>
           </div>
           <div>
-            <Typography.Text strong style={{ display: "block", marginBottom: 8 }}>
+            <Typography.Text
+              strong
+              style={{ display: "block", marginBottom: 8 }}
+            >
               {t("hr.assets.labelLanguage")}
             </Typography.Text>
             <Radio.Group
               value={printNameLanguage}
-              onChange={(e) => setPrintNameLanguage(e.target.value as LabelNameLanguage)}
+              onChange={(e) =>
+                setPrintNameLanguage(e.target.value as LabelNameLanguage)
+              }
             >
               <Space direction="vertical">
                 <Radio value="en">{t("hr.assets.labelLanguageEn")}</Radio>
@@ -1503,7 +1939,11 @@ export default function HRAssetsPage() {
       </Modal>
 
       <Modal
-        title={activeAsset ? `${t("hr.assets.returnAsset")}: ${activeAsset.asset_code}` : t("hr.assets.returnAsset")}
+        title={
+          activeAsset
+            ? `${t("hr.assets.returnAsset")}: ${activeAsset.asset_code}`
+            : t("hr.assets.returnAsset")
+        }
         open={returnModalOpen}
         onCancel={() => {
           setReturnModalOpen(false);
@@ -1518,11 +1958,14 @@ export default function HRAssetsPage() {
           <Form.Item name="return_note" label={t("hr.assets.returnNote")}>
             <Input.TextArea rows={3} />
           </Form.Item>
-          <Form.Item name="condition_on_return" label={t("hr.assets.conditionOnReturn")}>
+          <Form.Item
+            name="condition_on_return"
+            label={t("hr.assets.conditionOnReturn")}
+          >
             <Input.TextArea rows={2} />
           </Form.Item>
         </Form>
       </Modal>
-    </div >
+    </div>
   );
 }

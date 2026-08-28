@@ -69,7 +69,7 @@ def _upsert_obligation(
 ) -> RequestObligation:
     parent_ct = _parent_content_type(parent)
     target_ct, target_id = _target_identity(target)
-    qs = RequestObligation.objects.filter(
+    qs = RequestObligation.objects.select_for_update().filter(
         parent_content_type=parent_ct,
         parent_object_id=parent.pk,
         type=obligation_type,

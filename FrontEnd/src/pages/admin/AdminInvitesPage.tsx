@@ -1,16 +1,49 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Button, Card, Col, Form, Input, Row, Segmented, Select, Space, Table, Tag, Tooltip, Typography, message } from "antd";
+import {
+  Alert,
+  Button,
+  Card,
+  Col,
+  Form,
+  Input,
+  Row,
+  Segmented,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Tooltip,
+  Typography,
+  message,
+} from "antd";
 import type { ColumnsType, TablePaginationConfig } from "antd/es/table";
-import { MailOutlined, ReloadOutlined, StopOutlined, WhatsAppOutlined } from "@ant-design/icons";
+import {
+  MailOutlined,
+  ReloadOutlined,
+  StopOutlined,
+  WhatsAppOutlined,
+} from "@ant-design/icons";
 import PageHeader from "../../components/ui/PageHeader";
 import LoadingState from "../../components/ui/LoadingState";
 import EmptyState from "../../components/ui/EmptyState";
 import ErrorState from "../../components/ui/ErrorState";
 import Unauthorized403Page from "../Unauthorized403Page";
-import type { InviteDeliveryStatus, InviteDto, Role } from "../../services/api/apiTypes";
+import type {
+  InviteDeliveryStatus,
+  InviteDto,
+  Role,
+} from "../../services/api/apiTypes";
 import { isApiError } from "../../services/api/apiTypes";
-import { createInvite, listInvites, resendInvite, revokeInvite } from "../../services/api/invitesApi";
-import type { CreateInviteRequest, InviteChannel } from "../../services/api/invitesApi";
+import {
+  createInvite,
+  listInvites,
+  resendInvite,
+  revokeInvite,
+} from "../../services/api/invitesApi";
+import type {
+  CreateInviteRequest,
+  InviteChannel,
+} from "../../services/api/invitesApi";
 import PhoneNumberInput from "../../components/ui/PhoneNumberInput";
 import { useI18n } from "../../i18n/useI18n";
 import { useAuthStore } from "../../auth/authStore";
@@ -58,7 +91,8 @@ const roleOptions: Role[] = ["SystemAdmin", "HRManager", "CEO", "Employee"];
 
 function statusTag(status: InviteStatus, t: any) {
   if (status === "sent") return <Tag color="gold">{t("status.pending")}</Tag>;
-  if (status === "accepted") return <Tag color="green">{t("status.accepted")}</Tag>;
+  if (status === "accepted")
+    return <Tag color="green">{t("status.accepted")}</Tag>;
   if (status === "revoked") return <Tag color="red">{t("status.revoked")}</Tag>;
   return <Tag>{t("status.expired")}</Tag>;
 }
@@ -80,7 +114,8 @@ function resolveDelivery(invite: InviteDto): DeliveryInfo {
       providerSubmitted: last.provider_submitted ?? null,
     };
   }
-  const fallback = channel === "whatsapp" ? invite.whatsapp_delivery : invite.email_delivery;
+  const fallback =
+    channel === "whatsapp" ? invite.whatsapp_delivery : invite.email_delivery;
   if (fallback) {
     return {
       sent: fallback.sent,
@@ -89,7 +124,12 @@ function resolveDelivery(invite: InviteDto): DeliveryInfo {
       providerSubmitted: fallback.provider_submitted ?? null,
     };
   }
-  return { sent: null, error: null, deliveryStatus: null, providerSubmitted: null };
+  return {
+    sent: null,
+    error: null,
+    deliveryStatus: null,
+    providerSubmitted: null,
+  };
 }
 
 function toInviteRow(invite: InviteDto): InviteRow {
@@ -158,7 +198,11 @@ function whatsappDeliveryTag(delivery: DeliveryInfo, t: any) {
   // Immediate send failure. For WhatsApp, `sent: false` can also mean "queued but
   // not confirmed delivered", so only fail when it was not accepted at all.
   if (delivery.deliveryStatus === "failed" || delivery.sent === false) {
-    return makeTag("red", t("admin.invites.deliveryFailed"), safeDeliveryError(delivery, t));
+    return makeTag(
+      "red",
+      t("admin.invites.deliveryFailed"),
+      safeDeliveryError(delivery, t),
+    );
   }
 
   // No delivery metadata available (older rows / not yet attempted).
@@ -181,7 +225,11 @@ function deliveryTag(delivery: DeliveryInfo, channel: InviteChannel, t: any) {
     return makeTag("green", t("admin.invites.deliverySent"));
   }
   if (delivery.sent === false) {
-    return makeTag("red", t("admin.invites.deliveryFailed"), safeDeliveryError(delivery, t));
+    return makeTag(
+      "red",
+      t("admin.invites.deliveryFailed"),
+      safeDeliveryError(delivery, t),
+    );
   }
   return <Tag>{t("admin.invites.deliveryPending")}</Tag>;
 }
@@ -189,7 +237,8 @@ function deliveryTag(delivery: DeliveryInfo, channel: InviteChannel, t: any) {
 export default function AdminInvitesPage() {
   const [form] = Form.useForm<SendInviteValues>();
   const { t } = useI18n();
-  const channel = (Form.useWatch("channel", form) as InviteChannel | undefined) ?? "email";
+  const channel =
+    (Form.useWatch("channel", form) as InviteChannel | undefined) ?? "email";
   const isWhatsappChannel = channel === "whatsapp";
 
   const [mode, setMode] = useState<UiMode>("loading");
@@ -208,7 +257,7 @@ export default function AdminInvitesPage() {
 
   const pendingCount = useMemo(
     () => rows.filter((r) => r.status === "sent").length,
-    [rows]
+    [rows],
   );
 
   const loadInvites = useCallback(
@@ -249,7 +298,7 @@ export default function AdminInvitesPage() {
         setMode("error");
       }
     },
-    [search, statusFilter]
+    [search, statusFilter],
   );
 
   useEffect(() => {
@@ -264,12 +313,17 @@ export default function AdminInvitesPage() {
     setError(null);
     setSending(true);
 
-    const channel: InviteChannel = values.channel === "whatsapp" ? "whatsapp" : "email";
+    const channel: InviteChannel =
+      values.channel === "whatsapp" ? "whatsapp" : "email";
 
     try {
       const payload: CreateInviteRequest =
         channel === "whatsapp"
-          ? { channel, phone_number: values.phone_number?.trim(), role: values.role }
+          ? {
+              channel,
+              phone_number: values.phone_number?.trim(),
+              role: values.role,
+            }
           : { channel, email: values.email?.trim(), role: values.role };
       const res = await createInvite(payload);
 
@@ -281,7 +335,10 @@ export default function AdminInvitesPage() {
         return;
       }
 
-      const delivery = channel === "whatsapp" ? res.data.whatsapp_delivery : res.data.email_delivery;
+      const delivery =
+        channel === "whatsapp"
+          ? res.data.whatsapp_delivery
+          : res.data.email_delivery;
       if (
         delivery &&
         !delivery.sent &&
@@ -289,9 +346,10 @@ export default function AdminInvitesPage() {
         delivery.delivery_status !== "queued" &&
         delivery.delivery_status !== "sent"
       ) {
-        const channelLabel = channel === "whatsapp" ? "WhatsApp message" : "email";
+        const channelLabel =
+          channel === "whatsapp" ? "WhatsApp message" : "email";
         message.warning(
-          `Invite created, but ${channelLabel} was not delivered${delivery.error ? `: ${delivery.error}` : "."}`
+          `Invite created, but ${channelLabel} was not delivered${delivery.error ? `: ${delivery.error}` : "."}`,
         );
       } else {
         message.success("Invite sent successfully.");
@@ -322,15 +380,22 @@ export default function AdminInvitesPage() {
 
   async function resendInviteRow(invite: InviteRow) {
     try {
-      message.loading({ content: "Resending invite...", key: `resend-${invite.id}` });
+      message.loading({
+        content: "Resending invite...",
+        key: `resend-${invite.id}`,
+      });
       const res = await resendInvite(invite.id);
 
       if (isApiError(res)) {
-        message.error({ content: res.message || "Failed to resend.", key: `resend-${invite.id}` });
+        message.error({
+          content: res.message || "Failed to resend.",
+          key: `resend-${invite.id}`,
+        });
         return;
       }
 
-      const channelLabel = invite.channel === "whatsapp" ? "WhatsApp message" : "email";
+      const channelLabel =
+        invite.channel === "whatsapp" ? "WhatsApp message" : "email";
       const delivery = resolveDelivery(res.data);
       if (
         delivery.sent === false &&
@@ -343,7 +408,10 @@ export default function AdminInvitesPage() {
           key: `resend-${invite.id}`,
         });
       } else {
-        message.success({ content: "Invite resent.", key: `resend-${invite.id}` });
+        message.success({
+          content: "Invite resent.",
+          key: `resend-${invite.id}`,
+        });
       }
       loadInvites(pagination.current || 1, pagination.pageSize || 8);
     } catch (e: any) {
@@ -351,28 +419,60 @@ export default function AdminInvitesPage() {
         setUnauthorized(true);
         return;
       }
-      message.error({ content: e?.message || "Failed to resend.", key: `resend-${invite.id}` });
+      message.error({
+        content: e?.message || "Failed to resend.",
+        key: `resend-${invite.id}`,
+      });
     }
   }
 
   async function revokeInviteRow(invite: InviteRow) {
+    // Optimistic: flip the row to "revoked" immediately; restore its previous
+    // status if the request fails.
+    const previousStatus = invite.status;
+    setRows((current) =>
+      current.map((row) =>
+        row.id === invite.id ? { ...row, status: "revoked" } : row,
+      ),
+    );
     try {
-      message.loading({ content: "Revoking invite...", key: `revoke-${invite.id}` });
+      message.loading({
+        content: "Revoking invite...",
+        key: `revoke-${invite.id}`,
+      });
       const res = await revokeInvite(invite.id);
 
       if (isApiError(res)) {
-        message.error({ content: res.message || "Failed to revoke.", key: `revoke-${invite.id}` });
+        setRows((current) =>
+          current.map((row) =>
+            row.id === invite.id ? { ...row, status: previousStatus } : row,
+          ),
+        );
+        message.error({
+          content: res.message || "Failed to revoke.",
+          key: `revoke-${invite.id}`,
+        });
         return;
       }
 
-      message.success({ content: "Invite revoked.", key: `revoke-${invite.id}` });
-      loadInvites(pagination.current || 1, pagination.pageSize || 8);
+      message.success({
+        content: "Invite revoked.",
+        key: `revoke-${invite.id}`,
+      });
     } catch (e: any) {
+      setRows((current) =>
+        current.map((row) =>
+          row.id === invite.id ? { ...row, status: previousStatus } : row,
+        ),
+      );
       if (e?.response?.status === 403) {
         setUnauthorized(true);
         return;
       }
-      message.error({ content: e?.message || "Failed to revoke.", key: `revoke-${invite.id}` });
+      message.error({
+        content: e?.message || "Failed to revoke.",
+        key: `revoke-${invite.id}`,
+      });
     }
   }
 
@@ -394,7 +494,9 @@ export default function AdminInvitesPage() {
               icon={isWhatsapp ? <WhatsAppOutlined /> : <MailOutlined />}
               color={isWhatsapp ? "green" : "blue"}
             >
-              {isWhatsapp ? t("admin.invites.channelWhatsapp") : t("common.email")}
+              {isWhatsapp
+                ? t("admin.invites.channelWhatsapp")
+                : t("common.email")}
             </Tag>
             <div>
               {primary ? (
@@ -444,16 +546,30 @@ export default function AdminInvitesPage() {
       key: "delivery",
       render: (_, record) => deliveryTag(record.delivery, record.channel, t),
     },
-    { title: t("admin.invites.invited"), dataIndex: "invitedAt", key: "invitedAt" },
-    { title: t("admin.invites.expires"), dataIndex: "expiresAt", key: "expiresAt" },
-    { title: t("admin.invites.invitedBy"), dataIndex: "invitedBy", key: "invitedBy" },
+    {
+      title: t("admin.invites.invited"),
+      dataIndex: "invitedAt",
+      key: "invitedAt",
+    },
+    {
+      title: t("admin.invites.expires"),
+      dataIndex: "expiresAt",
+      key: "expiresAt",
+    },
+    {
+      title: t("admin.invites.invitedBy"),
+      dataIndex: "invitedBy",
+      key: "invitedBy",
+    },
     {
       title: t("common.actions"),
       key: "actions",
       width: 220,
       render: (_, record) => {
         const isWhatsapp = record.channel === "whatsapp";
-        const resendLabel = isWhatsapp ? t("admin.invites.resendWhatsapp") : t("admin.invites.resendEmail");
+        const resendLabel = isWhatsapp
+          ? t("admin.invites.resendWhatsapp")
+          : t("admin.invites.resendEmail");
         return (
           <Space>
             <Tooltip title={resendLabel}>
@@ -481,7 +597,16 @@ export default function AdminInvitesPage() {
 
   if (unauthorized) return <Unauthorized403Page />;
   if (mode === "loading") return <LoadingState title={t("loading.generic")} />;
-  if (mode === "error") return <ErrorState title={t("admin.invites.title")} description={error || t("common.tryAgain")} onRetry={() => loadInvites(pagination.current || 1, pagination.pageSize || 8)} />;
+  if (mode === "error")
+    return (
+      <ErrorState
+        title={t("admin.invites.title")}
+        description={error || t("common.tryAgain")}
+        onRetry={() =>
+          loadInvites(pagination.current || 1, pagination.pageSize || 8)
+        }
+      />
+    );
 
   return (
     <div>
@@ -490,15 +615,38 @@ export default function AdminInvitesPage() {
         subtitle={`${t("admin.invites.pendingInvitations")}: ${pendingCount}`}
         actions={
           <Space>
-            <Button icon={<ReloadOutlined />} onClick={() => loadInvites(1, pagination.pageSize || 8)}>{t("common.refresh")}</Button>
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={() => loadInvites(1, pagination.pageSize || 8)}
+            >
+              {t("common.refresh")}
+            </Button>
           </Space>
         }
       />
 
-      <Card style={{ borderRadius: 16, marginBottom: 16 }} bodyStyle={{ padding: 24 }}>
-        <Typography.Title level={5} style={{ marginTop: 0 }}>{t("admin.invites.sendInvitation")}</Typography.Title>
-        {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 12 }} />}
-        <Form<SendInviteValues> form={form} layout="vertical" requiredMark={false} onFinish={sendInvite} initialValues={{ role: "Employee", channel: "email" }}>
+      <Card
+        style={{ borderRadius: 16, marginBottom: 16 }}
+        bodyStyle={{ padding: 24 }}
+      >
+        <Typography.Title level={5} style={{ marginTop: 0 }}>
+          {t("admin.invites.sendInvitation")}
+        </Typography.Title>
+        {error && (
+          <Alert
+            type="error"
+            showIcon
+            message={error}
+            style={{ marginBottom: 12 }}
+          />
+        )}
+        <Form<SendInviteValues>
+          form={form}
+          layout="vertical"
+          requiredMark={false}
+          onFinish={sendInvite}
+          initialValues={{ role: "Employee", channel: "email" }}
+        >
           <Row gutter={16} align="bottom">
             <Col xs={24} md={5}>
               <Form.Item label={t("admin.invites.channel")} name="channel">
@@ -506,8 +654,16 @@ export default function AdminInvitesPage() {
                   size="large"
                   block
                   options={[
-                    { label: t("common.email"), value: "email", icon: <MailOutlined /> },
-                    { label: t("admin.invites.channelWhatsapp"), value: "whatsapp", icon: <WhatsAppOutlined /> },
+                    {
+                      label: t("common.email"),
+                      value: "email",
+                      icon: <MailOutlined />,
+                    },
+                    {
+                      label: t("admin.invites.channelWhatsapp"),
+                      value: "whatsapp",
+                      icon: <WhatsAppOutlined />,
+                    },
                   ]}
                 />
               </Form.Item>
@@ -520,8 +676,14 @@ export default function AdminInvitesPage() {
                   label={t("admin.invites.phoneNumber")}
                   name="phone_number"
                   rules={[
-                    { required: true, message: t("admin.invites.phoneRequired") },
-                    { pattern: /^\+[1-9]\d{7,14}$/, message: t("admin.invites.phoneInvalid") },
+                    {
+                      required: true,
+                      message: t("admin.invites.phoneRequired"),
+                    },
+                    {
+                      pattern: /^\+[1-9]\d{7,14}$/,
+                      message: t("admin.invites.phoneInvalid"),
+                    },
                   ]}
                 >
                   <PhoneNumberInput size="large" />
@@ -535,7 +697,11 @@ export default function AdminInvitesPage() {
                     { type: "email", message: t("auth.emailInvalid") },
                   ]}
                 >
-                  <Input size="large" placeholder="name@company.com" autoComplete="email" />
+                  <Input
+                    size="large"
+                    placeholder="name@company.com"
+                    autoComplete="email"
+                  />
                 </Form.Item>
               )}
             </Col>
@@ -547,15 +713,25 @@ export default function AdminInvitesPage() {
               >
                 <Select
                   size="large"
-                  options={roleOptions.filter(
-                    (r) => r !== "SystemAdmin" || useAuthStore.getState().user?.role === "SystemAdmin"
-                  ).map((r) => ({ label: t(`role.${r}`, r), value: r }))}
+                  options={roleOptions
+                    .filter(
+                      (r) =>
+                        r !== "SystemAdmin" ||
+                        useAuthStore.getState().user?.role === "SystemAdmin",
+                    )
+                    .map((r) => ({ label: t(`role.${r}`, r), value: r }))}
                 />
               </Form.Item>
             </Col>
             <Col xs={24} md={5}>
               <Form.Item>
-                <Button type="primary" htmlType="submit" size="large" loading={sending} block>
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  size="large"
+                  loading={sending}
+                  block
+                >
                   {t("admin.invites.sendInvite")}
                 </Button>
               </Form.Item>
@@ -565,25 +741,44 @@ export default function AdminInvitesPage() {
       </Card>
 
       <Card style={{ borderRadius: 16 }}>
-        <Typography.Title level={5} style={{ marginTop: 0 }}>{t("admin.invites.invitationHistory")}</Typography.Title>
-        <div className="responsive-filter-bar" style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-          <Input allowClear maxLength={MAX_SEARCH_LENGTH} placeholder={t("admin.invites.searchByEmailOrPhone")} style={{ flex: "1 1 200px", minWidth: 150 }} value={search} onChange={(e) => setSearch(e.target.value)} />
-          <Select value={statusFilter} onChange={setStatusFilter} style={{ flex: "0 1 180px", minWidth: 120 }} options={[
-            { label: t("common.filter"), value: "All" },
-            { label: t("status.pending"), value: "sent" },
-            { label: t("status.accepted"), value: "accepted" },
-            { label: t("status.revoked"), value: "revoked" },
-            { label: t("status.expired"), value: "expired" },
-          ]} />
+        <Typography.Title level={5} style={{ marginTop: 0 }}>
+          {t("admin.invites.invitationHistory")}
+        </Typography.Title>
+        <div
+          className="responsive-filter-bar"
+          style={{ display: "flex", flexWrap: "wrap", gap: 12 }}
+        >
+          <Input
+            allowClear
+            maxLength={MAX_SEARCH_LENGTH}
+            placeholder={t("admin.invites.searchByEmailOrPhone")}
+            style={{ flex: "1 1 200px", minWidth: 150 }}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <Select
+            value={statusFilter}
+            onChange={setStatusFilter}
+            style={{ flex: "0 1 180px", minWidth: 120 }}
+            options={[
+              { label: t("common.filter"), value: "All" },
+              { label: t("status.pending"), value: "sent" },
+              { label: t("status.accepted"), value: "accepted" },
+              { label: t("status.revoked"), value: "revoked" },
+              { label: t("status.expired"), value: "expired" },
+            ]}
+          />
         </div>
 
         <div style={{ marginTop: 16 }}>
-          {(mode === "empty" || (mode === "ok" && rows.length === 0)) ? (
+          {mode === "empty" || (mode === "ok" && rows.length === 0) ? (
             <EmptyState
               title={t("common.noData")}
               description={t("admin.invites.title")}
               actionText={t("admin.invites.sendInvitation")}
-              onAction={() => { window.scrollTo({ top: 0, behavior: "smooth" }); }}
+              onAction={() => {
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
             />
           ) : (
             <Table<InviteRow>

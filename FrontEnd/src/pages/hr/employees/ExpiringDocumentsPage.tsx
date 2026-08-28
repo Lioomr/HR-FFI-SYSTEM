@@ -1,7 +1,22 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Alert, Button, Card, InputNumber, message, Space, Table, Tag, Typography } from "antd";
-import { BellOutlined, MailOutlined, MessageOutlined, ReloadOutlined } from "@ant-design/icons";
+import {
+  Alert,
+  Button,
+  Card,
+  InputNumber,
+  message,
+  Space,
+  Table,
+  Tag,
+  Typography,
+} from "antd";
+import {
+  BellOutlined,
+  MailOutlined,
+  MessageOutlined,
+  ReloadOutlined,
+} from "@ant-design/icons";
 import {
   getExpiringEmployees,
   notifyExpiringEmployee,
@@ -9,10 +24,11 @@ import {
   type ExpiringEmployee,
 } from "../../../services/api/employeesApi";
 import { useI18n } from "../../../i18n/useI18n";
+import { STORAGE_KEYS } from "../../../utils/storageKeys";
 
 const { Title, Text } = Typography;
 const DEFAULT_WINDOW_DAYS = 30;
-const EXPIRING_DOCS_DAYS_STORAGE_KEY = "hr-expiring-documents-window-days";
+const EXPIRING_DOCS_DAYS_STORAGE_KEY = STORAGE_KEYS.expiringDocumentsWindowDays;
 
 function getStoredWindowDays(): number {
   if (typeof window === "undefined") {
@@ -40,7 +56,13 @@ function getDocumentTypeKey(document: ExpiringDocumentItem): string | null {
   return document.doc_type || null;
 }
 
-function ExpiryDocumentTag({ document, employeeId }: { document: ExpiringDocumentItem; employeeId: number }) {
+function ExpiryDocumentTag({
+  document,
+  employeeId,
+}: {
+  document: ExpiringDocumentItem;
+  employeeId: number;
+}) {
   const { t } = useI18n();
   const documentType = getDocumentTypeKey(document);
   const documentLabel = documentType
@@ -60,9 +82,16 @@ function ExpiryDocumentTag({ document, employeeId }: { document: ExpiringDocumen
   return (
     <Tag
       data-testid={`expiry-document-${employeeId}-${documentType ?? "unknown"}`}
-      color={!hasExpiryDate ? "default" : isExpired || document.days_left <= 7 ? "red" : "orange"}
+      color={
+        !hasExpiryDate
+          ? "default"
+          : isExpired || document.days_left <= 7
+            ? "red"
+            : "orange"
+      }
     >
-      {documentLabel}: {document.expiry_date || t("hr.expiringDocs.missingExpiryDate")}
+      {documentLabel}:{" "}
+      {document.expiry_date || t("hr.expiringDocs.missingExpiryDate")}
       {hasExpiryDate ? ` · ${daysLabel}` : ""} · {statusLabel}
     </Tag>
   );
@@ -93,15 +122,29 @@ export default function ExpiringDocumentsPage() {
     window.localStorage.setItem(EXPIRING_DOCS_DAYS_STORAGE_KEY, String(value));
   };
 
-  const loadData = async (nextPage = page, nextPageSize = pageSize, nextDays = days) => {
+  const loadData = async (
+    nextPage = page,
+    nextPageSize = pageSize,
+    nextDays = days,
+  ) => {
     setLoading(true);
     try {
-      const response = await getExpiringEmployees(nextDays || DEFAULT_WINDOW_DAYS, nextPage, nextPageSize);
+      const response = await getExpiringEmployees(
+        nextDays || DEFAULT_WINDOW_DAYS,
+        nextPage,
+        nextPageSize,
+      );
       if (response.status === "success") {
         const responseItems = response.data.items || [];
         const visibleItems = responseItems.filter((item) => !item.is_archived);
         setItems(visibleItems);
-        setTotal(Math.max(0, (response.data.count || 0) - (responseItems.length - visibleItems.length)));
+        setTotal(
+          Math.max(
+            0,
+            (response.data.count || 0) -
+              (responseItems.length - visibleItems.length),
+          ),
+        );
       } else {
         message.error(response.message || t("hr.expiringDocs.errorLoad"));
       }
@@ -117,10 +160,16 @@ export default function ExpiringDocumentsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const notifyOne = async (employeeId: number, channels: Array<"email" | "whatsapp" | "announcement">) => {
+  const notifyOne = async (
+    employeeId: number,
+    channels: Array<"email" | "whatsapp" | "announcement">,
+  ) => {
     setNotifyingId(employeeId);
     try {
-      const response = await notifyExpiringEmployee(employeeId, { channels, days: days || DEFAULT_WINDOW_DAYS });
+      const response = await notifyExpiringEmployee(employeeId, {
+        channels,
+        days: days || DEFAULT_WINDOW_DAYS,
+      });
       if (response.status === "success") {
         const delivery = response.data.delivery || {};
         const sentChannels = Object.entries(delivery)
@@ -133,14 +182,24 @@ export default function ExpiringDocumentsPage() {
             return t("hr.expiringDocs.notifyAnnouncement");
           });
           const annId = delivery?.announcement?.announcement_id;
-          const extra = annId ? ` (${t("hr.expiringDocs.announcementRef", { id: annId })})` : "";
-          message.success(t("hr.expiringDocs.successNotify", { channels: displayChannels.join(", ") }) + extra);
+          const extra = annId
+            ? ` (${t("hr.expiringDocs.announcementRef", { id: annId })})`
+            : "";
+          message.success(
+            t("hr.expiringDocs.successNotify", {
+              channels: displayChannels.join(", "),
+            }) + extra,
+          );
         } else {
           const reasons = Object.entries(delivery)
             .map(([k, v]: any) => (v?.reason ? `${k}: ${v.reason}` : null))
             .filter(Boolean)
             .join(" | ");
-          message.warning(reasons ? `${t("hr.expiringDocs.notDelivered")} ${reasons}` : t("hr.expiringDocs.noDeliveredChannels"));
+          message.warning(
+            reasons
+              ? `${t("hr.expiringDocs.notDelivered")} ${reasons}`
+              : t("hr.expiringDocs.noDeliveredChannels"),
+          );
         }
       } else {
         message.error(response.message || t("hr.expiringDocs.errorNotify"));
@@ -159,7 +218,15 @@ export default function ExpiringDocumentsPage() {
       render: (_: unknown, record: ExpiringEmployee) => (
         <div>
           <div style={{ fontWeight: 600 }}>
-            <Link to={`/hr/employees/${record.id}`} style={{ color: "var(--ant-color-primary)", textDecoration: "none" }}>{record.full_name || record.employee_id}</Link>
+            <Link
+              to={`/hr/employees/${record.id}`}
+              style={{
+                color: "var(--ant-color-primary)",
+                textDecoration: "none",
+              }}
+            >
+              {record.full_name || record.employee_id}
+            </Link>
           </div>
           <Text type="secondary" style={{ fontSize: 12 }}>
             {record.employee_id}
@@ -172,7 +239,11 @@ export default function ExpiringDocumentsPage() {
       key: "contact",
       render: (_: unknown, record: ExpiringEmployee) => (
         <div>
-          <div>{record.linked_email || <Text type="secondary">{t("hr.expiringDocs.noEmail")}</Text>}</div>
+          <div>
+            {record.linked_email || (
+              <Text type="secondary">{t("hr.expiringDocs.noEmail")}</Text>
+            )}
+          </div>
           <Text type="secondary" style={{ fontSize: 12 }}>
             {record.mobile || t("hr.expiringDocs.noMobile")}
           </Text>
@@ -183,7 +254,10 @@ export default function ExpiringDocumentsPage() {
       title: t("hr.expiringDocs.colExpiringDocs"),
       dataIndex: "documents",
       key: "documents",
-      render: (docs: ExpiringEmployee["documents"], record: ExpiringEmployee) => (
+      render: (
+        docs: ExpiringEmployee["documents"],
+        record: ExpiringEmployee,
+      ) => (
         <Space direction="vertical" size={4}>
           {docs.map((doc, index) => (
             <ExpiryDocumentTag
@@ -231,7 +305,9 @@ export default function ExpiringDocumentsPage() {
             type="primary"
             size="small"
             loading={notifyingId === record.id}
-            onClick={() => notifyOne(record.id, ["email", "whatsapp", "announcement"])}
+            onClick={() =>
+              notifyOne(record.id, ["email", "whatsapp", "announcement"])
+            }
           >
             {t("hr.expiringDocs.notifyAll")}
           </Button>
@@ -242,7 +318,14 @@ export default function ExpiringDocumentsPage() {
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 16,
+        }}
+      >
         <Title level={2} style={{ margin: 0 }}>
           {t("hr.expiringDocs.title")}
         </Title>

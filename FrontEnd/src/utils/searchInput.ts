@@ -62,6 +62,8 @@ export function sanitizeSearchTerm(value: string | null | undefined): string {
  * Same normalization, but returns `undefined` for an empty result so callers can
  * omit the parameter entirely rather than sending `search=`.
  */
-export function toSearchParam(value: string | null | undefined): string | undefined {
+export function toSearchParam(
+  value: string | null | undefined,
+): string | undefined {
   return sanitizeSearchTerm(value) || undefined;
 }

@@ -17,9 +17,12 @@ import * as employeesApi from "../../../services/api/employeesApi";
 import type { ExpiringEmployee } from "../../../services/api/employeesApi";
 import { useI18nStore } from "../../../i18n/i18nStore";
 
-const getExpiringEmployees = employeesApi.getExpiringEmployees as unknown as ReturnType<typeof vi.fn>;
+const getExpiringEmployees =
+  employeesApi.getExpiringEmployees as unknown as ReturnType<typeof vi.fn>;
 
-function makeEntry(overrides: Partial<ExpiringEmployee> = {}): ExpiringEmployee {
+function makeEntry(
+  overrides: Partial<ExpiringEmployee> = {},
+): ExpiringEmployee {
   return {
     id: 41,
     employee_id: "FFI-0041",
@@ -42,7 +45,13 @@ function makeEntry(overrides: Partial<ExpiringEmployee> = {}): ExpiringEmployee 
 function expiriesResponse(items: ExpiringEmployee[]) {
   return {
     status: "success" as const,
-    data: { items, page: 1, page_size: 25, count: items.length, total_pages: 1 },
+    data: {
+      items,
+      page: 1,
+      page_size: 25,
+      count: items.length,
+      total_pages: 1,
+    },
   };
 }
 
@@ -129,7 +138,12 @@ describe("ExpiringDocumentsPage work license", () => {
       expiriesResponse([
         makeEntry({
           documents: [
-            { doc_type: "passport", label: "Passport", expiry_date: "2026-08-20", days_left: 10 },
+            {
+              doc_type: "passport",
+              label: "Passport",
+              expiry_date: "2026-08-20",
+              days_left: 10,
+            },
             {
               document_type: "WORK_LICENSE",
               label: "Work License",
@@ -143,8 +157,12 @@ describe("ExpiringDocumentsPage work license", () => {
 
     render(<ExpiringDocumentsPage />);
 
-    expect(await screen.findByTestId("expiry-document-41-passport")).toHaveTextContent("Passport");
-    expect(screen.getByTestId("expiry-document-41-work_license")).toHaveTextContent("Work License");
+    expect(
+      await screen.findByTestId("expiry-document-41-passport"),
+    ).toHaveTextContent("Passport");
+    expect(
+      screen.getByTestId("expiry-document-41-work_license"),
+    ).toHaveTextContent("Work License");
   });
 
   it("falls back to the server label instead of mislabelling an unknown document", async () => {
@@ -152,7 +170,11 @@ describe("ExpiringDocumentsPage work license", () => {
       expiriesResponse([
         makeEntry({
           documents: [
-            { label: "Residency Permit", expiry_date: "2026-08-25", days_left: 15 },
+            {
+              label: "Residency Permit",
+              expiry_date: "2026-08-25",
+              days_left: 15,
+            },
           ],
         }),
       ]),
@@ -187,7 +209,9 @@ describe("ExpiringDocumentsPage work license", () => {
         "تُرسل تذكيرات واتساب تلقائياً إلى الموارد البشرية فقط عندما يكون موعد الانتهاء خلال 10 أيام.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByTestId("expiry-document-41-work_license")).toHaveTextContent("رخصة العمل");
+    expect(
+      screen.getByTestId("expiry-document-41-work_license"),
+    ).toHaveTextContent("رخصة العمل");
   });
 });
 
@@ -197,7 +221,12 @@ describe("ExpiringDocumentsPage archived employees", () => {
     getExpiringEmployees.mockResolvedValue(
       expiriesResponse([
         makeEntry(),
-        makeEntry({ id: 99, employee_id: "FFI-0099", full_name: "Archived Person", is_archived: true }),
+        makeEntry({
+          id: 99,
+          employee_id: "FFI-0099",
+          full_name: "Archived Person",
+          is_archived: true,
+        }),
       ]),
     );
 
@@ -205,14 +234,20 @@ describe("ExpiringDocumentsPage archived employees", () => {
     await screen.findByText("Yousef Nasser");
 
     expect(screen.queryByText("Archived Person")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("expiry-document-99-work_license")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("expiry-document-99-work_license"),
+    ).not.toBeInTheDocument();
   });
 
   it("renders every employee when the backend already excluded archived ones", async () => {
     getExpiringEmployees.mockResolvedValue(
       expiriesResponse([
         makeEntry(),
-        makeEntry({ id: 42, employee_id: "FFI-0042", full_name: "Layla Hassan" }),
+        makeEntry({
+          id: 42,
+          employee_id: "FFI-0042",
+          full_name: "Layla Hassan",
+        }),
       ]),
     );
 

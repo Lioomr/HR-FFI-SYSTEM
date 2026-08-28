@@ -1,8 +1,20 @@
 import { create } from "zustand";
-import { clearToken, getToken, setToken, getStoredUser, setStoredUser } from "../services/api/tokenStorage";
+import {
+  clearToken,
+  getToken,
+  setToken,
+  getStoredUser,
+  setStoredUser,
+} from "../services/api/tokenStorage";
 import type { OrganizationNodeDto } from "../services/api/apiTypes";
 
-export type Role = "SystemAdmin" | "HRManager" | "Manager" | "Employee" | "CEO" | "CFO";
+export type Role =
+  | "SystemAdmin"
+  | "HRManager"
+  | "Manager"
+  | "Employee"
+  | "CEO"
+  | "CFO";
 
 export type AuthUser = {
   id: string;
@@ -25,6 +37,31 @@ type AuthState = {
   hydrateFromStorage: () => void;
 };
 
+export function resolveAuthorizedActiveOrganizationId(
+  user: Pick<
+    AuthUser,
+    | "accessible_organizations"
+    | "active_organization_id"
+    | "default_organization_id"
+  >,
+): string | number | null {
+  const organizations = user.accessible_organizations ?? [];
+  const isAccessible = (organizationId: string | number | null | undefined) =>
+    organizationId != null &&
+    organizations.some(
+      (organization) => String(organization.id) === String(organizationId),
+    );
+
+  if (isAccessible(user.active_organization_id))
+    return user.active_organization_id ?? null;
+  if (isAccessible(user.default_organization_id))
+    return user.default_organization_id ?? null;
+  const company = organizations.find(
+    (organization) => organization.node_type === "company",
+  );
+  return company?.id ?? organizations[0]?.id ?? null;
+}
+
 export const useAuthStore = create<AuthState>((set) => ({
   isAuthenticated: false,
   user: null,
@@ -33,7 +70,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     if (token) setToken(token);
     const normalizedUser = {
       ...user,
-      active_organization_id: user.active_organization_id ?? user.default_organization_id ?? null,
+      active_organization_id: resolveAuthorizedActiveOrganizationId(user),
     };
     setStoredUser(normalizedUser);
     set({ isAuthenticated: true, user: normalizedUser });
@@ -47,7 +84,18 @@ export const useAuthStore = create<AuthState>((set) => ({
   setActiveOrganization: (organizationId) =>
     set((state) => {
       if (!state.user) return state;
-      const user = { ...state.user, active_organization_id: organizationId };
+      const requestedUser = {
+        ...state.user,
+        active_organization_id: organizationId,
+      };
+      const authorizedOrganizationId =
+        resolveAuthorizedActiveOrganizationId(requestedUser);
+      if (String(authorizedOrganizationId) !== String(organizationId))
+        return state;
+      const user = {
+        ...state.user,
+        active_organization_id: authorizedOrganizationId,
+      };
       setStoredUser(user);
       return { user };
     }),
@@ -64,10 +112,20 @@ export const useAuthStore = create<AuthState>((set) => ({
           id: storedUser.id,
           email: storedUser.email,
           role: storedUser.role as Role,
-          accessible_organizations: (storedUser.accessible_organizations as OrganizationNodeDto[] | undefined) ?? [],
+          accessible_organizations:
+            (storedUser.accessible_organizations as
+              | OrganizationNodeDto[]
+              | undefined) ?? [],
           default_organization_id: storedUser.default_organization_id ?? null,
           has_all_company_access: storedUser.has_all_company_access ?? false,
-          active_organization_id: storedUser.active_organization_id ?? storedUser.default_organization_id ?? null,
+          active_organization_id: resolveAuthorizedActiveOrganizationId({
+            accessible_organizations:
+              (storedUser.accessible_organizations as
+                | OrganizationNodeDto[]
+                | undefined) ?? [],
+            active_organization_id: storedUser.active_organization_id,
+            default_organization_id: storedUser.default_organization_id,
+          }),
         },
       });
     } else if (token) {

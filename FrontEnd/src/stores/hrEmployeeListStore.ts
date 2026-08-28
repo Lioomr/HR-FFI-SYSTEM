@@ -24,17 +24,21 @@ interface HrEmployeeListState {
   // Search and filters
   search: string;
   filters: EmployeeListFilters;
-  
+
   // Pagination
   page: number;
   pageSize: number;
-  
+
   // Actions
   setSearch: (search: string) => void;
   setFilters: (filters: Partial<EmployeeListFilters>) => void;
   setPage: (page: number) => void;
   setPageSize: (pageSize: number) => void;
-  hydrate: (payload: Partial<Pick<HrEmployeeListState, "search" | "filters" | "page" | "pageSize">>) => void;
+  hydrate: (
+    payload: Partial<
+      Pick<HrEmployeeListState, "search" | "filters" | "page" | "pageSize">
+    >,
+  ) => void;
   reset: () => void;
 }
 
@@ -56,17 +60,17 @@ export const useHrEmployeeListStore = create<HrEmployeeListState>()(
   persist(
     (set) => ({
       ...initialState,
-      
+
       setSearch: (search: string) => set({ search, page: 1 }),
-      
+
       setFilters: (newFilters: Partial<EmployeeListFilters>) =>
         set((state) => ({
           filters: { ...state.filters, ...newFilters },
           page: 1, // Reset to page 1 when filters change
         })),
-      
+
       setPage: (page: number) => set({ page }),
-      
+
       setPageSize: (pageSize: number) => set({ pageSize, page: 1 }),
 
       hydrate: (payload) =>
@@ -76,11 +80,11 @@ export const useHrEmployeeListStore = create<HrEmployeeListState>()(
           page: payload.page ?? state.page,
           pageSize: payload.pageSize ?? state.pageSize,
         })),
-      
+
       reset: () => set(initialState),
     }),
     {
       name: "hr-employee-list-storage", // localStorage key
-    }
-  )
+    },
+  ),
 );

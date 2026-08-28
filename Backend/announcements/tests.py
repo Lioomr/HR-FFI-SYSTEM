@@ -434,6 +434,26 @@ class MeetingAnnouncementTests(APITestCase):
         send_email.assert_called_once()
         self.assertEqual(send_email.call_args.kwargs["to_email"], "employee-one@ffi.test")
 
+    def test_send_announcement_email_excludes_same_role_users_from_other_companies(self):
+        announcement = Announcement.objects.create(
+            company=self.company,
+            title="Company Policy Notice",
+            content="This notice belongs to one company.",
+            target_roles=["EMPLOYEE"],
+            publish_to_dashboard=True,
+            publish_to_email=True,
+            created_by=self.hr,
+        )
+
+        with patch("announcements.utils.send_announcement_notification_email") as send_email:
+            send_email.return_value = {"success": True, "status_code": 202}
+            result = send_announcement_email(announcement)
+
+        self.assertEqual(result["sent"], 2)
+        delivered_to = {call.kwargs["to_email"] for call in send_email.call_args_list}
+        self.assertEqual(delivered_to, {"employee-one@ffi.test", "employee-two@ffi.test"})
+        self.assertNotIn("outsider@ffi.test", delivered_to)
+
     def test_send_announcement_email_reports_no_recipients(self):
         announcement = Announcement.objects.create(
             company=self.company,

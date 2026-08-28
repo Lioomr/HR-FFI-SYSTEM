@@ -178,7 +178,7 @@ class NotificationDispatcherTests(TestCase):
         self.assertEqual(delay.call_count, 2)
 
     @patch("in_app_notifications.tasks.deliver_whatsapp_notification.delay")
-    def test_pending_approval_flow_remains_non_blocking(self, delay):
+    def test_unknown_pending_approval_tenant_fails_closed(self, delay):
         with self.captureOnCommitCallbacks(execute=True):
             result = notify_users_for_pending_status(
                 users=[self.user],
@@ -189,9 +189,44 @@ class NotificationDispatcherTests(TestCase):
                 action_path="/hr/requests/10",
             )
         self.assertEqual(result["sent"], 0)
-        self.assertEqual(result["whatsapp_pending"], 1)
+        self.assertEqual(result["whatsapp_pending"], 0)
         self.assertEqual(result["whatsapp_failed"], 0)
-        self.assertTrue(Notification.objects.filter(event_key="approval.pending").exists())
+        self.assertFalse(Notification.objects.filter(event_key="approval.pending").exists())
+        delay.assert_not_called()
+
+    @patch("in_app_notifications.tasks.deliver_whatsapp_notification.delay")
+    def test_pending_approval_recipients_are_filtered_to_request_company(self, delay):
+        other_company = make_company("PENDING-OTHER")
+        other_hr = make_user("pending-other@example.com", other_company)
+        EmployeeProfile.objects.create(
+            user=other_hr,
+            company=other_company,
+            employee_id="PENDING-OTHER-1",
+        )
+        leave_type = LeaveType.objects.create(company=self.company, name="Pending Annual", code="PENDING_ANNUAL")
+        leave_request = LeaveRequest.objects.create(
+            employee=self.user,
+            employee_profile=self.user.employee_profile,
+            company=self.company,
+            leave_type=leave_type,
+            start_date=timezone.localdate() + timedelta(days=1),
+            end_date=timezone.localdate() + timedelta(days=2),
+        )
+
+        with self.captureOnCommitCallbacks(execute=True):
+            result = notify_users_for_pending_status(
+                users=[self.user, other_hr],
+                request_type="Leave Request",
+                request_id=leave_request.id,
+                requester_name="Requester",
+                status_label="Pending HR",
+            )
+
+        self.assertEqual(result["whatsapp_pending"], 1)
+        self.assertEqual(
+            set(Notification.objects.filter(event_key="approval.pending").values_list("recipient_id", flat=True)),
+            {self.user.id},
+        )
         delay.assert_called_once()
 
     @patch("in_app_notifications.tasks.deliver_whatsapp_notification.delay")
@@ -422,6 +457,12 @@ class NotificationApiTests(TestCase):
         self.company_a = make_company("COMP-A")
         self.company_b = make_company("COMP-B")
         self.user = make_user("owner@example.com", self.company_a)
+        EmployeeProfile.objects.create(
+            user=self.user,
+            company=self.company_a,
+            employee_id="NOTIFICATION-OWNER",
+            full_name="Notification Owner",
+        )
         UserOrganizationAccess.objects.create(user=self.user, organization=self.company_b)
         self.other_user = make_user("other@example.com", self.company_a)
         self.client = APIClient()
@@ -542,7 +583,10 @@ class NotificationApiTests(TestCase):
 
     def test_non_privileged_roles_only_see_public_delivery_fields_in_list_and_read(self):
         public_notification = Notification.objects.create(
-            recipient=self.user, company=None, event_key="public-delivery-shape", title="Public delivery shape"
+            recipient=self.user,
+            company=self.company_a,
+            event_key="public-delivery-shape",
+            title="Public delivery shape",
         )
         NotificationDelivery.objects.create(
             notification=public_notification,

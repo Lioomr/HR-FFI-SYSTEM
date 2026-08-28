@@ -93,6 +93,7 @@ def create_notification(
     company=None,
     company_id: int | None = None,
     broadcast: bool = True,
+    known_new: bool = False,
 ) -> tuple[Notification | None, bool]:
     if recipient is None or not getattr(recipient, "pk", None) or not getattr(recipient, "is_active", True):
         return None, False
@@ -118,7 +119,14 @@ def create_notification(
 
     try:
         with transaction.atomic():
-            if values["deduplication_key"]:
+            if values["deduplication_key"] and known_new:
+                # Caller has already batch-checked that no notification exists for this
+                # (recipient, deduplication_key) pair, so skip the redundant SELECT that
+                # get_or_create would otherwise issue per recipient. The IntegrityError
+                # handler below still covers the case where that pre-check was stale.
+                notification = Notification.objects.create(recipient=recipient, **values)
+                created = True
+            elif values["deduplication_key"]:
                 notification, created = Notification.objects.get_or_create(
                     recipient=recipient,
                     deduplication_key=values["deduplication_key"],

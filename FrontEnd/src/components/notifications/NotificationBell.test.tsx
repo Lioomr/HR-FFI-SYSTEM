@@ -18,12 +18,10 @@ vi.mock("../../services/api/notificationsApi", () => ({
   markNotificationRead: vi
     .fn()
     .mockResolvedValue({ status: "success", data: { unread_count: 0 } }),
-  markAllNotificationsRead: vi
-    .fn()
-    .mockResolvedValue({
-      status: "success",
-      data: { updated_count: 0, unread_count: 0 },
-    }),
+  markAllNotificationsRead: vi.fn().mockResolvedValue({
+    status: "success",
+    data: { updated_count: 0, unread_count: 0 },
+  }),
 }));
 
 import NotificationBell from "./NotificationBell";

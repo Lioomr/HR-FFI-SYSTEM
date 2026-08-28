@@ -21,7 +21,7 @@ export type LoginResponse = {
 export async function loginApi(payload: LoginRequest) {
   const { data } = await api.post<ApiResponse<LoginResponse>>(
     "/auth/login",
-    payload
+    payload,
   );
   return data;
 }
@@ -39,7 +39,7 @@ export type ChangePasswordRequest = {
 export async function changePasswordApi(payload: ChangePasswordRequest) {
   const { data } = await api.post<ApiResponse<{}>>(
     "/auth/change-password",
-    payload
+    payload,
   );
   return data;
 }

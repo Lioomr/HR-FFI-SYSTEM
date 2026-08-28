@@ -25,7 +25,10 @@ function mapAcceptError(messages: string[], t: (k: string) => string): string {
     return t("auth.invite.emailAlreadyRegistered");
   }
   // Guard against leaking raw stack/exception text; fall back to a generic message.
-  const looksUnsafe = !joined || joined.length > 200 || /traceback|exception|0x[0-9a-f]+|<.*object/i.test(joined);
+  const looksUnsafe =
+    !joined ||
+    joined.length > 200 ||
+    /traceback|exception|0x[0-9a-f]+|<.*object/i.test(joined);
   return looksUnsafe ? t("auth.invite.failedRegistration") : joined;
 }
 
@@ -53,7 +56,10 @@ export default function RegisterInvitePage() {
       try {
         const res = await validateInviteToken(token);
         if (isApiError(res)) {
-          const first = Array.isArray(res.errors) && res.errors.length > 0 ? String((res.errors[0] as any).message || "") : "";
+          const first =
+            Array.isArray(res.errors) && res.errors.length > 0
+              ? String((res.errors[0] as any).message || "")
+              : "";
           setError(first || res.message || t("auth.invite.invalidLink"));
           setLoading(false);
           return;
@@ -105,10 +111,12 @@ export default function RegisterInvitePage() {
       if (isApiError(res)) {
         const messages =
           Array.isArray(res.errors) && res.errors.length
-            ? res.errors.map((x: any) => String(x?.message || x || "")).filter(Boolean)
+            ? res.errors
+                .map((x: any) => String(x?.message || x || ""))
+                .filter(Boolean)
             : res.message
-            ? [res.message]
-            : [];
+              ? [res.message]
+              : [];
         setError(mapAcceptError(messages, t));
         setSubmitting(false);
         return;
@@ -120,10 +128,12 @@ export default function RegisterInvitePage() {
       const data = e?.apiData || e?.response?.data;
       const messages =
         data?.errors && Array.isArray(data.errors) && data.errors.length
-          ? data.errors.map((x: any) => String(x?.message || x || "")).filter(Boolean)
+          ? data.errors
+              .map((x: any) => String(x?.message || x || ""))
+              .filter(Boolean)
           : e?.message
-          ? [e.message]
-          : [];
+            ? [e.message]
+            : [];
       setError(mapAcceptError(messages, t));
     } finally {
       setSubmitting(false);
@@ -131,33 +141,60 @@ export default function RegisterInvitePage() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 16 }}>
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "grid",
+        placeItems: "center",
+        padding: 16,
+      }}
+    >
       <Card style={{ width: "100%", maxWidth: 520, borderRadius: 16 }}>
         <Typography.Title level={3} style={{ marginTop: 0 }}>
           {t("auth.invite.title")}
         </Typography.Title>
 
-        {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
+        {error && (
+          <Alert
+            type="error"
+            showIcon
+            message={error}
+            style={{ marginBottom: 16 }}
+          />
+        )}
 
         {loading ? (
-          <Typography.Text type="secondary">{t("auth.invite.validating")}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t("auth.invite.validating")}
+          </Typography.Text>
         ) : invite ? (
           <>
             <Alert
               type="info"
               showIcon
               style={{ marginBottom: 16 }}
-              message={t("auth.invite.invitedAs").replace("{role}", invite.role)}
+              message={t("auth.invite.invitedAs").replace(
+                "{role}",
+                invite.role,
+              )}
               description={`${t("auth.invite.expires")}: ${expiresOn}`}
             />
 
-            <Form form={form} layout="vertical" requiredMark={false} onFinish={onSubmit}>
+            <Form
+              form={form}
+              layout="vertical"
+              requiredMark={false}
+              onFinish={onSubmit}
+            >
               <Form.Item
                 label={t("profile.fullName")}
                 name="full_name"
                 rules={[{ required: true, message: t("common.required") }]}
               >
-                <Input size="large" placeholder={t("auth.invite.fullNameDesc")} />
+                <Input
+                  size="large"
+                  placeholder={t("auth.invite.fullNameDesc")}
+                />
               </Form.Item>
               <Form.Item
                 label={
@@ -165,7 +202,8 @@ export default function RegisterInvitePage() {
                     t("auth.invite.email")
                   ) : (
                     <span>
-                      {t("auth.invite.email")} <span style={{ color: "#ff4d4f" }}>*</span>
+                      {t("auth.invite.email")}{" "}
+                      <span style={{ color: "#ff4d4f" }}>*</span>
                     </span>
                   )
                 }
@@ -186,7 +224,8 @@ export default function RegisterInvitePage() {
                 label={
                   phoneRequired ? (
                     <span>
-                      {t("auth.invite.phone")} <span style={{ color: "#ff4d4f" }}>*</span>
+                      {t("auth.invite.phone")}{" "}
+                      <span style={{ color: "#ff4d4f" }}>*</span>
                     </span>
                   ) : (
                     t("auth.invite.phone")
@@ -198,12 +237,16 @@ export default function RegisterInvitePage() {
                     validator: (_, value) => {
                       if (!value) {
                         return phoneRequired
-                          ? Promise.reject(new Error(t("auth.invite.phoneRequired")))
+                          ? Promise.reject(
+                              new Error(t("auth.invite.phoneRequired")),
+                            )
                           : Promise.resolve();
                       }
                       return E164.test(value)
                         ? Promise.resolve()
-                        : Promise.reject(new Error(t("admin.invites.phoneInvalid")));
+                        : Promise.reject(
+                            new Error(t("admin.invites.phoneInvalid")),
+                          );
                     },
                   },
                 ]}
@@ -222,29 +265,43 @@ export default function RegisterInvitePage() {
                 name="password"
                 rules={[{ required: true, message: t("common.required") }]}
               >
-                <Input.Password size="large" placeholder={t("auth.invite.passwordDesc")} />
+                <Input.Password
+                  size="large"
+                  placeholder={t("auth.invite.passwordDesc")}
+                />
               </Form.Item>
               <Form.Item
                 label={t("auth.invite.confirmPassword")}
                 name="confirm_password"
                 dependencies={["password"]}
                 rules={[
-                  { required: true, message: t("auth.invite.confirmPasswordReq") },
+                  {
+                    required: true,
+                    message: t("auth.invite.confirmPasswordReq"),
+                  },
                   ({ getFieldValue }) => ({
                     validator(_, value) {
-                      if (!value || getFieldValue("password") === value) return Promise.resolve();
-                      return Promise.reject(new Error(t("auth.invite.passwordMismatch")));
+                      if (!value || getFieldValue("password") === value)
+                        return Promise.resolve();
+                      return Promise.reject(
+                        new Error(t("auth.invite.passwordMismatch")),
+                      );
                     },
                   }),
                 ]}
               >
-                <Input.Password size="large" placeholder={t("auth.invite.confirmPasswordDesc")} />
+                <Input.Password
+                  size="large"
+                  placeholder={t("auth.invite.confirmPasswordDesc")}
+                />
               </Form.Item>
               <Space>
                 <Button type="primary" htmlType="submit" loading={submitting}>
                   {t("auth.invite.complete")}
                 </Button>
-                <Button onClick={() => navigate("/login")}>{t("auth.invite.backToLogin")}</Button>
+                <Button onClick={() => navigate("/login")}>
+                  {t("auth.invite.backToLogin")}
+                </Button>
               </Space>
             </Form>
           </>

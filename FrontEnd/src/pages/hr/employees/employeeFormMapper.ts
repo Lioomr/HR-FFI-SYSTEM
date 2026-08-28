@@ -3,25 +3,90 @@ import dayjs from "dayjs";
 import type { Employee } from "../../../services/api/employeesApi";
 import { getDialCodeByNationality } from "../../../utils/countries";
 
-function splitPhoneNumber(raw: string | undefined | null): { code: string; local: string } {
+function splitPhoneNumber(raw: string | undefined | null): {
+  code: string;
+  local: string;
+} {
   const input = (raw || "").trim();
   if (!input) return { code: "+966", local: "" };
 
   const digits = input.replace(/[^\d+]/g, "");
-  const withPlus = digits.startsWith("+") ? digits : `+${digits.replace(/^\+/, "")}`;
+  const withPlus = digits.startsWith("+")
+    ? digits
+    : `+${digits.replace(/^\+/, "")}`;
 
   const knownCodes = [
-    "+971", "+977", "+974", "+973", "+968", "+966", "+965", "+964", "+963", "+962", "+961",
-    "+880", "+353", "+249", "+216", "+213", "+212", "+998", "+995", "+994", "+992", "+993",
-    "+998", "+994", "+993", "+992", "+970", "+967", "+963", "+962", "+961", "+94", "+93",
-    "+92", "+91", "+90", "+86", "+82", "+81", "+65", "+64", "+63", "+62", "+61", "+60",
-    "+55", "+54", "+52", "+49", "+44", "+39", "+34", "+33", "+27", "+20", "+7", "+1",
+    "+971",
+    "+977",
+    "+974",
+    "+973",
+    "+968",
+    "+966",
+    "+965",
+    "+964",
+    "+963",
+    "+962",
+    "+961",
+    "+880",
+    "+353",
+    "+249",
+    "+216",
+    "+213",
+    "+212",
+    "+998",
+    "+995",
+    "+994",
+    "+992",
+    "+993",
+    "+998",
+    "+994",
+    "+993",
+    "+992",
+    "+970",
+    "+967",
+    "+963",
+    "+962",
+    "+961",
+    "+94",
+    "+93",
+    "+92",
+    "+91",
+    "+90",
+    "+86",
+    "+82",
+    "+81",
+    "+65",
+    "+64",
+    "+63",
+    "+62",
+    "+61",
+    "+60",
+    "+55",
+    "+54",
+    "+52",
+    "+49",
+    "+44",
+    "+39",
+    "+34",
+    "+33",
+    "+27",
+    "+20",
+    "+7",
+    "+1",
   ];
-  const matched = knownCodes.sort((a, b) => b.length - a.length).find((c) => withPlus.startsWith(c));
+  const matched = knownCodes
+    .sort((a, b) => b.length - a.length)
+    .find((c) => withPlus.startsWith(c));
   if (matched) {
-    return { code: matched, local: withPlus.slice(matched.length).replace(/\D/g, "") };
+    return {
+      code: matched,
+      local: withPlus.slice(matched.length).replace(/\D/g, ""),
+    };
   }
-  return { code: "+966", local: withPlus.replace(/^\+/, "").replace(/\D/g, "") };
+  return {
+    code: "+966",
+    local: withPlus.replace(/^\+/, "").replace(/\D/g, ""),
+  };
 }
 
 /**
@@ -29,7 +94,7 @@ function splitPhoneNumber(raw: string | undefined | null): { code: string; local
  * - Converts DatePicker dayjs objects to YYYY-MM-DD strings
  * - Strips undefined/null values
  * - Maintains snake_case field names
- * 
+ *
  * Used for both create and update operations
  */
 export function toPayload(values: any): any {
@@ -52,12 +117,16 @@ export function toPayload(values: any): any {
   }
 
   const phoneCode = String(values.mobile_country_code || "").trim();
-  const phoneLocalRaw = String(values.mobile_local || "").trim().replace(/\D/g, "");
+  const phoneLocalRaw = String(values.mobile_local || "")
+    .trim()
+    .replace(/\D/g, "");
   // Remove local trunk prefix zeros (e.g. 054572021 -> 54572021) for WhatsApp/E.164 compatibility.
   const phoneLocal = phoneLocalRaw.replace(/^0+/, "");
 
   if (phoneCode && phoneLocal) {
-    const normalizedCode = phoneCode.startsWith("+") ? phoneCode : `+${phoneCode.replace(/\D/g, "")}`;
+    const normalizedCode = phoneCode.startsWith("+")
+      ? phoneCode
+      : `+${phoneCode.replace(/\D/g, "")}`;
     transformed.mobile = `${normalizedCode}${phoneLocal}`;
   } else {
     delete transformed.mobile;
@@ -84,7 +153,8 @@ export function fromEmployeeToFormValues(employee: Employee): any {
   formValues.is_saudi = employee.is_saudi ?? false;
   formValues.employee_number = (employee as any).employee_number || "";
   formValues.nationality = (employee as any).nationality || "";
-  formValues.passport_no = employee.passport || (employee as any).passport_no || "";
+  formValues.passport_no =
+    employee.passport || (employee as any).passport_no || "";
   formValues.passport_expiry = (employee as any).passport_expiry
     ? dayjs((employee as any).passport_expiry)
     : null;
@@ -109,9 +179,10 @@ export function fromEmployeeToFormValues(employee: Employee): any {
   formValues.sponsor_id = (employee as any).sponsor_id || null;
   formValues.manager_profile_id = employee.manager_profile_id || null;
   formValues.job_offer = (employee as any).job_offer || "";
-  formValues.join_date = ((employee as any).join_date || employee.hire_date)
-    ? dayjs((employee as any).join_date || employee.hire_date)
-    : null;
+  formValues.join_date =
+    (employee as any).join_date || employee.hire_date
+      ? dayjs((employee as any).join_date || employee.hire_date)
+      : null;
   formValues.contract_date = (employee as any).contract_date
     ? dayjs((employee as any).contract_date)
     : null;
@@ -135,7 +206,8 @@ export function fromEmployeeToFormValues(employee: Employee): any {
   formValues.basic_salary = (employee as any).basic_salary
     ? Number((employee as any).basic_salary)
     : null;
-  formValues.transportation_allowance = (employee as any).transportation_allowance
+  formValues.transportation_allowance = (employee as any)
+    .transportation_allowance
     ? Number((employee as any).transportation_allowance)
     : null;
   formValues.accommodation_allowance = (employee as any).accommodation_allowance
