@@ -38,14 +38,23 @@ export interface LeaveRequest {
   // Frontend had 'days_requested'. I should use 'days' to match backend.
   reason: string;
   document?: string | null;
-  status: "submitted" | "pending_delegate" | "pending_manager" | "pending_hr" | "pending_ceo" | "pending_hr_completion" | "approved" | "rejected" | "cancelled";
+  status:
+    | "submitted"
+    | "pending_delegate"
+    | "pending_manager"
+    | "pending_hr"
+    | "pending_ceo"
+    | "pending_hr_completion"
+    | "approved"
+    | "rejected"
+    | "cancelled";
   requires_hr_completion_visa?: boolean;
   source?: "employee" | "hr_manual";
   manual_entry_reason?: string;
   source_document_ref?: string;
   entered_by?: number | null;
   warning_messages?: string[];
-  rejection_reason?: string; // If mapped from hr_decision_note? Serializer fields=__all__. 
+  rejection_reason?: string; // If mapped from hr_decision_note? Serializer fields=__all__.
   // Model has hr_decision_note, manager_decision_note. Frontend might want generic 'rejection_reason'.
   // Backend keys: hr_decision_note, manager_decision_note.
   // I will keep existing + add specific ones if needed.
@@ -76,15 +85,28 @@ export interface LeaveRequest {
 
 /**
  * Leave Balance DTO
+ *
+ * Mirrors `Backend/leaves/serializers.py::LeaveBalanceSerializer`. Decimal
+ * fields arrive as DRF decimal strings (`"12.25"`), so every numeric field is
+ * typed `number | string` and normalised at the point of use.
+ *
+ * The balance is always calculated server-side — never re-derive it here.
  */
 export interface LeaveBalance {
   leave_type_id: number;
   leave_type: string;
   leave_code?: string;
   available_annual_year_days?: number | string;
-  total_days: number;
-  used_days: number;
-  remaining_days: number;
+  total_days: number | string;
+  used_days: number | string;
+  remaining_days: number | string;
+  /** Whole days already reserved by submitted/pending requests. */
+  pending_days?: number | string;
+  /** The only figure an employee may request against: floor(remaining) - pending. */
+  requestable_days?: number | string;
+  /** Sub-day remainder of the balance; informational, never requestable. */
+  fractional_days?: number | string;
+  adjustments?: number | string;
 }
 
 /**
@@ -118,14 +140,15 @@ export interface LeaveRequestFilter {
   page_size?: number;
 }
 
-
 // --- Employee Endpoints ---
 
 /**
  * Get all available leave types
  */
 export async function getLeaveTypes(): Promise<ApiResponse<LeaveType[]>> {
-  const { data } = await api.get<ApiResponse<LeaveType[]>>("/api/leaves/leave-types/");
+  const { data } = await api.get<ApiResponse<LeaveType[]>>(
+    "/api/leaves/leave-types/",
+  );
   return data;
 }
 
@@ -133,32 +156,42 @@ export async function getLeaveTypes(): Promise<ApiResponse<LeaveType[]>> {
  * Submit a new leave request
  */
 export async function createLeaveRequest(
-  payload: CreateLeaveRequestPayload | FormData
+  payload: CreateLeaveRequestPayload | FormData,
 ): Promise<ApiResponse<LeaveRequest>> {
-  const config = payload instanceof FormData ? { headers: { "Content-Type": "multipart/form-data" } } : undefined;
-  const { data } = await api.post<ApiResponse<LeaveRequest>>("/api/leaves/leave-requests/", payload, config);
+  const config =
+    payload instanceof FormData
+      ? { headers: { "Content-Type": "multipart/form-data" } }
+      : undefined;
+  const { data } = await api.post<ApiResponse<LeaveRequest>>(
+    "/api/leaves/leave-requests/",
+    payload,
+    config,
+  );
   return data;
 }
 
 /**
  * Get my leave requests (Employee)
  */
-export async function getMyLeaveRequests(
-  params?: { page?: number; page_size?: number }
-): Promise<ApiResponse<PaginatedResponse<LeaveRequest>>> {
+export async function getMyLeaveRequests(params?: {
+  page?: number;
+  page_size?: number;
+}): Promise<ApiResponse<PaginatedResponse<LeaveRequest>>> {
   const { data } = await api.get<ApiResponse<PaginatedResponse<LeaveRequest>>>(
     "/api/leaves/employee/leave-requests/",
-    { params }
+    { params },
   );
   return data;
 }
 
-export async function getMyDelegatedLeaveRequests(
-  params?: { page?: number; page_size?: number; status?: string }
-): Promise<ApiResponse<PaginatedResponse<LeaveRequest>>> {
+export async function getMyDelegatedLeaveRequests(params?: {
+  page?: number;
+  page_size?: number;
+  status?: string;
+}): Promise<ApiResponse<PaginatedResponse<LeaveRequest>>> {
   const { data } = await api.get<ApiResponse<PaginatedResponse<LeaveRequest>>>(
     "/api/leaves/employee/delegated-leave-requests/",
-    { params }
+    { params },
   );
   return data;
 }
@@ -167,15 +200,14 @@ export async function getMyDelegatedLeaveRequests(
  * Get my leave balance (Employee)
  */
 export async function getMyLeaveBalance(
-  year?: number
+  year?: number,
 ): Promise<ApiResponse<LeaveBalance[]>> {
   const { data } = await api.get<ApiResponse<LeaveBalance[]>>(
     "/api/leaves/employee/leave-balance/",
-    { params: { year } }
+    { params: { year } },
   );
   return data;
 }
-
 
 // --- HR Endpoints ---
 
@@ -183,11 +215,11 @@ export async function getMyLeaveBalance(
  * Get all leave requests (HR Inbox)
  */
 export async function getLeaveRequests(
-  params?: LeaveRequestFilter
+  params?: LeaveRequestFilter,
 ): Promise<ApiResponse<PaginatedResponse<LeaveRequest>>> {
   const { data } = await api.get<ApiResponse<PaginatedResponse<LeaveRequest>>>(
     "/api/leaves/leave-requests/",
-    { params }
+    { params },
   );
   return data;
 }
@@ -196,37 +228,33 @@ export async function getLeaveRequests(
  * Get single leave request details (HR)
  */
 export async function getLeaveRequest(
-  id: string | number
+  id: string | number,
 ): Promise<ApiResponse<LeaveRequest>> {
-  const { data } = await api.get<ApiResponse<LeaveRequest>>(`/api/leaves/leave-requests/${id}/`);
+  const { data } = await api.get<ApiResponse<LeaveRequest>>(
+    `/api/leaves/leave-requests/${id}/`,
+  );
   return data;
 }
 
 export async function getLeaveRequestDocumentBlob(
   id: string | number,
-  download = false
+  download = false,
 ): Promise<Blob> {
-  const { data } = await api.get(
-    `/api/leaves/leave-requests/${id}/document/`,
-    {
-      params: download ? { download: 1 } : undefined,
-      responseType: "blob",
-    }
-  );
+  const { data } = await api.get(`/api/leaves/leave-requests/${id}/document/`, {
+    params: download ? { download: 1 } : undefined,
+    responseType: "blob",
+  });
   return data;
 }
 
 export async function getLeaveRequestPdfBlob(
   id: string | number,
-  download = true
+  download = true,
 ): Promise<Blob> {
-  const { data } = await api.get(
-    `/api/leaves/leave-requests/${id}/pdf/`,
-    {
-      params: download ? { download: 1 } : { download: 0 },
-      responseType: "blob",
-    }
-  );
+  const { data } = await api.get(`/api/leaves/leave-requests/${id}/pdf/`, {
+    params: download ? { download: 1 } : { download: 0 },
+    responseType: "blob",
+  });
   return data;
 }
 
@@ -235,11 +263,11 @@ export async function getLeaveRequestPdfBlob(
  */
 export async function approveLeaveRequest(
   id: string | number,
-  comment?: string
+  comment?: string,
 ): Promise<ApiResponse<LeaveRequest>> {
   const { data } = await api.post<ApiResponse<LeaveRequest>>(
     `/api/leaves/leave-requests/${id}/approve/`,
-    { comment }
+    { comment },
   );
   return data;
 }
@@ -249,26 +277,27 @@ export async function approveLeaveRequest(
  */
 export async function rejectLeaveRequest(
   id: string | number,
-  comment: string
+  comment: string,
 ): Promise<ApiResponse<LeaveRequest>> {
   const { data } = await api.post<ApiResponse<LeaveRequest>>(
     `/api/leaves/leave-requests/${id}/reject/`,
-    { comment }
+    { comment },
   );
   return data;
 }
 
 export async function completeLeaveRequest(
   id: string | number,
-  payload: { comment?: string; visa_document?: File }
+  payload: { comment?: string; visa_document?: File },
 ): Promise<ApiResponse<LeaveRequest>> {
   const form = new FormData();
   if (payload.comment) form.append("comment", payload.comment);
-  if (payload.visa_document) form.append("visa_document", payload.visa_document);
+  if (payload.visa_document)
+    form.append("visa_document", payload.visa_document);
   const { data } = await api.post<ApiResponse<LeaveRequest>>(
     `/api/leaves/leave-requests/${id}/complete/`,
     form,
-    { headers: { "Content-Type": "multipart/form-data" } }
+    { headers: { "Content-Type": "multipart/form-data" } },
   );
   return data;
 }
@@ -286,73 +315,93 @@ export interface HRManualLeaveRequestPayload {
 
 export async function sendLeaveRequestToCEO(
   id: string | number,
-  comment?: string
+  comment?: string,
 ): Promise<ApiResponse<LeaveRequest>> {
   const { data } = await api.post<ApiResponse<LeaveRequest>>(
     `/api/leaves/leave-requests/${id}/send-to-ceo/`,
-    { comment }
+    { comment },
   );
   return data;
 }
 
 export async function createHRManualLeaveRequest(
-  payload: HRManualLeaveRequestPayload | FormData
+  payload: HRManualLeaveRequestPayload | FormData,
 ): Promise<ApiResponse<LeaveRequest>> {
-  const config = payload instanceof FormData ? { headers: { "Content-Type": "multipart/form-data" } } : undefined;
-  const { data } = await api.post<ApiResponse<LeaveRequest>>("/api/leaves/hr/manual-leave-requests/", payload, config);
+  const config =
+    payload instanceof FormData
+      ? { headers: { "Content-Type": "multipart/form-data" } }
+      : undefined;
+  const { data } = await api.post<ApiResponse<LeaveRequest>>(
+    "/api/leaves/hr/manual-leave-requests/",
+    payload,
+    config,
+  );
   return data;
 }
 
 export async function updateHRManualLeaveRequest(
   id: string | number,
-  payload: Partial<HRManualLeaveRequestPayload> | FormData
+  payload: Partial<HRManualLeaveRequestPayload> | FormData,
 ): Promise<ApiResponse<LeaveRequest>> {
-  const config = payload instanceof FormData ? { headers: { "Content-Type": "multipart/form-data" } } : undefined;
-  const { data } = await api.patch<ApiResponse<LeaveRequest>>(`/api/leaves/hr/manual-leave-requests/${id}/`, payload, config);
+  const config =
+    payload instanceof FormData
+      ? { headers: { "Content-Type": "multipart/form-data" } }
+      : undefined;
+  const { data } = await api.patch<ApiResponse<LeaveRequest>>(
+    `/api/leaves/hr/manual-leave-requests/${id}/`,
+    payload,
+    config,
+  );
   return data;
 }
 
-export async function deleteHRManualLeaveRequest(id: string | number): Promise<ApiResponse<Record<string, never>>> {
-  const { data } = await api.delete<ApiResponse<Record<string, never>>>(`/api/leaves/hr/manual-leave-requests/${id}/`);
+export async function deleteHRManualLeaveRequest(
+  id: string | number,
+): Promise<ApiResponse<Record<string, never>>> {
+  const { data } = await api.delete<ApiResponse<Record<string, never>>>(
+    `/api/leaves/hr/manual-leave-requests/${id}/`,
+  );
   return data;
 }
 
 export async function cancelLeaveRequest(
-  id: string | number
+  id: string | number,
 ): Promise<ApiResponse<LeaveRequest>> {
-  const { data } = await api.post<ApiResponse<LeaveRequest>>(`/api/leaves/leave-requests/${id}/cancel/`);
+  const { data } = await api.post<ApiResponse<LeaveRequest>>(
+    `/api/leaves/leave-requests/${id}/cancel/`,
+  );
   return data;
 }
 
 export async function approveDelegatedLeaveRequest(
   id: string | number,
-  comment?: string
+  comment?: string,
 ): Promise<ApiResponse<LeaveRequest>> {
   const { data } = await api.post<ApiResponse<LeaveRequest>>(
     `/api/leaves/leave-requests/${id}/delegate-approve/`,
-    { comment }
+    { comment },
   );
   return data;
 }
 
 export async function rejectDelegatedLeaveRequest(
   id: string | number,
-  comment: string
+  comment: string,
 ): Promise<ApiResponse<LeaveRequest>> {
   const { data } = await api.post<ApiResponse<LeaveRequest>>(
     `/api/leaves/leave-requests/${id}/delegate-reject/`,
-    { comment }
+    { comment },
   );
   return data;
 }
 
 export async function setLeaveRequestDelegate(
   id: string | number,
-  payload: { delegated_to: number; delegation_note?: string }
+  payload: { delegated_to: number; delegation_note?: string },
 ): Promise<ApiResponse<LeaveRequest>> {
   const { data } = await api.post<ApiResponse<LeaveRequest>>(
     `/api/leaves/leave-requests/${id}/set-delegate/`,
-    payload
+    payload,
   );
   return data;
 }
@@ -362,11 +411,14 @@ export async function setLeaveRequestDelegate(
  */
 export async function getLeaveBalances(
   employeeId: number | string,
-  year?: number
+  year?: number,
 ): Promise<ApiResponse<LeaveBalance[]>> {
-  const { data } = await api.get<ApiResponse<LeaveBalance[]>>("/api/leaves/leave-balances/", {
-    params: { employee_id: employeeId, year }
-  });
+  const { data } = await api.get<ApiResponse<LeaveBalance[]>>(
+    "/api/leaves/leave-balances/",
+    {
+      params: { employee_id: employeeId, year },
+    },
+  );
   return data;
 }
 
@@ -381,24 +433,28 @@ export interface CreateAdjustmentPayload {
 }
 
 export async function createLeaveAdjustment(
-  payload: CreateAdjustmentPayload
+  payload: CreateAdjustmentPayload,
 ): Promise<ApiResponse<any>> {
-  const { data } = await api.post<ApiResponse<any>>("/api/leaves/adjustments/", payload);
+  const { data } = await api.post<ApiResponse<any>>(
+    "/api/leaves/adjustments/",
+    payload,
+  );
   return data;
 }
-
 
 // --- CEO Endpoints ---
 
 /**
  * Get all leave requests pending CEO approval
  */
-export async function getCEOLeaveRequests(
-  params?: { page?: number; page_size?: number; status?: string }
-): Promise<ApiResponse<PaginatedResponse<LeaveRequest>>> {
+export async function getCEOLeaveRequests(params?: {
+  page?: number;
+  page_size?: number;
+  status?: string;
+}): Promise<ApiResponse<PaginatedResponse<LeaveRequest>>> {
   const { data } = await api.get<ApiResponse<PaginatedResponse<LeaveRequest>>>(
     "/api/leaves/ceo/leave-requests/",
-    { params }
+    { params },
   );
   return data;
 }
@@ -409,11 +465,11 @@ export async function getCEOLeaveRequests(
 export async function approveCEOLeaveRequest(
   id: string | number,
   comment?: string,
-  waiver_reason?: string
+  waiver_reason?: string,
 ): Promise<ApiResponse<LeaveRequest>> {
   const { data } = await api.post<ApiResponse<LeaveRequest>>(
     `/api/leaves/ceo/leave-requests/${id}/approve/`,
-    { comment, waiver_reason }
+    { comment, waiver_reason },
   );
   return data;
 }
@@ -423,11 +479,11 @@ export async function approveCEOLeaveRequest(
  */
 export async function rejectCEOLeaveRequest(
   id: string | number,
-  comment: string
+  comment: string,
 ): Promise<ApiResponse<LeaveRequest>> {
   const { data } = await api.post<ApiResponse<LeaveRequest>>(
     `/api/leaves/ceo/leave-requests/${id}/reject/`,
-    { comment }
+    { comment },
   );
   return data;
 }

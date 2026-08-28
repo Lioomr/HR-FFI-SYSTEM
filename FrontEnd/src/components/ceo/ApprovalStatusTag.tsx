@@ -12,7 +12,10 @@ import { toneForStatus, type ApprovalStatusTone } from "./approvalStatusLabel";
 
 export type { ApprovalStatusTone };
 
-const TONE_PRESETS: Record<ApprovalStatusTone, { color: string; icon: ReactNode }> = {
+const TONE_PRESETS: Record<
+  ApprovalStatusTone,
+  { color: string; icon: ReactNode }
+> = {
   // Every tone pairs a colour with a distinct glyph so the state is still
   // readable without colour perception.
   pending: { color: "gold", icon: <ClockCircleOutlined aria-hidden /> },
@@ -42,7 +45,12 @@ export default function ApprovalStatusTag({
     <Tag
       color={preset.color}
       icon={preset.icon}
-      style={{ marginInlineEnd: 0, borderRadius: 999, paddingInline: 10, fontWeight: 600 }}
+      style={{
+        marginInlineEnd: 0,
+        borderRadius: 999,
+        paddingInline: 10,
+        fontWeight: 600,
+      }}
     >
       {label}
     </Tag>

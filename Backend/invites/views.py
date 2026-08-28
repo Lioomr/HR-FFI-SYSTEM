@@ -22,6 +22,12 @@ from core.permissions import IsHRManagerOrAdmin
 from core.responses import error, success
 from core.services import WhatsAppService, send_user_invite_email, send_user_invite_whatsapp
 from employees.models import EmployeeProfile
+from organization.models import OrganizationNode
+from organization.services import (
+    ensure_company_write_allowed,
+    filter_queryset_by_company_scope,
+    get_active_company_for_request,
+)
 
 from .models import Invite
 from .serializers import (
@@ -247,10 +253,11 @@ def _generate_invite_employee_id() -> str:
     raise IntegrityError("Failed to generate unique employee_id for invite acceptance.")
 
 
-def _ensure_invited_employee_profile(*, user, full_name: str, phone_number: str) -> EmployeeProfile:
+def _ensure_invited_employee_profile(*, user, company, full_name: str, phone_number: str) -> EmployeeProfile:
     profile, created = EmployeeProfile.objects.get_or_create(
         user=user,
         defaults={
+            "company": company,
             "employee_id": _generate_invite_employee_id(),
             "full_name": full_name or getattr(user, "full_name", "") or "",
             "mobile": phone_number or "",
@@ -306,7 +313,7 @@ class InvitesListCreateView(APIView):
     def get(self, request):
         normalize_expired_invites()
 
-        qs = Invite.objects.all()
+        qs = filter_queryset_by_company_scope(Invite.objects.all(), request)
 
         # Optional filters
         status_param = request.query_params.get("status")
@@ -324,6 +331,7 @@ class InvitesListCreateView(APIView):
 
     @transaction.atomic
     def post(self, request):
+        ensure_company_write_allowed(request)
         s = InviteCreateSerializer(data=request.data, context={"request": request})
         if not s.is_valid():
             return error("Validation error", errors=s.errors, status=422)
@@ -343,6 +351,7 @@ class InvitesListCreateView(APIView):
 
         now = timezone.now()
         expires_at = now + timedelta(hours=expires_in_hours)
+        company = get_active_company_for_request(request)
 
         invite = Invite.objects.create(
             email=email,
@@ -354,6 +363,7 @@ class InvitesListCreateView(APIView):
             sent_at=now,
             expires_at=expires_at,
             created_by=request.user,
+            company=company,
         )
 
         audit(
@@ -419,7 +429,7 @@ class InviteResendView(APIView):
     @transaction.atomic
     def post(self, request, invite_id: int):
         try:
-            invite = Invite.objects.select_for_update().get(id=invite_id)
+            invite = filter_queryset_by_company_scope(Invite.objects.select_for_update(), request).get(id=invite_id)
         except Invite.DoesNotExist:
             return error("Invite not found", status=404)
 
@@ -495,7 +505,7 @@ class InviteRevokeView(APIView):
         normalize_expired_invites()
 
         try:
-            invite = Invite.objects.get(id=invite_id)
+            invite = filter_queryset_by_company_scope(Invite.objects.all(), request).get(id=invite_id)
         except Invite.DoesNotExist:
             return error("Invite not found", status=404)
 
@@ -504,7 +514,7 @@ class InviteRevokeView(APIView):
     @transaction.atomic
     def delete(self, request, invite_id: int):
         try:
-            invite = Invite.objects.select_for_update().get(id=invite_id)
+            invite = filter_queryset_by_company_scope(Invite.objects.select_for_update(), request).get(id=invite_id)
         except Invite.DoesNotExist:
             return error("Invite not found", status=404)
 
@@ -565,6 +575,12 @@ class InviteAcceptView(APIView):
             return error("Validation error", errors=s.errors, status=422)
 
         invite: Invite = s.validated_data["invite"]
+        if (
+            invite.company_id is None
+            or invite.company.node_type != OrganizationNode.NodeType.COMPANY
+            or not invite.company.is_active
+        ):
+            return error("Validation error", errors={"token": ["Invitation has no active company context."]}, status=422)
         email: str = s.validated_data["email"]
         phone_number: str = s.validated_data.get("phone_number", "")
         submitted_phone_number: str = s.validated_data.get("submitted_phone_number", "")
@@ -587,7 +603,12 @@ class InviteAcceptView(APIView):
         group, _ = Group.objects.get_or_create(name=invite.role)
         user.groups.clear()
         user.groups.add(group)
-        profile = _ensure_invited_employee_profile(user=user, full_name=full_name, phone_number=phone_number)
+        profile = _ensure_invited_employee_profile(
+            user=user,
+            company=invite.company,
+            full_name=full_name,
+            phone_number=phone_number,
+        )
 
         invite.status = Invite.Status.ACCEPTED
         update_fields = ["status"]

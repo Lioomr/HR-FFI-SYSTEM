@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { MAX_SEARCH_LENGTH, sanitizeSearchTerm, toSearchParam } from "./searchInput";
+import {
+  MAX_SEARCH_LENGTH,
+  sanitizeSearchTerm,
+  toSearchParam,
+} from "./searchInput";
 
 // Built from char codes so this source file stays free of literal control bytes.
 const NUL = String.fromCharCode(0);
@@ -12,7 +16,9 @@ describe("sanitizeSearchTerm", () => {
   });
 
   it("strips control characters and line separators", () => {
-    expect(sanitizeSearchTerm(`sa${NUL}ra${DEL}${LINE_SEPARATOR}`)).toBe("sara");
+    expect(sanitizeSearchTerm(`sa${NUL}ra${DEL}${LINE_SEPARATOR}`)).toBe(
+      "sara",
+    );
   });
 
   it("treats tabs and newlines as word separators rather than deleting them", () => {

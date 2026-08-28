@@ -23,35 +23,38 @@ import { isHeadOfficeOrganization } from "../../utils/organizationContext";
  * Generic props for ReferenceCrudPage component
  */
 export interface ReferenceCrudPageProps<TItem, TCreate, TUpdate> {
-    // Required props
-    title: string;
-    entityName: string;
-    columns: ColumnsType<TItem>;
-    rowKey: string | ((row: TItem) => string | number);
+  // Required props
+  title: string;
+  entityName: string;
+  columns: ColumnsType<TItem>;
+  rowKey: string | ((row: TItem) => string | number);
 
-    // API functions
-    fetchList: (params?: any) => Promise<ApiResponse<any>>;
-    createItem: (payload: TCreate) => Promise<ApiResponse<any>>;
-    updateItem: (id: string | number, payload: TUpdate) => Promise<ApiResponse<any>>;
+  // API functions
+  fetchList: (params?: any) => Promise<ApiResponse<any>>;
+  createItem: (payload: TCreate) => Promise<ApiResponse<any>>;
+  updateItem: (
+    id: string | number,
+    payload: TUpdate,
+  ) => Promise<ApiResponse<any>>;
 
-    // Optional props
-    mapListResponse?: (payload: any) => { items: TItem[]; total?: number };
-    enablePagination?: boolean;
-    pageSize?: number;
+  // Optional props
+  mapListResponse?: (payload: any) => { items: TItem[]; total?: number };
+  enablePagination?: boolean;
+  pageSize?: number;
 
-    // Form rendering
-    createForm?: ReactNode;
-    editForm?: ReactNode;
+  // Form rendering
+  createForm?: ReactNode;
+  editForm?: ReactNode;
 
-    // Form values
-    initialCreateValues?: Partial<TCreate>;
-    initialEditValues?: (row: TItem) => Partial<TUpdate>;
-    transformCreateValues?: (values: any) => TCreate;
-    transformEditValues?: (values: any, row: TItem) => TUpdate;
+  // Form values
+  initialCreateValues?: Partial<TCreate>;
+  initialEditValues?: (row: TItem) => Partial<TUpdate>;
+  transformCreateValues?: (values: any) => TCreate;
+  transformEditValues?: (values: any, row: TItem) => TUpdate;
 
-    // Hooks
-    beforeOpenEdit?: (row: TItem) => Promise<void> | void;
-    disableEdit?: (row: TItem) => boolean;
+  // Hooks
+  beforeOpenEdit?: (row: TItem) => Promise<void> | void;
+  disableEdit?: (row: TItem) => boolean;
 }
 
 /**
@@ -59,395 +62,476 @@ export interface ReferenceCrudPageProps<TItem, TCreate, TUpdate> {
  * Handles loading, error, empty states, and 403/422 errors consistently
  */
 export function ReferenceCrudPage<TItem = any, TCreate = any, TUpdate = any>({
-    title,
-    entityName,
-    columns,
-    rowKey,
-    fetchList,
-    createItem,
-    updateItem,
-    mapListResponse,
-    enablePagination = false,
-    pageSize = 25,
-    createForm,
-    editForm,
-    initialCreateValues,
-    initialEditValues,
-    transformCreateValues,
-    transformEditValues,
-    beforeOpenEdit,
-    disableEdit,
+  title,
+  entityName,
+  columns,
+  rowKey,
+  fetchList,
+  createItem,
+  updateItem,
+  mapListResponse,
+  enablePagination = false,
+  pageSize = 25,
+  createForm,
+  editForm,
+  initialCreateValues,
+  initialEditValues,
+  transformCreateValues,
+  transformEditValues,
+  beforeOpenEdit,
+  disableEdit,
 }: ReferenceCrudPageProps<TItem, TCreate, TUpdate>) {
-    const { t } = useI18n();
-    const user = useAuthStore((state) => state.user);
-    const isHeadOffice = isHeadOfficeOrganization(user);
-    // State management
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [forbidden, setForbidden] = useState(false);
-    const [items, setItems] = useState<TItem[]>([]);
-    const [total, setTotal] = useState(0);
-    const [page, setPage] = useState(1);
-    const [searchText, setSearchText] = useState("");
+  const { t } = useI18n();
+  const user = useAuthStore((state) => state.user);
+  const isHeadOffice = isHeadOfficeOrganization(user);
+  // State management
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [forbidden, setForbidden] = useState(false);
+  const [items, setItems] = useState<TItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [searchText, setSearchText] = useState("");
 
-    // Modal states
-    const [createModalOpen, setCreateModalOpen] = useState(false);
-    const [editModalOpen, setEditModalOpen] = useState(false);
-    const [currentRow, setCurrentRow] = useState<TItem | null>(null);
-    const [submitting, setSubmitting] = useState(false);
+  // Modal states
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [currentRow, setCurrentRow] = useState<TItem | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-    // Forms
-    const [createFormInstance] = Form.useForm();
-    const [editFormInstance] = Form.useForm();
+  // Forms
+  const [createFormInstance] = Form.useForm();
+  const [editFormInstance] = Form.useForm();
 
-    /**
-     * Fetch list data from API
-     */
-    const loadData = useCallback(async (currentPage = 1, search = searchText) => {
-        setLoading(true);
-        setError(null);
-        setForbidden(false);
+  /**
+   * Fetch list data from API
+   */
+  const loadData = useCallback(
+    async (currentPage = 1, search = searchText) => {
+      setLoading(true);
+      setError(null);
+      setForbidden(false);
 
-        try {
-            const params: any = enablePagination
-                ? { page: currentPage, page_size: pageSize }
-                : {};
+      try {
+        const params: any = enablePagination
+          ? { page: currentPage, page_size: pageSize }
+          : {};
 
-            if (search) {
-                params.search = search;
-            }
-
-            const response = await fetchList(params);
-
-            if (isApiError(response)) {
-                setError(response.message || t("reference.loadFailed", { entity: title }, `Failed to load ${title}`));
-                setLoading(false);
-                return;
-            }
-
-            // Map response to items and total
-            const mapped = mapListResponse
-                ? mapListResponse(response.data)
-                : { items: Array.isArray(response.data) ? response.data : [], total: 0 };
-
-            setItems(mapped.items);
-            setTotal(mapped.total || mapped.items.length);
-            setLoading(false);
-        } catch (err: any) {
-            if (isForbidden(err)) {
-                setForbidden(true);
-                setLoading(false);
-                return;
-            }
-
-            setError(err.message || t("reference.loadFailed", { entity: title }, `Failed to load ${title}`));
-            setLoading(false);
+        if (search) {
+          params.search = search;
         }
-    }, [fetchList, mapListResponse, enablePagination, pageSize, searchText, t, title]);
 
-    /**
-     * Initial load
-     */
-    useEffect(() => {
-        loadData(page);
-    }, [loadData, page]);
+        const response = await fetchList(params);
 
-    /**
-     * Handle create submission
-     */
-    const handleCreate = async () => {
-        if (isHeadOffice) {
-            notifyError(t("organization.headOffice.switchToCreateRecords"));
-            return;
+        if (isApiError(response)) {
+          setError(
+            response.message ||
+              t(
+                "reference.loadFailed",
+                { entity: title },
+                `Failed to load ${title}`,
+              ),
+          );
+          setLoading(false);
+          return;
         }
-        try {
-            const values = await createFormInstance.validateFields();
-            const payload = transformCreateValues ? transformCreateValues(values) : values;
 
-            setSubmitting(true);
-            const response = await createItem(payload);
+        // Map response to items and total
+        const mapped = mapListResponse
+          ? mapListResponse(response.data)
+          : {
+              items: Array.isArray(response.data) ? response.data : [],
+              total: 0,
+            };
 
-            if (isApiError(response)) {
-                // Apply 422 field errors to form if present
-                if (response.errors && response.errors.length > 0) {
-                    apply422ToForm(createFormInstance, response);
+        setItems(mapped.items);
+        setTotal(mapped.total || mapped.items.length);
+        setLoading(false);
+      } catch (err: any) {
+        if (isForbidden(err)) {
+          setForbidden(true);
+          setLoading(false);
+          return;
+        }
+
+        setError(
+          err.message ||
+            t(
+              "reference.loadFailed",
+              { entity: title },
+              `Failed to load ${title}`,
+            ),
+        );
+        setLoading(false);
+      }
+    },
+    [
+      fetchList,
+      mapListResponse,
+      enablePagination,
+      pageSize,
+      searchText,
+      t,
+      title,
+    ],
+  );
+
+  /**
+   * Initial load
+   */
+  useEffect(() => {
+    loadData(page);
+  }, [loadData, page]);
+
+  /**
+   * Handle create submission
+   */
+  const handleCreate = async () => {
+    if (isHeadOffice) {
+      notifyError(t("organization.headOffice.switchToCreateRecords"));
+      return;
+    }
+    try {
+      const values = await createFormInstance.validateFields();
+      const payload = transformCreateValues
+        ? transformCreateValues(values)
+        : values;
+
+      setSubmitting(true);
+      const response = await createItem(payload);
+
+      if (isApiError(response)) {
+        // Apply 422 field errors to form if present
+        if (response.errors && response.errors.length > 0) {
+          apply422ToForm(createFormInstance, response);
+        }
+        notifyError(
+          response.message ||
+            t(
+              "reference.createFailed",
+              { entity: entityName },
+              `Failed to create ${entityName}`,
+            ),
+        );
+        setSubmitting(false);
+        return;
+      }
+
+      notifySuccess(
+        t(
+          "reference.createSuccess",
+          { entity: entityName },
+          `${entityName} created successfully`,
+        ),
+      );
+      setCreateModalOpen(false);
+      createFormInstance.resetFields();
+      setSubmitting(false);
+      loadData(page);
+    } catch (err: any) {
+      setSubmitting(false);
+
+      // Handle 422 validation errors
+      if (err.errorFields) {
+        // Form validation failed, AntD already shows errors
+        return;
+      }
+
+      // Apply backend 422 errors to form
+      apply422ToForm(createFormInstance, err);
+
+      if (isForbidden(err)) {
+        setForbidden(true);
+        setCreateModalOpen(false);
+        return;
+      }
+
+      if (!err.response || err.response.status !== 422) {
+        notifyError(
+          err.message ||
+            t(
+              "reference.createFailed",
+              { entity: entityName },
+              `Failed to create ${entityName}`,
+            ),
+        );
+      }
+    }
+  };
+
+  /**
+   * Handle edit submission
+   */
+  const handleEdit = async () => {
+    if (!currentRow) return;
+    if (isHeadOffice) {
+      notifyError(t("organization.headOffice.switchToEditRecords"));
+      return;
+    }
+
+    try {
+      const values = await editFormInstance.validateFields();
+      const rowId =
+        typeof rowKey === "function"
+          ? rowKey(currentRow)
+          : (currentRow as any)[rowKey];
+      const payload = transformEditValues
+        ? transformEditValues(values, currentRow)
+        : values;
+
+      setSubmitting(true);
+      const response = await updateItem(rowId, payload);
+
+      if (isApiError(response)) {
+        // Apply 422 field errors to form if present
+        if (response.errors && response.errors.length > 0) {
+          apply422ToForm(editFormInstance, response);
+        }
+        notifyError(
+          response.message ||
+            t(
+              "reference.updateFailed",
+              { entity: entityName },
+              `Failed to update ${entityName}`,
+            ),
+        );
+        setSubmitting(false);
+        return;
+      }
+
+      notifySuccess(
+        t(
+          "reference.updateSuccess",
+          { entity: entityName },
+          `${entityName} updated successfully`,
+        ),
+      );
+      setEditModalOpen(false);
+      editFormInstance.resetFields();
+      setCurrentRow(null);
+      setSubmitting(false);
+      loadData(page);
+    } catch (err: any) {
+      setSubmitting(false);
+
+      // Handle 422 validation errors
+      if (err.errorFields) {
+        return;
+      }
+
+      apply422ToForm(editFormInstance, err);
+
+      if (isForbidden(err)) {
+        setForbidden(true);
+        setEditModalOpen(false);
+        return;
+      }
+
+      if (!err.response || err.response.status !== 422) {
+        notifyError(
+          err.message ||
+            t(
+              "reference.updateFailed",
+              { entity: entityName },
+              `Failed to update ${entityName}`,
+            ),
+        );
+      }
+    }
+  };
+
+  /**
+   * Open edit modal
+   */
+  const openEditModal = async (row: TItem) => {
+    if (beforeOpenEdit) {
+      try {
+        await beforeOpenEdit(row);
+      } catch (err: any) {
+        notifyError(err.message || "Failed to prepare edit");
+        return;
+      }
+    }
+
+    setCurrentRow(row);
+    const initialValues = initialEditValues ? initialEditValues(row) : row;
+    editFormInstance.setFieldsValue(initialValues);
+    setEditModalOpen(true);
+  };
+
+  /**
+   * Add edit action column if editForm is provided
+   */
+  const enhancedColumns: ColumnsType<TItem> = editForm
+    ? [
+        ...columns,
+        {
+          title: t("common.actions"),
+          key: "actions",
+          width: 100,
+          render: (_, record) => (
+            <Button
+              icon={<EditOutlined />}
+              onClick={() => openEditModal(record)}
+              disabled={
+                isHeadOffice || (disableEdit ? disableEdit(record) : false)
+              }
+            >
+              {t("common.edit")}
+            </Button>
+          ),
+        },
+      ]
+    : columns;
+
+  // Render 403 unauthorized page
+  if (forbidden) {
+    return <Unauthorized403Page />;
+  }
+
+  // Render loading state
+  if (loading && items.length === 0) {
+    return <LoadingState title={t("loading.generic")} />;
+  }
+
+  // Render error state
+  if (error && items.length === 0) {
+    return (
+      <ErrorState
+        title={t(
+          "reference.loadFailed",
+          { entity: title },
+          `Failed to load ${title}`,
+        )}
+        description={error}
+        onRetry={() => loadData(page)}
+      />
+    );
+  }
+
+  // Render empty state
+  if (!loading && items.length === 0) {
+    return (
+      <EmptyState
+        title={t("common.noData")}
+        description={t(
+          "reference.noItemsFound",
+          { entity: entityName },
+          `No ${entityName} found.`,
+        )}
+        actionText={
+          createForm && !isHeadOffice
+            ? `${t("common.create")} ${entityName}`
+            : undefined
+        }
+        onAction={
+          createForm && !isHeadOffice
+            ? () => setCreateModalOpen(true)
+            : undefined
+        }
+      />
+    );
+  }
+
+  // Render main content
+  return (
+    <div>
+      <PageHeader
+        title={title}
+        actions={
+          <Space>
+            <Input.Search
+              placeholder={`${t("common.search")}...`}
+              allowClear
+              onSearch={(value) => {
+                setSearchText(value);
+                setPage(1);
+                loadData(1, value);
+              }}
+              style={{ width: 250 }}
+            />
+            {createForm && (
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                disabled={isHeadOffice}
+                onClick={() => {
+                  createFormInstance.resetFields();
+                  if (initialCreateValues) {
+                    createFormInstance.setFieldsValue(initialCreateValues);
+                  }
+                  setCreateModalOpen(true);
+                }}
+                title={
+                  isHeadOffice
+                    ? t("organization.headOffice.switchToCreateRecords")
+                    : undefined
                 }
-                notifyError(
-                    response.message ||
-                    t("reference.createFailed", { entity: entityName }, `Failed to create ${entityName}`)
-                );
-                setSubmitting(false);
-                return;
-            }
+              >
+                {`${t("common.create")} ${entityName}`}
+              </Button>
+            )}
+          </Space>
+        }
+      />
 
-            notifySuccess(
-                t("reference.createSuccess", { entity: entityName }, `${entityName} created successfully`)
-            );
+      <Card style={{ borderRadius: 16 }}>
+        <Table
+          dataSource={items}
+          columns={enhancedColumns}
+          rowKey={rowKey}
+          loading={loading}
+          pagination={
+            enablePagination
+              ? {
+                  current: page,
+                  pageSize: pageSize,
+                  total: total,
+                  onChange: (newPage) => setPage(newPage),
+                }
+              : false
+          }
+        />
+      </Card>
+
+      {/* Create Modal */}
+      {createForm && (
+        <Modal
+          title={`${t("common.create")} ${entityName}`}
+          open={createModalOpen}
+          onOk={handleCreate}
+          onCancel={() => {
             setCreateModalOpen(false);
             createFormInstance.resetFields();
-            setSubmitting(false);
-            loadData(page);
-        } catch (err: any) {
-            setSubmitting(false);
+          }}
+          confirmLoading={submitting}
+          okText={t("common.create")}
+        >
+          <Form form={createFormInstance} layout="vertical">
+            {createForm}
+          </Form>
+        </Modal>
+      )}
 
-            // Handle 422 validation errors
-            if (err.errorFields) {
-                // Form validation failed, AntD already shows errors
-                return;
-            }
-
-            // Apply backend 422 errors to form
-            apply422ToForm(createFormInstance, err);
-
-            if (isForbidden(err)) {
-                setForbidden(true);
-                setCreateModalOpen(false);
-                return;
-            }
-
-            if (!err.response || err.response.status !== 422) {
-                notifyError(
-                    err.message ||
-                    t("reference.createFailed", { entity: entityName }, `Failed to create ${entityName}`)
-                );
-            }
-        }
-    };
-
-    /**
-     * Handle edit submission
-     */
-    const handleEdit = async () => {
-        if (!currentRow) return;
-        if (isHeadOffice) {
-            notifyError(t("organization.headOffice.switchToEditRecords"));
-            return;
-        }
-
-        try {
-            const values = await editFormInstance.validateFields();
-            const rowId = typeof rowKey === "function" ? rowKey(currentRow) : (currentRow as any)[rowKey];
-            const payload = transformEditValues ? transformEditValues(values, currentRow) : values;
-
-            setSubmitting(true);
-            const response = await updateItem(rowId, payload);
-
-            if (isApiError(response)) {
-                // Apply 422 field errors to form if present
-                if (response.errors && response.errors.length > 0) {
-                    apply422ToForm(editFormInstance, response);
-                }
-                notifyError(
-                    response.message ||
-                    t("reference.updateFailed", { entity: entityName }, `Failed to update ${entityName}`)
-                );
-                setSubmitting(false);
-                return;
-            }
-
-            notifySuccess(
-                t("reference.updateSuccess", { entity: entityName }, `${entityName} updated successfully`)
-            );
+      {/* Edit Modal */}
+      {editForm && (
+        <Modal
+          title={`${t("common.edit")} ${entityName}`}
+          open={editModalOpen}
+          onOk={handleEdit}
+          onCancel={() => {
             setEditModalOpen(false);
             editFormInstance.resetFields();
             setCurrentRow(null);
-            setSubmitting(false);
-            loadData(page);
-        } catch (err: any) {
-            setSubmitting(false);
-
-            // Handle 422 validation errors
-            if (err.errorFields) {
-                return;
-            }
-
-            apply422ToForm(editFormInstance, err);
-
-            if (isForbidden(err)) {
-                setForbidden(true);
-                setEditModalOpen(false);
-                return;
-            }
-
-            if (!err.response || err.response.status !== 422) {
-                notifyError(
-                    err.message ||
-                    t("reference.updateFailed", { entity: entityName }, `Failed to update ${entityName}`)
-                );
-            }
-        }
-    };
-
-    /**
-     * Open edit modal
-     */
-    const openEditModal = async (row: TItem) => {
-        if (beforeOpenEdit) {
-            try {
-                await beforeOpenEdit(row);
-            } catch (err: any) {
-                notifyError(err.message || "Failed to prepare edit");
-                return;
-            }
-        }
-
-        setCurrentRow(row);
-        const initialValues = initialEditValues ? initialEditValues(row) : row;
-        editFormInstance.setFieldsValue(initialValues);
-        setEditModalOpen(true);
-    };
-
-    /**
-     * Add edit action column if editForm is provided
-     */
-    const enhancedColumns: ColumnsType<TItem> = editForm
-        ? [
-            ...columns,
-            {
-                title: t("common.actions"),
-                key: "actions",
-                width: 100,
-                render: (_, record) => (
-                    <Button
-                        icon={<EditOutlined />}
-                        onClick={() => openEditModal(record)}
-                        disabled={isHeadOffice || (disableEdit ? disableEdit(record) : false)}
-                    >
-                        {t("common.edit")}
-                    </Button>
-                ),
-            },
-        ]
-        : columns;
-
-    // Render 403 unauthorized page
-    if (forbidden) {
-        return <Unauthorized403Page />;
-    }
-
-    // Render loading state
-    if (loading && items.length === 0) {
-        return <LoadingState title={t("loading.generic")} />;
-    }
-
-    // Render error state
-    if (error && items.length === 0) {
-        return (
-            <ErrorState
-                title={t("reference.loadFailed", { entity: title }, `Failed to load ${title}`)}
-                description={error}
-                onRetry={() => loadData(page)}
-            />
-        );
-    }
-
-    // Render empty state
-    if (!loading && items.length === 0) {
-        return (
-            <EmptyState
-                title={t("common.noData")}
-                description={t("reference.noItemsFound", { entity: entityName }, `No ${entityName} found.`)}
-                actionText={createForm && !isHeadOffice ? `${t("common.create")} ${entityName}` : undefined}
-                onAction={createForm && !isHeadOffice ? () => setCreateModalOpen(true) : undefined}
-            />
-        );
-    }
-
-    // Render main content
-    return (
-        <div>
-            <PageHeader
-                title={title}
-                actions={
-                    <Space>
-                        <Input.Search
-                            placeholder={`${t("common.search")}...`}
-                            allowClear
-                            onSearch={(value) => {
-                                setSearchText(value);
-                                setPage(1);
-                                loadData(1, value);
-                            }}
-                            style={{ width: 250 }}
-                        />
-                        {createForm && (
-                            <Button
-                                type="primary"
-                                icon={<PlusOutlined />}
-                                disabled={isHeadOffice}
-                                onClick={() => {
-                                    createFormInstance.resetFields();
-                                    if (initialCreateValues) {
-                                        createFormInstance.setFieldsValue(initialCreateValues);
-                                    }
-                                    setCreateModalOpen(true);
-                                }}
-                                title={isHeadOffice ? t("organization.headOffice.switchToCreateRecords") : undefined}
-                            >
-                                {`${t("common.create")} ${entityName}`}
-                            </Button>
-                        )}
-                    </Space>
-                }
-            />
-
-            <Card style={{ borderRadius: 16 }}>
-                <Table
-                    dataSource={items}
-                    columns={enhancedColumns}
-                    rowKey={rowKey}
-                    loading={loading}
-                    pagination={
-                        enablePagination
-                            ? {
-                                current: page,
-                                pageSize: pageSize,
-                                total: total,
-                                onChange: (newPage) => setPage(newPage),
-                            }
-                            : false
-                    }
-                />
-            </Card>
-
-            {/* Create Modal */}
-            {createForm && (
-                <Modal
-                    title={`${t("common.create")} ${entityName}`}
-                    open={createModalOpen}
-                    onOk={handleCreate}
-                    onCancel={() => {
-                        setCreateModalOpen(false);
-                        createFormInstance.resetFields();
-                    }}
-                    confirmLoading={submitting}
-                    okText={t("common.create")}
-                >
-                    <Form form={createFormInstance} layout="vertical">
-                        {createForm}
-                    </Form>
-                </Modal>
-            )}
-
-            {/* Edit Modal */}
-            {editForm && (
-                <Modal
-                    title={`${t("common.edit")} ${entityName}`}
-                    open={editModalOpen}
-                    onOk={handleEdit}
-                    onCancel={() => {
-                        setEditModalOpen(false);
-                        editFormInstance.resetFields();
-                        setCurrentRow(null);
-                    }}
-                    confirmLoading={submitting}
-                    okText={t("common.save")}
-                >
-                    <Form form={editFormInstance} layout="vertical">
-                        {editForm}
-                    </Form>
-                </Modal>
-            )}
-        </div>
-    );
+          }}
+          confirmLoading={submitting}
+          okText={t("common.save")}
+        >
+          <Form form={editFormInstance} layout="vertical">
+            {editForm}
+          </Form>
+        </Modal>
+      )}
+    </div>
+  );
 }

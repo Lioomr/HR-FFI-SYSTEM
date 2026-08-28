@@ -1,5 +1,10 @@
 import { api } from "./apiClient";
-import type { ApiResponse, InviteDto, PaginatedResponse, Role } from "./apiTypes";
+import type {
+  ApiResponse,
+  InviteDto,
+  PaginatedResponse,
+  Role,
+} from "./apiTypes";
 
 export type InvitesListParams = {
   page?: number;
@@ -47,7 +52,7 @@ export type WhatsappTestResult = {
 export async function listInvites(params: InvitesListParams = {}) {
   const { data } = await api.get<ApiResponse<PaginatedResponse<InviteDto>>>(
     "/invites/",
-    { params }
+    { params },
   );
   return data;
 }
@@ -60,7 +65,7 @@ export async function createInvite(payload: CreateInviteRequest) {
 export async function resendInvite(inviteId: number | string) {
   const { data } = await api.post<ApiResponse<InviteDto>>(
     `/invites/${inviteId}/resend/`,
-    {}
+    {},
   );
   return data;
 }
@@ -71,25 +76,33 @@ export async function revokeInvite(inviteId: number | string) {
 }
 
 export async function testWhatsappProvider(phone_number: string) {
-  const { data } = await api.post<ApiResponse<WhatsappTestResult> | WhatsappTestResult>(
-    "/invites/test-whatsapp/",
-    { phone_number }
-  );
+  const { data } = await api.post<
+    ApiResponse<WhatsappTestResult> | WhatsappTestResult
+  >("/invites/test-whatsapp/", { phone_number });
   // Tolerate both the standard {status,data} envelope and a raw delivery payload.
   if (data && typeof data === "object" && "status" in data) {
     return data as ApiResponse<WhatsappTestResult>;
   }
-  return { status: "success", data: data as WhatsappTestResult } satisfies ApiResponse<WhatsappTestResult>;
+  return {
+    status: "success",
+    data: data as WhatsappTestResult,
+  } satisfies ApiResponse<WhatsappTestResult>;
 }
 
 export async function validateInviteToken(token: string) {
-  const { data } = await api.get<ApiResponse<InviteAcceptInfo>>("/invites/accept/", {
-    params: { token },
-  });
+  const { data } = await api.get<ApiResponse<InviteAcceptInfo>>(
+    "/invites/accept/",
+    {
+      params: { token },
+    },
+  );
   return data;
 }
 
 export async function acceptInvite(payload: AcceptInviteRequest) {
-  const { data } = await api.post<ApiResponse<{ email: string; role: Role }>>("/invites/accept/", payload);
+  const { data } = await api.post<ApiResponse<{ email: string; role: Role }>>(
+    "/invites/accept/",
+    payload,
+  );
   return data;
 }

@@ -21,7 +21,13 @@ export interface Asset {
   name_en: string;
   name_ar: string;
   type: "VEHICLE" | "LAPTOP" | "OTHER";
-  status: "AVAILABLE" | "ASSIGNED" | "UNDER_MAINTENANCE" | "LOST" | "DAMAGED" | "RETIRED";
+  status:
+    | "AVAILABLE"
+    | "ASSIGNED"
+    | "UNDER_MAINTENANCE"
+    | "LOST"
+    | "DAMAGED"
+    | "RETIRED";
   serial_number?: string;
   purchase_date?: string | null;
   warranty_expiry?: string | null;
@@ -29,7 +35,10 @@ export interface Asset {
   vendor?: string;
   notes?: string;
   must_return_before_travel?: boolean;
-  flexible_attributes?: Record<string, { type?: "body" | "date"; body?: string; date?: string | null } | unknown> | null;
+  flexible_attributes?: Record<
+    string,
+    { type?: "body" | "date"; body?: string; date?: string | null } | unknown
+  > | null;
   plate_number?: string;
   chassis_number?: string;
   engine_number?: string;
@@ -52,7 +61,13 @@ export interface CreateAssetPayload {
   name_en: string;
   name_ar: string;
   type: "VEHICLE" | "LAPTOP" | "OTHER";
-  status?: "AVAILABLE" | "ASSIGNED" | "UNDER_MAINTENANCE" | "LOST" | "DAMAGED" | "RETIRED";
+  status?:
+    | "AVAILABLE"
+    | "ASSIGNED"
+    | "UNDER_MAINTENANCE"
+    | "LOST"
+    | "DAMAGED"
+    | "RETIRED";
   serial_number?: string;
   purchase_date?: string;
   warranty_expiry?: string;
@@ -60,7 +75,10 @@ export interface CreateAssetPayload {
   vendor?: string;
   notes?: string;
   must_return_before_travel?: boolean;
-  flexible_attributes?: Record<string, { type?: "body" | "date"; body?: string; date?: string | null } | unknown>;
+  flexible_attributes?: Record<
+    string,
+    { type?: "body" | "date"; body?: string; date?: string | null } | unknown
+  >;
   plate_number?: string;
   chassis_number?: string;
   engine_number?: string;
@@ -119,7 +137,13 @@ export interface AssetReturnRequest {
   employee_name?: string;
   employee_email?: string;
   note: string;
-  status: "PENDING_MANAGER" | "PENDING" | "PENDING_CEO" | "APPROVED" | "PROCESSED" | "REJECTED";
+  status:
+    | "PENDING_MANAGER"
+    | "PENDING"
+    | "PENDING_CEO"
+    | "APPROVED"
+    | "PROCESSED"
+    | "REJECTED";
   requested_at: string;
   manager_decision_at?: string | null;
   manager_decision_note?: string;
@@ -150,12 +174,17 @@ export async function listAssets(params?: {
   warranty_expiring_soon?: boolean;
   label_status?: "printed" | "never_printed";
 }) {
-  const { data } = await api.get<ApiResponse<AssetsPaginatedResponse>>("/api/assets/", { params });
+  const { data } = await api.get<ApiResponse<AssetsPaginatedResponse>>(
+    "/api/assets/",
+    { params },
+  );
   return data;
 }
 
 export async function getAssetsDashboardSummary() {
-  const { data } = await api.get<ApiResponse<AssetDashboardSummary>>("/api/assets/dashboard-summary/");
+  const { data } = await api.get<ApiResponse<AssetDashboardSummary>>(
+    "/api/assets/dashboard-summary/",
+  );
   return data;
 }
 
@@ -166,7 +195,10 @@ export async function listMyAssets(params?: {
   type?: string;
   status?: string;
 }) {
-  const { data } = await api.get<ApiResponse<AssetsPaginatedResponse>>("/api/assets/my-assets/", { params });
+  const { data } = await api.get<ApiResponse<AssetsPaginatedResponse>>(
+    "/api/assets/my-assets/",
+    { params },
+  );
   return data;
 }
 
@@ -176,10 +208,9 @@ export async function listMyAssetDamageReports(params?: {
   status?: string;
   asset?: number | string;
 }) {
-  const { data } = await api.get<ApiResponse<AssetRequestHistoryResponse<AssetDamageReport>>>(
-    "/api/assets/my-damage-reports/",
-    { params }
-  );
+  const { data } = await api.get<
+    ApiResponse<AssetRequestHistoryResponse<AssetDamageReport>>
+  >("/api/assets/my-damage-reports/", { params });
   return data;
 }
 
@@ -189,10 +220,9 @@ export async function listMyAssetReturnRequests(params?: {
   status?: string;
   asset?: number | string;
 }) {
-  const { data } = await api.get<ApiResponse<AssetRequestHistoryResponse<AssetReturnRequest>>>(
-    "/api/assets/my-return-requests/",
-    { params }
-  );
+  const { data } = await api.get<
+    ApiResponse<AssetRequestHistoryResponse<AssetReturnRequest>>
+  >("/api/assets/my-return-requests/", { params });
   return data;
 }
 
@@ -202,10 +232,9 @@ export async function listAssetDamageReports(params?: {
   status?: string;
   asset?: number | string;
 }) {
-  const { data } = await api.get<ApiResponse<AssetRequestHistoryResponse<AssetDamageReport>>>(
-    "/api/assets/damage-reports/",
-    { params }
-  );
+  const { data } = await api.get<
+    ApiResponse<AssetRequestHistoryResponse<AssetDamageReport>>
+  >("/api/assets/damage-reports/", { params });
   return data;
 }
 
@@ -215,10 +244,9 @@ export async function listAssetReturnRequests(params?: {
   status?: string;
   asset?: number | string;
 }) {
-  const { data } = await api.get<ApiResponse<AssetRequestHistoryResponse<AssetReturnRequest>>>(
-    "/api/assets/return-requests/",
-    { params }
-  );
+  const { data } = await api.get<
+    ApiResponse<AssetRequestHistoryResponse<AssetReturnRequest>>
+  >("/api/assets/return-requests/", { params });
   return data;
 }
 
@@ -227,15 +255,27 @@ export async function createAsset(payload: CreateAssetPayload) {
   return data;
 }
 
-export async function updateAsset(assetId: number | string, payload: CreateAssetPayload) {
-  const { data } = await api.put<ApiResponse<Asset>>(`/api/assets/${assetId}/`, payload);
+export async function updateAsset(
+  assetId: number | string,
+  payload: CreateAssetPayload,
+) {
+  const { data } = await api.put<ApiResponse<Asset>>(
+    `/api/assets/${assetId}/`,
+    payload,
+  );
   return data;
 }
 
-export async function assignAsset(assetId: number | string, employeeId: number) {
-  const { data } = await api.post<ApiResponse<Asset>>(`/api/assets/${assetId}/assign/`, {
-    employee_id: employeeId,
-  });
+export async function assignAsset(
+  assetId: number | string,
+  employeeId: number,
+) {
+  const { data } = await api.post<ApiResponse<Asset>>(
+    `/api/assets/${assetId}/assign/`,
+    {
+      employee_id: employeeId,
+    },
+  );
   return data;
 }
 
@@ -244,14 +284,19 @@ export async function returnAsset(
   payload?: {
     return_note?: string;
     condition_on_return?: string;
-  }
+  },
 ) {
-  const { data } = await api.post<ApiResponse<Asset>>(`/api/assets/${assetId}/return/`, payload || {});
+  const { data } = await api.post<ApiResponse<Asset>>(
+    `/api/assets/${assetId}/return/`,
+    payload || {},
+  );
   return data;
 }
 
 export async function deleteAsset(assetId: number | string) {
-  const { data } = await api.delete<ApiResponse<{ id: number | string }>>(`/api/assets/${assetId}/`);
+  const { data } = await api.delete<ApiResponse<{ id: number | string }>>(
+    `/api/assets/${assetId}/`,
+  );
   return data;
 }
 
@@ -259,93 +304,125 @@ export async function reportAssetIssue(
   assetId: number | string,
   payload: {
     description: string;
-  }
+  },
 ) {
-  const { data } = await api.post<ApiResponse<{ id: number; reported_at: string }>>(
-    `/api/assets/${assetId}/damage-report/`,
-    payload
-  );
+  const { data } = await api.post<
+    ApiResponse<{ id: number; reported_at: string }>
+  >(`/api/assets/${assetId}/damage-report/`, payload);
   return data;
 }
 
 export async function requestAssetReturn(
   assetId: number | string,
-  payload: { note: string }
+  payload: { note: string },
 ) {
-  const { data } = await api.post<ApiResponse<{ id: number; requested_at: string; status: string }>>(
-    `/api/assets/${assetId}/return-request/`,
-    payload
-  );
+  const { data } = await api.post<
+    ApiResponse<{ id: number; requested_at: string; status: string }>
+  >(`/api/assets/${assetId}/return-request/`, payload);
   return data;
 }
 
-export async function approveHRAssetReturnRequest(id: number | string, comment?: string) {
+export async function approveHRAssetReturnRequest(
+  id: number | string,
+  comment?: string,
+) {
   const { data } = await api.post<ApiResponse<AssetReturnRequest>>(
     `/api/assets/return-requests/${id}/approve/`,
-    { comment }
+    { comment },
   );
   return data;
 }
 
-export async function rejectHRAssetReturnRequest(id: number | string, comment: string) {
+export async function rejectHRAssetReturnRequest(
+  id: number | string,
+  comment: string,
+) {
   const { data } = await api.post<ApiResponse<AssetReturnRequest>>(
     `/api/assets/return-requests/${id}/reject/`,
-    { comment }
+    { comment },
   );
   return data;
 }
 
-export async function getCEOAssetDamageReports(params?: { status?: string; page?: number; page_size?: number }) {
-  const { data } = await api.get<ApiResponse<{ items: AssetDamageReport[]; count: number } | AssetDamageReport[]>>(
-    "/api/assets/ceo/assets/damage-reports/",
-    { params }
-  );
+export async function getCEOAssetDamageReports(params?: {
+  status?: string;
+  page?: number;
+  page_size?: number;
+}) {
+  const { data } = await api.get<
+    ApiResponse<
+      { items: AssetDamageReport[]; count: number } | AssetDamageReport[]
+    >
+  >("/api/ceo/assets/damage-reports/", { params });
   return data;
 }
 
-export async function approveCEOAssetDamageReport(id: number | string, comment?: string) {
+export async function approveCEOAssetDamageReport(
+  id: number | string,
+  comment?: string,
+) {
   const { data } = await api.post<ApiResponse<AssetDamageReport>>(
-    `/api/assets/ceo/assets/damage-reports/${id}/approve/`,
-    { comment }
+    `/api/ceo/assets/damage-reports/${id}/approve/`,
+    { comment },
   );
   return data;
 }
 
-export async function rejectCEOAssetDamageReport(id: number | string, comment: string) {
+export async function rejectCEOAssetDamageReport(
+  id: number | string,
+  comment: string,
+) {
   const { data } = await api.post<ApiResponse<AssetDamageReport>>(
-    `/api/assets/ceo/assets/damage-reports/${id}/reject/`,
-    { comment }
+    `/api/ceo/assets/damage-reports/${id}/reject/`,
+    { comment },
   );
   return data;
 }
 
-export async function getCEOAssetReturnRequests(params?: { status?: string; page?: number; page_size?: number }) {
-  const { data } = await api.get<ApiResponse<{ items: AssetReturnRequest[]; count: number } | AssetReturnRequest[]>>(
-    "/api/assets/ceo/assets/return-requests/",
-    { params }
-  );
+export async function getCEOAssetReturnRequests(params?: {
+  status?: string;
+  page?: number;
+  page_size?: number;
+}) {
+  const { data } = await api.get<
+    ApiResponse<
+      { items: AssetReturnRequest[]; count: number } | AssetReturnRequest[]
+    >
+  >("/api/ceo/assets/return-requests/", { params });
   return data;
 }
 
-export async function approveCEOAssetReturnRequest(id: number | string, comment?: string) {
+export async function approveCEOAssetReturnRequest(
+  id: number | string,
+  comment?: string,
+) {
   const { data } = await api.post<ApiResponse<AssetReturnRequest>>(
-    `/api/assets/ceo/assets/return-requests/${id}/approve/`,
-    { comment }
+    `/api/ceo/assets/return-requests/${id}/approve/`,
+    { comment },
   );
   return data;
 }
 
-export async function rejectCEOAssetReturnRequest(id: number | string, comment: string) {
+export async function rejectCEOAssetReturnRequest(
+  id: number | string,
+  comment: string,
+) {
   const { data } = await api.post<ApiResponse<AssetReturnRequest>>(
-    `/api/assets/ceo/assets/return-requests/${id}/reject/`,
-    { comment }
+    `/api/ceo/assets/return-requests/${id}/reject/`,
+    { comment },
   );
   return data;
 }
 
 // ─── Asset Labels: printing, lookup, history ──────────────────────────────────
 
-export type LabelPaperSize = "2X1" | "4X6" | "50X30" | "40X30" | "60X40" | "A4_GRID";
+export type LabelPaperSize =
+  | "2X1"
+  | "4X6"
+  | "50X30"
+  | "40X30"
+  | "60X40"
+  | "A4_GRID";
 export type LabelNameLanguage = "en" | "ar" | "auto";
 
 export interface AssetLookupAssignment {
@@ -401,9 +478,12 @@ export interface PrintedLabelJobsPaginatedResponse {
 }
 
 export async function lookupAssetByCode(code?: string, token?: string) {
-  const { data } = await api.get<ApiResponse<AssetLookupResult>>("/api/assets/lookup/", {
-    params: token ? { token } : { code },
-  });
+  const { data } = await api.get<ApiResponse<AssetLookupResult>>(
+    "/api/assets/lookup/",
+    {
+      params: token ? { token } : { code },
+    },
+  );
   return data;
 }
 
@@ -418,15 +498,19 @@ export async function printAssetLabels(payload: {
   return data as Blob;
 }
 
-export async function listLabelJobs(params?: { page?: number; page_size?: number }) {
-  const { data } = await api.get<ApiResponse<PrintedLabelJobsPaginatedResponse>>(
-    "/api/assets/labels/jobs/",
-    { params }
-  );
+export async function listLabelJobs(params?: {
+  page?: number;
+  page_size?: number;
+}) {
+  const { data } = await api.get<
+    ApiResponse<PrintedLabelJobsPaginatedResponse>
+  >("/api/assets/labels/jobs/", { params });
   return data;
 }
 
-export async function downloadLabelJobPdf(jobId: number | string): Promise<Blob> {
+export async function downloadLabelJobPdf(
+  jobId: number | string,
+): Promise<Blob> {
   const { data } = await api.get(`/api/assets/labels/jobs/${jobId}/pdf/`, {
     responseType: "blob",
   });

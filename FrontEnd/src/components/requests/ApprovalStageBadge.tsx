@@ -11,7 +11,11 @@ const colorMap: Record<string, string> = {
   draft: "default",
 };
 
-export default function ApprovalStageBadge({ workflow }: { workflow?: WorkflowSnapshot }) {
+export default function ApprovalStageBadge({
+  workflow,
+}: {
+  workflow?: WorkflowSnapshot;
+}) {
   if (!workflow) return null;
   const label = workflow.current_stage
     ? `${workflow.status.replace(/_/g, " ")} · ${workflow.current_stage.replace(/_/g, " ")}`

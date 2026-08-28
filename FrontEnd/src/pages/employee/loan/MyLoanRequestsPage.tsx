@@ -1,15 +1,36 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Card, Grid, Modal, Table, Tag, Tooltip, notification } from "antd";
+import {
+  Button,
+  Card,
+  Grid,
+  Modal,
+  Table,
+  Tag,
+  Tooltip,
+  notification,
+} from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { CloseCircleOutlined, EyeOutlined, PlusOutlined } from "@ant-design/icons";
+import {
+  CloseCircleOutlined,
+  EyeOutlined,
+  PlusOutlined,
+} from "@ant-design/icons";
 
 import PageHeader from "../../../components/ui/PageHeader";
 import { isApiError } from "../../../services/api/apiTypes";
-import { cancelLoanRequest, getMyLoanRequests, type LoanRequest, type LoanStatus } from "../../../services/api/loanApi";
+import {
+  cancelLoanRequest,
+  getMyLoanRequests,
+  type LoanRequest,
+  type LoanStatus,
+} from "../../../services/api/loanApi";
 import AmountWithSAR from "../../../components/ui/AmountWithSAR";
 import { useI18n } from "../../../i18n/useI18n";
-import { getDetailedApiMessage, getDetailedHttpErrorMessage } from "../../../services/api/userErrorMessages";
+import {
+  getDetailedApiMessage,
+  getDetailedHttpErrorMessage,
+} from "../../../services/api/userErrorMessages";
 import LoanApprovalMap from "../../../components/loans/LoanApprovalMap";
 import { formatDateOnly } from "../../../utils/dateTime";
 
@@ -60,13 +81,19 @@ export default function MyLoanRequestsPage() {
     try {
       const res = await getMyLoanRequests({ page, page_size: pageSize });
       if (isApiError(res)) {
-        notification.error({ message: t("loans.myRequests.failedLoad"), description: getDetailedApiMessage(t, res.message) });
+        notification.error({
+          message: t("loans.myRequests.failedLoad"),
+          description: getDetailedApiMessage(t, res.message),
+        });
       } else {
         setItems(res.data.items || []);
         setTotal(res.data.count || 0);
       }
     } catch (err: unknown) {
-      notification.error({ message: t("loans.myRequests.failedLoad"), description: getDetailedHttpErrorMessage(t, err) });
+      notification.error({
+        message: t("loans.myRequests.failedLoad"),
+        description: getDetailedHttpErrorMessage(t, err),
+      });
     } finally {
       setLoading(false);
     }
@@ -88,13 +115,21 @@ export default function MyLoanRequestsPage() {
         try {
           const res = await cancelLoanRequest(id);
           if (isApiError(res)) {
-            notification.error({ message: t("loans.myRequests.cancelFailed"), description: getDetailedApiMessage(t, res.message) });
+            notification.error({
+              message: t("loans.myRequests.cancelFailed"),
+              description: getDetailedApiMessage(t, res.message),
+            });
           } else {
-            notification.success({ message: t("loans.myRequests.cancelSuccess") });
+            notification.success({
+              message: t("loans.myRequests.cancelSuccess"),
+            });
             loadData();
           }
         } catch (err: unknown) {
-          notification.error({ message: t("loans.myRequests.cancelFailed"), description: getDetailedHttpErrorMessage(t, err) });
+          notification.error({
+            message: t("loans.myRequests.cancelFailed"),
+            description: getDetailedHttpErrorMessage(t, err),
+          });
         } finally {
           setCancellingId(null);
         }
@@ -107,7 +142,9 @@ export default function MyLoanRequestsPage() {
       title: t("loans.list.colAmount"),
       key: "requested_amount",
       width: 140,
-      render: (_, record) => <AmountWithSAR amount={record.requested_amount || 0} />,
+      render: (_, record) => (
+        <AmountWithSAR amount={record.requested_amount || 0} />
+      ),
     },
     {
       title: t("loans.list.colReason"),
@@ -165,7 +202,11 @@ export default function MyLoanRequestsPage() {
         return (
           <div style={{ display: "flex", gap: 8 }}>
             <Tooltip title={t("loans.list.viewDetails")}>
-              <Button size="small" icon={<EyeOutlined />} onClick={() => navigate(`/employee/loans/${record.id}`)} />
+              <Button
+                size="small"
+                icon={<EyeOutlined />}
+                onClick={() => navigate(`/employee/loans/${record.id}`)}
+              />
             </Tooltip>
             {isPending ? (
               <Tooltip title={t("loans.list.cancelReq")}>
@@ -190,7 +231,12 @@ export default function MyLoanRequestsPage() {
         title={t("loans.myRequests.title")}
         subtitle={t("loans.myRequests.subtitle")}
         actions={
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate("/employee/loans/request")} block={isMobile}>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => navigate("/employee/loans/request")}
+            block={isMobile}
+          >
             {t("loans.myRequests.newRequest")}
           </Button>
         }
@@ -204,7 +250,9 @@ export default function MyLoanRequestsPage() {
           size={isMobile ? "small" : "middle"}
           scroll={{ x: "max-content" }}
           expandable={{
-            expandedRowRender: (record) => <LoanApprovalMap request={record} t={t} />,
+            expandedRowRender: (record) => (
+              <LoanApprovalMap request={record} t={t} />
+            ),
           }}
           pagination={{
             current: page,

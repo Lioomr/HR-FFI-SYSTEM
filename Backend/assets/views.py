@@ -14,6 +14,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 
 from audit.utils import audit
+from core.files import read_field_file_bytes
 from core.pagination import StandardPagination
 from core.pdf import merge_pdfs
 from core.permissions import IsDepartmentCEOApprover, get_role
@@ -29,7 +30,7 @@ from core.services import (
 )
 from employees.models import EmployeeProfile
 from employees.services.manager_relationships import (
-    get_valid_direct_manager_user,
+    get_valid_manager_user,
     manager_approval_actor_source,
     manager_scope_q,
 )
@@ -85,20 +86,7 @@ def _flatten_errors(error_dict):
 def _asset_invoice_pdf_bytes(asset) -> bytes | None:
     """Read the asset's invoice file bytes when it's a PDF attachment."""
 
-    invoice = getattr(asset, "invoice_file", None)
-    if not invoice:
-        return None
-    name = str(getattr(invoice, "name", "") or "").lower()
-    if not name.endswith(".pdf"):
-        return None
-    try:
-        invoice.open("rb")
-        try:
-            return invoice.read()
-        finally:
-            invoice.close()
-    except Exception:
-        return None
+    return read_field_file_bytes(getattr(asset, "invoice_file", None), suffix=".pdf")
 
 
 def _reject_self_approval(request, profile):
@@ -108,7 +96,7 @@ def _reject_self_approval(request, profile):
 
 
 def _resolve_manager_user(profile: EmployeeProfile | None):
-    return get_valid_direct_manager_user(profile)
+    return get_valid_manager_user(profile, cross_company_capability="assets.approve")
 
 
 _DAMAGE_STATUS_LABELS = {
@@ -349,9 +337,7 @@ class AssetViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = Asset.objects.all().prefetch_related("assignments")
-        if self.action == "list":
-            return filter_queryset_by_company_scope(qs, self.request)
-        return filter_queryset_by_accessible_companies(qs, self.request)
+        return filter_queryset_by_company_scope(qs, self.request)
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -476,7 +462,7 @@ class AssetViewSet(viewsets.ModelViewSet):
 
         with transaction.atomic():
             asset = (
-                filter_queryset_by_accessible_companies(Asset.objects.select_for_update(), request)
+                filter_queryset_by_company_scope(Asset.objects.select_for_update(), request)
                 .filter(pk=pk)
                 .first()
             )
@@ -531,7 +517,7 @@ class AssetViewSet(viewsets.ModelViewSet):
 
         with transaction.atomic():
             asset = (
-                filter_queryset_by_accessible_companies(Asset.objects.select_for_update(), request)
+                filter_queryset_by_company_scope(Asset.objects.select_for_update(), request)
                 .filter(pk=pk)
                 .first()
             )
@@ -674,10 +660,7 @@ class AssetViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["post"], url_path="labels/print")
     def labels_print(self, request):
-        try:
-            ensure_company_write_allowed(request)
-        except ValueError as exc:
-            return error(str(exc), status=status.HTTP_400_BAD_REQUEST)
+        ensure_company_write_allowed(request)
 
         company = get_active_company_for_request(request)
         if not company:
@@ -1351,7 +1334,13 @@ class ManagerAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
             base_qs = filter_queryset_by_accessible_companies(qs, self.request, field_name="asset__company_id")
         if role == "SystemAdmin":
             return base_qs
-        return base_qs.filter(manager_scope_q(self.request.user, employee_prefix="employee__")).distinct()
+        return qs.filter(
+            manager_scope_q(
+                self.request.user,
+                employee_prefix="employee__",
+                cross_company_capability="assets.approve",
+            )
+        ).distinct()
 
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
@@ -1379,6 +1368,7 @@ class ManagerAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
         actor_source = manager_approval_actor_source(
             request.user,
             instance.employee,
+            capability="assets.approve",
             allow_admin=True,
         )
         if not actor_source:
@@ -1426,6 +1416,7 @@ class ManagerAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
         actor_source = manager_approval_actor_source(
             request.user,
             instance.employee,
+            capability="assets.approve",
             allow_admin=True,
         )
         if not actor_source:

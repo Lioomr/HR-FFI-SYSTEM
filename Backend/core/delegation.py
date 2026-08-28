@@ -24,8 +24,22 @@ def _get_ceo_department_id():
 
 def _active_delegation_queryset():
     now = timezone.now()
-    return DelegationRule.objects.filter(is_active=True, start_at__lte=now).filter(
-        Q(end_at__isnull=True) | Q(end_at__gte=now)
+    return (
+        DelegationRule.objects.filter(
+            is_active=True,
+            revoked_at__isnull=True,
+            start_at__lte=now,
+            from_user__is_active=True,
+            to_user__is_active=True,
+            from_user__employee_profile__is_archived=False,
+            from_user__employee_profile__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+            from_user__employee_profile__company__is_active=True,
+            to_user__employee_profile__is_archived=False,
+            to_user__employee_profile__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+            to_user__employee_profile__company__is_active=True,
+        )
+        .filter(Q(end_at__isnull=True) | Q(end_at__gte=now))
+        .distinct()
     )
 
 
@@ -47,10 +61,79 @@ def get_delegated_from_user_ids(to_user, *, role: str | None = None) -> list[int
     qs = _active_delegation_queryset().filter(to_user=to_user).select_related("from_user")
     user_ids = []
     for rule in qs:
+        if DelegationRule.Capability.WORKFLOW_APPROVE not in (rule.capabilities or []):
+            continue
         if role and not is_user_base_approver_for_role(rule.from_user, role):
             continue
         user_ids.append(rule.from_user_id)
     return user_ids
+
+
+def get_active_employee_read_scope_ids(to_user) -> set[int]:
+    """Return only currently valid employee-read scopes, failing closed for legacy rows.
+
+    These participant and company checks are intentionally repeated here rather
+    than relying only on lifecycle triggers. This makes old or manually-created
+    rows harmless if they predate the database lifecycle protections.
+    """
+    if not to_user or not getattr(to_user, "is_authenticated", False):
+        return set()
+    now = timezone.now()
+    return set(
+        _active_delegation_queryset()
+        .filter(
+            to_user=to_user,
+            is_active=True,
+            revoked_at__isnull=True,
+            start_at__lte=now,
+            from_user__is_active=True,
+            to_user__is_active=True,
+            from_user__employee_profile__is_archived=False,
+            from_user__employee_profile__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+            from_user__employee_profile__company__node_type="company",
+            from_user__employee_profile__company__is_active=True,
+            to_user__employee_profile__is_archived=False,
+            to_user__employee_profile__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+            to_user__employee_profile__company__node_type="company",
+            to_user__employee_profile__company__is_active=True,
+            scope__isnull=False,
+            scope__is_active=True,
+            capabilities__contains=[DelegationRule.Capability.EMPLOYEE_READ],
+        )
+        .filter(Q(end_at__isnull=True) | Q(end_at__gte=now))
+        .values_list("scope_id", flat=True)
+    )
+
+
+def get_current_scope_ids_for_user(user) -> set[int]:
+    """Scopes that may be displayed to a non-audit user right now.
+
+    Historical grants and assignments remain in their tables for audit, but never
+    become a discovery channel for expired, revoked, inactive, or disabled users.
+    """
+    if not user or not getattr(user, "is_authenticated", False) or not user.is_active:
+        return set()
+
+    delegation_scope_ids = get_active_employee_read_scope_ids(user)
+    from core.models import CrossCompanyManagerAssignment
+
+    now = timezone.now()
+    assignment_scope_ids = CrossCompanyManagerAssignment.objects.filter(
+        manager_profile__user=user,
+        manager_profile__is_archived=False,
+        manager_profile__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        manager_profile__user__is_active=True,
+        employee__is_archived=False,
+        employee__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        employee__user__is_active=True,
+        is_active=True,
+        revoked_at__isnull=True,
+        start_at__lte=now,
+        end_at__gte=now,
+        scope__is_active=True,
+        capabilities__contains=[CrossCompanyManagerAssignment.Capability.EMPLOYEE_VIEW],
+    ).values_list("scope_id", flat=True)
+    return delegation_scope_ids | set(assignment_scope_ids)
 
 
 def get_delegated_manager_user_ids(to_user) -> list[int]:

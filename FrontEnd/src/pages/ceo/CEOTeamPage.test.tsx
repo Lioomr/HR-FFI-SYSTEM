@@ -10,7 +10,9 @@ import * as managerApi from "../../services/api/managerApi";
 import { useI18nStore } from "../../i18n/i18nStore";
 import { useAuthStore } from "../../auth/authStore";
 
-const getManagerTeam = managerApi.getManagerTeam as unknown as ReturnType<typeof vi.fn>;
+const getManagerTeam = managerApi.getManagerTeam as unknown as ReturnType<
+  typeof vi.fn
+>;
 
 const members = [
   {
@@ -44,7 +46,10 @@ beforeEach(() => {
 
 describe("CEOTeamPage", () => {
   it("lists team members", async () => {
-    getManagerTeam.mockResolvedValue({ status: "success" as const, data: members });
+    getManagerTeam.mockResolvedValue({
+      status: "success" as const,
+      data: members,
+    });
 
     render(<CEOTeamPage />);
 
@@ -53,28 +58,40 @@ describe("CEOTeamPage", () => {
   });
 
   it("filters the list from the search field", async () => {
-    getManagerTeam.mockResolvedValue({ status: "success" as const, data: members });
+    getManagerTeam.mockResolvedValue({
+      status: "success" as const,
+      data: members,
+    });
 
     render(<CEOTeamPage />);
     await screen.findByText("Sara Ahmed");
 
-    fireEvent.change(screen.getByLabelText("Search by name, ID, department..."), {
-      target: { value: "operations" },
-    });
+    fireEvent.change(
+      screen.getByLabelText("Search by name, ID, department..."),
+      {
+        target: { value: "operations" },
+      },
+    );
 
     expect(screen.queryByText("Sara Ahmed")).not.toBeInTheDocument();
     expect(screen.getByText("Omar Nasser")).toBeInTheDocument();
   });
 
   it("distinguishes an empty team from an empty search result", async () => {
-    getManagerTeam.mockResolvedValue({ status: "success" as const, data: members });
+    getManagerTeam.mockResolvedValue({
+      status: "success" as const,
+      data: members,
+    });
 
     render(<CEOTeamPage />);
     await screen.findByText("Sara Ahmed");
 
-    fireEvent.change(screen.getByLabelText("Search by name, ID, department..."), {
-      target: { value: "nobody" },
-    });
+    fireEvent.change(
+      screen.getByLabelText("Search by name, ID, department..."),
+      {
+        target: { value: "nobody" },
+      },
+    );
     expect(screen.getByText("No matching team members")).toBeInTheDocument();
   });
 
@@ -87,15 +104,23 @@ describe("CEOTeamPage", () => {
   });
 
   it("shows a retryable error state when the team fails to load", async () => {
-    getManagerTeam.mockResolvedValue({ status: "error" as const, message: "team service down" });
+    getManagerTeam.mockResolvedValue({
+      status: "error" as const,
+      message: "team service down",
+    });
 
     render(<CEOTeamPage />);
 
     expect(await screen.findByText("team service down")).toBeInTheDocument();
 
-    getManagerTeam.mockResolvedValue({ status: "success" as const, data: members });
+    getManagerTeam.mockResolvedValue({
+      status: "success" as const,
+      data: members,
+    });
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
 
-    await waitFor(() => expect(screen.getByText("Sara Ahmed")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Sara Ahmed")).toBeInTheDocument(),
+    );
   });
 });

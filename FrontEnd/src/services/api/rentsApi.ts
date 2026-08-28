@@ -88,7 +88,7 @@ export interface CreateRentDto {
   amount?: number | null;
 }
 
-export interface UpdateRentDto extends Partial<CreateRentDto> { }
+export interface UpdateRentDto extends Partial<CreateRentDto> {}
 
 export interface CreateRentPaymentDto {
   payment_number: number;
@@ -100,35 +100,62 @@ export interface CreateRentPaymentDto {
   notes?: string;
 }
 
-export async function listRents(params?: ListRentsParams): Promise<ApiResponse<PaginatedResponse<RentItem>>> {
-  const { data } = await api.get<ApiResponse<PaginatedResponse<RentItem>>>("/api/hr/rents/", { params });
+export async function listRents(
+  params?: ListRentsParams,
+): Promise<ApiResponse<PaginatedResponse<RentItem>>> {
+  const { data } = await api.get<ApiResponse<PaginatedResponse<RentItem>>>(
+    "/api/hr/rents/",
+    { params },
+  );
   return data;
 }
 
-export async function createRent(payload: CreateRentDto): Promise<ApiResponse<RentItem>> {
-  const { data } = await api.post<ApiResponse<RentItem>>("/api/hr/rents/", payload);
+export async function createRent(
+  payload: CreateRentDto,
+): Promise<ApiResponse<RentItem>> {
+  const { data } = await api.post<ApiResponse<RentItem>>(
+    "/api/hr/rents/",
+    payload,
+  );
   return data;
 }
 
-export async function updateRent(id: string | number, payload: UpdateRentDto): Promise<ApiResponse<RentItem>> {
-  const { data } = await api.patch<ApiResponse<RentItem>>(`/api/hr/rents/${id}/`, payload);
+export async function updateRent(
+  id: string | number,
+  payload: UpdateRentDto,
+): Promise<ApiResponse<RentItem>> {
+  const { data } = await api.patch<ApiResponse<RentItem>>(
+    `/api/hr/rents/${id}/`,
+    payload,
+  );
   return data;
 }
 
-export async function deleteRent(id: string | number): Promise<ApiResponse<Record<string, never>>> {
-  const { data } = await api.delete<ApiResponse<Record<string, never>>>(`/api/hr/rents/${id}/`);
+export async function deleteRent(
+  id: string | number,
+): Promise<ApiResponse<Record<string, never>>> {
+  const { data } = await api.delete<ApiResponse<Record<string, never>>>(
+    `/api/hr/rents/${id}/`,
+  );
   return data;
 }
 
-export async function notifyRent(id: string | number): Promise<ApiResponse<{ delivery: Record<string, any> }>> {
-  const { data } = await api.post<ApiResponse<{ delivery: Record<string, any> }>>(`/api/hr/rents/${id}/notify/`, {});
+export async function notifyRent(
+  id: string | number,
+): Promise<ApiResponse<{ delivery: Record<string, any> }>> {
+  const { data } = await api.post<
+    ApiResponse<{ delivery: Record<string, any> }>
+  >(`/api/hr/rents/${id}/notify/`, {});
   return data;
 }
 
 export async function createRentPayment(
   rentId: string | number,
-  payload: CreateRentPaymentDto
+  payload: CreateRentPaymentDto,
 ): Promise<ApiResponse<RentPaymentRecord>> {
-  const { data } = await api.post<ApiResponse<RentPaymentRecord>>(`/api/hr/rents/${rentId}/payments/`, payload);
+  const { data } = await api.post<ApiResponse<RentPaymentRecord>>(
+    `/api/hr/rents/${rentId}/payments/`,
+    payload,
+  );
   return data;
 }

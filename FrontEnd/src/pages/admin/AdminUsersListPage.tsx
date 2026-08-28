@@ -27,7 +27,11 @@ import LoadingState from "../../components/ui/LoadingState";
 import EmptyState from "../../components/ui/EmptyState";
 import ErrorState from "../../components/ui/ErrorState";
 import Unauthorized403Page from "../Unauthorized403Page";
-import type { OrganizationNodeDto, Role, UserDto } from "../../services/api/apiTypes";
+import type {
+  OrganizationNodeDto,
+  Role,
+  UserDto,
+} from "../../services/api/apiTypes";
 import { isApiError } from "../../services/api/apiTypes";
 import {
   listUsers,
@@ -57,10 +61,19 @@ type ResetResult = {
   message?: string;
 };
 
-const roleOptions: Role[] = ["SystemAdmin", "HRManager", "Manager", "Employee", "CEO"];
+const roleOptions: Role[] = [
+  "SystemAdmin",
+  "HRManager",
+  "Manager",
+  "Employee",
+  "CEO",
+];
 
 // Color map for role badge
-const ROLE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+const ROLE_COLORS: Record<
+  string,
+  { bg: string; text: string; border: string }
+> = {
   SystemAdmin: { bg: "#fee2e2", text: "#dc2626", border: "#fecaca" },
   HRManager: { bg: "#fff4e6", text: "#ea580c", border: "#fed7aa" },
   Manager: { bg: "#dbeafe", text: "#1d4ed8", border: "#bfdbfe" },
@@ -71,9 +84,18 @@ const ROLE_COLORS: Record<string, { bg: string; text: string; border: string }> 
 
 // Deterministic avatar color from string
 function avatarColor(name: string): string {
-  const colors = ["#f97316", "#ea580c", "#fb923c", "#94a3b8", "#64748b", "#f59e0b", "#10b981"];
+  const colors = [
+    "#f97316",
+    "#ea580c",
+    "#fb923c",
+    "#94a3b8",
+    "#64748b",
+    "#f59e0b",
+    "#10b981",
+  ];
   let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  for (let i = 0; i < name.length; i++)
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
   return colors[Math.abs(hash) % colors.length];
 }
 
@@ -116,8 +138,12 @@ export default function AdminUsersListPage() {
   const navigate = useNavigate();
   const { t } = useI18n();
   const currentUserRole = useAuthStore((state) => state.user?.role);
-  const availableOrganizations = useAuthStore((state) => state.user?.accessible_organizations ?? []);
-  const activeRoleOptions = roleOptions.filter(r => r !== "SystemAdmin" || currentUserRole === "SystemAdmin");
+  const availableOrganizations = useAuthStore(
+    (state) => state.user?.accessible_organizations ?? [],
+  );
+  const activeRoleOptions = roleOptions.filter(
+    (r) => r !== "SystemAdmin" || currentUserRole === "SystemAdmin",
+  );
 
   const [mode, setMode] = useState<UiMode>("loading");
   const [error, setError] = useState<string | null>(null);
@@ -130,17 +156,25 @@ export default function AdminUsersListPage() {
   const [rows, setRows] = useState<UserRow[]>([]);
   const [orgModalOpen, setOrgModalOpen] = useState(false);
   const [orgUser, setOrgUser] = useState<UserRow | null>(null);
-  const [selectedOrganizationIds, setSelectedOrganizationIds] = useState<number[]>([]);
+  const [selectedOrganizationIds, setSelectedOrganizationIds] = useState<
+    number[]
+  >([]);
   const [savingOrganizations, setSavingOrganizations] = useState(false);
 
   const [resetOpen, setResetOpen] = useState(false);
   const [resetUser, setResetUser] = useState<UserRow | null>(null);
-  const [resetMode, setResetMode] = useState<"temporary_password" | "reset_link">("temporary_password");
+  const [resetMode, setResetMode] = useState<
+    "temporary_password" | "reset_link"
+  >("temporary_password");
   const [resetResult, setResetResult] = useState<ResetResult | null>(null);
   const [resetting, setResetting] = useState(false);
 
   const loadUsers = useCallback(
-    async (params: { search?: string; role?: Role; status?: "active" | "inactive" }) => {
+    async (params: {
+      search?: string;
+      role?: Role;
+      status?: "active" | "inactive";
+    }) => {
       setMode("loading");
       setError(null);
       setUnauthorized(false);
@@ -155,20 +189,32 @@ export default function AdminUsersListPage() {
         setRows(items.map(toUserRow));
         setMode(items.length === 0 ? "empty" : "ok");
       } catch (err: any) {
-        if (err?.response?.status === 403) { setUnauthorized(true); return; }
+        if (err?.response?.status === 403) {
+          setUnauthorized(true);
+          return;
+        }
         setError("Failed to load users.");
         setMode("error");
       }
     },
-    []
+    [],
   );
 
   useEffect(() => {
     const trimmed = search.trim();
     const roleParam = role === "All" ? undefined : role;
-    const statusParam = status === "All" ? undefined : status === "Active" ? "active" : "inactive";
+    const statusParam =
+      status === "All"
+        ? undefined
+        : status === "Active"
+          ? "active"
+          : "inactive";
     const timer = setTimeout(() => {
-      loadUsers({ search: trimmed || undefined, role: roleParam, status: statusParam });
+      loadUsers({
+        search: trimmed || undefined,
+        role: roleParam,
+        status: statusParam,
+      });
     }, 250);
     return () => clearTimeout(timer);
   }, [search, role, status, loadUsers]);
@@ -193,8 +239,12 @@ export default function AdminUsersListPage() {
               {v.charAt(0).toUpperCase()}
             </Avatar>
             <div>
-              <div style={{ fontWeight: 600, color: "#0f172a", fontSize: 13 }}>{v}</div>
-              <div style={{ fontSize: 12, color: "#94a3b8" }}>{record.email}</div>
+              <div style={{ fontWeight: 600, color: "#0f172a", fontSize: 13 }}>
+                {v}
+              </div>
+              <div style={{ fontSize: 12, color: "#94a3b8" }}>
+                {record.email}
+              </div>
             </div>
           </div>
         ),
@@ -204,7 +254,10 @@ export default function AdminUsersListPage() {
         dataIndex: "role",
         key: "role",
         render: (v: Role) => roleTag(v, t),
-        filters: activeRoleOptions.map((r) => ({ text: t(`role.${r}`, r), value: r })),
+        filters: activeRoleOptions.map((r) => ({
+          text: t(`role.${r}`, r),
+          value: r,
+        })),
         onFilter: (value, record) => record.role === value,
       },
       {
@@ -213,13 +266,47 @@ export default function AdminUsersListPage() {
         key: "status",
         render: (v: UserRow["status"]) =>
           v === "Active" ? (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#10b981", fontWeight: 600, fontSize: 13 }}>
-              <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#10b981", display: "inline-block" }} />
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                color: "#10b981",
+                fontWeight: 600,
+                fontSize: 13,
+              }}
+            >
+              <span
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: "50%",
+                  background: "#10b981",
+                  display: "inline-block",
+                }}
+              />
               {t("status.active")}
             </span>
           ) : (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#94a3b8", fontWeight: 600, fontSize: 13 }}>
-              <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#94a3b8", display: "inline-block" }} />
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                color: "#94a3b8",
+                fontWeight: 600,
+                fontSize: 13,
+              }}
+            >
+              <span
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: "50%",
+                  background: "#94a3b8",
+                  display: "inline-block",
+                }}
+              />
               {t("status.inactive")}
             </span>
           ),
@@ -235,7 +322,9 @@ export default function AdminUsersListPage() {
         key: "accessibleOrganizations",
         width: 260,
         render: (_: OrganizationNodeDto[], record) => {
-          const names = record.accessibleOrganizations.map((organization) => organization.name);
+          const names = record.accessibleOrganizations.map(
+            (organization) => organization.name,
+          );
           const summary = record.hasAllCompanyAccess
             ? t("admin.users.allCompanies", "All companies")
             : names.length > 0
@@ -243,14 +332,22 @@ export default function AdminUsersListPage() {
               : t("admin.users.noCompanyAccess", "No company access");
 
           return (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "space-between" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                justifyContent: "space-between",
+              }}
+            >
               <Typography.Text
                 style={{ fontSize: 12, color: "#475569" }}
                 ellipsis={{ tooltip: summary }}
               >
                 {summary}
               </Typography.Text>
-              {currentUserRole === "SystemAdmin" && record.role === "HRManager" ? (
+              {currentUserRole === "SystemAdmin" &&
+              record.role === "HRManager" ? (
                 <Button
                   size="small"
                   icon={<ApartmentOutlined />}
@@ -260,7 +357,9 @@ export default function AdminUsersListPage() {
                     setSelectedOrganizationIds(
                       record.accessibleOrganizations
                         .map((organization) => Number(organization.id))
-                        .filter((organizationId) => Number.isFinite(organizationId))
+                        .filter((organizationId) =>
+                          Number.isFinite(organizationId),
+                        ),
                     );
                     setOrgModalOpen(true);
                   }}
@@ -278,24 +377,44 @@ export default function AdminUsersListPage() {
         width: 200,
         render: (_, record) => (
           <Space size={6}>
-            <Tooltip title={record.status === "Active" ? t("admin.users.deactivate") : t("admin.users.activate")}>
+            <Tooltip
+              title={
+                record.status === "Active"
+                  ? t("admin.users.deactivate")
+                  : t("admin.users.activate")
+              }
+            >
               <Button
                 icon={<UserSwitchOutlined />}
                 size="small"
                 style={{
                   borderRadius: 8,
-                  borderColor: record.status === "Active" ? "#fde68a" : "#bbf7d0",
+                  borderColor:
+                    record.status === "Active" ? "#fde68a" : "#bbf7d0",
                   color: record.status === "Active" ? "#b45309" : "#065f46",
-                  background: record.status === "Active" ? "#fffbeb" : "#f0fdf4",
+                  background:
+                    record.status === "Active" ? "#fffbeb" : "#f0fdf4",
                 }}
                 onClick={async () => {
                   try {
-                    const res = await updateUserStatus(record.id, { is_active: record.status !== "Active" });
-                    if (isApiError(res)) { message.error(res.message || t("error.generic")); return; }
-                    setRows((prev) => prev.map((u) => (u.id === record.id ? toUserRow(res.data) : u)));
+                    const res = await updateUserStatus(record.id, {
+                      is_active: record.status !== "Active",
+                    });
+                    if (isApiError(res)) {
+                      message.error(res.message || t("error.generic"));
+                      return;
+                    }
+                    setRows((prev) =>
+                      prev.map((u) =>
+                        u.id === record.id ? toUserRow(res.data) : u,
+                      ),
+                    );
                     message.success(t("common.save"));
                   } catch (err: any) {
-                    if (err?.response?.status === 403) { setUnauthorized(true); return; }
+                    if (err?.response?.status === 403) {
+                      setUnauthorized(true);
+                      return;
+                    }
                     message.error(t("error.generic"));
                   }
                 }}
@@ -306,15 +425,30 @@ export default function AdminUsersListPage() {
               value={record.role}
               size="small"
               style={{ width: 140, borderRadius: 8 }}
-              options={activeRoleOptions.map((r) => ({ label: t(`role.${r}`, r), value: r }))}
+              options={activeRoleOptions.map((r) => ({
+                label: t(`role.${r}`, r),
+                value: r,
+              }))}
               onChange={async (nextRole) => {
                 try {
-                  const res = await updateUserRole(record.id, { role: nextRole });
-                  if (isApiError(res)) { message.error(res.message || t("error.generic")); return; }
-                  setRows((prev) => prev.map((u) => (u.id === record.id ? toUserRow(res.data) : u)));
+                  const res = await updateUserRole(record.id, {
+                    role: nextRole,
+                  });
+                  if (isApiError(res)) {
+                    message.error(res.message || t("error.generic"));
+                    return;
+                  }
+                  setRows((prev) =>
+                    prev.map((u) =>
+                      u.id === record.id ? toUserRow(res.data) : u,
+                    ),
+                  );
                   message.success(t("common.save"));
                 } catch (err: any) {
-                  if (err?.response?.status === 403) { setUnauthorized(true); return; }
+                  if (err?.response?.status === 403) {
+                    setUnauthorized(true);
+                    return;
+                  }
                   message.error(t("error.generic"));
                 }
               }}
@@ -325,23 +459,54 @@ export default function AdminUsersListPage() {
                 icon={<KeyOutlined />}
                 size="small"
                 style={{ borderRadius: 8 }}
-                onClick={() => { setResetUser(record); setResetMode("temporary_password"); setResetResult(null); setResetOpen(true); }}
+                onClick={() => {
+                  setResetUser(record);
+                  setResetMode("temporary_password");
+                  setResetResult(null);
+                  setResetOpen(true);
+                }}
               />
             </Tooltip>
           </Space>
         ),
       },
     ],
-    [activeRoleOptions, currentUserRole, setUnauthorized, t]
+    [activeRoleOptions, currentUserRole, setUnauthorized, t],
   );
 
   if (unauthorized) return <Unauthorized403Page />;
   if (mode === "loading") return <LoadingState title={t("loading.generic")} />;
   if (mode === "error") {
-    return <ErrorState title={t("admin.users.title")} description={error || t("common.tryAgain")} onRetry={() => { const roleParam = role === "All" ? undefined : role; const statusParam = status === "All" ? undefined : status === "Active" ? "active" : "inactive"; loadUsers({ search: search.trim() || undefined, role: roleParam, status: statusParam }); }} />;
+    return (
+      <ErrorState
+        title={t("admin.users.title")}
+        description={error || t("common.tryAgain")}
+        onRetry={() => {
+          const roleParam = role === "All" ? undefined : role;
+          const statusParam =
+            status === "All"
+              ? undefined
+              : status === "Active"
+                ? "active"
+                : "inactive";
+          loadUsers({
+            search: search.trim() || undefined,
+            role: roleParam,
+            status: statusParam,
+          });
+        }}
+      />
+    );
   }
   if (mode === "empty" || rows.length === 0) {
-    return <EmptyState title={t("common.noData")} description={t("admin.users.subtitle")} actionText={t("admin.users.createUser")} onAction={() => navigate("/admin/users/create")} />;
+    return (
+      <EmptyState
+        title={t("common.noData")}
+        description={t("admin.users.subtitle")}
+        actionText={t("admin.users.createUser")}
+        onAction={() => navigate("/admin/users/create")}
+      />
+    );
   }
 
   return (
@@ -389,8 +554,14 @@ export default function AdminUsersListPage() {
           onChange={setRole}
           style={{ flex: "0 1 160px", minWidth: 120 }}
           options={[
-            { label: t("common.filter") + " " + t("common.role"), value: "All" },
-            ...activeRoleOptions.map((r) => ({ label: t(`role.${r}`, r), value: r })),
+            {
+              label: t("common.filter") + " " + t("common.role"),
+              value: "All",
+            },
+            ...activeRoleOptions.map((r) => ({
+              label: t(`role.${r}`, r),
+              value: r,
+            })),
           ]}
         />
         <Select
@@ -428,7 +599,11 @@ export default function AdminUsersListPage() {
 
       {/* Reset Password Modal */}
       <Modal
-        title={<span style={{ fontWeight: 700 }}>{t("admin.users.manageCompanies", "Manage Companies")}</span>}
+        title={
+          <span style={{ fontWeight: 700 }}>
+            {t("admin.users.manageCompanies", "Manage Companies")}
+          </span>
+        }
         open={orgModalOpen}
         onCancel={() => {
           if (savingOrganizations) return;
@@ -446,7 +621,11 @@ export default function AdminUsersListPage() {
               message.error(res.message || t("error.generic"));
               return;
             }
-            setRows((prev) => prev.map((user) => (user.id === orgUser.id ? toUserRow(res.data) : user)));
+            setRows((prev) =>
+              prev.map((user) =>
+                user.id === orgUser.id ? toUserRow(res.data) : user,
+              ),
+            );
             message.success(t("common.save"));
             setOrgModalOpen(false);
             setOrgUser(null);
@@ -471,13 +650,15 @@ export default function AdminUsersListPage() {
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             {t(
               "admin.users.companyAccessHint",
-              "Select the companies and head office contexts this HR Manager can switch between."
+              "Select the companies and head office contexts this HR Manager can switch between.",
             )}
           </Typography.Text>
           <Select
             mode="multiple"
             value={selectedOrganizationIds}
-            onChange={(values) => setSelectedOrganizationIds(values.map((value) => Number(value)))}
+            onChange={(values) =>
+              setSelectedOrganizationIds(values.map((value) => Number(value)))
+            }
             style={{ width: "100%" }}
             placeholder={t("admin.users.selectCompanies", "Select companies")}
             options={availableOrganizations.map((organization) => ({
@@ -492,21 +673,40 @@ export default function AdminUsersListPage() {
       </Modal>
 
       <Modal
-        title={<span style={{ fontWeight: 700 }}>{t("admin.users.resetPassword")}</span>}
+        title={
+          <span style={{ fontWeight: 700 }}>
+            {t("admin.users.resetPassword")}
+          </span>
+        }
         open={resetOpen}
-        onCancel={() => { if (resetting) return; setResetOpen(false); setResetUser(null); setResetResult(null); }}
+        onCancel={() => {
+          if (resetting) return;
+          setResetOpen(false);
+          setResetUser(null);
+          setResetResult(null);
+        }}
         onOk={async () => {
           if (!resetUser) return;
           setResetting(true);
           try {
-            const res = await resetUserPassword(resetUser.id, { mode: resetMode });
-            if (isApiError(res)) { message.error(res.message || t("error.generic")); return; }
+            const res = await resetUserPassword(resetUser.id, {
+              mode: resetMode,
+            });
+            if (isApiError(res)) {
+              message.error(res.message || t("error.generic"));
+              return;
+            }
             setResetResult(res.data);
             message.success(t("common.confirm"));
           } catch (err: any) {
-            if (err?.response?.status === 403) { setUnauthorized(true); return; }
+            if (err?.response?.status === 403) {
+              setUnauthorized(true);
+              return;
+            }
             message.error(t("error.generic"));
-          } finally { setResetting(false); }
+          } finally {
+            setResetting(false);
+          }
         }}
         okText={t("common.confirm")}
         confirmLoading={resetting}
@@ -516,16 +716,30 @@ export default function AdminUsersListPage() {
           <Typography.Text>
             {t("common.confirm")}: <strong>{resetUser?.email}</strong>
           </Typography.Text>
-          <Radio.Group value={resetMode} onChange={(e) => setResetMode(e.target.value)}>
+          <Radio.Group
+            value={resetMode}
+            onChange={(e) => setResetMode(e.target.value)}
+          >
             <Space direction="vertical">
               <Radio value="temporary_password">Temporary password</Radio>
               <Radio value="reset_link">Reset link token</Radio>
             </Space>
           </Radio.Group>
           {resetResult && (
-            <div style={{ padding: 12, background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, color: "#065f46" }}>
-              <Typography.Text strong style={{ color: "#065f46" }}>Success: </Typography.Text>
-              Password reset operation completed successfully. Detailed credentials have been securely routed.
+            <div
+              style={{
+                padding: 12,
+                background: "#f0fdf4",
+                border: "1px solid #bbf7d0",
+                borderRadius: 8,
+                color: "#065f46",
+              }}
+            >
+              <Typography.Text strong style={{ color: "#065f46" }}>
+                Success:{" "}
+              </Typography.Text>
+              Password reset operation completed successfully. Detailed
+              credentials have been securely routed.
             </div>
           )}
         </Space>

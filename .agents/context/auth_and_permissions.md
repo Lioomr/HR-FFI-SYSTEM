@@ -15,7 +15,7 @@ Frontend `FrontEnd/src/services/api/apiClient.ts` still clears authentication st
 ## Rate Limiting / Security
 
 - `LoginRateThrottle`: 10 attempts/min per IP
-- Failed login lockout: 5 consecutive failures → 900 s lockout (tracked in `LoginAttempt`)
+- Failed login lockout: 5 consecutive failures → 900 s lockout (tracked in `LoginAttempt`). `accounts/security.py::record_login_failure` locks the row with `select_for_update()` inside `transaction.atomic()` — this closes a real race where concurrent failed attempts could under-count and delay the lockout; keep the lock, see `reliability_and_perf_fixes.md`.
 - `EmployeeImportThrottle`: 5 imports/min
 - `PayrollThrottle` variants for payroll run operations
 

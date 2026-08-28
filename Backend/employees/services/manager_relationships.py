@@ -4,6 +4,7 @@ from collections.abc import Iterable
 
 from django.core.exceptions import ValidationError
 from django.db.models import Q, QuerySet
+from django.utils import timezone
 
 from audit.utils import audit
 from employees.models import EmployeeProfile
@@ -89,6 +90,59 @@ def validate_manager_assignment(
         raise ValidationError(cycle_error)
 
 
+def validate_cross_company_manager_assignment(
+    employee: EmployeeProfile | None,
+    manager_profile: EmployeeProfile | None,
+    *,
+    scope,
+    start_at,
+    end_at,
+    assignment=None,
+) -> None:
+    if employee is None or manager_profile is None or scope is None:
+        raise ValidationError("Employee, manager, and approved organization scope are required.")
+    if employee.pk == manager_profile.pk or (employee.user_id and employee.user_id == manager_profile.user_id):
+        raise ValidationError("An employee cannot be their own manager.")
+    if employee.company_id == manager_profile.company_id:
+        raise ValidationError("Use manager_profile for normal same-company manager relationships.")
+    if not _is_active_manager_profile(employee) or not _is_active_manager_profile(manager_profile):
+        raise ValidationError("Cross-company manager assignments require active, non-archived employee users.")
+    if end_at is None or start_at is None or end_at <= start_at:
+        raise ValidationError({"end_at": "Cross-company manager assignments require a future end time after start time."})
+    member_ids = set(scope.memberships.values_list("company_id", flat=True))
+    if employee.company_id not in member_ids or manager_profile.company_id not in member_ids:
+        raise ValidationError("Both companies must be included in the approved organization scope.")
+
+    from core.models import CrossCompanyManagerAssignment
+
+    now = timezone.now()
+    edge_qs = CrossCompanyManagerAssignment.objects.filter(
+        is_active=True,
+        revoked_at__isnull=True,
+        start_at__lte=now,
+        end_at__gte=now,
+    )
+    if assignment is not None:
+        edge_qs = edge_qs.exclude(pk=assignment.pk)
+    extra_edges: dict[int, set[int]] = {}
+    for report_id, manager_id in edge_qs.values_list("employee_id", "manager_profile_id"):
+        extra_edges.setdefault(report_id, set()).add(manager_id)
+
+    stack = [manager_profile.id]
+    visited: set[int] = set()
+    while stack:
+        current_id = stack.pop()
+        if current_id == employee.id:
+            raise ValidationError("Manager assignment cannot create a reporting cycle.")
+        if current_id in visited:
+            continue
+        visited.add(current_id)
+        direct_manager_id = EmployeeProfile.objects.filter(pk=current_id).values_list("manager_profile_id", flat=True).first()
+        if direct_manager_id:
+            stack.append(direct_manager_id)
+        stack.extend(extra_edges.get(current_id, set()))
+
+
 def get_valid_direct_manager_profile(employee: EmployeeProfile | None) -> EmployeeProfile | None:
     if employee is None or not employee.manager_profile_id:
         return None
@@ -125,7 +179,45 @@ def active_direct_reports_queryset(user) -> QuerySet[EmployeeProfile]:
     )
 
 
-def manager_scope_q(user, *, employee_prefix: str = "") -> Q:
+def active_cross_company_manager_assignments(user, *, capability: str | None = None):
+    """Current, usable exceptional assignments for the authenticated manager.
+
+    Every caller that crosses a company boundary must name the workflow capability;
+    an assignment is never an implicit grant for all manager workflows.
+    """
+    if not user or not getattr(user, "is_authenticated", False):
+        from core.models import CrossCompanyManagerAssignment
+
+        return CrossCompanyManagerAssignment.objects.none()
+    actor_profile = getattr(user, "employee_profile", None)
+    if not _is_active_manager_profile(actor_profile):
+        from core.models import CrossCompanyManagerAssignment
+
+        return CrossCompanyManagerAssignment.objects.none()
+
+    from core.models import CrossCompanyManagerAssignment
+
+    now = timezone.now()
+    queryset = CrossCompanyManagerAssignment.objects.filter(
+        manager_profile_id=actor_profile.id,
+        manager_profile__is_archived=False,
+        manager_profile__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        manager_profile__user__is_active=True,
+        employee__is_archived=False,
+        employee__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        employee__user__is_active=True,
+        is_active=True,
+        revoked_at__isnull=True,
+        start_at__lte=now,
+        end_at__gte=now,
+        scope__is_active=True,
+    )
+    if capability:
+        queryset = queryset.filter(capabilities__contains=[capability])
+    return queryset
+
+
+def manager_scope_q(user, *, employee_prefix: str = "", cross_company_capability: str | None = None) -> Q:
     """Return the authoritative direct/delegated manager scope for an EmployeeProfile join."""
 
     empty = Q(**{f"{employee_prefix}pk__in": []})
@@ -159,13 +251,23 @@ def manager_scope_q(user, *, employee_prefix: str = "") -> Q:
             }
         )
 
+    # No capability means direct/delegated same-company scope only.  This
+    # prevents a convenience caller from accidentally turning any exceptional
+    # assignment into a cross-company authorization path.
+    cross_assignment_ids = []
+    if cross_company_capability:
+        cross_assignment_ids = active_cross_company_manager_assignments(
+            user, capability=cross_company_capability
+        ).values_list("employee_id", flat=True)
+    cross_company_match = Q(**{f"{employee_prefix}pk__in": cross_assignment_ids})
+
     not_self = ~Q(**{f"{employee_prefix}user_id": user.id})
-    return (direct_match | delegated_match) & not_self
+    return (direct_match | delegated_match | cross_company_match) & not_self
 
 
-def managed_reports_queryset(user) -> QuerySet[EmployeeProfile]:
+def managed_reports_queryset(user, *, cross_company_capability: str | None = None) -> QuerySet[EmployeeProfile]:
     return (
-        EmployeeProfile.objects.filter(manager_scope_q(user))
+        EmployeeProfile.objects.filter(manager_scope_q(user, cross_company_capability=cross_company_capability))
         .filter(
             employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
             is_archived=False,
@@ -175,11 +277,17 @@ def managed_reports_queryset(user) -> QuerySet[EmployeeProfile]:
     )
 
 
-def has_manager_access(user) -> bool:
-    return managed_reports_queryset(user).exists()
+def has_manager_access(user, *, cross_company_capability: str | None = None) -> bool:
+    return managed_reports_queryset(user, cross_company_capability=cross_company_capability).exists()
 
 
-def manager_approval_actor_source(user, employee: EmployeeProfile | None, *, allow_admin: bool = False) -> str | None:
+def manager_approval_actor_source(
+    user,
+    employee: EmployeeProfile | None,
+    *,
+    capability: str | None = None,
+    allow_admin: bool = False,
+) -> str | None:
     if not user or not getattr(user, "is_authenticated", False) or employee is None:
         return None
     if employee.user_id == user.id:
@@ -201,12 +309,55 @@ def manager_approval_actor_source(user, employee: EmployeeProfile | None, *, all
             if is_user_delegate_for_manager(user, manager_profile.user):
                 return "delegate"
 
+    if capability and active_cross_company_manager_assignments(user, capability=capability).filter(
+        employee=employee
+    ).exists():
+        return "cross_company_assignment"
+
     if allow_admin:
         from core.permissions import get_role
 
         if get_role(user) == "SystemAdmin":
             return "admin"
     return None
+
+
+def get_valid_manager_user(employee: EmployeeProfile | None, *, cross_company_capability: str | None = None):
+    """Resolve the normal manager first, then an explicitly-capable exception."""
+    direct_manager = get_valid_direct_manager_user(employee)
+    if direct_manager:
+        return direct_manager
+    # The assigned manager is looked up from the employee edge, not request user.
+    if employee is None or not cross_company_capability:
+        return None
+    assignment = (
+        active_cross_company_manager_assignments_for_employee(employee, capability=cross_company_capability)
+        .select_related("manager_profile__user")
+        .order_by("-updated_at", "-id")
+        .first()
+    )
+    return assignment.manager_profile.user if assignment else None
+
+
+def active_cross_company_manager_assignments_for_employee(employee, *, capability: str):
+    from core.models import CrossCompanyManagerAssignment
+
+    now = timezone.now()
+    return CrossCompanyManagerAssignment.objects.filter(
+        employee=employee,
+        employee__is_archived=False,
+        employee__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        employee__user__is_active=True,
+        manager_profile__is_archived=False,
+        manager_profile__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        manager_profile__user__is_active=True,
+        is_active=True,
+        revoked_at__isnull=True,
+        start_at__lte=now,
+        end_at__gte=now,
+        scope__is_active=True,
+        capabilities__contains=[capability],
+    )
 
 
 def log_manager_assignment_change(

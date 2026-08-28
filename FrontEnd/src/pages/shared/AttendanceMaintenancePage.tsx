@@ -16,12 +16,16 @@ export default function AttendanceMaintenancePage({
   backPath?: string;
 }) {
   const { t } = useI18n();
-  const resolvedTitle = title || (titleKey ? t(titleKey) : t("attendance.title", "Attendance"));
+  const resolvedTitle =
+    title || (titleKey ? t(titleKey) : t("attendance.title", "Attendance"));
   const resolvedSubtitle =
     subtitle ||
     (subtitleKey
       ? t(subtitleKey)
-      : t("attendance.maintenance.pageSubtitle", "This section is temporarily unavailable while we fix it."));
+      : t(
+          "attendance.maintenance.pageSubtitle",
+          "This section is temporarily unavailable while we fix it.",
+        ));
 
   return (
     <div>

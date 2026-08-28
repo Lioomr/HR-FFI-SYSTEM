@@ -4,6 +4,7 @@ from io import StringIO
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.management import call_command
+from django.db import IntegrityError, transaction
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -227,7 +228,7 @@ class ManagerCapabilityTests(APITestCase):
         self.employee_profile.refresh_from_db()
         self.assertIsNone(self.employee_profile.manager_profile_id)
 
-    def test_sync_command_dry_run_backfills_clean_mapping_and_preserves_conflict(self):
+    def test_sync_command_backfills_clean_mapping_and_database_rejects_conflict(self):
         clean_employee_user = User.objects.create_user(email="legacy-clean@example.com", password="password")
         clean_employee = self._profile(clean_employee_user, "MC-LEGACY-CLEAN")
         EmployeeProfile.objects.filter(pk=clean_employee.pk).update(manager_id=self.manager_user.id)
@@ -235,12 +236,12 @@ class ManagerCapabilityTests(APITestCase):
         archived_user = User.objects.create_user(email="legacy-conflict-manager@example.com", password="password")
         archived_manager = self._profile(archived_user, "MC-CONFLICT-MGR", is_archived=True)
         conflict_user = User.objects.create_user(email="legacy-conflict@example.com", password="password")
-        conflict_employee = self._profile(
-            conflict_user,
-            "MC-CONFLICT-EMP",
-            manager_profile=archived_manager,
-        )
-        EmployeeProfile.objects.filter(pk=conflict_employee.pk).update(manager_id=self.manager_user.id)
+        conflict_employee = self._profile(conflict_user, "MC-CONFLICT-EMP")
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            EmployeeProfile.objects.filter(pk=conflict_employee.pk).update(
+                manager_id=self.manager_user.id,
+                manager_profile_id=archived_manager.id,
+            )
 
         dry_run_output = StringIO()
         call_command("sync_manager_relationships", format="json", stdout=dry_run_output)
@@ -248,20 +249,18 @@ class ManagerCapabilityTests(APITestCase):
         clean_employee.refresh_from_db()
         self.assertTrue(dry_run["dry_run"])
         self.assertIsNone(clean_employee.manager_profile_id)
-        self.assertTrue(
-            any(item["employee_profile_id"] == conflict_employee.id for item in dry_run["conflicts"])
-        )
+        self.assertFalse(any(item["employee_profile_id"] == conflict_employee.id for item in dry_run["conflicts"]))
 
         apply_output = StringIO()
         call_command("sync_manager_relationships", apply=True, format="json", stdout=apply_output)
         applied = json.loads(apply_output.getvalue())
         clean_employee.refresh_from_db()
-        conflict_employee.refresh_from_db()
         self.assertFalse(applied["dry_run"])
         self.assertEqual(clean_employee.manager_profile_id, self.manager_profile.id)
         self.assertEqual(clean_employee.manager_id, self.manager_user.id)
-        self.assertEqual(conflict_employee.manager_profile_id, archived_manager.id)
-        self.assertEqual(conflict_employee.manager_id, self.manager_user.id)
+        conflict_employee.refresh_from_db()
+        self.assertIsNone(conflict_employee.manager_profile_id)
+        self.assertIsNone(conflict_employee.manager_id)
 
     def test_audit_command_reports_every_required_category_without_writes(self):
         self.manager_user.groups.add(self.manager_group)

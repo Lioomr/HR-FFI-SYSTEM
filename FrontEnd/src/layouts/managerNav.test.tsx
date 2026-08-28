@@ -21,13 +21,21 @@ vi.mock("../services/api/employeesApi", async (importOriginal) => ({
 }));
 
 // The shell's realtime runtime and bell would poll the API during the test.
-vi.mock("../hooks/useNotificationsRuntime", () => ({ useNotificationsRuntime: () => undefined }));
-vi.mock("../components/notifications/NotificationBell", () => ({ default: () => null }));
+vi.mock("../hooks/useNotificationsRuntime", () => ({
+  useNotificationsRuntime: () => undefined,
+}));
+vi.mock("../components/notifications/NotificationBell", () => ({
+  default: () => null,
+}));
 
 const mockedGetManagerAccess = vi.mocked(getManagerAccess);
 const mockedGetEmployee = vi.mocked(getEmployee);
 
-const t = (key: string, params?: Record<string, unknown> | string, fallback?: string) => {
+const t = (
+  key: string,
+  params?: Record<string, unknown> | string,
+  fallback?: string,
+) => {
   const actualFallback = typeof params === "string" ? params : fallback;
   return translations.en?.[key] ?? actualFallback ?? key;
 };
@@ -40,14 +48,19 @@ const MANAGER_NAV_LINKS = [
   "Loan Requests",
 ];
 
-function setManagerAccess(hasAccess: boolean, managedEmployeeCount = hasAccess ? 4 : 0) {
+function setManagerAccess(
+  hasAccess: boolean,
+  managedEmployeeCount = hasAccess ? 4 : 0,
+) {
   mockedGetManagerAccess.mockResolvedValue({
     status: "success",
     data: {
       has_access: hasAccess,
       managed_employee_count: managedEmployeeCount,
       source: hasAccess ? "direct_reports" : "none",
-      scopes: hasAccess ? ["leave", "loan", "attendance", "asset", "announcement"] : [],
+      scopes: hasAccess
+        ? ["leave", "loan", "attendance", "asset", "announcement"]
+        : [],
     },
   });
 }
@@ -118,7 +131,10 @@ describe("BaseLayout manager navigation", () => {
     resetManagerAccessCache();
     mockedGetManagerAccess.mockReset();
     mockedGetEmployee.mockReset();
-    mockedGetEmployee.mockResolvedValue({ status: "success", data: {} as never });
+    mockedGetEmployee.mockResolvedValue({
+      status: "success",
+      data: {} as never,
+    });
   });
 
   afterEach(() => {
@@ -133,7 +149,9 @@ describe("BaseLayout manager navigation", () => {
     await renderShell();
 
     await waitFor(() => {
-      expect(screen.getByRole("link", { name: "Team Dashboard" })).toBeInTheDocument();
+      expect(
+        screen.getByRole("link", { name: "Team Dashboard" }),
+      ).toBeInTheDocument();
     });
     MANAGER_NAV_LINKS.forEach((label) => {
       expect(screen.getByRole("link", { name: label })).toBeInTheDocument();
@@ -150,7 +168,9 @@ describe("BaseLayout manager navigation", () => {
       expect(mockedGetManagerAccess).toHaveBeenCalled();
     });
     MANAGER_NAV_LINKS.forEach((label) => {
-      expect(screen.queryByRole("link", { name: label })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("link", { name: label }),
+      ).not.toBeInTheDocument();
     });
   });
 
@@ -163,8 +183,12 @@ describe("BaseLayout manager navigation", () => {
     await waitFor(() => {
       expect(mockedGetManagerAccess).toHaveBeenCalled();
     });
-    expect(screen.queryByRole("link", { name: "Team Dashboard" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Team Requests" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Team Dashboard" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Team Requests" }),
+    ).not.toBeInTheDocument();
     // Their own profile stays reachable.
     expect(screen.getByRole("link", { name: "Profile" })).toBeInTheDocument();
   });
@@ -176,7 +200,9 @@ describe("BaseLayout manager navigation", () => {
     await renderShell();
 
     await waitFor(() => {
-      expect(screen.getByRole("link", { name: "Team Dashboard" })).toBeInTheDocument();
+      expect(
+        screen.getByRole("link", { name: "Team Dashboard" }),
+      ).toBeInTheDocument();
     });
   });
 
@@ -188,7 +214,9 @@ describe("BaseLayout manager navigation", () => {
 
     // CFO reaches the manager surface through its own mandate, so the group
     // stays put; assert on targets since "Loan Requests" appears twice.
-    const hrefs = screen.getAllByRole("link").map((link) => link.getAttribute("href"));
+    const hrefs = screen
+      .getAllByRole("link")
+      .map((link) => link.getAttribute("href"));
     expect(hrefs).toEqual(
       expect.arrayContaining([
         "/manager/dashboard",
@@ -205,7 +233,9 @@ describe("BaseLayout manager navigation", () => {
 
     await renderShell();
 
-    expect(screen.getByRole("link", { name: "Team Requests" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Team Requests" }),
+    ).toBeInTheDocument();
   });
 
   it("does not add manager navigation to the SystemAdmin menu", async () => {
@@ -214,7 +244,9 @@ describe("BaseLayout manager navigation", () => {
 
     await renderShell();
 
-    expect(screen.queryByRole("link", { name: "Team Dashboard" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Team Dashboard" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Users" })).toBeInTheDocument();
   });
 });

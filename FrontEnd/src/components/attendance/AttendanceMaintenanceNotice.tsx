@@ -18,10 +18,17 @@ export default function AttendanceMaintenanceNotice({
 }) {
   const navigate = useNavigate();
   const { t } = useI18n();
-  const resolvedTitle = title || t("attendance.maintenance.title", "Attendance is temporarily unavailable");
+  const resolvedTitle =
+    title ||
+    t("attendance.maintenance.title", "Attendance is temporarily unavailable");
   const resolvedDescription =
-    description || t("attendance.maintenance.description", "We are fixing this part right now. Please check back soon.");
-  const resolvedBackLabel = backLabel || t("attendance.maintenance.back", "Go back");
+    description ||
+    t(
+      "attendance.maintenance.description",
+      "We are fixing this part right now. Please check back soon.",
+    );
+  const resolvedBackLabel =
+    backLabel || t("attendance.maintenance.back", "Go back");
 
   return (
     <Card
@@ -33,7 +40,11 @@ export default function AttendanceMaintenanceNotice({
       }}
       bodyStyle={{ padding: 32 }}
     >
-      <Space direction="vertical" size={16} style={{ width: "100%", textAlign: "center" }}>
+      <Space
+        direction="vertical"
+        size={16}
+        style={{ width: "100%", textAlign: "center" }}
+      >
         <div
           style={{
             width: 72,
@@ -64,13 +75,19 @@ export default function AttendanceMaintenanceNotice({
           <Title level={3} style={{ marginTop: 8, marginBottom: 8 }}>
             {resolvedTitle}
           </Title>
-          <Paragraph style={{ marginBottom: 0, color: "#64748b", fontSize: 15 }}>
+          <Paragraph
+            style={{ marginBottom: 0, color: "#64748b", fontSize: 15 }}
+          >
             {resolvedDescription}
           </Paragraph>
         </div>
         {backPath ? (
           <div>
-            <Button type="primary" onClick={() => navigate(backPath)} style={{ borderRadius: 10 }}>
+            <Button
+              type="primary"
+              onClick={() => navigate(backPath)}
+              style={{ borderRadius: 10 }}
+            >
               {resolvedBackLabel}
             </Button>
           </div>

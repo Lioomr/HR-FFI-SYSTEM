@@ -44,11 +44,11 @@ export interface ListDepartmentsParams {
  * List all departments
  */
 export async function listDepartments(
-  params?: ListDepartmentsParams
+  params?: ListDepartmentsParams,
 ): Promise<ApiResponse<Department[]>> {
   const { data } = await api.get<ApiResponse<Department[]>>(
     "/api/hr/departments/",
-    { params }
+    { params },
   );
   return data;
 }
@@ -57,11 +57,11 @@ export async function listDepartments(
  * Create a new department
  */
 export async function createDepartment(
-  payload: CreateDepartmentDto
+  payload: CreateDepartmentDto,
 ): Promise<ApiResponse<Department>> {
   const { data } = await api.post<ApiResponse<Department>>(
     "/api/hr/departments/",
-    payload
+    payload,
   );
   return data;
 }
@@ -71,11 +71,11 @@ export async function createDepartment(
  */
 export async function updateDepartment(
   id: string | number,
-  payload: UpdateDepartmentDto
+  payload: UpdateDepartmentDto,
 ): Promise<ApiResponse<Department>> {
   const { data } = await api.patch<ApiResponse<Department>>(
     `/api/hr/departments/${id}/`,
-    payload
+    payload,
   );
   return data;
 }

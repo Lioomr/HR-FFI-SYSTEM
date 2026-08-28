@@ -6,6 +6,15 @@ from django.db import models
 from organization.models import OrganizationNode
 
 
+def default_delegation_capabilities():
+    return ["workflow.approve"]
+
+
+def default_cross_company_manager_capabilities():
+    """The least-privileged capability granted to a new exceptional manager link."""
+    return ["employees.view"]
+
+
 class WorkflowDefinition(models.Model):
     key = models.CharField(max_length=100, unique=True)
     name = models.CharField(max_length=150)
@@ -140,6 +149,10 @@ class WorkflowAction(models.Model):
 
 
 class DelegationRule(models.Model):
+    class Capability(models.TextChoices):
+        WORKFLOW_APPROVE = "workflow.approve", "Approve delegated workflow work"
+        EMPLOYEE_READ = "employees.read", "View employees in an approved organization scope"
+
     from_user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -152,8 +165,24 @@ class DelegationRule(models.Model):
     )
     start_at = models.DateTimeField()
     end_at = models.DateTimeField(null=True, blank=True)
+    scope = models.ForeignKey(
+        "organization.OrganizationScope",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="delegation_grants",
+    )
+    capabilities = models.JSONField(default=default_delegation_capabilities, blank=True)
     reason = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    revoked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="delegation_rules_revoked",
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -169,10 +198,95 @@ class DelegationRule(models.Model):
         indexes = [
             models.Index(fields=["from_user", "is_active"], name="core_del_from_act_idx"),
             models.Index(fields=["to_user", "is_active"], name="core_del_to_act_idx"),
+            models.Index(fields=["scope", "is_active"], name="core_del_scope_act_idx"),
         ]
 
     def __str__(self) -> str:
         return f"{self.from_user_id}->{self.to_user_id}"
+
+
+class CrossCompanyManagerAssignment(models.Model):
+    """Exceptional manager/report link that never mutates EmployeeProfile.manager_profile."""
+
+    class Capability(models.TextChoices):
+        EMPLOYEE_VIEW = "employees.view", "View the assigned employee"
+        LEAVE_APPROVE = "leaves.approve", "Approve assigned employee leave"
+        ATTENDANCE_APPROVE = "attendance.approve", "Approve assigned employee attendance"
+        LOAN_APPROVE = "loans.approve", "Approve assigned employee loans"
+        ASSET_APPROVE = "assets.approve", "Approve assigned employee asset returns"
+        ANNOUNCEMENT_MANAGE = "announcements.manage", "Target announcements to assigned employees"
+
+    employee = models.ForeignKey(
+        "employees.EmployeeProfile",
+        on_delete=models.PROTECT,
+        related_name="cross_company_manager_assignments",
+    )
+    manager_profile = models.ForeignKey(
+        "employees.EmployeeProfile",
+        on_delete=models.PROTECT,
+        related_name="cross_company_managed_assignments",
+    )
+    scope = models.ForeignKey(
+        "organization.OrganizationScope",
+        on_delete=models.PROTECT,
+        related_name="cross_company_manager_assignments",
+    )
+    start_at = models.DateTimeField()
+    end_at = models.DateTimeField()
+    capabilities = models.JSONField(default=default_cross_company_manager_capabilities, blank=True)
+    reason = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    revoked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cross_company_manager_assignments_revoked",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cross_company_manager_assignments_created",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at", "-id"]
+        indexes = [
+            models.Index(fields=["manager_profile", "is_active"], name="core_cross_mgr_active_idx"),
+            models.Index(fields=["employee", "is_active"], name="core_cross_emp_active_idx"),
+            models.Index(fields=["scope", "is_active"], name="core_cross_scope_active_idx"),
+        ]
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        super().clean()
+        if self.employee_id and self.manager_profile_id and self.employee_id == self.manager_profile_id:
+            raise ValidationError("An employee cannot manage themselves.")
+        if self.end_at and self.start_at and self.end_at <= self.start_at:
+            raise ValidationError({"end_at": "End time must be after start time."})
+        capabilities = self.capabilities or []
+        valid_capabilities = set(self.Capability.values)
+        invalid_capabilities = set(capabilities) - valid_capabilities
+        if not capabilities:
+            raise ValidationError({"capabilities": "Cross-company assignments require explicit capabilities."})
+        if invalid_capabilities:
+            raise ValidationError({"capabilities": f"Unsupported capabilities: {sorted(invalid_capabilities)}"})
+        if self.scope_id:
+            member_ids = set(self.scope.memberships.values_list("company_id", flat=True))
+            if self.employee_id and self.employee.company_id not in member_ids:
+                raise ValidationError({"employee": "The employee company must be inside the organization scope."})
+            if self.manager_profile_id and self.manager_profile.company_id not in member_ids:
+                raise ValidationError({"manager_profile": "The manager company must be inside the organization scope."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
 
 class RequestObligation(models.Model):

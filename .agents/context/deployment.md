@@ -2,13 +2,19 @@
 
 ## Docker Services
 
-Defined in `docker-compose.yml` (dev default), `docker-compose.dev.yml`, `docker-compose.prod.yml`:
+Defined in `docker-compose.yml` (prod-shaped) and `docker-compose.dev.yml` (local dev). There is no
+`docker-compose.prod.yml` — production config lives in `docker-compose.yml` itself.
 
 | Service | Image | Port | Notes |
 |---|---|---|---|
 | `db` | postgres:16-alpine | 5432 | Volume: `postgres_data`, health check: `pg_isready` |
-| `backend` | Custom Dockerfile | 8000 | Django app, reads `.env` |
-| `frontend` | Custom Dockerfile | 5173 -> 80 | React, VITE_API_BASE_URL env var |
+| `backend` | Custom Dockerfile | 8000 | Django app, reads `.env`; gzip is enabled via `GZipMiddleware` |
+| `notification-worker` | Custom Dockerfile | — | Celery worker only (no `-B` — beat is a separate service) |
+| `celery-beat` | Custom Dockerfile | — | Runs `celery beat` alone; do not recombine with the worker |
+| `frontend` | Custom Dockerfile | 5173 -> 80 | React → Nginx static build, `VITE_API_BASE_URL` env var; Nginx serves gzip + immutable-cached hashed assets |
+| `cinematic-site` | Custom Dockerfile | 5174 -> 80 | Separate marketing site (`CinematicSite/`); opt-in via `profiles: ["marketing"]`, not started by default |
+
+See `reliability_and_perf_fixes.md` for why the worker/beat split and the gzip config exist — both were reliability/perf fixes and should not be reverted.
 
 ## Required Environment Variables
 

@@ -15,9 +15,10 @@ import * as employeesApi from "../../services/api/employeesApi";
 import { useI18nStore } from "../../i18n/i18nStore";
 import { useAuthStore } from "../../auth/authStore";
 
-const listEmployeeArchiveRequests = employeesApi.listEmployeeArchiveRequests as unknown as ReturnType<
-  typeof vi.fn
->;
+const listEmployeeArchiveRequests =
+  employeesApi.listEmployeeArchiveRequests as unknown as ReturnType<
+    typeof vi.fn
+  >;
 
 const row = {
   id: 5,
@@ -35,7 +36,10 @@ const row = {
   },
 };
 
-const ok = (items: unknown[]) => ({ status: "success" as const, data: { items, count: items.length } });
+const ok = (items: unknown[]) => ({
+  status: "success" as const,
+  data: { items, count: items.length },
+});
 
 beforeEach(() => {
   navigateMock.mockClear();
@@ -67,9 +71,13 @@ describe("CEOEmployeeDeletionInboxPage", () => {
 
     render(<CEOEmployeeDeletionInboxPage />);
 
-    expect(await screen.findByText("No archive requests in this status.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("No archive requests in this status."),
+    ).toBeInTheDocument();
 
-    listEmployeeArchiveRequests.mockResolvedValue(ok([{ ...row, status: "EXECUTED" }]));
+    listEmployeeArchiveRequests.mockResolvedValue(
+      ok([{ ...row, status: "EXECUTED" }]),
+    );
     fireEvent.click(screen.getByText("Archived"));
 
     await waitFor(() =>
@@ -82,7 +90,10 @@ describe("CEOEmployeeDeletionInboxPage", () => {
   });
 
   it("shows a retryable error state when the queue fails", async () => {
-    listEmployeeArchiveRequests.mockResolvedValue({ status: "error" as const, message: "server error" });
+    listEmployeeArchiveRequests.mockResolvedValue({
+      status: "error" as const,
+      message: "server error",
+    });
 
     render(<CEOEmployeeDeletionInboxPage />);
 
@@ -91,7 +102,9 @@ describe("CEOEmployeeDeletionInboxPage", () => {
     listEmployeeArchiveRequests.mockResolvedValue(ok([row]));
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
 
-    await waitFor(() => expect(screen.getByText("Sara Ahmed")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Sara Ahmed")).toBeInTheDocument(),
+    );
   });
 
   it("opens the request from a clearly named review action", async () => {
@@ -99,8 +112,12 @@ describe("CEOEmployeeDeletionInboxPage", () => {
 
     render(<CEOEmployeeDeletionInboxPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Review: Sara Ahmed" }));
-    expect(navigateMock).toHaveBeenCalledWith("/ceo/employees/deletion-requests/5");
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Review: Sara Ahmed" }),
+    );
+    expect(navigateMock).toHaveBeenCalledWith(
+      "/ceo/employees/deletion-requests/5",
+    );
   });
 
   it("uses the Arabic name and status wording in Arabic", async () => {

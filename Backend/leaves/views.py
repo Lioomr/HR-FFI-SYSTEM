@@ -6,6 +6,7 @@ from io import BytesIO
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.db.models import Q
 from django.http import FileResponse, HttpResponse
 from django.utils import timezone
@@ -23,6 +24,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from audit.utils import audit
+from core.files import read_field_file_bytes
 from core.pagination import StandardPagination
 from core.pdf import merge_pdfs
 from core.permissions import IsDepartmentCEOApprover, IsHRWorkflowApprover, get_role
@@ -42,21 +44,19 @@ from employees.document_extraction import extract_visa_fields
 from employees.models import EmployeeDocument, EmployeeProfile
 from employees.permissions import IsHRManagerOrAdmin
 from employees.services.manager_relationships import (
-    get_valid_direct_manager_user,
+    get_valid_manager_user,
     manager_approval_actor_source,
     manager_scope_q,
 )
 from in_app_notifications.dispatcher import dispatch_notification_channels
 from in_app_notifications.models import Notification
-from organization.models import OrganizationNode
 from organization.services import (
     filter_queryset_by_accessible_companies,
     filter_queryset_by_company_scope,
     get_active_company_for_request,
-    get_user_accessible_company_ids,
 )
 
-from .models import LeaveBalanceAdjustment, LeaveRequest, LeaveType
+from .models import AnnualLeavePaymentRequest, LeaveBalanceAdjustment, LeaveRequest, LeaveType
 from .notifications import (
     notify_delegation_assigned,
     notify_leave_approved,
@@ -64,11 +64,16 @@ from .notifications import (
     notify_leave_submitted,
 )
 from .permissions import (
+    IsAnnualLeavePaymentCreator,
     IsEmployeeOnly,
     IsLeaveRequestOwner,
     IsOwnerOrHR,
 )
 from .serializers import (
+    AnnualLeaveEligibilitySerializer,
+    AnnualLeavePaymentRequestCreateSerializer,
+    AnnualLeavePaymentRequestSerializer,
+    AnnualLeavePaymentReviewSerializer,
     HRManualLeaveRequestSerializer,
     LeaveBalanceAdjustmentSerializer,
     LeaveBalanceSerializer,
@@ -80,6 +85,7 @@ from .serializers import (
     LeaveTypeSerializer,
 )
 from .utils import (
+    build_annual_leave_eligibility,
     calculate_leave_balance,
     ensure_policy_leave_types_for_company,
     get_leave_days,
@@ -148,7 +154,7 @@ def _leave_employee_email(instance: LeaveRequest):
 
 def _leave_manager_user(instance: LeaveRequest):
     profile = _leave_profile(instance)
-    return get_valid_direct_manager_user(profile)
+    return get_valid_manager_user(profile, cross_company_capability="leaves.approve")
 
 
 def _serve_leave_document(instance, request):
@@ -208,7 +214,7 @@ def _approval_path_rows(instance: LeaveRequest):
         return rows
 
     profile = _leave_profile(instance)
-    needs_manager = bool(get_valid_direct_manager_user(profile))
+    needs_manager = bool(get_valid_manager_user(profile, cross_company_capability="leaves.approve"))
     needs_ceo = bool(
         getattr(instance.leave_type, "requires_ceo_approval", False) or _is_hr_manager_origin_request(instance)
     )
@@ -327,20 +333,7 @@ _LEAVE_STAGE_LABELS = {
 def _leave_document_pdf_bytes(instance: LeaveRequest) -> bytes | None:
     """Return the leave supporting document bytes when it's a PDF."""
 
-    document = getattr(instance, "document", None)
-    if not document:
-        return None
-    name = str(getattr(document, "name", "") or "").lower()
-    if not name.endswith(".pdf"):
-        return None
-    try:
-        document.open("rb")
-        try:
-            return document.read()
-        finally:
-            document.close()
-    except Exception:
-        return None
+    return read_field_file_bytes(getattr(instance, "document", None), suffix=".pdf")
 
 
 def _build_leave_request_pdf_fallback(instance: LeaveRequest):
@@ -1110,25 +1103,9 @@ class LeaveTypeViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]  # Overridden by get_permissions
 
     def _ensure_policy_types_for_list_scope(self, request):
-        accessible_company_ids = get_user_accessible_company_ids(request.user)
-        if not accessible_company_ids:
-            return
-
-        company_ids = set()
-        query_key = request.query_params.get("company_id")
-        if query_key and str(query_key).isdigit():
-            requested_id = int(query_key)
-            if requested_id in accessible_company_ids:
-                company_ids.add(requested_id)
-        else:
-            active_company = get_active_company_for_request(request)
-            if active_company:
-                company_ids.add(active_company.id)
-            else:
-                company_ids.update(accessible_company_ids)
-
-        for company in OrganizationNode.objects.filter(id__in=company_ids):
-            ensure_policy_leave_types_for_company(company)
+        active_company = get_active_company_for_request(request)
+        if active_company:
+            ensure_policy_leave_types_for_company(active_company)
 
     def get_permissions(self):
         # List/Retrieve: Anyone authenticated can try, but logic filters content
@@ -1268,21 +1245,10 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             if role not in ["SystemAdmin", "HRManager"]:
                 qs = qs.filter(Q(employee=user) | Q(delegated_to=user))
             obj = qs.filter(pk=self.kwargs.get(self.lookup_field)).first()
-            if obj is None and role not in ["SystemAdmin", "HRManager"]:
-                obj = self._base_queryset().filter(pk=self.kwargs.get(self.lookup_field), delegated_to=user).first()
             if obj is None:
                 from django.shortcuts import get_object_or_404
 
-                include_null_qs = self._base_queryset().filter(company__isnull=True)
-                if role not in ["SystemAdmin", "HRManager"]:
-                    include_null_qs = include_null_qs.filter(Q(employee=user) | Q(delegated_to=user))
-                else:
-                    include_null_qs = filter_queryset_by_accessible_companies(
-                        self._base_queryset(),
-                        self.request,
-                        include_null=True,
-                    )
-                obj = get_object_or_404(include_null_qs, pk=self.kwargs.get(self.lookup_field))
+                obj = get_object_or_404(qs, pk=self.kwargs.get(self.lookup_field))
             self.check_object_permissions(self.request, obj)
             return obj
         return super().get_object()
@@ -1338,7 +1304,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         # Determine initial status
         user = self.request.user
         profile = getattr(user, "employee_profile", None)
-        has_manager = bool(get_valid_direct_manager_user(profile))
+        has_manager = bool(get_valid_manager_user(profile, cross_company_capability="leaves.approve"))
 
         if serializer.validated_data.get("delegated_to"):
             initial_status = LeaveRequest.RequestStatus.PENDING_DELEGATE
@@ -1349,13 +1315,10 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         else:
             initial_status = LeaveRequest.RequestStatus.PENDING_HR
 
-        leave_type = serializer.validated_data.get("leave_type")
         instance = serializer.save(
             employee=self.request.user,
             employee_profile=profile,
-            company=getattr(profile, "company", None)
-            or getattr(leave_type, "company", None)
-            or get_active_company_for_request(self.request),
+            company=profile.company,
             status=initial_status,
         )
         sync_workflow(instance, actor=self.request.user)
@@ -1593,23 +1556,27 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
                 status=422,
             )
 
-        allowed_statuses = [LeaveRequest.RequestStatus.SUBMITTED, LeaveRequest.RequestStatus.PENDING_HR]
-
-        if instance.status not in allowed_statuses:
-            return error("Validation error", errors=["Request is not in a state to be approved by HR."], status=422)
-
         s = LeaveRequestActionSerializer(data=request.data)
         if not s.is_valid():
             return error("Validation error", errors=_flatten_errors(s.errors), status=422)
 
-        instance.decided_by = request.user
-        instance.decided_at = timezone.now()
-        note = s.validated_data.get("comment", "")
-        instance.hr_decision_note = note
+        allowed_statuses = [LeaveRequest.RequestStatus.SUBMITTED, LeaveRequest.RequestStatus.PENDING_HR]
 
-        instance.status = LeaveRequest.RequestStatus.PENDING_CEO
+        with transaction.atomic():
+            instance = LeaveRequest.objects.select_for_update().get(pk=instance.pk)
+            if instance.status not in allowed_statuses:
+                return error(
+                    "Validation error", errors=["Request is not in a state to be approved by HR."], status=422
+                )
 
-        instance.save()
+            instance.decided_by = request.user
+            instance.decided_at = timezone.now()
+            note = s.validated_data.get("comment", "")
+            instance.hr_decision_note = note
+
+            instance.status = LeaveRequest.RequestStatus.PENDING_CEO
+
+            instance.save()
         sync_workflow(instance, actor=request.user)
 
         requested_days = get_leave_days(instance.start_date, instance.end_date)
@@ -1666,9 +1633,6 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             LeaveRequest.RequestStatus.PENDING_MANAGER,
         ]
 
-        if instance.status not in allowed_statuses:
-            return error("Validation error", errors=["Request cannot be rejected."], status=422)
-
         s = LeaveRequestActionSerializer(data=request.data)
         if not s.is_valid():
             return error("Validation error", errors=_flatten_errors(s.errors), status=422)
@@ -1676,11 +1640,16 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         if not comment:
             return error("Validation error", errors=["comment is required."], status=422)
 
-        instance.status = LeaveRequest.RequestStatus.REJECTED
-        instance.decided_by = request.user
-        instance.decided_at = timezone.now()
-        instance.hr_decision_note = comment
-        instance.save()
+        with transaction.atomic():
+            instance = LeaveRequest.objects.select_for_update().get(pk=instance.pk)
+            if instance.status not in allowed_statuses:
+                return error("Validation error", errors=["Request cannot be rejected."], status=422)
+
+            instance.status = LeaveRequest.RequestStatus.REJECTED
+            instance.decided_by = request.user
+            instance.decided_at = timezone.now()
+            instance.hr_decision_note = comment
+            instance.save()
         sync_workflow(instance, actor=request.user)
 
         audit(request, "reject", entity="LeaveRequest", entity_id=instance.id)
@@ -1832,7 +1801,11 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsLeaveRequestOwner])
     def cancel(self, request, pk=None):
         try:
-            instance = LeaveRequest.objects.get(pk=pk, employee=request.user, is_active=True)
+            instance = filter_queryset_by_company_scope(LeaveRequest.objects.all(), request).get(
+                pk=pk,
+                employee=request.user,
+                is_active=True,
+            )
         except LeaveRequest.DoesNotExist:
             return error("Not found", errors=["Not found."], status=404)
 
@@ -2061,8 +2034,12 @@ class ManagerLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
             base_qs = filter_queryset_by_accessible_companies(qs, self.request)
         if role == "SystemAdmin":
             return base_qs
-        return base_qs.filter(
-            manager_scope_q(self.request.user, employee_prefix="employee__employee_profile__")
+        return qs.filter(
+            manager_scope_q(
+                self.request.user,
+                employee_prefix="employee__employee_profile__",
+                cross_company_capability="leaves.approve",
+            )
         ).distinct()
 
     def list(self, request, *args, **kwargs):
@@ -2078,6 +2055,7 @@ class ManagerLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
         actor_source = manager_approval_actor_source(
             request.user,
             _leave_profile(instance),
+            capability="leaves.approve",
             allow_admin=True,
         )
         if not actor_source:
@@ -2085,20 +2063,22 @@ class ManagerLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
         allowed_statuses = [LeaveRequest.RequestStatus.SUBMITTED, LeaveRequest.RequestStatus.PENDING_MANAGER]
 
-        if instance.status not in allowed_statuses:
-            return error(
-                "Validation error", errors=["Request is not in a state to be approved by manager."], status=422
-            )
-
         s = LeaveRequestActionSerializer(data=request.data)
         if not s.is_valid():
             return error("Validation error", errors=_flatten_errors(s.errors), status=422)
 
-        instance.status = LeaveRequest.RequestStatus.PENDING_HR
-        instance.manager_decision_by = request.user
-        instance.manager_decision_at = timezone.now()
-        instance.manager_decision_note = s.validated_data.get("comment", "")
-        instance.save()
+        with transaction.atomic():
+            instance = LeaveRequest.objects.select_for_update().get(pk=instance.pk)
+            if instance.status not in allowed_statuses:
+                return error(
+                    "Validation error", errors=["Request is not in a state to be approved by manager."], status=422
+                )
+
+            instance.status = LeaveRequest.RequestStatus.PENDING_HR
+            instance.manager_decision_by = request.user
+            instance.manager_decision_at = timezone.now()
+            instance.manager_decision_note = s.validated_data.get("comment", "")
+            instance.save()
         sync_workflow(instance, actor=request.user)
 
         audit(
@@ -2128,17 +2108,13 @@ class ManagerLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
         actor_source = manager_approval_actor_source(
             request.user,
             _leave_profile(instance),
+            capability="leaves.approve",
             allow_admin=True,
         )
         if not actor_source:
             return error("Forbidden", errors=["You cannot reject this leave request."], status=403)
 
         allowed_statuses = [LeaveRequest.RequestStatus.SUBMITTED, LeaveRequest.RequestStatus.PENDING_MANAGER]
-
-        if instance.status not in allowed_statuses:
-            return error(
-                "Validation error", errors=["Request is not in a state to be rejected by manager."], status=422
-            )
 
         s = LeaveRequestActionSerializer(data=request.data)
         if not s.is_valid():
@@ -2147,11 +2123,18 @@ class ManagerLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
         if not comment:
             return error("Validation error", errors=["comment is required."], status=422)
 
-        instance.status = LeaveRequest.RequestStatus.REJECTED
-        instance.manager_decision_by = request.user
-        instance.manager_decision_at = timezone.now()
-        instance.manager_decision_note = comment
-        instance.save()
+        with transaction.atomic():
+            instance = LeaveRequest.objects.select_for_update().get(pk=instance.pk)
+            if instance.status not in allowed_statuses:
+                return error(
+                    "Validation error", errors=["Request is not in a state to be rejected by manager."], status=422
+                )
+
+            instance.status = LeaveRequest.RequestStatus.REJECTED
+            instance.manager_decision_by = request.user
+            instance.manager_decision_at = timezone.now()
+            instance.manager_decision_note = comment
+            instance.save()
         sync_workflow(instance, actor=request.user)
 
         audit(
@@ -2214,7 +2197,7 @@ class LeaveBalanceViewSet(viewsets.ViewSet):
         # Get Employee User
 
         try:
-            profile = EmployeeProfile.objects.get(id=employee_id)
+            profile = filter_queryset_by_company_scope(EmployeeProfile.objects.all(), request).get(id=employee_id)
             user = profile.user
         except (EmployeeProfile.DoesNotExist, ValueError):
             return error("Not found", errors=["Not found."], status=404)
@@ -2249,10 +2232,10 @@ class EmployeeLeaveBalanceView(APIView):
             except ValueError:
                 return error("Validation error", errors=["year must be a valid integer."], status=422)
 
-        # The balance calculator derives company scope from the employee profile.
-        # Do not pass the request company separately: calculate_leave_balance()
-        # intentionally accepts only user, year, and optional profile arguments.
-        balances = calculate_leave_balance(request.user, year)
+        profile = filter_queryset_by_company_scope(EmployeeProfile.objects.all(), request).filter(user=request.user).first()
+        if profile is None:
+            return error("Not found", errors=["Not found."], status=404)
+        balances = calculate_leave_balance(request.user, year, profile=profile)
 
         # Audit
         audit(request, "leave_balance.viewed", entity="user", entity_id=request.user.id, metadata={"year": year})
@@ -2309,7 +2292,7 @@ class EmployeeDelegatedLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ["-created_at"]
 
     def get_queryset(self):
-        return LeaveRequest.objects.filter(
+        queryset = LeaveRequest.objects.filter(
             delegated_to=self.request.user,
             is_active=True,
         ).select_related(
@@ -2322,6 +2305,7 @@ class EmployeeDelegatedLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
             "delegate_decision_by",
             "company",
         )
+        return filter_queryset_by_company_scope(queryset, self.request)
 
     def list(self, request, *args, **kwargs):
         qs = self.filter_queryset(self.get_queryset())
@@ -2377,6 +2361,247 @@ class LeaveBalanceAdjustmentViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         response = super().create(request, *args, **kwargs)
         return success(response.data, status=response.status_code)
+
+
+class AnnualLeavePaymentRequestViewSet(viewsets.ModelViewSet):
+    """Annual leave settlement requests: employee -> HR -> CEO."""
+
+    queryset = AnnualLeavePaymentRequest.objects.select_related(
+        "employee", "employee_profile", "company", "submitted_by", "hr_reviewed_by", "ceo_decided_by"
+    )
+    serializer_class = AnnualLeavePaymentRequestSerializer
+    http_method_names = ["get", "post", "head", "options"]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ["status", "resolution", "employee_profile"]
+    ordering_fields = ["submitted_at", "cycle_end", "payment_amount"]
+    ordering = ["-submitted_at"]
+
+    def get_permissions(self):
+        if self.action == "create":
+            return [IsAuthenticated(), IsAnnualLeavePaymentCreator()]
+        if self.action == "eligibility":
+            return [IsAuthenticated(), IsEmployeeOnly()]
+        if self.action == "review":
+            return [IsAuthenticated(), IsHRManagerOrAdmin()]
+        if self.action in {"approve", "reject"}:
+            return [IsAuthenticated(), IsDepartmentCEOApprover()]
+        return [IsAuthenticated()]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        role = get_role(self.request.user)
+        if role in {"SystemAdmin", "HRManager", "CEO"}:
+            return filter_queryset_by_company_scope(qs, self.request)
+        qs = qs.filter(employee=self.request.user)
+        return filter_queryset_by_company_scope(qs, self.request)
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, context={"request": request})
+        return success(serializer.data)
+
+    @action(detail=False, methods=["get"])
+    def eligibility(self, request):
+        profile = EmployeeProfile.objects.select_related("company").filter(user=request.user).first()
+        active_company = get_active_company_for_request(request)
+        payload = build_annual_leave_eligibility(profile, active_company=active_company)
+        audit(
+            request,
+            "annual_leave_payment_eligibility_viewed",
+            entity="employee_profile",
+            entity_id=profile.id if profile else None,
+            metadata={
+                "can_request": payload["can_request"],
+                "cycle_start": str(payload["cycle_start"]) if payload["cycle_start"] else None,
+                "cycle_end": str(payload["cycle_end"]) if payload["cycle_end"] else None,
+            },
+        )
+        return success(AnnualLeaveEligibilitySerializer(payload).data)
+
+    def create(self, request, *args, **kwargs):
+        serializer = AnnualLeavePaymentRequestCreateSerializer(data=request.data, context={"request": request})
+        if not serializer.is_valid():
+            return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
+        instance = serializer.save()
+        audit(
+            request,
+            "annual_leave_payment_submitted",
+            entity="AnnualLeavePaymentRequest",
+            entity_id=instance.id,
+            metadata={
+                "employee_profile_id": instance.employee_profile_id,
+                "cycle_start": str(instance.cycle_start),
+                "cycle_end": str(instance.cycle_end),
+                "eligible_unused_days": str(instance.eligible_unused_days),
+                "payment_amount": str(instance.payment_amount),
+                "is_termination_settlement": instance.is_termination_settlement,
+            },
+        )
+        try:
+            if instance.status == AnnualLeavePaymentRequest.Status.PENDING_CEO:
+                notify_users_for_pending_status(
+                    users=get_ceo_approver_users(),
+                    request_type="Annual Leave Settlement",
+                    request_id=instance.id,
+                    requester_name=_leave_employee_name(instance),
+                    status_label=instance.status,
+                    details=[
+                        f"Resolution: {instance.resolution}",
+                        f"Eligible Days: {instance.eligible_unused_days}",
+                        f"Payment Amount: {instance.payment_amount}",
+                    ],
+                    action_path=f"/ceo/annual-leave-payments/{instance.id}",
+                )
+            else:
+                notify_users_for_pending_status(
+                    users=get_hr_approver_users(),
+                    request_type="Annual Leave Payment Request",
+                    request_id=instance.id,
+                    requester_name=_leave_employee_name(instance),
+                    status_label=instance.status,
+                    details=[
+                        f"Eligible Days: {instance.eligible_unused_days}",
+                        f"Payment Amount: {instance.payment_amount}",
+                    ],
+                    action_path=f"/hr/annual-leave-payments/{instance.id}",
+                )
+        except Exception:
+            pass
+        return success(AnnualLeavePaymentRequestSerializer(instance).data, status=status.HTTP_201_CREATED)
+
+    @staticmethod
+    def _notify_employee(instance, *, approved: bool):
+        if not instance.employee:
+            return
+        event_key = "annual_leave.payment_approved" if approved else "annual_leave.payment_rejected"
+        title = "Annual Leave settlement approved" if approved else "Annual Leave settlement rejected"
+        message = (
+            f"Your Annual Leave settlement request #{instance.id} was approved."
+            if approved
+            else f"Your Annual Leave settlement request #{instance.id} was rejected."
+        )
+        dispatch_notification_channels(
+            recipient=instance.employee,
+            event_key=event_key,
+            title=title,
+            message=message,
+            category=Notification.Category.LEAVE,
+            action_url="/employee/leave/requests",
+            related_object=instance,
+            metadata={
+                "payment_amount": str(instance.payment_amount),
+                "eligible_unused_days": str(instance.eligible_unused_days),
+                "resolution": instance.resolution,
+            },
+            deduplication_key=f"{event_key}:{instance.id}",
+            company=instance.company,
+        )
+
+    @action(detail=True, methods=["post"])
+    def review(self, request, pk=None):
+        instance = self.get_object()
+        if instance.status != AnnualLeavePaymentRequest.Status.PENDING_HR:
+            return error("Validation error", errors=["Payment request is not pending HR review."], status=422)
+        serializer = AnnualLeavePaymentReviewSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
+        decision = serializer.validated_data["decision"]
+        instance.resolution = (
+            AnnualLeavePaymentRequest.Resolution.CARRY_FORWARD
+            if decision == "carry_forward"
+            else AnnualLeavePaymentRequest.Resolution.PAY
+        )
+        instance.carry_forward_days = (
+            instance.eligible_unused_days if decision == "carry_forward" else 0
+        )
+        instance.payment_amount = 0 if decision == "carry_forward" else instance.payment_amount
+        instance.status = AnnualLeavePaymentRequest.Status.PENDING_CEO
+        instance.hr_reviewed_by = request.user
+        instance.hr_reviewed_at = timezone.now()
+        instance.hr_review_note = serializer.validated_data.get("comment", "")
+        instance.save()
+        audit(
+            request,
+            "annual_leave_payment_hr_reviewed",
+            entity="AnnualLeavePaymentRequest",
+            entity_id=instance.id,
+            metadata={"resolution": instance.resolution, "comment": instance.hr_review_note},
+        )
+        try:
+            notify_users_for_pending_status(
+                users=get_ceo_approver_users(),
+                request_type="Annual Leave Settlement",
+                request_id=instance.id,
+                requester_name=_leave_employee_name(instance),
+                status_label=instance.status,
+                details=[
+                    f"Resolution: {instance.resolution}",
+                    f"Eligible Days: {instance.eligible_unused_days}",
+                    f"Payment Amount: {instance.payment_amount}",
+                ],
+                action_path=f"/ceo/annual-leave-payments/{instance.id}",
+            )
+        except Exception:
+            pass
+        return success(AnnualLeavePaymentRequestSerializer(instance).data)
+
+    @action(detail=True, methods=["post"])
+    def approve(self, request, pk=None):
+        instance = self.get_object()
+        serializer = LeaveRequestActionSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
+        with transaction.atomic():
+            instance = AnnualLeavePaymentRequest.objects.select_for_update().get(pk=instance.pk)
+            if instance.status != AnnualLeavePaymentRequest.Status.PENDING_CEO:
+                return error("Validation error", errors=["Payment request is not pending CEO approval."], status=422)
+            instance.status = (
+                AnnualLeavePaymentRequest.Status.CARRIED_FORWARD
+                if instance.resolution == AnnualLeavePaymentRequest.Resolution.CARRY_FORWARD
+                else AnnualLeavePaymentRequest.Status.APPROVED
+            )
+            instance.ceo_decided_by = request.user
+            instance.ceo_decided_at = timezone.now()
+            instance.ceo_decision_note = serializer.validated_data.get("comment", "")
+            instance.settled_at = timezone.now()
+            instance.save()
+        self._notify_employee(instance, approved=True)
+        audit(
+            request,
+            "annual_leave_payment_ceo_approved",
+            entity="AnnualLeavePaymentRequest",
+            entity_id=instance.id,
+            metadata={"resolution": instance.resolution, "status": instance.status},
+        )
+        return success(AnnualLeavePaymentRequestSerializer(instance).data)
+
+    @action(detail=True, methods=["post"])
+    def reject(self, request, pk=None):
+        instance = self.get_object()
+        serializer = LeaveRequestActionSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
+        comment = (serializer.validated_data.get("comment") or "").strip()
+        if not comment:
+            return error("Validation error", errors=["comment is required."], status=422)
+        with transaction.atomic():
+            instance = AnnualLeavePaymentRequest.objects.select_for_update().get(pk=instance.pk)
+            if instance.status != AnnualLeavePaymentRequest.Status.PENDING_CEO:
+                return error("Validation error", errors=["Payment request is not pending CEO approval."], status=422)
+            instance.status = AnnualLeavePaymentRequest.Status.REJECTED
+            instance.ceo_decided_by = request.user
+            instance.ceo_decided_at = timezone.now()
+            instance.ceo_decision_note = comment
+            instance.save()
+        self._notify_employee(instance, approved=False)
+        audit(
+            request,
+            "annual_leave_payment_ceo_rejected",
+            entity="AnnualLeavePaymentRequest",
+            entity_id=instance.id,
+            metadata={"comment": comment},
+        )
+        return success(AnnualLeavePaymentRequestSerializer(instance).data)
 
 
 class CEOLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):

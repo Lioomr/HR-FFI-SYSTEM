@@ -6,7 +6,6 @@ from core.permissions import IsHRManagerOrAdmin
 from core.responses import success
 from organization.services import (
     ensure_company_write_allowed,
-    filter_queryset_by_accessible_companies,
     filter_queryset_by_company_scope,
     get_active_company_for_request,
 )
@@ -27,9 +26,7 @@ class BaseReferenceViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = self.queryset.filter(is_active=True)
-        if self.action == "list":
-            return filter_queryset_by_company_scope(qs, self.request)
-        return filter_queryset_by_accessible_companies(qs, self.request)
+        return filter_queryset_by_company_scope(qs, self.request)
 
     def list(self, request, *args, **kwargs):
         response = super().list(request, *args, **kwargs)

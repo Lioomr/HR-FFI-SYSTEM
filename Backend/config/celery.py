@@ -25,6 +25,13 @@ app.conf.beat_schedule = {
         ),
         "kwargs": {"days": int(os.environ.get("NOTIFICATION_RETENTION_DAYS", "90"))},
     },
+    "send-annual-leave-year-end-notifications-daily": {
+        "task": "leaves.tasks.send_annual_leave_year_end_notifications",
+        "schedule": crontab(
+            hour=int(os.environ.get("ANNUAL_LEAVE_REMINDER_HOUR", "8")),
+            minute=int(os.environ.get("ANNUAL_LEAVE_REMINDER_MINUTE", "5")),
+        ),
+    },
     "sync-biotime-attendance-morning": {
         "task": "attendance.tasks.sync_biotime_attendance",
         "schedule": crontab(

@@ -10,7 +10,11 @@ import type { MenuProps } from "antd";
 
 import { sectionLabel } from "./menuUtils";
 
-type Translate = (key: string, params?: Record<string, any> | string, fallback?: string) => string;
+type Translate = (
+  key: string,
+  params?: Record<string, any> | string,
+  fallback?: string,
+) => string;
 
 type MenuItemGroup = NonNullable<MenuProps["items"]>[number];
 
@@ -23,12 +27,19 @@ type MenuItemGroup = NonNullable<MenuProps["items"]>[number];
 export function buildManagerNavGroup(t: Translate): MenuItemGroup {
   return {
     type: "group" as const,
-    label: sectionLabel(t("layout.menu.myTeam", "My Team"), t("layout.menu.teamManagement", "Team Management")),
+    label: sectionLabel(
+      t("layout.menu.myTeam", "My Team"),
+      t("layout.menu.teamManagement", "Team Management"),
+    ),
     children: [
       {
         key: "/manager/dashboard",
         icon: <DashboardOutlined />,
-        label: <Link to="/manager/dashboard">{t("layout.teamDashboard", "Team Dashboard")}</Link>,
+        label: (
+          <Link to="/manager/dashboard">
+            {t("layout.teamDashboard", "Team Dashboard")}
+          </Link>
+        ),
       },
       {
         key: "/manager/team",
@@ -38,7 +49,11 @@ export function buildManagerNavGroup(t: Translate): MenuItemGroup {
       {
         key: "/manager/team-requests",
         icon: <FileSearchOutlined />,
-        label: <Link to="/manager/team-requests">{t("layout.teamRequests", "Team Requests")}</Link>,
+        label: (
+          <Link to="/manager/team-requests">
+            {t("layout.teamRequests", "Team Requests")}
+          </Link>
+        ),
       },
       {
         key: "/manager/attendance-corrections",
@@ -52,13 +67,20 @@ export function buildManagerNavGroup(t: Translate): MenuItemGroup {
       {
         key: "/manager/loan-requests",
         icon: <DollarOutlined />,
-        label: <Link to="/manager/loan-requests">{t("layout.loanRequests", "Loan Requests")}</Link>,
+        label: (
+          <Link to="/manager/loan-requests">
+            {t("layout.loanRequests", "Loan Requests")}
+          </Link>
+        ),
       },
     ],
   };
 }
 
 /** Manager nav entries, or nothing when the user has no manager capability. */
-export function buildManagerNavGroups(t: Translate, hasManagerAccess: boolean): MenuItemGroup[] {
+export function buildManagerNavGroups(
+  t: Translate,
+  hasManagerAccess: boolean,
+): MenuItemGroup[] {
   return hasManagerAccess ? [buildManagerNavGroup(t)] : [];
 }

@@ -1,5 +1,9 @@
 import { Button, message, Typography } from "antd";
-import { WarningOutlined, BugOutlined, ReloadOutlined } from "@ant-design/icons";
+import {
+  WarningOutlined,
+  BugOutlined,
+  ReloadOutlined,
+} from "@ant-design/icons";
 import { useNavigate, useRouteError } from "react-router-dom";
 import { useState } from "react";
 import { reportErrorApi } from "../services/api/errorApi";
@@ -40,14 +44,22 @@ export default function RouteErrorBoundary() {
         flexDirection: "column",
         justifyContent: "center",
         alignItems: "center",
-        background: "linear-gradient(145deg, #1a1a1a 0%, #2a2a2a 40%, #1f1f1f 70%, #333333 100%)",
+        background:
+          "linear-gradient(145deg, #1a1a1a 0%, #2a2a2a 40%, #1f1f1f 70%, #333333 100%)",
         position: "relative",
         overflow: "hidden",
         padding: 24,
       }}
     >
       {/* Background decorative circles */}
-      <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          overflow: "hidden",
+          pointerEvents: "none",
+        }}
+      >
         {[
           { w: 400, h: 400, top: -100, right: -100, op: 0.06 },
           { w: 300, h: 300, bottom: -80, left: -80, op: 0.05 },
@@ -121,11 +133,25 @@ export default function RouteErrorBoundary() {
           {title}
         </h1>
 
-        <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 18, marginBottom: 32 }}>
+        <div
+          style={{
+            color: "rgba(255,255,255,0.8)",
+            fontSize: 18,
+            marginBottom: 32,
+          }}
+        >
           {subtitle}
         </div>
 
-        <div style={{ display: "flex", justifyContent: "center", gap: 16, flexWrap: "wrap", marginBottom: 32 }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            gap: 16,
+            flexWrap: "wrap",
+            marginBottom: 32,
+          }}
+        >
           <Button
             type="primary"
             size="large"
@@ -187,7 +213,9 @@ export default function RouteErrorBoundary() {
 
         {err && (
           <div style={{ textAlign: "left", marginTop: 16 }}>
-            <Typography.Text style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>
+            <Typography.Text
+              style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}
+            >
               Technical Details:
             </Typography.Text>
             <pre

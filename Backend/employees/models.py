@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
@@ -172,6 +173,31 @@ class EmployeeProfile(models.Model):
         verbose_name = _("Employee Profile")
         verbose_name_plural = _("Employee Profiles")
 
+    def clean(self):
+        super().clean()
+        errors = {}
+        if not self.is_archived and self.company_id is None:
+            errors["company"] = _("A non-archived employee profile must belong to a company.")
+        if self.company_id and self.company.node_type != OrganizationNode.NodeType.COMPANY:
+            errors["company"] = _("Employee profiles must belong to a company organization node.")
+        elif not self.is_archived and self.company_id and not self.company.is_active:
+            errors["company"] = _("A non-archived employee profile must belong to an active company.")
+
+        for field_name in ["department_ref", "position_ref", "task_group_ref", "sponsor_ref"]:
+            reference = getattr(self, field_name, None)
+            if reference and reference.company_id != self.company_id:
+                errors[field_name] = _("The selected reference must belong to the employee's company.")
+
+        if self.manager_profile_id:
+            from employees.services.manager_relationships import validate_manager_assignment
+
+            try:
+                validate_manager_assignment(self, self.manager_profile, company=self.company)
+            except ValidationError as exc:
+                errors["manager_profile"] = exc.messages
+        if errors:
+            raise ValidationError(errors)
+
     def __str__(self):
         email = self.user.email if self.user else ""
         return f"{self.employee_id} - {email}".strip()
@@ -226,6 +252,10 @@ class EmployeeProfile(models.Model):
             ]
             self.total_salary = sum((amount or Decimal("0.00")) for amount in allowances)
 
+        # Enforce tenant integrity for both new records and later relationship or
+        # status changes. Archived legacy profiles may remain company-less because
+        # ``clean()`` explicitly permits that state.
+        self.clean()
         super().save(*args, **kwargs)
 
 
@@ -239,6 +269,14 @@ class EmployeeImport(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         related_name="employee_imports",
+    )
+    company = models.ForeignKey(
+        OrganizationNode,
+        on_delete=models.PROTECT,
+        related_name="employee_imports",
+        null=True,
+        blank=True,
+        help_text=_("Company selected when this import was executed."),
     )
     original_filename = models.CharField(max_length=255)
     stored_file = models.FileField(

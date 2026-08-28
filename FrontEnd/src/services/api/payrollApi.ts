@@ -4,7 +4,12 @@ import type { ApiResponse, PaginatedResponse } from "./apiTypes";
 /**
  * Payroll Run Status
  */
-export type PayrollRunStatus = "DRAFT" | "COMPLETED" | "PAID" | "CANCELLED" | string;
+export type PayrollRunStatus =
+  | "DRAFT"
+  | "COMPLETED"
+  | "PAID"
+  | "CANCELLED"
+  | string;
 
 /**
  * Payroll Run Data Transfer Object
@@ -43,7 +48,7 @@ export interface PayrollRunItem {
   total_deductions: number;
   net_salary: number; // The Calculated amount
 
-  // We might generally just show the aggregates in the list, 
+  // We might generally just show the aggregates in the list,
   // and have a full detail view if needed, but for "Review" this usually suffices.
 }
 
@@ -92,11 +97,11 @@ export type PayrollRunItemListResponse = PaginatedResponse<PayrollRunItem>;
  * GET /payroll-runs
  */
 export async function getPayrollRuns(
-  params?: ListPayrollRunsParams
+  params?: ListPayrollRunsParams,
 ): Promise<ApiResponse<PayrollRunListResponse>> {
   const { data } = await api.get<ApiResponse<PayrollRunListResponse>>(
     "/payroll-runs",
-    { params }
+    { params },
   );
   return data;
 }
@@ -106,9 +111,11 @@ export async function getPayrollRuns(
  * GET /payroll-runs/{id}
  */
 export async function getPayrollRunDetails(
-  id: string | number
+  id: string | number,
 ): Promise<ApiResponse<PayrollRun>> {
-  const { data } = await api.get<ApiResponse<PayrollRun>>(`/payroll-runs/${id}`);
+  const { data } = await api.get<ApiResponse<PayrollRun>>(
+    `/payroll-runs/${id}`,
+  );
   return data;
 }
 
@@ -122,11 +129,11 @@ export interface CreatePayrollRunRequest {
 }
 
 export async function createPayrollRun(
-  payload: CreatePayrollRunRequest
+  payload: CreatePayrollRunRequest,
 ): Promise<ApiResponse<PayrollRun>> {
   const { data } = await api.post<ApiResponse<PayrollRun>>(
     "/payroll-runs",
-    payload
+    payload,
   );
   return data;
 }
@@ -137,26 +144,25 @@ export async function createPayrollRun(
  */
 export async function getPayrollRunItems(
   runId: string | number,
-  params?: ListPayrollRunItemsParams
+  params?: ListPayrollRunItemsParams,
 ): Promise<ApiResponse<PayrollRunItemListResponse>> {
   const { data } = await api.get<ApiResponse<PayrollRunItemListResponse>>(
     `/payroll-runs/${runId}/items`,
-    { params }
+    { params },
   );
   return data;
 }
-
 
 /**
  * Finalize a payroll run
  * POST /payroll-runs/{id}/finalize
  */
 export async function finalizePayrollRun(
-  runId: string | number
+  runId: string | number,
 ): Promise<ApiResponse<PayrollRun>> {
   const { data } = await api.post<ApiResponse<PayrollRun>>(
     `/payroll-runs/${runId}/finalize`,
-    { confirm: true }
+    { confirm: true },
   );
   return data;
 }
@@ -165,13 +171,22 @@ export async function finalizePayrollRun(
  * Trigger payslip generation
  * POST /payroll-runs/{id}/generate-payslips
  */
-export async function generatePayslips(
-  runId: string | number
-): Promise<ApiResponse<{ message: string; generated_count?: number; total_payslips?: number; run_status?: string }>> {
-  const { data } = await api.post<ApiResponse<{ message: string; generated_count?: number; total_payslips?: number; run_status?: string }>>(
-    `/payroll-runs/${runId}/generate-payslips`,
-    {}
-  );
+export async function generatePayslips(runId: string | number): Promise<
+  ApiResponse<{
+    message: string;
+    generated_count?: number;
+    total_payslips?: number;
+    run_status?: string;
+  }>
+> {
+  const { data } = await api.post<
+    ApiResponse<{
+      message: string;
+      generated_count?: number;
+      total_payslips?: number;
+      run_status?: string;
+    }>
+  >(`/payroll-runs/${runId}/generate-payslips`, {});
   return data;
 }
 
@@ -180,9 +195,11 @@ export async function generatePayslips(
  * GET /payroll-runs/{id}/summary
  */
 export async function getPayrollRunSummary(
-  runId: string | number
+  runId: string | number,
 ): Promise<ApiResponse<PayrollRunSummary>> {
-  const { data } = await api.get<ApiResponse<PayrollRunSummary>>(`/payroll-runs/${runId}/summary`);
+  const { data } = await api.get<ApiResponse<PayrollRunSummary>>(
+    `/payroll-runs/${runId}/summary`,
+  );
   return data;
 }
 
@@ -192,14 +209,11 @@ export async function getPayrollRunSummary(
  */
 export async function exportPayrollReport(
   runId: string | number,
-  format: "csv" | "pdf" | "xlsx"
+  format: "csv" | "pdf" | "xlsx",
 ): Promise<Blob> {
-  const response = await api.get(
-    `/payroll-runs/${runId}/export`,
-    {
-      params: { file_format: format },
-      responseType: "blob"
-    }
-  );
+  const response = await api.get(`/payroll-runs/${runId}/export`, {
+    params: { file_format: format },
+    responseType: "blob",
+  });
   return response.data;
 }

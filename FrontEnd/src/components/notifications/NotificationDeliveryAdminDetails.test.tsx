@@ -10,9 +10,7 @@ import type { AuthUser, Role } from "../../auth/authStore";
 function setRole(role: Role | undefined) {
   useAuthStore.setState({
     isAuthenticated: !!role,
-    user: role
-      ? ({ id: "1", email: "u@ffi.test", role } as AuthUser)
-      : null,
+    user: role ? ({ id: "1", email: "u@ffi.test", role } as AuthUser) : null,
   });
 }
 
@@ -43,7 +41,7 @@ describe("NotificationDeliveryAdminDetails", () => {
   it("renders nothing for non-admin users", () => {
     setRole("Employee");
     const { container } = render(
-      <NotificationDeliveryAdminDetails deliveries={[failedWhatsapp]} />
+      <NotificationDeliveryAdminDetails deliveries={[failedWhatsapp]} />,
     );
     expect(container).toBeEmptyDOMElement();
   });
@@ -51,7 +49,7 @@ describe("NotificationDeliveryAdminDetails", () => {
   it("renders nothing when there are no deliveries", () => {
     setRole("SystemAdmin");
     const { container } = render(
-      <NotificationDeliveryAdminDetails deliveries={[]} />
+      <NotificationDeliveryAdminDetails deliveries={[]} />,
     );
     expect(container).toBeEmptyDOMElement();
   });
@@ -60,21 +58,19 @@ describe("NotificationDeliveryAdminDetails", () => {
     setRole("SystemAdmin");
     render(<NotificationDeliveryAdminDetails deliveries={[failedWhatsapp]} />);
 
-    expect(
-      screen.getByText(/delivery details \(admin\)/i)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/delivery details \(admin\)/i)).toBeInTheDocument();
     expect(screen.getByText("evolution_whatsapp")).toBeInTheDocument();
     expect(screen.getByText("2")).toBeInTheDocument();
     // The backend already redacts this to a single safe line.
     expect(
-      screen.getByText("Evolution WhatsApp provider is unavailable.")
+      screen.getByText("Evolution WhatsApp provider is unavailable."),
     ).toBeInTheDocument();
   });
 
   it("uses a keyboard-accessible native disclosure", () => {
     setRole("HRManager");
     const { container } = render(
-      <NotificationDeliveryAdminDetails deliveries={[failedWhatsapp]} />
+      <NotificationDeliveryAdminDetails deliveries={[failedWhatsapp]} />,
     );
     const details = container.querySelector("details");
     const summary = container.querySelector("summary");

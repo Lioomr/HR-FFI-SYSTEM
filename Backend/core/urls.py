@@ -15,6 +15,18 @@ urlpatterns = [
     path("pending-requests/", views.PendingRequestsView.as_view(), name="pending_requests"),
     path("workflow/delegations/", views.DelegationRuleListCreateView.as_view(), name="delegation_rule_list_create"),
     path("workflow/delegations/<int:pk>/", views.DelegationRuleDetailView.as_view(), name="delegation_rule_detail"),
+    path("organization-scopes/", views.OrganizationScopeListCreateView.as_view(), name="organization_scope_list_create"),
+    path("organization-scopes/<int:pk>/", views.OrganizationScopeDetailView.as_view(), name="organization_scope_detail"),
+    path(
+        "cross-company-manager-assignments/",
+        views.CrossCompanyManagerAssignmentListCreateView.as_view(),
+        name="cross_company_manager_assignment_list_create",
+    ),
+    path(
+        "cross-company-manager-assignments/<int:pk>/",
+        views.CrossCompanyManagerAssignmentDetailView.as_view(),
+        name="cross_company_manager_assignment_detail",
+    ),
     path("request-obligations/", views.RequestObligationListView.as_view(), name="request_obligation_list"),
     path(
         "request-obligations/<int:pk>/waive/",

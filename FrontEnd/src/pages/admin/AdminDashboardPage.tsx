@@ -102,7 +102,10 @@ export default function AdminDashboardPage() {
         action: string;
         actor_email: string | null;
       }> = [];
-      if (auditResult.status === "fulfilled" && !isApiError(auditResult.value)) {
+      if (
+        auditResult.status === "fulfilled" &&
+        !isApiError(auditResult.value)
+      ) {
         auditItems = auditResult.value.data.items ?? [];
       }
 
@@ -114,7 +117,7 @@ export default function AdminDashboardPage() {
           action: item.action,
           actor: item.actor_email ?? "System",
           severity: inferSeverity(item.action),
-        }))
+        })),
       );
       setMode("ok");
     } catch (err: any) {
@@ -132,7 +135,8 @@ export default function AdminDashboardPage() {
   }, [loadData]);
 
   if (unauthorized) return <Unauthorized403Page />;
-  if (mode === "loading") return <LoadingState title={t("loading.dashboard")} />;
+  if (mode === "loading")
+    return <LoadingState title={t("loading.dashboard")} />;
   if (mode === "error") {
     return (
       <ErrorState
@@ -154,22 +158,53 @@ export default function AdminDashboardPage() {
   }
 
   const StatCard = ({ title, value, icon, color, trend }: any) => (
-    <Card bordered={false} style={{ borderRadius: 12, height: '100%' }} bodyStyle={{ padding: 24 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+    <Card
+      bordered={false}
+      style={{ borderRadius: 12, height: "100%" }}
+      bodyStyle={{ padding: 24 }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+        }}
+      >
         <div>
-          <div style={{ color: '#8c8c8c', fontSize: 14, marginBottom: 4 }}>{title}</div>
-          <div style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 8 }}>{value}</div>
+          <div style={{ color: "#8c8c8c", fontSize: 14, marginBottom: 4 }}>
+            {title}
+          </div>
+          <div style={{ fontSize: 24, fontWeight: "bold", marginBottom: 8 }}>
+            {value}
+          </div>
           {trend && (
-            <div style={{ color: '#52c41a', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
-              <ArrowUpOutlined /> {trend} <span style={{ color: '#bfbfbf' }}>{t("common.vsLastWeek")}</span>
+            <div
+              style={{
+                color: "#52c41a",
+                fontSize: 12,
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+              }}
+            >
+              <ArrowUpOutlined /> {trend}{" "}
+              <span style={{ color: "#bfbfbf" }}>{t("common.vsLastWeek")}</span>
             </div>
           )}
         </div>
-        <div style={{
-          width: 48, height: 48, borderRadius: 12,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: `${color}15`, color: color, fontSize: 20
-        }}>
+        <div
+          style={{
+            width: 48,
+            height: 48,
+            borderRadius: 12,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: `${color}15`,
+            color: color,
+            fontSize: 20,
+          }}
+        >
           {icon}
         </div>
       </div>
@@ -178,7 +213,9 @@ export default function AdminDashboardPage() {
 
   return (
     <div style={{ maxWidth: 1600, margin: "0 auto" }}>
-      <h2 style={{ fontSize: 24, fontWeight: 600, marginBottom: 24 }}>{t("admin.dashboard.title")}</h2>
+      <h2 style={{ fontSize: 24, fontWeight: 600, marginBottom: 24 }}>
+        {t("admin.dashboard.title")}
+      </h2>
 
       {/* Stats Row */}
       <Row gutter={[24, 24]} style={{ marginBottom: 32 }}>
@@ -188,7 +225,11 @@ export default function AdminDashboardPage() {
             value={summary.users.total.toLocaleString()}
             icon={<TeamOutlined />}
             color="#f97316"
-            trend={summary.users.total_growth_pct > 0 ? `+${summary.users.total_growth_pct}%` : `${summary.users.total_growth_pct}%`}
+            trend={
+              summary.users.total_growth_pct > 0
+                ? `+${summary.users.total_growth_pct}%`
+                : `${summary.users.total_growth_pct}%`
+            }
           />
         </Col>
         <Col xs={24} sm={12} lg={6}>
@@ -222,30 +263,49 @@ export default function AdminDashboardPage() {
 
       {/* Quick Actions */}
       <div style={{ marginBottom: 32 }}>
-        <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>{t("admin.dashboard.quickActions")}</h3>
+        <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>
+          {t("admin.dashboard.quickActions")}
+        </h3>
         <Space size={16} wrap>
           <Button
             type="primary"
             icon={<UserAddOutlined />}
             size="large"
-            style={{ background: '#ff7a45', borderColor: '#ff7a45', borderRadius: 8, height: 48, paddingLeft: 24, paddingRight: 24 }}
-            onClick={() => navigate('/admin/users')}
+            style={{
+              background: "#ff7a45",
+              borderColor: "#ff7a45",
+              borderRadius: 8,
+              height: 48,
+              paddingLeft: 24,
+              paddingRight: 24,
+            }}
+            onClick={() => navigate("/admin/users")}
           >
             {t("admin.dashboard.inviteUsers")}
           </Button>
           <Button
             icon={<TeamOutlined />}
             size="large"
-            style={{ borderRadius: 8, height: 48, paddingLeft: 24, paddingRight: 24 }}
-            onClick={() => navigate('/admin/users')}
+            style={{
+              borderRadius: 8,
+              height: 48,
+              paddingLeft: 24,
+              paddingRight: 24,
+            }}
+            onClick={() => navigate("/admin/users")}
           >
             {t("admin.dashboard.manageUsers")}
           </Button>
           <Button
             icon={<SettingOutlined />}
             size="large"
-            style={{ borderRadius: 8, height: 48, paddingLeft: 24, paddingRight: 24 }}
-            onClick={() => navigate('/admin/settings')}
+            style={{
+              borderRadius: 8,
+              height: 48,
+              paddingLeft: 24,
+              paddingRight: 24,
+            }}
+            onClick={() => navigate("/admin/settings")}
           >
             {t("admin.dashboard.settings")}
           </Button>
@@ -255,11 +315,30 @@ export default function AdminDashboardPage() {
       <Row gutter={[24, 24]}>
         {/* Main Content: Recent Audit Activity */}
         <Col xs={24} lg={16}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <h3 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>{t("admin.dashboard.recentActivity")}</h3>
-            <Button type="link" onClick={() => navigate("/admin/audit-logs")} style={{ color: '#ff7a45' }}>{t("admin.dashboard.viewAllAuditLogs")}</Button>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: 16,
+            }}
+          >
+            <h3 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>
+              {t("admin.dashboard.recentActivity")}
+            </h3>
+            <Button
+              type="link"
+              onClick={() => navigate("/admin/audit-logs")}
+              style={{ color: "#ff7a45" }}
+            >
+              {t("admin.dashboard.viewAllAuditLogs")}
+            </Button>
           </div>
-          <Card bordered={false} style={{ borderRadius: 16, overflow: 'hidden' }} bodyStyle={{ padding: 0 }}>
+          <Card
+            bordered={false}
+            style={{ borderRadius: 16, overflow: "hidden" }}
+            bodyStyle={{ padding: 0 }}
+          >
             <Table
               dataSource={auditPreview}
               pagination={false}
@@ -267,17 +346,29 @@ export default function AdminDashboardPage() {
               rowKey="id"
               columns={[
                 {
-                  title: t("admin.dashboard.actor"), dataIndex: 'actor', key: 'actor', render: (text) => (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <Avatar style={{ backgroundColor: '#f56a00' }}>{text[0]?.toUpperCase()}</Avatar>
+                  title: t("admin.dashboard.actor"),
+                  dataIndex: "actor",
+                  key: "actor",
+                  render: (text) => (
+                    <div
+                      style={{ display: "flex", alignItems: "center", gap: 12 }}
+                    >
+                      <Avatar style={{ backgroundColor: "#f56a00" }}>
+                        {text[0]?.toUpperCase()}
+                      </Avatar>
                       <span style={{ fontWeight: 500 }}>{text}</span>
                     </div>
-                  )
+                  ),
                 },
                 {
-                  title: t("admin.dashboard.action"), dataIndex: 'action', key: 'action', render: (val) => (
-                    <span style={{ fontWeight: 500 }}>{t(`audit.action.${val}`, val)}</span>
-                  )
+                  title: t("admin.dashboard.action"),
+                  dataIndex: "action",
+                  key: "action",
+                  render: (val) => (
+                    <span style={{ fontWeight: 500 }}>
+                      {t(`audit.action.${val}`, val)}
+                    </span>
+                  ),
                 },
                 {
                   title: t("admin.dashboard.time"),
@@ -290,7 +381,10 @@ export default function AdminDashboardPage() {
                   ),
                 },
                 {
-                  title: t("admin.dashboard.severity"), dataIndex: 'severity', key: 'severity', render: severityTag
+                  title: t("admin.dashboard.severity"),
+                  dataIndex: "severity",
+                  key: "severity",
+                  render: severityTag,
                 },
               ]}
             />
@@ -303,39 +397,77 @@ export default function AdminDashboardPage() {
             <AnnouncementWidget role="admin" />
           </div>
 
-          <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>{t("admin.dashboard.inviteStatistics")}</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 32 }}>
-
+          <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>
+            {t("admin.dashboard.inviteStatistics")}
+          </h3>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 16,
+              marginBottom: 32,
+            }}
+          >
             {/* Expired Invites */}
-            <Card bordered={false} style={{ borderRadius: 12 }} bodyStyle={{ padding: 16 }}>
-              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                <div style={{
-                  width: 40, height: 40, borderRadius: 8,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: '#ffccc7', color: '#cf1322'
-                }}>
+            <Card
+              bordered={false}
+              style={{ borderRadius: 12 }}
+              bodyStyle={{ padding: 16 }}
+            >
+              <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                <div
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 8,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: "#ffccc7",
+                    color: "#cf1322",
+                  }}
+                >
                   <BellOutlined style={{ fontSize: 18 }} />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, color: '#8c8c8c' }}>{t("admin.dashboard.expiredInvites")}</div>
-                  <div style={{ fontSize: 18, fontWeight: 600 }}>{summary.invites.expired}</div>
+                  <div style={{ fontSize: 14, color: "#8c8c8c" }}>
+                    {t("admin.dashboard.expiredInvites")}
+                  </div>
+                  <div style={{ fontSize: 18, fontWeight: 600 }}>
+                    {summary.invites.expired}
+                  </div>
                 </div>
               </div>
             </Card>
 
             {/* Accepted Invites */}
-            <Card bordered={false} style={{ borderRadius: 12 }} bodyStyle={{ padding: 16 }}>
-              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                <div style={{
-                  width: 40, height: 40, borderRadius: 8,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: '#d9f7be', color: '#389e0d'
-                }}>
+            <Card
+              bordered={false}
+              style={{ borderRadius: 12 }}
+              bodyStyle={{ padding: 16 }}
+            >
+              <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                <div
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 8,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: "#d9f7be",
+                    color: "#389e0d",
+                  }}
+                >
                   <TeamOutlined style={{ fontSize: 18 }} />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, color: '#8c8c8c' }}>{t("admin.dashboard.acceptedInvites")}</div>
-                  <div style={{ fontSize: 18, fontWeight: 600 }}>{summary.invites.accepted}</div>
+                  <div style={{ fontSize: 14, color: "#8c8c8c" }}>
+                    {t("admin.dashboard.acceptedInvites")}
+                  </div>
+                  <div style={{ fontSize: 18, fontWeight: 600 }}>
+                    {summary.invites.accepted}
+                  </div>
                 </div>
               </div>
             </Card>
@@ -343,29 +475,68 @@ export default function AdminDashboardPage() {
             {/* Top Actions Breakdown */}
             {summary.audit.top_actions_today && (
               <>
-                <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, marginTop: 16 }}>{t("admin.dashboard.topActionsToday")}</h3>
-                <Card bordered={false} style={{ borderRadius: 12 }} bodyStyle={{ padding: 0 }}>
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    {summary.audit.top_actions_today.slice(0, 3).map((item, idx) => (
-                      <div key={idx} style={{
-                        display: 'flex', justifyContent: 'space-between', padding: '12px 16px',
-                        borderBottom: idx < (summary.audit.top_actions_today?.length || 0) - 1 ? '1px solid #f0f0f0' : 'none'
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <ClusterOutlined style={{ color: '#f97316' }} />
-                          <span>{t(`audit.action.${item.action}`, item.action)}</span>
+                <h3
+                  style={{
+                    fontSize: 16,
+                    fontWeight: 600,
+                    marginBottom: 8,
+                    marginTop: 16,
+                  }}
+                >
+                  {t("admin.dashboard.topActionsToday")}
+                </h3>
+                <Card
+                  bordered={false}
+                  style={{ borderRadius: 12 }}
+                  bodyStyle={{ padding: 0 }}
+                >
+                  <div style={{ display: "flex", flexDirection: "column" }}>
+                    {summary.audit.top_actions_today
+                      .slice(0, 3)
+                      .map((item, idx) => (
+                        <div
+                          key={idx}
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            padding: "12px 16px",
+                            borderBottom:
+                              idx <
+                              (summary.audit.top_actions_today?.length || 0) - 1
+                                ? "1px solid #f0f0f0"
+                                : "none",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 8,
+                            }}
+                          >
+                            <ClusterOutlined style={{ color: "#f97316" }} />
+                            <span>
+                              {t(`audit.action.${item.action}`, item.action)}
+                            </span>
+                          </div>
+                          <Tag>{item.count}</Tag>
                         </div>
-                        <Tag>{item.count}</Tag>
+                      ))}
+                    {summary.audit.top_actions_today.length === 0 && (
+                      <div
+                        style={{
+                          padding: 16,
+                          color: "#8c8c8c",
+                          textAlign: "center",
+                        }}
+                      >
+                        {t("common.noActions")}
                       </div>
-                    ))}
-                    {(summary.audit.top_actions_today.length === 0) && (
-                      <div style={{ padding: 16, color: '#8c8c8c', textAlign: 'center' }}>{t("common.noActions")}</div>
                     )}
                   </div>
                 </Card>
               </>
             )}
-
           </div>
         </Col>
       </Row>

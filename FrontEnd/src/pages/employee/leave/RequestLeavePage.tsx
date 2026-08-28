@@ -1,398 +1,536 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Card, Form, Select, DatePicker, Input, Alert, notification, Upload, Row, Col } from "antd";
+import {
+  Button,
+  Card,
+  Form,
+  Select,
+  DatePicker,
+  Input,
+  Alert,
+  notification,
+  Upload,
+  Row,
+  Col,
+} from "antd";
 import { ArrowLeftOutlined, SendOutlined } from "@ant-design/icons";
 import type { UploadFile } from "antd/es/upload/interface";
 
 import PageHeader from "../../../components/ui/PageHeader";
 import { useI18n } from "../../../i18n/useI18n";
-import { getLeaveTypes, createLeaveRequest, getMyLeaveBalance, type LeaveType, type LeaveBalance } from "../../../services/api/leaveApi";
-import { listDelegationCandidates, type DelegationCandidate } from "../../../services/api/employeesApi";
+import {
+  getLeaveTypes,
+  createLeaveRequest,
+  getMyLeaveBalance,
+  type LeaveType,
+  type LeaveBalance,
+} from "../../../services/api/leaveApi";
+import {
+  listDelegationCandidates,
+  type DelegationCandidate,
+} from "../../../services/api/employeesApi";
 import { isApiError } from "../../../services/api/apiTypes";
 import { getDetailedHttpErrorMessage } from "../../../services/api/userErrorMessages";
-import { getLeaveValidationErrors, isEmployeeLeaveDateDisabled } from "./leaveRequestValidation";
+import {
+  annualLeaveDaysIssueMessage,
+  getLeaveValidationErrors,
+  isAnnualLeaveCode,
+  isEmployeeLeaveDateDisabled,
+  readLeaveBalanceFigures,
+  validateAnnualLeaveDays,
+} from "./leaveRequestValidation";
 
 const { Option } = Select;
 const { TextArea } = Input;
 const { RangePicker } = DatePicker;
 
 export function LeaveSubmissionError({ message }: { message: string | null }) {
-    if (!message) return null;
-    return <Alert type="error" title={message} showIcon style={{ marginBottom: 24 }} />;
+  if (!message) return null;
+  return (
+    <Alert type="error" title={message} showIcon style={{ marginBottom: 24 }} />
+  );
 }
 
 export default function RequestLeavePage() {
-    const navigate = useNavigate();
-    const { t } = useI18n();
-    const [form] = Form.useForm();
+  const navigate = useNavigate();
+  const { t } = useI18n();
+  const [form] = Form.useForm();
 
-    // Translate leave type names coming from the API
-    const translateLeaveType = (name?: string): string => {
-        if (!name) return '';
-        const key = `leave.type.${name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z_]/g, '')}`;
-        const translated = t(key);
-        return translated === key ? name : translated;
-    };
+  // Translate leave type names coming from the API
+  const translateLeaveType = (name?: string): string => {
+    if (!name) return "";
+    const key = `leave.type.${name
+      .toLowerCase()
+      .replace(/\s+/g, "_")
+      .replace(/[^a-z_]/g, "")}`;
+    const translated = t(key);
+    return translated === key ? name : translated;
+  };
 
-    const [loading, setLoading] = useState(false);
-    const [submitting, setSubmitting] = useState(false);
-    const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
-    const [balances, setBalances] = useState<Record<number, LeaveBalance>>({});
-    const selectedLeaveTypeId = Form.useWatch("leave_type", form);
-    const selectedLeaveBalance = selectedLeaveTypeId ? balances[selectedLeaveTypeId] : undefined;
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
+  const [balances, setBalances] = useState<Record<number, LeaveBalance>>({});
+  const selectedLeaveTypeId = Form.useWatch("leave_type", form);
+  const selectedLeaveBalance = selectedLeaveTypeId
+    ? balances[selectedLeaveTypeId]
+    : undefined;
+  const selectedBalanceFigures = selectedLeaveBalance
+    ? readLeaveBalanceFigures(selectedLeaveBalance)
+    : undefined;
 
-    const [daysCount, setDaysCount] = useState(0);
-    const [balanceError, setBalanceError] = useState<string | null>(null);
-    const [submitError, setSubmitError] = useState<string | null>(null);
-    const [isOtherSelected, setIsOtherSelected] = useState(false);
-    const [isSickSelected, setIsSickSelected] = useState(false);
-    const [delegationCandidates, setDelegationCandidates] = useState<DelegationCandidate[]>([]);
+  const [daysCount, setDaysCount] = useState(0);
+  const [balanceError, setBalanceError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isOtherSelected, setIsOtherSelected] = useState(false);
+  const [isSickSelected, setIsSickSelected] = useState(false);
+  const [delegationCandidates, setDelegationCandidates] = useState<
+    DelegationCandidate[]
+  >([]);
 
-    const getBalanceByCode = (code: string): LeaveBalance | undefined => {
-        const normalized = code.toUpperCase();
-        const leaveType = leaveTypes.find(t => (t.code || "").toUpperCase() === normalized);
-        return leaveType ? balances[leaveType.id] : undefined;
-    };
+  // Annual Leave is limited by requestable_days, which the backend already
+  // reduced by pending reservations and the sub-day remainder. Every other
+  // type keeps its previous remaining_days rule.
+  const getAvailableDaysForType = (typeObj: LeaveType): number =>
+    Number(balances[typeObj.id]?.remaining_days || 0);
 
-    const getAvailableDaysForType = (typeObj: LeaveType): number => {
-        const ownBalance = balances[typeObj.id];
-        const ownRemaining = Number(ownBalance?.remaining_days || 0);
-        const code = (typeObj.code || "").toUpperCase();
+  const getDaysIssueMessage = (
+    typeObj: LeaveType,
+    requestedDays: number,
+  ): string | null => {
+    if (isAnnualLeaveCode(typeObj.code)) {
+      const issue = validateAnnualLeaveDays(
+        requestedDays,
+        balances[typeObj.id],
+      );
+      return issue ? annualLeaveDaysIssueMessage(issue, t) : null;
+    }
+    return getAvailableDaysForType(typeObj) < requestedDays
+      ? t("leave.insufficientBalance")
+      : null;
+  };
 
-        if (["ANNUAL", "ANNUAL_LEAVE"].includes(code)) {
-            const unpaidRemaining = Number(getBalanceByCode("UNPAID")?.remaining_days || 0);
-            return ownRemaining + unpaidRemaining;
+  const formatDays = (value: number | string | undefined): string => {
+    const numericValue = Number(value || 0);
+    return Number.isInteger(numericValue)
+      ? String(numericValue)
+      : numericValue.toFixed(2);
+  };
+
+  // Balances are re-read after every submit attempt so a pending reservation
+  // created elsewhere is reflected before the employee tries again.
+  const loadBalances = useCallback(async () => {
+    const balanceRes = await getMyLeaveBalance();
+    if (!isApiError(balanceRes)) {
+      const map: Record<number, LeaveBalance> = {};
+      (balanceRes.data || []).forEach((b) => {
+        map[b.leave_type_id] = b;
+      });
+      setBalances(map);
+    }
+  }, []);
+
+  useEffect(() => {
+    async function init() {
+      setLoading(true);
+      try {
+        const typesRes = await getLeaveTypes();
+        if (!isApiError(typesRes)) {
+          setLeaveTypes(typesRes.data || []);
         }
 
-        return ownRemaining;
-    };
+        await loadBalances();
 
-    const formatDays = (value: number | string | undefined): string => {
-        const numericValue = Number(value || 0);
-        return Number.isInteger(numericValue) ? String(numericValue) : numericValue.toFixed(2);
-    };
-
-    useEffect(() => {
-        async function init() {
-            setLoading(true);
-            try {
-                const typesRes = await getLeaveTypes();
-                if (!isApiError(typesRes)) {
-                    setLeaveTypes(typesRes.data || []);
-                }
-
-                const balanceRes = await getMyLeaveBalance();
-                if (!isApiError(balanceRes)) {
-                    const map: Record<number, LeaveBalance> = {};
-                    (balanceRes.data || []).forEach(b => {
-                        map[b.leave_type_id] = b;
-                    });
-                    setBalances(map);
-                }
-
-                const employeesRes = await listDelegationCandidates();
-                if (!isApiError(employeesRes)) {
-                    setDelegationCandidates(employeesRes.data || []);
-                }
-            } catch (e) {
-                console.error(e);
-                notification.error({ message: t("common.error"), description: t("common.tryAgain") });
-            } finally {
-                setLoading(false);
-            }
+        const employeesRes = await listDelegationCandidates();
+        if (!isApiError(employeesRes)) {
+          setDelegationCandidates(employeesRes.data || []);
         }
-        init();
-    }, [t]);
+      } catch (e) {
+        console.error(e);
+        notification.error({
+          message: t("common.error"),
+          description: t("common.tryAgain"),
+        });
+      } finally {
+        setLoading(false);
+      }
+    }
+    init();
+  }, [t, loadBalances]);
 
-    const handleValuesChange = (changedValues: any, allValues: any) => {
-        if (changedValues.leave_type) {
-            const typeObj = leaveTypes.find(t => t.id === changedValues.leave_type);
-            setIsOtherSelected(typeObj?.code === 'OTHER');
-            const nextIsSickSelected = ["SICK", "SICK_LEAVE"].includes((typeObj?.code || "").toUpperCase());
-            setIsSickSelected(nextIsSickSelected);
-            if (!nextIsSickSelected) {
-                form.setFields([{ name: "document", errors: [] }]);
-            }
-        }
+  const handleValuesChange = (changedValues: any, allValues: any) => {
+    if (changedValues.leave_type) {
+      const typeObj = leaveTypes.find((t) => t.id === changedValues.leave_type);
+      setIsOtherSelected(typeObj?.code === "OTHER");
+      const nextIsSickSelected = ["SICK", "SICK_LEAVE"].includes(
+        (typeObj?.code || "").toUpperCase(),
+      );
+      setIsSickSelected(nextIsSickSelected);
+      if (!nextIsSickSelected) {
+        form.setFields([{ name: "document", errors: [] }]);
+      }
+    }
 
-        if (changedValues.dates || changedValues.leave_type) {
-            if (changedValues.dates) {
-                setSubmitError(null);
-                form.setFields([{ name: "dates", errors: [] }]);
-            }
-            const { dates, leave_type } = allValues;
-
-            if (dates && dates[0] && dates[1]) {
-                const start = dates[0];
-                const end = dates[1];
-                const diff = end.diff(start, 'day') + 1;
-                setDaysCount(diff > 0 ? diff : 0);
-
-                if (leave_type) {
-                    const typeObj = leaveTypes.find(t => t.id === leave_type);
-                    if (typeObj) {
-                        if (typeObj.code === 'OTHER') {
-                            setBalanceError(null);
-                        } else {
-                            const bal = balances[typeObj.id];
-                            if (bal) {
-                                const availableDays = getAvailableDaysForType(typeObj);
-                                if (availableDays < diff) {
-                                    setBalanceError(t("leave.insufficientBalance"));
-                                } else {
-                                    setBalanceError(null);
-                                }
-                            } else {
-                                setBalanceError(null);
-                            }
-                        }
-                    }
-                }
-            } else {
-                setDaysCount(0);
-                setBalanceError(null);
-            }
-        }
-    };
-
-    const handleFinish = async (values: any) => {
-        if (balanceError) {
-            notification.error({ message: t("common.error"), description: balanceError });
-            return;
-        }
-
-        setSubmitting(true);
+    if (changedValues.dates || changedValues.leave_type) {
+      if (changedValues.dates) {
         setSubmitError(null);
-        try {
-            const payload = new FormData();
-            payload.append("leave_type", String(values.leave_type));
-            payload.append("start_date", values.dates[0].format("YYYY-MM-DD"));
-            payload.append("end_date", values.dates[1].format("YYYY-MM-DD"));
-            payload.append("reason", values.reason || "");
+        form.setFields([{ name: "dates", errors: [] }]);
+      }
+      const { dates, leave_type } = allValues;
 
-            const fileList = (values.document || []) as UploadFile[];
-            const file = fileList[0]?.originFileObj;
-            if (file) {
-                payload.append("document", file);
+      if (dates && dates[0] && dates[1]) {
+        const start = dates[0];
+        const end = dates[1];
+        const diff = end.diff(start, "day") + 1;
+        setDaysCount(diff > 0 ? diff : 0);
+
+        if (leave_type) {
+          const typeObj = leaveTypes.find((t) => t.id === leave_type);
+          if (typeObj) {
+            if (typeObj.code === "OTHER") {
+              setBalanceError(null);
+            } else {
+              const bal = balances[typeObj.id];
+              setBalanceError(bal ? getDaysIssueMessage(typeObj, diff) : null);
             }
-
-            payload.append("other_leave_description", values.other_leave_description || "");
-            if (values.date_of_rejoin) payload.append("date_of_rejoin", values.date_of_rejoin.format("YYYY-MM-DD"));
-            payload.append("po_box", values.po_box || "");
-            payload.append("full_address", values.full_address || "");
-            payload.append("airplane_ticket_payer", values.airplane_ticket_payer || "");
-            payload.append("airplane_ticket_address", values.airplane_ticket_address || "");
-            if (values.delegated_to != null) payload.append("delegated_to", String(values.delegated_to));
-            payload.append("delegation_note", values.delegation_note || "");
-
-            await createLeaveRequest(payload);
-
-            notification.success({ message: t("common.submit"), description: t("leave.submitRequest") });
-            navigate("/employee/leave/requests");
-
-        } catch (err: any) {
-            console.error("Submit Error:", err);
-
-            let description = getDetailedHttpErrorMessage(t, err);
-            const validationErrors = getLeaveValidationErrors(err);
-            if (validationErrors.length > 0) {
-                description = validationErrors.map(({ message }) => message).join(", ");
-                const startDateError = validationErrors.find(({ field }) => field === "start_date");
-                if (startDateError) {
-                    form.setFields([{ name: "dates", errors: [startDateError.message] }]);
-                }
-            }
-
-            setSubmitError(description);
-            notification.error({ message: t("common.error"), description });
-        } finally {
-            setSubmitting(false);
+          }
         }
-    };
+      } else {
+        setDaysCount(0);
+        setBalanceError(null);
+      }
+    }
+  };
 
-    return (
-        <div style={{ maxWidth: 600, margin: "0 auto" }}>
-            <Button
-                type="link"
-                icon={<ArrowLeftOutlined />}
-                onClick={() => navigate("/employee/leave/requests")}
-                style={{ paddingLeft: 0, marginBottom: 16 }}
+  const handleFinish = async (values: any) => {
+    if (balanceError) {
+      notification.error({
+        message: t("common.error"),
+        description: balanceError,
+      });
+      return;
+    }
+
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const payload = new FormData();
+      payload.append("leave_type", String(values.leave_type));
+      payload.append("start_date", values.dates[0].format("YYYY-MM-DD"));
+      payload.append("end_date", values.dates[1].format("YYYY-MM-DD"));
+      payload.append("reason", values.reason || "");
+
+      const fileList = (values.document || []) as UploadFile[];
+      const file = fileList[0]?.originFileObj;
+      if (file) {
+        payload.append("document", file);
+      }
+
+      payload.append(
+        "other_leave_description",
+        values.other_leave_description || "",
+      );
+      if (values.date_of_rejoin)
+        payload.append(
+          "date_of_rejoin",
+          values.date_of_rejoin.format("YYYY-MM-DD"),
+        );
+      payload.append("po_box", values.po_box || "");
+      payload.append("full_address", values.full_address || "");
+      payload.append(
+        "airplane_ticket_payer",
+        values.airplane_ticket_payer || "",
+      );
+      payload.append(
+        "airplane_ticket_address",
+        values.airplane_ticket_address || "",
+      );
+      if (values.delegated_to != null)
+        payload.append("delegated_to", String(values.delegated_to));
+      payload.append("delegation_note", values.delegation_note || "");
+
+      await createLeaveRequest(payload);
+      await loadBalances();
+
+      notification.success({
+        message: t("common.submit"),
+        description: t("leave.submitRequest"),
+      });
+      navigate("/employee/leave/requests");
+    } catch (err: any) {
+      console.error("Submit Error:", err);
+
+      let description = getDetailedHttpErrorMessage(t, err);
+      const validationErrors = getLeaveValidationErrors(err);
+      if (validationErrors.length > 0) {
+        description = validationErrors.map(({ message }) => message).join(", ");
+        const startDateError = validationErrors.find(
+          ({ field }) => field === "start_date",
+        );
+        if (startDateError) {
+          form.setFields([{ name: "dates", errors: [startDateError.message] }]);
+        }
+      }
+
+      setSubmitError(description);
+      notification.error({ message: t("common.error"), description });
+      await loadBalances();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div style={{ maxWidth: 600, margin: "0 auto" }}>
+      <Button
+        type="link"
+        icon={<ArrowLeftOutlined />}
+        onClick={() => navigate("/employee/leave/requests")}
+        style={{ paddingLeft: 0, marginBottom: 16 }}
+      >
+        {t("leave.backToRequests")}
+      </Button>
+
+      <PageHeader
+        title={t("leave.requestTitle")}
+        subtitle={t("leave.requestSubtitle")}
+      />
+
+      <Card style={{ borderRadius: 16 }} loading={loading}>
+        {balanceError && (
+          <Alert
+            type="error"
+            message={balanceError}
+            showIcon
+            style={{ marginBottom: 24 }}
+          />
+        )}
+
+        <LeaveSubmissionError message={submitError} />
+
+        <Form
+          layout="vertical"
+          form={form}
+          onFinish={handleFinish}
+          onValuesChange={handleValuesChange}
+        >
+          <Form.Item
+            label={t("leave.type")}
+            name="leave_type"
+            rules={[{ required: true, message: t("common.required") }]}
+          >
+            <Select placeholder={t("leave.selectType")}>
+              {leaveTypes.map((lt) => (
+                <Option key={lt.id} value={lt.id}>
+                  {translateLeaveType(lt.name)}
+                </Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          {selectedLeaveBalance && (
+            <div
+              style={{
+                marginTop: -8,
+                marginBottom: 24,
+                padding: 12,
+                background: "#f0f7ff",
+                border: "1px solid #91caff",
+                borderRadius: 8,
+              }}
             >
-                {t("leave.backToRequests")}
-            </Button>
-
-            <PageHeader
-                title={t("leave.requestTitle")}
-                subtitle={t("leave.requestSubtitle")}
-            />
-
-            <Card style={{ borderRadius: 16 }} loading={loading}>
-                {balanceError && (
-                    <Alert
-                        type="error"
-                        message={balanceError}
-                        showIcon
-                        style={{ marginBottom: 24 }}
-                    />
+              <div>
+                <strong>{t("leave.balanceTitle")}:</strong>{" "}
+                {t("leave.remaining")}:{" "}
+                {formatDays(selectedLeaveBalance.remaining_days)}{" "}
+                {t("leave.days")}
+                {" | "}
+                {t("leave.used")}: {formatDays(selectedLeaveBalance.used_days)}{" "}
+                {t("leave.days")}
+                {" | "}
+                {t("leave.allowed")}:{" "}
+                {formatDays(selectedLeaveBalance.total_days)} {t("leave.days")}
+              </div>
+              {selectedBalanceFigures?.hasRequestableDays && (
+                <div style={{ marginTop: 6 }}>
+                  <strong>{t("leave.requestableDays")}:</strong>{" "}
+                  {formatDays(selectedBalanceFigures.requestable)}{" "}
+                  {t("leave.days")}
+                  {" | "}
+                  {t("leave.reservedDays")}:{" "}
+                  {formatDays(selectedBalanceFigures.pending)} {t("leave.days")}
+                </div>
+              )}
+              {selectedBalanceFigures && selectedBalanceFigures.pending > 0 && (
+                <div style={{ marginTop: 6, color: "#ad6800" }}>
+                  {t("leave.reservedDaysHint", {
+                    days: formatDays(selectedBalanceFigures.pending),
+                  })}
+                </div>
+              )}
+              {selectedBalanceFigures &&
+                selectedBalanceFigures.fractional > 0 && (
+                  <div style={{ marginTop: 6, color: "#ad6800" }}>
+                    {t("leave.fractionalBalanceHint", {
+                      days: formatDays(selectedBalanceFigures.fractional),
+                    })}
+                  </div>
                 )}
+            </div>
+          )}
 
-                <LeaveSubmissionError message={submitError} />
+          <Form.Item
+            label={t("common.date")}
+            name="dates"
+            rules={[{ required: true, message: t("common.required") }]}
+            extra={t("leave.backdateHelper")}
+          >
+            <RangePicker
+              style={{ width: "100%" }}
+              format="YYYY-MM-DD"
+              disabledDate={(current) => isEmployeeLeaveDateDisabled(current)}
+            />
+          </Form.Item>
 
-                <Form
-                    layout="vertical"
-                    form={form}
-                    onFinish={handleFinish}
-                    onValuesChange={handleValuesChange}
-                >
-                    <Form.Item
-                        label={t("leave.type")}
-                        name="leave_type"
-                        rules={[{ required: true, message: t("common.required") }]}
-                    >
-                        <Select placeholder={t("leave.selectType")}>
-                            {leaveTypes.map(lt => (
-                                <Option key={lt.id} value={lt.id}>{translateLeaveType(lt.name)}</Option>
-                            ))}
-                        </Select>
-                    </Form.Item>
+          {daysCount > 0 && (
+            <div
+              style={{
+                marginBottom: 24,
+                padding: 12,
+                background: "#f6ffed",
+                border: "1px solid #b7eb8f",
+                borderRadius: 8,
+              }}
+            >
+              <strong>{t("leave.totalDays")}:</strong> {daysCount}
+            </div>
+          )}
 
-                    {selectedLeaveBalance && (
-                        <div
-                            style={{
-                                marginTop: -8,
-                                marginBottom: 24,
-                                padding: 12,
-                                background: "#f0f7ff",
-                                border: "1px solid #91caff",
-                                borderRadius: 8,
-                            }}
-                        >
-                            <strong>{t("leave.balanceTitle")}:</strong>{" "}
-                            {t("leave.remaining")}: {formatDays(selectedLeaveBalance.remaining_days)} {t("leave.days")}
-                            {" | "}
-                            {t("leave.used")}: {formatDays(selectedLeaveBalance.used_days)} {t("leave.days")}
-                            {" | "}
-                            {t("leave.allowed")}: {formatDays(selectedLeaveBalance.total_days)} {t("leave.days")}
-                        </div>
-                    )}
+          <Form.Item
+            label={
+              isOtherSelected
+                ? t("leave.reasonRequired")
+                : t("leave.reasonOptional")
+            }
+            name="reason"
+            rules={[
+              { required: isOtherSelected, message: t("common.required") },
+            ]}
+          >
+            <TextArea rows={4} placeholder={t("leave.reason")} />
+          </Form.Item>
 
-                    <Form.Item
-                        label={t("common.date")}
-                        name="dates"
-                        rules={[{ required: true, message: t("common.required") }]}
-                        extra={t("leave.backdateHelper")}
-                    >
-                        <RangePicker
-                            style={{ width: "100%" }}
-                            format="YYYY-MM-DD"
-                            disabledDate={(current) => isEmployeeLeaveDateDisabled(current)}
-                        />
-                    </Form.Item>
+          <Form.Item
+            label={
+              isSickSelected ? t("leave.docRequired") : t("leave.docOptional")
+            }
+            name="document"
+            valuePropName="fileList"
+            getValueFromEvent={(e) =>
+              Array.isArray(e) ? e : e?.fileList || []
+            }
+            rules={[
+              {
+                validator: (_, value: UploadFile[]) => {
+                  if (!isSickSelected) return Promise.resolve();
+                  return value && value.length > 0
+                    ? Promise.resolve()
+                    : Promise.reject(new Error(t("common.required")));
+                },
+              },
+            ]}
+          >
+            <Upload
+              beforeUpload={() => false}
+              maxCount={1}
+              accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+            >
+              <Button>{t("leave.chooseFile")}</Button>
+            </Upload>
+          </Form.Item>
 
-                    {daysCount > 0 && (
-                        <div style={{ marginBottom: 24, padding: 12, background: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: 8 }}>
-                            <strong>{t("leave.totalDays")}:</strong> {daysCount}
-                        </div>
-                    )}
+          {isOtherSelected && (
+            <Form.Item
+              label={t("leave.otherLeaveDescription")}
+              name="other_leave_description"
+            >
+              <Input />
+            </Form.Item>
+          )}
 
-                    <Form.Item
-                        label={isOtherSelected ? t("leave.reasonRequired") : t("leave.reasonOptional")}
-                        name="reason"
-                        rules={[{ required: isOtherSelected, message: t("common.required") }]}
-                    >
-                        <TextArea rows={4} placeholder={t("leave.reason")} />
-                    </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item label={t("leave.dateOfRejoin")} name="date_of_rejoin">
+                <DatePicker style={{ width: "100%" }} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item label={t("leave.poBox")} name="po_box">
+                <Input />
+              </Form.Item>
+            </Col>
+          </Row>
 
-                    <Form.Item
-                        label={isSickSelected ? t("leave.docRequired") : t("leave.docOptional")}
-                        name="document"
-                        valuePropName="fileList"
-                        getValueFromEvent={(e) => (Array.isArray(e) ? e : e?.fileList || [])}
-                        rules={[
-                            {
-                                validator: (_, value: UploadFile[]) => {
-                                    if (!isSickSelected) return Promise.resolve();
-                                    return value && value.length > 0
-                                        ? Promise.resolve()
-                                        : Promise.reject(new Error(t("common.required")));
-                                },
-                            },
-                        ]}
-                    >
-                        <Upload beforeUpload={() => false} maxCount={1} accept=".pdf,.png,.jpg,.jpeg,.doc,.docx">
-                            <Button>{t("leave.chooseFile")}</Button>
-                        </Upload>
-                    </Form.Item>
+          <Form.Item label={t("leave.fullAddress")} name="full_address">
+            <Input />
+          </Form.Item>
 
-                    {isOtherSelected && (
-                        <Form.Item label={t("leave.otherLeaveDescription")} name="other_leave_description">
-                            <Input />
-                        </Form.Item>
-                    )}
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                label={t("leave.airplaneTicketPayer")}
+                name="airplane_ticket_payer"
+              >
+                <Select allowClear placeholder="-">
+                  <Option value="company">
+                    {t("leave.ticketPayer.company")}
+                  </Option>
+                  <Option value="employee">
+                    {t("leave.ticketPayer.employee")}
+                  </Option>
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                label={t("leave.airplaneTicketAddress")}
+                name="airplane_ticket_address"
+              >
+                <Input />
+              </Form.Item>
+            </Col>
+          </Row>
 
-                    <Row gutter={16}>
-                        <Col span={12}>
-                            <Form.Item label={t("leave.dateOfRejoin")} name="date_of_rejoin">
-                                <DatePicker style={{ width: "100%" }} />
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            <Form.Item label={t("leave.poBox")} name="po_box">
-                                <Input />
-                            </Form.Item>
-                        </Col>
-                    </Row>
+          <Form.Item label={t("leave.delegatedTo")} name="delegated_to">
+            <Select
+              showSearch
+              allowClear
+              optionFilterProp="label"
+              placeholder="-"
+              options={delegationCandidates.map((e) => ({
+                value: e.id,
+                label: `${e.full_name_en || e.full_name || e.employee_id} (${e.employee_id})`,
+              }))}
+            />
+          </Form.Item>
 
-                    <Form.Item label={t("leave.fullAddress")} name="full_address">
-                        <Input />
-                    </Form.Item>
+          <Form.Item label={t("leave.delegationNote")} name="delegation_note">
+            <TextArea rows={3} />
+          </Form.Item>
 
-                    <Row gutter={16}>
-                        <Col span={12}>
-                            <Form.Item label={t("leave.airplaneTicketPayer")} name="airplane_ticket_payer">
-                                <Select allowClear placeholder="-">
-                                    <Option value="company">{t("leave.ticketPayer.company")}</Option>
-                                    <Option value="employee">{t("leave.ticketPayer.employee")}</Option>
-                                </Select>
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            <Form.Item label={t("leave.airplaneTicketAddress")} name="airplane_ticket_address">
-                                <Input />
-                            </Form.Item>
-                        </Col>
-                    </Row>
-
-                    <Form.Item label={t("leave.delegatedTo")} name="delegated_to">
-                        <Select
-                            showSearch
-                            allowClear
-                            optionFilterProp="label"
-                            placeholder="-"
-                            options={delegationCandidates.map((e) => ({
-                                value: e.id,
-                                label: `${e.full_name_en || e.full_name || e.employee_id} (${e.employee_id})`,
-                            }))}
-                        />
-                    </Form.Item>
-
-                    <Form.Item label={t("leave.delegationNote")} name="delegation_note">
-                        <TextArea rows={3} />
-                    </Form.Item>
-
-                    <Button
-                        type="primary"
-                        htmlType="submit"
-                        icon={<SendOutlined />}
-                        block
-                        size="large"
-                        loading={submitting}
-                        disabled={!!balanceError}
-                    >
-                        {t("leave.submitRequest")}
-                    </Button>
-                </Form>
-            </Card>
-        </div>
-    );
+          <Button
+            type="primary"
+            htmlType="submit"
+            icon={<SendOutlined />}
+            block
+            size="large"
+            loading={submitting}
+            disabled={!!balanceError}
+          >
+            {t("leave.submitRequest")}
+          </Button>
+        </Form>
+      </Card>
+    </div>
+  );
 }

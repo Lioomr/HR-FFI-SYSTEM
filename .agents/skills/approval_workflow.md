@@ -8,11 +8,10 @@ Read `.agents/context/workflow_engine.md` first.
 
 ### Backend
 
-- [ ] A `WorkflowDefinition` exists (or needs creating via data migration) for the flow.
-- [ ] `WorkflowStageDefinition` rows define the stage sequence with correct role requirements.
-- [ ] On request creation: create `WorkflowInstance` linked to the new request object.
-- [ ] On each approval/rejection: call `advance_workflow(instance, actor, decision, comment)`.
-- [ ] Before action: call `can_actor_approve(user, instance)` — return 403 if false.
+- [ ] Map the model in `_adapter_for_instance()` (`Backend/core/services/workflow_engine.py`) so `sync_workflow` can project it (definitions auto-create from code templates).
+- [ ] On request creation: set the initial domain status and call `sync_workflow(instance, actor=request.user)` — it get-or-creates the `WorkflowInstance`.
+- [ ] On each approval/rejection: transition the parent request `status`, then call `sync_workflow(instance, actor=request.user)`.
+- [ ] Before action: call `can_user_act_on_instance(user, instance)` — return 403 if false.
 - [ ] Each stage transition emits an `AuditLog` entry (action: `<entity>_approved` / `<entity>_rejected`).
 - [ ] On final approval: update parent request `status` to APPROVED/REJECTED.
 - [ ] Delegation rules are checked when resolving next approver.

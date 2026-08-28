@@ -62,6 +62,7 @@ class HrSummaryViewTests(APITestCase):
             full_name="HR Manager",
         )
         self.hr_user.groups.add(self.hr_group)
+        UserOrganizationAccess.objects.create(user=self.hr_user, organization=self.company)
         EmployeeProfile.objects.create(
             user=self.hr_user,
             employee_id="EMP-HR-SUMMARY",
@@ -179,8 +180,13 @@ class WorkflowSnapshotTests(TestCase):
     def setUp(self):
         self.user_model = get_user_model()
         self.hr_group, _ = Group.objects.get_or_create(name="HRManager")
-        self.department = Department.objects.create(code="OPS", name="Operations")
-        self.position = Position.objects.create(code="ENG", name="Engineer")
+        self.company = OrganizationNode.objects.create(
+            code="CORE_WORKFLOW",
+            name="Core Workflow Company",
+            node_type=OrganizationNode.NodeType.COMPANY,
+        )
+        self.department = Department.objects.create(code="OPS", name="Operations", company=self.company)
+        self.position = Position.objects.create(code="ENG", name="Engineer", company=self.company)
 
         self.manager = self.user_model.objects.create_user(
             email="manager-workflow@test.com",
@@ -189,6 +195,7 @@ class WorkflowSnapshotTests(TestCase):
         )
         self.manager_profile = EmployeeProfile.objects.create(
             user=self.manager,
+            company=self.company,
             employee_id="EMP-MANAGER-WF",
             full_name="Manager Workflow",
             basic_salary=Decimal("12000.00"),
@@ -203,6 +210,7 @@ class WorkflowSnapshotTests(TestCase):
         )
         self.employee_profile = EmployeeProfile.objects.create(
             user=self.employee,
+            company=self.company,
             employee_id="EMP-EMP-WF",
             full_name="Employee Workflow",
             basic_salary=Decimal("8000.00"),
@@ -217,8 +225,10 @@ class WorkflowSnapshotTests(TestCase):
             full_name="HR Workflow",
         )
         self.hr_user.groups.add(self.hr_group)
+        UserOrganizationAccess.objects.create(user=self.hr_user, organization=self.company)
         EmployeeProfile.objects.create(
             user=self.hr_user,
+            company=self.company,
             employee_id="EMP-HR-WF",
             full_name="HR Workflow",
             basic_salary=Decimal("10000.00"),
@@ -233,6 +243,7 @@ class WorkflowSnapshotTests(TestCase):
         )
         EmployeeProfile.objects.create(
             user=self.delegate_user,
+            company=self.company,
             employee_id="EMP-DEL-WF",
             full_name="Delegate Workflow",
             basic_salary=Decimal("9000.00"),
@@ -242,7 +253,12 @@ class WorkflowSnapshotTests(TestCase):
         )
 
     def test_leave_snapshot_exposes_current_stage_and_history(self):
-        leave_type = LeaveType.objects.create(name="Annual Leave", code="ANNUAL", is_active=True)
+        leave_type = LeaveType.objects.create(
+            company=self.company,
+            name="Annual Leave",
+            code="ANNUAL",
+            is_active=True,
+        )
         request_obj = LeaveRequest.objects.create(
             employee=self.employee,
             leave_type=leave_type,
@@ -280,7 +296,12 @@ class WorkflowSnapshotTests(TestCase):
         self.assertEqual(card["review_path"], f"/hr/loan-requests/{loan_request.id}")
 
     def test_delegated_manager_becomes_current_actor_and_sees_pending_item(self):
-        leave_type = LeaveType.objects.create(name="Annual Leave", code="ANNUAL", is_active=True)
+        leave_type = LeaveType.objects.create(
+            company=self.company,
+            name="Annual Leave",
+            code="ANNUAL",
+            is_active=True,
+        )
         DelegationRule.objects.create(
             from_user=self.manager,
             to_user=self.delegate_user,
@@ -360,6 +381,7 @@ class PendingRequestsApiTests(APITestCase):
             full_name="Pending HR",
         )
         self.hr_user.groups.add(self.hr_group)
+        UserOrganizationAccess.objects.create(user=self.hr_user, organization=self.company)
         EmployeeProfile.objects.create(
             user=self.hr_user,
             employee_id="EMP-PENDING-HR",
@@ -376,6 +398,7 @@ class PendingRequestsApiTests(APITestCase):
             full_name="Other Pending HR",
         )
         self.other_hr_user.groups.add(self.hr_group)
+        UserOrganizationAccess.objects.create(user=self.other_hr_user, organization=self.company)
         EmployeeProfile.objects.create(
             user=self.other_hr_user,
             employee_id="EMP-PENDING-OTHER-HR",
@@ -610,15 +633,12 @@ class PendingRequestsApiTests(APITestCase):
         self.assertEqual(response.data["data"]["count"], 4)
         self.assertNotIn("Other company loan", [item["action"] for item in response.data["data"]["items"]])
 
-        UserOrganizationAccess.objects.create(user=self.hr_user, organization=self.company)
         UserOrganizationAccess.objects.create(user=self.hr_user, organization=self.other_company)
         head_office = OrganizationNode.objects.get(node_type=OrganizationNode.NodeType.HEAD_OFFICE)
         UserOrganizationAccess.objects.create(user=self.hr_user, organization=head_office)
         response = self.client.get("/api/core/pending-requests/", HTTP_X_ACTIVE_COMPANY_ID=str(head_office.id))
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["data"]["count"], 5)
-        self.assertIn(self.other_company.name, {item["company_name"] for item in response.data["data"]["items"]})
+        self.assertEqual(response.status_code, 403)
 
     def test_pending_requests_resync_clears_stale_single_hr_assignment(self):
         loan_request = LoanRequest.objects.create(
@@ -690,8 +710,9 @@ class DelegationRuleApiTests(APITestCase):
     def setUp(self):
         self.user_model = get_user_model()
         self.hr_group, _ = Group.objects.get_or_create(name="HRManager")
-        self.department = Department.objects.create(code="ADM", name="Administration")
-        self.position = Position.objects.create(code="SUP", name="Supervisor")
+        self.company = get_default_company()
+        self.department = Department.objects.create(code="ADM", name="Administration", company=self.company)
+        self.position = Position.objects.create(code="SUP", name="Supervisor", company=self.company)
 
         self.hr_user = self.user_model.objects.create_user(
             email="delegation-hr@test.com",
@@ -699,6 +720,7 @@ class DelegationRuleApiTests(APITestCase):
             full_name="Delegation HR",
         )
         self.hr_user.groups.add(self.hr_group)
+        UserOrganizationAccess.objects.create(user=self.hr_user, organization=self.company)
 
         self.manager = self.user_model.objects.create_user(
             email="delegation-manager@test.com",
@@ -713,6 +735,7 @@ class DelegationRuleApiTests(APITestCase):
         for idx, user in enumerate([self.hr_user, self.manager, self.delegate], start=1):
             EmployeeProfile.objects.create(
                 user=user,
+                company=self.company,
                 employee_id=f"EMP-DEL-{idx}",
                 full_name=user.full_name,
                 basic_salary=Decimal("7000.00"),

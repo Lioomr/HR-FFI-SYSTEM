@@ -1,5 +1,14 @@
 import { useEffect, useState } from "react";
-import { Button, Card, Space, Table, Tag, Tooltip, Typography, message } from "antd";
+import {
+  Button,
+  Card,
+  Space,
+  Table,
+  Tag,
+  Tooltip,
+  Typography,
+  message,
+} from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { DownloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
@@ -65,7 +74,9 @@ export default function LabelJobsHistoryPage() {
         : String(job.id);
       triggerBlobDownload(blob, `asset_labels_${stamp}.pdf`);
     } catch (err: any) {
-      await apiMessage.error(err?.message || t("hr.assets.labelJobs.downloadFailed"));
+      await apiMessage.error(
+        err?.message || t("hr.assets.labelJobs.downloadFailed"),
+      );
     } finally {
       setDownloadingId(null);
     }
@@ -146,8 +157,16 @@ export default function LabelJobsHistoryPage() {
     },
   ];
 
-  if (loading && jobs.length === 0) return <LoadingState title={t("hr.assets.labelJobs.loading")} lines={5} />;
-  if (error) return <ErrorState title={t("common.error")} description={error} onRetry={() => void loadJobs()} />;
+  if (loading && jobs.length === 0)
+    return <LoadingState title={t("hr.assets.labelJobs.loading")} lines={5} />;
+  if (error)
+    return (
+      <ErrorState
+        title={t("common.error")}
+        description={error}
+        onRetry={() => void loadJobs()}
+      />
+    );
 
   return (
     <div>

@@ -20,7 +20,13 @@ export interface WorkflowHistoryEntry {
 }
 
 export interface WorkflowSnapshot {
-  status: "draft" | "submitted" | "in_review" | "approved" | "rejected" | "cancelled";
+  status:
+    | "draft"
+    | "submitted"
+    | "in_review"
+    | "approved"
+    | "rejected"
+    | "cancelled";
   current_stage?: string;
   current_actor?: WorkflowActor | null;
   current_approver_role?: string;

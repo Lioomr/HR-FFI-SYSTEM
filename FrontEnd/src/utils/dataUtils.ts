@@ -1,9 +1,9 @@
-import type { ApiResponse } from '../services/api/apiTypes';
+import type { ApiResponse } from "../services/api/apiTypes";
 
 /**
  * Helper to extract the actual data from the API envelope
  * Per Global API Rules (v1): Success envelope is { status: "success", data: ... }
- * 
+ *
  * @throws Error if the response status is "error"
  * @param response - API response following the contract
  * @returns The unwrapped data
@@ -29,17 +29,23 @@ export interface ListResponse<T> {
 
 export function normalizeListData<T>(payload: any): ListResponse<T> {
   if (!payload) {
-      return { items: [], total: 0 };
+    return { items: [], total: 0 };
   }
   if (Array.isArray(payload)) {
     return { items: payload, total: payload.length };
   }
   if (typeof payload === "object") {
     if (Array.isArray(payload.items)) {
-      return { items: payload.items, total: payload.total ?? payload.count ?? payload.items.length };
+      return {
+        items: payload.items,
+        total: payload.total ?? payload.count ?? payload.items.length,
+      };
     }
     if (Array.isArray(payload.results)) {
-      return { items: payload.results, total: payload.count ?? payload.results.length };
+      return {
+        items: payload.results,
+        total: payload.count ?? payload.results.length,
+      };
     }
   }
   return { items: [], total: 0 };

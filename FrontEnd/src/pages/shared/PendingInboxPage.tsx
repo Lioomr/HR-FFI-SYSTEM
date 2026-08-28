@@ -1,6 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Avatar, Badge, Button, Card, Col, Empty, Form, Input, Row, Select, Space, Table, Tag, Typography, notification } from "antd";
+import {
+  Avatar,
+  Badge,
+  Button,
+  Card,
+  Col,
+  Empty,
+  Form,
+  Input,
+  Row,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Typography,
+  notification,
+} from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { EyeOutlined, ReloadOutlined } from "@ant-design/icons";
 
@@ -15,7 +31,10 @@ import { useI18n } from "../../i18n/useI18n";
 import { useAuthStore } from "../../auth/authStore";
 import { isHeadOfficeOrganization } from "../../utils/organizationContext";
 import { formatDateTime } from "../../utils/dateTime";
-import { PENDING_TYPE_COLORS, PENDING_TYPE_LABEL_KEYS } from "../../utils/pendingRequests";
+import {
+  PENDING_TYPE_COLORS,
+  PENDING_TYPE_LABEL_KEYS,
+} from "../../utils/pendingRequests";
 
 interface Filters {
   request_type?: PendingRequestType;
@@ -40,15 +59,25 @@ export default function PendingInboxPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await getPendingRequests({ ...filters, page, page_size: pageSize });
+      const res = await getPendingRequests({
+        ...filters,
+        page,
+        page_size: pageSize,
+      });
       if (isApiError(res)) {
-        notification.error({ message: t("common.error"), description: res.message });
+        notification.error({
+          message: t("common.error"),
+          description: res.message,
+        });
       } else {
         setData(res.data.items ?? []);
         setTotal(res.data.count ?? 0);
       }
     } catch (err: any) {
-      notification.error({ message: t("common.error"), description: err?.message });
+      notification.error({
+        message: t("common.error"),
+        description: err?.message,
+      });
     } finally {
       setLoading(false);
     }
@@ -64,7 +93,8 @@ export default function PendingInboxPage() {
       if (document.visibilityState === "visible") loadData();
     };
     document.addEventListener("visibilitychange", handleVisibility);
-    return () => document.removeEventListener("visibilitychange", handleVisibility);
+    return () =>
+      document.removeEventListener("visibilitychange", handleVisibility);
   }, [loadData]);
 
   const handleValuesChange = (_changed: Partial<Filters>, all: Filters) => {
@@ -105,7 +135,10 @@ export default function PendingInboxPage() {
       key: "request_type",
       render: (_, record) => (
         <Tag color={PENDING_TYPE_COLORS[record.request_type] ?? "default"}>
-          {t(PENDING_TYPE_LABEL_KEYS[record.request_type], record.request_type_label)}
+          {t(
+            PENDING_TYPE_LABEL_KEYS[record.request_type],
+            record.request_type_label,
+          )}
         </Tag>
       ),
     },
@@ -126,7 +159,8 @@ export default function PendingInboxPage() {
             title: t("common.company"),
             dataIndex: "company_name",
             key: "company_name",
-            render: (val?: string | null) => (val ? <Tag color="blue">{val}</Tag> : "-"),
+            render: (val?: string | null) =>
+              val ? <Tag color="blue">{val}</Tag> : "-",
           },
         ]
       : []),
@@ -158,7 +192,11 @@ export default function PendingInboxPage() {
         title={t("pendingInbox.title")}
         subtitle={t("pendingInbox.subtitle")}
         actions={
-          <Button icon={<ReloadOutlined />} onClick={loadData} loading={loading}>
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={loadData}
+            loading={loading}
+          >
             {t("common.refresh", "Refresh")}
           </Button>
         }
@@ -176,12 +214,23 @@ export default function PendingInboxPage() {
               </Form.Item>
             </Col>
             <Col xs={24} sm={12} md={8}>
-              <Form.Item name="request_type" label={t("pendingInbox.filterByType")}>
+              <Form.Item
+                name="request_type"
+                label={t("pendingInbox.filterByType")}
+              >
                 <Select placeholder={t("pendingInbox.allTypes")} allowClear>
-                  <Select.Option value="LEAVE">{t("pendingInbox.requestType.LEAVE")}</Select.Option>
-                  <Select.Option value="LOAN">{t("pendingInbox.requestType.LOAN")}</Select.Option>
-                  <Select.Option value="ATTENDANCE">{t("pendingInbox.requestType.ATTENDANCE")}</Select.Option>
-                  <Select.Option value="ASSET">{t("pendingInbox.requestType.ASSET")}</Select.Option>
+                  <Select.Option value="LEAVE">
+                    {t("pendingInbox.requestType.LEAVE")}
+                  </Select.Option>
+                  <Select.Option value="LOAN">
+                    {t("pendingInbox.requestType.LOAN")}
+                  </Select.Option>
+                  <Select.Option value="ATTENDANCE">
+                    {t("pendingInbox.requestType.ATTENDANCE")}
+                  </Select.Option>
+                  <Select.Option value="ASSET">
+                    {t("pendingInbox.requestType.ASSET")}
+                  </Select.Option>
                   <Select.Option value="EMPLOYEE_DELETION">
                     {t("pendingInbox.requestType.EMPLOYEE_DELETION")}
                   </Select.Option>
@@ -215,8 +264,12 @@ export default function PendingInboxPage() {
               <Empty
                 description={
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: 15 }}>{t("pendingInbox.empty")}</div>
-                    <div style={{ color: "#94a3b8", marginTop: 4 }}>{t("pendingInbox.emptyDesc")}</div>
+                    <div style={{ fontWeight: 600, fontSize: 15 }}>
+                      {t("pendingInbox.empty")}
+                    </div>
+                    <div style={{ color: "#94a3b8", marginTop: 4 }}>
+                      {t("pendingInbox.emptyDesc")}
+                    </div>
                   </div>
                 }
               />

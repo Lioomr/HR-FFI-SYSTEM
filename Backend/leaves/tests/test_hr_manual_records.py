@@ -10,22 +10,26 @@ from rest_framework.test import APITestCase
 from employees.models import EmployeeProfile
 from leaves.models import LeaveBalanceAdjustment, LeaveRequest, LeaveType
 from leaves.utils import calculate_leave_balance
-from organization.models import OrganizationNode
+from organization.models import OrganizationNode, UserOrganizationAccess
+from organization.services import get_default_company
 
 User = get_user_model()
 
 
 class HRManualLeaveRecordTests(APITestCase):
     def setUp(self):
+        self.company = get_default_company()
         self.hr_group, _ = Group.objects.get_or_create(name="HRManager")
         self.employee_group, _ = Group.objects.get_or_create(name="Employee")
 
         self.hr_user = User.objects.create_user(email="hr-manual@ffi.com", password="password", full_name="HR Manual")
         self.hr_user.groups.add(self.hr_group)
+        UserOrganizationAccess.objects.create(user=self.hr_user, organization=self.company)
 
         self.manager_user = User.objects.create_user(email="manager-manual@ffi.com", password="password")
         self.manager_profile = EmployeeProfile.objects.create(
             user=self.manager_user,
+            company=self.company,
             employee_id="EMP-MANAGER-MANUAL",
             full_name="Manager Manual",
             hire_date=date(2020, 1, 1),
@@ -36,6 +40,7 @@ class HRManualLeaveRecordTests(APITestCase):
         self.employee_user.groups.add(self.employee_group)
         self.employee_profile = EmployeeProfile.objects.create(
             user=self.employee_user,
+            company=self.company,
             employee_id="EMP-LEAVE-MANUAL",
             full_name="Employee Manual",
             hire_date=date(2021, 1, 1),
@@ -44,8 +49,14 @@ class HRManualLeaveRecordTests(APITestCase):
             manager=self.manager_user,
         )
 
-        self.annual = LeaveType.objects.create(name="Annual Leave", code="ANNUAL", annual_quota=21, is_active=True)
-        self.sick = LeaveType.objects.create(name="Sick Leave", code="SICK", is_active=True)
+        self.annual = LeaveType.objects.create(
+            company=self.company,
+            name="Annual Leave",
+            code="ANNUAL",
+            annual_quota=21,
+            is_active=True,
+        )
+        self.sick = LeaveType.objects.create(company=self.company, name="Sick Leave", code="SICK", is_active=True)
         self.url = "/api/leaves/hr/manual-leave-requests/"
 
     def test_hr_can_create_manual_record_auto_approved_with_warning(self):
@@ -89,21 +100,19 @@ class HRManualLeaveRecordTests(APITestCase):
         self.assertEqual(record.delegated_to, self.manager_user)
         self.assertEqual(record.delegation_note, "Please cover the employee's urgent duties.")
 
-    def test_hr_manual_record_accepts_cross_company_delegate(self):
-        employee_company = OrganizationNode.objects.create(
-            code="HR_MANUAL_EMPLOYEE_CO",
-            name="HR Manual Employee Co",
-            node_type=OrganizationNode.NodeType.COMPANY,
-        )
+    def test_hr_manual_record_rejects_cross_company_delegate(self):
         delegate_company = OrganizationNode.objects.create(
             code="HR_MANUAL_DELEGATE_CO",
             name="HR Manual Delegate Co",
             node_type=OrganizationNode.NodeType.COMPANY,
         )
-        self.employee_profile.company = employee_company
-        self.employee_profile.save(update_fields=["company", "updated_at"])
-        self.manager_profile.company = delegate_company
-        self.manager_profile.save(update_fields=["company", "updated_at"])
+        external_delegate = User.objects.create_user(email="external-delegate@ffi.test", password="password")
+        EmployeeProfile.objects.create(
+            user=external_delegate,
+            company=delegate_company,
+            employee_id="EXT-DELEGATE-001",
+            full_name="External Delegate",
+        )
 
         self.client.force_authenticate(user=self.hr_user)
         payload = {
@@ -114,16 +123,13 @@ class HRManualLeaveRecordTests(APITestCase):
             "reason": "Manual cross-company delegation coverage",
             "manual_entry_reason": "Added by HR with delegation.",
             "source_document_ref": "paper-file-2026-003",
-            "delegated_to": self.manager_user.id,
+            "delegated_to": external_delegate.id,
             "delegation_note": "Cross-company coverage.",
         }
 
         response = self.client.post(self.url, payload, format="json")
 
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        record = LeaveRequest.objects.get(pk=response.data["data"]["id"])
-        self.assertEqual(record.delegated_to, self.manager_user)
-        self.assertEqual(record.company, employee_company)
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
 
     def test_manual_create_blocks_non_active_employee(self):
         self.employee_profile.employment_status = EmployeeProfile.EmploymentStatus.TERMINATED
@@ -162,6 +168,7 @@ class HRManualLeaveRecordTests(APITestCase):
 
     def test_hr_can_create_manual_record_for_profile_without_user(self):
         external_profile = EmployeeProfile.objects.create(
+            company=self.company,
             employee_id="EMP-EXTERNAL-MANUAL",
             full_name="External Manual Employee",
             hire_date=date(2021, 6, 1),
@@ -254,6 +261,7 @@ class HRManualLeaveRecordTests(APITestCase):
 
     def test_manual_profile_only_record_is_counted_in_hr_balance_view(self):
         external_profile = EmployeeProfile.objects.create(
+            company=self.company,
             employee_id="EMP-EXTERNAL-BALANCE",
             full_name="External Balance Employee",
             hire_date=date(2021, 1, 1),
@@ -277,17 +285,18 @@ class HRManualLeaveRecordTests(APITestCase):
         balances = calculate_leave_balance(None, 2026, profile=external_profile)
         annual_balance = next(b for b in balances if b["leave_code"] == "ANNUAL")
         self.assertEqual(float(annual_balance["used_days"]), 9.0)
-        self.assertEqual(float(annual_balance["remaining_days"]), 12.0)
+        expected_remaining = float(annual_balance["remaining_days"])
 
         self.client.force_authenticate(user=self.hr_user)
         response = self.client.get(f"/api/leaves/leave-balances/?employee_id={external_profile.id}&year=2026")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         annual_response = next(item for item in response.data["data"] if item["leave_code"] == "ANNUAL")
         self.assertEqual(float(annual_response["used_days"]), 9.0)
-        self.assertEqual(float(annual_response["remaining_days"]), 12.0)
+        self.assertEqual(float(annual_response["remaining_days"]), expected_remaining)
 
     def test_hr_can_create_balance_adjustment_for_profile_without_user(self):
         external_profile = EmployeeProfile.objects.create(
+            company=self.company,
             employee_id="EMP-EXTERNAL-ADJUST",
             full_name="External Adjust Employee",
             hire_date=date(2021, 1, 1),

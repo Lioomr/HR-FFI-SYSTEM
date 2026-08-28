@@ -57,7 +57,8 @@ export default function NotificationDeliveryStatus({
       className={`ffi-notif-delivery-row${compact ? " ffi-notif-delivery-row--compact" : ""}`}
     >
       {ordered.map((d, i) => {
-        const color = DELIVERY_STATUS_COLOR[d.status] ?? DELIVERY_STATUS_COLOR.pending;
+        const color =
+          DELIVERY_STATUS_COLOR[d.status] ?? DELIVERY_STATUS_COLOR.pending;
         const label = deliveryLabel(t, d.channel, d.status);
         const hint = deliveryHint(t, d.status);
         return (
