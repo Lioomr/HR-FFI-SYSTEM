@@ -4,6 +4,8 @@ export { LeaveApprovalDetail } from './LeaveApprovalDetail';
 export { RejectReasonPrompt } from './RejectReasonPrompt';
 export { DelegationRulesSheet } from './DelegationRulesSheet';
 export { AttendanceCorrectionDetail } from './AttendanceCorrectionDetail';
+export { HiringRequestDetail } from './HiringRequestDetail';
+export * from './hiring-approvals-api';
 export type {
   ApprovalAction,
   ApprovalFailureKey,
@@ -14,4 +16,5 @@ export type {
   DelegationRule,
   DelegationUser,
   AttendanceCorrectionApproval,
+  HiringRequestApproval,
 } from './types';

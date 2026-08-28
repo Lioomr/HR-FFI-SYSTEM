@@ -82,3 +82,21 @@ export interface AttendanceCorrectionApproval {
   status: string | null;
   createdAt: string | null;
 }
+
+/** CEO-approver-facing, safe subset of a hiring request response. */
+export interface HiringRequestApproval {
+  id: number | string | null;
+  referenceNumber: string | null;
+  candidateFullName: string | null;
+  candidateEmail: string | null;
+  candidatePhoneNumber: string | null;
+  nationality: string | null;
+  proposedSalary: number | null;
+  status: string | null;
+  requestedByName: string | null;
+  submittedAt: string | null;
+  ceoDecisionByName: string | null;
+  ceoDecisionAt: string | null;
+  ceoDecisionNote: string | null;
+  createdAt: string | null;
+}

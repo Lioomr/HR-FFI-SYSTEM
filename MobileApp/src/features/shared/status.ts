@@ -48,6 +48,15 @@ const ATTENDANCE_CORRECTION_STATUS: Readonly<Record<string, StatusPresentation>>
   cancelled: { labelKey: 'attendanceCorrectionStatus.cancelled', tone: 'neutral', glyph: '–' },
 });
 
+const HIRING_REQUEST_STATUS: Readonly<Record<string, StatusPresentation>> = Object.freeze({
+  draft: { labelKey: 'hiringStatus.draft', tone: 'neutral', glyph: '–' },
+  submitted: { labelKey: 'hiringStatus.submitted', tone: 'warning', glyph: '⋯' },
+  approved: { labelKey: 'hiringStatus.approved', tone: 'success', glyph: '✓' },
+  rejected: { labelKey: 'hiringStatus.rejected', tone: 'error', glyph: '×' },
+  cancelled: { labelKey: 'hiringStatus.cancelled', tone: 'neutral', glyph: '–' },
+  converted: { labelKey: 'hiringStatus.converted', tone: 'info', glyph: '→' },
+});
+
 const EMPLOYMENT_STATUS: Readonly<Record<string, StatusPresentation>> = Object.freeze({
   ACTIVE: { labelKey: 'employmentStatus.ACTIVE', tone: 'success', glyph: '✓' },
   ON_LEAVE: { labelKey: 'employmentStatus.ON_LEAVE', tone: 'info', glyph: 'i' },
@@ -94,6 +103,10 @@ export function attendanceCorrectionStatusPresentation(
   value: string | null,
 ): StatusPresentation | null {
   return presentation(ATTENDANCE_CORRECTION_STATUS, value);
+}
+
+export function hiringRequestStatusPresentation(value: string | null): StatusPresentation | null {
+  return presentation(HIRING_REQUEST_STATUS, value);
 }
 
 export function employmentStatusPresentation(value: string | null): StatusPresentation | null {

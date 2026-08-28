@@ -8,6 +8,8 @@ import { useLocalization } from '@/i18n';
 interface RejectReasonPromptProps {
   visible: boolean;
   busy?: boolean;
+  /** Leave and attendance rejection require a reason; hiring decisions do not. */
+  required?: boolean;
   onCancel: () => void;
   onConfirm: (comment: string) => void;
 }
@@ -24,6 +26,7 @@ export function RejectReasonPrompt({
   busy = false,
   onCancel,
   onConfirm,
+  required = true,
   visible,
 }: RejectReasonPromptProps) {
   const { directionHelpers, t } = useLocalization();
@@ -31,16 +34,16 @@ export function RejectReasonPrompt({
 
   const trimmed = comment.trim();
   const confirm = useCallback(() => {
-    if (!trimmed || busy) return;
+    if ((required && !trimmed) || busy) return;
     onConfirm(trimmed);
-  }, [busy, onConfirm, trimmed]);
+  }, [busy, onConfirm, required, trimmed]);
 
   const footer = useMemo(
     () => (
       <>
         <Button
           accessibilityLabel={busy ? t('approvals.rejecting') : t('approvals.rejectConfirm')}
-          disabled={trimmed.length === 0}
+          disabled={busy || (required && trimmed.length === 0)}
           fullWidth
           label={t('approvals.rejectConfirm')}
           loading={busy}
@@ -58,7 +61,7 @@ export function RejectReasonPrompt({
         />
       </>
     ),
-    [busy, confirm, onCancel, t, trimmed.length],
+    [busy, confirm, onCancel, required, t, trimmed.length],
   );
 
   return (
@@ -70,9 +73,11 @@ export function RejectReasonPrompt({
       visible={visible}
     >
       <View style={styles.body}>
-        <AppText style={directionHelpers.text} tone="muted" variant="subhead">
-          {t('approvals.rejectReasonRequired')}
-        </AppText>
+        {required ? (
+          <AppText style={directionHelpers.text} tone="muted" variant="subhead">
+            {t('approvals.rejectReasonRequired')}
+          </AppText>
+        ) : null}
         <Field
           label={t('approvals.rejectReasonLabel')}
           multiline

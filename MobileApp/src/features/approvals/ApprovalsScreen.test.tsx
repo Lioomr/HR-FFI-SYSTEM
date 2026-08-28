@@ -11,6 +11,7 @@ import type {
   AttendanceCorrectionApproval,
   DelegationCandidate,
   DelegationRule,
+  HiringRequestApproval,
 } from './types';
 
 const mockLoad = jest.fn<() => Promise<ApprovalLeaveRequest[]>>();
@@ -18,6 +19,7 @@ const mockAct = jest.fn<() => Promise<ApprovalMutationOutcome>>();
 const mockLoadDelegationRules = jest.fn<() => Promise<DelegationRule[]>>();
 const mockLoadDelegationCandidates = jest.fn<() => Promise<DelegationCandidate[]>>();
 const mockLoadAttendanceCorrections = jest.fn<() => Promise<AttendanceCorrectionApproval[]>>();
+const mockLoadHiring = jest.fn<() => Promise<HiringRequestApproval[]>>();
 
 jest.mock('./approvals-api', () => {
   const actual = jest.requireActual<typeof import('./approvals-api')>('./approvals-api');
@@ -45,6 +47,12 @@ jest.mock('./attendance-corrections-api', () => {
     ...actual,
     loadAttendanceCorrectionApprovals: () => mockLoadAttendanceCorrections(),
   };
+});
+
+jest.mock('./hiring-approvals-api', () => {
+  const actual =
+    jest.requireActual<typeof import('./hiring-approvals-api')>('./hiring-approvals-api');
+  return { ...actual, loadHiringApprovals: () => mockLoadHiring() };
 });
 
 const pendingHr: ApprovalLeaveRequest = {
@@ -78,9 +86,11 @@ describe('ApprovalsScreen', () => {
     mockLoadDelegationRules.mockReset();
     mockLoadDelegationCandidates.mockReset();
     mockLoadAttendanceCorrections.mockReset();
+    mockLoadHiring.mockReset();
     mockLoadDelegationRules.mockResolvedValue([]);
     mockLoadDelegationCandidates.mockResolvedValue([]);
     mockLoadAttendanceCorrections.mockResolvedValue([]);
+    mockLoadHiring.mockResolvedValue([]);
   });
 
   it('lists every request with its requester and stage for HR', async () => {
@@ -99,6 +109,35 @@ describe('ApprovalsScreen', () => {
     const view = await renderWithProviders(<ApprovalsScreen />, asRole('CEO'));
 
     expect(await view.findByText('Nothing is waiting for your decision.')).toBeTruthy();
+  });
+
+  it('shows a CEO the hiring section and keeps non-submitted rows read-only in its detail', async () => {
+    mockLoad.mockResolvedValue([]);
+    mockLoadHiring.mockResolvedValue([
+      {
+        id: 31,
+        referenceNumber: 'HRQ-FFI-31',
+        candidateFullName: 'Hiring Candidate',
+        candidateEmail: null,
+        candidatePhoneNumber: null,
+        nationality: null,
+        proposedSalary: null,
+        status: 'approved',
+        requestedByName: 'HR User',
+        submittedAt: '2026-08-28T10:00:00Z',
+        ceoDecisionByName: 'CEO User',
+        ceoDecisionAt: '2026-08-28T11:00:00Z',
+        ceoDecisionNote: null,
+        createdAt: '2026-08-28T09:00:00Z',
+      },
+    ]);
+    const view = await renderWithProviders(<ApprovalsScreen />, asRole('CEO'));
+
+    expect(await view.findByTestId('hiring-request-31')).toBeTruthy();
+    await fireEvent.press(view.getByTestId('hiring-request-31'));
+    expect(await view.findByTestId('hiring-request-detail')).toBeTruthy();
+    expect(view.queryByTestId('hiring-request-approve')).toBeNull();
+    expect(view.queryByTestId('hiring-request-reject')).toBeNull();
   });
 
   it('shows a manager only the attendance-correction stage they can act on', async () => {
