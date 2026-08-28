@@ -1240,22 +1240,23 @@ def validate_leave_request_policy(
 
     # Annual leave eligibility: can start after 6 months.
     if _is_annual(code):
+        today = timezone.localdate()
         contract_start = get_contract_start_date(profile)
         if contract_start and get_completed_calendar_months(
-            contract_start, date.today(), contract_start=contract_start
+            contract_start, today, contract_start=contract_start
         ) < ANNUAL_MINIMUM_PERIODS:
             return "Annual leave can be used only after completing 6 months of service."
 
         # Only enforce remaining balance when profile + hire date are available.
         if contract_start:
-            balances = calculate_leave_balance(user, year, as_of=date.today())
+            balances = calculate_leave_balance(user, year, as_of=today)
             annual_balance = next((b for b in balances if b["leave_code"] == code), None)
             annual_remaining = (
                 float(Decimal(str(annual_balance["remaining_days"])).quantize(Decimal("1"), rounding=ROUND_FLOOR))
                 if annual_balance
                 else 0
             )
-            cycle_start, cycle_end = get_contract_year_cycle(profile, date.today())
+            cycle_start, cycle_end = get_contract_year_cycle(profile, today)
             pending_annual = get_annual_pending_days_for_cycle(user, cycle_start, cycle_end) if cycle_start else 0
             annual_remaining = max(0.0, annual_remaining - pending_annual)
             if requested_days > annual_remaining:

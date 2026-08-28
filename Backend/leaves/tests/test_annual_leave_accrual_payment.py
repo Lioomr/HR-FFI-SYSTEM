@@ -66,22 +66,32 @@ class AnnualLeaveAccrualPaymentTests(APITestCase):
         self.client.defaults["HTTP_X_ACTIVE_COMPANY_ID"] = str(self.company.id)
 
     def test_exact_30_day_periods_and_six_period_eligibility(self):
-        details_before = get_annual_accrual_details(self.profile, self.profile.contract_date + timedelta(days=179))
-        details_after = get_annual_accrual_details(self.profile, self.profile.contract_date + timedelta(days=180))
+        # Calendar-month accrual: verify 5 months before 6th anniversary, 6 on/after.
+        # Use deterministic contract 2023-01-01 to avoid month-length variability of
+        # the relative 360-day contract used in setUp.
+        from employees.models import EmployeeProfile
+
+        cal_profile = EmployeeProfile(
+            contract_date=date(2023, 1, 1), hire_date=date(2023, 1, 1)
+        )
+        details_before = get_annual_accrual_details(cal_profile, date(2023, 6, 30))
+        details_after = get_annual_accrual_details(cal_profile, date(2023, 7, 1))
 
         self.assertEqual(details_before["completed_periods"], 5)
+        self.assertEqual(details_before["accrued_days"], Decimal("8.75"))
         self.assertEqual(details_after["completed_periods"], 6)
         self.assertEqual(details_after["accrued_days"], Decimal("10.50"))
 
     def test_balance_exposes_whole_requestable_days_and_fraction(self):
         from leaves.utils import calculate_leave_balance
 
+        # With calendar months, contract+210 days (≈6 months) yields 6 periods =10.5 days
         balances = calculate_leave_balance(self.employee, date.today().year, as_of=self.profile.contract_date + timedelta(days=210))
         annual = next(item for item in balances if item["leave_code"] == "ANNUAL")
 
-        self.assertEqual(annual["total_days"], 12.25)
-        self.assertEqual(annual["requestable_days"], 12.0)
-        self.assertEqual(annual["fractional_days"], 0.25)
+        self.assertEqual(annual["total_days"], 10.5)
+        self.assertEqual(annual["requestable_days"], 10.0)
+        self.assertEqual(annual["fractional_days"], 0.5)
 
     def test_pending_annual_request_reserves_balance(self):
         # Keep both requests inside the same in-progress contract cycle. The
@@ -117,7 +127,10 @@ class AnnualLeaveAccrualPaymentTests(APITestCase):
         response = self.client.post("/api/leaves/annual-leave-payments/", {})
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         payment_id = response.data["data"]["id"]
-        self.assertEqual(Decimal(str(response.data["data"]["payment_amount"])), Decimal("2450.00"))
+        # With calendar-month accrual and a 360-day contract, today is 5 days
+        # before cycle end, so 11 periods =19.25 days → floor 19 eligible.
+        # 19 * 3500 / 30 = 2216.67
+        self.assertEqual(Decimal(str(response.data["data"]["payment_amount"])), Decimal("2216.67"))
 
         self.client.force_authenticate(self.hr)
         review = self.client.post(
