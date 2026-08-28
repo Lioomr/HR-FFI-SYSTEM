@@ -18,6 +18,7 @@ import { useLocalization } from '@/i18n';
 import { useAuth } from '@/providers';
 
 import {
+  attendanceCorrectionStatusPresentation,
   formatDateValue,
   leaveStatusPresentation,
   localizedCount,
@@ -26,9 +27,14 @@ import {
 } from '../shared';
 
 import { hasLeaveApprovalAccess, loadLeaveApprovals } from './approvals-api';
+import {
+  hasAttendanceCorrectionApprovalAccess,
+  loadAttendanceCorrectionApprovals,
+} from './attendance-corrections-api';
+import { AttendanceCorrectionDetail } from './AttendanceCorrectionDetail';
 import { DelegationRulesSheet } from './DelegationRulesSheet';
 import { LeaveApprovalDetail } from './LeaveApprovalDetail';
-import type { ApprovalLeaveRequest } from './types';
+import type { ApprovalLeaveRequest, AttendanceCorrectionApproval } from './types';
 
 /**
  * The approver home. Later domains (attendance corrections, hiring, loans) and
@@ -40,19 +46,37 @@ export function ApprovalsScreen() {
   const localization = useLocalization();
   const { t } = localization;
   const [selected, setSelected] = useState<ApprovalLeaveRequest | null>(null);
+  const [selectedCorrection, setSelectedCorrection] = useState<AttendanceCorrectionApproval | null>(
+    null,
+  );
   const [delegationsOpen, setDelegationsOpen] = useState(false);
 
   const approverRole = normalizeRole(user?.role);
-  const canApprove = hasLeaveApprovalAccess(approverRole);
+  const canApproveLeave = hasLeaveApprovalAccess(approverRole);
+  const canApproveCorrections = hasAttendanceCorrectionApprovalAccess(approverRole);
+  const hasApprovalSurface = canApproveLeave || canApproveCorrections;
 
   const { isRefreshing, refresh, resource, retry } = useResource<ApprovalLeaveRequest[]>(
     useCallback(() => loadLeaveApprovals(approverRole), [approverRole]),
+  );
+  const {
+    isRefreshing: isRefreshingCorrections,
+    refresh: refreshCorrections,
+    resource: corrections,
+    retry: retryCorrections,
+  } = useResource<AttendanceCorrectionApproval[]>(
+    useCallback(() => loadAttendanceCorrectionApprovals(approverRole), [approverRole]),
   );
 
   const afterDecision = useCallback(async () => {
     setSelected(null);
     await refresh();
   }, [refresh]);
+
+  const afterCorrectionDecision = useCallback(async () => {
+    setSelectedCorrection(null);
+    await refreshCorrections();
+  }, [refreshCorrections]);
 
   return (
     <Screen
@@ -64,8 +88,8 @@ export function ApprovalsScreen() {
           <RefreshControl
             accessibilityLabel={t('common.refresh')}
             colors={[colors.text]}
-            onRefresh={() => void refresh()}
-            refreshing={isRefreshing}
+            onRefresh={() => void Promise.all([refresh(), refreshCorrections()])}
+            refreshing={isRefreshing || isRefreshingCorrections}
             tintColor={colors.text}
           />
         ),
@@ -73,7 +97,7 @@ export function ApprovalsScreen() {
     >
       <ScreenHeader subtitle={t('approvals.subtitle')} title={t('approvals.title')} />
 
-      {canApprove ? (
+      {hasApprovalSurface ? (
         <Button
           label={t('delegations.manage')}
           onPress={() => setDelegationsOpen(true)}
@@ -82,19 +106,19 @@ export function ApprovalsScreen() {
         />
       ) : null}
 
-      {!canApprove ? (
+      {!hasApprovalSurface ? (
         <EmptyState emoji="🗂️" message={t('state.unauthorizedBody')} title={t('approvals.title')} />
       ) : null}
 
-      {canApprove && resource.status === 'error' ? (
+      {canApproveLeave && resource.status === 'error' ? (
         <ResourceFailure kind={resource.kind} onRetry={() => void retry()} />
       ) : null}
 
-      {canApprove && resource.status === 'loading' ? (
+      {canApproveLeave && resource.status === 'loading' ? (
         <SkeletonList rows={3} testID="approvals-skeleton" />
       ) : null}
 
-      {canApprove && resource.status === 'ready' ? (
+      {canApproveLeave && resource.status === 'ready' ? (
         <View style={styles.section}>
           <SectionHeader
             hint={localizedCount(localization, 'approvals.pendingCount', resource.data.length)}
@@ -160,6 +184,79 @@ export function ApprovalsScreen() {
             <DelegationRulesSheet onClose={() => setDelegationsOpen(false)} />
           ) : null}
         </View>
+      ) : null}
+
+      {canApproveCorrections && corrections.status === 'error' ? (
+        <ResourceFailure kind={corrections.kind} onRetry={() => void retryCorrections()} />
+      ) : null}
+
+      {canApproveCorrections && corrections.status === 'loading' ? (
+        <SkeletonList rows={3} testID="attendance-corrections-skeleton" />
+      ) : null}
+
+      {canApproveCorrections && corrections.status === 'ready' ? (
+        <View style={styles.section}>
+          <SectionHeader
+            hint={localizedCount(
+              localization,
+              'attendanceCorrections.pendingCount',
+              corrections.data.length,
+            )}
+            title={t('attendanceCorrections.sectionTitle')}
+          />
+          {corrections.data.length === 0 ? (
+            <EmptyState
+              compact
+              emoji="✅"
+              message={t('attendanceCorrections.empty')}
+              title={t('attendanceCorrections.sectionTitle')}
+            />
+          ) : (
+            <Card>
+              <View accessibilityRole="list" style={styles.list}>
+                {corrections.data.map((correction, index) => {
+                  const status = attendanceCorrectionStatusPresentation(correction.status);
+                  return (
+                    <View
+                      key={String(correction.id ?? `${correction.date ?? 'correction'}-${index}`)}
+                      style={index > 0 ? styles.separated : undefined}
+                    >
+                      <ListRow
+                        accessibilityHint={t('accessibility.opensDetailHint')}
+                        onPress={() => setSelectedCorrection(correction)}
+                        subtitle={formatDateValue(localization, correction.date)}
+                        testID={`attendance-correction-${correction.id ?? index}`}
+                        title={
+                          correction.employeeName ??
+                          correction.employeeEmail ??
+                          t('common.notAvailable')
+                        }
+                        trailing={
+                          status ? (
+                            <StatusBadge
+                              glyph={status.glyph}
+                              label={t(status.labelKey)}
+                              tone={status.tone}
+                            />
+                          ) : null
+                        }
+                      />
+                    </View>
+                  );
+                })}
+              </View>
+            </Card>
+          )}
+          <AttendanceCorrectionDetail
+            correction={selectedCorrection}
+            onClose={() => setSelectedCorrection(null)}
+            onDecided={() => void afterCorrectionDecision()}
+          />
+        </View>
+      ) : null}
+
+      {delegationsOpen && !canApproveLeave ? (
+        <DelegationRulesSheet onClose={() => setDelegationsOpen(false)} />
       ) : null}
     </Screen>
   );
