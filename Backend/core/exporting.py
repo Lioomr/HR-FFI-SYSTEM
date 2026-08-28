@@ -9,8 +9,10 @@ from audit.utils import audit
 
 
 def csv_response(*, rows, headers, filename: str) -> HttpResponse:
-    response = HttpResponse(content_type="text/csv")
+    response = HttpResponse(content_type="application/octet-stream")
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    response["X-Content-Type-Options"] = "nosniff"
+    response["Cache-Control"] = "private, no-store"
     writer = csv.writer(response)
     writer.writerow(headers)
     for row in rows:
@@ -32,9 +34,11 @@ def xlsx_response(*, rows, headers, filename: str, sheet_name: str = "Export") -
 
     response = HttpResponse(
         output.getvalue(),
-        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        content_type="application/octet-stream",
     )
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    response["X-Content-Type-Options"] = "nosniff"
+    response["Cache-Control"] = "private, no-store"
     return response
 
 

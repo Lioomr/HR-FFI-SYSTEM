@@ -73,6 +73,22 @@ from .throttles import EmployeeImportThrottle
 
 logger = logging.getLogger(__name__)
 
+
+def _log_notification_failure(event_name, *, entity_id, notification_type, actor_id=None, channel=None):
+    extra = {"entity_id": entity_id, "notification_type": notification_type}
+    if actor_id is not None:
+        extra["actor_id"] = actor_id
+    if channel is not None:
+        extra["channel"] = channel
+    logger.exception(event_name, extra=extra)
+
+
+def _log_audit_failure(event_name, *, entity_id, actor_id=None):
+    extra = {"entity_id": entity_id}
+    if actor_id is not None:
+        extra["actor_id"] = actor_id
+    logger.exception(event_name, extra=extra)
+
 try:
     from openpyxl import load_workbook
 except Exception:  # pragma: no cover - fallback for missing dependency
@@ -799,7 +815,16 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             "days_left": days_left,
         }
 
-        dispatch = notify_document_expiry_in_app(profile, [document_payload])[0]
+        try:
+            dispatch = notify_document_expiry_in_app(profile, [document_payload])[0]
+        except Exception:
+            _log_notification_failure(
+                "employee_document_expiry_notification_failed",
+                entity_id=document.id,
+                notification_type="document_expiry",
+                actor_id=request.user.id,
+            )
+            dispatch = {"whatsapp": {"status": "failed", "provider": "evolution_whatsapp"}}
         channel_delivery = dispatch.get("whatsapp") or {}
         if channel_delivery.get("status") != "sent":
             channel_delivery = dispatch.get("email") or channel_delivery
@@ -829,7 +854,11 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
                 },
             )
         except Exception:
-            pass
+            _log_audit_failure(
+                "employee_document_expiry_audit_failed",
+                entity_id=document.id,
+                actor_id=request.user.id,
+            )
 
         return success(
             {
@@ -1238,12 +1267,21 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
                 message="No expiring documents found in the selected window.",
             )
 
-        dispatches = notify_document_expiry_in_app(
-            profile,
-            documents,
-            whatsapp_enabled="whatsapp" in channels,
-            email_enabled="email" in channels or "whatsapp" in channels,
-        )
+        try:
+            dispatches = notify_document_expiry_in_app(
+                profile,
+                documents,
+                whatsapp_enabled="whatsapp" in channels,
+                email_enabled="email" in channels or "whatsapp" in channels,
+            )
+        except Exception:
+            _log_notification_failure(
+                "employee_document_expiry_bulk_notification_failed",
+                entity_id=profile.id,
+                notification_type="document_expiry",
+                actor_id=request.user.id,
+            )
+            dispatches = []
 
         delivery = {}
         for channel in ("whatsapp", "email"):
@@ -1279,6 +1317,13 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
                     )
                     delivery["announcement"] = {"sent": True, "announcement_id": announcement.id}
             except Exception as exc:
+                _log_notification_failure(
+                    "employee_document_expiry_announcement_failed",
+                    entity_id=profile.id,
+                    notification_type="document_expiry_announcement",
+                    actor_id=request.user.id,
+                    channel="announcement",
+                )
                 delivery["announcement"] = {"sent": False, "reason": f"Announcement delivery failed: {str(exc)}"}
 
         try:
@@ -1290,7 +1335,11 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
                 metadata={"channels": channels, "documents": documents},
             )
         except Exception:
-            pass
+            _log_audit_failure(
+                "employee_expiry_notification_audit_failed",
+                entity_id=profile.id,
+                actor_id=request.user.id,
+            )
 
         return success({"delivery": delivery})
 
@@ -1452,7 +1501,12 @@ class EmployeeDeletionRequestViewSet(viewsets.ModelViewSet):
                 action_path=f"/ceo/employees/deletion-requests/{instance.id}",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "employee_archive_submission_notification_failed",
+                entity_id=instance.id,
+                notification_type="employee_archive_submitted",
+                actor_id=request.user.id,
+            )
 
         data = EmployeeDeletionRequestReadSerializer(instance, context=self.get_serializer_context()).data
         return success(data, status=status.HTTP_201_CREATED)
@@ -1565,7 +1619,12 @@ class EmployeeDeletionRequestViewSet(viewsets.ModelViewSet):
                 action_path="/hr/employees",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "employee_archive_approval_notification_failed",
+                entity_id=instance.id,
+                notification_type="employee_archive_approved",
+                actor_id=request.user.id,
+            )
         data = EmployeeDeletionRequestReadSerializer(instance, context=self.get_serializer_context()).data
         return success(data)
 
@@ -1608,9 +1667,23 @@ class EmployeeDeletionRequestViewSet(viewsets.ModelViewSet):
                 action_path="/hr/employees",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "employee_archive_rejection_notification_failed",
+                entity_id=instance.id,
+                notification_type="employee_archive_rejected",
+                actor_id=request.user.id,
+            )
         data = EmployeeDeletionRequestReadSerializer(instance, context=self.get_serializer_context()).data
         return success(data)
+
+    def update(self, request, *args, **kwargs):
+        return error(
+            "Employee archive requests cannot be edited directly. Use the approve/reject actions.",
+            status=status.HTTP_405_METHOD_NOT_ALLOWED,
+        )
+
+    def partial_update(self, request, *args, **kwargs):
+        return self.update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
         return error("Employee archive requests cannot be deleted.", status=status.HTTP_403_FORBIDDEN)

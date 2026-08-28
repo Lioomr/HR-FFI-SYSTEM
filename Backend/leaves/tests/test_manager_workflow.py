@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 from io import BytesIO
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -431,7 +432,9 @@ class ManagerWorkflowTests(APITestCase):
         response = self.client.get(f"{self.manager_inbox_url}{lr.id}/pdf/?download=1")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertEqual(response["Content-Type"], "application/octet-stream")
+        self.assertEqual(response["X-Content-Type-Options"], "nosniff")
+        self.assertEqual(response["Cache-Control"], "private, no-store")
         self.assertIn(f"leave_request_{lr.id}.pdf", response["Content-Disposition"])
 
     def test_hr_can_download_leave_document(self):
@@ -468,7 +471,9 @@ class ManagerWorkflowTests(APITestCase):
         response = self.client.get(f"{self.requests_url}{lr.id}/pdf/?download=1")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertEqual(response["Content-Type"], "application/octet-stream")
+        self.assertEqual(response["X-Content-Type-Options"], "nosniff")
+        self.assertEqual(response["Cache-Control"], "private, no-store")
         self.assertIn(f"leave_request_{lr.id}.pdf", response["Content-Disposition"])
 
     def test_ceo_manager_scope_is_direct_reports_only(self):
@@ -581,11 +586,90 @@ class ManagerWorkflowTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         self.assertEqual(response.data["data"]["status"], LeaveRequest.RequestStatus.APPROVED)
         document = EmployeeDocument.objects.get(leave_request=request_obj)
+        self.assertEqual(EmployeeDocument.objects.filter(leave_request=request_obj).count(), 1)
         self.assertEqual(document.document_type, EmployeeDocument.DocumentType.VISA)
         self.assertEqual(document.visa_number, "209605081")
         self.assertEqual(document.exit_before_raw, "16/8/2026")
         self.assertEqual(document.exit_before, date(2026, 8, 16))
         self.assertEqual(document.visa_duration, 60)
+
+    def test_completed_leave_rejects_second_uploaded_document(self):
+        request_obj = LeaveRequest.objects.create(
+            employee=self.employee_user,
+            employee_profile=self.employee_profile,
+            leave_type=self.leave_type,
+            start_date=date(2026, 10, 8),
+            end_date=date(2026, 10, 9),
+            status=LeaveRequest.RequestStatus.PENDING_HR_COMPLETION,
+        )
+        first_upload = SimpleUploadedFile("first-visa.pdf", b"%PDF-1.4 first", content_type="application/pdf")
+        second_upload = SimpleUploadedFile("second-visa.pdf", b"%PDF-1.4 second", content_type="application/pdf")
+
+        self.client.force_authenticate(user=self.hr_user)
+        first_response = self.client.post(
+            f"{self.requests_url}{request_obj.id}/complete/",
+            {"visa_document": first_upload},
+            format="multipart",
+        )
+        self.assertEqual(first_response.status_code, status.HTTP_200_OK, first_response.data)
+
+        second_response = self.client.post(
+            f"{self.requests_url}{request_obj.id}/complete/",
+            {"visa_document": second_upload},
+            format="multipart",
+        )
+
+        self.assertEqual(second_response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(EmployeeDocument.objects.filter(leave_request=request_obj).count(), 1)
+        request_obj.refresh_from_db()
+        self.assertEqual(request_obj.status, LeaveRequest.RequestStatus.APPROVED)
+
+    def test_invalid_completion_with_upload_creates_no_document(self):
+        request_obj = LeaveRequest.objects.create(
+            employee=self.employee_user,
+            employee_profile=self.employee_profile,
+            leave_type=self.leave_type,
+            start_date=date(2026, 10, 8),
+            end_date=date(2026, 10, 9),
+            status=LeaveRequest.RequestStatus.APPROVED,
+        )
+        upload = SimpleUploadedFile("invalid-visa.pdf", b"%PDF-1.4 invalid", content_type="application/pdf")
+
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.post(
+            f"{self.requests_url}{request_obj.id}/complete/",
+            {"visa_document": upload},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(EmployeeDocument.objects.filter(leave_request=request_obj).count(), 0)
+
+    def test_completion_sync_failure_rolls_back_status_and_document(self):
+        request_obj = LeaveRequest.objects.create(
+            employee=self.employee_user,
+            employee_profile=self.employee_profile,
+            leave_type=self.leave_type,
+            start_date=date(2026, 10, 8),
+            end_date=date(2026, 10, 9),
+            status=LeaveRequest.RequestStatus.PENDING_HR_COMPLETION,
+        )
+        upload = SimpleUploadedFile("rollback-visa.pdf", b"%PDF-1.4 rollback", content_type="application/pdf")
+
+        self.client.force_authenticate(user=self.hr_user)
+        self.client.raise_request_exception = False
+        with patch("leaves.views.sync_workflow", side_effect=RuntimeError("workflow unavailable")):
+            response = self.client.post(
+                f"{self.requests_url}{request_obj.id}/complete/",
+                {"visa_document": upload},
+                format="multipart",
+            )
+        self.client.raise_request_exception = True
+
+        self.assertEqual(response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        request_obj.refresh_from_db()
+        self.assertEqual(request_obj.status, LeaveRequest.RequestStatus.PENDING_HR_COMPLETION)
+        self.assertEqual(EmployeeDocument.objects.filter(leave_request=request_obj).count(), 0)
 
     def test_saudi_hr_completion_does_not_require_visa_document(self):
         self.employee_profile.is_saudi = True

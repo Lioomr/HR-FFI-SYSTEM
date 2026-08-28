@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -262,8 +263,14 @@ class AssetsTests(TestCase):
         )
 
         self.client.force_authenticate(user=self.employee_user)
-        damage_response = self.client.post(f"/api/assets/{asset.id}/damage-report/", {"description": "Screen cracked"})
+        with self.assertLogs("assets.views", level="ERROR") as logs, patch(
+            "assets.views.send_request_submission_email", side_effect=RuntimeError("provider unavailable")
+        ), patch("assets.views.notify_users_for_pending_status", side_effect=RuntimeError("provider unavailable")):
+            damage_response = self.client.post(
+                f"/api/assets/{asset.id}/damage-report/", {"description": "Screen cracked"}
+            )
         self.assertEqual(damage_response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(any("asset_damage_submission_email_failed" in message for message in logs.output))
 
         return_request_response = self.client.post(
             f"/api/assets/{asset.id}/return-request/",
@@ -761,9 +768,12 @@ class AssetLabelAndLookupTests(TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response["Content-Type"], "application/pdf")
-        self.assertTrue(bytes(response.content).startswith(b"%PDF"))
+        self.assertEqual(response["Content-Type"], "application/octet-stream")
         job = PrintedLabelJob.objects.get()
+        self.assertEqual(response["Content-Disposition"], f'attachment; filename="asset_labels_{job.id}.pdf"')
+        self.assertEqual(response["X-Content-Type-Options"], "nosniff")
+        self.assertEqual(response["Cache-Control"], "private, no-store")
+        self.assertTrue(bytes(response.content).startswith(b"%PDF"))
         self.assertEqual(response["X-Label-Job-Id"], str(job.id))
         self.assertEqual(job.company, self.company)
         self.assertEqual(job.asset_codes, [self.asset.asset_code])
@@ -829,4 +839,23 @@ class AssetLabelAndLookupTests(TestCase):
 
         pdf_response = self.client.get(f"/api/assets/labels/jobs/{job_id}/pdf/", **self._company_header())
         self.assertEqual(pdf_response.status_code, status.HTTP_200_OK)
-        self.assertEqual(pdf_response["Content-Type"], "application/pdf")
+        self.assertEqual(pdf_response["Content-Type"], "application/octet-stream")
+        self.assertEqual(pdf_response["Content-Disposition"], f'attachment; filename="asset_labels_{job_id}.pdf"')
+        self.assertEqual(pdf_response["X-Content-Type-Options"], "nosniff")
+        self.assertEqual(pdf_response["Cache-Control"], "private, no-store")
+
+    def test_damage_and_return_pdf_downloads_ignore_download_zero(self):
+        damage = AssetDamageReport.objects.first()
+        return_request = AssetReturnRequest.objects.first()
+
+        for path in [
+            f"/api/assets/damage-reports/{damage.id}/pdf/?download=0",
+            f"/api/assets/return-requests/{return_request.id}/pdf/?download=0",
+        ]:
+            response = self.client.get(path, **self._company_header())
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            self.assertEqual(response["Content-Type"], "application/octet-stream")
+            self.assertTrue(response["Content-Disposition"].startswith("attachment;"))
+            self.assertNotIn("inline", response["Content-Disposition"].lower())
+            self.assertEqual(response["X-Content-Type-Options"], "nosniff")
+            self.assertEqual(response["Cache-Control"], "private, no-store")

@@ -1,4 +1,4 @@
-import mimetypes
+import logging
 import os
 from datetime import date
 from glob import glob
@@ -7,7 +7,7 @@ from io import BytesIO
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Prefetch, Q
 from django.http import FileResponse, HttpResponse
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
@@ -96,6 +96,55 @@ from .utils import (
 
 User = get_user_model()
 
+logger = logging.getLogger(__name__)
+
+
+def _log_notification_failure(event_name, *, entity_id, notification_type, actor_id=None, channel=None):
+    extra = {"entity_id": entity_id, "notification_type": notification_type}
+    if actor_id is not None:
+        extra["actor_id"] = actor_id
+    if channel is not None:
+        extra["channel"] = channel
+    logger.exception(event_name, extra=extra)
+
+
+def _configure_sensitive_download(response, filename):
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    response["Content-Type"] = "application/octet-stream"
+    response["X-Content-Type-Options"] = "nosniff"
+    response["Cache-Control"] = "private, no-store"
+    return response
+
+
+LEAVE_READ_SELECT_RELATED = (
+    "employee",
+    "employee__employee_profile",
+    "employee__employee_profile__manager_profile",
+    "employee__employee_profile__manager_profile__user",
+    "employee_profile",
+    "employee_profile__user",
+    "employee_profile__company",
+    "leave_type",
+    "company",
+    "entered_by",
+    "manager_decision_by",
+    "ceo_decision_by",
+    "decided_by",
+    "hr_completed_by",
+    "delegated_to",
+    "delegate_decision_by",
+    "deleted_by",
+)
+
+
+def _leave_read_queryset(queryset):
+    return queryset.select_related(*LEAVE_READ_SELECT_RELATED).prefetch_related(
+        Prefetch(
+            "employee_documents",
+            queryset=EmployeeDocument.objects.select_related("uploaded_by", "company", "leave_request"),
+        )
+    )
+
 try:
     import arabic_reshaper
     from bidi.algorithm import get_display
@@ -162,19 +211,15 @@ def _serve_leave_document(instance, request):
         return error("Not found", errors=["No document attached to this leave request."], status=404)
 
     try:
-        as_attachment = _to_bool(request.query_params.get("download", "0"))
         filename = instance.document.name.split("/")[-1] or f"leave_document_{instance.id}"
-
-        # Guess the content type so the browser can preview PDFs/images inline
-        content_type, _ = mimetypes.guess_type(filename)
-        if not content_type:
-            content_type = "application/octet-stream"
-
-        return FileResponse(
-            instance.document.open("rb"),
-            as_attachment=as_attachment,
-            filename=filename,
-            content_type=content_type,
+        return _configure_sensitive_download(
+            FileResponse(
+                instance.document.open("rb"),
+                as_attachment=True,
+                filename=filename,
+                content_type="application/octet-stream",
+            ),
+            filename,
         )
     except FileNotFoundError:
         return error("Not found", errors=["Document file is missing from storage."], status=404)
@@ -1203,17 +1248,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
     ordering = ["-created_at"]
 
     def _base_queryset(self):
-        return LeaveRequest.objects.filter(is_active=True).select_related(
-            "employee",
-            "employee__employee_profile",
-            "employee_profile",
-            "leave_type",
-            "decided_by",
-            "manager_decision_by",
-            "delegated_to",
-            "delegate_decision_by",
-            "company",
-        )
+        return _leave_read_queryset(LeaveRequest.objects.filter(is_active=True))
 
     def get_queryset(self):
         user = self.request.user
@@ -1353,12 +1388,22 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             if not instance.delegated_to:
                 notify_leave_submitted(instance)
         except Exception:
-            pass
+            _log_notification_failure(
+                "leave_submission_notification_failed",
+                entity_id=instance.id,
+                notification_type="leave_submitted",
+                actor_id=self.request.user.id,
+            )
         try:
             if instance.delegated_to:
                 notify_delegation_assigned(instance)
         except Exception:
-            pass
+            _log_notification_failure(
+                "leave_delegation_notification_failed",
+                entity_id=instance.id,
+                notification_type="delegation_assigned",
+                actor_id=self.request.user.id,
+            )
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated], url_path="set-delegate")
     def set_delegate(self, request, pk=None):
@@ -1404,7 +1449,12 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         try:
             notify_delegation_assigned(instance)
         except Exception:
-            pass
+            _log_notification_failure(
+                "leave_delegation_update_notification_failed",
+                entity_id=instance.id,
+                notification_type="delegation_assigned",
+                actor_id=request.user.id,
+            )
         return success(LeaveRequestSerializer(instance, context={"request": request}).data)
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated], url_path="delegate-approve")
@@ -1414,23 +1464,25 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         except LeaveRequest.DoesNotExist:
             return error("Not found", errors=["Not found."], status=404)
 
-        if instance.status != LeaveRequest.RequestStatus.PENDING_DELEGATE:
-            return error(
-                "Validation error",
-                errors=["Request is not waiting for delegated user approval."],
-                status=422,
-            )
-
         s = LeaveRequestActionSerializer(data=request.data)
         if not s.is_valid():
             return error("Validation error", errors=_flatten_errors(s.errors), status=422)
 
-        instance.status = LeaveRequest.RequestStatus.PENDING_HR
-        instance.delegate_decision_by = request.user
-        instance.delegate_decision_at = timezone.now()
-        instance.delegate_decision_note = s.validated_data.get("comment", "")
-        instance.save()
-        sync_workflow(instance, actor=request.user)
+        with transaction.atomic():
+            instance = LeaveRequest.objects.select_for_update().get(pk=instance.pk)
+            if instance.status != LeaveRequest.RequestStatus.PENDING_DELEGATE:
+                return error(
+                    "Validation error",
+                    errors=["Request is not waiting for delegated user approval."],
+                    status=422,
+                )
+
+            instance.status = LeaveRequest.RequestStatus.PENDING_HR
+            instance.delegate_decision_by = request.user
+            instance.delegate_decision_at = timezone.now()
+            instance.delegate_decision_note = s.validated_data.get("comment", "")
+            instance.save()
+            sync_workflow(instance, actor=request.user)
 
         audit(request, "approve_delegate", entity="LeaveRequest", entity_id=instance.id)
         try:
@@ -1444,7 +1496,12 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
                 action_path=f"/hr/leave/requests/{instance.id}",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "leave_delegate_approval_notification_failed",
+                entity_id=instance.id,
+                notification_type="pending_status",
+                actor_id=request.user.id,
+            )
         return success(LeaveRequestSerializer(instance, context={"request": request}).data)
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated], url_path="delegate-reject")
@@ -1454,13 +1511,6 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         except LeaveRequest.DoesNotExist:
             return error("Not found", errors=["Not found."], status=404)
 
-        if instance.status != LeaveRequest.RequestStatus.PENDING_DELEGATE:
-            return error(
-                "Validation error",
-                errors=["Request is not waiting for delegated user approval."],
-                status=422,
-            )
-
         s = LeaveRequestActionSerializer(data=request.data)
         if not s.is_valid():
             return error("Validation error", errors=_flatten_errors(s.errors), status=422)
@@ -1468,18 +1518,32 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         if not comment:
             return error("Validation error", errors=["comment is required."], status=422)
 
-        instance.status = LeaveRequest.RequestStatus.REJECTED
-        instance.delegate_decision_by = request.user
-        instance.delegate_decision_at = timezone.now()
-        instance.delegate_decision_note = comment
-        instance.save()
-        sync_workflow(instance, actor=request.user)
+        with transaction.atomic():
+            instance = LeaveRequest.objects.select_for_update().get(pk=instance.pk)
+            if instance.status != LeaveRequest.RequestStatus.PENDING_DELEGATE:
+                return error(
+                    "Validation error",
+                    errors=["Request is not waiting for delegated user approval."],
+                    status=422,
+                )
+
+            instance.status = LeaveRequest.RequestStatus.REJECTED
+            instance.delegate_decision_by = request.user
+            instance.delegate_decision_at = timezone.now()
+            instance.delegate_decision_note = comment
+            instance.save()
+            sync_workflow(instance, actor=request.user)
 
         audit(request, "reject_delegate", entity="LeaveRequest", entity_id=instance.id)
         try:
             notify_leave_rejected(instance, comment)
         except Exception:
-            pass
+            _log_notification_failure(
+                "leave_delegate_rejection_notification_failed",
+                entity_id=instance.id,
+                notification_type="leave_rejected",
+                actor_id=request.user.id,
+            )
         return success(LeaveRequestSerializer(instance, context={"request": request}).data)
 
     def list(self, request, *args, **kwargs):
@@ -1577,7 +1641,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             instance.status = LeaveRequest.RequestStatus.PENDING_CEO
 
             instance.save()
-        sync_workflow(instance, actor=request.user)
+            sync_workflow(instance, actor=request.user)
 
         requested_days = get_leave_days(instance.start_date, instance.end_date)
         used_before = max(
@@ -1615,7 +1679,12 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
                     action_path="/ceo/leave/requests",
                 )
             except Exception:
-                pass
+                _log_notification_failure(
+                    "leave_hr_approval_notification_failed",
+                    entity_id=instance.id,
+                    notification_type="pending_status",
+                    actor_id=request.user.id,
+                )
         return success(LeaveRequestSerializer(instance, context={"request": request}).data)
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsHRManagerOrAdmin])
@@ -1650,76 +1719,95 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             instance.decided_at = timezone.now()
             instance.hr_decision_note = comment
             instance.save()
-        sync_workflow(instance, actor=request.user)
+            sync_workflow(instance, actor=request.user)
 
         audit(request, "reject", entity="LeaveRequest", entity_id=instance.id)
         try:
             notify_leave_rejected(instance, comment)
         except Exception:
-            pass
+            _log_notification_failure(
+                "leave_hr_rejection_notification_failed",
+                entity_id=instance.id,
+                notification_type="leave_rejected",
+                actor_id=request.user.id,
+            )
         return success(LeaveRequestSerializer(instance, context={"request": request}).data)
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsHRManagerOrAdmin])
     def complete(self, request, pk=None):
+        document = None
+        document_file_name = None
+        extraction_warnings = []
         try:
-            instance = (
-                self._unscoped_queryset().select_related("employee_profile", "employee__employee_profile").get(pk=pk)
-            )
+            with transaction.atomic():
+                instance = (
+                    self._unscoped_queryset()
+                    .select_for_update(of=("self",))
+                    .select_related("employee_profile", "employee__employee_profile")
+                    .get(pk=pk)
+                )
+                self.check_object_permissions(request, instance)
+                if instance.status != LeaveRequest.RequestStatus.PENDING_HR_COMPLETION:
+                    return error("Validation error", errors=["Request is not waiting for HR completion."], status=422)
+
+                serializer = LeaveRequestCompleteSerializer(data=request.data)
+                if not serializer.is_valid():
+                    return error("Validation error", errors=serializer.errors, status=422)
+
+                profile = instance.employee_profile or resolve_employee_profile(instance.employee)
+                if not profile:
+                    return error("Validation error", errors=["Employee profile not found."], status=422)
+
+                visa_file = serializer.validated_data.get("visa_document")
+                requires_visa = not profile.is_saudi
+                if requires_visa and not visa_file:
+                    return error(
+                        "Validation error",
+                        errors=["visa_document is required for non-Saudi employees."],
+                        status=422,
+                    )
+
+                if visa_file:
+                    document = EmployeeDocument.objects.create(
+                        employee_profile=profile,
+                        company=instance.company or profile.company,
+                        leave_request=instance,
+                        document_type=EmployeeDocument.DocumentType.VISA,
+                        file=visa_file,
+                        original_filename=getattr(visa_file, "name", ""),
+                        uploaded_by=request.user,
+                    )
+                    document_file_name = document.file.name
+                    extraction_warnings = extract_visa_fields(document)
+                    audit(
+                        request,
+                        "employee_document_uploaded",
+                        entity="employee_document",
+                        entity_id=document.id,
+                        metadata={
+                            "employee_profile_id": profile.id,
+                            "leave_request_id": instance.id,
+                            "document_type": document.document_type,
+                            "extraction_status": document.extraction_status,
+                            "warnings": extraction_warnings,
+                        },
+                    )
+
+                instance.status = LeaveRequest.RequestStatus.APPROVED
+                instance.hr_completed_by = request.user
+                instance.hr_completed_at = timezone.now()
+                instance.hr_completion_note = serializer.validated_data.get("comment", "")
+                instance.save(
+                    update_fields=["status", "hr_completed_by", "hr_completed_at", "hr_completion_note", "updated_at"]
+                )
+                sync_workflow(instance, actor=request.user)
+                sync_leave_obligations(instance, actor=request.user)
         except LeaveRequest.DoesNotExist:
             return error("Not found", errors=["Not found."], status=404)
-
-        if instance.status != LeaveRequest.RequestStatus.PENDING_HR_COMPLETION:
-            return error("Validation error", errors=["Request is not waiting for HR completion."], status=422)
-
-        serializer = LeaveRequestCompleteSerializer(data=request.data)
-        if not serializer.is_valid():
-            return error("Validation error", errors=serializer.errors, status=422)
-
-        profile = instance.employee_profile or resolve_employee_profile(instance.employee)
-        if not profile:
-            return error("Validation error", errors=["Employee profile not found."], status=422)
-
-        visa_file = serializer.validated_data.get("visa_document")
-        requires_visa = not profile.is_saudi
-        if requires_visa and not visa_file:
-            return error("Validation error", errors=["visa_document is required for non-Saudi employees."], status=422)
-
-        document = None
-        extraction_warnings = []
-        if visa_file:
-            document = EmployeeDocument.objects.create(
-                employee_profile=profile,
-                company=instance.company or profile.company,
-                leave_request=instance,
-                document_type=EmployeeDocument.DocumentType.VISA,
-                file=visa_file,
-                original_filename=getattr(visa_file, "name", ""),
-                uploaded_by=request.user,
-            )
-            extraction_warnings = extract_visa_fields(document)
-            audit(
-                request,
-                "employee_document_uploaded",
-                entity="employee_document",
-                entity_id=document.id,
-                metadata={
-                    "employee_profile_id": profile.id,
-                    "leave_request_id": instance.id,
-                    "document_type": document.document_type,
-                    "extraction_status": document.extraction_status,
-                    "warnings": extraction_warnings,
-                },
-            )
-
-        instance.status = LeaveRequest.RequestStatus.APPROVED
-        instance.hr_completed_by = request.user
-        instance.hr_completed_at = timezone.now()
-        instance.hr_completion_note = serializer.validated_data.get("comment", "")
-        instance.save(
-            update_fields=["status", "hr_completed_by", "hr_completed_at", "hr_completion_note", "updated_at"]
-        )
-        sync_workflow(instance, actor=request.user)
-        sync_leave_obligations(instance, actor=request.user)
+        except Exception:
+            if document_file_name and document is not None:
+                document.file.storage.delete(document_file_name)
+            raise
 
         audit(
             request,
@@ -1736,7 +1824,12 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         try:
             notify_leave_approved(instance)
         except Exception:
-            pass
+            _log_notification_failure(
+                "leave_completion_notification_failed",
+                entity_id=instance.id,
+                notification_type="leave_approved",
+                actor_id=request.user.id,
+            )
 
         data = LeaveRequestSerializer(instance, context={"request": request}).data
         data["completion_document_id"] = document.id if document else None
@@ -1768,14 +1861,20 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         if not s.is_valid():
             return error("Validation error", errors=_flatten_errors(s.errors), status=422)
 
-        note = (s.validated_data.get("comment") or "").strip()
-        if note:
-            instance.hr_decision_note = note
-        instance.status = LeaveRequest.RequestStatus.PENDING_CEO
-        instance.decided_by = request.user
-        instance.decided_at = timezone.now()
-        instance.save()
-        sync_workflow(instance, actor=request.user)
+        with transaction.atomic():
+            instance = LeaveRequest.objects.select_for_update().get(pk=instance.pk)
+            if instance.status not in allowed_statuses:
+                return error(
+                    "Validation error", errors=["Request cannot be sent to CEO in current state."], status=422
+                )
+            note = (s.validated_data.get("comment") or "").strip()
+            if note:
+                instance.hr_decision_note = note
+            instance.status = LeaveRequest.RequestStatus.PENDING_CEO
+            instance.decided_by = request.user
+            instance.decided_at = timezone.now()
+            instance.save()
+            sync_workflow(instance, actor=request.user)
 
         audit(
             request,
@@ -1795,7 +1894,12 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
                 action_path="/ceo/leave/requests",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "leave_ceo_referral_notification_failed",
+                entity_id=instance.id,
+                notification_type="pending_status",
+                actor_id=request.user.id,
+            )
         return success(LeaveRequestSerializer(instance, context={"request": request}).data)
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsLeaveRequestOwner])
@@ -1815,34 +1919,44 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             LeaveRequest.RequestStatus.PENDING_MANAGER,
         ]
 
-        if instance.status not in allowed_statuses:
-            return error("Validation error", errors=["Only pending requests can be cancelled."], status=422)
+        with transaction.atomic():
+            instance = LeaveRequest.objects.select_for_update().get(pk=instance.pk)
+            if instance.status not in allowed_statuses:
+                return error("Validation error", errors=["Only pending requests can be cancelled."], status=422)
 
-        instance.status = LeaveRequest.RequestStatus.CANCELLED
-        instance.save()
-        sync_workflow(instance, actor=request.user)
+            instance.status = LeaveRequest.RequestStatus.CANCELLED
+            instance.save()
+            sync_workflow(instance, actor=request.user)
 
         audit(request, "cancel", entity="LeaveRequest", entity_id=instance.id)
-        dispatch_notification_channels(
-            recipient=request.user,
-            event_key="leave.cancelled",
-            title="Leave request cancelled",
-            message=f"Your leave request #{instance.id} was cancelled.",
-            category=Notification.Category.LEAVE,
-            action_url="/employee/leave/requests",
-            related_object=instance,
-            deduplication_key=f"leave.cancelled:{instance.id}",
-            whatsapp_template="request_status_update",
-            whatsapp_variables={
-                "employee_name": request.user.full_name or request.user.email,
-                "request_type": "Leave Request",
-                "request_id": instance.id,
-                "status_label": "Cancelled",
-                "reason": "",
-                "details": [],
-                "action_url": "/employee/leave/requests",
-            },
-        )
+        try:
+            dispatch_notification_channels(
+                recipient=request.user,
+                event_key="leave.cancelled",
+                title="Leave request cancelled",
+                message=f"Your leave request #{instance.id} was cancelled.",
+                category=Notification.Category.LEAVE,
+                action_url="/employee/leave/requests",
+                related_object=instance,
+                deduplication_key=f"leave.cancelled:{instance.id}",
+                whatsapp_template="request_status_update",
+                whatsapp_variables={
+                    "employee_name": request.user.full_name or request.user.email,
+                    "request_type": "Leave Request",
+                    "request_id": instance.id,
+                    "status_label": "Cancelled",
+                    "reason": "",
+                    "details": [],
+                    "action_url": "/employee/leave/requests",
+                },
+            )
+        except Exception:
+            _log_notification_failure(
+                "leave_cancellation_notification_failed",
+                entity_id=instance.id,
+                notification_type="leave_cancelled",
+                actor_id=request.user.id,
+            )
         return success(LeaveRequestSerializer(instance, context={"request": request}).data)
 
     @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated, IsOwnerOrHR])
@@ -1868,10 +1982,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             if doc_bytes:
                 pdf_bytes = merge_pdfs([pdf_bytes, doc_bytes])
                 filename = f"leave_request_{instance.id}_packet.pdf"
-        response = HttpResponse(pdf_bytes, content_type="application/pdf")
-        disposition = "attachment" if _to_bool(request.query_params.get("download", "1")) else "inline"
-        response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
-        return response
+        return _configure_sensitive_download(HttpResponse(pdf_bytes, content_type="application/octet-stream"), filename)
 
 
 class HRManualLeaveRequestViewSet(viewsets.ModelViewSet):
@@ -1882,11 +1993,11 @@ class HRManualLeaveRequestViewSet(viewsets.ModelViewSet):
 
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
-    queryset = LeaveRequest.objects.filter(
-        is_active=True,
-        source=LeaveRequest.RequestSource.HR_MANUAL,
-    ).select_related(
-        "employee", "leave_type", "employee__employee_profile", "employee_profile", "employee_profile__user"
+    queryset = _leave_read_queryset(
+        LeaveRequest.objects.filter(
+            is_active=True,
+            source=LeaveRequest.RequestSource.HR_MANUAL,
+        )
     )
     serializer_class = HRManualLeaveRequestSerializer
     http_method_names = ["post", "patch", "delete", "get", "head", "options"]
@@ -1915,7 +2026,11 @@ class HRManualLeaveRequestViewSet(viewsets.ModelViewSet):
                 action_path=f"/hr/leave/requests/{instance.id}",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "manual_leave_manager_notification_failed",
+                entity_id=instance.id,
+                notification_type="pending_status",
+            )
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data, context={"request": request})
@@ -1944,7 +2059,12 @@ class HRManualLeaveRequestViewSet(viewsets.ModelViewSet):
             try:
                 notify_delegation_assigned(instance)
             except Exception:
-                pass
+                _log_notification_failure(
+                    "manual_leave_delegation_notification_failed",
+                    entity_id=instance.id,
+                    notification_type="delegation_assigned",
+                    actor_id=request.user.id,
+                )
 
         data = LeaveRequestSerializer(instance, context={"request": request}).data
         data["warning_messages"] = warnings
@@ -1978,7 +2098,12 @@ class HRManualLeaveRequestViewSet(viewsets.ModelViewSet):
             try:
                 notify_delegation_assigned(updated)
             except Exception:
-                pass
+                _log_notification_failure(
+                    "manual_leave_update_delegation_notification_failed",
+                    entity_id=updated.id,
+                    notification_type="delegation_assigned",
+                    actor_id=request.user.id,
+                )
 
         data = LeaveRequestSerializer(updated, context={"request": request}).data
         data["warning_messages"] = warnings
@@ -2025,9 +2150,7 @@ class ManagerLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         role = get_role(self.request.user)
-        qs = LeaveRequest.objects.filter(is_active=True).select_related(
-            "employee", "leave_type", "employee__employee_profile", "employee__employee_profile__manager_profile"
-        )
+        qs = _leave_read_queryset(LeaveRequest.objects.filter(is_active=True))
         if self.action == "list":
             base_qs = filter_queryset_by_company_scope(qs, self.request)
         else:
@@ -2079,7 +2202,7 @@ class ManagerLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
             instance.manager_decision_at = timezone.now()
             instance.manager_decision_note = s.validated_data.get("comment", "")
             instance.save()
-        sync_workflow(instance, actor=request.user)
+            sync_workflow(instance, actor=request.user)
 
         audit(
             request,
@@ -2099,7 +2222,12 @@ class ManagerLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
                 action_path=f"/hr/leave/requests/{instance.id}",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "manager_leave_approval_notification_failed",
+                entity_id=instance.id,
+                notification_type="pending_status",
+                actor_id=request.user.id,
+            )
         return success(LeaveRequestSerializer(instance, context={"request": request}).data)
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
@@ -2135,7 +2263,7 @@ class ManagerLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
             instance.manager_decision_at = timezone.now()
             instance.manager_decision_note = comment
             instance.save()
-        sync_workflow(instance, actor=request.user)
+            sync_workflow(instance, actor=request.user)
 
         audit(
             request,
@@ -2147,7 +2275,12 @@ class ManagerLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
         try:
             notify_leave_rejected(instance, comment)
         except Exception:
-            pass
+            _log_notification_failure(
+                "manager_leave_rejection_notification_failed",
+                entity_id=instance.id,
+                notification_type="leave_rejected",
+                actor_id=request.user.id,
+            )
         return success(LeaveRequestSerializer(instance, context={"request": request}).data)
 
     @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated])
@@ -2166,10 +2299,7 @@ class ManagerLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
             if doc_bytes:
                 pdf_bytes = merge_pdfs([pdf_bytes, doc_bytes])
                 filename = f"leave_request_{instance.id}_packet.pdf"
-        response = HttpResponse(pdf_bytes, content_type="application/pdf")
-        disposition = "attachment" if _to_bool(request.query_params.get("download", "1")) else "inline"
-        response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
-        return response
+        return _configure_sensitive_download(HttpResponse(pdf_bytes, content_type="application/octet-stream"), filename)
 
 
 class LeaveBalanceViewSet(viewsets.ViewSet):
@@ -2250,10 +2380,12 @@ class EmployeeLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
     pagination_class = None
 
     def get_queryset(self):
-        queryset = LeaveRequest.objects.filter(
-            employee=self.request.user,
-            is_active=True,
-        ).select_related("employee", "leave_type", "decided_by")
+        queryset = _leave_read_queryset(
+            LeaveRequest.objects.filter(
+                employee=self.request.user,
+                is_active=True,
+            )
+        )
         active_company = get_active_company_for_request(self.request)
         if active_company is not None:
             return queryset.filter(company=active_company)
@@ -2292,18 +2424,11 @@ class EmployeeDelegatedLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ["-created_at"]
 
     def get_queryset(self):
-        queryset = LeaveRequest.objects.filter(
-            delegated_to=self.request.user,
-            is_active=True,
-        ).select_related(
-            "employee",
-            "employee__employee_profile",
-            "leave_type",
-            "decided_by",
-            "manager_decision_by",
-            "delegated_to",
-            "delegate_decision_by",
-            "company",
+        queryset = _leave_read_queryset(
+            LeaveRequest.objects.filter(
+                delegated_to=self.request.user,
+                is_active=True,
+            )
         )
         return filter_queryset_by_company_scope(queryset, self.request)
 
@@ -2466,7 +2591,12 @@ class AnnualLeavePaymentRequestViewSet(viewsets.ModelViewSet):
                     action_path=f"/hr/annual-leave-payments/{instance.id}",
                 )
         except Exception:
-            pass
+            _log_notification_failure(
+                "annual_leave_payment_submission_notification_failed",
+                entity_id=instance.id,
+                notification_type="annual_leave_payment_submitted",
+                actor_id=request.user.id,
+            )
         return success(AnnualLeavePaymentRequestSerializer(instance).data, status=status.HTTP_201_CREATED)
 
     @staticmethod
@@ -2480,22 +2610,29 @@ class AnnualLeavePaymentRequestViewSet(viewsets.ModelViewSet):
             if approved
             else f"Your Annual Leave settlement request #{instance.id} was rejected."
         )
-        dispatch_notification_channels(
-            recipient=instance.employee,
-            event_key=event_key,
-            title=title,
-            message=message,
-            category=Notification.Category.LEAVE,
-            action_url="/employee/leave/requests",
-            related_object=instance,
-            metadata={
-                "payment_amount": str(instance.payment_amount),
-                "eligible_unused_days": str(instance.eligible_unused_days),
-                "resolution": instance.resolution,
-            },
-            deduplication_key=f"{event_key}:{instance.id}",
-            company=instance.company,
-        )
+        try:
+            dispatch_notification_channels(
+                recipient=instance.employee,
+                event_key=event_key,
+                title=title,
+                message=message,
+                category=Notification.Category.LEAVE,
+                action_url="/employee/leave/requests",
+                related_object=instance,
+                metadata={
+                    "payment_amount": str(instance.payment_amount),
+                    "eligible_unused_days": str(instance.eligible_unused_days),
+                    "resolution": instance.resolution,
+                },
+                deduplication_key=f"{event_key}:{instance.id}",
+                company=instance.company,
+            )
+        except Exception:
+            _log_notification_failure(
+                "annual_leave_payment_status_notification_failed",
+                entity_id=instance.id,
+                notification_type=event_key,
+            )
 
     @action(detail=True, methods=["post"])
     def review(self, request, pk=None):
@@ -2542,7 +2679,12 @@ class AnnualLeavePaymentRequestViewSet(viewsets.ModelViewSet):
                 action_path=f"/ceo/annual-leave-payments/{instance.id}",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "annual_leave_payment_review_notification_failed",
+                entity_id=instance.id,
+                notification_type="pending_status",
+                actor_id=request.user.id,
+            )
         return success(AnnualLeavePaymentRequestSerializer(instance).data)
 
     @action(detail=True, methods=["post"])
@@ -2618,10 +2760,12 @@ class CEOLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         # CEO sees all requests pending CEO approval
-        qs = LeaveRequest.objects.filter(
-            status=LeaveRequest.RequestStatus.PENDING_CEO,
-            is_active=True,
-        ).select_related("employee", "leave_type", "employee__employee_profile")
+        qs = _leave_read_queryset(
+            LeaveRequest.objects.filter(
+                status=LeaveRequest.RequestStatus.PENDING_CEO,
+                is_active=True,
+            )
+        )
         if self.action == "list":
             return filter_queryset_by_company_scope(qs, self.request)
         return filter_queryset_by_accessible_companies(qs, self.request)
@@ -2639,31 +2783,39 @@ class CEOLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
         if not s.is_valid():
             return error("Validation error", errors=_flatten_errors(s.errors), status=422)
         waiver_reason = (s.validated_data.get("waiver_reason") or "").strip()
-        obligations_summary = sync_leave_obligations(instance, actor=request.user)
-        if is_business_trip_leave(instance) and obligations_summary.get("blocking_open", 0) > 0:
-            if not waiver_reason:
-                return Response(
-                    {
-                        "status": "error",
-                        "message": "Business Trip obligations must be resolved or waived by CEO before approval.",
-                        "errors": [
-                            {
-                                "message": "Business Trip obligations must be resolved or waived by CEO before approval.",
-                            }
-                        ],
-                        "data": {"obligations_summary": obligations_summary},
-                    },
-                    status=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                )
-            waive_open_blocking_obligations(instance, actor=request.user, reason=waiver_reason, request=request)
 
-        instance.status = LeaveRequest.RequestStatus.PENDING_HR_COMPLETION
-        instance.ceo_decision_by = request.user
-        instance.ceo_decision_at = timezone.now()
-        instance.ceo_decision_note = s.validated_data.get("comment", "")
-        instance.save()
-        sync_workflow(instance, actor=request.user)
-        sync_leave_obligations(instance, actor=request.user)
+        with transaction.atomic():
+            instance = LeaveRequest.objects.select_for_update().get(pk=instance.pk)
+            if instance.status != LeaveRequest.RequestStatus.PENDING_CEO:
+                return error(
+                    "Validation error", errors=["Request is not in a state to be approved by CEO."], status=422
+                )
+
+            obligations_summary = sync_leave_obligations(instance, actor=request.user)
+            if is_business_trip_leave(instance) and obligations_summary.get("blocking_open", 0) > 0:
+                if not waiver_reason:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": "Business Trip obligations must be resolved or waived by CEO before approval.",
+                            "errors": [
+                                {
+                                    "message": "Business Trip obligations must be resolved or waived by CEO before approval.",
+                                }
+                            ],
+                            "data": {"obligations_summary": obligations_summary},
+                        },
+                        status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    )
+                waive_open_blocking_obligations(instance, actor=request.user, reason=waiver_reason, request=request)
+
+            instance.status = LeaveRequest.RequestStatus.PENDING_HR_COMPLETION
+            instance.ceo_decision_by = request.user
+            instance.ceo_decision_at = timezone.now()
+            instance.ceo_decision_note = s.validated_data.get("comment", "")
+            instance.save()
+            sync_workflow(instance, actor=request.user)
+            sync_leave_obligations(instance, actor=request.user)
 
         audit(request, "approve_ceo", entity="LeaveRequest", entity_id=instance.id)
         try:
@@ -2677,7 +2829,12 @@ class CEOLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
                 action_path=f"/hr/leave/requests/{instance.id}",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "ceo_leave_approval_notification_failed",
+                entity_id=instance.id,
+                notification_type="pending_status",
+                actor_id=request.user.id,
+            )
         return success(LeaveRequestSerializer(instance, context={"request": request}).data)
 
     @action(detail=True, methods=["post"])
@@ -2696,18 +2853,29 @@ class CEOLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
         if not comment:
             return error("Validation error", errors=["comment is required."], status=422)
 
-        instance.status = LeaveRequest.RequestStatus.REJECTED
-        instance.ceo_decision_by = request.user
-        instance.ceo_decision_at = timezone.now()
-        instance.ceo_decision_note = comment
-        instance.save()
-        sync_workflow(instance, actor=request.user)
+        with transaction.atomic():
+            instance = LeaveRequest.objects.select_for_update().get(pk=instance.pk)
+            if instance.status != LeaveRequest.RequestStatus.PENDING_CEO:
+                return error(
+                    "Validation error", errors=["Request is not in a state to be rejected by CEO."], status=422
+                )
+            instance.status = LeaveRequest.RequestStatus.REJECTED
+            instance.ceo_decision_by = request.user
+            instance.ceo_decision_at = timezone.now()
+            instance.ceo_decision_note = comment
+            instance.save()
+            sync_workflow(instance, actor=request.user)
 
         audit(request, "reject_ceo", entity="LeaveRequest", entity_id=instance.id)
         try:
             notify_leave_rejected(instance, comment)
         except Exception:
-            pass
+            _log_notification_failure(
+                "ceo_leave_rejection_notification_failed",
+                entity_id=instance.id,
+                notification_type="leave_rejected",
+                actor_id=request.user.id,
+            )
         return success(LeaveRequestSerializer(instance, context={"request": request}).data)
 
     @action(detail=True, methods=["get"])

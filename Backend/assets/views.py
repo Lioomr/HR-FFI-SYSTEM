@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta
 from uuid import uuid4
 
@@ -61,6 +62,25 @@ from .serializers import (
     PrintedLabelJobSerializer,
 )
 from .services.label_pdf import ASSET_LABEL_QR_SALT, render_labels_pdf
+
+logger = logging.getLogger(__name__)
+
+
+def _configure_sensitive_download(response, filename):
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    response["Content-Type"] = "application/octet-stream"
+    response["X-Content-Type-Options"] = "nosniff"
+    response["Cache-Control"] = "private, no-store"
+    return response
+
+
+def _log_notification_failure(event_name, *, entity_id, notification_type, actor_id=None, channel=None):
+    extra = {"entity_id": entity_id, "notification_type": notification_type}
+    if actor_id is not None:
+        extra["actor_id"] = actor_id
+    if channel is not None:
+        extra["channel"] = channel
+    logger.exception(event_name, extra=extra)
 
 
 def _is_hr_manager_user(user):
@@ -497,17 +517,25 @@ class AssetViewSet(viewsets.ModelViewSet):
                 "status_after": asset.status,
             },
         )
-        dispatch_notification_channels(
-            recipient=employee.user,
-            event_key="asset.assigned",
-            title="Asset assigned",
-            message=f"{self._asset_display_name(asset)} ({asset.asset_code}) was assigned to you.",
-            category=Notification.Category.ASSET,
-            action_url="/employee/assets",
-            related_object=assignment,
-            company=asset.company,
-            deduplication_key=f"asset.assigned:{assignment.id}",
-        )
+        try:
+            dispatch_notification_channels(
+                recipient=employee.user,
+                event_key="asset.assigned",
+                title="Asset assigned",
+                message=f"{self._asset_display_name(asset)} ({asset.asset_code}) was assigned to you.",
+                category=Notification.Category.ASSET,
+                action_url="/employee/assets",
+                related_object=assignment,
+                company=asset.company,
+                deduplication_key=f"asset.assigned:{assignment.id}",
+            )
+        except Exception:
+            _log_notification_failure(
+                "asset_assignment_notification_failed",
+                entity_id=assignment.id,
+                notification_type="asset_assigned",
+                actor_id=request.user.id,
+            )
         return success(self.get_serializer(asset).data)
 
     @action(detail=True, methods=["post"], url_path="return")
@@ -583,17 +611,25 @@ class AssetViewSet(viewsets.ModelViewSet):
                 "status_after": asset.status,
             },
         )
-        dispatch_notification_channels(
-            recipient=assignment.employee.user,
-            event_key="asset.returned",
-            title="Asset returned",
-            message=f"{self._asset_display_name(asset)} ({asset.asset_code}) was marked as returned.",
-            category=Notification.Category.ASSET,
-            action_url="/employee/assets",
-            related_object=assignment,
-            company=asset.company,
-            deduplication_key=f"asset.returned:{assignment.id}",
-        )
+        try:
+            dispatch_notification_channels(
+                recipient=assignment.employee.user,
+                event_key="asset.returned",
+                title="Asset returned",
+                message=f"{self._asset_display_name(asset)} ({asset.asset_code}) was marked as returned.",
+                category=Notification.Category.ASSET,
+                action_url="/employee/assets",
+                related_object=assignment,
+                company=asset.company,
+                deduplication_key=f"asset.returned:{assignment.id}",
+            )
+        except Exception:
+            _log_notification_failure(
+                "asset_return_notification_failed",
+                entity_id=assignment.id,
+                notification_type="asset_returned",
+                actor_id=request.user.id,
+            )
         return success(self.get_serializer(asset).data)
 
     @action(detail=False, methods=["get"], url_path="dashboard-summary")
@@ -721,8 +757,10 @@ class AssetViewSet(viewsets.ModelViewSet):
             },
         )
 
-        response = HttpResponse(pdf_bytes, content_type="application/pdf")
-        response["Content-Disposition"] = f'attachment; filename="asset_labels_{job.id}.pdf"'
+        response = _configure_sensitive_download(
+            HttpResponse(pdf_bytes, content_type="application/octet-stream"),
+            f"asset_labels_{job.id}.pdf",
+        )
         response["X-Label-Job-Id"] = str(job.id)
         return response
 
@@ -752,9 +790,10 @@ class AssetViewSet(viewsets.ModelViewSet):
         except FileNotFoundError:
             return error("Not found", errors=["File not found."], status=status.HTTP_404_NOT_FOUND)
 
-        response = FileResponse(file_handle, content_type="application/pdf")
-        response["Content-Disposition"] = f'attachment; filename="asset_labels_{job.id}.pdf"'
-        return response
+        return _configure_sensitive_download(
+            FileResponse(file_handle, content_type="application/octet-stream"),
+            f"asset_labels_{job.id}.pdf",
+        )
 
     @action(detail=False, methods=["get"], url_path="my-assets")
     def my_assets(self, request):
@@ -856,7 +895,12 @@ class AssetViewSet(viewsets.ModelViewSet):
                 action_path="/employee/assets",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "asset_return_hr_approval_notification_failed",
+                entity_id=instance.id,
+                notification_type="asset_return_approved",
+                actor_id=request.user.id,
+            )
         return success(AssetReturnRequestSerializer(instance, context={"request": request}).data)
 
     @action(detail=False, methods=["post"], url_path=r"return-requests/(?P<request_id>[^/.]+)/reject")
@@ -904,7 +948,12 @@ class AssetViewSet(viewsets.ModelViewSet):
                 action_path="/employee/assets",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "asset_return_hr_rejection_notification_failed",
+                entity_id=instance.id,
+                notification_type="asset_return_rejected",
+                actor_id=request.user.id,
+            )
         return success(AssetReturnRequestSerializer(instance, context={"request": request}).data)
 
     @action(detail=False, methods=["get"], url_path="my-damage-reports")
@@ -1007,7 +1056,13 @@ class AssetViewSet(viewsets.ModelViewSet):
                 action_path="/employee/assets",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "asset_damage_submission_email_failed",
+                entity_id=report.id,
+                notification_type="asset_damage_submitted",
+                actor_id=request.user.id,
+                channel="email",
+            )
         try:
             approvers = (
                 get_ceo_approver_users()
@@ -1029,7 +1084,12 @@ class AssetViewSet(viewsets.ModelViewSet):
                 action_path=action_path,
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "asset_damage_pending_notification_failed",
+                entity_id=report.id,
+                notification_type="pending_status",
+                actor_id=request.user.id,
+            )
         return success(
             {"id": report.id, "reported_at": report.reported_at, "status": report.status},
             status=status.HTTP_201_CREATED,
@@ -1103,7 +1163,13 @@ class AssetViewSet(viewsets.ModelViewSet):
                 action_path="/employee/assets",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "asset_return_submission_email_failed",
+                entity_id=return_request.id,
+                notification_type="asset_return_submitted",
+                actor_id=request.user.id,
+                channel="email",
+            )
         try:
             if return_request.status == AssetReturnRequest.RequestStatus.PENDING_CEO:
                 approvers = get_ceo_approver_users()
@@ -1127,7 +1193,12 @@ class AssetViewSet(viewsets.ModelViewSet):
                 action_path=action_path,
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "asset_return_pending_notification_failed",
+                entity_id=return_request.id,
+                notification_type="pending_status",
+                actor_id=request.user.id,
+            )
         return success(
             {
                 "id": return_request.id,
@@ -1193,11 +1264,11 @@ class AssetViewSet(viewsets.ModelViewSet):
             entity="AssetDamageReport",
             entity_id=report.id,
         )
-        response = HttpResponse(pdf_bytes, content_type="application/pdf")
         filename = f"asset_damage_report_{report.id}_packet.pdf" if packet else f"asset_damage_report_{report.id}.pdf"
-        disposition = "attachment" if _to_bool(request.query_params.get("download", "1")) else "inline"
-        response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
-        return response
+        return _configure_sensitive_download(
+            HttpResponse(pdf_bytes, content_type="application/octet-stream"),
+            filename,
+        )
 
     @action(
         detail=False,
@@ -1223,11 +1294,11 @@ class AssetViewSet(viewsets.ModelViewSet):
             entity="AssetReturnRequest",
             entity_id=req.id,
         )
-        response = HttpResponse(pdf_bytes, content_type="application/pdf")
         filename = f"asset_return_request_{req.id}_packet.pdf" if packet else f"asset_return_request_{req.id}.pdf"
-        disposition = "attachment" if _to_bool(request.query_params.get("download", "1")) else "inline"
-        response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
-        return response
+        return _configure_sensitive_download(
+            HttpResponse(pdf_bytes, content_type="application/octet-stream"),
+            filename,
+        )
 
 
 class CEOAssetDamageReportViewSet(viewsets.ReadOnlyModelViewSet):
@@ -1277,7 +1348,12 @@ class CEOAssetDamageReportViewSet(viewsets.ReadOnlyModelViewSet):
                 action_path="/employee/assets",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "asset_damage_approval_notification_failed",
+                entity_id=instance.id,
+                notification_type="asset_damage_approved",
+                actor_id=request.user.id,
+            )
         return success(self.get_serializer(instance).data)
 
     @action(detail=True, methods=["post"])
@@ -1312,7 +1388,12 @@ class CEOAssetDamageReportViewSet(viewsets.ReadOnlyModelViewSet):
                 action_path="/employee/assets",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "asset_damage_rejection_notification_failed",
+                entity_id=instance.id,
+                notification_type="asset_damage_rejected",
+                actor_id=request.user.id,
+            )
         return success(self.get_serializer(instance).data)
 
 
@@ -1404,7 +1485,12 @@ class ManagerAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
                 action_path="/hr/assets",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "asset_return_manager_approval_notification_failed",
+                entity_id=instance.id,
+                notification_type="pending_status",
+                actor_id=request.user.id,
+            )
         return success(self.get_serializer(instance).data)
 
     @action(detail=True, methods=["post"])
@@ -1455,7 +1541,12 @@ class ManagerAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
                 action_path="/employee/assets",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "asset_return_manager_rejection_notification_failed",
+                entity_id=instance.id,
+                notification_type="asset_return_rejected",
+                actor_id=request.user.id,
+            )
         return success(self.get_serializer(instance).data)
 
 
@@ -1507,7 +1598,12 @@ class CEOAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
                 action_path="/employee/assets",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "asset_return_ceo_approval_notification_failed",
+                entity_id=instance.id,
+                notification_type="asset_return_approved",
+                actor_id=request.user.id,
+            )
         return success(self.get_serializer(instance).data)
 
     @action(detail=True, methods=["post"])
@@ -1543,5 +1639,10 @@ class CEOAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
                 action_path="/employee/assets",
             )
         except Exception:
-            pass
+            _log_notification_failure(
+                "asset_return_ceo_rejection_notification_failed",
+                entity_id=instance.id,
+                notification_type="asset_return_rejected",
+                actor_id=request.user.id,
+            )
         return success(self.get_serializer(instance).data)

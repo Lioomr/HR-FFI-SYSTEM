@@ -1,4 +1,5 @@
 from datetime import date, time
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -153,3 +154,26 @@ class AttendanceCorrectionRequestTests(TestCase):
         record = AttendanceRecord.objects.get(employee_profile=self.no_manager_profile, date=work_date)
         self.assertEqual(record.check_in_at, requested_check_in)
         self.assertEqual(record.status, AttendanceRecord.Status.PRESENT)
+
+    def test_notification_failure_does_not_fail_correction_submission(self):
+        work_date = date(2026, 5, 17)
+        self.client.force_authenticate(user=self.no_manager_user)
+        create_response = self.client.post(
+            "/api/attendance-correction-requests/",
+            {
+                "date": str(work_date),
+                "requested_status": AttendanceRecord.Status.PRESENT,
+                "reason": "Notification failure test.",
+            },
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, 201)
+        request_id = create_response.data["data"]["id"]
+
+        with self.assertLogs("attendance.views", level="ERROR") as logs, patch(
+            "attendance.views.notify_users_for_pending_status", side_effect=RuntimeError("provider unavailable")
+        ):
+            response = self.client.post(f"/api/attendance-correction-requests/{request_id}/submit/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(any("attendance_correction_pending_notification_failed" in message for message in logs.output))

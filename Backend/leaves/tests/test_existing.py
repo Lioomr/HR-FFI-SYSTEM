@@ -5,18 +5,22 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from pypdf import PdfReader
 from rest_framework import status
 from rest_framework.test import APIClient
 
 from audit.models import AuditLog
+from core.models import RequestObligation, WorkflowAction, WorkflowInstance
 from core.services import get_workflow_snapshot
 from employees.models import EmployeeProfile
 from leaves.models import LeaveRequest, LeaveType
 from leaves.pdf_leave_request import load_field_map
-from leaves.views import _approval_path_rows, _leave_type_labels
+from leaves.serializers import LeaveRequestSerializer
+from leaves.views import _approval_path_rows, _leave_read_queryset, _leave_type_labels
 from organization.models import OrganizationNode, UserOrganizationAccess
 
 User = get_user_model()
@@ -185,6 +189,123 @@ class LeaveManagementTests(TestCase):
         self.assertEqual(req.status, LeaveRequest.RequestStatus.PENDING_CEO)
         self.assertEqual(req.decided_by, self.hr)
 
+    def test_notification_failure_does_not_fail_leave_submission(self):
+        self.client.force_authenticate(user=self.emp1)
+        data = {
+            "leave_type": self.annual_leave.id,
+            "start_date": str(date.today() + timedelta(days=20)),
+            "end_date": str(date.today() + timedelta(days=21)),
+            "reason": "Notification failure test",
+        }
+        with self.assertLogs("leaves.views", level="ERROR") as logs, patch(
+            "leaves.views.notify_leave_submitted", side_effect=RuntimeError("provider unavailable")
+        ):
+            response = self.client.post("/api/leaves/leave-requests/", data)
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(any("leave_submission_notification_failed" in message for message in logs.output))
+
+    def test_read_serialization_does_not_sync_workflow_or_obligations(self):
+        request_obj = LeaveRequest.objects.create(
+            employee=self.emp1,
+            employee_profile=self.emp1.employee_profile,
+            company=self.company,
+            leave_type=self.annual_leave,
+            start_date=date.today() + timedelta(days=20),
+            end_date=date.today() + timedelta(days=21),
+            status=LeaveRequest.RequestStatus.PENDING_HR,
+        )
+        counts_before = (
+            WorkflowInstance.objects.count(),
+            WorkflowAction.objects.count(),
+            RequestObligation.objects.count(),
+        )
+
+        LeaveRequestSerializer(request_obj).data
+
+        self.assertEqual(
+            counts_before,
+            (
+                WorkflowInstance.objects.count(),
+                WorkflowAction.objects.count(),
+                RequestObligation.objects.count(),
+            ),
+        )
+
+    def test_leave_list_serialization_batches_payment_and_balance_queries(self):
+        requests = [
+            LeaveRequest.objects.create(
+                employee=employee,
+                employee_profile=employee.employee_profile,
+                company=self.company,
+                leave_type=self.annual_leave,
+                start_date=date.today() + timedelta(days=20 + offset),
+                end_date=date.today() + timedelta(days=21 + offset),
+                status=LeaveRequest.RequestStatus.PENDING_HR,
+            )
+            for offset, employee in enumerate((self.emp1, self.emp2, self.hr))
+        ]
+        queryset = _leave_read_queryset(LeaveRequest.objects.filter(pk__in=[item.pk for item in requests]).order_by("id"))
+
+        with CaptureQueriesContext(connection) as single_queries:
+            LeaveRequestSerializer(queryset.filter(pk=requests[0].pk), many=True).data
+        with CaptureQueriesContext(connection) as list_queries:
+            serialized = LeaveRequestSerializer(queryset, many=True).data
+
+        self.assertLessEqual(len(list_queries), len(single_queries) + 2)
+        self.assertEqual(len(serialized), len(requests))
+
+    def test_leave_list_payment_output_matches_single_request_output(self):
+        request_obj = LeaveRequest.objects.create(
+            employee=self.emp1,
+            employee_profile=self.emp1.employee_profile,
+            company=self.company,
+            leave_type=self.annual_leave,
+            start_date=date.today() + timedelta(days=25),
+            end_date=date.today() + timedelta(days=27),
+            status=LeaveRequest.RequestStatus.APPROVED,
+        )
+        single = LeaveRequestSerializer(
+            _leave_read_queryset(LeaveRequest.objects.filter(pk=request_obj.pk)).get(),
+            context={"request": None},
+        ).data
+        listed = LeaveRequestSerializer(
+            _leave_read_queryset(LeaveRequest.objects.filter(pk=request_obj.pk)),
+            many=True,
+            context={"request": None},
+        ).data[0]
+
+        self.assertEqual(listed["payment_breakdown"], single["payment_breakdown"])
+        self.assertEqual(listed["payment_status"], single["payment_status"])
+
+    def test_leave_list_serialization_does_not_write_database(self):
+        request_obj = LeaveRequest.objects.create(
+            employee=self.emp1,
+            employee_profile=self.emp1.employee_profile,
+            company=self.company,
+            leave_type=self.annual_leave,
+            start_date=date.today() + timedelta(days=30),
+            end_date=date.today() + timedelta(days=31),
+            status=LeaveRequest.RequestStatus.PENDING_HR,
+        )
+        counts_before = {
+            "leave_requests": LeaveRequest.objects.count(),
+            "workflow_instances": WorkflowInstance.objects.count(),
+            "workflow_actions": WorkflowAction.objects.count(),
+            "obligations": RequestObligation.objects.count(),
+        }
+
+        LeaveRequestSerializer(
+            _leave_read_queryset(LeaveRequest.objects.filter(pk=request_obj.pk)),
+            many=True,
+            context={"request": None},
+        ).data
+
+        self.assertEqual(counts_before["leave_requests"], LeaveRequest.objects.count())
+        self.assertEqual(counts_before["workflow_instances"], WorkflowInstance.objects.count())
+        self.assertEqual(counts_before["workflow_actions"], WorkflowAction.objects.count())
+        self.assertEqual(counts_before["obligations"], RequestObligation.objects.count())
+
     def test_hr_manager_self_request_starts_pending_ceo(self):
         self.client.force_authenticate(user=self.hr)
         start = date.today() + timedelta(days=2)
@@ -318,7 +439,9 @@ class LeaveManagementTests(TestCase):
         response = self.client.get(f"/api/leaves/leave-requests/{req.id}/pdf/?download=1")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertEqual(response["Content-Type"], "application/octet-stream")
+        self.assertEqual(response["X-Content-Type-Options"], "nosniff")
+        self.assertEqual(response["Cache-Control"], "private, no-store")
         self.assertIn(f"leave_request_{req.id}.pdf", response["Content-Disposition"])
         reader = PdfReader(BytesIO(response.content))
         extracted_text = "\n".join(page.extract_text() or "" for page in reader.pages)

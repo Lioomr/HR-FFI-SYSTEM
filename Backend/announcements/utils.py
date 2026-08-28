@@ -225,7 +225,7 @@ def send_announcement_email(announcement):
     if not announcement.publish_to_email:
         logger.warning(
             "announcement_email_skipped_publish_to_email_false",
-            extra={"announcement_id": announcement.id, "title": announcement.title},
+            extra={"announcement_id": announcement.id, "channel": "email"},
         )
         return {"sent": 0, "failed": 0, "reason": "publish_to_email_false"}
 
@@ -237,9 +237,8 @@ def send_announcement_email(announcement):
             "announcement_email_skipped_no_recipients",
             extra={
                 "announcement_id": announcement.id,
-                "title": announcement.title,
-                "target_roles": announcement.target_roles,
-                "target_user_id": getattr(announcement, "target_user_id", None),
+                "channel": "email",
+                "notification_type": "announcement",
             },
         )
         return {"sent": 0, "failed": 0, "reason": "no_recipients"}
@@ -293,8 +292,7 @@ def send_announcement_email(announcement):
                 "announcement_email_failed",
                 extra={
                     "announcement_id": announcement.id,
-                    "recipient_email": recipient_email,
-                    "error": result.get("error", "Unknown error"),
+                    "channel": "email",
                     "status_code": result.get("status_code"),
                 },
             )
@@ -377,15 +375,29 @@ def send_announcement_whatsapp(announcement):
                         "announcement_whatsapp_document_failed",
                         extra={
                             "announcement_id": announcement.id,
-                            "phone": phone,
+                            "channel": "whatsapp",
                             "status_code": document_result.get("status_code"),
-                            "error": document_result.get("error"),
                         },
                     )
         else:
-            print(f"Error sending announcement WhatsApp to {phone}: {result.get('error', 'Unknown error')}")
+            logger.error(
+                "announcement_whatsapp_delivery_failed",
+                extra={
+                    "announcement_id": announcement.id,
+                    "channel": "whatsapp",
+                    "status_code": result.get("status_code"),
+                },
+            )
 
-    print(f"WhatsApp notifications sent: {sent_count}; documents sent: {document_sent_count}")
+    logger.info(
+        "announcement_whatsapp_delivery_finished",
+        extra={
+            "announcement_id": announcement.id,
+            "channel": "whatsapp",
+            "sent_count": sent_count,
+            "document_sent_count": document_sent_count,
+        },
+    )
 
 
 def send_announcement_sms(announcement):

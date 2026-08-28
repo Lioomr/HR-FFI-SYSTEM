@@ -1,5 +1,6 @@
 import csv
 import io
+import logging
 from decimal import Decimal
 from html import escape
 
@@ -53,6 +54,8 @@ from .throttles import (
     PayrollFinalizeThrottle,
     PayrollGeneratePayslipsThrottle,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _error_list(message, errors_list, status_code):
@@ -413,8 +416,10 @@ def _export_payroll_run_response(request, run):
     items = list(PayrollRunItem.objects.filter(payroll_run=run).order_by("employee_name", "id"))
 
     if export_format == "csv":
-        response = HttpResponse(content_type="text/csv")
+        response = HttpResponse(content_type="application/octet-stream")
         response["Content-Disposition"] = f'attachment; filename="payroll_run_{run.id}.csv"'
+        response["X-Content-Type-Options"] = "nosniff"
+        response["Cache-Control"] = "private, no-store"
         writer = csv.writer(response)
         writer.writerow(
             [
@@ -479,17 +484,21 @@ def _export_payroll_run_response(request, run):
         output.seek(0)
         response = HttpResponse(
             output.getvalue(),
-            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            content_type="application/octet-stream",
         )
         response["Content-Disposition"] = f'attachment; filename="payroll_run_{run.id}.xlsx"'
+        response["X-Content-Type-Options"] = "nosniff"
+        response["Cache-Control"] = "private, no-store"
         audit(request, "payroll_exported_xlsx", entity="PayrollRun", entity_id=run.id)
         return response
 
     if export_format == "pdf":
         pdf_bytes = _build_payroll_report_pdf(run, items)
-        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response = HttpResponse(pdf_bytes, content_type="application/octet-stream")
         response["Content-Disposition"] = f'attachment; filename="payroll_run_{run.id}.pdf"'
         response["Content-Length"] = str(len(pdf_bytes))
+        response["X-Content-Type-Options"] = "nosniff"
+        response["Cache-Control"] = "private, no-store"
         audit(request, "payroll_exported_pdf", entity="PayrollRun", entity_id=run.id)
         return response
 
@@ -508,7 +517,7 @@ def _generate_payroll_items(run, request=None):
     from employees.models import EmployeeProfile
 
     # 1. Fetch active employees
-    employees = EmployeeProfile.objects.filter(
+    employees = EmployeeProfile.objects.select_related("user").filter(
         employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
         is_archived=False,
         company=run.company,
@@ -823,17 +832,23 @@ class PayrollRunViewSet(
                 run.save(update_fields=["status", "updated_at"])
 
         for payslip in Payslip.objects.select_related("employee").filter(payroll_run=run, is_active=True):
-            dispatch_notification_channels(
-                recipient=payslip.employee,
-                company=run.company,
-                event_key="payroll.payslip_available",
-                title="Payslip available",
-                message=f"Your payslip for {run.year}-{run.month:02d} is available.",
-                category=Notification.Category.PAYROLL,
-                action_url=f"/employee/payslips/{payslip.id}",
-                related_object=payslip,
-                deduplication_key=f"payroll.payslip:{payslip.id}",
-            )
+            try:
+                dispatch_notification_channels(
+                    recipient=payslip.employee,
+                    company=run.company,
+                    event_key="payroll.payslip_available",
+                    title="Payslip available",
+                    message=f"Your payslip for {run.year}-{run.month:02d} is available.",
+                    category=Notification.Category.PAYROLL,
+                    action_url=f"/employee/payslips/{payslip.id}",
+                    related_object=payslip,
+                    deduplication_key=f"payroll.payslip:{payslip.id}",
+                )
+            except Exception:
+                logger.exception(
+                    "payroll_payslip_notification_failed",
+                    extra={"entity_id": payslip.id, "notification_type": "payslip_available"},
+                )
 
         audit(request, "payslips_generated", entity="PayrollRun", entity_id=run.id)
         return success(
@@ -957,7 +972,7 @@ class EmployeePayslipViewSet(
             return _error_list("Not found", ["Not found."], status.HTTP_404_NOT_FOUND)
 
         pdf_bytes = _build_payslip_pdf(payslip)
-        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response = HttpResponse(pdf_bytes, content_type="application/octet-stream")
         response["Content-Disposition"] = f'attachment; filename="payslip_{payslip.id}.pdf"'
         response["Content-Length"] = str(len(pdf_bytes))
         response["X-Content-Type-Options"] = "nosniff"
