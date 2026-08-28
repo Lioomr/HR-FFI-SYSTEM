@@ -1875,9 +1875,9 @@ export const translations: Record<AppLanguage, TranslationMap> = {
       "{days} day(s) are reserved by your pending requests and cannot be requested again.",
     "leave.fractionalBalanceHint":
       "{days} day(s) of your balance are fractional and cannot be requested as whole days.",
-    "leave.annual.wholeDaysOnly": "Annual leave can only be requested in whole days.",
+    "leave.annual.wholeDaysOnly": "Annual Leave can be requested in whole days only.",
     "leave.annual.exceedsRequestable":
-      "You can request at most {requestable} day(s); {pending} day(s) are already reserved by pending requests.",
+      "Annual Leave exceeds your requestable balance ({requestable} day(s) requestable, {pending} day(s) reserved by pending requests).",
 
     // Assets (Employee)
     "assets.myAssets": "My Assets",
@@ -4420,9 +4420,9 @@ export const translations: Record<AppLanguage, TranslationMap> = {
       "{days} يوم/أيام محجوزة بطلباتك المعلّقة ولا يمكن طلبها مرة أخرى.",
     "leave.fractionalBalanceHint":
       "{days} يوم/أيام من رصيدك جزئية ولا يمكن طلبها كأيام كاملة.",
-    "leave.annual.wholeDaysOnly": "لا يمكن طلب الإجازة السنوية إلا بأيام كاملة.",
+    "leave.annual.wholeDaysOnly": "يمكن طلب الإجازة السنوية بأيام كاملة فقط.",
     "leave.annual.exceedsRequestable":
-      "يمكنك طلب {requestable} يوم/أيام كحد أقصى؛ {pending} يوم/أيام محجوزة بالفعل بطلبات معلّقة.",
+      "الإجازة السنوية تتجاوز رصيدك القابل للطلب ({requestable} يوم/أيام قابلة للطلب، {pending} يوم/أيام محجوزة بطلبات معلّقة).",
     "leave.backToRequests": "العودة إلى طلباتي",
     "leave.requestTitle": "طلب إجازة",
     "leave.requestSubtitle": "تقديم طلب إجازة جديد",
