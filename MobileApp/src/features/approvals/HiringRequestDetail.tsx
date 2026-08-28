@@ -40,13 +40,14 @@ export function HiringRequestDetail({
       setError(null);
       try {
         const outcome = await actOnHiringApproval(approverRole, request.id, action, note);
+        setRejectVisible(false);
         if (outcome.status === 'success') {
-          setRejectVisible(false);
           onDecided();
           return;
         }
         setError(outcome.details[0] ?? t(outcome.messageKey));
       } catch (apiError) {
+        setRejectVisible(false);
         if (!handleApiError(apiError)) setError(t('state.actionFailed'));
       } finally {
         setPending(null);
@@ -92,7 +93,7 @@ export function HiringRequestDetail({
         subtitle={request?.referenceNumber ?? undefined}
         testID="hiring-request-detail"
         title={t('hiring.requestDetail')}
-        visible={request !== null}
+        visible={request !== null && !rejectVisible}
       >
         {error ? (
           <View accessibilityLiveRegion="assertive" style={styles.errorBlock}>

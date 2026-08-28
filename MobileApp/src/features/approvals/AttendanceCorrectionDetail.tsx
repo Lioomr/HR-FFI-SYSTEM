@@ -48,13 +48,14 @@ export function AttendanceCorrectionDetail({
       setError(null);
       try {
         const outcome = await actOnAttendanceCorrection(role, correction.id, action, notes);
+        setRejectVisible(false);
         if (outcome.status === 'success') {
-          setRejectVisible(false);
           onDecided();
           return;
         }
         setError(outcome.details[0] ?? t(outcome.messageKey));
       } catch (apiError) {
+        setRejectVisible(false);
         if (!handleApiError(apiError)) setError(t('state.actionFailed'));
       } finally {
         setPending(null);
@@ -100,7 +101,7 @@ export function AttendanceCorrectionDetail({
         subtitle={correction?.employeeName ?? correction?.employeeEmail ?? undefined}
         testID="attendance-correction-detail"
         title={t('attendanceCorrections.requestDetail')}
-        visible={correction !== null}
+        visible={correction !== null && !rejectVisible}
       >
         {error ? (
           <View accessibilityLiveRegion="assertive" style={styles.errorBlock}>
