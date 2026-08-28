@@ -5,12 +5,17 @@ import { renderWithProviders, stubAuthService, testUser } from '@/qa/harness';
 import { ApiError } from '@/services/api';
 
 import { ApprovalsScreen } from './ApprovalsScreen';
-import type { ApprovalLeaveRequest, ApprovalMutationOutcome } from './types';
+import type {
+  ApprovalLeaveRequest,
+  ApprovalMutationOutcome,
+  DelegationCandidate,
+  DelegationRule,
+} from './types';
 
 const mockLoad = jest.fn<() => Promise<ApprovalLeaveRequest[]>>();
 const mockAct = jest.fn<() => Promise<ApprovalMutationOutcome>>();
-const mockLoadDelegationRules = jest.fn();
-const mockLoadDelegationCandidates = jest.fn();
+const mockLoadDelegationRules = jest.fn<() => Promise<DelegationRule[]>>();
+const mockLoadDelegationCandidates = jest.fn<() => Promise<DelegationCandidate[]>>();
 
 jest.mock('./approvals-api', () => {
   const actual = jest.requireActual<typeof import('./approvals-api')>('./approvals-api');
