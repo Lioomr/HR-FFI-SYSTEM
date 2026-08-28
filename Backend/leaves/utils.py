@@ -1,3 +1,4 @@
+import calendar
 from collections import defaultdict
 from datetime import date, timedelta
 from decimal import ROUND_FLOOR, ROUND_HALF_UP, Decimal
@@ -10,7 +11,6 @@ from employees.models import EmployeeProfile
 from .models import AnnualLeavePaymentRequest, LeaveBalanceAdjustment, LeaveRequest, LeaveType
 
 ANNUAL_ACCRUAL_DAYS_PER_PERIOD = Decimal("1.75")
-ANNUAL_ACCRUAL_PERIOD_DAYS = 30
 ANNUAL_MINIMUM_PERIODS = 6
 PENDING_RESERVATION_STATUSES = {
     LeaveRequest.RequestStatus.SUBMITTED,
@@ -311,10 +311,56 @@ def get_contract_year_cycle(profile: EmployeeProfile, reference_date: date | Non
     return cycle_start, next_anniversary - timedelta(days=1)
 
 
-def get_completed_annual_periods(cycle_start: date, as_of: date | None = None) -> int:
+def _calendar_month_anniversary(
+    contract_start: date, cycle_start: date, months_ahead: int
+) -> date:
+    """
+    Return the calendar-month anniversary ``months_ahead`` months after
+    ``cycle_start`` using the original ``contract_start`` day.
+
+    The anniversary is always derived from the original contract start day
+    (capped to the last day of the target month), not by repeatedly adding
+    a month to the previous adjusted date.
+    """
+    original_day = contract_start.day
+    month_index = cycle_start.month - 1 + months_ahead
+    year = cycle_start.year + month_index // 12
+    month = month_index % 12 + 1
+    last_day = calendar.monthrange(year, month)[1]
+    day = min(original_day, last_day)
+    return date(year, month, day)
+
+
+def get_completed_calendar_months(
+    cycle_start: date,
+    as_of: date | None = None,
+    *,
+    contract_start: date | None = None,
+) -> int:
+    """
+    Count completed calendar months between ``cycle_start`` and ``as_of``.
+
+    Each anniversary is calculated from the original ``contract_start`` day
+    (capped to month length, including February leap-year handling). On the
+    day before an anniversary the month does not accrue; on the anniversary
+    date it does. Result is capped at 12 per contract year.
+    """
     if not cycle_start or not as_of or as_of <= cycle_start:
         return 0
-    return min(12, max(0, (as_of - cycle_start).days // ANNUAL_ACCRUAL_PERIOD_DAYS))
+    original = contract_start or cycle_start
+    completed = 0
+    for n in range(1, 13):
+        anniversary = _calendar_month_anniversary(original, cycle_start, n)
+        if anniversary <= as_of:
+            completed += 1
+        else:
+            break
+    return min(12, completed)
+
+
+def get_completed_annual_periods(cycle_start: date, as_of: date | None = None) -> int:
+    """Deprecated alias — use ``get_completed_calendar_months``."""
+    return get_completed_calendar_months(cycle_start, as_of)
 
 
 def get_annual_accrual_details(profile: EmployeeProfile, as_of: date | None = None):
@@ -327,7 +373,10 @@ def get_annual_accrual_details(profile: EmployeeProfile, as_of: date | None = No
             "accrued_days": Decimal("0.00"),
         }
     effective_date = min(as_of or date.today(), cycle_end)
-    periods = get_completed_annual_periods(cycle_start, effective_date)
+    contract_start = get_contract_start_date(profile)
+    periods = get_completed_calendar_months(
+        cycle_start, effective_date, contract_start=contract_start
+    )
     return {
         "cycle_start": cycle_start,
         "cycle_end": cycle_end,
@@ -532,7 +581,10 @@ def build_annual_leave_eligibility(profile: EmployeeProfile | None, *, active_co
         return base
 
     reasons = []
-    if not is_terminated and get_completed_annual_periods(cycle_start, today) < ANNUAL_MINIMUM_PERIODS:
+    contract_start = get_contract_start_date(profile)
+    if not is_terminated and get_completed_calendar_months(
+        cycle_start, today, contract_start=contract_start
+    ) < ANNUAL_MINIMUM_PERIODS:
         reasons.append("Annual Leave payment is available after completing 6 months of service.")
     if not window_open:
         reasons.append("The Annual Leave payment window opens only during the final 5 days of the contract year.")
@@ -599,37 +651,24 @@ def build_annual_leave_payment_snapshot(
 
 def get_annual_entitlement(profile: EmployeeProfile, year: int):
     """
-    Annual entitlement:
-    - <1 year service: proportional up to 21
-    - >=1 and <5 years: 21
-    - >=5 years: 30
+    Annual entitlement per company policy:
+
+    - 1.75 days per completed calendar month in the contract year.
+    - Maximum 21 days per contract year (12 months × 1.75).
+    - No five-year or 30-day entitlement exists under current policy.
+
+    This helper is retained only for backward-compatible quota fallback where
+    ``LeaveType.annual_quota`` is zero. Actual balance accrual is computed via
+    ``get_annual_accrual_details()`` using calendar-month logic and remains
+    the authoritative source.
     """
-    year_start = date(year, 1, 1)
-    year_end = date(year, 12, 31)
-
-    if not profile.hire_date:
+    if not profile or not get_contract_start_date(profile):
         return 0.0
-
-    if profile.hire_date > year_end:
-        return 0.0
-
-    service_at_year_end = get_service_years(profile, year_end)
-    if service_at_year_end >= 5:
-        base = 30.0
-    else:
-        base = 21.0
-
-    # First service year: proportional entitlement.
-    first_service_year = profile.hire_date.year
-    if year == first_service_year and service_at_year_end < 1:
-        employed_days = (year_end - max(year_start, profile.hire_date)).days + 1
-        return round(base * (employed_days / 365.0), 2)
-
-    return base
+    return 21.0
 
 
 def get_annual_accrued_days(profile: EmployeeProfile, year: int, as_of: date | None = None) -> float:
-    """Return 1.75 days for each completed 30-day period in the contract cycle."""
+    """Return 1.75 days for each completed calendar month in the contract cycle (max 21)."""
     if not profile or not get_contract_start_date(profile):
         return 0.0
     effective_date = as_of or date(year, 12, 31)
@@ -1170,7 +1209,9 @@ def validate_leave_request_policy(
     # Annual leave eligibility: can start after 6 months.
     if _is_annual(code):
         contract_start = get_contract_start_date(profile)
-        if contract_start and get_completed_annual_periods(contract_start, date.today()) < ANNUAL_MINIMUM_PERIODS:
+        if contract_start and get_completed_calendar_months(
+            contract_start, date.today(), contract_start=contract_start
+        ) < ANNUAL_MINIMUM_PERIODS:
             return "Annual leave can be used only after completing 6 months of service."
 
         # Only enforce remaining balance when profile + hire date are available.
