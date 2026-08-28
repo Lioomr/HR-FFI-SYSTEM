@@ -35,9 +35,12 @@ function canRoleOpenPath(role: Role | string | undefined, path: string) {
   if (path.startsWith("/hr")) return role === "HRManager";
   if (path.startsWith("/ceo")) return role === "CEO";
   if (path.startsWith("/cfo")) return role === "CFO";
-  if (path.startsWith("/manager")) return ["CEO", "CFO", "Manager"].includes(role);
-  if (path.startsWith("/employee")) return ["Employee", "HRManager", "Manager"].includes(role);
-  if (path.startsWith("/hiring-requests/")) return ["CEO", "HRManager"].includes(role);
+  if (path.startsWith("/manager"))
+    return ["CEO", "CFO", "Manager"].includes(role);
+  if (path.startsWith("/employee"))
+    return ["Employee", "HRManager", "Manager"].includes(role);
+  if (path.startsWith("/hiring-requests/"))
+    return ["CEO", "HRManager"].includes(role);
   return true;
 }
 

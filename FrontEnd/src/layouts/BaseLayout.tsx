@@ -961,9 +961,33 @@ export default function BaseLayout() {
             },
           ],
         },
-        { key: "/hr/hiring-requests", icon: <SolutionOutlined />, label: <Link to="/hr/hiring-requests">{t("layout.hiringRequests", "Hiring Requests")}</Link> },
-        { key: "/hr/job-offers", icon: <FileDoneOutlined />, label: <Link to="/hr/job-offers">{t("layout.jobOffers", "Job Offers")}</Link> },
-        { key: "/hr/templates", icon: <FileTextOutlined />, label: <Link to="/hr/templates">{t("layout.templateLibrary", "Template Library")}</Link> },
+        {
+          key: "/hr/hiring-requests",
+          icon: <SolutionOutlined />,
+          label: (
+            <Link to="/hr/hiring-requests">
+              {t("layout.hiringRequests", "Hiring Requests")}
+            </Link>
+          ),
+        },
+        {
+          key: "/hr/job-offers",
+          icon: <FileDoneOutlined />,
+          label: (
+            <Link to="/hr/job-offers">
+              {t("layout.jobOffers", "Job Offers")}
+            </Link>
+          ),
+        },
+        {
+          key: "/hr/templates",
+          icon: <FileTextOutlined />,
+          label: (
+            <Link to="/hr/templates">
+              {t("layout.templateLibrary", "Template Library")}
+            </Link>
+          ),
+        },
         {
           key: "hr-announcements-sub",
           icon: <BellOutlined />,

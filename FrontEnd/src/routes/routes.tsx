@@ -122,19 +122,34 @@ import BaseLayout from "../layouts/BaseLayout";
 
 export const routes = [
   // Public
-  { path: "/login", element: <LoginPage />, errorElement: <RouteErrorBoundary /> },
-  { path: "/register", element: <RegisterInvitePage />, errorElement: <RouteErrorBoundary /> },
+  {
+    path: "/login",
+    element: <LoginPage />,
+    errorElement: <RouteErrorBoundary />,
+  },
+  {
+    path: "/register",
+    element: <RegisterInvitePage />,
+    errorElement: <RouteErrorBoundary />,
+  },
   // Candidate-facing offer response. No auth, no app chrome: the recipient has
   // only the tokenized link from their WhatsApp/email message.
-  { path: "/job-offers/respond", element: <JobOfferResponsePage />, errorElement: <RouteErrorBoundary /> },
+  {
+    path: "/job-offers/respond",
+    element: <JobOfferResponsePage />,
+    errorElement: <RouteErrorBoundary />,
+  },
 
   // Compatibility route. Notifications and workflow deep links point at
   // /hiring-requests/{id}, which is the API path rather than a screen; this
   // forwards the visitor to the CEO or HR screen they can actually use.
   // It owns its own auth handling so an unauthenticated visit keeps the link
   // as the post-login destination.
-  { path: "/hiring-requests/:id", element: <HiringRequestRedirect />, errorElement: <RouteErrorBoundary /> },
-
+  {
+    path: "/hiring-requests/:id",
+    element: <HiringRequestRedirect />,
+    errorElement: <RouteErrorBoundary />,
+  },
 
   // Authenticated (all roles)
   {
@@ -225,10 +240,22 @@ export const routes = [
               { path: "hr/job-offers/:id/edit", element: <JobOfferFormPage /> },
 
               // Hiring Requests — the approved-request gate in front of offers
-              { path: "hr/hiring-requests", element: <HiringRequestsListPage /> },
-              { path: "hr/hiring-requests/new", element: <HiringRequestFormPage /> },
-              { path: "hr/hiring-requests/:id", element: <HiringRequestDetailPage /> },
-              { path: "hr/hiring-requests/:id/edit", element: <HiringRequestFormPage /> },
+              {
+                path: "hr/hiring-requests",
+                element: <HiringRequestsListPage />,
+              },
+              {
+                path: "hr/hiring-requests/new",
+                element: <HiringRequestFormPage />,
+              },
+              {
+                path: "hr/hiring-requests/:id",
+                element: <HiringRequestDetailPage />,
+              },
+              {
+                path: "hr/hiring-requests/:id/edit",
+                element: <HiringRequestFormPage />,
+              },
 
               // Import Employees
               {
@@ -484,14 +511,38 @@ export const routes = [
             element: <RequireCEOApprover />,
             children: [
               { path: "ceo/loan-requests", element: <CEOLoanRequestsPage /> },
-              { path: "ceo/loan-requests/:id", element: <CEOLoanRequestDetailsPage /> },
-              { path: "ceo/attendance", element: <AttendancePreviewPage role="ceo" /> },
-              { path: "ceo/assets/damage-reports", element: <CEOAssetDamageReportsPage /> },
-              { path: "ceo/assets/return-requests", element: <CEOAssetReturnRequestsPage /> },
-              { path: "ceo/employees/deletion-requests", element: <CEOEmployeeDeletionInboxPage /> },
-              { path: "ceo/employees/deletion-requests/:id", element: <CEOEmployeeDeletionDetailPage /> },
-              { path: "ceo/hiring-requests", element: <CEOHiringRequestsInboxPage /> },
-              { path: "ceo/hiring-requests/:id", element: <CEOHiringRequestDetailPage /> },
+              {
+                path: "ceo/loan-requests/:id",
+                element: <CEOLoanRequestDetailsPage />,
+              },
+              {
+                path: "ceo/attendance",
+                element: <AttendancePreviewPage role="ceo" />,
+              },
+              {
+                path: "ceo/assets/damage-reports",
+                element: <CEOAssetDamageReportsPage />,
+              },
+              {
+                path: "ceo/assets/return-requests",
+                element: <CEOAssetReturnRequestsPage />,
+              },
+              {
+                path: "ceo/employees/deletion-requests",
+                element: <CEOEmployeeDeletionInboxPage />,
+              },
+              {
+                path: "ceo/employees/deletion-requests/:id",
+                element: <CEOEmployeeDeletionDetailPage />,
+              },
+              {
+                path: "ceo/hiring-requests",
+                element: <CEOHiringRequestsInboxPage />,
+              },
+              {
+                path: "ceo/hiring-requests/:id",
+                element: <CEOHiringRequestDetailPage />,
+              },
             ],
           },
 
