@@ -41,6 +41,10 @@ build/
 *.xlsm
 
 # Local tooling and scratch files
+.codex-*
+.codex-upload-staging/
+.opencode/
+FrontEnd/.codex-*
 .claude/
 .cursor/
 .cursorrules
