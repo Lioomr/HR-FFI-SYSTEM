@@ -336,6 +336,7 @@ def get_completed_calendar_months(
     as_of: date | None = None,
     *,
     contract_start: date | None = None,
+    cycle_end: date | None = None,
 ) -> int:
     """
     Count completed calendar months between ``cycle_start`` and ``as_of``.
@@ -344,6 +345,14 @@ def get_completed_calendar_months(
     (capped to month length, including February leap-year handling). On the
     day before an anniversary the month does not accrue; on the anniversary
     date it does. Result is capped at 12 per contract year.
+
+    Contract cycles are defined as inclusive ``[cycle_start, cycle_end]``
+    where ``cycle_end`` is one day before the next annual anniversary. To
+    ensure 12 months (21 days) are reachable within the cycle, the final
+    day ``cycle_end`` is treated as completion of month 12 even though the
+    12th calendar anniversary falls on ``cycle_end + 1`` (the first day of
+    the next cycle). This keeps the 21-day annual cap and final-five-days
+    settlement window consistent.
     """
     if not cycle_start or not as_of or as_of <= cycle_start:
         return 0
@@ -355,6 +364,29 @@ def get_completed_calendar_months(
             completed += 1
         else:
             break
+    # Inclusive cycle boundary fix: cycle_end is next anniversary -1, so the
+    # 12th anniversary lies one day after the cycle. Treat cycle_end itself
+    # as completion of month 12 so the contract year can accrue 21 days.
+    if completed == 11 and cycle_end is not None and as_of == cycle_end:
+        # Verify the 12th anniversary is exactly the next day, to avoid
+        # incorrectly bumping in edge cases where cycle_end is passed
+        # explicitly but does not correspond to this cycle.
+        try:
+            twelfth = _calendar_month_anniversary(original, cycle_start, 12)
+            if twelfth == cycle_end + timedelta(days=1):
+                completed = 12
+        except Exception:
+            completed = 12
+    elif completed == 11 and cycle_end is None and contract_start is not None:
+        # Auto-derive cycle_end when not supplied but contract_start is known.
+        try:
+            derived_end = _anniversary_for_year(original, cycle_start.year + 1) - timedelta(days=1)
+            if as_of == derived_end:
+                twelfth = _calendar_month_anniversary(original, cycle_start, 12)
+                if twelfth == derived_end + timedelta(days=1):
+                    completed = 12
+        except Exception:
+            pass
     return min(12, completed)
 
 
@@ -375,7 +407,7 @@ def get_annual_accrual_details(profile: EmployeeProfile, as_of: date | None = No
     effective_date = min(as_of or date.today(), cycle_end)
     contract_start = get_contract_start_date(profile)
     periods = get_completed_calendar_months(
-        cycle_start, effective_date, contract_start=contract_start
+        cycle_start, effective_date, contract_start=contract_start, cycle_end=cycle_end
     )
     return {
         "cycle_start": cycle_start,
@@ -583,7 +615,7 @@ def build_annual_leave_eligibility(profile: EmployeeProfile | None, *, active_co
     reasons = []
     contract_start = get_contract_start_date(profile)
     if not is_terminated and get_completed_calendar_months(
-        cycle_start, today, contract_start=contract_start
+        cycle_start, today, contract_start=contract_start, cycle_end=cycle_end
     ) < ANNUAL_MINIMUM_PERIODS:
         reasons.append("Annual Leave payment is available after completing 6 months of service.")
     if not window_open:
