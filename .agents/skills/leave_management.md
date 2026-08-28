@@ -61,10 +61,10 @@ remaining = opening_balance + annual_quota + adjustments - used_days
 - Recursively calculates previous year's remaining
 - Capped by `LeaveType.max_carry_over` (null = unlimited)
 
-**Service length tiers (Annual Leave)**:
-- Less than 1 year service: proportional up to 21 days
-- 1-5 years: 21 days
-- 5 or more years: 30 days
+**Annual Leave Accrual (company policy)**:
+- 1.75 days per completed calendar month in the contract year, capped at 21 days (12 months).
+- Accrual anchor is `contract_date` (falls back to `hire_date` only for legacy profiles).
+- Calendar-month anniversaries are calculated from the original contract start day (capped to month length, including February leap-year handling). No 30-day approximation and no five-year/30-day entitlement exists.
 
 **Used days**: `get_used_days_for_type()` sums approved requests in the year, accounting for official holidays (Feb 22, Sep 23 excluded).
 
@@ -74,7 +74,7 @@ remaining = opening_balance + annual_quota + adjustments - used_days
 
 | Code | Days | Paid | Carry-over | Notes |
 |---|---|---|---|---|
-| ANNUAL | 21-30 (service-based) | Yes | Configurable | Prorated first year; emergency deducted here |
+| ANNUAL | 21 (1.75 × completed calendar months) | Yes | Configurable | Accrues per calendar month; emergency deducted here |
 | SICK | 120 | Tiered (100%/50%/0%) | No | Requires attachment; 30/30/60 day pay tiers |
 | EMERGENCY | 10 | Yes | No | Deducted from ANNUAL balance |
 | UNPAID | 60 | No | No | Annual overflow flows here |
