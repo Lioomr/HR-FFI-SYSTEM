@@ -20,6 +20,7 @@ import { useAuth } from '@/providers';
 import {
   attendanceCorrectionStatusPresentation,
   formatDateValue,
+  hiringRequestStatusPresentation,
   leaveStatusPresentation,
   localizedCount,
   ResourceFailure,
@@ -34,7 +35,13 @@ import {
 import { AttendanceCorrectionDetail } from './AttendanceCorrectionDetail';
 import { DelegationRulesSheet } from './DelegationRulesSheet';
 import { LeaveApprovalDetail } from './LeaveApprovalDetail';
-import type { ApprovalLeaveRequest, AttendanceCorrectionApproval } from './types';
+import { HiringRequestDetail } from './HiringRequestDetail';
+import { hasHiringApprovalAccess, loadHiringApprovals } from './hiring-approvals-api';
+import type {
+  ApprovalLeaveRequest,
+  AttendanceCorrectionApproval,
+  HiringRequestApproval,
+} from './types';
 
 /**
  * The approver home. Later domains (attendance corrections, hiring, loans) and
@@ -49,12 +56,16 @@ export function ApprovalsScreen() {
   const [selectedCorrection, setSelectedCorrection] = useState<AttendanceCorrectionApproval | null>(
     null,
   );
+  const [selectedHiringRequest, setSelectedHiringRequest] = useState<HiringRequestApproval | null>(
+    null,
+  );
   const [delegationsOpen, setDelegationsOpen] = useState(false);
 
   const approverRole = normalizeRole(user?.role);
   const canApproveLeave = hasLeaveApprovalAccess(approverRole);
   const canApproveCorrections = hasAttendanceCorrectionApprovalAccess(approverRole);
-  const hasApprovalSurface = canApproveLeave || canApproveCorrections;
+  const canApproveHiring = hasHiringApprovalAccess(approverRole);
+  const hasApprovalSurface = canApproveLeave || canApproveCorrections || canApproveHiring;
 
   const { isRefreshing, refresh, resource, retry } = useResource<ApprovalLeaveRequest[]>(
     useCallback(() => loadLeaveApprovals(approverRole), [approverRole]),
@@ -67,6 +78,14 @@ export function ApprovalsScreen() {
   } = useResource<AttendanceCorrectionApproval[]>(
     useCallback(() => loadAttendanceCorrectionApprovals(approverRole), [approverRole]),
   );
+  const {
+    isRefreshing: isRefreshingHiring,
+    refresh: refreshHiring,
+    resource: hiringRequests,
+    retry: retryHiring,
+  } = useResource<HiringRequestApproval[]>(
+    useCallback(() => loadHiringApprovals(approverRole), [approverRole]),
+  );
 
   const afterDecision = useCallback(async () => {
     setSelected(null);
@@ -78,6 +97,11 @@ export function ApprovalsScreen() {
     await refreshCorrections();
   }, [refreshCorrections]);
 
+  const afterHiringDecision = useCallback(async () => {
+    setSelectedHiringRequest(null);
+    await refreshHiring();
+  }, [refreshHiring]);
+
   return (
     <Screen
       contentContainerStyle={styles.content}
@@ -88,8 +112,8 @@ export function ApprovalsScreen() {
           <RefreshControl
             accessibilityLabel={t('common.refresh')}
             colors={[colors.text]}
-            onRefresh={() => void Promise.all([refresh(), refreshCorrections()])}
-            refreshing={isRefreshing || isRefreshingCorrections}
+            onRefresh={() => void Promise.all([refresh(), refreshCorrections(), refreshHiring()])}
+            refreshing={isRefreshing || isRefreshingCorrections || isRefreshingHiring}
             tintColor={colors.text}
           />
         ),
@@ -251,6 +275,67 @@ export function ApprovalsScreen() {
             correction={selectedCorrection}
             onClose={() => setSelectedCorrection(null)}
             onDecided={() => void afterCorrectionDecision()}
+          />
+        </View>
+      ) : null}
+
+      {canApproveHiring && hiringRequests.status === 'error' ? (
+        <ResourceFailure kind={hiringRequests.kind} onRetry={() => void retryHiring()} />
+      ) : null}
+
+      {canApproveHiring && hiringRequests.status === 'loading' ? (
+        <SkeletonList rows={3} testID="hiring-requests-skeleton" />
+      ) : null}
+
+      {canApproveHiring && hiringRequests.status === 'ready' ? (
+        <View style={styles.section}>
+          <SectionHeader
+            hint={localizedCount(localization, 'hiring.pendingCount', hiringRequests.data.length)}
+            title={t('hiring.sectionTitle')}
+          />
+          {hiringRequests.data.length === 0 ? (
+            <EmptyState
+              compact
+              emoji="✅"
+              message={t('hiring.empty')}
+              title={t('hiring.sectionTitle')}
+            />
+          ) : (
+            <Card>
+              <View accessibilityRole="list" style={styles.list}>
+                {hiringRequests.data.map((request, index) => {
+                  const status = hiringRequestStatusPresentation(request.status);
+                  return (
+                    <View
+                      key={String(request.id ?? `${request.referenceNumber ?? 'hiring'}-${index}`)}
+                      style={index > 0 ? styles.separated : undefined}
+                    >
+                      <ListRow
+                        accessibilityHint={t('accessibility.opensDetailHint')}
+                        onPress={() => setSelectedHiringRequest(request)}
+                        subtitle={request.referenceNumber ?? t('common.notAvailable')}
+                        testID={`hiring-request-${request.id ?? index}`}
+                        title={request.candidateFullName ?? t('common.notAvailable')}
+                        trailing={
+                          status ? (
+                            <StatusBadge
+                              glyph={status.glyph}
+                              label={t(status.labelKey)}
+                              tone={status.tone}
+                            />
+                          ) : null
+                        }
+                      />
+                    </View>
+                  );
+                })}
+              </View>
+            </Card>
+          )}
+          <HiringRequestDetail
+            onClose={() => setSelectedHiringRequest(null)}
+            onDecided={() => void afterHiringDecision()}
+            request={selectedHiringRequest}
           />
         </View>
       ) : null}

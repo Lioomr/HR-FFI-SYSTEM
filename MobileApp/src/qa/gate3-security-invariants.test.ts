@@ -52,6 +52,9 @@ const ALLOWED_PATHS = [
   '/api/attendance-correction-requests/',
   '/api/core/workflow/delegations/',
   '/api/employees/delegation-candidates/',
+  // Hiring is intentionally root-mounted by `Backend/job_offers/urls.py`.
+  // Its action suffixes are built from this reviewed base at runtime.
+  '/hiring-requests/',
   '/api/notifications/',
   '/api/notifications/unread-count/',
   '/api/notifications/read-all/',
@@ -62,9 +65,9 @@ const ALLOWED_PATHS = [
 ] as const;
 
 function literalPaths(source: string): string[] {
-  return [...source.matchAll(/(['"`])(\/(?:api|auth|employee|ws)\/[^'"`\s]*)\1/gu)].map(
-    (match) => match[2],
-  );
+  return [
+    ...source.matchAll(/(['"`])(\/(?:api|auth|employee|ws|hiring-requests)\/[^'"`\s]*)\1/gu),
+  ].map((match) => match[2]);
 }
 
 describe('Gate 3 independent API and security invariants', () => {
