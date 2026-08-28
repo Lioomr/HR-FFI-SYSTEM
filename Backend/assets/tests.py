@@ -35,9 +35,24 @@ class AssetsTests(TestCase):
         self.hr_user = User.objects.create_user(email="hr-assets@ffi.com", password="password")
         self.hr_user.groups.add(self.hr_group)
         UserOrganizationAccess.objects.create(user=self.hr_user, organization=self.company)
-        self.department_ceo = Department.objects.create(id=1, code="CEO", name="CEO Department")
-        self.department_ops = Department.objects.create(id=12, code="OPS", name="Operations")
-        self.position = Position.objects.create(id=501, code="GEN", name="General")
+        self.department_ceo = Department.objects.create(
+            id=1,
+            code="CEO",
+            name="CEO Department",
+            company=self.company,
+        )
+        self.department_ops = Department.objects.create(
+            id=12,
+            code="OPS",
+            name="Operations",
+            company=self.company,
+        )
+        self.position = Position.objects.create(
+            id=501,
+            code="GEN",
+            name="General",
+            company=self.company,
+        )
         self.hr_profile = EmployeeProfile.objects.create(
             user=self.hr_user,
             company=self.company,

@@ -26,7 +26,9 @@ export default function CEOAssetReturnRequestsPage() {
       reject={rejectCEOAssetReturnRequest}
       // The return flow passes through manager and HR before the CEO, so the
       // map is worth keeping: it shows what has already been decided.
-      expandedRowRender={(record) => <AssetReturnApprovalMap request={record} t={t} />}
+      expandedRowRender={(record) => (
+        <AssetReturnApprovalMap request={record} t={t} />
+      )}
     />
   );
 }

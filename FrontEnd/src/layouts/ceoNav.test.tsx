@@ -8,8 +8,13 @@ import { buildCeoMenuItems, getCeoOpenKeysForPath } from "./ceoNav";
 import { getSelectedKey } from "./menuUtils";
 import { translations } from "../i18n/translations";
 
-const t = (language: "en" | "ar") =>
-  (key: string, params?: Record<string, unknown> | string, fallback?: string) => {
+const t =
+  (language: "en" | "ar") =>
+  (
+    key: string,
+    params?: Record<string, unknown> | string,
+    fallback?: string,
+  ) => {
     const actualFallback = typeof params === "string" ? params : fallback;
     return translations[language]?.[key] ?? actualFallback ?? key;
   };
@@ -32,9 +37,9 @@ function groupTitles(items: MenuProps["items"]): string[] {
     </MemoryRouter>,
   );
   // The group heading stacks a title over a caption; assert on the title line.
-  return Array.from(container.querySelectorAll(".ant-menu-item-group-title")).map(
-    (node) => node.querySelector("span")?.textContent ?? "",
-  );
+  return Array.from(
+    container.querySelectorAll(".ant-menu-item-group-title"),
+  ).map((node) => node.querySelector("span")?.textContent ?? "");
 }
 
 describe("CEO navigation", () => {
@@ -59,7 +64,9 @@ describe("CEO navigation", () => {
   });
 
   it("lists every CEO route exactly once", () => {
-    const keys = collectKeys(buildCeoMenuItems(t("en"))).filter((key) => key.startsWith("/"));
+    const keys = collectKeys(buildCeoMenuItems(t("en"))).filter((key) =>
+      key.startsWith("/"),
+    );
     expect(new Set(keys).size).toBe(keys.length);
     expect(keys).toEqual(
       expect.arrayContaining([
@@ -87,7 +94,9 @@ describe("CEO navigation", () => {
 
   it("keeps the manager queues that show different data, under distinct labels", () => {
     const items = buildCeoMenuItems(t("en"));
-    expect(collectKeys(items)).toEqual(expect.arrayContaining(["/manager/dashboard", "/manager/loan-requests"]));
+    expect(collectKeys(items)).toEqual(
+      expect.arrayContaining(["/manager/dashboard", "/manager/loan-requests"]),
+    );
 
     render(
       <MemoryRouter>
@@ -117,8 +126,12 @@ describe("CEO navigation", () => {
   });
 
   it("opens the submenu that contains the current route", () => {
-    expect(getCeoOpenKeysForPath("/ceo/assets/damage-reports")).toEqual(["ceo-assets-sub"]);
-    expect(getCeoOpenKeysForPath("/ceo/announcements/create")).toEqual(["ceo-announcements-sub"]);
+    expect(getCeoOpenKeysForPath("/ceo/assets/damage-reports")).toEqual([
+      "ceo-assets-sub",
+    ]);
+    expect(getCeoOpenKeysForPath("/ceo/announcements/create")).toEqual([
+      "ceo-announcements-sub",
+    ]);
     expect(getCeoOpenKeysForPath("/ceo/dashboard")).toEqual([]);
   });
 });

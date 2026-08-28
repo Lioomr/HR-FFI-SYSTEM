@@ -17,9 +17,22 @@ export default function RentTypesPage() {
 
   const columns: ColumnsType<RentType> = [
     { title: "ID", dataIndex: "id", key: "id", width: 80 },
-    { title: t("reference.departments.colCode", "Code"), dataIndex: "code", key: "code", width: 140 },
-    { title: t("reference.departments.colName", "Name"), dataIndex: "name", key: "name" },
-    { title: t("common.description", "Description"), dataIndex: "description", key: "description" },
+    {
+      title: t("reference.departments.colCode", "Code"),
+      dataIndex: "code",
+      key: "code",
+      width: 140,
+    },
+    {
+      title: t("reference.departments.colName", "Name"),
+      dataIndex: "name",
+      key: "name",
+    },
+    {
+      title: t("common.description", "Description"),
+      dataIndex: "description",
+      key: "description",
+    },
   ];
 
   const createForm = (
@@ -38,7 +51,10 @@ export default function RentTypesPage() {
       >
         <Input placeholder="e.g., Office Rent" />
       </Form.Item>
-      <Form.Item label={t("common.description", "Description")} name="description">
+      <Form.Item
+        label={t("common.description", "Description")}
+        name="description"
+      >
         <Input.TextArea rows={3} placeholder="Optional description" />
       </Form.Item>
     </>
@@ -55,9 +71,16 @@ export default function RentTypesPage() {
       updateItem={updateRentType}
       createForm={createForm}
       editForm={createForm}
-      initialEditValues={(row) => ({ code: row.code, name: row.name, description: row.description })}
+      initialEditValues={(row) => ({
+        code: row.code,
+        name: row.name,
+        description: row.description,
+      })}
       disableEdit={() => false}
-      mapListResponse={(data) => ({ items: Array.isArray(data) ? data : [], total: Array.isArray(data) ? data.length : 0 })}
+      mapListResponse={(data) => ({
+        items: Array.isArray(data) ? data : [],
+        total: Array.isArray(data) ? data.length : 0,
+      })}
     />
   );
 }

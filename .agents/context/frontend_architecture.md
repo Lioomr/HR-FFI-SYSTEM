@@ -70,6 +70,7 @@ FrontEnd/src/
 - **Local state** (`useState`) for UI state (modal open, form values, loading).
 - **Zustand stores** only for state shared across multiple pages/components (employee list, attendance, language).
 - Do not add new Zustand stores for single-page data — use local state or React Query patterns.
+- New approve/reject list-view actions should update local list state optimistically (remove/restore the row) rather than `await`-then-`load()`. See `reliability_and_perf_fixes.md` for the pattern and the full list of screens already converted.
 
 ## Role-Based Routes
 

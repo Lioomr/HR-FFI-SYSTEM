@@ -7,6 +7,84 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     // App
     "app.title": "FFI HR System",
 
+    // Annual Leave settlements
+    "annualPayment.hrTitle": "Annual Leave Settlements",
+    "annualPayment.hrSubtitle":
+      "Review employee Annual Leave settlement requests.",
+    "annualPayment.hrEmpty": "No settlements are awaiting HR review.",
+    "annualPayment.hrCreateButton": "Open Settlement",
+    "annualPayment.hrCreateTitle": "Open Annual Leave Settlement",
+    "annualPayment.hrCreateNotice":
+      "Create a settlement for an employee who did not submit one.",
+    "annualPayment.hrDecision": "HR decision",
+    "annualPayment.hrComment": "HR comment",
+    "annualPayment.hrPendingLeaveWarning":
+      "This employee has a pending Annual Leave request.",
+    "annualPayment.hrSettlementCreated":
+      "Settlement created and sent to the CEO.",
+    "annualPayment.review": "Review",
+    "annualPayment.reviewTitle": "Review Annual Leave Settlement",
+    "annualPayment.reviewHint":
+      "Choose whether the eligible days are paid or carried forward.",
+    "annualPayment.forwardToCeo": "Forward to CEO",
+    "annualPayment.forwardSuccess": "Settlement forwarded to the CEO.",
+    "annualPayment.carryForward": "Carry forward",
+    "annualPayment.carryForwardSuccess":
+      "Days marked to carry forward and sent to the CEO.",
+    "annualPayment.pay": "Pay",
+    "annualPayment.allStatuses": "All statuses",
+    "annualPayment.status": "Status",
+    "annualPayment.status.pendingHr": "Pending HR",
+    "annualPayment.status.pendingCeo": "Pending CEO",
+    "annualPayment.status.approved": "Approved for Payment",
+    "annualPayment.status.rejected": "Rejected",
+    "annualPayment.status.carriedForward": "Carried Forward",
+    "annualPayment.employee": "Employee",
+    "annualPayment.requestNumber": "Request #",
+    "annualPayment.contractYear": "Contract year",
+    "annualPayment.eligibleDays": "Eligible days",
+    "annualPayment.eligibleWholeDays": "Eligible whole days",
+    "annualPayment.fractionalDays": "Fractional days",
+    "annualPayment.yearEndSalary": "Year-end salary",
+    "annualPayment.paymentAmount": "Payment amount",
+    "annualPayment.estimatedPaymentAmount": "Estimated payment amount",
+    "annualPayment.resolution": "Resolution",
+    "annualPayment.pendingAnnualLeave": "Pending Annual Leave",
+    "annualPayment.employeeNote": "Employee note",
+    "annualPayment.ceoComment": "CEO comment",
+    "annualPayment.carryForwardDays": "Carry-forward days",
+    "annualPayment.settlementType": "Settlement type",
+    "annualPayment.terminationSettlement": "Termination settlement",
+    "annualPayment.ceoTitle": "Annual Leave Settlements",
+    "annualPayment.ceoSubtitle":
+      "Make the final decision on reviewed settlements.",
+    "annualPayment.ceoEmpty": "No settlements are awaiting CEO approval.",
+    "annualPayment.approveTitle": "Approve settlement",
+    "annualPayment.approvePayNotice":
+      "This will approve payment for the eligible days.",
+    "annualPayment.approveCarryForwardNotice":
+      "This will carry the eligible days into the next contract year.",
+    "annualPayment.approveSuccess": "Settlement approved for payment.",
+    "annualPayment.carriedForwardSuccess":
+      "Settlement approved for carry-forward.",
+    "annualPayment.rejectTitle": "Reject settlement",
+    "annualPayment.rejectConfirm": "Reject this Annual Leave settlement?",
+    "annualPayment.rejectSuccess": "Settlement rejected.",
+    "annualPayment.title": "Annual Leave Payment",
+    "annualPayment.description":
+      "Request settlement of eligible unused Annual Leave days.",
+    "annualPayment.requestButton": "Request payment",
+    "annualPayment.requestTitle": "Request Annual Leave Payment",
+    "annualPayment.submitSuccess": "Annual Leave payment request submitted.",
+    "annualPayment.notAvailable": "Annual Leave payment is not available.",
+    "annualPayment.windowNotice":
+      "The request window opens during the final five days of the contract year.",
+    "annualPayment.activeRequestNotice":
+      "An Annual Leave settlement already exists for this contract year.",
+    "annualPayment.employeePendingLeaveNotice":
+      "Payment cannot be requested while Annual Leave is pending.",
+    "annualPayment.employeeEmpty": "No Annual Leave settlements yet.",
+
     // Language
     "language.english": "English",
     "language.arabic": "Arabic",
@@ -3168,6 +3246,77 @@ export const translations: Record<AppLanguage, TranslationMap> = {
   },
 
   ar: {
+    // تسوية الإجازة السنوية
+    "annualPayment.hrTitle": "تسويات الإجازة السنوية",
+    "annualPayment.hrSubtitle": "مراجعة طلبات تسوية الإجازة السنوية للموظفين.",
+    "annualPayment.hrEmpty": "لا توجد تسويات بانتظار مراجعة الموارد البشرية.",
+    "annualPayment.hrCreateButton": "فتح تسوية",
+    "annualPayment.hrCreateTitle": "فتح تسوية إجازة سنوية",
+    "annualPayment.hrCreateNotice": "إنشاء تسوية لموظف لم يقدّم طلباً.",
+    "annualPayment.hrDecision": "قرار الموارد البشرية",
+    "annualPayment.hrComment": "ملاحظة الموارد البشرية",
+    "annualPayment.hrPendingLeaveWarning":
+      "لدى هذا الموظف طلب إجازة سنوية قيد الانتظار.",
+    "annualPayment.hrSettlementCreated":
+      "تم إنشاء التسوية وإرسالها للرئيس التنفيذي.",
+    "annualPayment.review": "مراجعة",
+    "annualPayment.reviewTitle": "مراجعة تسوية الإجازة السنوية",
+    "annualPayment.reviewHint": "اختر دفع الأيام المستحقة أو ترحيلها.",
+    "annualPayment.forwardToCeo": "إرسال للرئيس التنفيذي",
+    "annualPayment.forwardSuccess": "تم إرسال التسوية للرئيس التنفيذي.",
+    "annualPayment.carryForward": "ترحيل",
+    "annualPayment.carryForwardSuccess":
+      "تم تحديد الأيام للترحيل وإرسالها للرئيس التنفيذي.",
+    "annualPayment.pay": "دفع",
+    "annualPayment.allStatuses": "كل الحالات",
+    "annualPayment.status": "الحالة",
+    "annualPayment.status.pendingHr": "بانتظار الموارد البشرية",
+    "annualPayment.status.pendingCeo": "بانتظار الرئيس التنفيذي",
+    "annualPayment.status.approved": "معتمد للدفع",
+    "annualPayment.status.rejected": "مرفوض",
+    "annualPayment.status.carriedForward": "تم الترحيل",
+    "annualPayment.employee": "الموظف",
+    "annualPayment.requestNumber": "رقم الطلب",
+    "annualPayment.contractYear": "سنة العقد",
+    "annualPayment.eligibleDays": "الأيام المستحقة",
+    "annualPayment.eligibleWholeDays": "الأيام الكاملة المستحقة",
+    "annualPayment.fractionalDays": "الأيام الكسرية",
+    "annualPayment.yearEndSalary": "راتب نهاية السنة",
+    "annualPayment.paymentAmount": "مبلغ الدفع",
+    "annualPayment.estimatedPaymentAmount": "مبلغ الدفع التقديري",
+    "annualPayment.resolution": "القرار",
+    "annualPayment.pendingAnnualLeave": "إجازة سنوية معلقة",
+    "annualPayment.employeeNote": "ملاحظة الموظف",
+    "annualPayment.ceoComment": "ملاحظة الرئيس التنفيذي",
+    "annualPayment.carryForwardDays": "أيام الترحيل",
+    "annualPayment.settlementType": "نوع التسوية",
+    "annualPayment.terminationSettlement": "تسوية إنهاء الخدمة",
+    "annualPayment.ceoTitle": "تسويات الإجازة السنوية",
+    "annualPayment.ceoSubtitle": "اتخاذ القرار النهائي للتسويات المراجعة.",
+    "annualPayment.ceoEmpty": "لا توجد تسويات بانتظار اعتماد الرئيس التنفيذي.",
+    "annualPayment.approveTitle": "اعتماد التسوية",
+    "annualPayment.approvePayNotice": "سيتم اعتماد دفع الأيام المستحقة.",
+    "annualPayment.approveCarryForwardNotice":
+      "سيتم ترحيل الأيام المستحقة إلى سنة العقد التالية.",
+    "annualPayment.approveSuccess": "تم اعتماد التسوية للدفع.",
+    "annualPayment.carriedForwardSuccess": "تم اعتماد التسوية للترحيل.",
+    "annualPayment.rejectTitle": "رفض التسوية",
+    "annualPayment.rejectConfirm": "هل تريد رفض تسوية الإجازة السنوية؟",
+    "annualPayment.rejectSuccess": "تم رفض التسوية.",
+    "annualPayment.title": "دفع الإجازة السنوية",
+    "annualPayment.description":
+      "طلب تسوية أيام الإجازة السنوية غير المستخدمة والمستحقة.",
+    "annualPayment.requestButton": "طلب دفع",
+    "annualPayment.requestTitle": "طلب دفع الإجازة السنوية",
+    "annualPayment.submitSuccess": "تم إرسال طلب دفع الإجازة السنوية.",
+    "annualPayment.notAvailable": "دفع الإجازة السنوية غير متاح.",
+    "annualPayment.windowNotice":
+      "تفتح نافذة الطلب في آخر خمسة أيام من سنة العقد.",
+    "annualPayment.activeRequestNotice":
+      "توجد تسوية إجازة سنوية بالفعل لسنة العقد هذه.",
+    "annualPayment.employeePendingLeaveNotice":
+      "لا يمكن طلب الدفع أثناء وجود إجازة سنوية معلقة.",
+    "annualPayment.employeeEmpty": "لا توجد تسويات إجازة سنوية حتى الآن.",
     // App
     "app.title": "نظام الموارد البشرية FFI",
 

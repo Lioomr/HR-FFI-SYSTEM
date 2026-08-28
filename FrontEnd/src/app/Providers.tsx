@@ -6,76 +6,81 @@ import enUS from "antd/locale/en_US";
 import { useI18n } from "../i18n/useI18n";
 import I18nBootstrap from "../i18n/I18nBootstrap";
 
-const FONT_EN = "'Rubik', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-const FONT_AR = "'Readex Pro', 'Rubik', -apple-system, BlinkMacSystemFont, sans-serif";
+const FONT_EN =
+  "'Rubik', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+const FONT_AR =
+  "'Readex Pro', 'Rubik', -apple-system, BlinkMacSystemFont, sans-serif";
 
 export default function Providers({ children }: { children: ReactNode }) {
   const { language, direction } = useI18n();
 
-  const modernTheme = useMemo(() => ({
-    token: {
-      colorPrimary: "#f97316",
-      colorInfo: "#94a3b8",
-      colorSuccess: "#10b981",
-      colorWarning: "#f59e0b",
-      colorError: "#ef4444",
-      colorBgBase: "#ffffff",
-      colorBgLayout: "#f8f9fb",
-      colorBgContainer: "#ffffff",
-      colorTextBase: "#0f172a",
-      borderRadius: 10,
-      borderRadiusLG: 14,
-      borderRadiusSM: 6,
-      fontFamily: language === "ar" ? FONT_AR : FONT_EN,
-      fontSize: 14,
-      boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
-      boxShadowSecondary: "0 4px 16px rgba(0,0,0,0.08)",
-    },
-    components: {
-      Layout: {
-        siderBg: "#0d1117",
-      },
-      Card: {
-        borderRadiusLG: 16,
-      },
-      Button: {
+  const modernTheme = useMemo(
+    () => ({
+      token: {
+        colorPrimary: "#f97316",
+        colorInfo: "#94a3b8",
+        colorSuccess: "#10b981",
+        colorWarning: "#f59e0b",
+        colorError: "#ef4444",
+        colorBgBase: "#ffffff",
+        colorBgLayout: "#f8f9fb",
+        colorBgContainer: "#ffffff",
+        colorTextBase: "#0f172a",
         borderRadius: 10,
-        controlHeight: 40,
-        fontWeight: 600,
+        borderRadiusLG: 14,
+        borderRadiusSM: 6,
+        fontFamily: language === "ar" ? FONT_AR : FONT_EN,
+        fontSize: 14,
+        boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
+        boxShadowSecondary: "0 4px 16px rgba(0,0,0,0.08)",
       },
-      Input: {
-        borderRadius: 10,
-        controlHeight: 40,
-        activeShadow: "0 0 0 3px rgba(249,115,22,0.15)",
+      components: {
+        Layout: {
+          siderBg: "#0d1117",
+        },
+        Card: {
+          borderRadiusLG: 16,
+        },
+        Button: {
+          borderRadius: 10,
+          controlHeight: 40,
+          fontWeight: 600,
+        },
+        Input: {
+          borderRadius: 10,
+          controlHeight: 40,
+          activeShadow: "0 0 0 3px rgba(249,115,22,0.15)",
+        },
+        Select: {
+          borderRadius: 10,
+          controlHeight: 40,
+        },
+        Table: {
+          headerBg: "#f1f5f9",
+          headerColor: "#64748b",
+          rowHoverBg: "#fff7ed",
+        },
+        Tag: {
+          borderRadiusSM: 20,
+        },
+        Tabs: {
+          inkBarColor: "#f97316",
+          itemActiveColor: "#f97316",
+          itemSelectedColor: "#f97316",
+        },
+        Menu: {
+          darkItemBg: "#0d1117",
+          darkItemSelectedBg: "rgba(249,115,22,0.11)",
+          darkItemSelectedColor: "#fb923c",
+          darkItemHoverBg: "rgba(255,255,255,0.06)",
+          darkSubMenuItemBg: "#0d1117",
+          darkPopupBg: "#161b22",
+        },
       },
-      Select: {
-        borderRadius: 10,
-        controlHeight: 40,
-      },
-      Table: {
-        headerBg: "#f1f5f9",
-        headerColor: "#64748b",
-        rowHoverBg: "#fff7ed",
-      },
-      Tag: {
-        borderRadiusSM: 20,
-      },
-      Tabs: {
-        inkBarColor: "#f97316",
-        itemActiveColor: "#f97316",
-        itemSelectedColor: "#f97316",
-      },
-      Menu: {
-        darkItemBg: "#0d1117",
-        darkItemSelectedBg: "rgba(249,115,22,0.11)",
-        darkItemSelectedColor: "#fb923c",
-        darkItemHoverBg: "rgba(255,255,255,0.06)",
-        darkSubMenuItemBg: "#0d1117",
-        darkPopupBg: "#161b22",
-      },
-    },
-    algorithm: theme.defaultAlgorithm,
-  }), [language]);
+      algorithm: theme.defaultAlgorithm,
+    }),
+    [language],
+  );
 
   return (
     <ConfigProvider

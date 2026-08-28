@@ -95,6 +95,9 @@ class EmployeeDocumentSecurityTests(TestCase):
         self.assertIn("attachment", download_response["Content-Disposition"].lower())
         self.assertEqual(download_response["X-Content-Type-Options"], "nosniff")
         self.assertEqual(download_response["Cache-Control"], "private, no-store")
+        for resource_closer in download_response._resource_closers:
+            resource_closer()
+        download_response._resource_closers.clear()
         self.assertTrue(
             AuditLog.objects.filter(
                 action="employee_document_downloaded", entity_id=str(document.id), actor=self.employee

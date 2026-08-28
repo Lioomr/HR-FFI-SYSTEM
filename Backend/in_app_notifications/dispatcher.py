@@ -168,8 +168,14 @@ def dispatch_notification_channels(
     whatsapp_enabled: bool | None = None,
     email_enabled: bool | None = None,
     redeliver_existing: bool = True,
+    known_new: bool = False,
 ) -> dict:
-    """Persist immediately and enqueue WhatsApp-first external delivery after commit."""
+    """Persist immediately and enqueue WhatsApp-first external delivery after commit.
+
+    ``known_new`` lets a caller that has already batch-checked recipients against
+    a shared ``deduplication_key`` (e.g. a company-wide announcement) skip the
+    per-recipient dedup SELECT that create_notification would otherwise run.
+    """
     try:
         notification, created = create_notification(
             recipient=recipient,
@@ -186,6 +192,7 @@ def dispatch_notification_channels(
             company=company,
             company_id=company_id,
             broadcast=False,
+            known_new=known_new,
         )
         if notification is None:
             return {"notification": None, "created": False, "whatsapp": None, "email": None}

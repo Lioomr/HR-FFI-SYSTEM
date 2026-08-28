@@ -1,3 +1,4 @@
+from django.db import transaction
 from django.http import HttpResponse
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
@@ -22,7 +23,7 @@ from core.services import (
     sync_workflow,
 )
 from employees.services.manager_relationships import (
-    get_valid_direct_manager_user,
+    get_valid_manager_user,
     manager_approval_actor_source,
     manager_scope_q,
 )
@@ -561,7 +562,7 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
             return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
 
         profile = serializer.validated_data["employee_profile"]
-        manager_user = get_valid_direct_manager_user(profile)
+        manager_user = get_valid_manager_user(profile, cross_company_capability="loans.approve")
 
         config = get_active_workflow_config()
         if _is_hr_manager_user(request.user):
@@ -708,22 +709,26 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
         if not serializer.is_valid():
             return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
 
-        instance.status = LoanRequest.RequestStatus.PENDING_CFO
-        instance.finance_decision_by = request.user
-        instance.finance_decision_at = timezone.now()
-        instance.finance_decision_note = serializer.validated_data.get("comment", "")
-        instance.hr_recommendation = LoanRequest.Recommendation.APPROVE
-        instance.save(
-            update_fields=[
-                "status",
-                "finance_decision_by",
-                "finance_decision_at",
-                "finance_decision_note",
-                "hr_recommendation",
-                "updated_at",
-            ]
-        )
-        sync_workflow(instance, actor=request.user)
+        with transaction.atomic():
+            instance = LoanRequest.objects.select_for_update().get(pk=instance.pk)
+            if instance.status not in LEGACY_PENDING_HR_STATUSES:
+                return error("Validation error", errors=["Request is not pending HR approval."], status=422)
+            instance.status = LoanRequest.RequestStatus.PENDING_CFO
+            instance.finance_decision_by = request.user
+            instance.finance_decision_at = timezone.now()
+            instance.finance_decision_note = serializer.validated_data.get("comment", "")
+            instance.hr_recommendation = LoanRequest.Recommendation.APPROVE
+            instance.save(
+                update_fields=[
+                    "status",
+                    "finance_decision_by",
+                    "finance_decision_at",
+                    "finance_decision_note",
+                    "hr_recommendation",
+                    "updated_at",
+                ]
+            )
+            sync_workflow(instance, actor=request.user)
         audit(request, "loan_request_recommended_hr_approve", entity="LoanRequest", entity_id=instance.id)
         try:
             notify_users_for_pending_status(
@@ -754,22 +759,26 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
         if not serializer.is_valid():
             return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
 
-        instance.status = LoanRequest.RequestStatus.PENDING_CFO
-        instance.finance_decision_by = request.user
-        instance.finance_decision_at = timezone.now()
-        instance.finance_decision_note = serializer.validated_data.get("comment", "")
-        instance.hr_recommendation = LoanRequest.Recommendation.REJECT
-        instance.save(
-            update_fields=[
-                "status",
-                "finance_decision_by",
-                "finance_decision_at",
-                "finance_decision_note",
-                "hr_recommendation",
-                "updated_at",
-            ]
-        )
-        sync_workflow(instance, actor=request.user)
+        with transaction.atomic():
+            instance = LoanRequest.objects.select_for_update().get(pk=instance.pk)
+            if instance.status not in LEGACY_PENDING_HR_STATUSES:
+                return error("Validation error", errors=["Request is not pending HR approval."], status=422)
+            instance.status = LoanRequest.RequestStatus.PENDING_CFO
+            instance.finance_decision_by = request.user
+            instance.finance_decision_at = timezone.now()
+            instance.finance_decision_note = serializer.validated_data.get("comment", "")
+            instance.hr_recommendation = LoanRequest.Recommendation.REJECT
+            instance.save(
+                update_fields=[
+                    "status",
+                    "finance_decision_by",
+                    "finance_decision_at",
+                    "finance_decision_note",
+                    "hr_recommendation",
+                    "updated_at",
+                ]
+            )
+            sync_workflow(instance, actor=request.user)
         audit(request, "loan_request_recommended_hr_reject", entity="LoanRequest", entity_id=instance.id)
         try:
             notify_users_for_pending_status(
@@ -799,12 +808,14 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
             LoanRequest.RequestStatus.PENDING_CFO,
             LoanRequest.RequestStatus.PENDING_CEO,
         ]
-        if instance.status not in allowed_statuses:
-            return error("Validation error", errors=["Only pending requests can be cancelled."], status=422)
 
-        instance.status = LoanRequest.RequestStatus.CANCELLED
-        instance.save(update_fields=["status", "updated_at"])
-        sync_workflow(instance, actor=request.user)
+        with transaction.atomic():
+            instance = LoanRequest.objects.select_for_update().get(pk=instance.pk)
+            if instance.status not in allowed_statuses:
+                return error("Validation error", errors=["Only pending requests can be cancelled."], status=422)
+            instance.status = LoanRequest.RequestStatus.CANCELLED
+            instance.save(update_fields=["status", "updated_at"])
+            sync_workflow(instance, actor=request.user)
         audit(request, "loan_request_cancelled", entity="LoanRequest", entity_id=instance.id)
         return success(LoanRequestReadSerializer(instance).data)
 
@@ -872,7 +883,13 @@ class ManagerLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
             base_qs = filter_queryset_by_accessible_companies(qs, self.request)
         if role == "SystemAdmin":
             return base_qs
-        return base_qs.filter(manager_scope_q(self.request.user, employee_prefix="employee_profile__")).distinct()
+        return qs.filter(
+            manager_scope_q(
+                self.request.user,
+                employee_prefix="employee_profile__",
+                cross_company_capability="loans.approve",
+            )
+        ).distinct()
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -887,6 +904,7 @@ class ManagerLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
         actor_source = manager_approval_actor_source(
             request.user,
             instance.employee_profile,
+            capability="loans.approve",
             allow_admin=True,
         )
         if not actor_source:
@@ -898,22 +916,26 @@ class ManagerLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
         if not serializer.is_valid():
             return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
 
-        instance.status = LoanRequest.RequestStatus.PENDING_HR
-        instance.manager_decision_by = request.user
-        instance.manager_decision_at = timezone.now()
-        instance.manager_decision_note = serializer.validated_data.get("comment", "")
-        instance.manager_recommendation = LoanRequest.Recommendation.APPROVE
-        instance.save(
-            update_fields=[
-                "status",
-                "manager_decision_by",
-                "manager_decision_at",
-                "manager_decision_note",
-                "manager_recommendation",
-                "updated_at",
-            ]
-        )
-        sync_workflow(instance, actor=request.user)
+        with transaction.atomic():
+            instance = LoanRequest.objects.select_for_update().get(pk=instance.pk)
+            if instance.status != LoanRequest.RequestStatus.PENDING_MANAGER:
+                return error("Validation error", errors=["Request is not pending manager approval."], status=422)
+            instance.status = LoanRequest.RequestStatus.PENDING_HR
+            instance.manager_decision_by = request.user
+            instance.manager_decision_at = timezone.now()
+            instance.manager_decision_note = serializer.validated_data.get("comment", "")
+            instance.manager_recommendation = LoanRequest.Recommendation.APPROVE
+            instance.save(
+                update_fields=[
+                    "status",
+                    "manager_decision_by",
+                    "manager_decision_at",
+                    "manager_decision_note",
+                    "manager_recommendation",
+                    "updated_at",
+                ]
+            )
+            sync_workflow(instance, actor=request.user)
         audit(
             request,
             "loan_request_recommended_manager_approve",
@@ -944,6 +966,7 @@ class ManagerLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
         actor_source = manager_approval_actor_source(
             request.user,
             instance.employee_profile,
+            capability="loans.approve",
             allow_admin=True,
         )
         if not actor_source:
@@ -955,22 +978,26 @@ class ManagerLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
         if not serializer.is_valid():
             return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
 
-        instance.status = LoanRequest.RequestStatus.PENDING_HR
-        instance.manager_decision_by = request.user
-        instance.manager_decision_at = timezone.now()
-        instance.manager_decision_note = serializer.validated_data.get("comment", "")
-        instance.manager_recommendation = LoanRequest.Recommendation.REJECT
-        instance.save(
-            update_fields=[
-                "status",
-                "manager_decision_by",
-                "manager_decision_at",
-                "manager_decision_note",
-                "manager_recommendation",
-                "updated_at",
-            ]
-        )
-        sync_workflow(instance, actor=request.user)
+        with transaction.atomic():
+            instance = LoanRequest.objects.select_for_update().get(pk=instance.pk)
+            if instance.status != LoanRequest.RequestStatus.PENDING_MANAGER:
+                return error("Validation error", errors=["Request is not pending manager approval."], status=422)
+            instance.status = LoanRequest.RequestStatus.PENDING_HR
+            instance.manager_decision_by = request.user
+            instance.manager_decision_at = timezone.now()
+            instance.manager_decision_note = serializer.validated_data.get("comment", "")
+            instance.manager_recommendation = LoanRequest.Recommendation.REJECT
+            instance.save(
+                update_fields=[
+                    "status",
+                    "manager_decision_by",
+                    "manager_decision_at",
+                    "manager_decision_note",
+                    "manager_recommendation",
+                    "updated_at",
+                ]
+            )
+            sync_workflow(instance, actor=request.user)
         audit(
             request,
             "loan_request_recommended_manager_reject",
@@ -1031,35 +1058,39 @@ class CFOLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
         if not serializer.is_valid():
             return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
 
-        approved_year, approved_month = timezone.localtime().year, timezone.localtime().month
-        target_year = None
-        target_month = None
-        if instance.loan_type == LoanRequest.LoanType.OPEN:
-            target_year, target_month = _resolve_open_loan_target_period()
-        instance.status = LoanRequest.RequestStatus.PENDING_DISBURSEMENT
-        instance.approved_amount = instance.requested_amount
-        instance.approved_year = approved_year
-        instance.approved_month = approved_month
-        instance.target_deduction_year = target_year
-        instance.target_deduction_month = target_month
-        instance.cfo_decision_by = request.user
-        instance.cfo_decision_at = timezone.now()
-        instance.cfo_decision_note = serializer.validated_data.get("comment", "")
-        instance.save(
-            update_fields=[
-                "status",
-                "approved_amount",
-                "approved_year",
-                "approved_month",
-                "target_deduction_year",
-                "target_deduction_month",
-                "cfo_decision_by",
-                "cfo_decision_at",
-                "cfo_decision_note",
-                "updated_at",
-            ]
-        )
-        sync_workflow(instance, actor=request.user)
+        with transaction.atomic():
+            instance = LoanRequest.objects.select_for_update().get(pk=instance.pk)
+            if instance.status != LoanRequest.RequestStatus.PENDING_CFO:
+                return error("Validation error", errors=["Request is not pending CFO approval."], status=422)
+            approved_year, approved_month = timezone.localtime().year, timezone.localtime().month
+            target_year = None
+            target_month = None
+            if instance.loan_type == LoanRequest.LoanType.OPEN:
+                target_year, target_month = _resolve_open_loan_target_period()
+            instance.status = LoanRequest.RequestStatus.PENDING_DISBURSEMENT
+            instance.approved_amount = instance.requested_amount
+            instance.approved_year = approved_year
+            instance.approved_month = approved_month
+            instance.target_deduction_year = target_year
+            instance.target_deduction_month = target_month
+            instance.cfo_decision_by = request.user
+            instance.cfo_decision_at = timezone.now()
+            instance.cfo_decision_note = serializer.validated_data.get("comment", "")
+            instance.save(
+                update_fields=[
+                    "status",
+                    "approved_amount",
+                    "approved_year",
+                    "approved_month",
+                    "target_deduction_year",
+                    "target_deduction_month",
+                    "cfo_decision_by",
+                    "cfo_decision_at",
+                    "cfo_decision_note",
+                    "updated_at",
+                ]
+            )
+            sync_workflow(instance, actor=request.user)
         audit(request, "loan_request_approved_cfo", entity="LoanRequest", entity_id=instance.id)
         try:
             notify_users_for_pending_status(
@@ -1091,20 +1122,24 @@ class CFOLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
         if not comment:
             return error("Validation error", errors=["comment is required."], status=422)
 
-        instance.status = LoanRequest.RequestStatus.REJECTED
-        instance.cfo_decision_by = request.user
-        instance.cfo_decision_at = timezone.now()
-        instance.cfo_decision_note = comment
-        instance.save(
-            update_fields=[
-                "status",
-                "cfo_decision_by",
-                "cfo_decision_at",
-                "cfo_decision_note",
-                "updated_at",
-            ]
-        )
-        sync_workflow(instance, actor=request.user)
+        with transaction.atomic():
+            instance = LoanRequest.objects.select_for_update().get(pk=instance.pk)
+            if instance.status != LoanRequest.RequestStatus.PENDING_CFO:
+                return error("Validation error", errors=["Request is not pending CFO approval."], status=422)
+            instance.status = LoanRequest.RequestStatus.REJECTED
+            instance.cfo_decision_by = request.user
+            instance.cfo_decision_at = timezone.now()
+            instance.cfo_decision_note = comment
+            instance.save(
+                update_fields=[
+                    "status",
+                    "cfo_decision_by",
+                    "cfo_decision_at",
+                    "cfo_decision_note",
+                    "updated_at",
+                ]
+            )
+            sync_workflow(instance, actor=request.user)
         audit(request, "loan_request_rejected_cfo", entity="LoanRequest", entity_id=instance.id)
         try:
             notify_profile_request_status_whatsapp(
@@ -1141,20 +1176,24 @@ class CFOLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
         if not comment:
             return error("Validation error", errors=["comment is required."], status=422)
 
-        instance.status = LoanRequest.RequestStatus.PENDING_CEO
-        instance.cfo_decision_by = request.user
-        instance.cfo_decision_at = timezone.now()
-        instance.cfo_decision_note = comment
-        instance.save(
-            update_fields=[
-                "status",
-                "cfo_decision_by",
-                "cfo_decision_at",
-                "cfo_decision_note",
-                "updated_at",
-            ]
-        )
-        sync_workflow(instance, actor=request.user)
+        with transaction.atomic():
+            instance = LoanRequest.objects.select_for_update().get(pk=instance.pk)
+            if instance.status != LoanRequest.RequestStatus.PENDING_CFO:
+                return error("Validation error", errors=["Request is not pending CFO approval."], status=422)
+            instance.status = LoanRequest.RequestStatus.PENDING_CEO
+            instance.cfo_decision_by = request.user
+            instance.cfo_decision_at = timezone.now()
+            instance.cfo_decision_note = comment
+            instance.save(
+                update_fields=[
+                    "status",
+                    "cfo_decision_by",
+                    "cfo_decision_at",
+                    "cfo_decision_note",
+                    "updated_at",
+                ]
+            )
+            sync_workflow(instance, actor=request.user)
         audit(request, "loan_request_referred_to_ceo", entity="LoanRequest", entity_id=instance.id)
         try:
             notify_users_for_pending_status(
@@ -1209,35 +1248,39 @@ class CEOLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
         if not serializer.is_valid():
             return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
 
-        approved_year, approved_month = timezone.localtime().year, timezone.localtime().month
-        target_year = None
-        target_month = None
-        if instance.loan_type == LoanRequest.LoanType.OPEN:
-            target_year, target_month = _resolve_open_loan_target_period()
-        instance.status = LoanRequest.RequestStatus.PENDING_DISBURSEMENT
-        instance.approved_amount = instance.requested_amount
-        instance.approved_year = approved_year
-        instance.approved_month = approved_month
-        instance.target_deduction_year = target_year
-        instance.target_deduction_month = target_month
-        instance.ceo_decision_by = request.user
-        instance.ceo_decision_at = timezone.now()
-        instance.ceo_decision_note = serializer.validated_data.get("comment", "")
-        instance.save(
-            update_fields=[
-                "status",
-                "approved_amount",
-                "approved_year",
-                "approved_month",
-                "target_deduction_year",
-                "target_deduction_month",
-                "ceo_decision_by",
-                "ceo_decision_at",
-                "ceo_decision_note",
-                "updated_at",
-            ]
-        )
-        sync_workflow(instance, actor=request.user)
+        with transaction.atomic():
+            instance = LoanRequest.objects.select_for_update().get(pk=instance.pk)
+            if instance.status != LoanRequest.RequestStatus.PENDING_CEO:
+                return error("Validation error", errors=["Request is not pending CEO approval."], status=422)
+            approved_year, approved_month = timezone.localtime().year, timezone.localtime().month
+            target_year = None
+            target_month = None
+            if instance.loan_type == LoanRequest.LoanType.OPEN:
+                target_year, target_month = _resolve_open_loan_target_period()
+            instance.status = LoanRequest.RequestStatus.PENDING_DISBURSEMENT
+            instance.approved_amount = instance.requested_amount
+            instance.approved_year = approved_year
+            instance.approved_month = approved_month
+            instance.target_deduction_year = target_year
+            instance.target_deduction_month = target_month
+            instance.ceo_decision_by = request.user
+            instance.ceo_decision_at = timezone.now()
+            instance.ceo_decision_note = serializer.validated_data.get("comment", "")
+            instance.save(
+                update_fields=[
+                    "status",
+                    "approved_amount",
+                    "approved_year",
+                    "approved_month",
+                    "target_deduction_year",
+                    "target_deduction_month",
+                    "ceo_decision_by",
+                    "ceo_decision_at",
+                    "ceo_decision_note",
+                    "updated_at",
+                ]
+            )
+            sync_workflow(instance, actor=request.user)
         audit(request, "loan_request_approved_ceo", entity="LoanRequest", entity_id=instance.id)
         try:
             notify_users_for_pending_status(
@@ -1269,20 +1312,24 @@ class CEOLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
         if not comment:
             return error("Validation error", errors=["comment is required."], status=422)
 
-        instance.status = LoanRequest.RequestStatus.REJECTED
-        instance.ceo_decision_by = request.user
-        instance.ceo_decision_at = timezone.now()
-        instance.ceo_decision_note = comment
-        instance.save(
-            update_fields=[
-                "status",
-                "ceo_decision_by",
-                "ceo_decision_at",
-                "ceo_decision_note",
-                "updated_at",
-            ]
-        )
-        sync_workflow(instance, actor=request.user)
+        with transaction.atomic():
+            instance = LoanRequest.objects.select_for_update().get(pk=instance.pk)
+            if instance.status != LoanRequest.RequestStatus.PENDING_CEO:
+                return error("Validation error", errors=["Request is not pending CEO approval."], status=422)
+            instance.status = LoanRequest.RequestStatus.REJECTED
+            instance.ceo_decision_by = request.user
+            instance.ceo_decision_at = timezone.now()
+            instance.ceo_decision_note = comment
+            instance.save(
+                update_fields=[
+                    "status",
+                    "ceo_decision_by",
+                    "ceo_decision_at",
+                    "ceo_decision_note",
+                    "updated_at",
+                ]
+            )
+            sync_workflow(instance, actor=request.user)
         audit(request, "loan_request_rejected_ceo", entity="LoanRequest", entity_id=instance.id)
         try:
             notify_profile_request_status_whatsapp(

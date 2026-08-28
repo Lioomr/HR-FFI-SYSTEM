@@ -46,7 +46,10 @@ export default function AttendanceCorrectionRequestsPage() {
     setLoading(true);
     setErrorMessage(null);
     try {
-      const res = await listAttendanceCorrectionRequests({ page, page_size: pageSize });
+      const res = await listAttendanceCorrectionRequests({
+        page,
+        page_size: pageSize,
+      });
       if (isApiError(res)) {
         setErrorMessage(getDetailedApiMessage(t, res.message));
         return;
@@ -67,10 +70,13 @@ export default function AttendanceCorrectionRequestsPage() {
   const onSubmitDraft = useCallback(
     (id: number) => {
       confirm({
-        title: t("attendanceCorrections.actions.submitTitle", "Submit correction request"),
+        title: t(
+          "attendanceCorrections.actions.submitTitle",
+          "Submit correction request",
+        ),
         content: t(
           "attendanceCorrections.actions.submitConfirm",
-          "This will send the request for approval. Continue?"
+          "This will send the request for approval. Continue?",
         ),
         okText: t("attendanceCorrections.form.submit", "Submit request"),
         cancelText: t("common.cancel", "Cancel"),
@@ -85,7 +91,10 @@ export default function AttendanceCorrectionRequestsPage() {
               });
             } else {
               notification.success({
-                message: t("attendanceCorrections.success.submitted", "Correction request submitted."),
+                message: t(
+                  "attendanceCorrections.success.submitted",
+                  "Correction request submitted.",
+                ),
               });
               load();
             }
@@ -100,16 +109,19 @@ export default function AttendanceCorrectionRequestsPage() {
         },
       });
     },
-    [load, t]
+    [load, t],
   );
 
   const onCancel = useCallback(
     (id: number) => {
       confirm({
-        title: t("attendanceCorrections.actions.cancelTitle", "Cancel correction request"),
+        title: t(
+          "attendanceCorrections.actions.cancelTitle",
+          "Cancel correction request",
+        ),
         content: t(
           "attendanceCorrections.actions.cancelConfirm",
-          "Are you sure you want to cancel this request?"
+          "Are you sure you want to cancel this request?",
         ),
         okText: t("common.confirm", "Confirm"),
         okType: "danger",
@@ -125,7 +137,10 @@ export default function AttendanceCorrectionRequestsPage() {
               });
             } else {
               notification.success({
-                message: t("attendanceCorrections.success.cancelled", "Correction request cancelled."),
+                message: t(
+                  "attendanceCorrections.success.cancelled",
+                  "Correction request cancelled.",
+                ),
               });
               load();
             }
@@ -140,7 +155,7 @@ export default function AttendanceCorrectionRequestsPage() {
         },
       });
     },
-    [load, t]
+    [load, t],
   );
 
   const columns: ColumnsType<AttendanceCorrectionRequest> = useMemo(
@@ -153,21 +168,30 @@ export default function AttendanceCorrectionRequestsPage() {
         render: (value: string) => formatDateOnly(value, "—"),
       },
       {
-        title: t("attendanceCorrections.fields.requestedCheckIn", "Requested check-in"),
+        title: t(
+          "attendanceCorrections.fields.requestedCheckIn",
+          "Requested check-in",
+        ),
         key: "in",
         dataIndex: "requested_check_in_at",
         width: 150,
         render: (value: string | null) => formatTimeOnly(value, "—"),
       },
       {
-        title: t("attendanceCorrections.fields.requestedCheckOut", "Requested check-out"),
+        title: t(
+          "attendanceCorrections.fields.requestedCheckOut",
+          "Requested check-out",
+        ),
         key: "out",
         dataIndex: "requested_check_out_at",
         width: 160,
         render: (value: string | null) => formatTimeOnly(value, "—"),
       },
       {
-        title: t("attendanceCorrections.fields.requestedStatus", "Requested status"),
+        title: t(
+          "attendanceCorrections.fields.requestedStatus",
+          "Requested status",
+        ),
         key: "rstatus",
         dataIndex: "requested_status",
         width: 140,
@@ -189,7 +213,9 @@ export default function AttendanceCorrectionRequestsPage() {
         title: t("common.status", "Status"),
         key: "status",
         width: 150,
-        render: (_: unknown, record) => <AttendanceCorrectionStatusTag status={record.status} />,
+        render: (_: unknown, record) => (
+          <AttendanceCorrectionStatusTag status={record.status} />
+        ),
       },
       {
         title: t("common.actions", "Actions"),
@@ -230,16 +256,19 @@ export default function AttendanceCorrectionRequestsPage() {
         },
       },
     ],
-    [t, actionId, onCancel, onSubmitDraft]
+    [t, actionId, onCancel, onSubmitDraft],
   );
 
   return (
     <div>
       <PageHeader
-        title={t("attendanceCorrections.page.employeeTitle", "Attendance Corrections")}
+        title={t(
+          "attendanceCorrections.page.employeeTitle",
+          "Attendance Corrections",
+        )}
         subtitle={t(
           "attendanceCorrections.page.employeeSubtitle",
-          "Submit corrections for missing or incorrect attendance entries."
+          "Submit corrections for missing or incorrect attendance entries.",
         )}
         actions={
           <Button
@@ -248,7 +277,10 @@ export default function AttendanceCorrectionRequestsPage() {
             onClick={() => setCreateOpen(true)}
             style={{ borderRadius: 10 }}
           >
-            {t("attendanceCorrections.actions.create", "New correction request")}
+            {t(
+              "attendanceCorrections.actions.create",
+              "New correction request",
+            )}
           </Button>
         }
       />
@@ -265,12 +297,18 @@ export default function AttendanceCorrectionRequestsPage() {
         />
       ) : items.length === 0 ? (
         <EmptyState
-          title={t("attendanceCorrections.empty.title", "No correction requests yet")}
+          title={t(
+            "attendanceCorrections.empty.title",
+            "No correction requests yet",
+          )}
           description={t(
             "attendanceCorrections.empty.employeeDescription",
-            "Submit a correction request if your attendance for a day is missing or wrong."
+            "Submit a correction request if your attendance for a day is missing or wrong.",
           )}
-          actionText={t("attendanceCorrections.actions.create", "New correction request")}
+          actionText={t(
+            "attendanceCorrections.actions.create",
+            "New correction request",
+          )}
           onAction={() => setCreateOpen(true)}
         />
       ) : (
@@ -288,7 +326,9 @@ export default function AttendanceCorrectionRequestsPage() {
             rowKey="id"
             loading={loading}
             expandable={{
-              expandedRowRender: (record) => <AttendanceCorrectionDetails request={record} />,
+              expandedRowRender: (record) => (
+                <AttendanceCorrectionDetails request={record} />
+              ),
             }}
             scroll={{ x: 1100 }}
             pagination={{
@@ -297,7 +337,11 @@ export default function AttendanceCorrectionRequestsPage() {
               total,
               showSizeChanger: true,
               showTotal: (totalCount) =>
-                t("common.totalItems", { count: totalCount }, `${totalCount} items`),
+                t(
+                  "common.totalItems",
+                  { count: totalCount },
+                  `${totalCount} items`,
+                ),
               onChange: (next, size) => {
                 setPage(next);
                 if (size && size !== pageSize) setPageSize(size);

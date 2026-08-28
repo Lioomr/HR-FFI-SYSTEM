@@ -13,7 +13,10 @@ import { getCeoApprovalSummary } from "./ceoSummaryApi";
 import { getCEOLeaveRequests } from "./leaveApi";
 import { getCEOLoanRequests } from "./loanApi";
 import { getCEOAttendance } from "./attendanceApi";
-import { getCEOAssetDamageReports, getCEOAssetReturnRequests } from "./assetsApi";
+import {
+  getCEOAssetDamageReports,
+  getCEOAssetReturnRequests,
+} from "./assetsApi";
 import { listEmployeeArchiveRequests } from "./employeesApi";
 
 const mocks = {
@@ -25,7 +28,10 @@ const mocks = {
   archive: listEmployeeArchiveRequests as unknown as ReturnType<typeof vi.fn>,
 };
 
-const counted = (count: number) => ({ status: "success" as const, data: { items: [], count } });
+const counted = (count: number) => ({
+  status: "success" as const,
+  data: { items: [], count },
+});
 
 beforeEach(() => {
   Object.values(mocks).forEach((fn) => fn.mockReset());
@@ -35,7 +41,10 @@ describe("getCeoApprovalSummary", () => {
   it("totals the counts across every queue", async () => {
     mocks.leave.mockResolvedValue(counted(3));
     mocks.loan.mockResolvedValue(counted(2));
-    mocks.attendance.mockResolvedValue({ status: "success", data: { results: [], count: 4 } });
+    mocks.attendance.mockResolvedValue({
+      status: "success",
+      data: { results: [], count: 4 },
+    });
     mocks.damage.mockResolvedValue(counted(1));
     mocks.returns.mockResolvedValue(counted(5));
     mocks.archive.mockResolvedValue(counted(6));
@@ -43,7 +52,11 @@ describe("getCeoApprovalSummary", () => {
     const summary = await getCeoApprovalSummary();
 
     expect(summary.totalPending).toBe(21);
-    expect(summary.queues.attendance).toEqual({ key: "attendance", count: 4, available: true });
+    expect(summary.queues.attendance).toEqual({
+      key: "attendance",
+      count: 4,
+      available: true,
+    });
     expect(summary.allUnavailable).toBe(false);
   });
 
@@ -53,11 +66,31 @@ describe("getCeoApprovalSummary", () => {
     await getCeoApprovalSummary();
 
     expect(mocks.leave).toHaveBeenCalledWith({ page: 1, page_size: 1 });
-    expect(mocks.loan).toHaveBeenCalledWith({ status: "pending_ceo", page: 1, page_size: 1 });
-    expect(mocks.attendance).toHaveBeenCalledWith({ status: "PENDING_CEO", page: 1, page_size: 1 });
-    expect(mocks.damage).toHaveBeenCalledWith({ status: "PENDING_CEO", page: 1, page_size: 1 });
-    expect(mocks.returns).toHaveBeenCalledWith({ status: "PENDING_CEO", page: 1, page_size: 1 });
-    expect(mocks.archive).toHaveBeenCalledWith({ status: "PENDING_CEO", page: 1, page_size: 1 });
+    expect(mocks.loan).toHaveBeenCalledWith({
+      status: "pending_ceo",
+      page: 1,
+      page_size: 1,
+    });
+    expect(mocks.attendance).toHaveBeenCalledWith({
+      status: "PENDING_CEO",
+      page: 1,
+      page_size: 1,
+    });
+    expect(mocks.damage).toHaveBeenCalledWith({
+      status: "PENDING_CEO",
+      page: 1,
+      page_size: 1,
+    });
+    expect(mocks.returns).toHaveBeenCalledWith({
+      status: "PENDING_CEO",
+      page: 1,
+      page_size: 1,
+    });
+    expect(mocks.archive).toHaveBeenCalledWith({
+      status: "PENDING_CEO",
+      page: 1,
+      page_size: 1,
+    });
   });
 
   it("marks only the failing queue unavailable and keeps the rest", async () => {
@@ -91,7 +124,9 @@ describe("getCeoApprovalSummary", () => {
   });
 
   it("reports allUnavailable only when no queue can be read", async () => {
-    Object.values(mocks).forEach((fn) => fn.mockRejectedValue(new Error("offline")));
+    Object.values(mocks).forEach((fn) =>
+      fn.mockRejectedValue(new Error("offline")),
+    );
 
     const summary = await getCeoApprovalSummary();
 
@@ -101,7 +136,10 @@ describe("getCeoApprovalSummary", () => {
 
   it("falls back to array length when the endpoint returns a bare list", async () => {
     Object.values(mocks).forEach((fn) => fn.mockResolvedValue(counted(0)));
-    mocks.damage.mockResolvedValue({ status: "success" as const, data: [{ id: 1 }, { id: 2 }] });
+    mocks.damage.mockResolvedValue({
+      status: "success" as const,
+      data: [{ id: 1 }, { id: 2 }],
+    });
 
     const summary = await getCeoApprovalSummary();
 

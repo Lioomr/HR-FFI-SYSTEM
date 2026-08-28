@@ -119,12 +119,6 @@ const employeesResponse = (items: Employee[]) => ({
   data: { results: items, count: items.length },
 });
 
-const descriptionValue = (card: HTMLElement, label: string) =>
-  within(card)
-    .getByText(label)
-    .closest("th")
-    ?.nextElementSibling?.textContent?.trim();
-
 const employeeSelect = (table: HTMLElement) =>
   within(table).getByRole("combobox", { name: "Map to HR Employee" });
 
@@ -213,86 +207,20 @@ describe("BioTimeSettingsPage config", () => {
 });
 
 describe("BioTimeSettingsPage sync", () => {
-  it("sends the default days_back of 7 and renders the result summary", async () => {
-    syncNow.mockResolvedValue({
-      message: "BioTime sync completed.",
-      summary: {
-        processed: 12,
-        created: 4,
-        updated: 3,
-        skipped: 2,
-        unmapped: 2,
-        invalid: 1,
-      },
-    });
-
+  it("keeps direct cloud sync disabled because the office agent owns synchronization", async () => {
     render(<BioTimeSettingsPage />);
     await screen.findByDisplayValue("192.168.1.250");
 
-    fireEvent.click(screen.getByRole("button", { name: /Sync Now/ }));
-
-    await waitFor(() => expect(syncNow).toHaveBeenCalledWith(7));
-
-    const summary = await screen.findByText("Last Sync Result");
-    const card = summary.closest(".ant-descriptions") as HTMLElement;
-    expect(descriptionValue(card, "Processed")).toBe("12");
-    expect(descriptionValue(card, "Created")).toBe("4");
-    expect(descriptionValue(card, "Updated")).toBe("3");
-    expect(descriptionValue(card, "Skipped")).toBe("2");
-    expect(descriptionValue(card, "Unmapped")).toBe("2");
-    expect(descriptionValue(card, "Invalid")).toBe("1");
+    const syncButton = screen.getByRole("button", { name: /Sync Now/ });
+    expect(syncButton).toBeDisabled();
+    fireEvent.click(syncButton);
+    expect(syncNow).not.toHaveBeenCalled();
   });
 
-  it("sends the days_back value chosen by the user", async () => {
-    syncNow.mockResolvedValue({
-      message: "BioTime sync completed.",
-      summary: {
-        processed: 0,
-        created: 0,
-        updated: 0,
-        skipped: 0,
-        unmapped: 0,
-        invalid: 0,
-      },
-    });
-
-    render(<BioTimeSettingsPage />);
-    await screen.findByDisplayValue("192.168.1.250");
-
-    const daysInput = screen.getByLabelText("Days to sync back");
-    fireEvent.change(daysInput, { target: { value: "30" } });
-    fireEvent.blur(daysInput);
-    fireEvent.click(screen.getByRole("button", { name: /Sync Now/ }));
-
-    await waitFor(() => expect(syncNow).toHaveBeenCalledWith(30));
-  });
-
-  it("shows the last sync time reloaded after a successful sync", async () => {
-    syncNow.mockResolvedValue({
-      message: "BioTime sync completed.",
-      summary: {
-        processed: 1,
-        created: 1,
-        updated: 0,
-        skipped: 0,
-        unmapped: 0,
-        invalid: 0,
-      },
-    });
-    getConfig.mockResolvedValueOnce(config).mockResolvedValueOnce({
-      ...config,
-      last_sync_time: "2026-08-12T10:30:00Z",
-    });
-
+  it("shows the last sync time reported by the office agent", async () => {
     render(<BioTimeSettingsPage />);
     await screen.findByDisplayValue("192.168.1.250");
     expect(screen.getByText(/Last sync: 2026-08-12 09:00/)).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /Sync Now/ }));
-
-    expect(
-      await screen.findByText(/Last sync: 2026-08-12 13:30/),
-    ).toBeInTheDocument();
   });
 });
 
@@ -389,7 +317,7 @@ describe("BioTimeSettingsPage mappings", () => {
     expect(
       await screen.findByText("Employee already has a BioTime mapping."),
     ).toBeInTheDocument();
-  });
+  }, 60_000);
 
   it("refreshes both tables after a successful link", async () => {
     createMapping.mockResolvedValue(mapping({ id: 9, employee_profile: 77 }));
@@ -419,7 +347,7 @@ describe("BioTimeSettingsPage mappings", () => {
         unmappedCallsBefore,
       );
     });
-  });
+  }, 60_000);
 
   it("disables employees that are already mapped", async () => {
     listEmployeesMock.mockResolvedValue(

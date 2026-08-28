@@ -13,12 +13,15 @@ export default function AttendanceMaintenanceBanner({
       type="warning"
       showIcon
       icon={<ToolOutlined />}
-      message={t("attendanceCorrections.maintenance.title", "Attendance is under maintenance")}
+      message={t(
+        "attendanceCorrections.maintenance.title",
+        "Attendance is under maintenance",
+      )}
       description={
         description ||
         t(
           "attendanceCorrections.maintenance.description",
-          "Attendance records are temporarily under maintenance. You can still submit correction requests for missing or incorrect records."
+          "Attendance records are temporarily under maintenance. You can still submit correction requests for missing or incorrect records.",
         )
       }
       style={{ borderRadius: 12, marginBottom: 16 }}

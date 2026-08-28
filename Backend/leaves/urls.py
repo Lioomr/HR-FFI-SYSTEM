@@ -2,6 +2,7 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
+    AnnualLeavePaymentRequestViewSet,
     CEOLeaveRequestViewSet,
     EmployeeDelegatedLeaveRequestViewSet,
     EmployeeLeaveBalanceView,
@@ -28,6 +29,11 @@ router.register(
 router.register(r"manager/leave-requests", ManagerLeaveRequestViewSet, basename="manager-leave-requests")
 router.register(r"ceo/leave-requests", CEOLeaveRequestViewSet, basename="ceo-leave-requests")
 router.register(r"adjustments", LeaveBalanceAdjustmentViewSet, basename="leave-adjustments")
+router.register(
+    r"annual-leave-payments",
+    AnnualLeavePaymentRequestViewSet,
+    basename="annual-leave-payments",
+)
 
 urlpatterns = [
     path("", include(router.urls)),

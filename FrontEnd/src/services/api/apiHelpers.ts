@@ -37,7 +37,7 @@ export function unwrapApiData<T>(res: ApiResponse<T>): T {
 /**
  * Safely extracts error message from various error formats
  * Handles Error objects, strings, and objects with message property
- * 
+ *
  * @param error - Error of any type
  * @returns Human-readable error message
  */

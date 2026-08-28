@@ -48,7 +48,8 @@ export function setStoredUser(user: {
     accessible_organizations: user.accessible_organizations,
     default_organization_id: user.default_organization_id,
     has_all_company_access: user.has_all_company_access,
-    active_organization_id: user.active_organization_id ?? user.default_organization_id ?? null,
+    active_organization_id:
+      user.active_organization_id ?? user.default_organization_id ?? null,
   };
   sessionStorage.setItem(USER_KEY, JSON.stringify(stored));
 }

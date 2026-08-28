@@ -35,13 +35,15 @@ export default function NotificationItem({
   const absolute = formatAbsoluteTime(notification.created_at, language);
   const categoryLabel = t(
     categoryLabelKey(notification.category),
-    notification.category || t("notifications.category.general", "General")
+    notification.category || t("notifications.category.general", "General"),
   );
 
   const unread = !notification.is_read;
   const deliverySummary = summarizeDeliveries(t, notification.deliveries);
   const ariaLabel = `${categoryLabel}: ${notification.title}. ${
-    unread ? t("notifications.unread", "Unread") : t("notifications.read", "Read")
+    unread
+      ? t("notifications.unread", "Unread")
+      : t("notifications.read", "Read")
   }. ${absolute}${deliverySummary ? `. ${deliverySummary}` : ""}`;
 
   return (
@@ -69,7 +71,9 @@ export default function NotificationItem({
       <span className="ffi-notif-item__body">
         <span className="ffi-notif-item__title">{notification.title}</span>
         {notification.message ? (
-          <span className="ffi-notif-item__message">{notification.message}</span>
+          <span className="ffi-notif-item__message">
+            {notification.message}
+          </span>
         ) : null}
         <span className="ffi-notif-item__meta">
           <Tag
@@ -93,7 +97,10 @@ export default function NotificationItem({
             {relative}
           </time>
         </span>
-        <NotificationDeliveryStatus deliveries={notification.deliveries} compact />
+        <NotificationDeliveryStatus
+          deliveries={notification.deliveries}
+          compact
+        />
       </span>
 
       {unread ? (

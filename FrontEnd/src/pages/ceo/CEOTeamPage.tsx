@@ -4,7 +4,10 @@ import { SearchOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 
 import ApprovalQueuePage from "../../components/ceo/ApprovalQueuePage";
-import { getManagerTeam, type ManagerTeamMember } from "../../services/api/managerApi";
+import {
+  getManagerTeam,
+  type ManagerTeamMember,
+} from "../../services/api/managerApi";
 import { isApiError } from "../../services/api/apiTypes";
 import { useI18n } from "../../i18n/useI18n";
 
@@ -67,7 +70,9 @@ export default function CEOTeamPage() {
       dataIndex: "employee_id",
       key: "employee_id",
       width: 140,
-      render: (value: string) => <span className="tabular-nums">{value || "—"}</span>,
+      render: (value: string) => (
+        <span className="tabular-nums">{value || "—"}</span>
+      ),
     },
     {
       title: t("common.name"),
@@ -112,7 +117,9 @@ export default function CEOTeamPage() {
       isEmpty={filtered.length === 0}
       emptyTitle={query.trim() ? t("ceo.team.noMatches") : t("ceo.team.empty")}
       emptyDescription={
-        query.trim() ? t("ceo.approvals.emptyFilteredDescription") : t("ceo.team.emptyDescription")
+        query.trim()
+          ? t("ceo.approvals.emptyFilteredDescription")
+          : t("ceo.team.emptyDescription")
       }
       onRetry={() => load()}
       onRefresh={() => load({ isRefresh: true })}

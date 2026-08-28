@@ -1,5 +1,5 @@
-import '@testing-library/jest-dom';
-import { vi } from 'vitest';
+import "@testing-library/jest-dom";
+import { vi } from "vitest";
 
 // ── jsdom polyfills required by Ant Design components ────────────────────────
 // antd's responsive observer, waves, and some overlays rely on browser APIs
@@ -18,7 +18,7 @@ if (!window.matchMedia) {
   }));
 }
 
-if (!('ResizeObserver' in globalThis)) {
+if (!("ResizeObserver" in globalThis)) {
   class ResizeObserver {
     observe() {}
     unobserve() {}

@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  within,
+} from "@testing-library/react";
 
 const navigateMock = vi.fn();
 vi.mock("react-router-dom", () => ({
@@ -36,15 +42,25 @@ import { useI18nStore } from "../../../i18n/i18nStore";
 import { useAuthStore } from "../../../auth/authStore";
 import { useHrEmployeeListStore } from "../../../stores/hrEmployeeListStore";
 
-const listEmployees = employeesApi.listEmployees as unknown as ReturnType<typeof vi.fn>;
+const listEmployees = employeesApi.listEmployees as unknown as ReturnType<
+  typeof vi.fn
+>;
 const listEmployeeArchiveRequests =
-  employeesApi.listEmployeeArchiveRequests as unknown as ReturnType<typeof vi.fn>;
+  employeesApi.listEmployeeArchiveRequests as unknown as ReturnType<
+    typeof vi.fn
+  >;
 const requestEmployeeArchive =
   employeesApi.requestEmployeeArchive as unknown as ReturnType<typeof vi.fn>;
-const restoreEmployee = employeesApi.restoreEmployee as unknown as ReturnType<typeof vi.fn>;
-const listDepartments = departmentsApi.listDepartments as unknown as ReturnType<typeof vi.fn>;
-const getUserPreference = preferencesApi.getUserPreference as unknown as ReturnType<typeof vi.fn>;
-const saveUserPreference = preferencesApi.saveUserPreference as unknown as ReturnType<typeof vi.fn>;
+const restoreEmployee = employeesApi.restoreEmployee as unknown as ReturnType<
+  typeof vi.fn
+>;
+const listDepartments = departmentsApi.listDepartments as unknown as ReturnType<
+  typeof vi.fn
+>;
+const getUserPreference =
+  preferencesApi.getUserPreference as unknown as ReturnType<typeof vi.fn>;
+const saveUserPreference =
+  preferencesApi.saveUserPreference as unknown as ReturnType<typeof vi.fn>;
 
 function makeEmployee(overrides: Partial<Employee> = {}): Employee {
   return {
@@ -64,12 +80,17 @@ function makeEmployee(overrides: Partial<Employee> = {}): Employee {
 
 /** The page reads employees from the paginated `results` envelope. */
 function employeesResponse(items: Employee[]) {
-  return { status: "success" as const, data: { results: items, count: items.length } };
+  return {
+    status: "success" as const,
+    data: { results: items, count: items.length },
+  };
 }
 
 /** Only the calls that carry `archive_state` come from the employee table itself. */
 function tableCalls() {
-  return listEmployees.mock.calls.filter((call) => call[0] && "archive_state" in call[0]);
+  return listEmployees.mock.calls.filter(
+    (call) => call[0] && "archive_state" in call[0],
+  );
 }
 
 function latestTableCall() {
@@ -106,7 +127,10 @@ beforeEach(() => {
   saveUserPreference.mockReset();
 
   listDepartments.mockResolvedValue({ status: "success", data: [] });
-  getUserPreference.mockResolvedValue({ status: "error", message: "not found" });
+  getUserPreference.mockResolvedValue({
+    status: "error",
+    message: "not found",
+  });
   saveUserPreference.mockResolvedValue({ status: "success", data: {} });
   listEmployeeArchiveRequests.mockResolvedValue({
     status: "success",
@@ -130,8 +154,12 @@ describe("EmployeesListPage archive modal", () => {
     await openRowMenu("Sara Ahmed");
     fireEvent.click(screen.getByText("Request Archive"));
 
-    expect(await screen.findByText("Request Employee Archive")).toBeInTheDocument();
-    expect(screen.getByText("The employee stays in the system")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Request Employee Archive"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("The employee stays in the system"),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(/preserving all linked records/i),
     ).toBeInTheDocument();
@@ -145,15 +173,22 @@ describe("EmployeesListPage archive modal", () => {
     fireEvent.click(screen.getByText("Request Archive"));
     await screen.findByText("Request Employee Archive");
 
-    fireEvent.click(screen.getByRole("button", { name: "Submit for CEO Approval" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Submit for CEO Approval" }),
+    );
 
-    expect(await screen.findByText("An archive reason is required.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("An archive reason is required."),
+    ).toBeInTheDocument();
     expect(screen.getByText("A reason is required.")).toBeInTheDocument();
     expect(requestEmployeeArchive).not.toHaveBeenCalled();
   });
 
   it("submits the selected archive reason with the request", async () => {
-    requestEmployeeArchive.mockResolvedValue({ status: "success", data: { id: 11 } });
+    requestEmployeeArchive.mockResolvedValue({
+      status: "success",
+      data: { id: 11 },
+    });
 
     render(<EmployeesListPage />);
     await screen.findByText("Sara Ahmed");
@@ -162,16 +197,22 @@ describe("EmployeesListPage archive modal", () => {
     fireEvent.click(screen.getByText("Request Archive"));
     await screen.findByText("Request Employee Archive");
 
-    fireEvent.mouseDown(screen.getByRole("combobox", { name: "Archive reason" }));
+    fireEvent.mouseDown(
+      screen.getByRole("combobox", { name: "Archive reason" }),
+    );
     fireEvent.click(await screen.findByTitle("End of contract"));
 
     fireEvent.change(screen.getByPlaceholderText(/Add details supporting/i), {
       target: { value: "Contract ended on 30 June." },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Submit for CEO Approval" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Submit for CEO Approval" }),
+    );
 
-    await waitFor(() => expect(requestEmployeeArchive).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(requestEmployeeArchive).toHaveBeenCalledTimes(1),
+    );
     expect(requestEmployeeArchive).toHaveBeenCalledWith({
       employee_profile_id: 1,
       archive_reason: "END_OF_CONTRACT",
@@ -192,15 +233,21 @@ describe("EmployeesListPage archive modal", () => {
     fireEvent.click(screen.getByText("Request Archive"));
     await screen.findByText("Request Employee Archive");
 
-    fireEvent.mouseDown(screen.getByRole("combobox", { name: "Archive reason" }));
+    fireEvent.mouseDown(
+      screen.getByRole("combobox", { name: "Archive reason" }),
+    );
     fireEvent.click(await screen.findByTitle("Fired"));
     fireEvent.change(screen.getByPlaceholderText(/Add details supporting/i), {
       target: { value: "Policy breach." },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Submit for CEO Approval" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Submit for CEO Approval" }),
+    );
 
     expect(
-      await screen.findByText("An archive request is already pending for this employee."),
+      await screen.findByText(
+        "An archive request is already pending for this employee.",
+      ),
     ).toBeInTheDocument();
   });
 });
@@ -236,7 +283,9 @@ describe("EmployeesListPage archive filtering", () => {
     render(<EmployeesListPage />);
     await screen.findByText("Sara Ahmed");
 
-    expect(screen.queryByRole("radio", { name: "Archived" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("radio", { name: "Archived" }),
+    ).not.toBeInTheDocument();
     expect(latestTableCall()).toMatchObject({ archive_state: "active" });
   });
 });
@@ -260,7 +309,9 @@ describe("EmployeesListPage archived employee display", () => {
     render(<EmployeesListPage />);
     await screen.findByText("Omar Khalid");
 
-    expect(screen.getByRole("columnheader", { name: "Archived By" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("columnheader", { name: "Archived By" }),
+    ).toBeInTheDocument();
     const row = screen.getByText("Omar Khalid").closest("tr") as HTMLElement;
     expect(within(row).getByText("Archive Administrator")).toBeInTheDocument();
     // The raw archiver id is internal and must never reach the table.
@@ -269,14 +320,18 @@ describe("EmployeesListPage archived employee display", () => {
 
   it("falls back to a placeholder when the archiver name is absent", async () => {
     listEmployees.mockResolvedValue(
-      employeesResponse([{ ...ARCHIVED_EMPLOYEE, archived_by: null, archived_by_name: null }]),
+      employeesResponse([
+        { ...ARCHIVED_EMPLOYEE, archived_by: null, archived_by_name: null },
+      ]),
     );
 
     render(<EmployeesListPage />);
     await screen.findByText("Omar Khalid");
 
     const row = screen.getByText("Omar Khalid").closest("tr") as HTMLElement;
-    expect(within(row).queryByText("Archive Administrator")).not.toBeInTheDocument();
+    expect(
+      within(row).queryByText("Archive Administrator"),
+    ).not.toBeInTheDocument();
     expect(within(row).getAllByText("-").length).toBeGreaterThan(0);
   });
 
@@ -287,7 +342,9 @@ describe("EmployeesListPage archived employee display", () => {
     render(<EmployeesListPage />);
     await screen.findByText("Sara Ahmed");
 
-    expect(screen.queryByRole("columnheader", { name: "Archived By" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("columnheader", { name: "Archived By" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("columnheader", { name: "Archive Reason" }),
     ).not.toBeInTheDocument();
@@ -314,7 +371,12 @@ describe("EmployeesListPage restore action", () => {
   it("restores the employee and refreshes the list", async () => {
     restoreEmployee.mockResolvedValue({
       status: "success",
-      data: { ...ARCHIVED_EMPLOYEE, is_archived: false, archive_reason: null, archived_at: null },
+      data: {
+        ...ARCHIVED_EMPLOYEE,
+        is_archived: false,
+        archive_reason: null,
+        archived_at: null,
+      },
     });
 
     render(<EmployeesListPage />);
@@ -325,11 +387,17 @@ describe("EmployeesListPage restore action", () => {
     fireEvent.click(screen.getByText("Restore Employee"));
 
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByText(/Archived by:\s*Archive Administrator/)).toBeInTheDocument();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Restore Employee" }));
+    expect(
+      within(dialog).getByText(/Archived by:\s*Archive Administrator/),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Restore Employee" }),
+    );
 
     await waitFor(() => expect(restoreEmployee).toHaveBeenCalledWith(7));
-    await waitFor(() => expect(tableCalls().length).toBeGreaterThan(callsBeforeRestore));
+    await waitFor(() =>
+      expect(tableCalls().length).toBeGreaterThan(callsBeforeRestore),
+    );
   });
 
   it("shows the backend message when a restore is not allowed", async () => {
@@ -345,9 +413,13 @@ describe("EmployeesListPage restore action", () => {
     fireEvent.click(screen.getByText("Restore Employee"));
 
     const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Restore Employee" }));
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Restore Employee" }),
+    );
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Employee is not archived.");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Employee is not archived.",
+    );
   });
 
   it("hides the restore action from roles that cannot restore", async () => {
@@ -360,6 +432,8 @@ describe("EmployeesListPage restore action", () => {
     await screen.findByText("Omar Khalid");
 
     await openRowMenu("Omar Khalid");
-    expect(within(screen.getByRole("menu")).queryByText("Restore Employee")).not.toBeInTheDocument();
+    expect(
+      within(screen.getByRole("menu")).queryByText("Restore Employee"),
+    ).not.toBeInTheDocument();
   });
 });

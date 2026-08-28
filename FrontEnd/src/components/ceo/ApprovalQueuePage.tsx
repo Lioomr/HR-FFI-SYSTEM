@@ -57,7 +57,9 @@ export default function ApprovalQueuePage({
       <Tag
         color="orange"
         style={{ margin: 0, borderRadius: 999, fontWeight: 700 }}
-        aria-label={t("ceo.approvals.awaitingCount", { count: String(pendingCount) })}
+        aria-label={t("ceo.approvals.awaitingCount", {
+          count: String(pendingCount),
+        })}
       >
         {t("ceo.approvals.awaitingCount", { count: String(pendingCount) })}
       </Tag>
@@ -96,7 +98,11 @@ export default function ApprovalQueuePage({
       {loading ? (
         <LoadingState title={t("loading.generic")} />
       ) : error ? (
-        <ErrorState title={t("common.error")} description={error} onRetry={onRetry} />
+        <ErrorState
+          title={t("common.error")}
+          description={error}
+          onRetry={onRetry}
+        />
       ) : isEmpty ? (
         <EmptyState title={emptyTitle} description={emptyDescription} />
       ) : (

@@ -33,7 +33,12 @@ export default function AttendanceCorrectionRejectModal({
   const handleOk = async () => {
     const trimmed = notes.trim();
     if (!trimmed) {
-      setError(t("attendanceCorrections.errors.rejectNoteRequired", "Rejection note is required"));
+      setError(
+        t(
+          "attendanceCorrections.errors.rejectNoteRequired",
+          "Rejection note is required",
+        ),
+      );
       return;
     }
     await onConfirm(trimmed);
@@ -45,14 +50,23 @@ export default function AttendanceCorrectionRejectModal({
       onCancel={onCancel}
       onOk={handleOk}
       confirmLoading={loading}
-      title={title || t("attendanceCorrections.actions.rejectTitle", "Reject correction request")}
+      title={
+        title ||
+        t(
+          "attendanceCorrections.actions.rejectTitle",
+          "Reject correction request",
+        )
+      }
       okText={t("common.reject", "Reject")}
       okButtonProps={{ danger: true }}
       cancelText={t("common.cancel", "Cancel")}
       destroyOnClose
     >
       <p style={{ marginTop: 0, color: "#475569" }}>
-        {t("attendanceCorrections.actions.rejectPrompt", "Provide a reason for the rejection. The employee will see this note.")}
+        {t(
+          "attendanceCorrections.actions.rejectPrompt",
+          "Provide a reason for the rejection. The employee will see this note.",
+        )}
       </p>
       <TextArea
         rows={4}
@@ -61,12 +75,17 @@ export default function AttendanceCorrectionRejectModal({
           setNotes(e.target.value);
           if (error && e.target.value.trim()) setError(null);
         }}
-        placeholder={t("attendanceCorrections.actions.rejectPlaceholder", "e.g. The requested time does not match our records.")}
+        placeholder={t(
+          "attendanceCorrections.actions.rejectPlaceholder",
+          "e.g. The requested time does not match our records.",
+        )}
         maxLength={1000}
         showCount
       />
       {error ? (
-        <div style={{ color: "#dc2626", marginTop: 6, fontSize: 12 }}>{error}</div>
+        <div style={{ color: "#dc2626", marginTop: 6, fontSize: 12 }}>
+          {error}
+        </div>
       ) : null}
     </Modal>
   );

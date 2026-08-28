@@ -33,26 +33,42 @@ export type CreateDelegationRuleRequest = {
   is_active?: boolean;
 };
 
-export type UpdateDelegationRuleRequest = Partial<CreateDelegationRuleRequest> & {
-  is_active?: boolean;
-};
+export type UpdateDelegationRuleRequest =
+  Partial<CreateDelegationRuleRequest> & {
+    is_active?: boolean;
+  };
 
 export async function listDelegationRules() {
-  const { data } = await api.get<ApiResponse<DelegationRuleListResponse>>("/api/core/workflow/delegations/");
+  const { data } = await api.get<ApiResponse<DelegationRuleListResponse>>(
+    "/api/core/workflow/delegations/",
+  );
   return data;
 }
 
-export async function createDelegationRule(payload: CreateDelegationRuleRequest) {
-  const { data } = await api.post<ApiResponse<DelegationRuleDto>>("/api/core/workflow/delegations/", payload);
+export async function createDelegationRule(
+  payload: CreateDelegationRuleRequest,
+) {
+  const { data } = await api.post<ApiResponse<DelegationRuleDto>>(
+    "/api/core/workflow/delegations/",
+    payload,
+  );
   return data;
 }
 
-export async function updateDelegationRule(ruleId: number, payload: UpdateDelegationRuleRequest) {
-  const { data } = await api.patch<ApiResponse<DelegationRuleDto>>(`/api/core/workflow/delegations/${ruleId}/`, payload);
+export async function updateDelegationRule(
+  ruleId: number,
+  payload: UpdateDelegationRuleRequest,
+) {
+  const { data } = await api.patch<ApiResponse<DelegationRuleDto>>(
+    `/api/core/workflow/delegations/${ruleId}/`,
+    payload,
+  );
   return data;
 }
 
 export async function deleteDelegationRule(ruleId: number) {
-  const { data } = await api.delete<ApiResponse<Record<string, never>>>(`/api/core/workflow/delegations/${ruleId}/`);
+  const { data } = await api.delete<ApiResponse<Record<string, never>>>(
+    `/api/core/workflow/delegations/${ruleId}/`,
+  );
   return data;
 }

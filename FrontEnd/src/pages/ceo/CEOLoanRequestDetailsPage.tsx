@@ -1,5 +1,9 @@
 import LoanRequestDetailsPage from "../../components/loan/LoanRequestDetailsPage";
-import { approveCEOLoanRequest, getCEOLoanRequest, rejectCEOLoanRequest } from "../../services/api/loanApi";
+import {
+  approveCEOLoanRequest,
+  getCEOLoanRequest,
+  rejectCEOLoanRequest,
+} from "../../services/api/loanApi";
 import { useI18n } from "../../i18n/useI18n";
 
 export default function CEOLoanRequestDetailsPage() {

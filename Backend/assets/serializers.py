@@ -137,13 +137,24 @@ class AssetAssignmentCreateSerializer(serializers.Serializer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         request = self.context.get("request")
-        company = getattr(request, "_active_company", None) if request else None
+        company = None
+        if request:
+            from organization.services import get_active_company_for_request
+
+            company = get_active_company_for_request(request)
         if company is not None:
             self.fields["employee_id"].queryset = EmployeeProfile.objects.filter(company=company, is_archived=False)
 
     def validate_employee(self, value):
         if value.is_archived or value.employment_status != EmployeeProfile.EmploymentStatus.ACTIVE:
             raise serializers.ValidationError("Only active employees can be assigned assets.")
+        request = self.context.get("request")
+        if request:
+            from organization.services import get_active_company_for_request
+
+            active_company = get_active_company_for_request(request)
+            if active_company is None or value.company_id != active_company.id:
+                raise serializers.ValidationError("Employee must belong to the active company.")
         return value
 
 

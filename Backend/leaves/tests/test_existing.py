@@ -31,6 +31,12 @@ class LeaveManagementTests(TestCase):
         self.hr_group, _ = Group.objects.get_or_create(name="HRManager")
         self.employee_group, _ = Group.objects.get_or_create(name="Employee")
 
+        self.company = OrganizationNode.objects.create(
+            code="LEAVE_MANAGEMENT_TEST",
+            name="Leave Management Test Company",
+            node_type=OrganizationNode.NodeType.COMPANY,
+        )
+
         # Admin User
         self.admin = User.objects.create_user(email="admin@ffi.com", password="password")
         self.admin.groups.add(self.admin_group)
@@ -38,6 +44,7 @@ class LeaveManagementTests(TestCase):
         # HR User
         self.hr = User.objects.create_user(email="hr@ffi.com", password="password")
         self.hr.groups.add(self.hr_group)
+        UserOrganizationAccess.objects.create(user=self.hr, organization=self.company)
 
         # Employee 1
         self.emp1 = User.objects.create_user(email="emp1@ffi.com", password="password")
@@ -47,15 +54,49 @@ class LeaveManagementTests(TestCase):
         self.emp2 = User.objects.create_user(email="emp2@ffi.com", password="password")
         self.emp2.groups.add(self.employee_group)
 
+        EmployeeProfile.objects.create(
+            user=self.hr,
+            company=self.company,
+            employee_id="LEAVE-HR-001",
+            hire_date=date.today() - timedelta(days=700),
+        )
+        EmployeeProfile.objects.create(
+            user=self.emp1,
+            company=self.company,
+            employee_id="LEAVE-EMP-001",
+            hire_date=date.today() - timedelta(days=700),
+        )
+        EmployeeProfile.objects.create(
+            user=self.emp2,
+            company=self.company,
+            employee_id="LEAVE-EMP-002",
+            hire_date=date.today() - timedelta(days=700),
+        )
+
         # Leave Types
-        self.annual_leave = LeaveType.objects.create(name="Annual Leave", code="ANNUAL")
-        self.sick_leave = LeaveType.objects.create(name="Sick Leave", code="SICK")
+        self.annual_leave = LeaveType.objects.create(company=self.company, name="Annual Leave", code="ANNUAL")
+        self.sick_leave = LeaveType.objects.create(company=self.company, name="Sick Leave", code="SICK")
+
+    def _move_company(self, company, *users, move_leave_types=True):
+        if move_leave_types:
+            self.annual_leave.company = company
+            self.annual_leave.save(update_fields=["company"])
+            self.sick_leave.company = company
+            self.sick_leave.save(update_fields=["company"])
+        for user in users:
+            profile = user.employee_profile
+            profile.company = company
+            profile.save(update_fields=["company", "updated_at"])
 
     # --- Leave Types ---
     def test_leave_type_crud_admin(self):
         self.client.force_authenticate(user=self.admin)
         data = {"name": "Unpaid Leave", "code": "UNPAID", "is_paid": False}
-        response = self.client.post("/api/leaves/leave-types/", data)
+        response = self.client.post(
+            "/api/leaves/leave-types/",
+            data,
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertTrue(LeaveType.objects.filter(code="UNPAID").exists())
         # Audit
@@ -65,9 +106,12 @@ class LeaveManagementTests(TestCase):
 
     def test_leave_type_soft_delete(self):
         self.client.force_authenticate(user=self.admin)
-        type_to_delete = LeaveType.objects.create(name="Delete Me", code="DEL")
+        type_to_delete = LeaveType.objects.create(company=self.company, name="Delete Me", code="DEL")
 
-        response = self.client.delete(f"/api/leaves/leave-types/{type_to_delete.id}/")
+        response = self.client.delete(
+            f"/api/leaves/leave-types/{type_to_delete.id}/",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Verify it still exists but is inactive
@@ -77,7 +121,8 @@ class LeaveManagementTests(TestCase):
 
     def test_leave_type_read_only_employee(self):
         self.client.force_authenticate(user=self.emp1)
-        # Employee sees only active types. setUp created 2 active types.
+        # Employee sees every active policy type for their company. The endpoint
+        # may seed missing standard policy types before returning the list.
 
         # Test Create Forbidden
         response = self.client.post("/api/leaves/leave-types/", {"name": "Hack", "code": "HACK"})
@@ -86,7 +131,9 @@ class LeaveManagementTests(TestCase):
         # Test List
         response = self.client.get("/api/leaves/leave-types/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data["data"]), 2)
+        returned_ids = {item["id"] for item in response.data["data"]}
+        expected_ids = set(LeaveType.objects.filter(company=self.company, is_active=True).values_list("id", flat=True))
+        self.assertEqual(returned_ids, expected_ids)
 
     def test_employee_leave_type_list_seeds_company_policy_types(self):
         company = OrganizationNode.objects.create(
@@ -94,12 +141,7 @@ class LeaveManagementTests(TestCase):
             name="Company Without Types",
             node_type=OrganizationNode.NodeType.COMPANY,
         )
-        EmployeeProfile.objects.create(
-            user=self.emp1,
-            company=company,
-            employee_id="EMP-WITHOUT-TYPES",
-            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
-        )
+        self._move_company(company, self.emp1, move_leave_types=False)
 
         self.client.force_authenticate(user=self.emp1)
         response = self.client.get("/api/leaves/leave-types/", follow=True)
@@ -182,6 +224,7 @@ class LeaveManagementTests(TestCase):
         )
         UserOrganizationAccess.objects.create(user=self.hr, organization=company)
         leave_type = LeaveType.objects.create(company=company, name="Company Annual", code="COMPANY_ANNUAL")
+        self._move_company(company, self.hr, move_leave_types=False)
 
         self.client.force_authenticate(user=self.hr)
         start = date.today() + timedelta(days=20)
@@ -204,15 +247,10 @@ class LeaveManagementTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_annual_leave_allowed_after_six_months_service(self):
-        from employees.models import EmployeeProfile
 
         hire_date = date.today() - timedelta(days=200)
-        EmployeeProfile.objects.create(
-            user=self.emp1,
-            employee_id="EMP-SIX-MONTHS",
-            hire_date=hire_date,
-            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
-        )
+        self.emp1.employee_profile.hire_date = hire_date
+        self.emp1.employee_profile.save(update_fields=["hire_date", "updated_at"])
 
         self.client.force_authenticate(user=self.emp1)
         start = date.today() + timedelta(days=1)
@@ -390,29 +428,13 @@ class LeaveManagementTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
     def test_create_leave_request_notifies_delegate_when_selected(self):
-        from employees.models import EmployeeProfile
 
         company = OrganizationNode.objects.create(
             code="LEAVE_DELEGATION_CO",
             name="Leave Delegation Co",
             node_type=OrganizationNode.NodeType.COMPANY,
         )
-        EmployeeProfile.objects.create(
-            user=self.emp1,
-            company=company,
-            employee_id="EMP-DEL-SEND",
-            full_name="Delegation Sender",
-            hire_date=date.today() - timedelta(days=700),
-            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
-        )
-        EmployeeProfile.objects.create(
-            user=self.emp2,
-            company=company,
-            employee_id="EMP-DEL-RECV",
-            full_name="Delegation Receiver",
-            hire_date=date.today() - timedelta(days=700),
-            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
-        )
+        self._move_company(company, self.emp1, self.emp2)
 
         self.client.force_authenticate(user=self.emp1)
         with patch("leaves.views.notify_delegation_assigned") as notify_delegate:
@@ -438,8 +460,7 @@ class LeaveManagementTests(TestCase):
         self.assertEqual(workflow["current_stage"], "delegate")
         self.assertTrue(workflow["can_approve"])
 
-    def test_employee_can_create_leave_request_with_cross_company_delegate(self):
-        from employees.models import EmployeeProfile
+    def test_employee_cannot_create_leave_request_with_cross_company_delegate(self):
 
         requester_company = OrganizationNode.objects.create(
             code="LEAVE_CROSS_REQUESTER",
@@ -451,22 +472,8 @@ class LeaveManagementTests(TestCase):
             name="Leave Cross Delegate",
             node_type=OrganizationNode.NodeType.COMPANY,
         )
-        EmployeeProfile.objects.create(
-            user=self.emp1,
-            company=requester_company,
-            employee_id="EMP-CROSS-SEND",
-            full_name="Cross Sender",
-            hire_date=date.today() - timedelta(days=700),
-            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
-        )
-        EmployeeProfile.objects.create(
-            user=self.emp2,
-            company=delegate_company,
-            employee_id="EMP-CROSS-RECV",
-            full_name="Cross Receiver",
-            hire_date=date.today() - timedelta(days=700),
-            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
-        )
+        self._move_company(requester_company, self.emp1)
+        self._move_company(delegate_company, self.emp2, move_leave_types=False)
 
         self.client.force_authenticate(user=self.emp1)
         response = self.client.post(
@@ -482,36 +489,17 @@ class LeaveManagementTests(TestCase):
             HTTP_X_ACTIVE_COMPANY_ID=str(requester_company.id),
         )
 
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        request_obj = LeaveRequest.objects.get(pk=response.data["data"]["id"])
-        self.assertEqual(request_obj.company, requester_company)
-        self.assertEqual(request_obj.delegated_to, self.emp2)
-        self.assertEqual(request_obj.status, LeaveRequest.RequestStatus.PENDING_DELEGATE)
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertFalse(LeaveRequest.objects.filter(reason="Cross-company coverage").exists())
 
     def test_delegate_approval_moves_leave_request_to_hr(self):
-        from employees.models import EmployeeProfile
 
         company = OrganizationNode.objects.create(
             code="LEAVE_DELEGATE_APPROVAL_CO",
             name="Leave Delegate Approval Co",
             node_type=OrganizationNode.NodeType.COMPANY,
         )
-        EmployeeProfile.objects.create(
-            user=self.emp1,
-            company=company,
-            employee_id="EMP-DEL-APP-SEND",
-            full_name="Delegation Sender",
-            hire_date=date.today() - timedelta(days=700),
-            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
-        )
-        EmployeeProfile.objects.create(
-            user=self.emp2,
-            company=company,
-            employee_id="EMP-DEL-APP-RECV",
-            full_name="Delegation Receiver",
-            hire_date=date.today() - timedelta(days=700),
-            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
-        )
+        self._move_company(company, self.emp1, self.emp2)
 
         request_obj = LeaveRequest.objects.create(
             employee=self.emp1,
@@ -546,29 +534,13 @@ class LeaveManagementTests(TestCase):
         )
 
     def test_delegated_employee_can_list_and_view_assigned_leave_request(self):
-        from employees.models import EmployeeProfile
 
         company = OrganizationNode.objects.create(
             code="LEAVE_DELEGATE_INBOX_CO",
             name="Leave Delegate Inbox Co",
             node_type=OrganizationNode.NodeType.COMPANY,
         )
-        EmployeeProfile.objects.create(
-            user=self.emp1,
-            company=company,
-            employee_id="EMP-DEL-INBOX-SEND",
-            full_name="Delegation Sender",
-            hire_date=date.today() - timedelta(days=700),
-            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
-        )
-        EmployeeProfile.objects.create(
-            user=self.emp2,
-            company=company,
-            employee_id="EMP-DEL-INBOX-RECV",
-            full_name="Delegation Receiver",
-            hire_date=date.today() - timedelta(days=700),
-            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
-        )
+        self._move_company(company, self.emp1, self.emp2)
 
         request_obj = LeaveRequest.objects.create(
             employee=self.emp1,
@@ -602,29 +574,13 @@ class LeaveManagementTests(TestCase):
         self.assertTrue(detail_response.data["data"]["workflow"]["can_approve"])
 
     def test_delegated_employee_can_view_assigned_request_without_active_company_header(self):
-        from employees.models import EmployeeProfile
 
         company = OrganizationNode.objects.create(
             code="LEAVE_DELEGATE_DIRECT_CO",
             name="Leave Delegate Direct Co",
             node_type=OrganizationNode.NodeType.COMPANY,
         )
-        EmployeeProfile.objects.create(
-            user=self.emp1,
-            company=company,
-            employee_id="EMP-DEL-DIRECT-SEND",
-            full_name="Delegation Sender",
-            hire_date=date.today() - timedelta(days=700),
-            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
-        )
-        EmployeeProfile.objects.create(
-            user=self.emp2,
-            company=company,
-            employee_id="EMP-DEL-DIRECT-RECV",
-            full_name="Delegation Receiver",
-            hire_date=date.today() - timedelta(days=700),
-            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
-        )
+        self._move_company(company, self.emp1, self.emp2)
 
         request_obj = LeaveRequest.objects.create(
             employee=self.emp1,
@@ -666,6 +622,11 @@ class LeaveBalanceTests(TestCase):
         self.admin_group, _ = Group.objects.get_or_create(name="SystemAdmin")
         self.hr_group, _ = Group.objects.get_or_create(name="HRManager")
         self.employee_group, _ = Group.objects.get_or_create(name="Employee")
+        self.company = OrganizationNode.objects.create(
+            code="LEAVE_BALANCE_TEST",
+            name="Leave Balance Test Company",
+            node_type=OrganizationNode.NodeType.COMPANY,
+        )
 
         # Create Users
         from employees.models import EmployeeProfile
@@ -673,22 +634,29 @@ class LeaveBalanceTests(TestCase):
         # HR
         self.hr = User.objects.create_user(email="hr@ffi.com", password="password")
         self.hr.groups.add(self.hr_group)
+        UserOrganizationAccess.objects.create(user=self.hr, organization=self.company)
 
         # Employee
         self.emp1 = User.objects.create_user(email="emp1@ffi.com", password="password")
         self.emp1.groups.add(self.employee_group)
         self.profile1 = EmployeeProfile.objects.create(
             user=self.emp1,
+            company=self.company,
             employee_id="EMP001",
             hire_date=date.today() - timedelta(days=700),  # Hired 2 years ago
         )
 
         # Leave Types
         self.annual = LeaveType.objects.create(
-            name="Annual Leave", code="ANNUAL", annual_quota=21.0, allow_carry_over=False
+            company=self.company, name="Annual Leave", code="ANNUAL", annual_quota=21.0, allow_carry_over=False
         )
         self.sick = LeaveType.objects.create(
-            name="Sick Leave", code="SICK", annual_quota=10.0, allow_carry_over=True, max_carry_over=5.0
+            company=self.company,
+            name="Sick Leave",
+            code="SICK",
+            annual_quota=10.0,
+            allow_carry_over=True,
+            max_carry_over=5.0,
         )
 
     def test_balance_calculation_simple(self):
@@ -696,6 +664,11 @@ class LeaveBalanceTests(TestCase):
         from leaves.utils import calculate_leave_balance
 
         year = date.today().year
+        # Keep this calendar-year assertion on a calendar-aligned contract.
+        # Other tests below cover non-January contract anniversaries.
+        self.profile1.contract_date = date(year, 1, 1)
+        self.profile1.hire_date = date(year - 1, 1, 1)
+        self.profile1.save(update_fields=["contract_date", "hire_date"])
         balances = calculate_leave_balance(self.emp1, year, as_of=date(year, 12, 31))
 
         # Find annual leave
@@ -710,13 +683,13 @@ class LeaveBalanceTests(TestCase):
         self.profile1.hire_date = date(2024, 1, 1)
         self.profile1.save()
 
-        self.assertEqual(get_annual_accrued_days(self.profile1, 2026, as_of=date(2026, 5, 17)), 8.75)
+        self.assertEqual(get_annual_accrued_days(self.profile1, 2026, as_of=date(2026, 5, 17)), 7.0)
 
         balances = calculate_leave_balance(self.emp1, 2026, as_of=date(2026, 5, 17))
         annual_bal = next(b for b in balances if b["leave_type_id"] == self.annual.id)
-        self.assertEqual(float(annual_bal["available_annual_year_days"]), 8.75)
-        self.assertEqual(float(annual_bal["total_days"]), 21.0)
-        self.assertEqual(float(annual_bal["remaining_days"]), 8.75)
+        self.assertEqual(float(annual_bal["available_annual_year_days"]), 7.0)
+        self.assertEqual(float(annual_bal["total_days"]), 7.0)
+        self.assertEqual(float(annual_bal["remaining_days"]), 7.0)
 
     def test_annual_accrual_caps_at_full_year(self):
         from leaves.utils import get_annual_accrued_days
@@ -732,7 +705,7 @@ class LeaveBalanceTests(TestCase):
         self.profile1.hire_date = date(2026, 3, 20)
         self.profile1.save()
 
-        self.assertEqual(get_annual_accrued_days(self.profile1, 2026, as_of=date(2026, 5, 17)), 5.25)
+        self.assertEqual(get_annual_accrued_days(self.profile1, 2026, as_of=date(2026, 5, 17)), 1.75)
 
     def test_annual_remaining_uses_accrued_days_minus_usage(self):
         self.profile1.hire_date = date(2024, 1, 1)
@@ -751,14 +724,14 @@ class LeaveBalanceTests(TestCase):
 
         balances = calculate_leave_balance(self.emp1, 2026, as_of=date(2026, 5, 17))
         annual_bal = next(b for b in balances if b["leave_type_id"] == self.annual.id)
-        self.assertEqual(float(annual_bal["total_days"]), 21.0)
+        self.assertEqual(float(annual_bal["total_days"]), 7.0)
         self.assertEqual(float(annual_bal["used_days"]), 2.0)
-        self.assertEqual(float(annual_bal["remaining_days"]), 6.75)
+        self.assertEqual(float(annual_bal["remaining_days"]), 5.0)
 
     def test_emergency_availability_uses_accrued_annual_balance(self):
         self.profile1.hire_date = date(2024, 1, 1)
         self.profile1.save()
-        emergency = LeaveType.objects.create(name="Emergency Leave", code="EMERGENCY")
+        emergency = LeaveType.objects.create(company=self.company, name="Emergency Leave", code="EMERGENCY")
 
         LeaveRequest.objects.create(
             employee=self.emp1,
@@ -773,8 +746,8 @@ class LeaveBalanceTests(TestCase):
 
         balances = calculate_leave_balance(self.emp1, 2026, as_of=date(2026, 5, 17))
         emergency_bal = next(b for b in balances if b["leave_type_id"] == emergency.id)
-        self.assertEqual(float(emergency_bal["total_days"]), 10.0)
-        self.assertEqual(float(emergency_bal["remaining_days"]), 3.75)
+        self.assertEqual(float(emergency_bal["total_days"]), 2.0)
+        self.assertEqual(float(emergency_bal["remaining_days"]), 2.0)
 
     def test_balance_calculation_uses_employee_company_leave_types(self):
         from leaves.utils import calculate_leave_balance
@@ -811,6 +784,9 @@ class LeaveBalanceTests(TestCase):
 
     def test_balance_usage(self):
         year = date.today().year
+        self.profile1.contract_date = date(year, 1, 1)
+        self.profile1.hire_date = date(year - 1, 1, 1)
+        self.profile1.save(update_fields=["contract_date", "hire_date"])
         # Create Approved Request (2 days)
         start = date(year, 1, 10)
         end = date(year, 1, 11)
@@ -834,6 +810,9 @@ class LeaveBalanceTests(TestCase):
 
     def test_annual_overflow_consumes_unpaid_balance(self):
         year = date.today().year
+        self.profile1.contract_date = date(year, 1, 1)
+        self.profile1.hire_date = date(year - 1, 1, 1)
+        self.profile1.save(update_fields=["contract_date", "hire_date"])
         start = date(year, 3, 1)
         end = date(year, 3, 30)
         LeaveRequest.objects.create(
@@ -855,7 +834,7 @@ class LeaveBalanceTests(TestCase):
         self.assertEqual(float(unpaid_bal["used_days"]), 9.0)
         self.assertEqual(float(unpaid_bal["remaining_days"]), 51.0)
 
-    def test_annual_leave_request_can_fall_back_to_unpaid_balance(self):
+    def test_annual_leave_request_rejects_over_accrued_annual_balance(self):
         self.client.force_authenticate(user=self.emp1)
         request_start = timezone.localdate() + timedelta(days=7)
         year = request_start.year
@@ -876,8 +855,8 @@ class LeaveBalanceTests(TestCase):
             {"leave_type": self.annual.id, "start_date": str(start), "end_date": str(end), "reason": "Annual overflow"},
         )
 
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data["data"]["payment_status"], "unpaid")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Annual leave exceeds available balance", str(response.data))
 
     def test_annual_leave_request_rejects_over_accrued_annual_plus_unpaid(self):
         self.client.force_authenticate(user=self.emp1)

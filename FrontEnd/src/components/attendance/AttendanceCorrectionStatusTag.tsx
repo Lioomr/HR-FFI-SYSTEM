@@ -30,7 +30,10 @@ export default function AttendanceCorrectionStatusTag({
   const labelKey = STATUS_LABEL_KEY[status];
   const label = labelKey ? t(labelKey) : status;
   return (
-    <Tag color={color} style={{ borderRadius: 999, paddingInline: 10, fontWeight: 600 }}>
+    <Tag
+      color={color}
+      style={{ borderRadius: 999, paddingInline: 10, fontWeight: 600 }}
+    >
       {label}
     </Tag>
   );

@@ -1,15 +1,30 @@
-import { ClockCircleOutlined, CheckCircleFilled, CloseCircleFilled, MinusCircleOutlined } from "@ant-design/icons";
+import {
+  ClockCircleOutlined,
+  CheckCircleFilled,
+  CloseCircleFilled,
+  MinusCircleOutlined,
+} from "@ant-design/icons";
 import { Card, Space, Tag, Typography } from "antd";
 import { formatDateTime } from "../../utils/dateTime";
 
 const { Paragraph, Text } = Typography;
 
-type TranslateFn = (key: string, params?: Record<string, unknown> | string, fallback?: string) => string;
+type TranslateFn = (
+  key: string,
+  params?: Record<string, unknown> | string,
+  fallback?: string,
+) => string;
 
 export type ApprovalFlowStage = {
   key: string;
   title: string;
-  state: "completed" | "current" | "rejected" | "upcoming" | "skipped" | "cancelled";
+  state:
+    | "completed"
+    | "current"
+    | "rejected"
+    | "upcoming"
+    | "skipped"
+    | "cancelled";
   note: string;
   detail?: string;
   at?: string | null;
@@ -78,11 +93,25 @@ export default function ApprovalFlowMap({
       }}
       bodyStyle={{ padding: 20 }}
     >
-      <Space direction="vertical" size={6} style={{ width: "100%", marginBottom: 18 }}>
-        <Text style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "#f97316" }}>
+      <Space
+        direction="vertical"
+        size={6}
+        style={{ width: "100%", marginBottom: 18 }}
+      >
+        <Text
+          style={{
+            fontSize: 12,
+            fontWeight: 700,
+            letterSpacing: "0.14em",
+            textTransform: "uppercase",
+            color: "#f97316",
+          }}
+        >
           {eyebrow}
         </Text>
-        <Text style={{ fontSize: 20, fontWeight: 700, color: "#0f172a" }}>{title}</Text>
+        <Text style={{ fontSize: 20, fontWeight: 700, color: "#0f172a" }}>
+          {title}
+        </Text>
       </Space>
 
       <div
@@ -114,12 +143,20 @@ export default function ApprovalFlowMap({
                     right: -10,
                     width: 20,
                     height: 2,
-                    background: "linear-gradient(90deg, rgba(249,115,22,0.35), rgba(148,163,184,0.25))",
+                    background:
+                      "linear-gradient(90deg, rgba(249,115,22,0.35), rgba(148,163,184,0.25))",
                   }}
                 />
               ) : null}
               <Space direction="vertical" size={10} style={{ width: "100%" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 10,
+                  }}
+                >
                   <div
                     style={{
                       width: 34,
@@ -148,13 +185,27 @@ export default function ApprovalFlowMap({
                     {getStateLabel(stage.state)}
                   </Tag>
                 </div>
-                <Text style={{ fontSize: 15, fontWeight: 700, color: "#0f172a" }}>{stage.title}</Text>
+                <Text
+                  style={{ fontSize: 15, fontWeight: 700, color: "#0f172a" }}
+                >
+                  {stage.title}
+                </Text>
                 {stage.detail ? (
-                  <Text style={{ color: "#0f172a", fontSize: 13, fontWeight: 600 }}>{stage.detail}</Text>
+                  <Text
+                    style={{ color: "#0f172a", fontSize: 13, fontWeight: 600 }}
+                  >
+                    {stage.detail}
+                  </Text>
                 ) : null}
-                <Paragraph style={{ marginBottom: 0, color: "#475569", minHeight: 44 }}>{stage.note}</Paragraph>
+                <Paragraph
+                  style={{ marginBottom: 0, color: "#475569", minHeight: 44 }}
+                >
+                  {stage.note}
+                </Paragraph>
                 <Text type="secondary" style={{ fontSize: 12 }}>
-                  {stage.at ? formatDateTime(stage.at) : t("leave.approvalMap.noDate")}
+                  {stage.at
+                    ? formatDateTime(stage.at)
+                    : t("leave.approvalMap.noDate")}
                 </Text>
               </Space>
             </div>

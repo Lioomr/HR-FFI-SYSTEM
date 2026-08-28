@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from django.contrib.auth import get_user_model
+from django.db.models import Q
 
 from .dispatcher import dispatch_notification_channels
 from .models import Notification
@@ -61,16 +62,38 @@ def _company_for_request(request_type: str, request_id):
                 .values_list("employee_profile__company", flat=True)
                 .first()
             )
-        if request_type == "Employee Deletion":
+        if request_type in {"Employee Archive", "Employee Deletion"}:
             from employees.models import EmployeeDeletionRequest
 
             return EmployeeDeletionRequest.objects.filter(pk=request_id).values_list("company", flat=True).first()
+        if request_type in {"Annual Leave Payment Request", "Annual Leave Settlement"}:
+            from leaves.models import AnnualLeavePaymentRequest
+
+            return AnnualLeavePaymentRequest.objects.filter(pk=request_id).values_list("company", flat=True).first()
     except Exception:
         logger.exception(
             "notification_company_resolution_failed",
             extra={"request_type": request_type, "request_id": str(request_id)},
         )
     return None
+
+
+def _company_scoped_recipients(users, company_id):
+    """Fail closed unless each recipient is authorized for the request company."""
+    user_ids = [getattr(user, "pk", None) for user in users]
+    user_ids = [user_id for user_id in user_ids if user_id]
+    if not company_id or not user_ids:
+        return []
+    return list(
+        get_user_model()
+        .objects.filter(id__in=user_ids, is_active=True)
+        .filter(
+            Q(employee_profile__company_id=company_id)
+            | Q(organization_access_entries__organization_id=company_id)
+            | Q(groups__name="SystemAdmin")
+        )
+        .distinct()
+    )
 
 
 def safe_create_notification(**kwargs):
@@ -96,9 +119,8 @@ def notify_pending_approvers(
     *, users, request_type, request_id, requester_name, status_label, details=None, action_path=None
 ):
     users = list(users)
-    company_id = (
-        _company_for_request(request_type, request_id) if any(getattr(user, "pk", None) for user in users) else None
-    )
+    company_id = _company_for_request(request_type, request_id) if any(getattr(user, "pk", None) for user in users) else None
+    users = _company_scoped_recipients(users, company_id)
     from core.services.pending_approval_email import _build_action_url, send_pending_approval_email
 
     results = []

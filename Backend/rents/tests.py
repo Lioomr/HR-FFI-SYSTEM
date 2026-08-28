@@ -9,6 +9,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from assets.models import Asset
+from organization.models import UserOrganizationAccess
 from organization.services import get_default_company
 from rents.models import Rent, RentPayment, RentReminderLog, RentType
 from rents.services import compute_rent_state
@@ -40,6 +41,7 @@ class RentApiTests(RentFeatureTestsMixin, TestCase):
         self.emp_user.groups.add(self.emp_group)
 
         self.company = get_default_company()
+        UserOrganizationAccess.objects.create(user=self.hr_user, organization=self.company)
         self.rent_type = RentType.objects.create(company=self.company, code="OFFICE", name_en="Office Rent")
         self.asset = self.create_asset()
 

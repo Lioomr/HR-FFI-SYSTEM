@@ -18,9 +18,16 @@ import * as employeesApi from "../../services/api/employeesApi";
 import { useI18nStore } from "../../i18n/i18nStore";
 import { useAuthStore } from "../../auth/authStore";
 
-const getRequest = employeesApi.getEmployeeArchiveRequest as unknown as ReturnType<typeof vi.fn>;
-const approveRequest = employeesApi.approveEmployeeArchiveRequest as unknown as ReturnType<typeof vi.fn>;
-const rejectRequest = employeesApi.rejectEmployeeArchiveRequest as unknown as ReturnType<typeof vi.fn>;
+const getRequest =
+  employeesApi.getEmployeeArchiveRequest as unknown as ReturnType<typeof vi.fn>;
+const approveRequest =
+  employeesApi.approveEmployeeArchiveRequest as unknown as ReturnType<
+    typeof vi.fn
+  >;
+const rejectRequest =
+  employeesApi.rejectEmployeeArchiveRequest as unknown as ReturnType<
+    typeof vi.fn
+  >;
 
 const request = {
   id: 5,
@@ -57,8 +64,14 @@ describe("CEOEmployeeDeletionDetailPage", () => {
 
     render(<CEOEmployeeDeletionDetailPage />);
 
-    expect(await screen.findByRole("button", { name: "Approve & Archive: Sara Ahmed" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Reject: Sara Ahmed" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", {
+        name: "Approve & Archive: Sara Ahmed",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Reject: Sara Ahmed" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("Contract ended")).toBeInTheDocument();
   });
 
@@ -68,8 +81,14 @@ describe("CEOEmployeeDeletionDetailPage", () => {
 
     render(<CEOEmployeeDeletionDetailPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Approve & Archive: Sara Ahmed" }));
-    expect(await screen.findByText(/about to archive Sara Ahmed/i)).toBeInTheDocument();
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Approve & Archive: Sara Ahmed",
+      }),
+    );
+    expect(
+      await screen.findByText(/about to archive Sara Ahmed/i),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Approve & Archive" }));
 
@@ -78,14 +97,21 @@ describe("CEOEmployeeDeletionDetailPage", () => {
 
   it("requires a reason before rejecting and surfaces a server failure inline", async () => {
     getRequest.mockResolvedValue(ok(request));
-    rejectRequest.mockResolvedValue({ status: "error" as const, message: "rejection refused" });
+    rejectRequest.mockResolvedValue({
+      status: "error" as const,
+      message: "rejection refused",
+    });
 
     render(<CEOEmployeeDeletionDetailPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Reject: Sara Ahmed" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Reject: Sara Ahmed" }),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Submit Rejection" }));
-    expect(await screen.findByText("A rejection reason is required.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("A rejection reason is required."),
+    ).toBeInTheDocument();
     expect(rejectRequest).not.toHaveBeenCalled();
 
     fireEvent.change(screen.getByLabelText("Reason for rejection"), {
@@ -93,22 +119,37 @@ describe("CEOEmployeeDeletionDetailPage", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Submit Rejection" }));
 
-    await waitFor(() => expect(rejectRequest).toHaveBeenCalledWith(5, "Still holds assets"));
+    await waitFor(() =>
+      expect(rejectRequest).toHaveBeenCalledWith(5, "Still holds assets"),
+    );
     expect(await screen.findByText("rejection refused")).toBeInTheDocument();
   });
 
   it("hides the decision panel once the request is settled", async () => {
-    getRequest.mockResolvedValue(ok({ ...request, status: "EXECUTED", executed_at: "2026-08-02T09:00:00Z" }));
+    getRequest.mockResolvedValue(
+      ok({
+        ...request,
+        status: "EXECUTED",
+        executed_at: "2026-08-02T09:00:00Z",
+      }),
+    );
 
     render(<CEOEmployeeDeletionDetailPage />);
 
     expect(await screen.findByText("Archived")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Approve & Archive/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /^Reject/ })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Approve & Archive/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^Reject/ }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows a retryable error state when the request cannot be loaded", async () => {
-    getRequest.mockResolvedValue({ status: "error" as const, message: "not reachable" });
+    getRequest.mockResolvedValue({
+      status: "error" as const,
+      message: "not reachable",
+    });
 
     render(<CEOEmployeeDeletionDetailPage />);
 
@@ -117,6 +158,8 @@ describe("CEOEmployeeDeletionDetailPage", () => {
     getRequest.mockResolvedValue(ok(request));
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
 
-    await waitFor(() => expect(screen.getByText("Contract ended")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Contract ended")).toBeInTheDocument(),
+    );
   });
 });

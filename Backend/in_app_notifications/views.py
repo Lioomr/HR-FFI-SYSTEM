@@ -1,12 +1,10 @@
-from django.db.models import Q
 from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
 from core.pagination import StandardPagination
 from core.responses import error, success
-from organization.models import OrganizationNode
-from organization.services import get_active_organization_for_request, get_user_accessible_company_ids
+from organization.services import filter_queryset_by_company_scope
 
 from .models import Notification
 from .serializers import NotificationSerializer
@@ -15,13 +13,7 @@ from .services import with_delivery_details
 
 def _owned_notifications(request):
     queryset = Notification.objects.filter(recipient=request.user)
-    active_company = get_active_organization_for_request(request)
-    if active_company is not None and active_company.node_type == OrganizationNode.NodeType.COMPANY:
-        return queryset.filter(Q(company=active_company) | Q(company__isnull=True))
-    accessible_ids = get_user_accessible_company_ids(request.user)
-    if accessible_ids:
-        return queryset.filter(Q(company_id__in=accessible_ids) | Q(company__isnull=True))
-    return queryset.filter(company__isnull=True)
+    return filter_queryset_by_company_scope(queryset, request)
 
 
 class NotificationListView(APIView):

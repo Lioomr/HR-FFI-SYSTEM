@@ -7,6 +7,9 @@ export async function getSettings() {
 }
 
 export async function updateSettings(payload: SettingsDto) {
-  const { data } = await api.put<ApiResponse<SettingsDto>>("/settings/", payload);
+  const { data } = await api.put<ApiResponse<SettingsDto>>(
+    "/settings/",
+    payload,
+  );
   return data;
 }

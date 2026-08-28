@@ -12,8 +12,14 @@ The system runs fully in Docker. The notification worker waits for required infr
 
 Dev env file: `Backend/.env.docker` (debug=true, local DB config)
 
-The notification stack also includes `ffi_hr_redis`, `ffi_hr_notification_worker`, and the development Evolution services
+The notification stack also includes `ffi_hr_redis`, `ffi_hr_notification_worker` (Celery worker only, no `-B`),
+`ffi_hr_celery_beat` (scheduled/periodic tasks — a separate container from the worker; see
+`reliability_and_perf_fixes.md` before recombining them), and the development Evolution services
 (`ffi_hr_evolution_db`, `ffi_hr_evolution_redis`, and `ffi_hr_evolution_api` on port 8080).
+
+`ffi_cinematic_site` (the separate marketing site, `CinematicSite/`) is defined under
+`profiles: ["marketing"]` and does not start with a plain `docker compose up`. Start it explicitly:
+`docker compose -f docker-compose.dev.yml --profile marketing up -d cinematic-site` (port `5174:80`).
 
 ## Start / Stop
 

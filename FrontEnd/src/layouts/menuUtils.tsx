@@ -11,7 +11,10 @@ import type { MenuProps } from "antd";
  * them, otherwise every entry nested under a section heading is invisible here
  * and nothing highlights unless the path matches an item key exactly.
  */
-export function getSelectedKey(pathname: string, items: MenuProps["items"]): string {
+export function getSelectedKey(
+  pathname: string,
+  items: MenuProps["items"],
+): string {
   if (!items) return pathname;
   let longestMatch = pathname;
   let longestMatchLength = 0;
@@ -19,7 +22,11 @@ export function getSelectedKey(pathname: string, items: MenuProps["items"]): str
     menuItems?.forEach((item) => {
       if (!item || typeof item !== "object") return;
       const key = (item as { key?: unknown }).key;
-      if (typeof key === "string" && pathname.startsWith(key) && key.length > longestMatchLength) {
+      if (
+        typeof key === "string" &&
+        pathname.startsWith(key) &&
+        key.length > longestMatchLength
+      ) {
         longestMatch = key;
         longestMatchLength = key.length;
       }
@@ -37,7 +44,14 @@ export function sectionLabel(title: string, caption?: string) {
     <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
       <span>{title}</span>
       {caption ? (
-        <span style={{ fontSize: 10, letterSpacing: "0.04em", textTransform: "none", opacity: 0.7 }}>
+        <span
+          style={{
+            fontSize: 10,
+            letterSpacing: "0.04em",
+            textTransform: "none",
+            opacity: 0.7,
+          }}
+        >
           {caption}
         </span>
       ) : null}

@@ -61,9 +61,14 @@ export default function RequireFinanceApprover() {
   }
 
   if (!allowed) {
-    return <Navigate to="/unauthorized" replace state={{ from: location.pathname }} />;
+    return (
+      <Navigate
+        to="/unauthorized"
+        replace
+        state={{ from: location.pathname }}
+      />
+    );
   }
 
   return <Outlet />;
 }
-

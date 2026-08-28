@@ -15,14 +15,22 @@ export default function RequireAuth() {
     const token = getToken();
     if (token) {
       return (
-        <div style={{ display: "grid", placeItems: "center", minHeight: "50vh" }}>
+        <div
+          style={{ display: "grid", placeItems: "center", minHeight: "50vh" }}
+        >
           <LoadingState title="Verifying Session..." lines={2} />
         </div>
       );
     }
 
     const from = `${location.pathname}${location.search}${location.hash}`;
-    return <Navigate to={`/login?next=${encodeURIComponent(from)}`} replace state={{ from }} />;
+    return (
+      <Navigate
+        to={`/login?next=${encodeURIComponent(from)}`}
+        replace
+        state={{ from }}
+      />
+    );
   }
 
   return <Outlet />;

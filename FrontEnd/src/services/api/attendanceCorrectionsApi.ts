@@ -107,7 +107,8 @@ export type CreateAttendanceCorrectionPayload = {
   employee_profile?: number;
 };
 
-export type UpdateAttendanceCorrectionPayload = Partial<CreateAttendanceCorrectionPayload>;
+export type UpdateAttendanceCorrectionPayload =
+  Partial<CreateAttendanceCorrectionPayload>;
 
 export type AttendanceCorrectionDecisionPayload = {
   notes?: string;
@@ -117,66 +118,81 @@ export type AttendanceCorrectionDecisionPayload = {
 const BASE_URL = "/api/attendance-correction-requests/";
 
 export async function listAttendanceCorrectionRequests(
-  params?: ListAttendanceCorrectionsParams
+  params?: ListAttendanceCorrectionsParams,
 ): Promise<ApiResponse<AttendanceCorrectionListResponse>> {
-  const { data } = await api.get<ApiResponse<AttendanceCorrectionListResponse>>(BASE_URL, { params });
+  const { data } = await api.get<ApiResponse<AttendanceCorrectionListResponse>>(
+    BASE_URL,
+    { params },
+  );
   return data;
 }
 
 export async function getAttendanceCorrectionRequest(
-  id: number | string
+  id: number | string,
 ): Promise<ApiResponse<AttendanceCorrectionRequest>> {
-  const { data } = await api.get<ApiResponse<AttendanceCorrectionRequest>>(`${BASE_URL}${id}/`);
+  const { data } = await api.get<ApiResponse<AttendanceCorrectionRequest>>(
+    `${BASE_URL}${id}/`,
+  );
   return data;
 }
 
 export async function createAttendanceCorrectionRequest(
-  payload: CreateAttendanceCorrectionPayload
+  payload: CreateAttendanceCorrectionPayload,
 ): Promise<ApiResponse<AttendanceCorrectionRequest>> {
-  const { data } = await api.post<ApiResponse<AttendanceCorrectionRequest>>(BASE_URL, payload);
+  const { data } = await api.post<ApiResponse<AttendanceCorrectionRequest>>(
+    BASE_URL,
+    payload,
+  );
   return data;
 }
 
 export async function updateAttendanceCorrectionRequest(
   id: number | string,
-  payload: UpdateAttendanceCorrectionPayload
+  payload: UpdateAttendanceCorrectionPayload,
 ): Promise<ApiResponse<AttendanceCorrectionRequest>> {
-  const { data } = await api.patch<ApiResponse<AttendanceCorrectionRequest>>(`${BASE_URL}${id}/`, payload);
+  const { data } = await api.patch<ApiResponse<AttendanceCorrectionRequest>>(
+    `${BASE_URL}${id}/`,
+    payload,
+  );
   return data;
 }
 
 export async function submitAttendanceCorrectionRequest(
-  id: number | string
+  id: number | string,
 ): Promise<ApiResponse<AttendanceCorrectionRequest>> {
-  const { data } = await api.post<ApiResponse<AttendanceCorrectionRequest>>(`${BASE_URL}${id}/submit/`);
+  const { data } = await api.post<ApiResponse<AttendanceCorrectionRequest>>(
+    `${BASE_URL}${id}/submit/`,
+  );
   return data;
 }
 
 export async function approveAttendanceCorrectionRequest(
   id: number | string,
-  payload?: AttendanceCorrectionDecisionPayload
+  payload?: AttendanceCorrectionDecisionPayload,
 ): Promise<ApiResponse<AttendanceCorrectionRequest>> {
   const { data } = await api.post<ApiResponse<AttendanceCorrectionRequest>>(
     `${BASE_URL}${id}/approve/`,
-    payload || {}
+    payload || {},
   );
   return data;
 }
 
 export async function rejectAttendanceCorrectionRequest(
   id: number | string,
-  payload: AttendanceCorrectionDecisionPayload
+  payload: AttendanceCorrectionDecisionPayload,
 ): Promise<ApiResponse<AttendanceCorrectionRequest>> {
   const { data } = await api.post<ApiResponse<AttendanceCorrectionRequest>>(
     `${BASE_URL}${id}/reject/`,
-    payload
+    payload,
   );
   return data;
 }
 
 export async function cancelAttendanceCorrectionRequest(
-  id: number | string
+  id: number | string,
 ): Promise<ApiResponse<AttendanceCorrectionRequest>> {
-  const { data } = await api.post<ApiResponse<AttendanceCorrectionRequest>>(`${BASE_URL}${id}/cancel/`);
+  const { data } = await api.post<ApiResponse<AttendanceCorrectionRequest>>(
+    `${BASE_URL}${id}/cancel/`,
+  );
   return data;
 }

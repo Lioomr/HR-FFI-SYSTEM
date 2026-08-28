@@ -62,8 +62,15 @@ export interface LoanRequest {
   workflow?: WorkflowSnapshot;
 }
 
-export async function getManagerLoanRequests(params?: { status?: LoanStatus; page?: number; page_size?: number }) {
-  const { data } = await api.get<ApiResponse<PaginatedResponse<LoanRequest>>>("/api/loans/manager/loan-requests/", { params });
+export async function getManagerLoanRequests(params?: {
+  status?: LoanStatus;
+  page?: number;
+  page_size?: number;
+}) {
+  const { data } = await api.get<ApiResponse<PaginatedResponse<LoanRequest>>>(
+    "/api/loans/manager/loan-requests/",
+    { params },
+  );
   return data;
 }
 
@@ -73,37 +80,65 @@ export async function createLoanRequest(payload: {
   loan_type?: LoanType;
   installment_months?: number | null;
 }) {
-  const { data } = await api.post<ApiResponse<LoanRequest>>("/api/loans/loan-requests/", payload);
+  const { data } = await api.post<ApiResponse<LoanRequest>>(
+    "/api/loans/loan-requests/",
+    payload,
+  );
   return data;
 }
 
-export async function getMyLoanRequests(params?: { status?: LoanStatus; page?: number; page_size?: number }) {
-  const { data } = await api.get<ApiResponse<PaginatedResponse<LoanRequest>>>("/api/loans/employee/loan-requests/", { params });
+export async function getMyLoanRequests(params?: {
+  status?: LoanStatus;
+  page?: number;
+  page_size?: number;
+}) {
+  const { data } = await api.get<ApiResponse<PaginatedResponse<LoanRequest>>>(
+    "/api/loans/employee/loan-requests/",
+    { params },
+  );
   return data;
 }
 
 export async function getMyLoanRequest(id: number | string) {
-  const { data } = await api.get<ApiResponse<LoanRequest>>(`/api/loans/employee/loan-requests/${id}/`);
+  const { data } = await api.get<ApiResponse<LoanRequest>>(
+    `/api/loans/employee/loan-requests/${id}/`,
+  );
   return data;
 }
 
 export async function cancelLoanRequest(id: number | string) {
-  const { data } = await api.post<ApiResponse<LoanRequest>>(`/api/loans/loan-requests/${id}/cancel/`);
+  const { data } = await api.post<ApiResponse<LoanRequest>>(
+    `/api/loans/loan-requests/${id}/cancel/`,
+  );
   return data;
 }
 
 export async function getManagerLoanRequest(id: number | string) {
-  const { data } = await api.get<ApiResponse<LoanRequest>>(`/api/loans/manager/loan-requests/${id}/`);
+  const { data } = await api.get<ApiResponse<LoanRequest>>(
+    `/api/loans/manager/loan-requests/${id}/`,
+  );
   return data;
 }
 
-export async function approveManagerLoanRequest(id: number | string, comment?: string) {
-  const { data } = await api.post<ApiResponse<LoanRequest>>(`/api/loans/manager/loan-requests/${id}/approve/`, { comment });
+export async function approveManagerLoanRequest(
+  id: number | string,
+  comment?: string,
+) {
+  const { data } = await api.post<ApiResponse<LoanRequest>>(
+    `/api/loans/manager/loan-requests/${id}/approve/`,
+    { comment },
+  );
   return data;
 }
 
-export async function rejectManagerLoanRequest(id: number | string, comment: string) {
-  const { data } = await api.post<ApiResponse<LoanRequest>>(`/api/loans/manager/loan-requests/${id}/reject/`, { comment });
+export async function rejectManagerLoanRequest(
+  id: number | string,
+  comment: string,
+) {
+  const { data } = await api.post<ApiResponse<LoanRequest>>(
+    `/api/loans/manager/loan-requests/${id}/reject/`,
+    { comment },
+  );
   return data;
 }
 
@@ -115,7 +150,10 @@ export async function getFinanceLoanRequests(params?: {
   page?: number;
   page_size?: number;
 }) {
-  const { data } = await api.get<ApiResponse<PaginatedResponse<LoanRequest>>>("/api/loans/loan-requests/", { params });
+  const { data } = await api.get<ApiResponse<PaginatedResponse<LoanRequest>>>(
+    "/api/loans/loan-requests/",
+    { params },
+  );
   return data;
 }
 
@@ -127,83 +165,160 @@ export async function getHRLoanRequests(params?: {
   page?: number;
   page_size?: number;
 }) {
-  const { data } = await api.get<ApiResponse<PaginatedResponse<LoanRequest>>>("/api/loans/hr/loan-requests/", { params });
+  const { data } = await api.get<ApiResponse<PaginatedResponse<LoanRequest>>>(
+    "/api/loans/hr/loan-requests/",
+    { params },
+  );
   return data;
 }
 
 export async function getFinanceLoanRequest(id: number | string) {
-  const { data } = await api.get<ApiResponse<LoanRequest>>(`/api/loans/loan-requests/${id}/`);
+  const { data } = await api.get<ApiResponse<LoanRequest>>(
+    `/api/loans/loan-requests/${id}/`,
+  );
   return data;
 }
 
-export async function approveFinanceLoanRequest(id: number | string, comment?: string) {
-  const { data } = await api.post<ApiResponse<LoanRequest>>(`/api/loans/loan-requests/${id}/approve/`, { comment });
+export async function approveFinanceLoanRequest(
+  id: number | string,
+  comment?: string,
+) {
+  const { data } = await api.post<ApiResponse<LoanRequest>>(
+    `/api/loans/loan-requests/${id}/approve/`,
+    { comment },
+  );
   return data;
 }
 
-export async function rejectFinanceLoanRequest(id: number | string, comment: string) {
-  const { data } = await api.post<ApiResponse<LoanRequest>>(`/api/loans/loan-requests/${id}/reject/`, { comment });
+export async function rejectFinanceLoanRequest(
+  id: number | string,
+  comment: string,
+) {
+  const { data } = await api.post<ApiResponse<LoanRequest>>(
+    `/api/loans/loan-requests/${id}/reject/`,
+    { comment },
+  );
   return data;
 }
 
-export async function getCFOLoanRequests(params?: { status?: LoanStatus; page?: number; page_size?: number }) {
-  const { data } = await api.get<ApiResponse<PaginatedResponse<LoanRequest>>>("/api/loans/cfo/loan-requests/", { params });
+export async function getCFOLoanRequests(params?: {
+  status?: LoanStatus;
+  page?: number;
+  page_size?: number;
+}) {
+  const { data } = await api.get<ApiResponse<PaginatedResponse<LoanRequest>>>(
+    "/api/loans/cfo/loan-requests/",
+    { params },
+  );
   return data;
 }
 
 export async function getCFOLoanRequest(id: number | string) {
-  const { data } = await api.get<ApiResponse<LoanRequest>>(`/api/loans/cfo/loan-requests/${id}/`);
+  const { data } = await api.get<ApiResponse<LoanRequest>>(
+    `/api/loans/cfo/loan-requests/${id}/`,
+  );
   return data;
 }
 
-export async function approveCFOLoanRequest(id: number | string, comment?: string) {
-  const { data } = await api.post<ApiResponse<LoanRequest>>(`/api/loans/cfo/loan-requests/${id}/approve/`, { comment });
+export async function approveCFOLoanRequest(
+  id: number | string,
+  comment?: string,
+) {
+  const { data } = await api.post<ApiResponse<LoanRequest>>(
+    `/api/loans/cfo/loan-requests/${id}/approve/`,
+    { comment },
+  );
   return data;
 }
 
-export async function rejectCFOLoanRequest(id: number | string, comment: string) {
-  const { data } = await api.post<ApiResponse<LoanRequest>>(`/api/loans/cfo/loan-requests/${id}/reject/`, { comment });
+export async function rejectCFOLoanRequest(
+  id: number | string,
+  comment: string,
+) {
+  const { data } = await api.post<ApiResponse<LoanRequest>>(
+    `/api/loans/cfo/loan-requests/${id}/reject/`,
+    { comment },
+  );
   return data;
 }
 
-export async function referCFOLoanRequestToCEO(id: number | string, comment: string) {
-  const { data } = await api.post<ApiResponse<LoanRequest>>(`/api/loans/cfo/loan-requests/${id}/refer-to-ceo/`, { comment });
+export async function referCFOLoanRequestToCEO(
+  id: number | string,
+  comment: string,
+) {
+  const { data } = await api.post<ApiResponse<LoanRequest>>(
+    `/api/loans/cfo/loan-requests/${id}/refer-to-ceo/`,
+    { comment },
+  );
   return data;
 }
 
-export async function getCEOLoanRequests(params?: { status?: LoanStatus; page?: number; page_size?: number }) {
-  const { data } = await api.get<ApiResponse<PaginatedResponse<LoanRequest>>>("/api/loans/ceo/loan-requests/", { params });
+export async function getCEOLoanRequests(params?: {
+  status?: LoanStatus;
+  page?: number;
+  page_size?: number;
+}) {
+  const { data } = await api.get<ApiResponse<PaginatedResponse<LoanRequest>>>(
+    "/api/loans/ceo/loan-requests/",
+    { params },
+  );
   return data;
 }
 
 export async function getCEOLoanRequest(id: number | string) {
-  const { data } = await api.get<ApiResponse<LoanRequest>>(`/api/loans/ceo/loan-requests/${id}/`);
+  const { data } = await api.get<ApiResponse<LoanRequest>>(
+    `/api/loans/ceo/loan-requests/${id}/`,
+  );
   return data;
 }
 
-export async function approveCEOLoanRequest(id: number | string, comment?: string) {
-  const { data } = await api.post<ApiResponse<LoanRequest>>(`/api/loans/ceo/loan-requests/${id}/approve/`, { comment });
+export async function approveCEOLoanRequest(
+  id: number | string,
+  comment?: string,
+) {
+  const { data } = await api.post<ApiResponse<LoanRequest>>(
+    `/api/loans/ceo/loan-requests/${id}/approve/`,
+    { comment },
+  );
   return data;
 }
 
-export async function rejectCEOLoanRequest(id: number | string, comment: string) {
-  const { data } = await api.post<ApiResponse<LoanRequest>>(`/api/loans/ceo/loan-requests/${id}/reject/`, { comment });
+export async function rejectCEOLoanRequest(
+  id: number | string,
+  comment: string,
+) {
+  const { data } = await api.post<ApiResponse<LoanRequest>>(
+    `/api/loans/ceo/loan-requests/${id}/reject/`,
+    { comment },
+  );
   return data;
 }
 
-export async function getDisbursementLoanRequests(params?: { status?: LoanStatus; page?: number; page_size?: number }) {
-  const { data } = await api.get<ApiResponse<PaginatedResponse<LoanRequest>>>("/api/loans/disbursements/", { params });
+export async function getDisbursementLoanRequests(params?: {
+  status?: LoanStatus;
+  page?: number;
+  page_size?: number;
+}) {
+  const { data } = await api.get<ApiResponse<PaginatedResponse<LoanRequest>>>(
+    "/api/loans/disbursements/",
+    { params },
+  );
   return data;
 }
 
 export async function getDisbursementLoanRequest(id: number | string) {
-  const { data } = await api.get<ApiResponse<LoanRequest>>(`/api/loans/disbursements/${id}/`);
+  const { data } = await api.get<ApiResponse<LoanRequest>>(
+    `/api/loans/disbursements/${id}/`,
+  );
   return data;
 }
 
 export async function markLoanDisbursed(id: number | string, comment?: string) {
-  const { data } = await api.post<ApiResponse<LoanRequest>>(`/api/loans/disbursements/${id}/mark-disbursed/`, {
-    comment,
-  });
+  const { data } = await api.post<ApiResponse<LoanRequest>>(
+    `/api/loans/disbursements/${id}/mark-disbursed/`,
+    {
+      comment,
+    },
+  );
   return data;
 }

@@ -1,23 +1,54 @@
-import ApprovalFlowMap, { type ApprovalFlowStage } from "../requests/ApprovalFlowMap";
+import ApprovalFlowMap, {
+  type ApprovalFlowStage,
+} from "../requests/ApprovalFlowMap";
 import { buildStagesFromWorkflow } from "../requests/workflowPresentation";
 
 import type { LoanRequest } from "../../services/api/loanApi";
 
-type TranslateFn = (key: string, params?: Record<string, unknown> | string, fallback?: string) => string;
+type TranslateFn = (
+  key: string,
+  params?: Record<string, unknown> | string,
+  fallback?: string,
+) => string;
 
-function isRejectedAtStage(request: LoanRequest, stage: "manager" | "hr" | "cfo" | "ceo") {
+function isRejectedAtStage(
+  request: LoanRequest,
+  stage: "manager" | "hr" | "cfo" | "ceo",
+) {
   if (request.status !== "rejected") return false;
-  if (stage === "manager") return Boolean(request.manager_decision_note && !request.finance_decision_note && !request.cfo_decision_note && !request.ceo_decision_note);
-  if (stage === "hr") return Boolean(request.finance_decision_note && !request.cfo_decision_note && !request.ceo_decision_note);
-  if (stage === "cfo") return Boolean(request.cfo_decision_note && !request.ceo_decision_note);
+  if (stage === "manager")
+    return Boolean(
+      request.manager_decision_note &&
+      !request.finance_decision_note &&
+      !request.cfo_decision_note &&
+      !request.ceo_decision_note,
+    );
+  if (stage === "hr")
+    return Boolean(
+      request.finance_decision_note &&
+      !request.cfo_decision_note &&
+      !request.ceo_decision_note,
+    );
+  if (stage === "cfo")
+    return Boolean(request.cfo_decision_note && !request.ceo_decision_note);
   return Boolean(request.ceo_decision_note);
 }
 
-function buildStages(request: LoanRequest, t: TranslateFn): ApprovalFlowStage[] {
-  const needsManager = request.status === "pending_manager" || Boolean(request.manager_decision_at || request.manager_decision_note);
-  const needsCeo = request.status === "pending_ceo" || Boolean(request.ceo_decision_at || request.ceo_decision_note);
+function buildStages(
+  request: LoanRequest,
+  t: TranslateFn,
+): ApprovalFlowStage[] {
+  const needsManager =
+    request.status === "pending_manager" ||
+    Boolean(request.manager_decision_at || request.manager_decision_note);
+  const needsCeo =
+    request.status === "pending_ceo" ||
+    Boolean(request.ceo_decision_at || request.ceo_decision_note);
   const wentToDisbursement =
-    request.status === "pending_disbursement" || request.status === "approved" || request.status === "deducted" || Boolean(request.disbursed_at);
+    request.status === "pending_disbursement" ||
+    request.status === "approved" ||
+    request.status === "deducted" ||
+    Boolean(request.disbursed_at);
 
   const managerState: ApprovalFlowStage["state"] = !needsManager
     ? "skipped"
@@ -45,7 +76,9 @@ function buildStages(request: LoanRequest, t: TranslateFn): ApprovalFlowStage[] 
       ? "completed"
       : request.status === "pending_cfo"
         ? "current"
-        : request.finance_decision_at || request.status === "pending_ceo" || wentToDisbursement
+        : request.finance_decision_at ||
+            request.status === "pending_ceo" ||
+            wentToDisbursement
           ? "upcoming"
           : "upcoming";
 
@@ -64,7 +97,8 @@ function buildStages(request: LoanRequest, t: TranslateFn): ApprovalFlowStage[] 
   const disbursementState: ApprovalFlowStage["state"] =
     request.status === "deducted"
       ? "completed"
-      : request.status === "approved" || request.status === "pending_disbursement"
+      : request.status === "approved" ||
+          request.status === "pending_disbursement"
         ? "current"
         : request.disbursed_at
           ? "completed"
@@ -87,7 +121,8 @@ function buildStages(request: LoanRequest, t: TranslateFn): ApprovalFlowStage[] 
       note:
         managerState === "skipped"
           ? t("loans.approvalMap.notRequired")
-          : request.manager_decision_note || t(`loans.approvalMap.${managerState}`),
+          : request.manager_decision_note ||
+            t(`loans.approvalMap.${managerState}`),
       at: request.manager_decision_at,
     },
     {
@@ -96,7 +131,9 @@ function buildStages(request: LoanRequest, t: TranslateFn): ApprovalFlowStage[] 
       state: hrState,
       note:
         request.finance_decision_note ||
-        (hrState === "completed" ? t("loans.approvalMap.forwarded") : t(`loans.approvalMap.${hrState}`)),
+        (hrState === "completed"
+          ? t("loans.approvalMap.forwarded")
+          : t(`loans.approvalMap.${hrState}`)),
       at: request.finance_decision_at,
     },
     {
@@ -122,14 +159,26 @@ function buildStages(request: LoanRequest, t: TranslateFn): ApprovalFlowStage[] 
       state: disbursementState,
       note:
         request.disbursement_note ||
-        (request.status === "deducted" ? t("loans.approvalMap.deducted") : t(`loans.approvalMap.${disbursementState}`)),
+        (request.status === "deducted"
+          ? t("loans.approvalMap.deducted")
+          : t(`loans.approvalMap.${disbursementState}`)),
       at: request.disbursed_at || request.deducted_at,
     },
   ];
 }
 
-export default function LoanApprovalMap({ request, t }: { request: LoanRequest; t: TranslateFn }) {
-  const workflowStages = buildStagesFromWorkflow(request.workflow, ["manager", "hr", "cfo", "ceo", "disbursement"], t);
+export default function LoanApprovalMap({
+  request,
+  t,
+}: {
+  request: LoanRequest;
+  t: TranslateFn;
+}) {
+  const workflowStages = buildStagesFromWorkflow(
+    request.workflow,
+    ["manager", "hr", "cfo", "ceo", "disbursement"],
+    t,
+  );
   return (
     <ApprovalFlowMap
       eyebrow={t("loans.approvalMap.eyebrow")}

@@ -18,7 +18,7 @@ export type AuditLogsParams = {
 export async function listAuditLogs(params: AuditLogsParams = {}) {
   const { data } = await api.get<ApiResponse<PaginatedResponse<AuditLogDto>>>(
     "/audit-logs/",
-    { params }
+    { params },
   );
   return data;
 }

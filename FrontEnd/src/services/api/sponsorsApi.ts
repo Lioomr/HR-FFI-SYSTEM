@@ -46,12 +46,11 @@ export interface ListSponsorsParams {
  * List all sponsors
  */
 export async function listSponsors(
-  params?: ListSponsorsParams
+  params?: ListSponsorsParams,
 ): Promise<ApiResponse<Sponsor[]>> {
-  const { data } = await api.get<ApiResponse<Sponsor[]>>(
-    "/api/hr/sponsors/",
-    { params }
-  );
+  const { data } = await api.get<ApiResponse<Sponsor[]>>("/api/hr/sponsors/", {
+    params,
+  });
   return data;
 }
 
@@ -59,11 +58,11 @@ export async function listSponsors(
  * Create a new sponsor
  */
 export async function createSponsor(
-  payload: CreateSponsorDto
+  payload: CreateSponsorDto,
 ): Promise<ApiResponse<Sponsor>> {
   const { data } = await api.post<ApiResponse<Sponsor>>(
     "/api/hr/sponsors/",
-    payload
+    payload,
   );
   return data;
 }
@@ -73,11 +72,11 @@ export async function createSponsor(
  */
 export async function updateSponsor(
   id: string | number,
-  payload: UpdateSponsorDto
+  payload: UpdateSponsorDto,
 ): Promise<ApiResponse<Sponsor>> {
   const { data } = await api.patch<ApiResponse<Sponsor>>(
     `/api/hr/sponsors/${id}/`,
-    payload
+    payload,
   );
   return data;
 }

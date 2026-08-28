@@ -13,7 +13,6 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.throttling import UserRateThrottle
 
 from audit.utils import audit
-from core.delegation import get_delegated_manager_user_ids
 from core.permissions import (
     IsDepartmentCEOApprover,
     IsHRManagerOrAdmin,
@@ -32,7 +31,7 @@ from core.services import (
 )
 from employees.models import EmployeeProfile
 from employees.services.manager_relationships import (
-    get_valid_direct_manager_user,
+    get_valid_manager_user,
     manager_approval_actor_source,
     manager_scope_q,
 )
@@ -72,7 +71,9 @@ def _is_hr_manager_origin_record(instance: AttendanceRecord):
 
 
 def _manager_scope_filter(user):
-    return manager_scope_q(user, employee_prefix="employee_profile__")
+    return manager_scope_q(
+        user, employee_prefix="employee_profile__", cross_company_capability="attendance.approve"
+    )
 
 
 def _can_manager_act_on_correction(user, correction: AttendanceCorrectionRequest):
@@ -80,6 +81,7 @@ def _can_manager_act_on_correction(user, correction: AttendanceCorrectionRequest
         manager_approval_actor_source(
             user,
             correction.employee_profile,
+            capability="attendance.approve",
             allow_admin=True,
         )
     )
@@ -300,7 +302,7 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         if not _profile_matches_active_company(request, profile):
             return error("Employee profile is not available in the active company.", status=status.HTTP_403_FORBIDDEN)
 
-        has_manager = bool(get_valid_direct_manager_user(profile))
+        has_manager = bool(get_valid_manager_user(profile, cross_company_capability="attendance.approve"))
 
         if _is_hr_manager_user(user):
             status_value = AttendanceRecord.Status.PENDING_CEO
@@ -566,7 +568,9 @@ class AttendanceCorrectionRequestViewSet(viewsets.ModelViewSet):
         if instance.created_by_id != request.user.id and get_role(request.user) not in ["SystemAdmin", "HRManager"]:
             return error("You cannot submit this correction request.", status=status.HTTP_403_FORBIDDEN)
 
-        has_manager = bool(get_valid_direct_manager_user(instance.employee_profile))
+        has_manager = bool(
+            get_valid_manager_user(instance.employee_profile, cross_company_capability="attendance.approve")
+        )
         instance.status = (
             AttendanceCorrectionRequest.Status.PENDING_MANAGER
             if has_manager
@@ -591,6 +595,7 @@ class AttendanceCorrectionRequestViewSet(viewsets.ModelViewSet):
             actor_source = manager_approval_actor_source(
                 request.user,
                 instance.employee_profile,
+                capability="attendance.approve",
                 allow_admin=True,
             )
             instance.status = AttendanceCorrectionRequest.Status.PENDING_HR
@@ -660,6 +665,7 @@ class AttendanceCorrectionRequestViewSet(viewsets.ModelViewSet):
             actor_source = manager_approval_actor_source(
                 request.user,
                 instance.employee_profile,
+                capability="attendance.approve",
                 allow_admin=True,
             )
             approval_actor_source = actor_source
@@ -798,11 +804,12 @@ class ManagerAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         role = get_role(self.request.user)
-        base_qs = AttendanceRecord.objects.select_related("employee_profile__user", "employee_profile__manager_profile")
+        qs = AttendanceRecord.objects.select_related("employee_profile__user", "employee_profile__manager_profile")
+        base_qs = qs
         base_qs = _scope_attendance_queryset(base_qs, self.request)
         if role == "SystemAdmin":
             return base_qs
-        return base_qs.filter(manager_scope_q(self.request.user, employee_prefix="employee_profile__")).distinct()
+        return qs.filter(_manager_scope_filter(self.request.user)).distinct()
 
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
@@ -814,6 +821,7 @@ class ManagerAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
         actor_source = manager_approval_actor_source(
             request.user,
             instance.employee_profile,
+            capability="attendance.approve",
             allow_admin=True,
         )
         if not actor_source:
@@ -862,6 +870,7 @@ class ManagerAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
         actor_source = manager_approval_actor_source(
             request.user,
             instance.employee_profile,
+            capability="attendance.approve",
             allow_admin=True,
         )
         if not actor_source:

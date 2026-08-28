@@ -27,7 +27,7 @@ describe("resolveSafeNotificationUrl", () => {
 
   it("allows a same-origin absolute URL, reduced to a router path", () => {
     const result = resolveSafeNotificationUrl(
-      `${ORIGIN}/employee/leave/requests?x=1#h`
+      `${ORIGIN}/employee/leave/requests?x=1#h`,
     );
     expect(result).toEqual({
       allowed: true,
@@ -37,9 +37,9 @@ describe("resolveSafeNotificationUrl", () => {
   });
 
   it("blocks an external HTTPS URL", () => {
-    expect(resolveSafeNotificationUrl("https://evil.example.com/steal")).toEqual(
-      { allowed: false, kind: "blocked" }
-    );
+    expect(
+      resolveSafeNotificationUrl("https://evil.example.com/steal"),
+    ).toEqual({ allowed: false, kind: "blocked" });
   });
 
   it("blocks an external HTTP URL", () => {
@@ -58,20 +58,21 @@ describe("resolveSafeNotificationUrl", () => {
 
   it("blocks a javascript: URL", () => {
     expect(
-      resolveSafeNotificationUrl("javascript:alert(document.cookie)")
+      resolveSafeNotificationUrl("javascript:alert(document.cookie)"),
     ).toEqual({ allowed: false, kind: "blocked" });
   });
 
   it("blocks a data: URL", () => {
     expect(
-      resolveSafeNotificationUrl("data:text/html,<script>alert(1)</script>")
+      resolveSafeNotificationUrl("data:text/html,<script>alert(1)</script>"),
     ).toEqual({ allowed: false, kind: "blocked" });
   });
 
   it("blocks a blob: URL", () => {
-    expect(
-      resolveSafeNotificationUrl(`blob:${ORIGIN}/1234-5678`)
-    ).toEqual({ allowed: false, kind: "blocked" });
+    expect(resolveSafeNotificationUrl(`blob:${ORIGIN}/1234-5678`)).toEqual({
+      allowed: false,
+      kind: "blocked",
+    });
   });
 
   it("blocks a malformed absolute URL", () => {

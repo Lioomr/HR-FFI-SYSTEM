@@ -1,7 +1,24 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, SyncOutlined } from "@ant-design/icons";
-import { Button, Card, Grid, Input, Modal, Space, Table, Tag, Tooltip, Typography, notification } from "antd";
+import {
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  EyeOutlined,
+  SyncOutlined,
+} from "@ant-design/icons";
+import {
+  Button,
+  Card,
+  Grid,
+  Input,
+  Modal,
+  Space,
+  Table,
+  Tag,
+  Tooltip,
+  Typography,
+  notification,
+} from "antd";
 import type { ColumnsType } from "antd/es/table";
 
 import LeaveApprovalMap from "../../../components/leaves/LeaveApprovalMap";
@@ -14,7 +31,10 @@ import {
   rejectDelegatedLeaveRequest,
   type LeaveRequest,
 } from "../../../services/api/leaveApi";
-import { getDetailedApiMessage, getDetailedHttpErrorMessage } from "../../../services/api/userErrorMessages";
+import {
+  getDetailedApiMessage,
+  getDetailedHttpErrorMessage,
+} from "../../../services/api/userErrorMessages";
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -56,15 +76,24 @@ export default function DelegatedLeaveInboxPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await getMyDelegatedLeaveRequests({ page, page_size: pageSize });
+      const res = await getMyDelegatedLeaveRequests({
+        page,
+        page_size: pageSize,
+      });
       if (isApiError(res)) {
-        notification.error({ message: t("common.error"), description: getDetailedApiMessage(t, res.message) });
+        notification.error({
+          message: t("common.error"),
+          description: getDetailedApiMessage(t, res.message),
+        });
         return;
       }
       setData(res.data.items || []);
       setTotal(res.data.count || 0);
     } catch (err: unknown) {
-      notification.error({ message: t("common.error"), description: getDetailedHttpErrorMessage(t, err) });
+      notification.error({
+        message: t("common.error"),
+        description: getDetailedHttpErrorMessage(t, err),
+      });
     } finally {
       setLoading(false);
     }
@@ -82,7 +111,10 @@ export default function DelegatedLeaveInboxPage() {
 
   const translateLeaveType = (name?: string) => {
     if (!name) return "-";
-    const key = `leave.type.${name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z_]/g, "")}`;
+    const key = `leave.type.${name
+      .toLowerCase()
+      .replace(/\s+/g, "_")
+      .replace(/[^a-z_]/g, "")}`;
     const translated = t(key);
     return translated === key ? name : translated;
   };
@@ -97,13 +129,19 @@ export default function DelegatedLeaveInboxPage() {
     try {
       const res = await approveDelegatedLeaveRequest(record.id);
       if (isApiError(res)) {
-        notification.error({ message: t("leave.approveFail"), description: getDetailedApiMessage(t, res.message) });
+        notification.error({
+          message: t("leave.approveFail"),
+          description: getDetailedApiMessage(t, res.message),
+        });
         return;
       }
       notification.success({ message: t("leave.approveSuccess") });
       loadData();
     } catch (err: unknown) {
-      notification.error({ message: t("common.error"), description: getDetailedHttpErrorMessage(t, err) });
+      notification.error({
+        message: t("common.error"),
+        description: getDetailedHttpErrorMessage(t, err),
+      });
     } finally {
       setActionId(null);
     }
@@ -111,14 +149,23 @@ export default function DelegatedLeaveInboxPage() {
 
   const handleReject = async () => {
     if (!rejectTarget || !rejectionReason.trim()) {
-      notification.error({ message: t("leave.reasonReqTitle"), description: t("leave.reasonReqDesc") });
+      notification.error({
+        message: t("leave.reasonReqTitle"),
+        description: t("leave.reasonReqDesc"),
+      });
       return;
     }
     setActionId(rejectTarget.id);
     try {
-      const res = await rejectDelegatedLeaveRequest(rejectTarget.id, rejectionReason);
+      const res = await rejectDelegatedLeaveRequest(
+        rejectTarget.id,
+        rejectionReason,
+      );
       if (isApiError(res)) {
-        notification.error({ message: t("leave.rejectFail"), description: getDetailedApiMessage(t, res.message) });
+        notification.error({
+          message: t("leave.rejectFail"),
+          description: getDetailedApiMessage(t, res.message),
+        });
         return;
       }
       notification.success({ message: t("leave.rejectSuccess") });
@@ -126,7 +173,10 @@ export default function DelegatedLeaveInboxPage() {
       setRejectionReason("");
       loadData();
     } catch (err: unknown) {
-      notification.error({ message: t("common.error"), description: getDetailedHttpErrorMessage(t, err) });
+      notification.error({
+        message: t("common.error"),
+        description: getDetailedHttpErrorMessage(t, err),
+      });
     } finally {
       setActionId(null);
     }
@@ -137,7 +187,8 @@ export default function DelegatedLeaveInboxPage() {
       title: t("common.employee"),
       key: "employee",
       width: 190,
-      render: (_, record) => record.employee?.full_name || record.employee?.email || "-",
+      render: (_, record) =>
+        record.employee?.full_name || record.employee?.email || "-",
     },
     {
       title: t("leave.type"),
@@ -149,7 +200,8 @@ export default function DelegatedLeaveInboxPage() {
       title: t("leave.period"),
       key: "period",
       width: 210,
-      render: (_, record) => `${record.start_date} ${t("common.to")} ${record.end_date}`,
+      render: (_, record) =>
+        `${record.start_date} ${t("common.to")} ${record.end_date}`,
     },
     {
       title: t("leave.days"),
@@ -172,7 +224,9 @@ export default function DelegatedLeaveInboxPage() {
       dataIndex: "status",
       key: "status",
       width: 150,
-      render: (status) => <Tag color={statusColor(status)}>{statusLabel(status)}</Tag>,
+      render: (status) => (
+        <Tag color={statusColor(status)}>{statusLabel(status)}</Tag>
+      ),
     },
     {
       title: t("common.actions"),
@@ -231,10 +285,28 @@ export default function DelegatedLeaveInboxPage() {
     <div style={{ maxWidth: 1080, margin: "0 auto" }}>
       <PageHeader
         title={t("leave.delegatedInboxTitle", "Delegated Approval Inbox")}
-        subtitle={t("leave.delegatedInboxSubtitle", "Leave requests assigned to you for coverage confirmation.")}
-        tags={pendingCount > 0 ? <Tag color="gold">{t("leave.delegatedPendingCount", { count: pendingCount }, `${pendingCount} pending`)}</Tag> : undefined}
+        subtitle={t(
+          "leave.delegatedInboxSubtitle",
+          "Leave requests assigned to you for coverage confirmation.",
+        )}
+        tags={
+          pendingCount > 0 ? (
+            <Tag color="gold">
+              {t(
+                "leave.delegatedPendingCount",
+                { count: pendingCount },
+                `${pendingCount} pending`,
+              )}
+            </Tag>
+          ) : undefined
+        }
         actions={
-          <Button icon={<SyncOutlined />} onClick={loadData} loading={loading} block={isMobile}>
+          <Button
+            icon={<SyncOutlined />}
+            onClick={loadData}
+            loading={loading}
+            block={isMobile}
+          >
             {t("common.refresh", "Refresh")}
           </Button>
         }
@@ -251,7 +323,10 @@ export default function DelegatedLeaveInboxPage() {
           locale={{
             emptyText: (
               <Text type="secondary">
-                {t("leave.delegatedInboxEmpty", "No delegated leave approvals assigned to you.")}
+                {t(
+                  "leave.delegatedInboxEmpty",
+                  "No delegated leave approvals assigned to you.",
+                )}
               </Text>
             ),
           }}
@@ -265,11 +340,14 @@ export default function DelegatedLeaveInboxPage() {
             },
           }}
           expandable={{
-            expandedRowRender: (record) => <LeaveApprovalMap request={record} t={t} />,
+            expandedRowRender: (record) => (
+              <LeaveApprovalMap request={record} t={t} />
+            ),
             rowExpandable: () => true,
           }}
           onRow={(record) => ({
-            onClick: () => navigate(`/employee/delegated-approvals/${record.id}`),
+            onClick: () =>
+              navigate(`/employee/delegated-approvals/${record.id}`),
             style: { cursor: "pointer" },
           })}
         />

@@ -29,31 +29,40 @@ export type WhatsAppTestResponse = {
 };
 
 export async function getWhatsAppIntegrationStatus() {
-  const { data } = await api.get<ApiResponse<WhatsAppIntegrationStatus>>("/api/integrations/whatsapp/status/");
-  return data;
-}
-
-export async function connectWhatsAppIntegration() {
-  const { data } = await api.post<ApiResponse<WhatsAppQrResponse>>("/api/integrations/whatsapp/connect/", {});
-  return data;
-}
-
-export async function getWhatsAppIntegrationQr() {
-  const { data } = await api.get<ApiResponse<WhatsAppQrResponse>>("/api/integrations/whatsapp/qr/");
-  return data;
-}
-
-export async function logoutWhatsAppIntegration() {
-  const { data } = await api.post<ApiResponse<{ instance_name: string; provider_status_code?: number }>>(
-    "/api/integrations/whatsapp/logout/",
-    {}
+  const { data } = await api.get<ApiResponse<WhatsAppIntegrationStatus>>(
+    "/api/integrations/whatsapp/status/",
   );
   return data;
 }
 
+export async function connectWhatsAppIntegration() {
+  const { data } = await api.post<ApiResponse<WhatsAppQrResponse>>(
+    "/api/integrations/whatsapp/connect/",
+    {},
+  );
+  return data;
+}
+
+export async function getWhatsAppIntegrationQr() {
+  const { data } = await api.get<ApiResponse<WhatsAppQrResponse>>(
+    "/api/integrations/whatsapp/qr/",
+  );
+  return data;
+}
+
+export async function logoutWhatsAppIntegration() {
+  const { data } = await api.post<
+    ApiResponse<{ instance_name: string; provider_status_code?: number }>
+  >("/api/integrations/whatsapp/logout/", {});
+  return data;
+}
+
 export async function testWhatsAppIntegration(phone_number: string) {
-  const { data } = await api.post<ApiResponse<WhatsAppTestResponse>>("/api/integrations/whatsapp/test/", {
-    phone_number,
-  });
+  const { data } = await api.post<ApiResponse<WhatsAppTestResponse>>(
+    "/api/integrations/whatsapp/test/",
+    {
+      phone_number,
+    },
+  );
   return data;
 }

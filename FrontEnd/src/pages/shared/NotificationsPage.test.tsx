@@ -26,7 +26,9 @@ const listNotifications = api.listNotifications as unknown as ReturnType<
   typeof vi.fn
 >;
 
-function makeNotification(overrides: Partial<NotificationDto> = {}): NotificationDto {
+function makeNotification(
+  overrides: Partial<NotificationDto> = {},
+): NotificationDto {
   return {
     id: 1,
     title: "Leave approved",
@@ -47,7 +49,14 @@ function makeNotification(overrides: Partial<NotificationDto> = {}): Notificatio
 
 const page = <T,>(items: T[], extra: Record<string, unknown> = {}) => ({
   status: "success" as const,
-  data: { items, page: 1, page_size: 20, count: items.length, total_pages: 1, ...extra },
+  data: {
+    items,
+    page: 1,
+    page_size: 20,
+    count: items.length,
+    total_pages: 1,
+    ...extra,
+  },
 });
 
 beforeEach(() => {
@@ -60,7 +69,7 @@ beforeEach(() => {
 describe("NotificationsPage", () => {
   it("loads and renders notifications on mount", async () => {
     listNotifications.mockResolvedValue(
-      page([makeNotification({ id: 1, title: "Inbox item" })])
+      page([makeNotification({ id: 1, title: "Inbox item" })]),
     );
     render(<NotificationsPage />);
     expect(await screen.findByText("Inbox item")).toBeInTheDocument();
@@ -75,14 +84,17 @@ describe("NotificationsPage", () => {
 
     await waitFor(() =>
       expect(listNotifications).toHaveBeenCalledWith(
-        expect.objectContaining({ unread: true })
-      )
+        expect.objectContaining({ unread: true }),
+      ),
     );
   });
 
   it("paginates through pages", async () => {
     listNotifications.mockResolvedValue(
-      page([makeNotification({ id: 1, title: "Page one" })], { count: 40, total_pages: 2 })
+      page([makeNotification({ id: 1, title: "Page one" })], {
+        count: 40,
+        total_pages: 2,
+      }),
     );
     render(<NotificationsPage />);
     await screen.findByText("Page one");
@@ -91,8 +103,8 @@ describe("NotificationsPage", () => {
 
     await waitFor(() =>
       expect(listNotifications).toHaveBeenCalledWith(
-        expect.objectContaining({ page: 2 })
-      )
+        expect.objectContaining({ page: 2 }),
+      ),
     );
   });
 
@@ -101,7 +113,7 @@ describe("NotificationsPage", () => {
     useNotificationStore.setState({ filter: "unread" });
     render(<NotificationsPage />);
     expect(
-      await screen.findByText(/no unread notifications/i)
+      await screen.findByText(/no unread notifications/i),
     ).toBeInTheDocument();
   });
 
@@ -109,7 +121,7 @@ describe("NotificationsPage", () => {
     listNotifications.mockRejectedValue(new Error("Network down"));
     render(<NotificationsPage />);
     expect(
-      await screen.findByText(/couldn't load notifications/i)
+      await screen.findByText(/couldn't load notifications/i),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
   });

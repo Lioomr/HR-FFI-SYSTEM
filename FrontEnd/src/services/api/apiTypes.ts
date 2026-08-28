@@ -36,7 +36,13 @@ export function isApiError<T>(res: ApiResponse<T>): res is ApiError {
   return res.status === "error";
 }
 
-export type Role = "SystemAdmin" | "HRManager" | "Manager" | "Employee" | "CEO" | "CFO";
+export type Role =
+  | "SystemAdmin"
+  | "HRManager"
+  | "Manager"
+  | "Employee"
+  | "CEO"
+  | "CFO";
 
 export type OrganizationNodeDto = {
   id: number | string;
@@ -50,7 +56,13 @@ export type OrganizationNodeDto = {
 
 // Confirmed delivery state reported by the provider/back-end.
 // "sent" here means submitted to the provider, NOT confirmed delivery.
-export type InviteDeliveryStatus = "unknown" | "queued" | "sent" | "delivered" | "read" | "failed";
+export type InviteDeliveryStatus =
+  | "unknown"
+  | "queued"
+  | "sent"
+  | "delivered"
+  | "read"
+  | "failed";
 
 export type EmailDeliveryStatus = {
   sent: boolean;
@@ -167,10 +179,23 @@ export type SettingsDto = {
   updated_at: string;
 };
 
+/**
+ * Mirrors `Backend/leaves/serializers.py::LeaveBalanceSerializer`.
+ * DRF serialises decimals as strings, so numeric fields accept both shapes.
+ */
 export type LeaveBalance = {
   leave_type_id: number;
   leave_type: string;
-  total_days: number;
-  used_days: number;
-  remaining_days: number;
+  leave_code?: string;
+  total_days: number | string;
+  used_days: number | string;
+  remaining_days: number | string;
+  /** Whole days already reserved by submitted/pending requests. */
+  pending_days?: number | string;
+  /** The only figure an employee may request against: floor(remaining) - pending. */
+  requestable_days?: number | string;
+  /** Sub-day remainder of the balance; informational, never requestable. */
+  fractional_days?: number | string;
+  adjustments?: number | string;
+  available_annual_year_days?: number | string;
 };

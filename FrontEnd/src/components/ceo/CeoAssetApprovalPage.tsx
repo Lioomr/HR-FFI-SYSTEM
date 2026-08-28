@@ -56,8 +56,14 @@ export default function CeoAssetApprovalPage<T extends CeoAssetRecord>({
     page?: number;
     page_size?: number;
   }) => Promise<ApiResponse<ListPayload<T>>>;
-  approve: (id: number | string, comment?: string) => Promise<ApiResponse<unknown>>;
-  reject: (id: number | string, comment: string) => Promise<ApiResponse<unknown>>;
+  approve: (
+    id: number | string,
+    comment?: string,
+  ) => Promise<ApiResponse<unknown>>;
+  reject: (
+    id: number | string,
+    comment: string,
+  ) => Promise<ApiResponse<unknown>>;
   expandedRowRender?: (record: T) => ReactNode;
 }) {
   const { t } = useI18n();
@@ -77,19 +83,28 @@ export default function CeoAssetApprovalPage<T extends CeoAssetRecord>({
   const [processing, setProcessing] = useState(false);
 
   const load = useCallback(
-    async (targetPage = 1, { isRefresh = false }: { isRefresh?: boolean } = {}) => {
+    async (
+      targetPage = 1,
+      { isRefresh = false }: { isRefresh?: boolean } = {},
+    ) => {
       if (isRefresh) setRefreshing(true);
       else setLoading(true);
       setError(null);
       try {
-        const res = await fetcher({ status: "PENDING_CEO", page: targetPage, page_size: PAGE_SIZE });
+        const res = await fetcher({
+          status: "PENDING_CEO",
+          page: targetPage,
+          page_size: PAGE_SIZE,
+        });
         if (isApiError(res)) {
           setError(res.message || t("common.error.genericDetailed"));
           return;
         }
         const payload = res.data;
         const rows = Array.isArray(payload) ? payload : (payload?.items ?? []);
-        const count = Array.isArray(payload) ? payload.length : (payload?.count ?? rows.length);
+        const count = Array.isArray(payload)
+          ? payload.length
+          : (payload?.count ?? rows.length);
         setItems(rows);
         setTotal(count);
       } catch (err: any) {
@@ -110,19 +125,46 @@ export default function CeoAssetApprovalPage<T extends CeoAssetRecord>({
 
   const submitApprove = async () => {
     if (!approving) return;
+    const row = approving;
     setProcessing(true);
+    // Optimistic: close the modal and drop the row immediately; restore it on failure.
+    setApproving(null);
+    setApprovalNote("");
+    setItems((current) => current.filter((item) => item.id !== row.id));
+    setTotal((current) => Math.max(0, current - 1));
     try {
-      const res = await approve(approving.id, approvalNote.trim() || DEFAULT_APPROVAL_NOTE);
+      const res = await approve(
+        row.id,
+        approvalNote.trim() || DEFAULT_APPROVAL_NOTE,
+      );
       if (isApiError(res)) {
-        notification.error({ message: t("common.error"), description: res.message });
+        setItems((current) =>
+          current.some((item) => item.id === row.id)
+            ? current
+            : [row, ...current],
+        );
+        setTotal((current) => current + 1);
+        notification.error({
+          message: t("common.error"),
+          description: res.message,
+        });
         return;
       }
       notification.success({ message: t("ceo.approvals.approveSuccess") });
-      setApproving(null);
-      setApprovalNote("");
-      void load(page);
+      // Retain the immediate optimistic feedback, then reconcile the queue
+      // and its server-owned count in case another decision happened too.
+      await load(page);
     } catch {
-      notification.error({ message: t("common.error"), description: t("common.tryAgain") });
+      setItems((current) =>
+        current.some((item) => item.id === row.id)
+          ? current
+          : [row, ...current],
+      );
+      setTotal((current) => current + 1);
+      notification.error({
+        message: t("common.error"),
+        description: t("common.tryAgain"),
+      });
     } finally {
       setProcessing(false);
     }
@@ -130,18 +172,42 @@ export default function CeoAssetApprovalPage<T extends CeoAssetRecord>({
 
   const submitReject = async (reason: string) => {
     if (!rejecting) return;
+    const row = rejecting;
     setProcessing(true);
+    // Optimistic: close the modal and drop the row immediately; restore it on failure.
+    setRejecting(null);
+    setItems((current) => current.filter((item) => item.id !== row.id));
+    setTotal((current) => Math.max(0, current - 1));
     try {
-      const res = await reject(rejecting.id, reason);
+      const res = await reject(row.id, reason);
       if (isApiError(res)) {
-        notification.error({ message: t("common.error"), description: res.message });
+        setItems((current) =>
+          current.some((item) => item.id === row.id)
+            ? current
+            : [row, ...current],
+        );
+        setTotal((current) => current + 1);
+        notification.error({
+          message: t("common.error"),
+          description: res.message,
+        });
         return;
       }
       notification.success({ message: t("ceo.approvals.rejectSuccess") });
-      setRejecting(null);
-      void load(page);
+      // Retain the immediate optimistic feedback, then reconcile the queue
+      // and its server-owned count in case another decision happened too.
+      await load(page);
     } catch {
-      notification.error({ message: t("common.error"), description: t("common.tryAgain") });
+      setItems((current) =>
+        current.some((item) => item.id === row.id)
+          ? current
+          : [row, ...current],
+      );
+      setTotal((current) => current + 1);
+      notification.error({
+        message: t("common.error"),
+        description: t("common.tryAgain"),
+      });
     } finally {
       setProcessing(false);
     }
@@ -153,8 +219,12 @@ export default function CeoAssetApprovalPage<T extends CeoAssetRecord>({
       key: "asset",
       render: (_, record) => (
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 600, color: "#0f172a" }}>{record.asset_code}</div>
-          <div style={{ fontSize: 12, color: "#64748b" }}>{record.asset_name}</div>
+          <div style={{ fontWeight: 600, color: "#0f172a" }}>
+            {record.asset_code}
+          </div>
+          <div style={{ fontSize: 12, color: "#64748b" }}>
+            {record.asset_name}
+          </div>
         </div>
       ),
     },
@@ -163,9 +233,13 @@ export default function CeoAssetApprovalPage<T extends CeoAssetRecord>({
       key: "employee",
       render: (_, record) => (
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 600, color: "#0f172a" }}>{record.employee_name || "—"}</div>
+          <div style={{ fontWeight: 600, color: "#0f172a" }}>
+            {record.employee_name || "—"}
+          </div>
           {record.employee_email && (
-            <div style={{ fontSize: 12, color: "#64748b" }}>{record.employee_email}</div>
+            <div style={{ fontSize: 12, color: "#64748b" }}>
+              {record.employee_email}
+            </div>
           )}
         </div>
       ),
@@ -187,7 +261,10 @@ export default function CeoAssetApprovalPage<T extends CeoAssetRecord>({
       key: "status",
       width: 150,
       render: (_, record) => (
-        <ApprovalStatusTag label={approvalStatusLabel(record.status, t)} status={record.status} />
+        <ApprovalStatusTag
+          label={approvalStatusLabel(record.status, t)}
+          status={record.status}
+        />
       ),
     },
     {
@@ -247,7 +324,10 @@ export default function CeoAssetApprovalPage<T extends CeoAssetRecord>({
         open={Boolean(approving)}
         title={t("ceo.approvals.approveTitle")}
         okText={t("common.approve")}
-        okButtonProps={{ loading: processing, "aria-label": t("common.approve") }}
+        okButtonProps={{
+          loading: processing,
+          "aria-label": t("common.approve"),
+        }}
         cancelText={t("common.cancel")}
         cancelButtonProps={{ disabled: processing }}
         onOk={submitApprove}
@@ -265,7 +345,10 @@ export default function CeoAssetApprovalPage<T extends CeoAssetRecord>({
             <Typography.Paragraph strong style={{ marginBottom: 12 }}>
               {approving.asset_code} — {subjectLabel(approving)}
             </Typography.Paragraph>
-            <Typography.Text type="secondary" style={{ display: "block", marginBottom: 8 }}>
+            <Typography.Text
+              type="secondary"
+              style={{ display: "block", marginBottom: 8 }}
+            >
               {t("ceo.approvals.approveNoteLabel")}
             </Typography.Text>
             <Input.TextArea
@@ -285,7 +368,11 @@ export default function CeoAssetApprovalPage<T extends CeoAssetRecord>({
       <RejectReasonModal
         open={Boolean(rejecting)}
         title={rejectTitle}
-        subject={rejecting ? `${rejecting.asset_code} — ${subjectLabel(rejecting)}` : undefined}
+        subject={
+          rejecting
+            ? `${rejecting.asset_code} — ${subjectLabel(rejecting)}`
+            : undefined
+        }
         loading={processing}
         onCancel={() => setRejecting(null)}
         onSubmit={submitReject}

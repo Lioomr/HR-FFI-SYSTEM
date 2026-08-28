@@ -34,4 +34,6 @@ app.post("/auth/change-password", (req, res) => {
   res.json({ status: "success", data: {} });
 });
 
-app.listen(5000, () => console.log("Mock backend running on http://localhost:5000"));
+app.listen(5000, () =>
+  console.log("Mock backend running on http://localhost:5000"),
+);

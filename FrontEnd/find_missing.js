@@ -1,6 +1,6 @@
-const fs = require('fs');
-const keysTxt = fs.readFileSync('admin_keys.txt', 'utf8');
-const translationsTs = fs.readFileSync('src/i18n/translations.ts', 'utf8');
+const fs = require("fs");
+const keysTxt = fs.readFileSync("admin_keys.txt", "utf8");
+const translationsTs = fs.readFileSync("src/i18n/translations.ts", "utf8");
 
 const keysPattern = /t\(\"([^\"]+)\"\)/g;
 let match;
@@ -16,4 +16,4 @@ for (const key of keysList) {
     missing.push(key);
   }
 }
-console.log("Missing Admin Keys:\\n", missing.join('\\n'));
+console.log("Missing Admin Keys:\\n", missing.join("\\n"));

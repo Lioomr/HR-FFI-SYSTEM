@@ -60,7 +60,11 @@ export default function RejectReasonModal({
       open={open}
       title={title}
       okText={confirmText ?? t("common.reject")}
-      okButtonProps={{ danger: true, loading, "aria-label": confirmText ?? t("common.reject") }}
+      okButtonProps={{
+        danger: true,
+        loading,
+        "aria-label": confirmText ?? t("common.reject"),
+      }}
       cancelText={t("common.cancel")}
       cancelButtonProps={{ disabled: loading }}
       onOk={handleOk}
@@ -110,7 +114,12 @@ export default function RejectReasonModal({
         </Form.Item>
       </Form>
       {errorMessage && (
-        <Alert type="error" showIcon message={errorMessage} style={{ marginTop: 12, borderRadius: 10 }} />
+        <Alert
+          type="error"
+          showIcon
+          message={errorMessage}
+          style={{ marginTop: 12, borderRadius: 10 }}
+        />
       )}
     </Modal>
   );

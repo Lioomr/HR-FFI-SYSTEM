@@ -3,17 +3,30 @@ from unittest.mock import patch
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 
+from organization.models import OrganizationNode
+
 from .document_extraction import _extract_identity_fields, extract_document_fields
 from .models import EmployeeDocument, EmployeeProfile
 
 
 class EmployeeDocumentExtractionTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.company = OrganizationNode.objects.create(
+            code="DOCUMENT_EXTRACTION_TEST",
+            name="Document Extraction Test Company",
+            node_type=OrganizationNode.NodeType.COMPANY,
+        )
+
     def tearDown(self):
         for document in EmployeeDocument.objects.exclude(file=""):
             document.file.delete(save=False)
 
     def _document(self, document_type):
-        profile = EmployeeProfile.objects.create(employee_id=f"OCR-{EmployeeProfile.objects.count() + 1}")
+        profile = EmployeeProfile.objects.create(
+            company=self.company,
+            employee_id=f"OCR-{EmployeeProfile.objects.count() + 1}",
+        )
         return EmployeeDocument.objects.create(
             employee_profile=profile,
             document_type=document_type,
