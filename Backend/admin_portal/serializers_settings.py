@@ -23,11 +23,16 @@ class SecuritySerializer(serializers.Serializer):
     max_login_attempts = serializers.IntegerField(min_value=1, max_value=50)
 
 
+class AttendanceSettingsSerializer(serializers.Serializer):
+    geofence_enabled = serializers.BooleanField()
+
+
 class SettingsResponseSerializer(serializers.Serializer):
     password_policy = PasswordPolicySerializer()
     session = SessionSerializer()
     invites = InvitesSerializer()
     security = SecuritySerializer()
+    attendance = AttendanceSettingsSerializer()
     updated_at = serializers.DateTimeField()
 
 
@@ -36,10 +41,11 @@ class SettingsUpdateSerializer(serializers.Serializer):
     session = SessionSerializer()
     invites = InvitesSerializer()
     security = SecuritySerializer()
+    attendance = AttendanceSettingsSerializer(required=False)
 
     def validate(self, attrs):
         # Reject unknown top-level fields
-        allowed = {"password_policy", "session", "invites", "security"}
+        allowed = {"password_policy", "session", "invites", "security", "attendance"}
         unknown = set(self.initial_data.keys()) - allowed
         if unknown:
             raise serializers.ValidationError({k: ["Unknown field."] for k in sorted(unknown)})
@@ -56,12 +62,14 @@ class SettingsUpdateSerializer(serializers.Serializer):
             "session_timeout_minutes": settings_obj.session_timeout_minutes,
             "max_login_attempts": settings_obj.max_login_attempts,
             "default_invite_expiry_hours": settings_obj.default_invite_expiry_hours,
+            "geofence_attendance_enabled": settings_obj.geofence_attendance_enabled,
         }
 
         pp = self.validated_data["password_policy"]
         se = self.validated_data["session"]
         inv = self.validated_data["invites"]
         sec = self.validated_data["security"]
+        attendance = self.validated_data.get("attendance")
 
         settings_obj.password_min_length = pp["min_length"]
         settings_obj.password_require_upper = pp["require_upper"]
@@ -72,6 +80,8 @@ class SettingsUpdateSerializer(serializers.Serializer):
         settings_obj.session_timeout_minutes = se["timeout_minutes"]
         settings_obj.default_invite_expiry_hours = inv["default_expiry_hours"]
         settings_obj.max_login_attempts = sec["max_login_attempts"]
+        if attendance is not None:
+            settings_obj.geofence_attendance_enabled = attendance["geofence_enabled"]
 
         settings_obj.save()
 
@@ -84,6 +94,7 @@ class SettingsUpdateSerializer(serializers.Serializer):
             "session_timeout_minutes": settings_obj.session_timeout_minutes,
             "max_login_attempts": settings_obj.max_login_attempts,
             "default_invite_expiry_hours": settings_obj.default_invite_expiry_hours,
+            "geofence_attendance_enabled": settings_obj.geofence_attendance_enabled,
         }
 
         changed = {k: {"from": before[k], "to": after[k]} for k in before.keys() if before[k] != after[k]}
@@ -107,6 +118,9 @@ def to_settings_response(settings_obj: SystemSettings):
         },
         "security": {
             "max_login_attempts": settings_obj.max_login_attempts,
+        },
+        "attendance": {
+            "geofence_enabled": settings_obj.geofence_attendance_enabled,
         },
         "updated_at": settings_obj.updated_at,
     }
