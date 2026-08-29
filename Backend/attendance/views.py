@@ -13,10 +13,12 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.throttling import UserRateThrottle
 
 from audit.utils import audit
+from core.pagination import StandardPagination
 from core.permissions import (
     IsDepartmentCEOApprover,
     IsHRManagerOrAdmin,
     IsManager,
+    IsSystemAdmin,
     get_role,
     is_hr_workflow_approver_user,
 )
@@ -35,9 +37,14 @@ from employees.services.manager_relationships import (
     manager_approval_actor_source,
     manager_scope_q,
 )
-from organization.services import filter_queryset_by_company_scope, get_active_company_for_request
+from organization.services import (
+    ensure_company_write_allowed,
+    filter_queryset_by_company_scope,
+    get_active_company_for_request,
+)
 
-from .models import AttendanceCorrectionRequest, AttendanceRecord
+from .geofence import GeofencePayloadError, validate_mobile_geofence
+from .models import AttendanceCorrectionRequest, AttendanceRecord, WorkLocation
 from .permissions import IsAttendanceSelfServiceRole
 from .serializers import (
     AttendanceCorrectionRequestSerializer,
@@ -45,6 +52,7 @@ from .serializers import (
     AttendanceRecordSerializer,
     CheckInResponseSerializer,
     CheckOutResponseSerializer,
+    WorkLocationSerializer,
 )
 
 User = get_user_model()
@@ -99,8 +107,100 @@ def _profile_matches_active_company(request, profile):
     return bool(active_company and active_company.id == profile.company_id)
 
 
+def _validate_attendance_geofence(request, profile):
+    """Return a matching site when the global rollout toggle is enabled."""
+    from admin_portal.models import SystemSettings
+
+    if not SystemSettings.get_solo().geofence_attendance_enabled:
+        return None, None
+
+    try:
+        location = validate_mobile_geofence(payload=request.data, company=profile.company)
+    except GeofencePayloadError as exc:
+        if exc.kind == "poor_accuracy":
+            return None, error(
+                "GPS accuracy must be 100 metres or better.",
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+        return None, error("Invalid GPS coordinates.", status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+    if location is None:
+        return None, error(
+            "You are not within an approved work location.", status=status.HTTP_403_FORBIDDEN
+        )
+    return location, None
+
+
 class AttendanceThrottle(UserRateThrottle):
     rate = "10/min"
+
+
+class WorkLocationViewSet(viewsets.ModelViewSet):
+    """SystemAdmin-managed, active-company-scoped attendance sites."""
+
+    permission_classes = [IsAuthenticated, IsSystemAdmin]
+    serializer_class = WorkLocationSerializer
+    pagination_class = StandardPagination
+
+    def get_queryset(self):
+        return filter_queryset_by_company_scope(
+            WorkLocation.objects.select_related("company").filter(is_active=True), self.request
+        )
+
+    def list(self, request, *args, **kwargs):
+        response = super().list(request, *args, **kwargs)
+        if isinstance(response.data, dict) and response.data.get("status") == "success":
+            return response
+        return success(response.data)
+
+    def retrieve(self, request, *args, **kwargs):
+        return success(self.get_serializer(self.get_object()).data)
+
+    def create(self, request, *args, **kwargs):
+        ensure_company_write_allowed(request)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        location = serializer.save(company=get_active_company_for_request(request))
+        audit(
+            request,
+            "attendance.work_location_created",
+            entity="work_location",
+            entity_id=location.id,
+            metadata={"company_id": location.company_id, "name": location.name},
+        )
+        return success(self.get_serializer(location).data, status=status.HTTP_201_CREATED)
+
+    def update(self, request, *args, **kwargs):
+        ensure_company_write_allowed(request)
+        location = self.get_object()
+        serializer = self.get_serializer(location, data=request.data, partial=kwargs.pop("partial", False))
+        serializer.is_valid(raise_exception=True)
+        updated = serializer.save()
+        audit(
+            request,
+            "attendance.work_location_updated",
+            entity="work_location",
+            entity_id=updated.id,
+            metadata={"company_id": updated.company_id, "name": updated.name},
+        )
+        return success(self.get_serializer(updated).data)
+
+    def partial_update(self, request, *args, **kwargs):
+        kwargs["partial"] = True
+        return self.update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        location = self.get_object()
+        location.is_active = False
+        location.save(update_fields=["is_active", "updated_at"])
+        audit(
+            request,
+            "attendance.work_location_deleted",
+            entity="work_location",
+            entity_id=location.id,
+            metadata={"company_id": location.company_id, "name": location.name, "soft_deleted": True},
+        )
+        return success({})
 
 
 class AttendanceRecordViewSet(viewsets.ModelViewSet):
@@ -302,6 +402,10 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         if not _profile_matches_active_company(request, profile):
             return error("Employee profile is not available in the active company.", status=status.HTTP_403_FORBIDDEN)
 
+        matched_location, geofence_error = _validate_attendance_geofence(request, profile)
+        if geofence_error:
+            return geofence_error
+
         has_manager = bool(get_valid_manager_user(profile, cross_company_capability="attendance.approve"))
 
         if _is_hr_manager_user(user):
@@ -329,7 +433,15 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
                     "attendance.check_in",
                     entity="attendance_record",
                     entity_id=record.id,
-                    metadata={"date": str(record.date), "company_id": profile.company_id},
+                    metadata={
+                        "date": str(record.date),
+                        "company_id": profile.company_id,
+                        **(
+                            {"work_location_id": matched_location.id, "work_location_name": matched_location.name}
+                            if matched_location
+                            else {}
+                        ),
+                    },
                 )
         except IntegrityError:
             return error("Check-in already exists for today.", status=status.HTTP_400_BAD_REQUEST)
@@ -387,6 +499,10 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         if not _profile_matches_active_company(request, profile):
             return error("Employee profile is not available in the active company.", status=status.HTTP_403_FORBIDDEN)
 
+        matched_location, geofence_error = _validate_attendance_geofence(request, profile)
+        if geofence_error:
+            return geofence_error
+
         with transaction.atomic():
             try:
                 record = AttendanceRecord.objects.select_for_update().get(employee_profile=profile, date=today)
@@ -405,7 +521,15 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
                 "attendance.check_out",
                 entity="attendance_record",
                 entity_id=record.id,
-                metadata={"date": str(record.date), "company_id": profile.company_id},
+                metadata={
+                    "date": str(record.date),
+                    "company_id": profile.company_id,
+                    **(
+                        {"work_location_id": matched_location.id, "work_location_name": matched_location.name}
+                        if matched_location
+                        else {}
+                    ),
+                },
             )
         return success(CheckOutResponseSerializer(record).data)
 

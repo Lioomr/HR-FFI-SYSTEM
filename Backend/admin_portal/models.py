@@ -23,6 +23,9 @@ class SystemSettings(models.Model):
     # Invites
     default_invite_expiry_hours = models.PositiveIntegerField(default=72)
 
+    # Attendance
+    geofence_attendance_enabled = models.BooleanField(default=False)
+
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

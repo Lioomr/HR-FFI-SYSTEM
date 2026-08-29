@@ -1,6 +1,6 @@
 # API Route Status Matrix
 
-**Last reviewed:** 2026-08-28
+**Last reviewed:** 2026-08-29
 **Gate 1 status:** **Pass**; API/security blockers remediated and verified with Docker/PostgreSQL.  
 **Gate 3 status:** **Pass**; the employee mobile client now consumes these routes. No route, permission, or response contract was changed — the 2026-07-28 edits record verification only.  
 **Purpose:** reconciled mobile endpoint index. Django URL resolution, views, serializers, permissions, and tests are authoritative.
@@ -24,6 +24,7 @@
 | Dashboard summary | `/employee/summary` | Legacy/missing | No route exists. Compose the dashboard from approved current endpoints or add a reviewed aggregate endpoint. |
 | Separate profile/status | `/employee/profile`, `/employee/status` | Legacy/missing | No routes exist. Do not implement these examples in a client. |
 | Attendance timeline/check-in/out | `GET /api/attendance/me/`; `POST /api/attendance/me/check-in/`; `POST /api/attendance/me/check-out/` | Current; Gate 1 verified | Maintenance 503 guards and module skip were removed. Employee ownership, allowed roles, active-company match, 10/min mutations, duplicate/missing-state failures, row locking, workflow sync, and audits are covered. Profiles without a company fail closed. |
+| Attendance work locations | `GET, POST /api/work-locations/`; `GET, PUT, PATCH, DELETE /api/work-locations/{id}/` | Current; Phase 8 | SystemAdmin-only, `x-active-company-id` scoped site configuration. The server injects company on create; delete is audited soft deletion. See `Geofenced Attendance Phase 8 Backend Contract.md` for exact fields and payloads. |
 | Attendance corrections | `GET /api/attendance-correction-requests/?status=...`; `POST /{id}/approve/`; `POST /{id}/reject/` | Current; mobile Phase 5 | One active-company-scoped endpoint serves both stages. Managers act only on `pending_manager` and approval moves the request to `pending_hr`; HR workflow approvers act only on `pending_hr` and approval applies the protected HR override then sets `approved`. SystemAdmin may act at either stage. Rejection at either actionable stage requires non-empty `notes` (the route accepts `comment` for compatibility, but mobile sends `notes`). CEO has no correction stage. |
 | Submit leave | `POST /api/leaves/leave-requests/` | Current | Server fixes ownership to the caller. Actual field is `leave_type`, not the legacy `leave_type_id`. Upload validation and submit audit exist. |
 | My leave requests | `GET /api/leaves/employee/leave-requests/` and `/{id}/` | Current; Gate 1 verified | Owner-only, active-company scoped, and paginated with `data.items`; employee override parameters are rejected. HR/delegated routes were not changed. |
