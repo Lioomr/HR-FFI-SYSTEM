@@ -121,6 +121,11 @@ export function LoanRequestDetail({
         {status ? (
           <StatusBadge glyph={status.glyph} label={t(status.labelKey)} tone={status.tone} />
         ) : null}
+        {request?.status === 'pending_ceo' ? (
+          <AppText style={directionHelpers.text} tone="muted" variant="footnote">
+            {t('loans.referredByCfo')}
+          </AppText>
+        ) : null}
         <View style={styles.rows}>
           <DetailRow
             label={t('approvals.requester')}
@@ -142,6 +147,15 @@ export function LoanRequestDetail({
             label={t('leave.submittedOn')}
             value={formatDateTimeValue(localization, request?.createdAt ?? null)}
           />
+          {request?.hrDecisionNote ? (
+            <DetailRow label={t('loans.hrNote')} value={request.hrDecisionNote} />
+          ) : null}
+          {request?.cfoDecisionNote ? (
+            <DetailRow label={t('loans.cfoNote')} value={request.cfoDecisionNote} />
+          ) : null}
+          {request?.ceoDecisionNote ? (
+            <DetailRow label={t('loans.ceoNote')} value={request.ceoDecisionNote} />
+          ) : null}
         </View>
       </DetailSheet>
       {noteAction ? (
