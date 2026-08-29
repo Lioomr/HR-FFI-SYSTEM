@@ -1,8 +1,10 @@
+from decimal import Decimal
+
 from rest_framework import serializers
 
 from core.services import get_workflow_snapshot
 
-from .models import AttendanceCorrectionRequest, AttendanceRecord, BioTimeConfig, BioTimeEmployeeMap
+from .models import AttendanceCorrectionRequest, AttendanceRecord, BioTimeConfig, BioTimeEmployeeMap, WorkLocation
 
 
 class AttendanceRecordSerializer(serializers.ModelSerializer):
@@ -204,6 +206,40 @@ class CheckOutResponseSerializer(serializers.ModelSerializer):
     class Meta:
         model = AttendanceRecord
         fields = ["id", "date", "check_in_at", "check_out_at", "status"]
+
+
+class WorkLocationSerializer(serializers.ModelSerializer):
+    company_id = serializers.IntegerField(source="company.id", read_only=True)
+    company_name = serializers.CharField(source="company.name", read_only=True)
+    latitude = serializers.DecimalField(
+        max_digits=9, decimal_places=6, min_value=Decimal("-90"), max_value=Decimal("90")
+    )
+    longitude = serializers.DecimalField(
+        max_digits=9, decimal_places=6, min_value=Decimal("-180"), max_value=Decimal("180")
+    )
+    radius_meters = serializers.IntegerField(min_value=1)
+
+    class Meta:
+        model = WorkLocation
+        fields = [
+            "id",
+            "name",
+            "latitude",
+            "longitude",
+            "radius_meters",
+            "is_active",
+            "company_id",
+            "company_name",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "is_active", "company_id", "company_name", "created_at", "updated_at"]
+
+    def validate(self, attrs):
+        prohibited = {"company", "company_id"}.intersection(self.initial_data.keys())
+        if prohibited:
+            raise serializers.ValidationError({field: "This field is server-managed." for field in sorted(prohibited)})
+        return attrs
 
 
 class BioTimeConfigSerializer(serializers.ModelSerializer):
