@@ -1,7 +1,7 @@
 import { forwardRef, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View, type PressableProps } from 'react-native';
 
-import { colors, layout, radii, spacing } from '@/design-system';
+import { colors, elevation, layout, radii, spacing } from '@/design-system';
 
 import { AppText } from './AppText';
 
@@ -37,7 +37,8 @@ export const Button = forwardRef<View, ButtonProps>(function Button(
 ) {
   const [isFocused, setIsFocused] = useState(false);
   const isDisabled = disabled || loading;
-  const foregroundColor = variant === 'destructive' ? colors.cream : colors.text;
+  const foregroundColor =
+    variant === 'destructive' ? colors.cream : variant === 'ghost' ? colors.muted : colors.text;
 
   return (
     <Pressable
@@ -87,11 +88,12 @@ export const Button = forwardRef<View, ButtonProps>(function Button(
 const variantStyles = StyleSheet.create({
   primary: {
     backgroundColor: colors.primary,
-    borderColor: colors.primary,
+    borderColor: 'transparent',
+    ...elevation.low,
   },
   secondary: {
-    backgroundColor: colors.cream,
-    borderColor: colors.text,
+    backgroundColor: colors.overlay,
+    borderColor: 'transparent',
   },
   ghost: {
     backgroundColor: 'transparent',
@@ -99,7 +101,8 @@ const variantStyles = StyleSheet.create({
   },
   destructive: {
     backgroundColor: colors.error,
-    borderColor: colors.error,
+    borderColor: 'transparent',
+    ...elevation.low,
   },
 });
 
@@ -107,7 +110,7 @@ const styles = StyleSheet.create({
   base: {
     minWidth: layout.minTouchTarget,
     borderWidth: 1,
-    borderRadius: radii.md,
+    borderRadius: radii.sm,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -131,14 +134,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   focused: {
-    borderColor: colors.text,
+    borderColor: colors.primary,
     borderWidth: 2,
   },
   pressed: {
-    opacity: 0.78,
-    transform: [{ scale: 0.985 }],
+    opacity: 0.92,
   },
   disabled: {
-    opacity: 0.48,
+    opacity: 0.45,
   },
 });
