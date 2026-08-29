@@ -10,6 +10,14 @@ interface RejectReasonPromptProps {
   busy?: boolean;
   /** Leave and attendance rejection require a reason; hiring decisions do not. */
   required?: boolean;
+  /**
+   * Defaults to the rejection copy/styling. The loan "Refer to CEO" action
+   * reuses this same comment sheet but is not a rejection, so it overrides
+   * the title, the confirm button label, and the confirm button variant.
+   */
+  title?: string;
+  confirmLabel?: string;
+  confirmVariant?: 'destructive' | 'primary' | 'secondary';
   onCancel: () => void;
   onConfirm: (comment: string) => void;
 }
@@ -24,14 +32,18 @@ interface RejectReasonPromptProps {
  */
 export function RejectReasonPrompt({
   busy = false,
+  confirmLabel,
+  confirmVariant = 'destructive',
   onCancel,
   onConfirm,
   required = true,
+  title,
   visible,
 }: RejectReasonPromptProps) {
   const { directionHelpers, t } = useLocalization();
   const [comment, setComment] = useState('');
 
+  const resolvedConfirmLabel = confirmLabel ?? t('approvals.rejectConfirm');
   const trimmed = comment.trim();
   const confirm = useCallback(() => {
     if ((required && !trimmed) || busy) return;
@@ -42,14 +54,14 @@ export function RejectReasonPrompt({
     () => (
       <>
         <Button
-          accessibilityLabel={busy ? t('approvals.rejecting') : t('approvals.rejectConfirm')}
+          accessibilityLabel={busy ? t('approvals.rejecting') : resolvedConfirmLabel}
           disabled={busy || (required && trimmed.length === 0)}
           fullWidth
-          label={t('approvals.rejectConfirm')}
+          label={resolvedConfirmLabel}
           loading={busy}
           onPress={confirm}
           testID="approvals-reject-confirm"
-          variant="destructive"
+          variant={confirmVariant}
         />
         <Button
           disabled={busy}
@@ -61,7 +73,7 @@ export function RejectReasonPrompt({
         />
       </>
     ),
-    [busy, confirm, onCancel, required, t, trimmed.length],
+    [busy, confirm, confirmVariant, onCancel, required, resolvedConfirmLabel, t, trimmed.length],
   );
 
   return (
@@ -69,7 +81,7 @@ export function RejectReasonPrompt({
       footer={footer}
       onClose={onCancel}
       testID="approvals-reject-prompt"
-      title={t('approvals.rejectReasonTitle')}
+      title={title ?? t('approvals.rejectReasonTitle')}
       visible={visible}
     >
       <View style={styles.body}>

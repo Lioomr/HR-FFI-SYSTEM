@@ -147,8 +147,11 @@ export function LoanRequestDetail({
       {noteAction ? (
         <RejectReasonPrompt
           busy={pending === noteAction}
+          confirmLabel={noteAction === 'refer-to-ceo' ? t('loans.referToCeo') : undefined}
+          confirmVariant={noteAction === 'refer-to-ceo' ? 'secondary' : 'destructive'}
           onCancel={() => setNoteAction(null)}
           onConfirm={(comment) => void decide(noteAction, comment)}
+          title={noteAction === 'refer-to-ceo' ? t('loans.referToCeo') : undefined}
           visible
         />
       ) : null}
