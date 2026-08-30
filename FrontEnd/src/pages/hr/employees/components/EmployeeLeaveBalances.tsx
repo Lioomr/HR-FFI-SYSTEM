@@ -10,6 +10,7 @@ import {
   message,
   Space,
   Tag,
+  Descriptions,
 } from "antd";
 import { CalculatorOutlined } from "@ant-design/icons";
 import {
@@ -120,22 +121,10 @@ export default function EmployeeLeaveBalances({
       },
     },
     {
-      title: t("hr.employees.balances.totalQuota"),
+      title: t("hr.employees.balances.totalBalance"),
       dataIndex: "total_days",
       key: "total_days",
       render: (val: any) => formatLeaveDays(val),
-    },
-    {
-      title: t(
-        "hr.employees.balances.availableAnnualYearDays",
-        "Available Annual Year Days",
-      ),
-      dataIndex: "available_annual_year_days",
-      key: "available_annual_year_days",
-      render: (val: any, record: LeaveBalance) => {
-        if (!isAnnualLeave(record)) return "-";
-        return formatLeaveDays(val);
-      },
     },
     {
       title: t("hr.employees.balances.used"),
@@ -146,42 +135,44 @@ export default function EmployeeLeaveBalances({
       ),
     },
     {
-      // Reserved by requests that are submitted but not yet decided.
-      title: t("leave.reservedDays"),
+      title: t("hr.employees.balances.pending"),
       dataIndex: "pending_days",
       key: "pending_days",
       render: (val: any) => formatLeaveDays(val),
     },
     {
       // The only figure the employee may request against.
-      title: t("leave.requestableDays"),
+      title: t("hr.employees.balances.availableToRequest"),
       dataIndex: "requestable_days",
       key: "requestable_days",
       render: (val: any) =>
-        val === undefined || val === null ? "-" : formatLeaveDays(val),
-    },
-    {
-      title: t("leave.fractionalDays"),
-      dataIndex: "fractional_days",
-      key: "fractional_days",
-      render: (val: any) => formatLeaveDays(val),
-    },
-    {
-      title: t("hr.employees.balances.remaining"),
-      dataIndex: "remaining_days",
-      key: "remaining_days",
-      render: (val: any) => {
-        const num = Number(val || 0);
-        return (
-          <span
-            style={{ color: num < 0 ? "red" : "green", fontWeight: "bold" }}
-          >
-            {formatLeaveDays(num)}
-          </span>
-        );
-      },
+        val === undefined || val === null ? "-" : <strong>{formatLeaveDays(val)}</strong>,
     },
   ];
+
+  const expandedRowRender = (record: LeaveBalance) => (
+    <Descriptions
+      size="small"
+      column={{ xs: 1, sm: 2, md: 3 }}
+      colon={false}
+      style={{ padding: "8px 16px" }}
+    >
+      {isAnnualLeave(record) && (
+        <Descriptions.Item label={t("hr.employees.balances.accruedThisYear")}>
+          {formatLeaveDays(record.available_annual_year_days)}
+        </Descriptions.Item>
+      )}
+      <Descriptions.Item label={t("hr.employees.balances.remaining")}>
+        {formatLeaveDays(record.remaining_days)}
+      </Descriptions.Item>
+      <Descriptions.Item label={t("leave.fractionalDays")}>
+        {formatLeaveDays(record.fractional_days)}
+      </Descriptions.Item>
+      <Descriptions.Item label={t("hr.employees.balances.adjustments")}>
+        {formatLeaveDays(record.adjustments)}
+      </Descriptions.Item>
+    </Descriptions>
+  );
 
   return (
     <div>
@@ -210,8 +201,8 @@ export default function EmployeeLeaveBalances({
         pagination={false}
         loading={loading}
         size="small"
-        scroll={{ x: "max-content" }}
         bordered
+        expandable={{ expandedRowRender }}
       />
 
       <Modal

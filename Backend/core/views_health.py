@@ -1,6 +1,8 @@
 import logging
 
 from django.conf import settings
+from django.db import connection
+from django.db.migrations.executor import MigrationExecutor
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -10,6 +12,28 @@ from config.worker_readiness import ReadinessError, check_evolution_api, check_r
 from core.services.email_service import EmailService
 
 logger = logging.getLogger(__name__)
+
+
+def _check_database() -> str:
+    try:
+        connection.ensure_connection()
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+            cursor.fetchone()
+        return "ok"
+    except Exception:
+        logger.exception("health_check_database_failed")
+        return "down"
+
+
+def _check_database_migrations() -> str:
+    try:
+        executor = MigrationExecutor(connection)
+        pending = executor.migration_plan(executor.loader.graph.leaf_nodes())
+        return "pending" if pending else "ok"
+    except Exception:
+        logger.exception("health_check_database_migrations_failed")
+        return "down"
 
 
 def _check_celery_worker() -> str:
@@ -65,13 +89,17 @@ class HealthCheckView(APIView):
 
     def get(self, request):
         components = {
+            "database": _check_database(),
+            "database_migrations": _check_database_migrations(),
             "redis": _check_redis(getattr(settings, "REDIS_URL", "redis://localhost:6379/0")),
             "celery_broker": _check_redis(getattr(settings, "CELERY_BROKER_URL", "redis://localhost:6379/2")),
             "celery_worker": _check_celery_worker(),
             "evolution_api": _check_evolution_api(),
             "email_provider": _check_email_provider(),
         }
-        unhealthy = {name: value for name, value in components.items() if value not in {"ok", "disabled", "configured"}}
+        unhealthy = {
+            name: value for name, value in components.items() if value not in {"ok", "disabled", "configured"}
+        }
         overall_status = status.HTTP_200_OK if not unhealthy else status.HTTP_503_SERVICE_UNAVAILABLE
         return Response(
             {"status": "ok" if not unhealthy else "degraded", "components": components},

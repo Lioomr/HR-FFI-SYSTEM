@@ -305,7 +305,7 @@ def update_employee_profile_from_offer(offer: JobOffer) -> EmployeeProfile | Non
         "nationality_en": offer.nationality,
         "national_id": offer.id_passport_iqama_number,
         "mobile": offer.candidate_phone_number,
-        "date_of_birth": offer.hiring_request.date_of_birth if offer.hiring_request_id else None,
+        "date_of_birth": offer.date_of_birth,
         "department_ref": offer.department_ref,
         "department": offer.department_ref.name if offer.department_ref_id else offer.department,
         "department_name_en": offer.department_ref.name if offer.department_ref_id else offer.department,
@@ -392,6 +392,7 @@ def create_and_send_employee_invite(offer: JobOffer, *, created_by) -> tuple[Inv
         expires_at=timezone.now() + timedelta(hours=expiry_hours),
         created_by=created_by,
         employee_profile=profile,
+        company=offer.company,
     )
     invite_link = f"{settings.FRONTEND_URL.rstrip('/')}/register?token={invite.token}"
     try:

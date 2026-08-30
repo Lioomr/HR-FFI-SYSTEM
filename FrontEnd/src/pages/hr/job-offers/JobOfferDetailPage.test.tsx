@@ -17,6 +17,8 @@ vi.mock("../../../services/api/jobOffersApi", () => ({
   getJobOffer: vi.fn(),
   sendJobOffer: vi.fn(),
   cancelJobOffer: vi.fn(),
+  submitJobOffer: vi.fn(),
+  downloadJobOfferCv: vi.fn(),
   downloadJobOfferPdf: vi.fn(),
 }));
 
@@ -33,6 +35,7 @@ import JobOfferDetailPage from "./JobOfferDetailPage";
 import * as jobOffersApi from "../../../services/api/jobOffersApi";
 import * as downloads from "../../../services/api/downloads";
 import * as employeesApi from "../../../services/api/employeesApi";
+import { makeJobOffer, makeWorkflow } from "./testFixtures";
 import { useI18nStore } from "../../../i18n/i18nStore";
 import { useAuthStore } from "../../../auth/authStore";
 
@@ -44,6 +47,11 @@ const sendJobOffer = jobOffersApi.sendJobOffer as unknown as ReturnType<
 >;
 const downloadJobOfferPdf =
   jobOffersApi.downloadJobOfferPdf as unknown as ReturnType<typeof vi.fn>;
+const submitJobOffer = jobOffersApi.submitJobOffer as unknown as ReturnType<
+  typeof vi.fn
+>;
+const downloadJobOfferCv =
+  jobOffersApi.downloadJobOfferCv as unknown as ReturnType<typeof vi.fn>;
 const triggerBlobDownload =
   downloads.triggerBlobDownload as unknown as ReturnType<typeof vi.fn>;
 const getEmployeeDocuments =
@@ -51,59 +59,32 @@ const getEmployeeDocuments =
 const downloadEmployeeDocument =
   employeesApi.downloadEmployeeDocument as unknown as ReturnType<typeof vi.fn>;
 
-const draftOffer = {
-  id: 11,
-  company_id: 1,
-  employee_profile_id: null,
-  account_invite_id: null,
-  candidate_full_name: "Nora Khalid",
-  candidate_email: "nora@example.com",
-  candidate_phone_number: "+966501234567",
-  nationality: "Saudi",
-  id_passport_iqama_number: "1234567890",
-  department_id: null,
-  position_id: null,
-  position_title: "Site Engineer",
-  classification: "Engineering",
-  department: "Projects",
-  location: "Riyadh",
-  basic_salary: "10000.00",
-  housing_allowance: "2500.00",
-  transportation_allowance: "1000.00",
-  other_allowance: "0.00",
-  total_salary_package: "13500.00",
-  vacation: "30 days",
-  tickets: "Annual",
-  contract_status: "New",
-  contract_type: "Full time",
-  contract_duration: "2 years",
-  medical_insurance: "Class A",
-  offer_date: "2026-08-01",
-  expiry_date: "2026-08-20",
-  reference_number: "JO-2026-011",
-  hr_signer_user_id: 1,
-  hr_signer_name: "HR Manager",
-  hr_signer_title: "Head of HR",
-  status: "draft" as const,
-  status_label: "Draft",
-  has_response_token: false,
-  biotime: { is_mapped: false, biotime_emp_code: null, mapping_id: null },
-  sent_at: null,
-  accepted_at: null,
-  rejected_at: null,
-  cancelled_at: null,
-  rejection_reason: "",
-  delivery_metadata: null,
-  created_at: "2026-08-01T08:00:00Z",
-  updated_at: "2026-08-01T08:00:00Z",
-};
+const draftOffer = makeJobOffer({
+  workflow: makeWorkflow({
+    can_edit: true,
+    can_submit: true,
+    can_cancel: true,
+  }),
+});
 
-const sentOfferWithWarning = {
-  ...draftOffer,
-  status: "sent" as const,
+/** Approved by the CEO, so delivery to the candidate is finally unlocked. */
+const sendableOffer = makeJobOffer({
+  approval_status: "approved",
+  approval_status_label: "Approved",
+  ceo_decision_by_id: 9,
+  ceo_decision_by_name: "Chief Exec",
+  ceo_decision_at: "2026-08-02T08:00:00Z",
+  ceo_recommendation: "Confirm the start date with the site team.",
+  workflow: makeWorkflow({ can_send: true, can_cancel: true }),
+});
+
+const sentOfferWithWarning = makeJobOffer({
+  ...sendableOffer,
+  status: "sent",
   status_label: "Sent",
   has_response_token: true,
   sent_at: "2026-08-02T09:00:00Z",
+  workflow: makeWorkflow({ can_cancel: true }),
   delivery_metadata: {
     channels: {
       whatsapp: {
@@ -115,15 +96,19 @@ const sentOfferWithWarning = {
     },
     warnings: ["WhatsApp delivery failed."],
   },
-};
+});
 
 beforeEach(() => {
   navigateMock.mockClear();
   getJobOffer.mockReset();
   sendJobOffer.mockReset();
   downloadJobOfferPdf.mockReset();
+  submitJobOffer.mockReset();
+  downloadJobOfferCv.mockReset();
   triggerBlobDownload.mockReset();
-  getEmployeeDocuments.mockReset().mockResolvedValue({ status: "success", data: [] });
+  getEmployeeDocuments
+    .mockReset()
+    .mockResolvedValue({ status: "success", data: [] });
   downloadEmployeeDocument.mockReset();
   useI18nStore.getState().setLanguage("en");
   useAuthStore.setState({
@@ -146,7 +131,7 @@ describe("JobOfferDetailPage", () => {
   });
 
   it("sends the offer after confirmation and surfaces the delivery warning", async () => {
-    getJobOffer.mockResolvedValue({ status: "success", data: draftOffer });
+    getJobOffer.mockResolvedValue({ status: "success", data: sendableOffer });
     sendJobOffer.mockResolvedValue({
       status: "success",
       data: {
@@ -214,6 +199,8 @@ describe("JobOfferDetailPage", () => {
         status_label: "Accepted",
         accepted_at: "2026-08-03T10:00:00Z",
         account_invite_id: 7,
+        // Nothing left to do: the backend closes every gate on an accepted offer.
+        workflow: makeWorkflow(),
       },
     });
 
@@ -241,8 +228,6 @@ const sentOfferWithLegs = {
   status_label: "Sent",
   has_response_token: true,
   sent_at: "2026-08-02T09:00:00Z",
-  hiring_request_id: 7,
-  hiring_request_reference: "HR-2026-001",
   delivery_metadata: {
     channels: {
       whatsapp: { sent: true, provider: "evolution_whatsapp" },
@@ -256,7 +241,11 @@ const sentOfferWithLegs = {
         provider: "evolution_whatsapp",
         error: "Candidate phone number is missing.",
       },
-      email_pdf: { sent: true, provider: "bird", attachment: "attached" as const },
+      email_pdf: {
+        sent: true,
+        provider: "bird",
+        attachment: "attached" as const,
+      },
     },
     ceo: {
       recipients: [
@@ -264,18 +253,27 @@ const sentOfferWithLegs = {
           user_id: 9,
           display_name: "Chief Exec",
           whatsapp_pdf: { sent: true, provider: "evolution_whatsapp" },
-          email_pdf: { sent: false, provider: "bird", error: "Delivery failed." },
+          email_pdf: {
+            sent: false,
+            provider: "bird",
+            error: "Delivery failed.",
+          },
         },
       ],
     },
-    warning_details: { ceo_email_pdf: ["CEO email PDF delivery failed for user 9."] },
+    warning_details: {
+      ceo_email_pdf: ["CEO email PDF delivery failed for user 9."],
+    },
     warnings: ["CEO email PDF delivery failed for user 9."],
   },
 };
 
 describe("JobOfferDetailPage delivery breakdown", () => {
   it("shows each candidate and CEO delivery leg", async () => {
-    getJobOffer.mockResolvedValue({ status: "success", data: sentOfferWithLegs });
+    getJobOffer.mockResolvedValue({
+      status: "success",
+      data: sentOfferWithLegs,
+    });
 
     render(<JobOfferDetailPage />);
     await screen.findByText("Nora Khalid");
@@ -289,7 +287,10 @@ describe("JobOfferDetailPage delivery breakdown", () => {
   });
 
   it("separates a skipped leg from a failed one", async () => {
-    getJobOffer.mockResolvedValue({ status: "success", data: sentOfferWithLegs });
+    getJobOffer.mockResolvedValue({
+      status: "success",
+      data: sentOfferWithLegs,
+    });
 
     render(<JobOfferDetailPage />);
     await screen.findByText("Nora Khalid");
@@ -297,11 +298,16 @@ describe("JobOfferDetailPage delivery breakdown", () => {
     // Candidate WhatsApp PDF was never attempted; the CEO email PDF failed.
     expect(screen.getByText("Not attempted")).toBeInTheDocument();
     expect(screen.getByText("Not delivered")).toBeInTheDocument();
-    expect(screen.getAllByText("Handed to the delivery service").length).toBe(3);
+    expect(screen.getAllByText("Handed to the delivery service").length).toBe(
+      3,
+    );
   });
 
   it("names no delivery provider anywhere on the page", async () => {
-    getJobOffer.mockResolvedValue({ status: "success", data: sentOfferWithLegs });
+    getJobOffer.mockResolvedValue({
+      status: "success",
+      data: sentOfferWithLegs,
+    });
 
     render(<JobOfferDetailPage />);
     await screen.findByText("Nora Khalid");
@@ -312,7 +318,10 @@ describe("JobOfferDetailPage delivery breakdown", () => {
 
   it("still renders a legacy offer that only carries the old channels shape", async () => {
     // Offers sent before delivery was split per leg have no `candidate` block.
-    getJobOffer.mockResolvedValue({ status: "success", data: sentOfferWithWarning });
+    getJobOffer.mockResolvedValue({
+      status: "success",
+      data: sentOfferWithWarning,
+    });
 
     render(<JobOfferDetailPage />);
     await screen.findByText("Nora Khalid");
@@ -320,7 +329,9 @@ describe("JobOfferDetailPage delivery breakdown", () => {
     expect(screen.getByText("WhatsApp message")).toBeInTheDocument();
     expect(screen.getByText("Email PDF")).toBeInTheDocument();
     expect(screen.getByText("Not delivered")).toBeInTheDocument();
-    expect(screen.getByText("Handed to the delivery service")).toBeInTheDocument();
+    expect(
+      screen.getByText("Handed to the delivery service"),
+    ).toBeInTheDocument();
   });
 });
 
@@ -359,11 +370,15 @@ describe("JobOfferDetailPage starting work acknowledgment", () => {
 
     await waitFor(() => expect(getEmployeeDocuments).toHaveBeenCalledWith(21));
     expect(await screen.findByText("Generated")).toBeInTheDocument();
-    expect(screen.getByText("Starting Work Acknowledgment")).toBeInTheDocument();
+    expect(
+      screen.getByText("Starting Work Acknowledgment"),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /Download acknowledgment/i }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Open document archive/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Open document archive/i }),
+    ).toBeInTheDocument();
   });
 
   it("downloads it through the existing employee document endpoint", async () => {
@@ -378,9 +393,13 @@ describe("JobOfferDetailPage starting work acknowledgment", () => {
     render(<JobOfferDetailPage />);
     await screen.findByText("Generated");
 
-    fireEvent.click(screen.getByRole("button", { name: /Download acknowledgment/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /Download acknowledgment/i }),
+    );
 
-    await waitFor(() => expect(downloadEmployeeDocument).toHaveBeenCalledWith(21, 55));
+    await waitFor(() =>
+      expect(downloadEmployeeDocument).toHaveBeenCalledWith(21, 55),
+    );
     expect(triggerBlobDownload).toHaveBeenCalledWith(
       blob,
       "starting-work-acknowledgment-EMP-1-20260810.pdf",
@@ -397,7 +416,9 @@ describe("JobOfferDetailPage starting work acknowledgment", () => {
     render(<JobOfferDetailPage />);
     await screen.findByText("Generated");
 
-    fireEvent.click(screen.getByRole("button", { name: /Open document archive/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /Open document archive/i }),
+    );
 
     expect(navigateMock).toHaveBeenCalledWith("/hr/employees/21");
   });
@@ -406,13 +427,21 @@ describe("JobOfferDetailPage starting work acknowledgment", () => {
     getJobOffer.mockResolvedValue({ status: "success", data: acceptedOffer });
     getEmployeeDocuments.mockResolvedValue({
       status: "success",
-      data: [{ ...acknowledgmentDocument, custom_name: "Contract", display_name: "Contract" }],
+      data: [
+        {
+          ...acknowledgmentDocument,
+          custom_name: "Contract",
+          display_name: "Contract",
+        },
+      ],
     });
 
     render(<JobOfferDetailPage />);
     await screen.findByText("Nora Khalid");
 
-    expect(await screen.findByText("Pending BioTime attendance")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Pending BioTime attendance"),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(
         "This document will be generated after the employee's first BioTime attendance record.",
@@ -444,7 +473,9 @@ describe("JobOfferDetailPage starting work acknowledgment", () => {
     await screen.findByText("Nora Khalid");
 
     // A failed lookup must not take the rest of the offer down with it.
-    expect(await screen.findByText("Pending BioTime attendance")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Pending BioTime attendance"),
+    ).toBeInTheDocument();
     // The position appears in both the header and the job details table.
     expect(screen.getAllByText("Site Engineer").length).toBeGreaterThan(0);
   });
@@ -453,7 +484,6 @@ describe("JobOfferDetailPage starting work acknowledgment", () => {
 describe("JobOfferDetailPage onboarding and BioTime status", () => {
   const linkedOffer = {
     ...draftOffer,
-    hiring_request_id: 7,
     department_id: 3,
     position_id: 8,
     status: "accepted" as const,
@@ -490,7 +520,9 @@ describe("JobOfferDetailPage onboarding and BioTime status", () => {
     expect(screen.getByText("Pre-hire profile created")).toBeInTheDocument();
     expect(screen.getByText("Profile #205")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Open employee profile" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open employee profile" }),
+    );
     expect(navigateMock).toHaveBeenCalledWith("/hr/employees/205");
   });
 
@@ -508,7 +540,9 @@ describe("JobOfferDetailPage onboarding and BioTime status", () => {
 
     expect(screen.getByText("BioTime connected")).toBeInTheDocument();
     expect(screen.getByText("Device employee code 100001")).toBeInTheDocument();
-    expect(screen.queryByText("BioTime mapping not connected yet")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("BioTime mapping not connected yet"),
+    ).not.toBeInTheDocument();
   });
 
   it("warns about a missing mapping without implying the acceptance failed", async () => {
@@ -517,7 +551,9 @@ describe("JobOfferDetailPage onboarding and BioTime status", () => {
     render(<JobOfferDetailPage />);
     await screen.findByText("Nora Khalid");
 
-    expect(screen.getByText("BioTime mapping not connected yet")).toBeInTheDocument();
+    expect(
+      screen.getByText("BioTime mapping not connected yet"),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(
         "HR has been notified. Attendance records start once the device mapping is added; the candidate's acceptance is unaffected.",
@@ -535,7 +571,9 @@ describe("JobOfferDetailPage onboarding and BioTime status", () => {
     render(<JobOfferDetailPage />);
     await screen.findByText("Nora Khalid");
 
-    expect(screen.getByText("BioTime mapping not connected yet")).toBeInTheDocument();
+    expect(
+      screen.getByText("BioTime mapping not connected yet"),
+    ).toBeInTheDocument();
   });
 
   it("keeps legacy offers with no profile on the unlinked wording", async () => {
@@ -544,10 +582,204 @@ describe("JobOfferDetailPage onboarding and BioTime status", () => {
     render(<JobOfferDetailPage />);
     await screen.findByText("Nora Khalid");
 
-    expect(screen.getByText("No employee profile is linked to this offer.")).toBeInTheDocument();
-    expect(screen.queryByText("Pre-hire profile created")).not.toBeInTheDocument();
+    expect(
+      screen.getByText("No employee profile is linked to this offer."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Pre-hire profile created"),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Open employee profile" }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("JobOfferDetailPage CEO approval gate", () => {
+  it("offers Submit to CEO, and no Send, while the offer is a draft", async () => {
+    getJobOffer.mockResolvedValue({ status: "success", data: draftOffer });
+
+    render(<JobOfferDetailPage />);
+    await screen.findByText("Nora Khalid");
+
+    expect(
+      screen.getByRole("button", { name: /Submit to CEO/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Send Offer/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "The offer can only be sent to the candidate after the CEO approves it.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("submits to the CEO after confirmation", async () => {
+    getJobOffer.mockResolvedValue({ status: "success", data: draftOffer });
+    submitJobOffer.mockResolvedValue({
+      status: "success",
+      data: {
+        job_offer: makeJobOffer({
+          approval_status: "pending_ceo",
+          approval_status_label: "Pending CEO",
+          submitted_at: "2026-08-02T07:00:00Z",
+          workflow: makeWorkflow(),
+        }),
+        notifications: [],
+      },
+    });
+
+    render(<JobOfferDetailPage />);
+    await screen.findByText("Nora Khalid");
+
+    fireEvent.click(screen.getByRole("button", { name: /Submit to CEO/i }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(submitJobOffer).not.toHaveBeenCalled();
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Submit to CEO" }),
+    );
+
+    await waitFor(() => expect(submitJobOffer).toHaveBeenCalledWith("11"));
+    expect(await screen.findAllByText("Pending CEO")).not.toHaveLength(0);
+  });
+
+  it("shows Resubmit and the CEO reason once changes are requested", async () => {
+    getJobOffer.mockResolvedValue({
+      status: "success",
+      data: makeJobOffer({
+        approval_status: "changes_requested",
+        approval_status_label: "Changes Requested",
+        ceo_decision_by_name: "Chief Exec",
+        ceo_decision_at: "2026-08-02T08:00:00Z",
+        ceo_decision_reason: "Housing allowance is above the band.",
+        ceo_recommendation: "Bring it down to 2,000.",
+        workflow: makeWorkflow({ can_edit: true, can_submit: true }),
+      }),
+    });
+
+    render(<JobOfferDetailPage />);
+    await screen.findByText("Nora Khalid");
+
+    expect(
+      screen.getByRole("button", { name: /Resubmit to CEO/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Changes requested by Chief Exec"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Housing allowance is above the band."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Bring it down to 2,000.")).toBeInTheDocument();
+  });
+
+  it("shows Send only once the backend approves it", async () => {
+    getJobOffer.mockResolvedValue({ status: "success", data: sendableOffer });
+
+    render(<JobOfferDetailPage />);
+    await screen.findByText("Nora Khalid");
+
+    expect(
+      screen.getByRole("button", { name: /Send Offer/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Approved by Chief Exec")).toBeInTheDocument();
+    expect(
+      screen.getByText("Confirm the start date with the site team."),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("JobOfferDetailPage workflow history and CV", () => {
+  const reviewedOffer = makeJobOffer({
+    approval_status: "approved",
+    approval_status_label: "Approved",
+    ceo_decision_by_name: "Chief Exec",
+    ceo_decision_at: "2026-08-02T08:00:00Z",
+    workflow: makeWorkflow({
+      can_send: true,
+      history: [
+        {
+          id: 1,
+          action: "submit",
+          stage: "ceo",
+          approver_role: "ceo",
+          actor: { id: 1, email: "hr@ffi.test", full_name: "HR Manager" },
+          at: "2026-08-01T09:00:00Z",
+          note: "",
+          from_status: "draft",
+          to_status: "pending_ceo",
+          from_stage: null,
+          to_stage: "ceo",
+          metadata: null,
+        },
+        {
+          id: 2,
+          action: "approve",
+          stage: "ceo",
+          approver_role: "ceo",
+          actor: { id: 9, email: "ceo@ffi.test", full_name: "Chief Exec" },
+          at: "2026-08-02T08:00:00Z",
+          note: "Looks right.",
+          from_status: "pending_ceo",
+          to_status: "approved",
+          from_stage: "ceo",
+          to_stage: null,
+          metadata: null,
+        },
+      ],
+    }),
+  });
+
+  it("renders the approval trail the backend recorded", async () => {
+    getJobOffer.mockResolvedValue({ status: "success", data: reviewedOffer });
+
+    render(<JobOfferDetailPage />);
+    await screen.findByText("Nora Khalid");
+
+    expect(screen.getByText("Submitted for CEO approval")).toBeInTheDocument();
+    expect(screen.getAllByText("Approved").length).toBeGreaterThan(0);
+    expect(screen.getByText("Looks right.")).toBeInTheDocument();
+  });
+
+  it("downloads the candidate CV through the authenticated endpoint", async () => {
+    getJobOffer.mockResolvedValue({ status: "success", data: reviewedOffer });
+    const blob = new Blob(["cv"], { type: "application/pdf" });
+    downloadJobOfferCv.mockResolvedValue(blob);
+
+    render(<JobOfferDetailPage />);
+    await screen.findByText("Nora Khalid");
+
+    fireEvent.click(screen.getByRole("button", { name: /Download CV/i }));
+
+    await waitFor(() => expect(downloadJobOfferCv).toHaveBeenCalledWith("11"));
+    expect(triggerBlobDownload).toHaveBeenCalledWith(blob, "job_offer_11_cv");
+  });
+
+  it("reloads instead of stalling when the offer moved on under the user", async () => {
+    getJobOffer.mockResolvedValue({ status: "success", data: draftOffer });
+    submitJobOffer.mockRejectedValue({
+      isAxiosError: true,
+      response: {
+        status: 409,
+        data: { message: "Only unsent job offers can be submitted." },
+      },
+    });
+
+    render(<JobOfferDetailPage />);
+    await screen.findByText("Nora Khalid");
+    getJobOffer.mockClear();
+
+    fireEvent.click(screen.getByRole("button", { name: /Submit to CEO/i }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Submit to CEO" }),
+    );
+
+    await waitFor(() => expect(submitJobOffer).toHaveBeenCalled());
+    // The message reaches the user and the page refetches the real state.
+    expect(
+      await screen.findByText("Only unsent job offers can be submitted."),
+    ).toBeInTheDocument();
+    await waitFor(() => expect(getJobOffer).toHaveBeenCalled());
   });
 });

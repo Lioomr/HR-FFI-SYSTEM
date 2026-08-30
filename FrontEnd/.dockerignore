@@ -2,5 +2,9 @@ node_modules
 dist
 .git
 .gitignore
+# The frontend build needs its local VITE_* values.  This file remains
+# gitignored and is copied only into the disposable Node build stage; it is
+# not present in the final Nginx image.  Never place non-VITE secrets here.
 .env*
+!.env
 npm-debug.log*

@@ -823,7 +823,7 @@ class CrossCompanyManagerAssignmentListCreateView(APIView):
     def post(self, request):
         if get_role(request.user) not in {"HRManager", "SystemAdmin"}:
             raise PermissionDenied("Only HRManager or SystemAdmin can create cross-company manager assignments.")
-        serializer = CrossCompanyManagerAssignmentSerializer(data=request.data)
+        serializer = CrossCompanyManagerAssignmentSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         with transaction.atomic():
             assignment = serializer.save(created_by=request.user)
@@ -868,7 +868,9 @@ class CrossCompanyManagerAssignmentDetailView(APIView):
         if get_role(request.user) not in {"HRManager", "SystemAdmin"}:
             raise PermissionDenied("Only HRManager or SystemAdmin can change cross-company manager assignments.")
         assignment = self._get_assignment(request, pk)
-        serializer = CrossCompanyManagerAssignmentSerializer(assignment, data=request.data, partial=True)
+        serializer = CrossCompanyManagerAssignmentSerializer(
+            assignment, data=request.data, partial=True, context={"request": request}
+        )
         serializer.is_valid(raise_exception=True)
         updated_assignment = serializer.save()
         audit(request, "cross_company_manager_assignment_updated", entity="cross_company_manager_assignment", entity_id=updated_assignment.id)

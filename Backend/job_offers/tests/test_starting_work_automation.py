@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.db import IntegrityError, transaction
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -198,17 +199,15 @@ class StartingWorkAcknowledgmentAutomationTests(TestCase):
         self.assertFalse(StartingWorkAcknowledgment.objects.exists())
         notify.assert_not_called()
 
-    def test_archived_employee_does_not_trigger_generation(self):
-        self.profile.is_archived = True
-        self.profile.save(update_fields=["is_archived", "updated_at"])
+    def test_archiving_mapped_employee_is_blocked_before_generation(self):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            self.profile.is_archived = True
+            self.profile.save(update_fields=["is_archived", "updated_at"])
 
-        successful, result, notify = self._sync(self._transactions())
-
-        self.assertTrue(successful)
-        self.assertEqual(result["unmapped"], 1)
+        self.profile.refresh_from_db()
+        self.assertFalse(self.profile.is_archived)
         self.assertFalse(AttendanceRecord.objects.filter(employee_profile=self.profile).exists())
         self.assertFalse(StartingWorkAcknowledgment.objects.exists())
-        notify.assert_not_called()
 
     def test_unmapped_biotime_record_does_not_trigger_generation(self):
         self.mapping.delete()

@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any
 
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
 from django.db.models import Prefetch, Q
@@ -82,8 +83,8 @@ WORKFLOW_TEMPLATES = {
             {"key": "ceo", "title": "CEO Review", "approver_role": "ceo", "order": 1},
         ],
     },
-    "hiring_request": {
-        "name": "Hiring Request Workflow",
+    "job_offer": {
+        "name": "Job Offer CEO Approval Workflow",
         "module_key": "job_offers",
         "stages": [
             {"key": "ceo", "title": "CEO Review", "approver_role": "ceo", "order": 1},
@@ -108,9 +109,9 @@ class WorkflowEvent:
 
 
 def _build_action_url_path(workflow_key: str, role: str, object_id: int) -> str:
-    if workflow_key == "hiring_request":
+    if workflow_key == "job_offer":
         audience = "ceo" if role == "ceo" else "hr"
-        path = f"/{audience}/hiring-requests/{object_id}"
+        path = f"/{audience}/job-offers/{object_id}"
         return f"{settings.FRONTEND_URL.rstrip('/')}/{path.lstrip('/')}"
 
     route_map = {
@@ -1099,89 +1100,83 @@ def _legacy_events_for_employee_deletion(instance) -> list[WorkflowEvent]:
     return events
 
 
-def _legacy_status_snapshot_for_hiring_request(instance):
-    from job_offers.models import HiringRequest
+def _legacy_status_snapshot_for_job_offer(instance):
+    from job_offers.models import JobOffer
 
     status = WorkflowInstance.Status.DRAFT
     current_stage = ""
     current_role = ""
     decided_at = None
-    cancelled_at = None
-    if instance.status == HiringRequest.Status.SUBMITTED:
+    if instance.approval_status == JobOffer.ApprovalStatus.PENDING_CEO:
         status = WorkflowInstance.Status.SUBMITTED
         current_stage = "ceo"
         current_role = "ceo"
-    elif instance.status in {HiringRequest.Status.APPROVED, HiringRequest.Status.CONVERTED}:
+    elif instance.approval_status == JobOffer.ApprovalStatus.APPROVED:
         status = WorkflowInstance.Status.APPROVED
         decided_at = instance.ceo_decision_at or instance.updated_at
-    elif instance.status == HiringRequest.Status.REJECTED:
+    elif instance.approval_status == JobOffer.ApprovalStatus.REJECTED:
         status = WorkflowInstance.Status.REJECTED
         decided_at = instance.ceo_decision_at or instance.updated_at
-    elif instance.status == HiringRequest.Status.CANCELLED:
-        status = WorkflowInstance.Status.CANCELLED
-        cancelled_at = instance.updated_at
 
     return {
         "status": status,
         "current_stage": current_stage,
         "current_role": current_role,
         "current_actor_user": _resolve_current_actor(current_role, instance) if current_role else None,
-        "submitted_by": instance.requested_by if instance.submitted_at else None,
+        "submitted_by": instance.created_by if instance.submitted_at else None,
         "submitted_at": instance.submitted_at,
         "decided_at": decided_at,
-        "cancelled_at": cancelled_at,
+        "cancelled_at": None,
     }
 
 
-def _legacy_events_for_hiring_request(instance) -> list[WorkflowEvent]:
-    from job_offers.models import HiringRequest
-
+def _legacy_events_for_job_offer(instance) -> list[WorkflowEvent]:
+    user_model = get_user_model()
+    users = {
+        user.id: user
+        for user in user_model.objects.filter(
+            id__in={event.get("actor_id") for event in instance.approval_events or [] if event.get("actor_id")}
+        )
+    }
+    action_map = {
+        "submit": WorkflowAction.Action.SUBMIT,
+        "approve": WorkflowAction.Action.APPROVE,
+        "request_changes": WorkflowAction.Action.REQUEST_CHANGES,
+        "reject": WorkflowAction.Action.REJECT,
+    }
     events = []
-    if instance.submitted_at:
+    for item in instance.approval_events or []:
+        event_type = item.get("type")
+        action = action_map.get(event_type)
+        event_id = item.get("id")
+        if not action or not event_id:
+            continue
+        from_status = item.get("from_status", "")
+        to_status = item.get("to_status", "")
+        is_submit = event_type == "submit"
+        at = None
+        if item.get("at"):
+            try:
+                at = datetime.fromisoformat(item["at"])
+            except (TypeError, ValueError):
+                at = None
         events.append(
             WorkflowEvent(
-                signature=f"hiring-request:submitted:{instance.id}:{instance.submitted_at.isoformat()}",
-                action=WorkflowAction.Action.SUBMIT,
-                approver_role="",
-                from_status="draft",
-                to_status="submitted",
-                from_stage="",
-                to_stage="ceo",
-                actor=instance.requested_by,
-                at=instance.submitted_at,
-                metadata={"legacy_signature": "submitted", "workflow_key": "hiring_request"},
-            )
-        )
-    if instance.ceo_decision_at:
-        approved = instance.status in {HiringRequest.Status.APPROVED, HiringRequest.Status.CONVERTED}
-        events.append(
-            WorkflowEvent(
-                signature=f"hiring-request:ceo:{instance.id}:{instance.ceo_decision_at.isoformat()}",
-                action=WorkflowAction.Action.APPROVE if approved else WorkflowAction.Action.REJECT,
-                approver_role="ceo",
-                from_status="submitted",
-                to_status="approved" if approved else "rejected",
-                from_stage="ceo",
-                to_stage="",
-                actor=instance.ceo_decision_by,
-                note=instance.ceo_decision_note or "",
-                at=instance.ceo_decision_at,
-                metadata={"legacy_signature": "ceo", "workflow_key": "hiring_request"},
-            )
-        )
-    if instance.status == HiringRequest.Status.CANCELLED:
-        events.append(
-            WorkflowEvent(
-                signature=f"hiring-request:cancelled:{instance.id}:{instance.updated_at.isoformat()}",
-                action=WorkflowAction.Action.CANCEL,
-                approver_role="",
-                from_status="draft" if not instance.submitted_at else "submitted",
-                to_status="cancelled",
-                from_stage="ceo" if instance.submitted_at else "",
-                to_stage="",
-                actor=instance.updated_by,
-                at=instance.updated_at,
-                metadata={"legacy_signature": "cancelled", "workflow_key": "hiring_request"},
+                signature=f"job-offer:{instance.id}:{event_id}",
+                action=action,
+                approver_role="" if is_submit else "ceo",
+                from_status=from_status,
+                to_status=to_status,
+                from_stage="" if is_submit else "ceo",
+                to_stage="ceo" if is_submit else "",
+                actor=users.get(item.get("actor_id")),
+                note=item.get("reason", "") or "",
+                at=at,
+                metadata={
+                    "legacy_signature": f"job-offer:{event_id}",
+                    "workflow_key": "job_offer",
+                    "recommendation": item.get("recommendation", "") or "",
+                },
             )
         )
     return events
@@ -1209,8 +1204,8 @@ def _adapter_for_instance(instance):
             _legacy_status_snapshot_for_employee_deletion,
             _legacy_events_for_employee_deletion,
         )
-    if class_name == "HiringRequest":
-        return "hiring_request", _legacy_status_snapshot_for_hiring_request, _legacy_events_for_hiring_request
+    if class_name == "JobOffer":
+        return "job_offer", _legacy_status_snapshot_for_job_offer, _legacy_events_for_job_offer
     raise ValueError(f"Unsupported workflow instance class: {class_name}")
 
 
