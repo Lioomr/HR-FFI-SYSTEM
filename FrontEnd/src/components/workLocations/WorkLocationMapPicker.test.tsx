@@ -265,6 +265,8 @@ describe("auto fit", () => {
     );
 
     expect(harness.map.fitBounds).not.toHaveBeenCalled();
+    // L.latLng() returns a LatLng carrying helper methods (toBounds), so match
+    // on the coordinates rather than requiring exact object equality.
     expect(harness.map.setView).toHaveBeenCalledWith(
       expect.objectContaining({ lat: 24.7136, lng: 46.6753 }),
       16,
