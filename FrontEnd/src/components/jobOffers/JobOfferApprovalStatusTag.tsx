@@ -1,34 +1,44 @@
 import { Tag } from "antd";
 
-import type { HiringRequestStatus } from "../../services/api/hiringRequestsApi";
+import type { JobOfferApprovalStatus } from "../../services/api/jobOffersApi";
 import { useI18n } from "../../i18n/useI18n";
 
 /**
- * One visual vocabulary for hiring-request status across the HR list, the HR
- * detail header and the CEO inbox, so a "Submitted" chip reads the same
- * wherever it appears.
+ * The CEO approval track, shown next to the delivery status everywhere an offer
+ * appears. Keeping the two chips visually distinct stops "Approved" (by the
+ * CEO) from being read as "Accepted" (by the candidate).
  */
-const TONE: Record<HiringRequestStatus, { background: string; border: string; color: string }> = {
+const TONE: Record<
+  JobOfferApprovalStatus,
+  { background: string; border: string; color: string }
+> = {
   draft: { background: "#f8fafc", border: "#cbd5e1", color: "#475569" },
-  submitted: { background: "#fff7ed", border: "#fed7aa", color: "#c2410c" },
+  pending_ceo: { background: "#fefce8", border: "#fde68a", color: "#a16207" },
   approved: { background: "#ecfdf5", border: "#a7f3d0", color: "#047857" },
+  changes_requested: {
+    background: "#fff7ed",
+    border: "#fed7aa",
+    color: "#c2410c",
+  },
   rejected: { background: "#fef2f2", border: "#fecaca", color: "#b91c1c" },
-  cancelled: { background: "#f1f5f9", border: "#cbd5e1", color: "#64748b" },
-  converted: { background: "#eff6ff", border: "#bfdbfe", color: "#1d4ed8" },
 };
 
-export default function HiringRequestStatusTag({
+export default function JobOfferApprovalStatusTag({
   status,
   fallbackLabel,
   size = "default",
 }: {
-  status: HiringRequestStatus;
-  /** `status_label` from the backend, used when the key is not translated. */
+  status: JobOfferApprovalStatus;
+  /** `approval_status_label` from the backend, used when the key is untranslated. */
   fallbackLabel?: string;
   size?: "default" | "large";
 }) {
   const { t } = useI18n();
   const tone = TONE[status] || TONE.draft;
+  const label = t(
+    `jobOffers.approval.status.${status}`,
+    fallbackLabel || status,
+  );
 
   return (
     <Tag
@@ -44,7 +54,7 @@ export default function HiringRequestStatusTag({
         color: tone.color,
       }}
     >
-      {t(`hiringRequests.status.${status}`, fallbackLabel || status)}
+      {label}
     </Tag>
   );
 }

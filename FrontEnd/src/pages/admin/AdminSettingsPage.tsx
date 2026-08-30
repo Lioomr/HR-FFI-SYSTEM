@@ -19,6 +19,7 @@ import Unauthorized403Page from "../Unauthorized403Page";
 import { getSettings, updateSettings } from "../../services/api/settingsApi";
 import { isApiError } from "../../services/api/apiTypes";
 import type { SettingsDto } from "../../services/api/apiTypes";
+import { getFirstApiErrorMessage } from "../../utils/formErrors";
 import { useI18n } from "../../i18n/useI18n";
 
 type FormValues = SettingsDto;
@@ -69,9 +70,9 @@ export default function AdminSettingsPage() {
     try {
       const res = await updateSettings(values);
       if (isApiError(res)) {
-        const firstError = res.errors
-          ? Object.values(res.errors).flat().join(" ")
-          : res.message;
+        // `errors` is contractually an array of {field, message}; render the
+        // backend's own wording rather than stringifying the objects.
+        const firstError = getFirstApiErrorMessage(res) || res.message;
         setError(firstError || t("admin.settings.saveError"));
         return;
       }
@@ -261,6 +262,24 @@ export default function AdminSettingsPage() {
                 style={{ width: "100%" }}
                 placeholder="e.g. 5"
               />
+            </Form.Item>
+          </Space>
+
+          <Divider />
+
+          <Typography.Title level={5} style={{ marginTop: 0 }}>
+            {t("admin.settings.secAttendance")}
+          </Typography.Title>
+
+          <Space style={{ width: "100%" }} align="start" wrap>
+            <Form.Item
+              label={t("admin.settings.lblGeofenceEnabled")}
+              name={["attendance", "geofence_enabled"]}
+              valuePropName="checked"
+              extra={t("admin.settings.helpGeofenceEnabled")}
+              style={{ minWidth: 320 }}
+            >
+              <Switch />
             </Form.Item>
           </Space>
 

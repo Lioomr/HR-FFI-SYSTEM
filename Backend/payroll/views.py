@@ -792,18 +792,22 @@ class PayrollRunViewSet(
                 status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
 
-        if run.status in [PayrollRun.Status.COMPLETED, PayrollRun.Status.PAID]:
-            return success({"message": "Payroll run already finalized."})
+        with transaction.atomic():
+            # Re-read under a row lock so concurrent finalization requests cannot
+            # both observe an open run and emit duplicate transition audits.
+            run = get_object_or_404(self.get_queryset().select_for_update(), pk=run.pk)
+            if run.status in [PayrollRun.Status.COMPLETED, PayrollRun.Status.PAID]:
+                return success({"message": "Payroll run already finalized."})
 
-        if run.status == PayrollRun.Status.CANCELLED:
-            return _error_list(
-                "Payroll run is cancelled.",
-                ["Cancelled runs cannot be finalized."],
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
-            )
+            if run.status == PayrollRun.Status.CANCELLED:
+                return _error_list(
+                    "Payroll run is cancelled.",
+                    ["Cancelled runs cannot be finalized."],
+                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                )
 
-        run.status = PayrollRun.Status.COMPLETED
-        run.save(update_fields=["status", "updated_at"])
+            run.status = PayrollRun.Status.COMPLETED
+            run.save(update_fields=["status", "updated_at"])
         audit(request, "payroll_run_finalized", entity="PayrollRun", entity_id=run.id)
         return success({"message": "Payroll run finalized."})
 
@@ -815,14 +819,17 @@ class PayrollRunViewSet(
     )
     def generate_payslips(self, request, pk=None):
         run = self.get_object()
-        if run.status not in [PayrollRun.Status.COMPLETED, PayrollRun.Status.PAID]:
-            return _error_list(
-                "Payroll run not finalized.",
-                ["Finalize the payroll run before generating payslips."],
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
-            )
-
         with transaction.atomic():
+            # Lock the parent run before checking/updating its state. This keeps
+            # concurrent generation requests idempotent at the workflow level.
+            run = get_object_or_404(self.get_queryset().select_for_update(), pk=run.pk)
+            if run.status not in [PayrollRun.Status.COMPLETED, PayrollRun.Status.PAID]:
+                return _error_list(
+                    "Payroll run not finalized.",
+                    ["Finalize the payroll run before generating payslips."],
+                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                )
+
             payslips_qs = Payslip.objects.filter(payroll_run=run, is_active=True)
             total_payslips = payslips_qs.count()
             generated_count = payslips_qs.exclude(status="PAID").update(status="PAID")

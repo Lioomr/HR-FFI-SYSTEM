@@ -184,8 +184,8 @@ class AssetDamageReportSerializer(serializers.ModelSerializer):
     employee_email = serializers.EmailField(source="employee.user.email", read_only=True)
     asset_code = serializers.CharField(source="asset.asset_code", read_only=True)
     asset_name = serializers.CharField(source="asset.name_en", read_only=True)
-    company_id = serializers.PrimaryKeyRelatedField(source="company", read_only=True)
-    company_name = serializers.CharField(source="company.name", read_only=True)
+    company_id = serializers.PrimaryKeyRelatedField(source="asset.company", read_only=True)
+    company_name = serializers.CharField(source="asset.company.name", read_only=True)
 
     class Meta:
         model = AssetDamageReport
@@ -228,8 +228,8 @@ class AssetReturnRequestSerializer(serializers.ModelSerializer):
     asset_code = serializers.CharField(source="asset.asset_code", read_only=True)
     asset_name = serializers.CharField(source="asset.name_en", read_only=True)
     workflow = serializers.SerializerMethodField()
-    company_id = serializers.PrimaryKeyRelatedField(source="company", read_only=True)
-    company_name = serializers.CharField(source="company.name", read_only=True)
+    company_id = serializers.PrimaryKeyRelatedField(source="asset.company", read_only=True)
+    company_name = serializers.CharField(source="asset.company.name", read_only=True)
 
     class Meta:
         model = AssetReturnRequest

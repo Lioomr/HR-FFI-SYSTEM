@@ -110,6 +110,7 @@ class WorkflowAction(models.Model):
     class Action(models.TextChoices):
         SUBMIT = "submit", "Submit"
         APPROVE = "approve", "Approve"
+        REQUEST_CHANGES = "request_changes", "Request Changes"
         REJECT = "reject", "Reject"
         CANCEL = "cancel", "Cancel"
         ADVANCE = "advance", "Advance"

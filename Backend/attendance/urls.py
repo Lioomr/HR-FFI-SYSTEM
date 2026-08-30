@@ -13,6 +13,7 @@ from .views import (
     AttendanceRecordViewSet,
     CEOAttendanceViewSet,
     ManagerAttendanceViewSet,
+    WorkLocationViewSet,
 )
 
 router = DefaultRouter()
@@ -25,6 +26,7 @@ router.register(
 router.register(r"manager/attendance", ManagerAttendanceViewSet, basename="manager-attendance")
 router.register(r"ceo/attendance", CEOAttendanceViewSet, basename="ceo-attendance")
 router.register(r"biotime-mappings", BioTimeEmployeeMapViewSet, basename="biotime-mappings")
+router.register(r"work-locations", WorkLocationViewSet, basename="work-locations")
 
 urlpatterns = [
     path("biotime/config/", BioTimeConfigViewSet.as_view(), name="biotime-config"),

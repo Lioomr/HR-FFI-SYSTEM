@@ -8,73 +8,6 @@ from employees.storage import PrivateUploadStorage
 from organization.models import OrganizationNode
 
 
-class HiringRequest(models.Model):
-    class Status(models.TextChoices):
-        DRAFT = "draft", "Draft"
-        SUBMITTED = "submitted", "Submitted"
-        APPROVED = "approved", "Approved"
-        REJECTED = "rejected", "Rejected"
-        CANCELLED = "cancelled", "Cancelled"
-        CONVERTED = "converted", "Converted"
-
-    company = models.ForeignKey(OrganizationNode, on_delete=models.PROTECT, related_name="hiring_requests")
-    reference_number = models.CharField(max_length=100)
-    candidate_full_name = models.CharField(max_length=255)
-    candidate_email = models.EmailField(blank=True)
-    candidate_phone_number = models.CharField(max_length=32, blank=True)
-    nationality = models.CharField(max_length=100, blank=True)
-    date_of_birth = models.DateField(null=True, blank=True)
-    proposed_salary = models.DecimalField(max_digits=14, decimal_places=2, default=0)
-    cv_file = models.FileField(storage=PrivateUploadStorage(), upload_to="hiring_request_cvs/")
-    status = models.CharField(max_length=16, choices=Status.choices, default=Status.DRAFT, db_index=True)
-    requested_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.PROTECT,
-        related_name="requested_hires",
-    )
-    submitted_at = models.DateTimeField(null=True, blank=True)
-    ceo_decision_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.PROTECT,
-        related_name="decided_hiring_requests",
-        null=True,
-        blank=True,
-    )
-    ceo_decision_at = models.DateTimeField(null=True, blank=True)
-    ceo_decision_note = models.TextField(blank=True)
-    created_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.PROTECT,
-        related_name="created_hiring_requests",
-    )
-    updated_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.PROTECT,
-        related_name="updated_hiring_requests",
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ["-created_at", "-id"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["company", "reference_number"], name="unique_hiring_request_reference_company"
-            ),
-            models.CheckConstraint(condition=~models.Q(reference_number=""), name="hiring_request_reference_not_blank"),
-            models.CheckConstraint(
-                condition=models.Q(proposed_salary__gte=0), name="hiring_request_salary_nonnegative"
-            ),
-        ]
-        indexes = [
-            models.Index(fields=["company", "status"]),
-            models.Index(fields=["company", "created_at"]),
-        ]
-
-    def __str__(self) -> str:
-        return f"{self.reference_number} - {self.candidate_full_name}"
-
-
 class JobOffer(models.Model):
     class Status(models.TextChoices):
         DRAFT = "draft", "Draft"
@@ -83,6 +16,13 @@ class JobOffer(models.Model):
         REJECTED = "rejected", "Rejected"
         EXPIRED = "expired", "Expired"
         CANCELLED = "cancelled", "Cancelled"
+
+    class ApprovalStatus(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        PENDING_CEO = "pending_ceo", "Pending CEO"
+        APPROVED = "approved", "Approved"
+        CHANGES_REQUESTED = "changes_requested", "Changes Requested"
+        REJECTED = "rejected", "Rejected"
 
     company = models.ForeignKey(OrganizationNode, on_delete=models.PROTECT, related_name="job_offers")
     employee_profile = models.ForeignKey(
@@ -99,19 +39,13 @@ class JobOffer(models.Model):
         null=True,
         blank=True,
     )
-    hiring_request = models.OneToOneField(
-        HiringRequest,
-        on_delete=models.PROTECT,
-        related_name="job_offer",
-        null=True,
-        blank=True,
-    )
-
     candidate_full_name = models.CharField(max_length=255)
     candidate_email = models.EmailField(blank=True)
     candidate_phone_number = models.CharField(max_length=32, blank=True)
     nationality = models.CharField(max_length=100, blank=True)
+    date_of_birth = models.DateField(null=True, blank=True)
     id_passport_iqama_number = models.CharField(max_length=100, blank=True)
+    cv_file = models.FileField(storage=PrivateUploadStorage(), upload_to="job_offer_cvs/", blank=True)
     department_ref = models.ForeignKey(
         "hr_reference.Department",
         on_delete=models.PROTECT,
@@ -156,6 +90,24 @@ class JobOffer(models.Model):
     hr_signer_title = models.CharField(max_length=150, blank=True)
 
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.DRAFT, db_index=True)
+    approval_status = models.CharField(
+        max_length=24,
+        choices=ApprovalStatus.choices,
+        default=ApprovalStatus.DRAFT,
+        db_index=True,
+    )
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    ceo_decision_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="decided_job_offers",
+        null=True,
+        blank=True,
+    )
+    ceo_decision_at = models.DateTimeField(null=True, blank=True)
+    ceo_decision_reason = models.TextField(blank=True)
+    ceo_recommendation = models.TextField(blank=True)
+    approval_events = models.JSONField(default=list, blank=True)
     response_token = models.CharField(max_length=64, unique=True, null=True, blank=True, db_index=True)
     sent_at = models.DateTimeField(null=True, blank=True)
     accepted_at = models.DateTimeField(null=True, blank=True)
@@ -185,6 +137,7 @@ class JobOffer(models.Model):
         ]
         indexes = [
             models.Index(fields=["company", "status"]),
+            models.Index(fields=["company", "approval_status"]),
             models.Index(fields=["company", "expiry_date"]),
         ]
 

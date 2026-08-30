@@ -1,3 +1,4 @@
+import json
 from datetime import date
 from decimal import Decimal
 from io import BytesIO
@@ -68,10 +69,24 @@ class HrDocumentPdfTests(SimpleTestCase):
         )
 
     def test_combined_map_is_the_authoritative_source_for_both_documents(self):
-        offer_fields = load_document_field_map("job_offer", "job_offer_blank_field_map.json")
-        starting_fields = load_document_field_map(
-            "starting_work_acknowledgment", "starting_work_acknowledgment_blank_field_map.json"
-        )
+        offer_map = {f"offer_field_{index}": {} for index in range(28)}
+        offer_map["rejection_reason"] = {"multiline": True}
+        starting_map = {f"starting_field_{index}": {} for index in range(24)}
+        starting_map["not_started_reason"] = {"multiline": True}
+        combined = {
+            "documents": {
+                "job_offer": {"fields": offer_map},
+                "starting_work_acknowledgment": {"fields": starting_map},
+            }
+        }
+        with TemporaryDirectory() as template_dir:
+            combined_path = Path(template_dir) / "hr_documents_combined_field_map.json"
+            combined_path.write_text(json.dumps(combined), encoding="utf-8")
+            with patch("job_offers.document_pdf.resolve_template_path", return_value=str(combined_path)):
+                offer_fields = load_document_field_map("job_offer", "job_offer_blank_field_map.json")
+                starting_fields = load_document_field_map(
+                    "starting_work_acknowledgment", "starting_work_acknowledgment_blank_field_map.json"
+                )
 
         self.assertEqual(len(offer_fields), 29)
         self.assertEqual(len(starting_fields), 25)
@@ -89,6 +104,14 @@ class HrDocumentPdfTests(SimpleTestCase):
         self.assertIn("existing", extracted)
         self.assertIn("notice", extracted)
         self.assertIn("period.", extracted)
+
+    def test_job_offer_pdf_uses_the_production_template_when_it_is_available(self):
+        pdf_bytes = build_job_offer_pdf(self.offer())
+        extracted = PdfReader(BytesIO(pdf_bytes)).pages[0].extract_text()
+
+        self.assertIn("Applicant Details", extracted)
+        self.assertIn("Monthly Salary Details", extracted)
+        self.assertIn("Benefits / Contract Details", extracted)
 
     def test_starting_work_pdf_started_state_uses_profile_and_start_date(self):
         profile = self.employee()

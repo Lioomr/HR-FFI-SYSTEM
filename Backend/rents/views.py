@@ -326,10 +326,11 @@ class RentViewSet(viewsets.ModelViewSet):
         rent = self.get_object()
         pdf_bytes = _build_rent_pdf(rent)
         audit(request, "rent_exported_pdf", entity="rent", entity_id=rent.id)
-        response = HttpResponse(pdf_bytes, content_type="application/pdf")
         filename = f"rent_{rent.id}.pdf"
-        disposition = "attachment" if _to_bool_rent(request.query_params.get("download", "1")) else "inline"
-        response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
+        response = HttpResponse(pdf_bytes, content_type="application/octet-stream")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        response["X-Content-Type-Options"] = "nosniff"
+        response["Cache-Control"] = "private, no-store"
         return response
 
     @action(detail=True, methods=["post"], url_path="notify")

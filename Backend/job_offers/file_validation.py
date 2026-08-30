@@ -39,12 +39,12 @@ def _matches_signature(extension: str, content: bytes) -> bool:
     return False
 
 
-def validate_hiring_request_cv(upload):
+def validate_job_offer_cv(upload):
     extension = Path(upload.name or "").suffix.lower()
     if extension not in ALLOWED_CV_EXTENSIONS:
         raise serializers.ValidationError("CV must be a PDF, DOC, DOCX, JPG, or PNG file.")
 
-    limit = int(getattr(settings, "MAX_HIRING_REQUEST_CV_SIZE_BYTES", 5 * 1024 * 1024))
+    limit = int(getattr(settings, "MAX_JOB_OFFER_CV_SIZE_BYTES", 5 * 1024 * 1024))
     if upload.size > limit:
         raise serializers.ValidationError(f"CV file size must not exceed {limit} bytes.")
 

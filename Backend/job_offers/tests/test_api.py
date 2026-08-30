@@ -21,7 +21,7 @@ from hr_reference.models import Department, Position
 from invites.models import Invite
 from organization.models import OrganizationNode, UserOrganizationAccess
 
-from ..models import HiringRequest, JobOffer
+from ..models import JobOffer
 from ..notifications import notify_job_offer_biotime_mapping_missing
 from ..pdf import build_job_offer_pdf
 from ..services import deliver_job_offer, ensure_prehire_profile_for_offer
@@ -80,36 +80,16 @@ class JobOfferApiTests(APITestCase):
         self.headers = {"HTTP_X_ACTIVE_COMPANY_ID": str(self.company.id)}
 
     def payload(self, **overrides):
-        hiring_request_id = overrides.pop("hiring_request_id", None)
-        if hiring_request_id is None:
-            sequence = HiringRequest.objects.count() + 1
-            hiring_request = HiringRequest.objects.create(
-                company=self.company,
-                reference_number=f"HRQ-FFI-{timezone.localdate().year}-{sequence:04d}",
-                candidate_full_name=overrides.get("candidate_full_name", "Candidate One"),
-                candidate_email=overrides.get("candidate_email", "candidate.one@example.com"),
-                candidate_phone_number=overrides.get("candidate_phone_number", "+201001234567"),
-                nationality=overrides.get("nationality", "Egyptian"),
-                date_of_birth=overrides.get("date_of_birth", "1994-05-17"),
-                proposed_salary=Decimal(overrides.get("basic_salary", "10000.00")),
-                cv_file=SimpleUploadedFile("candidate.pdf", b"%PDF-1.4\n%%EOF", content_type="application/pdf"),
-                status=HiringRequest.Status.APPROVED,
-                requested_by=self.hr,
-                ceo_decision_by=self.hr,
-                ceo_decision_at=timezone.now(),
-                created_by=self.hr,
-                updated_by=self.hr,
-            )
-            hiring_request_id = hiring_request.id
         data = {
-            "hiring_request_id": hiring_request_id,
             "department_id": self.department.id,
             "position_id": self.position.id,
             "candidate_full_name": "Candidate One",
             "candidate_email": "candidate.one@example.com",
             "candidate_phone_number": "+201001234567",
             "nationality": "Egyptian",
+            "date_of_birth": "1994-05-17",
             "id_passport_iqama_number": "A1234567",
+            "cv_file": SimpleUploadedFile("candidate.pdf", b"%PDF-1.4\n%%EOF", content_type="application/pdf"),
             "position_title": "Project Engineer",
             "classification": "Technical",
             "department": "Projects",
@@ -155,6 +135,7 @@ class JobOfferApiTests(APITestCase):
             transportation_allowance=Decimal("1000.00"),
             other_allowance=Decimal("500.00"),
             total_salary_package=Decimal("14000.00"),
+            approval_status=overrides.pop("approval_status", JobOffer.ApprovalStatus.APPROVED),
             offer_date=timezone.localdate(),
             expiry_date=overrides.pop("expiry_date", timezone.localdate() + timedelta(days=7)),
             reference_number=overrides.pop("reference_number", f"JO-{JobOffer.objects.count() + 1}"),
@@ -173,7 +154,7 @@ class JobOfferApiTests(APITestCase):
 
     def test_hr_can_create_and_update_draft_job_offer(self):
         self.authenticate_hr()
-        response = self.client.post("/job-offers/", self.payload(), format="json", **self.headers)
+        response = self.client.post("/job-offers/", self.payload(), format="multipart", **self.headers)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
         offer = JobOffer.objects.get()
         self.assertEqual(offer.company, self.company)
@@ -230,7 +211,7 @@ class JobOfferApiTests(APITestCase):
 
     def test_linked_offer_profile_ensure_is_idempotent(self):
         self.authenticate_hr()
-        response = self.client.post("/job-offers/", self.payload(), format="json", **self.headers)
+        response = self.client.post("/job-offers/", self.payload(), format="multipart", **self.headers)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
         offer = JobOffer.objects.get()
         profile_count = EmployeeProfile.objects.count()
@@ -250,13 +231,13 @@ class JobOfferApiTests(APITestCase):
                 hr_signer_name="Client Signer",
                 hr_signer_title="Client Title",
             ),
-            format="json",
+            format="multipart",
             **self.headers,
         )
         second = self.client.post(
             "/job-offers/",
             self.payload(reference_number="CLIENT-TWO"),
-            format="json",
+            format="multipart",
             **self.headers,
         )
 
@@ -279,7 +260,7 @@ class JobOfferApiTests(APITestCase):
 
     def test_non_hr_cannot_create_or_list_internal_offers(self):
         self.client.force_authenticate(self.employee_user)
-        create = self.client.post("/job-offers/", self.payload(), format="json", **self.headers)
+        create = self.client.post("/job-offers/", self.payload(), format="multipart", **self.headers)
         listing = self.client.get("/job-offers/", **self.headers)
         self.assertEqual(create.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(listing.status_code, status.HTTP_403_FORBIDDEN)
@@ -304,7 +285,7 @@ class JobOfferApiTests(APITestCase):
         listing = self.client.get("/job-offers/", **self.headers)
         detail = self.client.get(f"/job-offers/{foreign.id}/", **self.headers)
         create = self.client.post(
-            "/job-offers/", self.payload(employee_profile_id=foreign_profile.id), format="json", **self.headers
+            "/job-offers/", self.payload(employee_profile_id=foreign_profile.id), format="multipart", **self.headers
         )
         self.assertEqual(listing.status_code, status.HTTP_200_OK)
         self.assertNotIn("Foreign Candidate", str(listing.data))
@@ -321,13 +302,13 @@ class JobOfferApiTests(APITestCase):
         cross_company = self.client.post(
             "/job-offers/",
             self.payload(department_id=self.other_department.id, position_id=self.other_position.id),
-            format="json",
+            format="multipart",
             **self.headers,
         )
         inactive = self.client.post(
             "/job-offers/",
             self.payload(department_id=inactive_department.id),
-            format="json",
+            format="multipart",
             **self.headers,
         )
 
@@ -385,7 +366,7 @@ class JobOfferApiTests(APITestCase):
 
     def test_pdf_uses_generated_reference_and_automatic_signer(self):
         self.authenticate_hr()
-        response = self.client.post("/job-offers/", self.payload(), format="json", **self.headers)
+        response = self.client.post("/job-offers/", self.payload(), format="multipart", **self.headers)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
         offer = JobOffer.objects.get()
         extracted = PdfReader(BytesIO(build_job_offer_pdf(offer))).pages[0].extract_text()

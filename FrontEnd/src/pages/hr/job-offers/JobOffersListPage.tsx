@@ -1,6 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Grid, Input, Modal, Segmented, Space, Table, Tag, Tooltip, Typography, message } from "antd";
+import {
+  Button,
+  Grid,
+  Input,
+  Modal,
+  Segmented,
+  Space,
+  Table,
+  Tag,
+  Tooltip,
+  Typography,
+  message,
+} from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
   EyeOutlined,
@@ -16,6 +28,7 @@ import ErrorState from "../../../components/ui/ErrorState";
 import LoadingState from "../../../components/ui/LoadingState";
 import PageHeader from "../../../components/ui/PageHeader";
 import JobOfferStatusTag from "../../../components/jobOffers/JobOfferStatusTag";
+import JobOfferApprovalStatusTag from "../../../components/jobOffers/JobOfferApprovalStatusTag";
 import Unauthorized403Page from "../../Unauthorized403Page";
 
 import { isApiError } from "../../../services/api/apiTypes";
@@ -27,6 +40,7 @@ import {
   listJobOffers,
   sendJobOffer,
   type JobOffer,
+  type JobOfferApprovalStatus,
   type JobOfferStatus,
 } from "../../../services/api/jobOffersApi";
 import { useI18n } from "../../../i18n/useI18n";
@@ -41,6 +55,7 @@ const { useBreakpoint } = Grid;
 const PAGE_SIZE = 25;
 
 type StatusFilter = JobOfferStatus | "all";
+type ApprovalFilter = JobOfferApprovalStatus | "all";
 
 const STATUS_FILTERS: StatusFilter[] = [
   "all",
@@ -50,6 +65,15 @@ const STATUS_FILTERS: StatusFilter[] = [
   "rejected",
   "expired",
   "cancelled",
+];
+
+const APPROVAL_FILTERS: ApprovalFilter[] = [
+  "all",
+  "draft",
+  "pending_ceo",
+  "approved",
+  "changes_requested",
+  "rejected",
 ];
 
 export default function JobOffersListPage() {
@@ -63,6 +87,7 @@ export default function JobOffersListPage() {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter>("all");
   const [page, setPage] = useState(1);
 
   const [items, setItems] = useState<JobOffer[]>([]);
@@ -83,6 +108,9 @@ export default function JobOffersListPage() {
           page,
           page_size: PAGE_SIZE,
           ...(statusFilter === "all" ? {} : { status: statusFilter }),
+          ...(approvalFilter === "all"
+            ? {}
+            : { approval_status: approvalFilter }),
           ...(search ? { search } : {}),
         });
         if (isApiError(response)) {
@@ -99,7 +127,11 @@ export default function JobOffersListPage() {
           return;
         }
         setItems(items);
-        setTotal(typeof response.data.count === "number" ? response.data.count : items.length);
+        setTotal(
+          typeof response.data.count === "number"
+            ? response.data.count
+            : items.length,
+        );
       } catch (err: unknown) {
         if (isForbidden(err)) {
           setForbidden(true);
@@ -111,7 +143,7 @@ export default function JobOffersListPage() {
         setRefreshing(false);
       }
     },
-    [page, statusFilter, search, t],
+    [page, statusFilter, approvalFilter, search, t],
   );
 
   useEffect(() => {
@@ -134,6 +166,18 @@ export default function JobOffersListPage() {
     [t],
   );
 
+  const approvalOptions = useMemo(
+    () =>
+      APPROVAL_FILTERS.map((value) => ({
+        label:
+          value === "all"
+            ? t("jobOffers.approval.status.all")
+            : t(`jobOffers.approval.status.${value}`),
+        value,
+      })),
+    [t],
+  );
+
   const handleSend = useCallback(
     (offer: JobOffer) => {
       modal.confirm({
@@ -151,11 +195,14 @@ export default function JobOffersListPage() {
             }
             const warnings = response.data.delivery?.warnings || [];
             // A warning on one channel does not undo the send: the offer is out.
-            if (warnings.length > 0) messageApi.warning(t("jobOffers.send.successWithWarnings"));
+            if (warnings.length > 0)
+              messageApi.warning(t("jobOffers.send.successWithWarnings"));
             else messageApi.success(t("jobOffers.send.success"));
             await load({ isRefresh: true });
           } catch (err: unknown) {
-            messageApi.error((err as Error)?.message || t("jobOffers.send.failed"));
+            messageApi.error(
+              (err as Error)?.message || t("jobOffers.send.failed"),
+            );
           } finally {
             setBusyId(null);
           }
@@ -178,13 +225,17 @@ export default function JobOffersListPage() {
           try {
             const response = await cancelJobOffer(offer.id);
             if (isApiError(response)) {
-              messageApi.error(response.message || t("jobOffers.cancel.failed"));
+              messageApi.error(
+                response.message || t("jobOffers.cancel.failed"),
+              );
               return;
             }
             messageApi.success(t("jobOffers.cancel.success"));
             await load({ isRefresh: true });
           } catch (err: unknown) {
-            messageApi.error((err as Error)?.message || t("jobOffers.cancel.failed"));
+            messageApi.error(
+              (err as Error)?.message || t("jobOffers.cancel.failed"),
+            );
           } finally {
             setBusyId(null);
           }
@@ -220,7 +271,9 @@ export default function JobOffersListPage() {
             {record.candidate_full_name}
           </Text>
           <Text type="secondary" style={{ fontSize: 12 }}>
-            {record.candidate_email || record.candidate_phone_number || record.reference_number}
+            {record.candidate_email ||
+              record.candidate_phone_number ||
+              record.reference_number}
           </Text>
         </div>
       ),
@@ -263,11 +316,25 @@ export default function JobOffersListPage() {
       ),
     },
     {
+      title: t("jobOffers.col.approvalStatus"),
+      key: "approval_status",
+      width: 150,
+      render: (_, record) => (
+        <JobOfferApprovalStatusTag
+          status={record.approval_status}
+          fallbackLabel={record.approval_status_label}
+        />
+      ),
+    },
+    {
       title: t("jobOffers.col.status"),
       key: "status",
       width: 140,
       render: (_, record) => (
-        <JobOfferStatusTag status={record.status} fallbackLabel={record.status_label} />
+        <JobOfferStatusTag
+          status={record.status}
+          fallbackLabel={record.status_label}
+        />
       ),
     },
     {
@@ -345,7 +412,8 @@ export default function JobOffersListPage() {
 
   if (forbidden) return <Unauthorized403Page />;
 
-  const hasFilters = statusFilter !== "all" || search.length > 0;
+  const hasFilters =
+    statusFilter !== "all" || approvalFilter !== "all" || search.length > 0;
 
   return (
     <div style={{ maxWidth: 1600, margin: "0 auto", paddingBottom: 24 }}>
@@ -357,7 +425,10 @@ export default function JobOffersListPage() {
         subtitle={t("jobOffers.subtitle")}
         tags={
           total > 0 ? (
-            <Tag style={{ margin: 0, borderRadius: 999, fontWeight: 700 }} color="orange">
+            <Tag
+              style={{ margin: 0, borderRadius: 999, fontWeight: 700 }}
+              color="orange"
+            >
               {t("jobOffers.countTag", { count: String(total) })}
             </Tag>
           ) : undefined
@@ -375,10 +446,10 @@ export default function JobOffersListPage() {
             <Button
               type="primary"
               icon={<PlusOutlined aria-hidden />}
-              onClick={() => navigate("/hr/hiring-requests?status=approved")}
+              onClick={() => navigate("/hr/job-offers/new")}
               style={{ borderRadius: 10, minHeight: 40, fontWeight: 600 }}
             >
-              {t("jobOffers.createFromRequest")}
+              {t("jobOffers.newOffer")}
             </Button>
           </div>
         }
@@ -416,6 +487,17 @@ export default function JobOffersListPage() {
             }}
           />
         </div>
+        <div style={{ overflowX: "auto", maxWidth: "100%" }}>
+          <Segmented
+            aria-label={t("jobOffers.filterApprovalStatus")}
+            value={approvalFilter}
+            options={approvalOptions}
+            onChange={(value) => {
+              setApprovalFilter(value as ApprovalFilter);
+              setPage(1);
+            }}
+          />
+        </div>
         {hasFilters && (
           <Button
             type="link"
@@ -423,6 +505,7 @@ export default function JobOffersListPage() {
               setSearchInput("");
               setSearch("");
               setStatusFilter("all");
+              setApprovalFilter("all");
               setPage(1);
             }}
           >
@@ -434,15 +517,27 @@ export default function JobOffersListPage() {
       {loading ? (
         <LoadingState title={t("loading.generic")} />
       ) : error ? (
-        <ErrorState title={t("common.error")} description={error} onRetry={() => load()} />
+        <ErrorState
+          title={t("common.error")}
+          description={error}
+          onRetry={() => load()}
+        />
       ) : items.length === 0 ? (
         <EmptyState
-          title={hasFilters ? t("jobOffers.empty.filteredTitle") : t("jobOffers.empty.title")}
-          description={
-            hasFilters ? t("jobOffers.empty.filteredDescription") : t("jobOffers.empty.description")
+          title={
+            hasFilters
+              ? t("jobOffers.empty.filteredTitle")
+              : t("jobOffers.empty.title")
           }
-          actionText={hasFilters ? undefined : t("jobOffers.createFromRequest")}
-          onAction={hasFilters ? undefined : () => navigate("/hr/hiring-requests?status=approved")}
+          description={
+            hasFilters
+              ? t("jobOffers.empty.filteredDescription")
+              : t("jobOffers.empty.description")
+          }
+          actionText={hasFilters ? undefined : t("jobOffers.newOffer")}
+          onAction={
+            hasFilters ? undefined : () => navigate("/hr/job-offers/new")
+          }
         />
       ) : (
         <div
@@ -457,7 +552,7 @@ export default function JobOffersListPage() {
             rowKey="id"
             columns={columns}
             dataSource={items}
-            scroll={{ x: 1100 }}
+            scroll={{ x: 1300 }}
             onRow={(record) => ({
               onClick: () => navigate(`/hr/job-offers/${record.id}`),
               style: { cursor: "pointer" },
