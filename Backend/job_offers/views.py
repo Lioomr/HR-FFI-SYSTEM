@@ -1,4 +1,5 @@
 import logging
+import uuid
 from pathlib import Path
 
 from django.db import transaction
@@ -19,18 +20,19 @@ from core.services.workflow_engine import can_user_act_on_instance, sync_workflo
 from organization.models import OrganizationNode
 from organization.services import filter_queryset_by_company_scope, get_active_company_for_request
 
-from .automation import generate_hiring_request_reference_number, generate_reference_number, signer_snapshot
-from .models import HiringRequest, JobOffer
+from .automation import generate_reference_number, signer_snapshot
+from .models import JobOffer
 from .notifications import (
-    notify_hiring_request_decided,
-    notify_hiring_request_submitted,
     notify_job_offer_biotime_mapping_missing,
+    notify_job_offer_decided,
+    notify_job_offer_submitted,
 )
 from .pdf import build_job_offer_pdf
 from .serializers import (
-    HiringRequestDecisionSerializer,
-    HiringRequestSerializer,
+    JobOfferApprovalSerializer,
+    JobOfferRejectionSerializer,
     JobOfferResponseSerializer,
+    JobOfferRevisionSerializer,
     JobOfferSerializer,
     PublicJobOfferSerializer,
 )
@@ -44,38 +46,50 @@ from .services import (
 
 logger = logging.getLogger(__name__)
 
+CEO_COMMERCIAL_FIELDS = {
+    "department_id",
+    "position_id",
+    "position_title",
+    "classification",
+    "department",
+    "location",
+    "basic_salary",
+    "housing_allowance",
+    "transportation_allowance",
+    "other_allowance",
+    "total_salary_package",
+    "vacation",
+    "tickets",
+    "contract_status",
+    "contract_type",
+    "contract_duration",
+    "medical_insurance",
+    "offer_date",
+    "expiry_date",
+}
+
 
 def _is_hr_or_admin(user) -> bool:
     return get_role(user) in {"HRManager", "SystemAdmin"}
 
 
-def _can_view_hiring_requests(user) -> bool:
+def _can_view_job_offers(user) -> bool:
     return _is_hr_or_admin(user) or is_department_ceo_approver_user(user)
-
-
-def _hiring_request_audit_metadata(hiring_request: HiringRequest, **extra) -> dict:
-    return {
-        "company_id": hiring_request.company_id,
-        "reference_number": hiring_request.reference_number,
-        "requested_by_id": hiring_request.requested_by_id,
-        "ceo_decision_by_id": hiring_request.ceo_decision_by_id,
-        **extra,
-    }
 
 
 def _offer_audit_metadata(offer: JobOffer, **extra) -> dict:
     return {
         "company_id": offer.company_id,
         "reference_number": offer.reference_number,
+        "approval_status": offer.approval_status,
         "hr_signer_user_id": offer.hr_signer_user_id,
         "hr_signer_name": offer.hr_signer_name,
+        "ceo_decision_by_id": offer.ceo_decision_by_id,
         **extra,
     }
 
 
 def _scoped_offer_rows(request):
-    """Return company-scoped rows without joins so PostgreSQL can lock them safely."""
-
     return filter_queryset_by_company_scope(JobOffer.objects.all(), request)
 
 
@@ -84,38 +98,23 @@ def _scoped_offers(request):
         "company",
         "employee_profile",
         "account_invite",
-        "hiring_request",
         "department_ref",
         "position_ref",
         "hr_signer_user",
+        "ceo_decision_by",
         "created_by",
         "updated_by",
     )
     return filter_queryset_by_company_scope(queryset, request)
 
 
-def _scoped_hiring_request_rows(request):
-    return filter_queryset_by_company_scope(HiringRequest.objects.all(), request)
-
-
-def _scoped_hiring_requests(request):
-    queryset = HiringRequest.objects.select_related(
-        "company", "requested_by", "ceo_decision_by", "created_by", "updated_by"
-    )
-    return filter_queryset_by_company_scope(queryset, request)
-
-
-def _visible_hiring_requests(request):
-    queryset = _scoped_hiring_requests(request)
+def _visible_offers(request):
+    queryset = _scoped_offers(request)
     if _is_hr_or_admin(request.user):
         return queryset
     if is_department_ceo_approver_user(request.user):
-        return queryset.filter(Q(status=HiringRequest.Status.SUBMITTED) | Q(ceo_decision_by=request.user))
+        return queryset.filter(Q(approval_status=JobOffer.ApprovalStatus.PENDING_CEO) | Q(ceo_decision_by=request.user))
     return queryset.none()
-
-
-def _get_visible_hiring_request(request, hiring_request_id: int):
-    return _visible_hiring_requests(request).filter(id=hiring_request_id).first()
 
 
 def _expire_sent_offers(queryset) -> None:
@@ -126,17 +125,45 @@ def _expire_sent_offers(queryset) -> None:
 
 def _get_internal_offer(request, offer_id: int) -> JobOffer | None:
     _expire_sent_offers(_scoped_offers(request))
-    return _scoped_offers(request).filter(id=offer_id).first()
+    return _visible_offers(request).filter(id=offer_id).first()
 
 
 def _public_offer(token: str, *, for_update: bool = False) -> JobOffer | None:
     if for_update:
-        # PostgreSQL cannot lock nullable sides of the outer joins introduced
-        # by select_related("employee_profile"). Lock only the offer row.
         queryset = JobOffer.objects.select_for_update()
     else:
         queryset = JobOffer.objects.select_related("company", "employee_profile", "created_by", "updated_by")
     return queryset.filter(response_token=token).first()
+
+
+def _serialize_offer(offer: JobOffer, request) -> dict:
+    return JobOfferSerializer(offer, context={"request": request, "company": offer.company}).data
+
+
+def _append_approval_event(
+    offer: JobOffer,
+    *,
+    event_type: str,
+    actor,
+    from_status: str,
+    to_status: str,
+    reason: str = "",
+    recommendation: str = "",
+) -> None:
+    events = list(offer.approval_events or [])
+    events.append(
+        {
+            "id": uuid.uuid4().hex,
+            "type": event_type,
+            "actor_id": actor.id,
+            "at": timezone.now().isoformat(),
+            "from_status": from_status,
+            "to_status": to_status,
+            "reason": reason,
+            "recommendation": recommendation,
+        }
+    )
+    offer.approval_events = events
 
 
 def _validate_public_response_state(offer: JobOffer):
@@ -170,15 +197,20 @@ class JobOfferPagination(PageNumberPagination):
 
 
 class JobOfferListCreateView(APIView):
-    permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        queryset = _scoped_offers(request)
+        if not _can_view_job_offers(request.user):
+            return error("You do not have permission to view job offers.", status=status.HTTP_403_FORBIDDEN)
+        queryset = _visible_offers(request)
         _expire_sent_offers(queryset)
-        queryset = _scoped_offers(request)
+        queryset = _visible_offers(request)
         status_filter = (request.query_params.get("status") or "").strip()
         if status_filter:
             queryset = queryset.filter(status=status_filter)
+        approval_status = (request.query_params.get("approval_status") or "").strip()
+        if approval_status:
+            queryset = queryset.filter(approval_status=approval_status)
         search = (request.query_params.get("search") or "").strip()
         if search:
             queryset = queryset.filter(
@@ -190,392 +222,289 @@ class JobOfferListCreateView(APIView):
             )
         paginator = JobOfferPagination()
         page = paginator.paginate_queryset(queryset, request)
-        return paginator.get_paginated_response(JobOfferSerializer(page, many=True).data)
+        serializer = JobOfferSerializer(page, many=True, context={"request": request})
+        return paginator.get_paginated_response(serializer.data)
 
     def post(self, request):
+        if not _is_hr_or_admin(request.user):
+            return error("Only HR can create job offers.", status=status.HTTP_403_FORBIDDEN)
         company = get_active_company_for_request(request)
         if not company:
             return error("Select a company before creating a job offer.", status=status.HTTP_422_UNPROCESSABLE_ENTITY)
-        hiring_request_id = request.data.get("hiring_request_id")
-        hiring_request = None
-        if hiring_request_id in (None, ""):
-            return error(
-                "An approved hiring_request_id is required.",
-                errors={"hiring_request_id": ["This field is required."]},
-                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            )
-        if hiring_request_id not in (None, ""):
-            if not str(hiring_request_id).isdigit():
-                return error(
-                    "Validation error",
-                    errors={"hiring_request_id": ["A valid integer is required."]},
-                    status=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                )
-            hiring_request = _scoped_hiring_request_rows(request).filter(id=int(hiring_request_id)).first()
-            if not hiring_request:
-                return error("Hiring request not found.", status=status.HTTP_404_NOT_FOUND)
-            if hiring_request.status != HiringRequest.Status.APPROVED:
-                return error(
-                    "Only an approved, unconverted hiring request can create a job offer.",
-                    status=status.HTTP_409_CONFLICT,
-                )
-
-        payload = request.data.copy()
-        if hiring_request:
-            payload["hiring_request_id"] = str(hiring_request.id)
-            payload["candidate_full_name"] = hiring_request.candidate_full_name
-            payload["candidate_email"] = hiring_request.candidate_email
-            payload["candidate_phone_number"] = hiring_request.candidate_phone_number
-            payload["nationality"] = hiring_request.nationality
-            payload["basic_salary"] = str(hiring_request.proposed_salary)
-            payload.pop("employee_profile_id", None)
-            payload.pop("total_salary_package", None)
-        serializer = JobOfferSerializer(data=payload, context={"request": request, "company": company})
+        serializer = JobOfferSerializer(data=request.data, context={"request": request, "company": company})
         if not serializer.is_valid():
             return error("Validation error", errors=serializer.errors, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
         with transaction.atomic():
             locked_company = OrganizationNode.objects.select_for_update().get(pk=company.pk)
-            locked_hiring_request = None
-            if hiring_request:
-                locked_hiring_request = HiringRequest.objects.select_for_update().get(pk=hiring_request.pk)
-                if locked_hiring_request.company_id != locked_company.id:
-                    return error("Hiring request not found.", status=status.HTTP_404_NOT_FOUND)
-                if locked_hiring_request.status != HiringRequest.Status.APPROVED:
-                    return error(
-                        "Only an approved, unconverted hiring request can create a job offer.",
-                        status=status.HTTP_409_CONFLICT,
-                    )
-                if JobOffer.objects.filter(hiring_request=locked_hiring_request).exists():
-                    return error("This hiring request has already been converted.", status=status.HTTP_409_CONFLICT)
-            reference_number = generate_reference_number(
-                locked_company,
-                serializer.validated_data.get("offer_date"),
-            )
             offer = serializer.save(
                 company=locked_company,
                 created_by=request.user,
                 updated_by=request.user,
-                reference_number=reference_number,
-                hiring_request=locked_hiring_request,
+                reference_number=generate_reference_number(
+                    locked_company,
+                    serializer.validated_data.get("offer_date"),
+                ),
                 **signer_snapshot(request.user),
             )
-            profile_created = None
-            if locked_hiring_request:
-                _, profile_created = ensure_prehire_profile_for_offer(offer)
-                locked_hiring_request.status = HiringRequest.Status.CONVERTED
-                locked_hiring_request.updated_by = request.user
-                locked_hiring_request.save(update_fields=["status", "updated_by", "updated_at"])
-                sync_workflow(locked_hiring_request, actor=request.user)
+            _, profile_created = ensure_prehire_profile_for_offer(offer)
+            sync_workflow(offer, actor=request.user)
         audit(
             request,
             "job_offer_created",
             entity="JobOffer",
             entity_id=offer.id,
-            metadata=_offer_audit_metadata(offer),
-        )
-        if locked_hiring_request:
-            audit(
-                request,
-                "job_offer_prehire_profile_created" if profile_created else "job_offer_prehire_profile_reused",
-                entity="JobOffer",
-                entity_id=offer.id,
-                metadata=_offer_audit_metadata(offer, employee_profile_id=offer.employee_profile_id),
-            )
-            audit(
-                request,
-                "hiring_request_converted_to_job_offer",
-                entity="HiringRequest",
-                entity_id=locked_hiring_request.id,
-                metadata=_hiring_request_audit_metadata(locked_hiring_request, job_offer_id=offer.id),
-            )
-        return success(JobOfferSerializer(offer).data, message="Job offer created.", status=status.HTTP_201_CREATED)
-
-
-class HiringRequestListCreateView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        if not _can_view_hiring_requests(request.user):
-            return error("You do not have permission to view hiring requests.", status=status.HTTP_403_FORBIDDEN)
-        queryset = _visible_hiring_requests(request)
-        status_filter = (request.query_params.get("status") or "").strip()
-        if status_filter:
-            queryset = queryset.filter(status=status_filter)
-        search = (request.query_params.get("search") or "").strip()
-        if search:
-            queryset = queryset.filter(
-                Q(candidate_full_name__icontains=search)
-                | Q(candidate_email__icontains=search)
-                | Q(reference_number__icontains=search)
-            )
-        paginator = JobOfferPagination()
-        page = paginator.paginate_queryset(queryset, request)
-        serializer = HiringRequestSerializer(page, many=True, context={"request": request})
-        return paginator.get_paginated_response(serializer.data)
-
-    def post(self, request):
-        if not _is_hr_or_admin(request.user):
-            return error("Only HR can create hiring requests.", status=status.HTTP_403_FORBIDDEN)
-        company = get_active_company_for_request(request)
-        if not company:
-            return error(
-                "Select a company before creating a hiring request.", status=status.HTTP_422_UNPROCESSABLE_ENTITY
-            )
-        serializer = HiringRequestSerializer(data=request.data, context={"request": request})
-        if not serializer.is_valid():
-            return error("Validation error", errors=serializer.errors, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
-        with transaction.atomic():
-            locked_company = OrganizationNode.objects.select_for_update().get(pk=company.pk)
-            hiring_request = serializer.save(
-                company=locked_company,
-                reference_number=generate_hiring_request_reference_number(locked_company),
-                requested_by=request.user,
-                created_by=request.user,
-                updated_by=request.user,
-            )
-            sync_workflow(hiring_request, actor=request.user)
-        audit(
-            request,
-            "hiring_request_created",
-            entity="HiringRequest",
-            entity_id=hiring_request.id,
-            metadata=_hiring_request_audit_metadata(hiring_request),
+            metadata=_offer_audit_metadata(offer, employee_profile_created=profile_created),
         )
         return success(
-            HiringRequestSerializer(hiring_request, context={"request": request}).data,
-            message="Hiring request created.",
+            _serialize_offer(offer, request),
+            message="Job offer created.",
             status=status.HTTP_201_CREATED,
         )
 
 
-class HiringRequestDetailView(APIView):
+class JobOfferDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, hiring_request_id: int):
-        if not _can_view_hiring_requests(request.user):
-            return error("You do not have permission to view hiring requests.", status=status.HTTP_403_FORBIDDEN)
-        hiring_request = _get_visible_hiring_request(request, hiring_request_id)
-        if not hiring_request:
-            return error("Hiring request not found.", status=status.HTTP_404_NOT_FOUND)
-        return success(HiringRequestSerializer(hiring_request, context={"request": request}).data)
+    def get(self, request, offer_id: int):
+        if not _can_view_job_offers(request.user):
+            return error("You do not have permission to view job offers.", status=status.HTTP_403_FORBIDDEN)
+        offer = _get_internal_offer(request, offer_id)
+        if not offer:
+            return error("Job offer not found.", status=status.HTTP_404_NOT_FOUND)
+        return success(_serialize_offer(offer, request))
 
-    def patch(self, request, hiring_request_id: int):
-        if not _is_hr_or_admin(request.user):
-            return error("Only HR can edit hiring requests.", status=status.HTTP_403_FORBIDDEN)
-        hiring_request = _scoped_hiring_requests(request).filter(id=hiring_request_id).first()
-        if not hiring_request:
-            return error("Hiring request not found.", status=status.HTTP_404_NOT_FOUND)
-        if hiring_request.status != HiringRequest.Status.DRAFT:
-            return error("Only draft hiring requests can be updated.", status=status.HTTP_409_CONFLICT)
-        serializer = HiringRequestSerializer(
-            hiring_request,
-            data=request.data,
-            partial=True,
-            context={"request": request},
-        )
-        if not serializer.is_valid():
-            return error("Validation error", errors=serializer.errors, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
-        changed_fields = sorted(serializer.validated_data.keys())
-        hiring_request = serializer.save(updated_by=request.user)
-        sync_workflow(hiring_request, actor=request.user)
-        audit(
-            request,
-            "hiring_request_updated",
-            entity="HiringRequest",
-            entity_id=hiring_request.id,
-            metadata=_hiring_request_audit_metadata(hiring_request, changed_fields=changed_fields),
-        )
-        return success(HiringRequestSerializer(hiring_request, context={"request": request}).data)
-
-
-class HiringRequestSubmitView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request, hiring_request_id: int):
-        if not _is_hr_or_admin(request.user):
-            return error("Only HR can submit hiring requests.", status=status.HTTP_403_FORBIDDEN)
+    def patch(self, request, offer_id: int):
+        if not _can_view_job_offers(request.user):
+            return error("You do not have permission to edit job offers.", status=status.HTTP_403_FORBIDDEN)
         with transaction.atomic():
-            hiring_request = (
-                _scoped_hiring_request_rows(request).select_for_update().filter(id=hiring_request_id).first()
+            offer = _scoped_offer_rows(request).select_for_update().filter(id=offer_id).first()
+            if not offer:
+                return error("Job offer not found.", status=status.HTTP_404_NOT_FOUND)
+
+            is_hr = _is_hr_or_admin(request.user)
+            if is_hr:
+                if offer.approval_status not in {
+                    JobOffer.ApprovalStatus.DRAFT,
+                    JobOffer.ApprovalStatus.CHANGES_REQUESTED,
+                }:
+                    return error(
+                        "HR can edit only draft job offers or offers returned for changes.",
+                        status=status.HTTP_409_CONFLICT,
+                    )
+            else:
+                workflow = sync_workflow(offer, actor=request.user)
+                if offer.approval_status != JobOffer.ApprovalStatus.PENDING_CEO:
+                    return error("Only job offers pending CEO review can be edited.", status=status.HTTP_409_CONFLICT)
+                if not can_user_act_on_instance(request.user, offer, workflow):
+                    return error("You cannot act on this job offer.", status=status.HTTP_403_FORBIDDEN)
+                forbidden_fields = set(request.data.keys()) - CEO_COMMERCIAL_FIELDS
+                if forbidden_fields:
+                    return error(
+                        "CEO may edit commercial job-offer fields only.",
+                        errors={field: ["This field cannot be edited by CEO."] for field in sorted(forbidden_fields)},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+
+            serializer = JobOfferSerializer(
+                offer,
+                data=request.data,
+                partial=True,
+                context={"request": request, "company": offer.company},
             )
-            if not hiring_request:
-                return error("Hiring request not found.", status=status.HTTP_404_NOT_FOUND)
-            if hiring_request.status != HiringRequest.Status.DRAFT:
-                return error("Only draft hiring requests can be submitted.", status=status.HTTP_409_CONFLICT)
-            if not hiring_request.cv_file:
-                return error("A CV is required before submission.", status=status.HTTP_422_UNPROCESSABLE_ENTITY)
-            hiring_request.status = HiringRequest.Status.SUBMITTED
-            hiring_request.submitted_at = timezone.now()
-            hiring_request.updated_by = request.user
-            hiring_request.save(update_fields=["status", "submitted_at", "updated_by", "updated_at"])
-            sync_workflow(hiring_request, actor=request.user)
-        delivery = notify_hiring_request_submitted(hiring_request)
-        audit(
-            request,
-            "hiring_request_submitted",
-            entity="HiringRequest",
-            entity_id=hiring_request.id,
-            metadata=_hiring_request_audit_metadata(hiring_request, ceo_recipient_count=len(delivery)),
-        )
-        data = HiringRequestSerializer(hiring_request, context={"request": request}).data
-        return success({"hiring_request": data, "notifications": delivery}, message="Hiring request submitted.")
+            if not serializer.is_valid():
+                return error("Validation error", errors=serializer.errors, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+            changed_fields = sorted(serializer.validated_data.keys())
+            offer = serializer.save(updated_by=request.user)
+            if offer.employee_profile_id:
+                update_employee_profile_from_offer(offer)
 
-
-class HiringRequestCancelView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request, hiring_request_id: int):
-        if not _is_hr_or_admin(request.user):
-            return error("Only HR can cancel hiring requests.", status=status.HTTP_403_FORBIDDEN)
-        with transaction.atomic():
-            hiring_request = (
-                _scoped_hiring_request_rows(request).select_for_update().filter(id=hiring_request_id).first()
-            )
-            if not hiring_request:
-                return error("Hiring request not found.", status=status.HTTP_404_NOT_FOUND)
-            if hiring_request.status not in {HiringRequest.Status.DRAFT, HiringRequest.Status.SUBMITTED}:
-                return error("This hiring request cannot be cancelled.", status=status.HTTP_409_CONFLICT)
-            hiring_request.status = HiringRequest.Status.CANCELLED
-            hiring_request.updated_by = request.user
-            hiring_request.save(update_fields=["status", "updated_by", "updated_at"])
-            sync_workflow(hiring_request, actor=request.user)
-        audit(
-            request,
-            "hiring_request_cancelled",
-            entity="HiringRequest",
-            entity_id=hiring_request.id,
-            metadata=_hiring_request_audit_metadata(hiring_request),
-        )
-        return success(HiringRequestSerializer(hiring_request, context={"request": request}).data)
-
-
-class HiringRequestDecisionView(APIView):
-    permission_classes = [IsAuthenticated]
-    decision = ""
-
-    def post(self, request, hiring_request_id: int):
-        if not is_department_ceo_approver_user(request.user):
-            return error("Only a CEO approver can decide hiring requests.", status=status.HTTP_403_FORBIDDEN)
-        serializer = HiringRequestDecisionSerializer(data=request.data)
-        if not serializer.is_valid():
-            return error("Validation error", errors=serializer.errors, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
-        with transaction.atomic():
-            hiring_request = (
-                _scoped_hiring_request_rows(request).select_for_update().filter(id=hiring_request_id).first()
-            )
-            if not hiring_request:
-                return error("Hiring request not found.", status=status.HTTP_404_NOT_FOUND)
-            workflow = sync_workflow(hiring_request, actor=request.user)
-            if hiring_request.status != HiringRequest.Status.SUBMITTED:
-                return error("Only submitted hiring requests can be decided.", status=status.HTTP_409_CONFLICT)
-            if not can_user_act_on_instance(request.user, hiring_request, workflow):
-                return error("You cannot act on this hiring request.", status=status.HTTP_403_FORBIDDEN)
-            hiring_request.status = self.decision
-            hiring_request.ceo_decision_by = request.user
-            hiring_request.ceo_decision_at = timezone.now()
-            hiring_request.ceo_decision_note = serializer.validated_data["note"].strip()
-            hiring_request.updated_by = request.user
-            hiring_request.save(
-                update_fields=[
-                    "status",
-                    "ceo_decision_by",
-                    "ceo_decision_at",
-                    "ceo_decision_note",
-                    "updated_by",
-                    "updated_at",
-                ]
-            )
-            sync_workflow(hiring_request, actor=request.user)
-        notification = notify_hiring_request_decided(hiring_request)
-        action = (
-            "hiring_request_approved" if self.decision == HiringRequest.Status.APPROVED else "hiring_request_rejected"
-        )
+        action = "job_offer_updated" if is_hr else "job_offer_ceo_commercial_fields_updated"
         audit(
             request,
             action,
-            entity="HiringRequest",
-            entity_id=hiring_request.id,
-            metadata=_hiring_request_audit_metadata(hiring_request, requester_notification=notification),
-        )
-        return success(HiringRequestSerializer(hiring_request, context={"request": request}).data)
-
-
-class HiringRequestApproveView(HiringRequestDecisionView):
-    decision = HiringRequest.Status.APPROVED
-
-
-class HiringRequestRejectView(HiringRequestDecisionView):
-    decision = HiringRequest.Status.REJECTED
-
-
-class HiringRequestCvView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request, hiring_request_id: int):
-        if not _can_view_hiring_requests(request.user):
-            return error("You do not have permission to view hiring requests.", status=status.HTTP_403_FORBIDDEN)
-        hiring_request = _get_visible_hiring_request(request, hiring_request_id)
-        if not hiring_request:
-            return error("Hiring request not found.", status=status.HTTP_404_NOT_FOUND)
-        if not hiring_request.cv_file:
-            return error("CV not found.", status=status.HTTP_404_NOT_FOUND)
-        try:
-            hiring_request.cv_file.open("rb")
-        except FileNotFoundError:
-            return error("CV not found.", status=status.HTTP_404_NOT_FOUND)
-        audit(
-            request,
-            "hiring_request_cv_downloaded",
-            entity="HiringRequest",
-            entity_id=hiring_request.id,
-            metadata=_hiring_request_audit_metadata(hiring_request),
-        )
-        response = FileResponse(
-            hiring_request.cv_file,
-            content_type="application/octet-stream",
-            as_attachment=True,
-            filename=Path(hiring_request.cv_file.name).name,
-        )
-        response["X-Content-Type-Options"] = "nosniff"
-        response["Cache-Control"] = "private, no-store"
-        return response
-
-
-class JobOfferDetailView(APIView):
-    permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
-
-    def get(self, request, offer_id: int):
-        offer = _get_internal_offer(request, offer_id)
-        if not offer:
-            return error("Job offer not found.", status=status.HTTP_404_NOT_FOUND)
-        return success(JobOfferSerializer(offer).data)
-
-    def patch(self, request, offer_id: int):
-        offer = _get_internal_offer(request, offer_id)
-        if not offer:
-            return error("Job offer not found.", status=status.HTTP_404_NOT_FOUND)
-        if offer.status != JobOffer.Status.DRAFT:
-            return error("Only draft job offers can be updated.", status=status.HTTP_409_CONFLICT)
-        serializer = JobOfferSerializer(
-            offer,
-            data=request.data,
-            partial=True,
-            context={"request": request, "company": offer.company},
-        )
-        if not serializer.is_valid():
-            return error("Validation error", errors=serializer.errors, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
-        changed_fields = sorted(serializer.validated_data.keys())
-        offer = serializer.save(updated_by=request.user)
-        if offer.hiring_request_id and offer.employee_profile_id:
-            update_employee_profile_from_offer(offer)
-        audit(
-            request,
-            "job_offer_updated",
             entity="JobOffer",
             entity_id=offer.id,
             metadata=_offer_audit_metadata(offer, changed_fields=changed_fields),
         )
-        return success(JobOfferSerializer(offer).data, message="Job offer updated.")
+        return success(_serialize_offer(offer, request), message="Job offer updated.")
+
+
+class JobOfferSubmitView(APIView):
+    permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
+
+    def post(self, request, offer_id: int):
+        with transaction.atomic():
+            offer = _scoped_offer_rows(request).select_for_update().filter(id=offer_id).first()
+            if not offer:
+                return error("Job offer not found.", status=status.HTTP_404_NOT_FOUND)
+            allowed = {JobOffer.ApprovalStatus.DRAFT, JobOffer.ApprovalStatus.CHANGES_REQUESTED}
+            if offer.approval_status not in allowed:
+                return error(
+                    "Only draft job offers or offers returned for changes can be submitted.",
+                    status=status.HTTP_409_CONFLICT,
+                )
+            if offer.status != JobOffer.Status.DRAFT:
+                return error("Only unsent job offers can be submitted.", status=status.HTTP_409_CONFLICT)
+            if not offer.cv_file:
+                return error("A CV is required before submission.", status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+            if offer.is_expired():
+                return error("Expired job offers cannot be submitted.", status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+            previous_status = offer.approval_status
+            offer.approval_status = JobOffer.ApprovalStatus.PENDING_CEO
+            offer.submitted_at = timezone.now()
+            offer.updated_by = request.user
+            _append_approval_event(
+                offer,
+                event_type="submit",
+                actor=request.user,
+                from_status=previous_status,
+                to_status=offer.approval_status,
+            )
+            offer.save(update_fields=["approval_status", "submitted_at", "updated_by", "approval_events", "updated_at"])
+            sync_workflow(offer, actor=request.user)
+        try:
+            delivery = notify_job_offer_submitted(offer)
+        except Exception:
+            logger.exception("job_offer_submission_notification_failed", extra={"job_offer_id": offer.id})
+            delivery = []
+        audit(
+            request,
+            "job_offer_submitted_for_ceo_approval",
+            entity="JobOffer",
+            entity_id=offer.id,
+            metadata=_offer_audit_metadata(offer, ceo_recipient_count=len(delivery)),
+        )
+        return success(
+            {"job_offer": _serialize_offer(offer, request), "notifications": delivery},
+            message="Job offer submitted for CEO approval.",
+        )
+
+
+class JobOfferDecisionView(APIView):
+    permission_classes = [IsAuthenticated]
+    target_status = ""
+    event_type = ""
+    audit_action = ""
+    serializer_class = JobOfferApprovalSerializer
+
+    def post(self, request, offer_id: int):
+        if not is_department_ceo_approver_user(request.user):
+            return error("Only a CEO approver can decide job offers.", status=status.HTTP_403_FORBIDDEN)
+        serializer = self.serializer_class(data=request.data)
+        if not serializer.is_valid():
+            return error("Validation error", errors=serializer.errors, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        reason = serializer.validated_data.get("reason", "").strip()
+        recommendation = serializer.validated_data.get("recommendation", "").strip()
+        with transaction.atomic():
+            offer = _scoped_offer_rows(request).select_for_update().filter(id=offer_id).first()
+            if not offer:
+                return error("Job offer not found.", status=status.HTTP_404_NOT_FOUND)
+            workflow = sync_workflow(offer, actor=request.user)
+            if offer.approval_status != JobOffer.ApprovalStatus.PENDING_CEO:
+                return error("Only job offers pending CEO review can be decided.", status=status.HTTP_409_CONFLICT)
+            if not can_user_act_on_instance(request.user, offer, workflow):
+                return error("You cannot act on this job offer.", status=status.HTTP_403_FORBIDDEN)
+            previous_status = offer.approval_status
+            offer.approval_status = self.target_status
+            offer.ceo_decision_by = request.user
+            offer.ceo_decision_at = timezone.now()
+            offer.ceo_decision_reason = reason
+            offer.ceo_recommendation = recommendation
+            offer.updated_by = request.user
+            _append_approval_event(
+                offer,
+                event_type=self.event_type,
+                actor=request.user,
+                from_status=previous_status,
+                to_status=self.target_status,
+                reason=reason,
+                recommendation=recommendation,
+            )
+            offer.save(
+                update_fields=[
+                    "approval_status",
+                    "ceo_decision_by",
+                    "ceo_decision_at",
+                    "ceo_decision_reason",
+                    "ceo_recommendation",
+                    "updated_by",
+                    "approval_events",
+                    "updated_at",
+                ]
+            )
+            sync_workflow(offer, actor=request.user)
+        try:
+            delivery = notify_job_offer_decided(offer)
+        except Exception:
+            logger.exception("job_offer_decision_notification_failed", extra={"job_offer_id": offer.id})
+            delivery = []
+        audit(
+            request,
+            self.audit_action,
+            entity="JobOffer",
+            entity_id=offer.id,
+            metadata=_offer_audit_metadata(
+                offer,
+                has_reason=bool(reason),
+                has_recommendation=bool(recommendation),
+                hr_recipient_count=len(delivery),
+            ),
+        )
+        return success(_serialize_offer(offer, request))
+
+
+class JobOfferApproveView(JobOfferDecisionView):
+    target_status = JobOffer.ApprovalStatus.APPROVED
+    event_type = "approve"
+    audit_action = "job_offer_ceo_approved"
+    serializer_class = JobOfferApprovalSerializer
+
+
+class JobOfferRequestChangesView(JobOfferDecisionView):
+    target_status = JobOffer.ApprovalStatus.CHANGES_REQUESTED
+    event_type = "request_changes"
+    audit_action = "job_offer_changes_requested"
+    serializer_class = JobOfferRevisionSerializer
+
+
+class JobOfferRejectView(JobOfferDecisionView):
+    target_status = JobOffer.ApprovalStatus.REJECTED
+    event_type = "reject"
+    audit_action = "job_offer_ceo_rejected"
+    serializer_class = JobOfferRejectionSerializer
+
+
+class JobOfferCvView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, offer_id: int):
+        if not _can_view_job_offers(request.user):
+            return error("You do not have permission to view job-offer CVs.", status=status.HTTP_403_FORBIDDEN)
+        offer = _get_internal_offer(request, offer_id)
+        if not offer:
+            return error("Job offer not found.", status=status.HTTP_404_NOT_FOUND)
+        if not offer.cv_file:
+            return error("CV not found.", status=status.HTTP_404_NOT_FOUND)
+        try:
+            offer.cv_file.open("rb")
+        except FileNotFoundError:
+            return error("CV not found.", status=status.HTTP_404_NOT_FOUND)
+        audit(
+            request,
+            "job_offer_cv_downloaded",
+            entity="JobOffer",
+            entity_id=offer.id,
+            metadata=_offer_audit_metadata(offer),
+        )
+        response = FileResponse(
+            offer.cv_file,
+            content_type="application/octet-stream",
+            as_attachment=True,
+            filename=Path(offer.cv_file.name).name,
+        )
+        response["X-Content-Type-Options"] = "nosniff"
+        response["Cache-Control"] = "private, no-store"
+        return response
 
 
 class JobOfferSendView(APIView):
@@ -586,6 +515,11 @@ class JobOfferSendView(APIView):
             offer = _scoped_offer_rows(request).select_for_update().filter(id=offer_id).first()
             if not offer:
                 return error("Job offer not found.", status=status.HTTP_404_NOT_FOUND)
+            if offer.approval_status != JobOffer.ApprovalStatus.APPROVED:
+                return error(
+                    "CEO approval is required before sending this job offer.",
+                    status=status.HTTP_409_CONFLICT,
+                )
             if offer.is_expired():
                 if offer.status in {JobOffer.Status.DRAFT, JobOffer.Status.SENT}:
                     offer.status = JobOffer.Status.EXPIRED
@@ -701,14 +635,16 @@ class JobOfferSendView(APIView):
                 ),
             )
         return success(
-            {"offer": JobOfferSerializer(offer).data, "delivery": delivery_metadata}, message="Job offer sent."
+            {"offer": _serialize_offer(offer, request), "delivery": delivery_metadata}, message="Job offer sent."
         )
 
 
 class JobOfferPdfView(APIView):
-    permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, offer_id: int):
+        if not _can_view_job_offers(request.user):
+            return error("You do not have permission to view job offers.", status=status.HTTP_403_FORBIDDEN)
         offer = _get_internal_offer(request, offer_id)
         if not offer:
             return error("Job offer not found.", status=status.HTTP_404_NOT_FOUND)
@@ -735,6 +671,8 @@ class JobOfferCancelView(APIView):
             offer = _scoped_offer_rows(request).select_for_update().filter(id=offer_id).first()
             if not offer:
                 return error("Job offer not found.", status=status.HTTP_404_NOT_FOUND)
+            if offer.approval_status == JobOffer.ApprovalStatus.PENDING_CEO:
+                return error("A job offer under CEO review cannot be cancelled.", status=status.HTTP_409_CONFLICT)
             if offer.status not in {JobOffer.Status.DRAFT, JobOffer.Status.SENT}:
                 return error(
                     f"A {offer.get_status_display().lower()} job offer cannot be cancelled.",
@@ -752,7 +690,7 @@ class JobOfferCancelView(APIView):
             entity_id=offer.id,
             metadata=_offer_audit_metadata(offer, previous_status=previous_status),
         )
-        return success(JobOfferSerializer(offer).data, message="Job offer cancelled.")
+        return success(_serialize_offer(offer, request), message="Job offer cancelled.")
 
 
 class JobOfferRespondView(APIView):

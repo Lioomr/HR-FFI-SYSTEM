@@ -7,7 +7,7 @@ from django.utils import timezone
 from employees.models import EmployeeProfile
 from organization.models import OrganizationNode
 
-from .models import HiringRequest, JobOffer
+from .models import JobOffer
 
 User = get_user_model()
 
@@ -43,27 +43,6 @@ def generate_reference_number(company: OrganizationNode, offer_date: date | None
         sequence += 1
         reference = f"{prefix}{sequence:04d}"
         if not JobOffer.objects.filter(company=company, reference_number=reference).exists():
-            return reference
-
-
-def generate_hiring_request_reference_number(company: OrganizationNode, requested_date: date | None = None) -> str:
-    """Return the next hiring-request reference while the caller holds a company lock."""
-
-    year = (requested_date or timezone.localdate()).year
-    prefix = f"HRQ-{normalized_company_code(company)}-{year}-"
-    sequence = 0
-    for reference in HiringRequest.objects.filter(
-        company=company,
-        reference_number__startswith=prefix,
-    ).values_list("reference_number", flat=True):
-        suffix = reference.removeprefix(prefix)
-        if suffix.isdigit():
-            sequence = max(sequence, int(suffix))
-
-    while True:
-        sequence += 1
-        reference = f"{prefix}{sequence:04d}"
-        if not HiringRequest.objects.filter(company=company, reference_number=reference).exists():
             return reference
 
 

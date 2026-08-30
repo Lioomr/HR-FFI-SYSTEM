@@ -90,8 +90,11 @@ def _fallback_rows(offer: JobOffer) -> list[tuple[str, str]]:
         ("Contract type", offer.contract_type),
         ("Contract duration", offer.contract_duration),
         ("Medical insurance", offer.medical_insurance),
+        ("HR signer", offer.hr_signer_name),
+        ("HR title", offer.hr_signer_title),
         ("Offer date", offer.offer_date.isoformat()),
         ("Expiry date", offer.expiry_date.isoformat()),
+        ("Rejection reason", offer.rejection_reason if offer.status == JobOffer.Status.REJECTED else ""),
         ("Status", offer.get_status_display()),
     ]
 
@@ -107,7 +110,7 @@ def _draw_fallback(pdf: canvas.Canvas, offer: JobOffer, *, height: float) -> Non
         pdf.setFont(bold, 8)
         pdf.drawString(42, y, f"{label}:")
         pdf.setFont(regular, 8)
-        pdf.drawString(150, y, shape_ar(str(value))[:85])
+        pdf.drawString(150, y, shape_ar(str(value))[:120])
         y -= 16
         if y < 64:
             break
@@ -128,9 +131,11 @@ def build_job_offer_pdf(offer: JobOffer) -> bytes:
     if not template_path or not field_map:
         return _fallback_pdf(offer)
 
-    writer = PdfWriter(clone_from=template_path)
-    if not writer.pages:
+    template = PdfReader(template_path)
+    if not template.pages:
         return _fallback_pdf(offer)
+    writer = PdfWriter()
+    writer.add_page(template.pages[0])
     page = writer.pages[0]
     width = float(page.mediabox.width)
     height = float(page.mediabox.height)
@@ -139,6 +144,9 @@ def build_job_offer_pdf(offer: JobOffer) -> bytes:
     _draw_offer_overlay_from_map(pdf, offer, field_map)
     pdf.save()
     overlay.seek(0)
+    # Start from the original page, then layer the data onto it. Constructing a
+    # writer with clone_from can lose the template's artwork for this form,
+    # leaving only the values visible in some PDF viewers.
     page.merge_page(PdfReader(overlay).pages[0])
 
     output = BytesIO()

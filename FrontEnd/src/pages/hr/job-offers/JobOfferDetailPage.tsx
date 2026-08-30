@@ -4,7 +4,6 @@ import {
   Alert,
   Button,
   Col,
-  Descriptions,
   Modal,
   Row,
   Space,
@@ -14,6 +13,7 @@ import {
 } from "antd";
 import {
   ArrowLeftOutlined,
+  AuditOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
   CloseCircleOutlined,
@@ -32,10 +32,21 @@ import LoadingState from "../../../components/ui/LoadingState";
 import PageHeader from "../../../components/ui/PageHeader";
 import SARIcon from "../../../components/icons/SARIcon";
 import JobOfferStatusTag from "../../../components/jobOffers/JobOfferStatusTag";
+import JobOfferApprovalStatusTag from "../../../components/jobOffers/JobOfferApprovalStatusTag";
+import JobOfferCeoDecision from "../../../components/jobOffers/JobOfferCeoDecision";
+import JobOfferWorkflowHistory from "../../../components/jobOffers/JobOfferWorkflowHistory";
+import JobOfferDocumentSection, {
+  JobOfferDocumentGrid,
+} from "../../../components/jobOffers/JobOfferDocumentSection";
 import Unauthorized403Page from "../../Unauthorized403Page";
 
 import { isApiError } from "../../../services/api/apiTypes";
-import { isForbidden, isNotFound } from "../../../services/api/httpErrors";
+import {
+  getHttpErrorMessage,
+  isConflict,
+  isForbidden,
+  isNotFound,
+} from "../../../services/api/httpErrors";
 import { triggerBlobDownload } from "../../../services/api/downloads";
 import {
   downloadEmployeeDocument,
@@ -44,16 +55,18 @@ import {
 } from "../../../services/api/employeesApi";
 import {
   cancelJobOffer,
+  downloadJobOfferCv,
   downloadJobOfferPdf,
   getJobOffer,
   sendJobOffer,
+  submitJobOffer,
   type JobOffer,
   type JobOfferChannelDelivery,
 } from "../../../services/api/jobOffersApi";
 import { useI18n } from "../../../i18n/useI18n";
 import { formatNumber } from "../../../utils/currency";
 import { formatDateTimeShort } from "../../../utils/dateTime";
-import { canCancel, canEdit, canSend } from "./jobOfferRules";
+import { canCancel, canEdit, canSend, canSubmit } from "./jobOfferRules";
 
 const { Text } = Typography;
 
@@ -88,7 +101,9 @@ const WARNING_KEYS: { match: RegExp; key: string }[] = [
  */
 const ACKNOWLEDGMENT_NAME = "Starting Work Acknowledgment";
 
-function findAcknowledgment(documents: EmployeeDocument[]): EmployeeDocument | null {
+function findAcknowledgment(
+  documents: EmployeeDocument[],
+): EmployeeDocument | null {
   return (
     documents.find(
       (document) =>
@@ -233,9 +248,14 @@ export default function JobOfferDetailPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [forbidden, setForbidden] = useState(false);
-  const [acting, setActing] = useState<"send" | "cancel" | "pdf" | null>(null);
-  const [acknowledgment, setAcknowledgment] = useState<EmployeeDocument | null>(null);
-  const [downloadingAcknowledgment, setDownloadingAcknowledgment] = useState(false);
+  const [acting, setActing] = useState<
+    "send" | "cancel" | "pdf" | "submit" | "cv" | null
+  >(null);
+  const [acknowledgment, setAcknowledgment] = useState<EmployeeDocument | null>(
+    null,
+  );
+  const [downloadingAcknowledgment, setDownloadingAcknowledgment] =
+    useState(false);
 
   const load = useCallback(
     async ({ isRefresh = false }: { isRefresh?: boolean } = {}) => {
@@ -300,16 +320,81 @@ export default function JobOfferDetailPage() {
     if (!employeeProfileId || !acknowledgment) return;
     setDownloadingAcknowledgment(true);
     try {
-      const blob = await downloadEmployeeDocument(employeeProfileId, acknowledgment.id);
-      triggerBlobDownload(blob, acknowledgment.original_filename || "starting-work-acknowledgment.pdf");
+      const blob = await downloadEmployeeDocument(
+        employeeProfileId,
+        acknowledgment.id,
+      );
+      triggerBlobDownload(
+        blob,
+        acknowledgment.original_filename || "starting-work-acknowledgment.pdf",
+      );
     } catch (err: unknown) {
       messageApi.error(
-        (err as Error)?.message || t("jobOffers.onboarding.acknowledgmentDownloadFailed"),
+        (err as Error)?.message ||
+          t("jobOffers.onboarding.acknowledgmentDownloadFailed"),
       );
     } finally {
       setDownloadingAcknowledgment(false);
     }
   }, [employeeProfileId, acknowledgment, messageApi, t]);
+
+  /**
+   * Surfaces what the API actually said, and treats a 409 as a stale view.
+   *
+   * The approval endpoints answer 409 when the offer moved on under the user —
+   * already decided, already sent, no longer editable. Reloading shows the real
+   * state instead of leaving a screen whose buttons no longer match the record.
+   */
+  const reportActionError = useCallback(
+    (err: unknown, fallbackKey: string) => {
+      const detail = getHttpErrorMessage(err) || t(fallbackKey);
+      if (isConflict(err)) {
+        messageApi.warning(detail);
+        void load({ isRefresh: true });
+        return;
+      }
+      messageApi.error(detail);
+    },
+    [messageApi, load, t],
+  );
+
+  const handleSubmitToCeo = useCallback(() => {
+    modal.confirm({
+      title: t("jobOffers.submit.confirmTitle"),
+      content: t("jobOffers.submit.confirmBody"),
+      okText: t("jobOffers.form.submitToCeo"),
+      cancelText: t("common.cancel"),
+      onOk: async () => {
+        setActing("submit");
+        try {
+          const response = await submitJobOffer(id!);
+          if (isApiError(response)) {
+            messageApi.error(response.message || t("jobOffers.submit.failed"));
+            return;
+          }
+          setOffer(response.data.job_offer);
+          messageApi.success(t("jobOffers.submit.success"));
+        } catch (err: unknown) {
+          reportActionError(err, "jobOffers.submit.failed");
+        } finally {
+          setActing(null);
+        }
+      },
+    });
+  }, [modal, id, messageApi, t, reportActionError]);
+
+  const handleCvDownload = useCallback(async () => {
+    setActing("cv");
+    try {
+      const blob = await downloadJobOfferCv(id!);
+      triggerBlobDownload(blob, `job_offer_${id}_cv`);
+      messageApi.success(t("jobOffers.cv.downloaded"));
+    } catch (err: unknown) {
+      reportActionError(err, "jobOffers.cv.failed");
+    } finally {
+      setActing(null);
+    }
+  }, [id, messageApi, t, reportActionError]);
 
   const handleSend = useCallback(() => {
     modal.confirm({
@@ -333,15 +418,13 @@ export default function JobOfferDetailPage() {
             messageApi.warning(t("jobOffers.send.successWithWarnings"));
           else messageApi.success(t("jobOffers.send.success"));
         } catch (err: unknown) {
-          messageApi.error(
-            (err as Error)?.message || t("jobOffers.send.failed"),
-          );
+          reportActionError(err, "jobOffers.send.failed");
         } finally {
           setActing(null);
         }
       },
     });
-  }, [modal, id, messageApi, t]);
+  }, [modal, id, messageApi, t, reportActionError]);
 
   const handleCancel = useCallback(() => {
     modal.confirm({
@@ -361,15 +444,13 @@ export default function JobOfferDetailPage() {
           setOffer(response.data);
           messageApi.success(t("jobOffers.cancel.success"));
         } catch (err: unknown) {
-          messageApi.error(
-            (err as Error)?.message || t("jobOffers.cancel.failed"),
-          );
+          reportActionError(err, "jobOffers.cancel.failed");
         } finally {
           setActing(null);
         }
       },
     });
-  }, [modal, id, messageApi, t]);
+  }, [modal, id, messageApi, t, reportActionError]);
 
   const handlePdf = useCallback(async () => {
     setActing("pdf");
@@ -554,6 +635,7 @@ export default function JobOfferDetailPage() {
   const editable = canEdit(offer);
   const sendable = canSend(offer);
   const cancellable = canCancel(offer);
+  const submittable = canSubmit(offer);
   const delivery = offer.delivery_metadata;
   const warnings = delivery?.warnings || [];
   // Older cached responses predate the field, and unmapped is the safe reading.
@@ -572,11 +654,21 @@ export default function JobOfferDetailPage() {
         })}
         breadcrumb={t("jobOffers.title")}
         tags={
-          <JobOfferStatusTag
-            status={offer.status}
-            fallbackLabel={offer.status_label}
-            size="large"
-          />
+          <Space size={8} wrap>
+            <JobOfferStatusTag
+              status={offer.status}
+              fallbackLabel={offer.status_label}
+              size="large"
+            />
+            {/* Two separate tracks: the CEO approval gate and the delivery
+                lifecycle. Showing both stops "Approved" from being read as
+                "Accepted by the candidate". */}
+            <JobOfferApprovalStatusTag
+              status={offer.approval_status}
+              fallbackLabel={offer.approval_status_label}
+              size="large"
+            />
+          </Space>
         }
         actions={
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -604,6 +696,16 @@ export default function JobOfferDetailPage() {
                 {t("jobOffers.action.edit")}
               </Button>
             )}
+            {offer.has_cv && (
+              <Button
+                icon={<DownloadOutlined aria-hidden />}
+                loading={acting === "cv"}
+                onClick={handleCvDownload}
+                style={{ borderRadius: 10, minHeight: 40 }}
+              >
+                {t("jobOffers.action.downloadCv")}
+              </Button>
+            )}
             <Button
               icon={<FilePdfOutlined aria-hidden />}
               loading={acting === "pdf"}
@@ -623,6 +725,21 @@ export default function JobOfferDetailPage() {
                 {t("jobOffers.action.cancelOffer")}
               </Button>
             )}
+            {submittable && (
+              <Button
+                type="primary"
+                icon={<AuditOutlined aria-hidden />}
+                loading={acting === "submit"}
+                onClick={handleSubmitToCeo}
+                style={{ borderRadius: 10, minHeight: 40, fontWeight: 600 }}
+              >
+                {offer.approval_status === "changes_requested"
+                  ? t("jobOffers.action.resubmitToCeo")
+                  : t("jobOffers.form.submitToCeo")}
+              </Button>
+            )}
+            {/* Delivery is gated on the CEO decision, so the button appears
+                only while the backend says the offer may go out. */}
             {sendable && (
               <Button
                 type="primary"
@@ -640,68 +757,105 @@ export default function JobOfferDetailPage() {
 
       <Row gutter={[16, 16]}>
         <Col xs={24} xl={16}>
-          <Surface style={{ marginBottom: 16 }}>
-            <SectionTitle>{t("jobOffers.detail.section.job")}</SectionTitle>
-            <Descriptions column={{ xs: 1, sm: 2 }} size="small" colon={false}>
-              <Descriptions.Item label={t("jobOffers.field.positionTitle")}>
-                {offer.position_title || "—"}
-              </Descriptions.Item>
-              <Descriptions.Item label={t("jobOffers.field.classification")}>
-                {offer.classification || "—"}
-              </Descriptions.Item>
-              <Descriptions.Item label={t("jobOffers.field.department")}>
-                {offer.department || "—"}
-              </Descriptions.Item>
-              <Descriptions.Item label={t("jobOffers.field.location")}>
-                {offer.location || "—"}
-              </Descriptions.Item>
-              <Descriptions.Item label={t("jobOffers.field.nationality")}>
-                {offer.nationality || "—"}
-              </Descriptions.Item>
-              <Descriptions.Item label={t("jobOffers.field.idNumber")}>
-                {offer.id_passport_iqama_number || "—"}
-              </Descriptions.Item>
-              <Descriptions.Item label={t("jobOffers.field.candidateEmail")}>
-                {offer.candidate_email || "—"}
-              </Descriptions.Item>
-              <Descriptions.Item label={t("jobOffers.field.candidatePhone")}>
-                {offer.candidate_phone_number || "—"}
-              </Descriptions.Item>
-              <Descriptions.Item label={t("jobOffers.field.offerDate")}>
-                {offer.offer_date || "—"}
-              </Descriptions.Item>
-              <Descriptions.Item label={t("jobOffers.field.expiryDate")}>
-                {offer.expiry_date || "—"}
-              </Descriptions.Item>
-              <Descriptions.Item label={t("jobOffers.field.hrSignerName")}>
-                {offer.hr_signer_name || "—"}
-              </Descriptions.Item>
-              <Descriptions.Item label={t("jobOffers.field.hrSignerTitle")}>
-                {offer.hr_signer_title || "—"}
-              </Descriptions.Item>
-            </Descriptions>
-          </Surface>
+          <JobOfferDocumentSection
+            title={t("jobOffers.detail.section.applicant")}
+            style={{ marginBottom: 16 }}
+          >
+            <JobOfferDocumentGrid
+              fields={[
+                {
+                  label: t("jobOffers.field.candidateFullName"),
+                  value: offer.candidate_full_name || "—",
+                  emphasis: true,
+                },
+                {
+                  label: t("jobOffers.field.nationality"),
+                  value: offer.nationality || "—",
+                },
+                {
+                  label: t("jobOffers.field.idNumber"),
+                  value: offer.id_passport_iqama_number || "—",
+                },
+                {
+                  label: t("jobOffers.field.candidateEmail"),
+                  value: offer.candidate_email || "—",
+                },
+                {
+                  label: t("jobOffers.field.candidatePhone"),
+                  value: offer.candidate_phone_number || "—",
+                },
+              ]}
+            />
+          </JobOfferDocumentSection>
 
-          <Surface style={{ marginBottom: 16 }}>
-            <SectionTitle>
-              {t("jobOffers.detail.section.compensation")}
-            </SectionTitle>
-            <Descriptions column={{ xs: 1, sm: 2 }} size="small" colon={false}>
-              <Descriptions.Item label={t("jobOffers.field.basicSalary")}>
-                <Money value={offer.basic_salary} />
-              </Descriptions.Item>
-              <Descriptions.Item label={t("jobOffers.field.housingAllowance")}>
-                <Money value={offer.housing_allowance} />
-              </Descriptions.Item>
-              <Descriptions.Item
-                label={t("jobOffers.field.transportationAllowance")}
-              >
-                <Money value={offer.transportation_allowance} />
-              </Descriptions.Item>
-              <Descriptions.Item label={t("jobOffers.field.otherAllowance")}>
-                <Money value={offer.other_allowance} />
-              </Descriptions.Item>
-            </Descriptions>
+          <JobOfferDocumentSection
+            title={t("jobOffers.detail.section.job")}
+            style={{ marginBottom: 16 }}
+          >
+            <JobOfferDocumentGrid
+              fields={[
+                {
+                  label: t("jobOffers.field.positionTitle"),
+                  value: offer.position_title || "—",
+                  emphasis: true,
+                },
+                {
+                  label: t("jobOffers.field.classification"),
+                  value: offer.classification || "—",
+                },
+                {
+                  label: t("jobOffers.field.department"),
+                  value: offer.department || "—",
+                },
+                {
+                  label: t("jobOffers.field.location"),
+                  value: offer.location || "—",
+                },
+                {
+                  label: t("jobOffers.field.offerDate"),
+                  value: offer.offer_date || "—",
+                },
+                {
+                  label: t("jobOffers.field.expiryDate"),
+                  value: offer.expiry_date || "—",
+                },
+                {
+                  label: t("jobOffers.field.hrSignerName"),
+                  value: offer.hr_signer_name || "—",
+                },
+                {
+                  label: t("jobOffers.field.hrSignerTitle"),
+                  value: offer.hr_signer_title || "—",
+                },
+              ]}
+            />
+          </JobOfferDocumentSection>
+
+          <JobOfferDocumentSection
+            title={t("jobOffers.detail.section.compensation")}
+            style={{ marginBottom: 16 }}
+          >
+            <JobOfferDocumentGrid
+              fields={[
+                {
+                  label: t("jobOffers.field.basicSalary"),
+                  value: <Money value={offer.basic_salary} />,
+                  emphasis: true,
+                },
+                {
+                  label: t("jobOffers.field.housingAllowance"),
+                  value: <Money value={offer.housing_allowance} />,
+                },
+                {
+                  label: t("jobOffers.field.transportationAllowance"),
+                  value: <Money value={offer.transportation_allowance} />,
+                },
+                {
+                  label: t("jobOffers.field.otherAllowance"),
+                  value: <Money value={offer.other_allowance} />,
+                },
+              ]}
+            />
             <div
               style={{
                 marginTop: 12,
@@ -728,36 +882,68 @@ export default function JobOfferDetailPage() {
                 <SARIcon size={18} color="#c2410c" />
               </Space>
             </div>
-          </Surface>
+          </JobOfferDocumentSection>
 
-          <Surface>
-            <SectionTitle>
-              {t("jobOffers.detail.section.benefits")}
-            </SectionTitle>
-            <Descriptions column={{ xs: 1, sm: 2 }} size="small" colon={false}>
-              <Descriptions.Item label={t("jobOffers.field.vacation")}>
-                {offer.vacation || "—"}
-              </Descriptions.Item>
-              <Descriptions.Item label={t("jobOffers.field.tickets")}>
-                {offer.tickets || "—"}
-              </Descriptions.Item>
-              <Descriptions.Item label={t("jobOffers.field.contractStatus")}>
-                {offer.contract_status || "—"}
-              </Descriptions.Item>
-              <Descriptions.Item label={t("jobOffers.field.contractType")}>
-                {offer.contract_type || "—"}
-              </Descriptions.Item>
-              <Descriptions.Item label={t("jobOffers.field.contractDuration")}>
-                {offer.contract_duration || "—"}
-              </Descriptions.Item>
-              <Descriptions.Item label={t("jobOffers.field.medicalInsurance")}>
-                {offer.medical_insurance || "—"}
-              </Descriptions.Item>
-            </Descriptions>
-          </Surface>
+          <JobOfferDocumentSection
+            title={t("jobOffers.detail.section.benefits")}
+          >
+            <JobOfferDocumentGrid
+              fields={[
+                {
+                  label: t("jobOffers.field.vacation"),
+                  value: offer.vacation || "—",
+                },
+                {
+                  label: t("jobOffers.field.tickets"),
+                  value: offer.tickets || "—",
+                },
+                {
+                  label: t("jobOffers.field.contractStatus"),
+                  value: offer.contract_status || "—",
+                },
+                {
+                  label: t("jobOffers.field.contractType"),
+                  value: offer.contract_type || "—",
+                },
+                {
+                  label: t("jobOffers.field.contractDuration"),
+                  value: offer.contract_duration || "—",
+                },
+                {
+                  label: t("jobOffers.field.medicalInsurance"),
+                  value: offer.medical_insurance || "—",
+                },
+              ]}
+            />
+          </JobOfferDocumentSection>
         </Col>
 
         <Col xs={24} xl={8}>
+          <Surface style={{ marginBottom: 16 }}>
+            <SectionTitle>
+              {t("jobOffers.detail.section.ceoReview")}
+            </SectionTitle>
+            <JobOfferCeoDecision offer={offer} />
+            {/* Nothing reaches the candidate before the CEO approves, so say
+                why the send button is absent rather than leaving a gap. */}
+            {offer.status === "draft" &&
+              offer.approval_status !== "approved" && (
+                <Alert
+                  type="info"
+                  showIcon
+                  style={{ borderRadius: 12, marginTop: 12 }}
+                  message={t("jobOffers.approval.sendBlocked")}
+                />
+              )}
+          </Surface>
+
+          <Surface style={{ marginBottom: 16 }}>
+            <SectionTitle>
+              {t("jobOffers.detail.section.workflow")}
+            </SectionTitle>
+            <JobOfferWorkflowHistory history={offer.workflow?.history} />
+          </Surface>
+
           <Surface style={{ marginBottom: 16 }}>
             <SectionTitle>
               {t("jobOffers.detail.section.timeline")}
@@ -773,7 +959,10 @@ export default function JobOfferDetailPage() {
               <Text type="secondary">{t("jobOffers.delivery.notSentYet")}</Text>
             ) : (
               <Space direction="vertical" size={10} style={{ width: "100%" }}>
-                <Text type="secondary" style={{ fontSize: 12, fontWeight: 700 }}>
+                <Text
+                  type="secondary"
+                  style={{ fontSize: 12, fontWeight: 700 }}
+                >
                   {t("jobOffers.delivery.candidateGroup")}
                 </Text>
                 {/* `channels` is the pre-split shape older offers still carry,
@@ -781,7 +970,9 @@ export default function JobOfferDetailPage() {
                 <DeliveryChannel
                   icon={<WhatsAppOutlined aria-hidden />}
                   label={t("jobOffers.delivery.candidateText")}
-                  delivery={delivery?.candidate?.text ?? delivery?.channels?.whatsapp}
+                  delivery={
+                    delivery?.candidate?.text ?? delivery?.channels?.whatsapp
+                  }
                 />
                 {delivery?.candidate?.whatsapp_pdf && (
                   <DeliveryChannel
@@ -793,12 +984,17 @@ export default function JobOfferDetailPage() {
                 <DeliveryChannel
                   icon={<MailOutlined aria-hidden />}
                   label={t("jobOffers.delivery.candidateEmailPdf")}
-                  delivery={delivery?.candidate?.email_pdf ?? delivery?.channels?.email}
+                  delivery={
+                    delivery?.candidate?.email_pdf ?? delivery?.channels?.email
+                  }
                 />
 
                 {(delivery?.ceo?.recipients?.length ?? 0) > 0 && (
                   <>
-                    <Text type="secondary" style={{ fontSize: 12, fontWeight: 700 }}>
+                    <Text
+                      type="secondary"
+                      style={{ fontSize: 12, fontWeight: 700 }}
+                    >
                       {t("jobOffers.delivery.ceoGroup")}
                     </Text>
                     {delivery!.ceo!.recipients.map((recipient) => (
@@ -900,9 +1096,16 @@ export default function JobOfferDetailPage() {
 
               {acknowledgment ? (
                 <>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <CheckCircleOutlined aria-hidden style={{ color: "#047857" }} />
-                    <Text strong>{t("jobOffers.onboarding.acknowledgmentGenerated")}</Text>
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 8 }}
+                  >
+                    <CheckCircleOutlined
+                      aria-hidden
+                      style={{ color: "#047857" }}
+                    />
+                    <Text strong>
+                      {t("jobOffers.onboarding.acknowledgmentGenerated")}
+                    </Text>
                   </div>
                   <Text type="secondary" style={{ fontSize: 12 }}>
                     {acknowledgment.display_name || ACKNOWLEDGMENT_NAME}
@@ -921,7 +1124,9 @@ export default function JobOfferDetailPage() {
                       size="small"
                       type="link"
                       style={{ padding: 0 }}
-                      onClick={() => navigate(`/hr/employees/${employeeProfileId}`)}
+                      onClick={() =>
+                        navigate(`/hr/employees/${employeeProfileId}`)
+                      }
                     >
                       {t("jobOffers.onboarding.openDocumentArchive")}
                     </Button>
@@ -929,9 +1134,16 @@ export default function JobOfferDetailPage() {
                 </>
               ) : (
                 <>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <ClockCircleOutlined aria-hidden style={{ color: "#94a3b8" }} />
-                    <Text>{t("jobOffers.onboarding.acknowledgmentPending")}</Text>
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 8 }}
+                  >
+                    <ClockCircleOutlined
+                      aria-hidden
+                      style={{ color: "#94a3b8" }}
+                    />
+                    <Text>
+                      {t("jobOffers.onboarding.acknowledgmentPending")}
+                    </Text>
                   </div>
                   <Text type="secondary" style={{ fontSize: 12 }}>
                     {t("jobOffers.onboarding.acknowledgmentHint")}
@@ -942,9 +1154,15 @@ export default function JobOfferDetailPage() {
               <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 10 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   {offer.employee_profile_id ? (
-                    <CheckCircleOutlined aria-hidden style={{ color: "#047857" }} />
+                    <CheckCircleOutlined
+                      aria-hidden
+                      style={{ color: "#047857" }}
+                    />
                   ) : (
-                    <ClockCircleOutlined aria-hidden style={{ color: "#94a3b8" }} />
+                    <ClockCircleOutlined
+                      aria-hidden
+                      style={{ color: "#94a3b8" }}
+                    />
                   )}
                   <Text strong>
                     {offer.employee_profile_id
@@ -979,9 +1197,15 @@ export default function JobOfferDetailPage() {
               <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 10 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   {biotimeMapped ? (
-                    <CheckCircleOutlined aria-hidden style={{ color: "#047857" }} />
+                    <CheckCircleOutlined
+                      aria-hidden
+                      style={{ color: "#047857" }}
+                    />
                   ) : (
-                    <ClockCircleOutlined aria-hidden style={{ color: "#94a3b8" }} />
+                    <ClockCircleOutlined
+                      aria-hidden
+                      style={{ color: "#94a3b8" }}
+                    />
                   )}
                   <Text strong>
                     {biotimeMapped

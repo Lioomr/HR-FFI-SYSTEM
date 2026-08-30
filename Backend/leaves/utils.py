@@ -371,22 +371,16 @@ def get_completed_calendar_months(
         # Verify the 12th anniversary is exactly the next day, to avoid
         # incorrectly bumping in edge cases where cycle_end is passed
         # explicitly but does not correspond to this cycle.
-        try:
-            twelfth = _calendar_month_anniversary(original, cycle_start, 12)
-            if twelfth == cycle_end + timedelta(days=1):
-                completed = 12
-        except Exception:
+        twelfth = _calendar_month_anniversary(original, cycle_start, 12)
+        if twelfth == cycle_end + timedelta(days=1):
             completed = 12
     elif completed == 11 and cycle_end is None and contract_start is not None:
         # Auto-derive cycle_end when not supplied but contract_start is known.
-        try:
-            derived_end = _anniversary_for_year(original, cycle_start.year + 1) - timedelta(days=1)
-            if as_of == derived_end:
-                twelfth = _calendar_month_anniversary(original, cycle_start, 12)
-                if twelfth == derived_end + timedelta(days=1):
-                    completed = 12
-        except Exception:
-            pass
+        derived_end = _anniversary_for_year(original, cycle_start.year + 1) - timedelta(days=1)
+        if as_of == derived_end:
+            twelfth = _calendar_month_anniversary(original, cycle_start, 12)
+            if twelfth == derived_end + timedelta(days=1):
+                completed = 12
     return min(12, completed)
 
 

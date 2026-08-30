@@ -21,6 +21,7 @@ vi.mock("../../../services/api/jobOffersApi", () => ({
 
 import JobOffersListPage from "./JobOffersListPage";
 import * as jobOffersApi from "../../../services/api/jobOffersApi";
+import { makeJobOffer, makeWorkflow } from "./testFixtures";
 import { useI18nStore } from "../../../i18n/i18nStore";
 import { useAuthStore } from "../../../auth/authStore";
 
@@ -31,47 +32,21 @@ const cancelJobOffer = jobOffersApi.cancelJobOffer as unknown as ReturnType<
   typeof vi.fn
 >;
 
-const draftOffer = {
-  id: 11,
-  company_id: 1,
-  candidate_full_name: "Nora Khalid",
-  candidate_email: "nora@example.com",
-  candidate_phone_number: "+966501234567",
-  nationality: "Saudi",
-  id_passport_iqama_number: "1234567890",
-  position_title: "Site Engineer",
-  classification: "Engineering",
-  department: "Projects",
-  location: "Riyadh",
-  basic_salary: "10000.00",
-  housing_allowance: "2500.00",
-  transportation_allowance: "1000.00",
-  other_allowance: "0.00",
-  total_salary_package: "13500.00",
-  vacation: "30 days",
-  tickets: "Annual",
-  contract_status: "New",
-  contract_type: "Full time",
-  contract_duration: "2 years",
-  medical_insurance: "Class A",
-  offer_date: "2026-08-01",
-  expiry_date: "2026-08-20",
-  reference_number: "JO-2026-011",
-  hr_signer_user_id: 1,
-  hr_signer_name: "HR Manager",
-  hr_signer_title: "Head of HR",
-  status: "draft" as const,
-  status_label: "Draft",
-  has_response_token: false,
-  sent_at: null,
-  accepted_at: null,
-  rejected_at: null,
-  cancelled_at: null,
-  rejection_reason: "",
-  delivery_metadata: null,
-  created_at: "2026-08-01T08:00:00Z",
-  updated_at: "2026-08-01T08:00:00Z",
-};
+const draftOffer = makeJobOffer({
+  workflow: makeWorkflow({
+    can_edit: true,
+    can_submit: true,
+    can_cancel: true,
+  }),
+});
+
+const approvedOffer = makeJobOffer({
+  id: 12,
+  candidate_full_name: "Omar Saleh",
+  approval_status: "approved",
+  approval_status_label: "Approved",
+  workflow: makeWorkflow({ can_send: true, can_cancel: true }),
+});
 
 const ok = (items: unknown[]) => ({
   status: "success" as const,
@@ -195,32 +170,55 @@ describe("JobOffersListPage", () => {
   });
 });
 
-describe("JobOffersListPage reference-backed offers", () => {
-  it("shows the department and position names the backend derived from the ids", async () => {
-    listJobOffers.mockResolvedValue({
-      status: "success",
-      data: {
-        items: [
-          {
-            ...draftOffer,
-            hiring_request_id: 7,
-            department_id: 3,
-            position_id: 8,
-            department: "Projects",
-            position_title: "Project Engineer",
-          },
-        ],
-        page: 1,
-        page_size: 25,
-        count: 1,
-        total_pages: 1,
-      },
-    });
+describe("JobOffersListPage CEO approval", () => {
+  it("shows the approval status alongside the delivery status", async () => {
+    listJobOffers.mockResolvedValue(ok([approvedOffer]));
 
     render(<JobOffersListPage />);
 
-    // The list never sees the ids; it renders exactly what came back.
-    expect(await screen.findByText("Project Engineer")).toBeInTheDocument();
-    expect(screen.getByText("Projects")).toBeInTheDocument();
+    expect(await screen.findByText("Omar Saleh")).toBeInTheDocument();
+    expect(screen.getAllByText("CEO approved").length).toBeGreaterThan(0);
+  });
+
+  it("filters by approval status", async () => {
+    listJobOffers.mockResolvedValue(ok([draftOffer]));
+
+    render(<JobOffersListPage />);
+    await screen.findByText("Nora Khalid");
+
+    fireEvent.click(screen.getByText("Pending CEO"));
+
+    await waitFor(() =>
+      expect(listJobOffers).toHaveBeenLastCalledWith({
+        page: 1,
+        page_size: 25,
+        approval_status: "pending_ceo",
+      }),
+    );
+  });
+
+  it("offers Send only on an offer the backend says may be sent", async () => {
+    listJobOffers.mockResolvedValue(ok([draftOffer, approvedOffer]));
+
+    render(<JobOffersListPage />);
+    await screen.findByText("Nora Khalid");
+
+    // Nora is still a draft awaiting the CEO; Omar has been approved.
+    expect(
+      screen.queryByLabelText("Send Offer: Nora Khalid"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Send Offer: Omar Saleh")).toBeInTheDocument();
+  });
+
+  it("starts a new offer directly instead of routing through a request", async () => {
+    listJobOffers.mockResolvedValue(ok([]));
+
+    render(<JobOffersListPage />);
+    await screen.findByText("No job offers yet");
+
+    // The header action and the empty state both offer it; either is fine.
+    fireEvent.click(screen.getAllByRole("button", { name: /New Offer/i })[0]);
+
+    expect(navigateMock).toHaveBeenCalledWith("/hr/job-offers/new");
   });
 });

@@ -119,7 +119,10 @@ def _fallback_pdf(profile: EmployeeProfile, data: StartingWorkAcknowledgmentData
     pdf.setFont(bold, 12)
     pdf.drawString(42, height - 46, f"Starting Work Acknowledgment {values['reference_no']}")
     y = height - 74
-    for key in ("employee_name", "employee_no", "job_title", "department", "direct_superior"):
+    fallback_keys = ["employee_name", "employee_no", "job_title", "department", "direct_superior"]
+    if data.work_start_status.lower().strip() == "not_started":
+        fallback_keys.extend(["not_started_reason", "not_started_name", "not_started_date"])
+    for key in fallback_keys:
         pdf.setFont(bold, 8)
         pdf.drawString(42, y, f"{key.replace('_', ' ').title()}:")
         pdf.setFont(regular, 8)

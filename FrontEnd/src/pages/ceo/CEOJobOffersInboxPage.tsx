@@ -4,17 +4,17 @@ import { Button, Grid, Segmented, Space, Table, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 
 import ApprovalQueuePage from "../../components/ceo/ApprovalQueuePage";
-import HiringRequestStatusTag from "../../components/hiringRequests/HiringRequestStatusTag";
+import JobOfferApprovalStatusTag from "../../components/jobOffers/JobOfferApprovalStatusTag";
 import SARIcon from "../../components/icons/SARIcon";
 import Unauthorized403Page from "../Unauthorized403Page";
 
 import { isApiError } from "../../services/api/apiTypes";
 import { isForbidden } from "../../services/api/httpErrors";
 import {
-  listHiringRequests,
-  type HiringRequest,
-  type HiringRequestStatus,
-} from "../../services/api/hiringRequestsApi";
+  listJobOffers,
+  type JobOffer,
+  type JobOfferApprovalStatus,
+} from "../../services/api/jobOffersApi";
 import { useI18n } from "../../i18n/useI18n";
 import { formatNumber } from "../../utils/currency";
 import { formatDateTimeShort } from "../../utils/dateTime";
@@ -25,21 +25,27 @@ const { useBreakpoint } = Grid;
 const PAGE_SIZE = 20;
 
 /**
- * The CEO only ever sees requests awaiting a decision plus the ones they have
- * already decided — the backend scopes the list that way — so the tabs mirror
- * exactly those states.
+ * The CEO sees offers awaiting a decision plus the ones they have already
+ * decided — the backend scopes the list that way — so the tabs mirror exactly
+ * those states, and the inbox opens on the only one that needs action.
  */
-const STATUS_TABS: HiringRequestStatus[] = ["submitted", "approved", "rejected"];
+const STATUS_TABS: JobOfferApprovalStatus[] = [
+  "pending_ceo",
+  "approved",
+  "changes_requested",
+  "rejected",
+];
 
-export default function CEOHiringRequestsInboxPage() {
+export default function CEOJobOffersInboxPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
   const screens = useBreakpoint();
   const isNarrow = !screens.lg;
 
-  const [statusFilter, setStatusFilter] = useState<HiringRequestStatus>("submitted");
+  const [statusFilter, setStatusFilter] =
+    useState<JobOfferApprovalStatus>("pending_ceo");
   const [page, setPage] = useState(1);
-  const [items, setItems] = useState<HiringRequest[]>([]);
+  const [items, setItems] = useState<JobOffer[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -52,28 +58,32 @@ export default function CEOHiringRequestsInboxPage() {
       else setLoading(true);
       setError(null);
       try {
-        const response = await listHiringRequests({
-          status: statusFilter,
+        const response = await listJobOffers({
+          approval_status: statusFilter,
           page,
           page_size: PAGE_SIZE,
         });
         if (isApiError(response)) {
-          setError(response.message || t("hiringRequests.loadFailed"));
+          setError(response.message || t("jobOffers.loadFailed"));
           return;
         }
         const rows = response.data?.items;
         if (!Array.isArray(rows)) {
-          setError(t("hiringRequests.loadFailed"));
+          setError(t("jobOffers.loadFailed"));
           return;
         }
         setItems(rows);
-        setTotal(typeof response.data.count === "number" ? response.data.count : rows.length);
+        setTotal(
+          typeof response.data.count === "number"
+            ? response.data.count
+            : rows.length,
+        );
       } catch (err: unknown) {
         if (isForbidden(err)) {
           setForbidden(true);
           return;
         }
-        setError((err as Error)?.message || t("hiringRequests.loadFailed"));
+        setError((err as Error)?.message || t("jobOffers.loadFailed"));
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -87,19 +97,25 @@ export default function CEOHiringRequestsInboxPage() {
   }, [load]);
 
   const segmentedOptions = useMemo(
-    () => STATUS_TABS.map((value) => ({ label: t(`hiringRequests.status.${value}`), value })),
+    () =>
+      STATUS_TABS.map((value) => ({
+        label: t(`jobOffers.approval.status.${value}`),
+        value,
+      })),
     [t],
   );
 
-  const columns: ColumnsType<HiringRequest> = [
+  const columns: ColumnsType<JobOffer> = [
     {
-      title: t("hiringRequests.col.reference"),
+      title: t("jobOffers.col.reference"),
       key: "reference",
       width: 150,
-      render: (_, record) => <Text strong>{record.reference_number || "—"}</Text>,
+      render: (_, record) => (
+        <Text strong>{record.reference_number || "—"}</Text>
+      ),
     },
     {
-      title: t("hiringRequests.col.candidate"),
+      title: t("jobOffers.col.candidate"),
       key: "candidate",
       render: (_, record) => (
         <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
@@ -111,42 +127,49 @@ export default function CEOHiringRequestsInboxPage() {
       ),
     },
     {
-      title: t("hiringRequests.col.company"),
-      key: "company",
-      render: (_, record) => <Text>{record.company_name || "—"}</Text>,
+      title: t("jobOffers.col.position"),
+      key: "position",
+      render: (_, record) => (
+        <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+          <Text>{record.position_title || "—"}</Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {record.department || "—"}
+          </Text>
+        </div>
+      ),
     },
     {
-      title: t("hiringRequests.col.salary"),
-      key: "salary",
-      width: 140,
+      title: t("jobOffers.col.package"),
+      key: "package",
+      width: 150,
       render: (_, record) => (
         <Space size={4} style={{ whiteSpace: "nowrap" }}>
-          <Text strong>{formatNumber(record.proposed_salary)}</Text>
+          <Text strong>{formatNumber(record.total_salary_package)}</Text>
           <SARIcon size={13} color="#475569" />
         </Space>
       ),
     },
     {
-      title: t("hiringRequests.col.requestedBy"),
-      key: "requested_by",
-      render: (_, record) => <Text>{record.requested_by_name || "—"}</Text>,
-    },
-    {
-      title: t("hiringRequests.col.submittedAt"),
+      title: t("jobOffers.col.submittedAt"),
       key: "submitted_at",
       width: 170,
-      render: (_, record) => <Text>{formatDateTimeShort(record.submitted_at, "—")}</Text>,
-    },
-    {
-      title: t("hiringRequests.col.status"),
-      key: "status",
-      width: 130,
       render: (_, record) => (
-        <HiringRequestStatusTag status={record.status} fallbackLabel={record.status_label} />
+        <Text>{formatDateTimeShort(record.submitted_at, "—")}</Text>
       ),
     },
     {
-      title: t("hiringRequests.col.actions"),
+      title: t("jobOffers.col.approvalStatus"),
+      key: "approval_status",
+      width: 150,
+      render: (_, record) => (
+        <JobOfferApprovalStatusTag
+          status={record.approval_status}
+          fallbackLabel={record.approval_status_label}
+        />
+      ),
+    },
+    {
+      title: t("jobOffers.col.actions"),
       key: "actions",
       width: 130,
       fixed: isNarrow ? undefined : "right",
@@ -156,12 +179,12 @@ export default function CEOHiringRequestsInboxPage() {
           size="small"
           onClick={(event) => {
             event.stopPropagation();
-            navigate(`/ceo/hiring-requests/${record.id}`);
+            navigate(`/ceo/job-offers/${record.id}`);
           }}
-          aria-label={`${t("hiringRequests.action.review")}: ${record.candidate_full_name}`}
+          aria-label={`${t("jobOffers.action.review")}: ${record.candidate_full_name}`}
           style={{ borderRadius: 8, fontWeight: 600 }}
         >
-          {t("hiringRequests.action.review")}
+          {t("jobOffers.action.review")}
         </Button>
       ),
     },
@@ -171,14 +194,14 @@ export default function CEOHiringRequestsInboxPage() {
 
   return (
     <ApprovalQueuePage
-      title={t("hiringRequests.ceo.title")}
-      subtitle={t("hiringRequests.ceo.subtitle")}
-      pendingCount={statusFilter === "submitted" ? total : undefined}
+      title={t("jobOffers.ceo.title")}
+      subtitle={t("jobOffers.ceo.subtitle")}
+      pendingCount={statusFilter === "pending_ceo" ? total : undefined}
       loading={loading}
       error={error}
       isEmpty={items.length === 0}
-      emptyTitle={t("hiringRequests.ceo.emptyTitle")}
-      emptyDescription={t("hiringRequests.ceo.emptyDescription")}
+      emptyTitle={t("jobOffers.ceo.emptyTitle")}
+      emptyDescription={t("jobOffers.ceo.emptyDescription")}
       onRetry={() => load()}
       onRefresh={() => load({ isRefresh: true })}
       refreshing={refreshing}
@@ -187,19 +210,19 @@ export default function CEOHiringRequestsInboxPage() {
           value={statusFilter}
           options={segmentedOptions}
           onChange={(value) => {
-            setStatusFilter(value as HiringRequestStatus);
+            setStatusFilter(value as JobOfferApprovalStatus);
             setPage(1);
           }}
         />
       }
     >
-      <Table<HiringRequest>
+      <Table<JobOffer>
         rowKey="id"
         columns={columns}
         dataSource={items}
         scroll={{ x: 1100 }}
         onRow={(record) => ({
-          onClick: () => navigate(`/ceo/hiring-requests/${record.id}`),
+          onClick: () => navigate(`/ceo/job-offers/${record.id}`),
           style: { cursor: "pointer" },
         })}
         pagination={{
