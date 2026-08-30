@@ -17,6 +17,7 @@ import {
 import { colors, spacing } from '@/design-system';
 import { useLocalization } from '@/i18n';
 import { useAuth } from '@/providers';
+import { requireLocalAuthentication, type Reauthenticate } from '@/services/biometrics';
 
 import {
   attendanceStatusPresentation,
@@ -141,7 +142,10 @@ function TodayCard({
   );
 }
 
-export function AttendanceScreen() {
+export function AttendanceScreen({
+  /** Injectable so tests exercise the gate without the native prompt. */
+  reauthenticate = requireLocalAuthentication,
+}: { reauthenticate?: Reauthenticate } = {}) {
   const { handleApiError } = useAuth();
   const { t } = useLocalization();
   const [busy, setBusy] = useState<'check-in' | 'check-out' | null>(null);
@@ -156,6 +160,20 @@ export function AttendanceScreen() {
       setBusy(kind);
       setOutcome(null);
       try {
+        // Gate 4: attendance is a protected operation, so the device owner is
+        // re-verified before any location is captured or any request is sent.
+        const reauth = await reauthenticate({
+          promptMessage: t('lock.attendancePrompt'),
+          cancelLabel: t('common.cancel'),
+        });
+        if (reauth.status !== 'passed') {
+          setOutcome({
+            status: 'failed',
+            messageKey:
+              reauth.reason === 'unavailable' ? 'lock.unprotectedBody' : 'lock.attendanceFailed',
+          });
+          return;
+        }
         const result = kind === 'check-in' ? await checkIn() : await checkOut();
         setOutcome(result);
         if (result.status === 'success') await refresh();
@@ -166,7 +184,7 @@ export function AttendanceScreen() {
         setBusy(null);
       }
     },
-    [busy, handleApiError, refresh],
+    [busy, handleApiError, reauthenticate, refresh, t],
   );
 
   return (

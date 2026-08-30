@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react-native';
 
 import type { AuthUser } from '@/auth';
 import { ApiError } from '@/services/api/api-error';
+import type { Reauthenticate } from '@/services/biometrics';
 
 import { AuthProvider, type AuthService, useAuth } from './AuthProvider';
 
@@ -29,9 +30,18 @@ function fakeAuthService(overrides: Partial<AuthService> = {}): AuthService {
   };
 }
 
-function wrapperFor(client: AuthService) {
+/** Existing cases model a device whose owner passes the Gate 4 cold-launch challenge. */
+const passes: Reauthenticate = async () => ({ status: 'passed' });
+const fails: Reauthenticate = async () => ({ status: 'failed', reason: 'refused' });
+const unprotected: Reauthenticate = async () => ({ status: 'failed', reason: 'unavailable' });
+
+function wrapperFor(client: AuthService, reauthenticate: Reauthenticate = passes) {
   return function Wrapper({ children }: React.PropsWithChildren) {
-    return <AuthProvider client={client}>{children}</AuthProvider>;
+    return (
+      <AuthProvider client={client} reauthenticate={reauthenticate}>
+        {children}
+      </AuthProvider>
+    );
   };
 }
 
@@ -171,5 +181,118 @@ describe('AuthProvider', () => {
     await act(async () => result.current.selectCompany(8));
     expect(result.current.company).toEqual(user.accessible_organizations[1]);
     expect(client.selectActiveCompany).toHaveBeenCalledWith(8);
+  });
+});
+
+describe('Gate 4 cold-launch lock', () => {
+  it('locks a restored session when the device owner is not confirmed', async () => {
+    const client = fakeAuthService({ restoreSession: async () => user });
+    const { result } = await renderHook(() => useAuth(), {
+      wrapper: wrapperFor(client, fails),
+    });
+
+    await waitFor(() => expect(result.current.status).toBe('locked'));
+    // The session itself is intact: the employee is not signed out by a failed challenge.
+    expect(result.current.user).toEqual(user);
+    expect(client.logout).not.toHaveBeenCalled();
+  });
+
+  it('opens the session only after a passed challenge', async () => {
+    const client = fakeAuthService({ restoreSession: async () => user });
+    const { result } = await renderHook(() => useAuth(), {
+      wrapper: wrapperFor(client, passes),
+    });
+
+    await waitFor(() => expect(result.current.status).toBe('authenticated'));
+  });
+
+  it('unlocks a locked session on a later successful challenge', async () => {
+    let allow = false;
+    const client = fakeAuthService({ restoreSession: async () => user });
+    const gate: Reauthenticate = async () =>
+      allow ? { status: 'passed' } : { status: 'failed', reason: 'refused' };
+    const { result } = await renderHook(() => useAuth(), { wrapper: wrapperFor(client, gate) });
+
+    await waitFor(() => expect(result.current.status).toBe('locked'));
+    allow = true;
+    await act(async () => {
+      await result.current.unlock({ promptMessage: 'Confirm', cancelLabel: 'Cancel' });
+    });
+
+    expect(result.current.status).toBe('authenticated');
+  });
+
+  it('keeps the session locked when the retry challenge also fails', async () => {
+    const client = fakeAuthService({ restoreSession: async () => user });
+    const { result } = await renderHook(() => useAuth(), { wrapper: wrapperFor(client, fails) });
+
+    await waitFor(() => expect(result.current.status).toBe('locked'));
+    let passed = true;
+    await act(async () => {
+      passed = await result.current.unlock({ promptMessage: 'Confirm', cancelLabel: 'Cancel' });
+    });
+
+    expect(passed).toBe(false);
+    expect(result.current.status).toBe('locked');
+  });
+
+  it('locks an unprotected device and reports why retrying cannot help', async () => {
+    const client = fakeAuthService({ restoreSession: async () => user });
+    const { result } = await renderHook(() => useAuth(), {
+      wrapper: wrapperFor(client, unprotected),
+    });
+
+    await waitFor(() => expect(result.current.status).toBe('locked'));
+    expect(result.current.lockReason).toBe('unavailable');
+    // The app must not open on a device with no biometric and no passcode.
+    expect(result.current.status).not.toBe('authenticated');
+  });
+
+  it('distinguishes a refused challenge from an unprotected device', async () => {
+    const client = fakeAuthService({ restoreSession: async () => user });
+    const { result } = await renderHook(() => useAuth(), { wrapper: wrapperFor(client, fails) });
+
+    await waitFor(() => expect(result.current.status).toBe('locked'));
+    expect(result.current.lockReason).toBe('refused');
+  });
+
+  it('clears the lock reason once the challenge passes', async () => {
+    let allow = false;
+    const client = fakeAuthService({ restoreSession: async () => user });
+    const gate: Reauthenticate = async () =>
+      allow ? { status: 'passed' } : { status: 'failed', reason: 'unavailable' };
+    const { result } = await renderHook(() => useAuth(), { wrapper: wrapperFor(client, gate) });
+
+    await waitFor(() => expect(result.current.lockReason).toBe('unavailable'));
+    allow = true;
+    await act(async () => {
+      await result.current.unlock({ promptMessage: 'Confirm', cancelLabel: 'Cancel' });
+    });
+
+    expect(result.current.status).toBe('authenticated');
+    expect(result.current.lockReason).toBeNull();
+  });
+
+  it('does not challenge when there is no stored session to restore', async () => {
+    const gate = jest.fn<Reauthenticate>(async () => ({ status: 'passed' as const }));
+    const client = fakeAuthService({ restoreSession: async () => null });
+    const { result } = await renderHook(() => useAuth(), { wrapper: wrapperFor(client, gate) });
+
+    await waitFor(() => expect(result.current.status).toBe('unauthenticated'));
+    expect(gate).not.toHaveBeenCalled();
+  });
+
+  it('does not re-challenge a fresh credential login', async () => {
+    const gate = jest.fn<Reauthenticate>(async () => ({ status: 'passed' as const }));
+    const client = fakeAuthService({ restoreSession: async () => null, login: async () => user });
+    const { result } = await renderHook(() => useAuth(), { wrapper: wrapperFor(client, gate) });
+
+    await waitFor(() => expect(result.current.status).toBe('unauthenticated'));
+    await act(async () => {
+      await result.current.login({ email: 'employee@example.com', password: 'pw' });
+    });
+
+    expect(result.current.status).toBe('authenticated');
+    expect(gate).not.toHaveBeenCalled();
   });
 });
