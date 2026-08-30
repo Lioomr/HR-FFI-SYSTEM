@@ -23,7 +23,17 @@ export type AttendanceActionOutcome =
 
 export type AttendanceFailureKey =
   | 'attendance.actionsUnavailable'
+  | 'attendance.alreadyCheckedIn'
+  | 'attendance.alreadyCheckedOut'
   | 'attendance.duplicate'
+  | 'attendance.invalidLocation'
+  | 'attendance.locationPermissionDenied'
+  | 'attendance.locationUnavailable'
+  | 'attendance.missingCheckIn'
+  | 'attendance.outsideWorkLocation'
+  | 'attendance.poorAccuracy'
   | 'attendance.rateLimited'
+  | 'lock.attendanceFailed'
+  | 'lock.unprotectedBody'
   | 'state.actionFailed'
   | 'state.offlineBody';

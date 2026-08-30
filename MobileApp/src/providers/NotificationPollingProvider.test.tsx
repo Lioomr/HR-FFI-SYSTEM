@@ -67,7 +67,7 @@ function authService(): AuthService {
 function wrapperFor(client: NotificationPollClient, appState: AppStateSource) {
   return function Wrapper({ children }: React.PropsWithChildren) {
     return (
-      <AuthProvider client={authService()}>
+      <AuthProvider client={authService()} reauthenticate={async () => ({ status: 'passed' })}>
         <NotificationPollingProvider appState={appState} client={client} intervalMs={20_000}>
           {children}
         </NotificationPollingProvider>
