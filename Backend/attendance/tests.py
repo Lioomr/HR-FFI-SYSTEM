@@ -16,7 +16,7 @@ from hr_reference.models import Department, Position
 from organization.models import OrganizationNode, UserOrganizationAccess
 
 from .biotime_client import BioTimeClient
-from .models import AttendanceRecord, BioTimeConfig, BioTimeEmployeeMap
+from .models import AttendanceRecord, BioTimeConfig, BioTimeDeviceEmployee, BioTimeEmployeeMap
 from .services import SyncBioTimeService
 
 User = get_user_model()
@@ -710,6 +710,24 @@ class BioTimeSyncTests(TestCase):
             unmapped,
             [{"emp_code": "100002", "first_name": "New", "last_name": "Person", "department": "Ops"}],
         )
+
+    def test_unmapped_users_are_available_from_an_active_company_for_all_company_admin(self):
+        BioTimeDeviceEmployee.objects.create(
+            emp_code="100002",
+            first_name="New",
+            last_name="Person",
+            department="Operations",
+        )
+        self.client.force_authenticate(user=self.admin)
+
+        response = self.client.get(
+            "/api/biotime-mappings/unmapped/",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"]["count"], 1)
+        self.assertEqual(response.data["data"]["items"][0]["emp_code"], "100002")
 
     def test_config_put_preserves_password_when_blank(self):
         self.client.force_authenticate(user=self.admin)
