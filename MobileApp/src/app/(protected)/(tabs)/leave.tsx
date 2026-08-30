@@ -1,3 +1,4 @@
 import { LeaveScreen } from '@/features/leave';
+import { withSelfServiceGuard } from '@/features/shell';
 
-export default LeaveScreen;
+export default withSelfServiceGuard(LeaveScreen);

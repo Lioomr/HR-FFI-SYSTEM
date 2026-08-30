@@ -403,3 +403,68 @@ describe('ApiClient authentication lifecycle', () => {
     expect(store.value).toEqual(oldSession);
   });
 });
+
+describe('ApiClient geofence 403 classification', () => {
+  function forbiddenClient(body: unknown) {
+    const store = new FakeCredentialStore(oldSession);
+    const fetchImpl = jest.fn(async () => response(403, body)) as unknown as FetchLike;
+    return new ApiClient({ baseUrl: 'https://hr.example.com', credentialStore: store, fetchImpl });
+  }
+
+  it('raises the dedicated code for the exact outside-work-location envelope', async () => {
+    const client = forbiddenClient({
+      status: 'error',
+      message: 'You are not within an approved work location.',
+    });
+
+    await expect(client.request('/api/attendance/me/check-in/')).rejects.toMatchObject({
+      code: 'outside_work_location',
+      status: 403,
+    });
+  });
+
+  it('retains no server text on the dedicated error', async () => {
+    const client = forbiddenClient({
+      status: 'error',
+      message: 'You are not within an approved work location.',
+    });
+
+    const failure = await client.request('/api/attendance/me/check-in/').catch((e: unknown) => e);
+
+    expect((failure as ApiError).details).toEqual([]);
+  });
+
+  it.each([
+    ['a different 403 the contract defines', 'Archived employees cannot check in.'],
+    ['the active-company rejection', 'Employee profile is not available in the active company.'],
+    ['a near-miss reworded sentence', 'You are not within an approved work location'],
+    ['a prefixed sentence', 'Note: You are not within an approved work location.'],
+  ])('stays generic for %s', async (_label, message) => {
+    const client = forbiddenClient({ status: 'error', message });
+
+    await expect(client.request('/api/attendance/me/check-in/')).rejects.toMatchObject({
+      code: 'forbidden',
+      status: 403,
+    });
+  });
+
+  it('stays generic when the 403 body is missing or unreadable', async () => {
+    const store = new FakeCredentialStore(oldSession);
+    const fetchImpl = jest.fn(async () => ({
+      json: async () => {
+        throw new Error('not json');
+      },
+      ok: false,
+      status: 403,
+    })) as unknown as FetchLike;
+    const client = new ApiClient({
+      baseUrl: 'https://hr.example.com',
+      credentialStore: store,
+      fetchImpl,
+    });
+
+    await expect(client.request('/api/attendance/me/check-in/')).rejects.toMatchObject({
+      code: 'forbidden',
+    });
+  });
+});

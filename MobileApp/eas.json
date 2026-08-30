@@ -19,6 +19,14 @@
         "simulator": true
       }
     },
+    "test": {
+      "distribution": "internal",
+      "environment": "preview",
+      "env": {
+        "FFI_APP_ENV": "test",
+        "FFI_REQUIRE_EXPLICIT_API_ORIGIN": "true"
+      }
+    },
     "preview": {
       "distribution": "internal",
       "environment": "preview",

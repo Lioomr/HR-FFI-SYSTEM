@@ -41,7 +41,23 @@ const ALLOWED_PATHS = [
   '/api/leaves/employee/leave-balance/',
   '/api/leaves/employee/leave-requests/',
   '/api/leaves/leave-types/',
+  // Approver surface (Phase 2). `/api/leaves/leave-requests/` is shared with the
+  // employee submit action: HR's wider view comes from the server-side queryset,
+  // not from a different path. The `{id}/approve/` and `{id}/reject/` suffixes are
+  // built at runtime from these bases, exactly like `{id}/cancel/`, so the literal
+  // scanner needs no separate entries. Neither string collides with the rejected
+  // legacy literal `/api/leaves/hr/`.
   '/api/leaves/leave-requests/',
+  '/api/leaves/ceo/leave-requests/',
+  '/api/attendance-correction-requests/',
+  '/api/core/workflow/delegations/',
+  '/api/employees/delegation-candidates/',
+  '/api/loans/hr/loan-requests/',
+  '/api/loans/cfo/loan-requests/',
+  '/api/loans/ceo/loan-requests/',
+  // Hiring is intentionally root-mounted by `Backend/job_offers/urls.py`.
+  // Its action suffixes are built from this reviewed base at runtime.
+  '/hiring-requests/',
   '/api/notifications/',
   '/api/notifications/unread-count/',
   '/api/notifications/read-all/',
@@ -52,9 +68,9 @@ const ALLOWED_PATHS = [
 ] as const;
 
 function literalPaths(source: string): string[] {
-  return [...source.matchAll(/(['"`])(\/(?:api|auth|employee|ws)\/[^'"`\s]*)\1/gu)].map(
-    (match) => match[2],
-  );
+  return [
+    ...source.matchAll(/(['"`])(\/(?:api|auth|employee|ws|hiring-requests)\/[^'"`\s]*)\1/gu),
+  ].map((match) => match[2]);
 }
 
 describe('Gate 3 independent API and security invariants', () => {
@@ -119,6 +135,7 @@ describe('Gate 3 independent API and security invariants', () => {
 
   it('keeps the route surface bounded, token-free, and free of record identifiers', () => {
     expect(Object.keys(appRoutes)).toEqual([
+      'approvals',
       'attendance',
       'changePassword',
       'home',
@@ -196,6 +213,81 @@ describe('Gate 3 independent API and security invariants', () => {
     );
   });
 
+  it('classifies the geofence 403 from a closed sentinel set and retains no server text', () => {
+    const apiError = readFileSync(join(sourceRoot, 'services', 'api', 'api-error.ts'), 'utf8');
+
+    // Exactly one 403 body may be recognised, compared verbatim against the contract.
+    expect(apiError).toContain(
+      "export const OUTSIDE_WORK_LOCATION_MESSAGE = 'You are not within an approved work location.';",
+    );
+    const classifier = apiError.slice(
+      apiError.indexOf('export function isOutsideWorkLocationEnvelope'),
+    );
+    expect(classifier).toMatch(/envelope\.message === OUTSIDE_WORK_LOCATION_MESSAGE/u);
+    // Classification is equality only: no substring, regex, or prefix matching.
+    expect(classifier).not.toMatch(/\.includes\(|\.startsWith\(|\.match\(|RegExp/u);
+
+    // The dedicated code carries no `details`, so no 403 body text can reach a screen.
+    expect(apiError).toContain("code === 'validation_failed'");
+
+    // The attendance feature maps contract sentences to local keys, never rendering them.
+    const attendance = readFileSync(
+      join(sourceRoot, 'features', 'attendance', 'attendance-api.ts'),
+      'utf8',
+    );
+    expect(attendance).toContain("'attendance.outsideWorkLocation'");
+    for (const key of Object.values({
+      invalid: "'Invalid GPS coordinates.': 'attendance.invalidLocation'",
+      accuracy: "'GPS accuracy must be 100 metres or better.': 'attendance.poorAccuracy'",
+    })) {
+      expect(attendance).toContain(key);
+    }
+  });
+
+  it('confines the location module and keeps GPS readings ephemeral', () => {
+    const locationUsers = productionFiles.filter((file) =>
+      readFileSync(file, 'utf8').includes("from 'expo-location'"),
+    );
+    expect(locationUsers.map((file) => relative(sourceRoot, file))).toEqual([
+      join('services', 'location', 'location.ts'),
+    ]);
+
+    const location = readFileSync(locationUsers[0], 'utf8');
+    // Foreground fixes only. No watcher, geofencing task, or background provider.
+    for (const pattern of [
+      /watchPositionAsync/u,
+      /startLocationUpdatesAsync/u,
+      /startGeofencingAsync/u,
+      /requestBackgroundPermissionsAsync/u,
+      /expo-task-manager/u,
+    ]) {
+      expect(location).not.toMatch(pattern);
+    }
+    // No module-level mutable store could accumulate a location history.
+    expect(location).not.toMatch(/^(?:let|var)\s/mu);
+
+    // The reading only ever leaves through the exact three contract fields.
+    const attendance = readFileSync(
+      join(sourceRoot, 'features', 'attendance', 'attendance-api.ts'),
+      'utf8',
+    );
+    const body = attendance.slice(
+      attendance.indexOf('export function geofenceRequestBody'),
+      attendance.indexOf('async function mutate'),
+    );
+    expect(body).toMatch(/latitude:\s*reading\.latitude/u);
+    expect(body).toMatch(/longitude:\s*reading\.longitude/u);
+    expect(body).toMatch(/accuracy_meters:\s*reading\.accuracyMeters/u);
+    // No site, distance, or radius field may be sent or read anywhere in the client.
+    expect(productionSource).not.toMatch(/site_name|radius_meters|distance_meters/u);
+    // The only token containing `work_location` is the local error code. A bare
+    // `work_location` would mean a server site field had reached the client.
+    const workLocationTokens = [
+      ...productionSource.matchAll(/[A-Za-z_]*work_location[A-Za-z_]*/gu),
+    ].map((match) => match[0]);
+    expect([...new Set(workLocationTokens)]).toEqual(['outside_work_location']);
+  });
+
   it('projects no compensation or identity-document field into the profile feature', () => {
     const moreApi = readFileSync(join(sourceRoot, 'features', 'more', 'more-api.ts'), 'utf8');
     const profileSection = moreApi.slice(
@@ -250,6 +342,59 @@ describe('Gate 3 independent API and security invariants', () => {
     ] as const) {
       expect(readFileSync(join(sourceRoot, ...file.split('/')), 'utf8')).toMatch(expectation);
     }
+  });
+
+  it('confines local authentication and gates the Gate 4 protected surfaces', () => {
+    const authUsers = productionFiles.filter((file) =>
+      readFileSync(file, 'utf8').includes("from 'expo-local-authentication'"),
+    );
+    expect(authUsers.map((file) => relative(sourceRoot, file))).toEqual([
+      join('services', 'biometrics', 'biometrics.ts'),
+    ]);
+
+    const biometrics = readFileSync(authUsers[0], 'utf8');
+    // Device passcode stays available so a failed biometric can still be satisfied.
+    expect(biometrics).toContain('disableDeviceFallback: false');
+    // A device with no biometric and no passcode is refused, never passed through, and
+    // no failure path may return a pass.
+    expect(biometrics).toContain("{ status: 'failed', reason: 'unavailable' }");
+    expect(biometrics).not.toMatch(/PASS_WHEN_UNENROLLED|status: 'passed'.*unenrolled/u);
+
+    // Cold launch: a restored session may only become authenticated through the gate.
+    const provider = readFileSync(join(sourceRoot, 'providers', 'AuthProvider.tsx'), 'utf8');
+    expect(provider).toContain('await reauthenticate(lockPrompt)');
+    expect(provider).toMatch(
+      /setStatus\(reauth\.status === 'passed' \? 'authenticated' : 'locked'\)/u,
+    );
+
+    // Attendance: the challenge precedes the mutation, not the other way round.
+    const screen = readFileSync(
+      join(sourceRoot, 'features', 'attendance', 'AttendanceScreen.tsx'),
+      'utf8',
+    );
+    const action = screen.slice(screen.indexOf('const runAction'));
+    expect(action.indexOf('await reauthenticate(')).toBeLessThan(action.indexOf('await checkIn()'));
+    expect(action).toMatch(/if \(reauth\.status !== 'passed'\)/u);
+  });
+
+  it('keeps the deep-link surface on guarded, parameterless expo-router routes', () => {
+    // The `ffihr` / `com.ffihr.employee` schemes are registered, so any installed app
+    // can open this one. Safety comes from there being nothing to aim at: no custom
+    // URL handler, and a route surface with no parameters to inject into.
+    for (const pattern of [
+      /from 'expo-linking'/u,
+      /Linking\.(?:addEventListener|getInitialURL|parse)/u,
+      /useURL\s*\(/u,
+      /getStateFromPath|getPathFromState/u,
+    ]) {
+      expect(productionSource).not.toMatch(pattern);
+    }
+
+    // Both route groups stay behind an authentication guard, so a deep link opened while
+    // signed out lands on login rather than inside an employee screen.
+    const rootLayout = readFileSync(join(sourceRoot, 'app', '_layout.tsx'), 'utf8');
+    expect(rootLayout).toContain('<Stack.Protected guard={hasBootstrapped && !isAuthenticated}>');
+    expect(rootLayout).toContain('<Stack.Protected guard={hasBootstrapped && isAuthenticated}>');
   });
 
   it('never persists the in-app language choice', () => {

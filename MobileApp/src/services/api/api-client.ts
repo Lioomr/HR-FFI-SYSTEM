@@ -1,4 +1,9 @@
-import { ApiError, safeApiError, safeValidationDetails } from './api-error';
+import {
+  ApiError,
+  isOutsideWorkLocationEnvelope,
+  safeApiError,
+  safeValidationDetails,
+} from './api-error';
 import type {
   ApiRequestOptions,
   ApiSuccessEnvelope,
@@ -121,13 +126,19 @@ export class ApiClient {
       );
       if (replay.response.ok) return replay.data as T;
       if (replay.response.status === 401) await this.clearSessionSilently();
-      throw safeApiError(replay.response.status, true, replay.validationDetails);
+      throw safeApiError(
+        replay.response.status,
+        true,
+        replay.validationDetails,
+        replay.outsideWorkLocation,
+      );
     }
 
     const failure = safeApiError(
       firstResponse.response.status,
       authenticated,
       firstResponse.validationDetails,
+      firstResponse.outsideWorkLocation,
     );
     if (authenticated && firstResponse.response.status === 401) {
       await this.clearSessionSilently();
@@ -255,7 +266,12 @@ export class ApiClient {
     options: ApiRequestOptions,
     credentials: SessionCredentials | null,
     authenticated: boolean,
-  ): Promise<{ response: Response; data?: T; validationDetails: string[] }> {
+  ): Promise<{
+    response: Response;
+    data?: T;
+    validationDetails: string[];
+    outsideWorkLocation: boolean;
+  }> {
     const headers: Record<string, string> = { Accept: 'application/json' };
     if (options.body !== undefined) headers['Content-Type'] = 'application/json';
     if (authenticated && credentials) {
@@ -286,8 +302,9 @@ export class ApiClient {
 
       if (!response.ok) {
         const validationDetails = await this.readValidationDetails(response);
+        const outsideWorkLocation = await this.readOutsideWorkLocation(response);
         if (requestController.signal.aborted) throw new ApiError('network_unavailable');
-        return { response, validationDetails };
+        return { response, validationDetails, outsideWorkLocation };
       }
 
       let payload: unknown;
@@ -304,6 +321,7 @@ export class ApiClient {
         response,
         data: (payload as unknown as ApiSuccessEnvelope<T>).data,
         validationDetails: [],
+        outsideWorkLocation: false,
       };
     } catch (error) {
       if (error instanceof ApiError) throw error;
@@ -326,6 +344,20 @@ export class ApiClient {
       return safeValidationDetails(response.status, await response.json());
     } catch {
       return [];
+    }
+  }
+
+  /**
+   * Classifies a 403 against the one geofence sentence the Phase 8 contract defines. It
+   * returns a boolean, never text: no part of the body is retained, so this cannot widen
+   * the sanitized 400/422 channel that `readValidationDetails` guards above.
+   */
+  private async readOutsideWorkLocation(response: Response): Promise<boolean> {
+    if (response.status !== 403) return false;
+    try {
+      return isOutsideWorkLocationEnvelope(response.status, await response.json());
+    } catch {
+      return false;
     }
   }
 
