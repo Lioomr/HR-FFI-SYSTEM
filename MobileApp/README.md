@@ -18,6 +18,38 @@ React Native, TypeScript, and Expo Router.
 Plain HTTP API URLs are accepted only in development or for loopback hosts. Preview
 and production builds require an explicit HTTPS URL.
 
+## Isolated test app
+
+The test app variant installs separately from production:
+
+- App name: `FFI HR Employee Test`
+- iOS bundle ID: `com.ffihr.employee.test`
+- Android package: `com.ffihr.employee.test`
+- URL scheme: `ffihr-test`
+
+For local testing, copy `.env.test.example` to `.env.test.local` if you want a
+saved local reference, then run one of the test scripts:
+
+```powershell
+npm run start:test
+npm run ios:test
+npm run android:test
+npm run web:test
+```
+
+The local scripts point at `http://localhost:8000`, except Android emulator builds
+which use `http://10.0.2.2:8000`. For a physical phone, replace the API origin with
+a reachable HTTPS test API.
+
+For an isolated EAS build, configure the preview environment with the test API
+origin, then build the `test` profile:
+
+```powershell
+npx eas-cli@latest env:create --name EXPO_PUBLIC_API_BASE_URL --value https://test-api.example.com --environment preview --visibility plaintext
+npx eas-cli@latest build --platform ios --profile test
+npx eas-cli@latest build --platform android --profile test
+```
+
 ## EAS iOS validation
 
 The app is linked to the EAS project declared in `extra.eas.projectId`. Every EAS

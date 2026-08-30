@@ -35,6 +35,46 @@ const LEAVE_STATUS: Readonly<Record<string, StatusPresentation>> = Object.freeze
   cancelled: { labelKey: 'leaveStatus.cancelled', tone: 'neutral', glyph: '–' },
 });
 
+const ATTENDANCE_CORRECTION_STATUS: Readonly<Record<string, StatusPresentation>> = Object.freeze({
+  draft: { labelKey: 'attendanceCorrectionStatus.draft', tone: 'neutral', glyph: '–' },
+  pending_manager: {
+    labelKey: 'attendanceCorrectionStatus.pending_manager',
+    tone: 'warning',
+    glyph: '⋯',
+  },
+  pending_hr: { labelKey: 'attendanceCorrectionStatus.pending_hr', tone: 'warning', glyph: '⋯' },
+  approved: { labelKey: 'attendanceCorrectionStatus.approved', tone: 'success', glyph: '✓' },
+  rejected: { labelKey: 'attendanceCorrectionStatus.rejected', tone: 'error', glyph: '×' },
+  cancelled: { labelKey: 'attendanceCorrectionStatus.cancelled', tone: 'neutral', glyph: '–' },
+});
+
+const HIRING_REQUEST_STATUS: Readonly<Record<string, StatusPresentation>> = Object.freeze({
+  draft: { labelKey: 'hiringStatus.draft', tone: 'neutral', glyph: '–' },
+  submitted: { labelKey: 'hiringStatus.submitted', tone: 'warning', glyph: '⋯' },
+  approved: { labelKey: 'hiringStatus.approved', tone: 'success', glyph: '✓' },
+  rejected: { labelKey: 'hiringStatus.rejected', tone: 'error', glyph: '×' },
+  cancelled: { labelKey: 'hiringStatus.cancelled', tone: 'neutral', glyph: '–' },
+  converted: { labelKey: 'hiringStatus.converted', tone: 'info', glyph: '→' },
+});
+
+const LOAN_REQUEST_STATUS: Readonly<Record<string, StatusPresentation>> = Object.freeze({
+  submitted: { labelKey: 'loanStatus.submitted', tone: 'info', glyph: '→' },
+  pending_manager: { labelKey: 'loanStatus.pending_manager', tone: 'warning', glyph: '⋯' },
+  pending_hr: { labelKey: 'loanStatus.pending_hr', tone: 'warning', glyph: '⋯' },
+  pending_finance: { labelKey: 'loanStatus.pending_finance', tone: 'warning', glyph: '⋯' },
+  pending_cfo: { labelKey: 'loanStatus.pending_cfo', tone: 'warning', glyph: '⋯' },
+  pending_ceo: { labelKey: 'loanStatus.pending_ceo', tone: 'warning', glyph: '⋯' },
+  pending_disbursement: {
+    labelKey: 'loanStatus.pending_disbursement',
+    tone: 'warning',
+    glyph: '⋯',
+  },
+  approved: { labelKey: 'loanStatus.approved', tone: 'success', glyph: '✓' },
+  rejected: { labelKey: 'loanStatus.rejected', tone: 'error', glyph: '×' },
+  cancelled: { labelKey: 'loanStatus.cancelled', tone: 'neutral', glyph: '–' },
+  deducted: { labelKey: 'loanStatus.deducted', tone: 'neutral', glyph: '✓' },
+});
+
 const EMPLOYMENT_STATUS: Readonly<Record<string, StatusPresentation>> = Object.freeze({
   ACTIVE: { labelKey: 'employmentStatus.ACTIVE', tone: 'success', glyph: '✓' },
   ON_LEAVE: { labelKey: 'employmentStatus.ON_LEAVE', tone: 'info', glyph: 'i' },
@@ -75,6 +115,20 @@ export function attendanceStatusPresentation(value: string | null): StatusPresen
 
 export function leaveStatusPresentation(value: string | null): StatusPresentation | null {
   return presentation(LEAVE_STATUS, value);
+}
+
+export function attendanceCorrectionStatusPresentation(
+  value: string | null,
+): StatusPresentation | null {
+  return presentation(ATTENDANCE_CORRECTION_STATUS, value);
+}
+
+export function hiringRequestStatusPresentation(value: string | null): StatusPresentation | null {
+  return presentation(HIRING_REQUEST_STATUS, value);
+}
+
+export function loanRequestStatusPresentation(value: string | null): StatusPresentation | null {
+  return presentation(LOAN_REQUEST_STATUS, value);
 }
 
 export function employmentStatusPresentation(value: string | null): StatusPresentation | null {

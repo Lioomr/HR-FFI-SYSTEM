@@ -4,7 +4,7 @@ import type { PropsWithChildren } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { LocalizationProvider } from '@/i18n';
+import { LocalizationProvider, useLocalization } from '@/i18n';
 import {
   AuthenticatedPrivacyProtection,
   AuthProvider,
@@ -47,17 +47,31 @@ function AuthenticatedRuntime({ children }: PropsWithChildren) {
   );
 }
 
+/**
+ * Supplies the Gate 4 lock prompt in the employee's session language. It sits between
+ * the localization and auth providers because the bootstrap challenge runs inside
+ * `AuthProvider` and must be readable before any HR screen mounts.
+ */
+function LocalizedAuthProvider({ children }: PropsWithChildren) {
+  const { t } = useLocalization();
+  return (
+    <AuthProvider lockPrompt={{ promptMessage: t('lock.prompt'), cancelLabel: t('common.cancel') }}>
+      {children}
+    </AuthProvider>
+  );
+}
+
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <LocalizationProvider>
-          <AuthProvider>
+          <LocalizedAuthProvider>
             <AuthenticatedRuntime>
               <StatusBar style="dark" />
               <RootNavigator />
             </AuthenticatedRuntime>
-          </AuthProvider>
+          </LocalizedAuthProvider>
         </LocalizationProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
