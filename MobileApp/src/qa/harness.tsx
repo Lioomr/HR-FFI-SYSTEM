@@ -4,6 +4,7 @@ import type { PropsWithChildren, ReactElement } from 'react';
 import type { AuthUser } from '@/auth';
 import { LocalizationProvider, type SupportedLanguage } from '@/i18n';
 import { AuthProvider, type AuthService } from '@/providers';
+import type { Reauthenticate } from '@/services/biometrics';
 
 /**
  * Test-only provider harness. It lives under `src/qa/` so the Gate 2 production source
@@ -38,19 +39,30 @@ const LOCALES: Readonly<Record<SupportedLanguage, { languageCode: string; langua
     ar: { languageCode: 'ar', languageTag: 'ar-SA' },
   });
 
+/**
+ * The harness models an employee who is signed in AND has passed the Gate 4 cold-launch
+ * lock, so screen tests exercise their own behaviour rather than the lock. Tests that
+ * cover the lock itself pass their own `reauthenticate`.
+ */
+export const passingReauthentication: Reauthenticate = async () => ({ status: 'passed' });
+
 export interface HarnessOptions extends Omit<RenderOptions, 'wrapper'> {
   language?: SupportedLanguage;
   authService?: AuthService;
+  reauthenticate?: Reauthenticate;
 }
 
 export function providerWrapper({
   authService = stubAuthService(),
   language = 'en',
-}: Pick<HarnessOptions, 'authService' | 'language'> = {}) {
+  reauthenticate = passingReauthentication,
+}: Pick<HarnessOptions, 'authService' | 'language' | 'reauthenticate'> = {}) {
   return function Wrapper({ children }: PropsWithChildren) {
     return (
       <LocalizationProvider initialLanguage={language} locales={[LOCALES[language]]}>
-        <AuthProvider client={authService}>{children}</AuthProvider>
+        <AuthProvider client={authService} reauthenticate={reauthenticate}>
+          {children}
+        </AuthProvider>
       </LocalizationProvider>
     );
   };
@@ -58,8 +70,11 @@ export function providerWrapper({
 
 /** Mirrors the async `render` contract of React Native Testing Library 14. */
 export function renderWithProviders(ui: ReactElement, options: HarnessOptions = {}) {
-  const { authService, language, ...renderOptions } = options;
-  return render(ui, { ...renderOptions, wrapper: providerWrapper({ authService, language }) });
+  const { authService, language, reauthenticate, ...renderOptions } = options;
+  return render(ui, {
+    ...renderOptions,
+    wrapper: providerWrapper({ authService, language, reauthenticate }),
+  });
 }
 
 export type RenderedScreen = Awaited<ReturnType<typeof renderWithProviders>>;
