@@ -15,7 +15,6 @@ from core.permissions import IsHRManagerOrAdmin
 from core.responses import error, success
 from organization.services import (
     filter_queryset_by_company_scope,
-    is_head_office_context,
     user_has_all_company_access,
 )
 
@@ -188,10 +187,11 @@ class BioTimeEmployeeMapViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"])
     def unmapped(self, request):
         # Device roster rows do not carry a company key, so they cannot be
-        # safely tenant-filtered. Expose them only as an explicit all-company
-        # head-office workflow; ordinary company contexts must fail closed.
-        if not is_head_office_context(request) or not user_has_all_company_access(request.user):
-            raise PermissionDenied("Unmapped BioTime employees require all-company head-office access.")
+        # safely tenant-filtered. An administrator with access to every company
+        # may view them from any active company and map a row to that company's
+        # employee records. Other users must still fail closed.
+        if not user_has_all_company_access(request.user):
+            raise PermissionDenied("Unmapped BioTime employees require all-company access.")
         try:
             mapped_codes = set(BioTimeEmployeeMap.objects.values_list("biotime_emp_code", flat=True))
             employees = [
