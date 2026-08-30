@@ -120,44 +120,44 @@ describe("NotificationBell", () => {
     expect(navigateMock).toHaveBeenCalledWith("/employee/leave/requests");
   });
 
-  it("normalizes a legacy hiring-request link onto the compatibility route", () => {
-    // The backend still sends the DRF path. Navigating there as-is would 404 in
-    // the app, so it must be rewritten before the router sees it.
+  it("follows a job-offer approval link to the CEO review screen", () => {
+    // The backend points job-offer notifications at real screens, so the link
+    // reaches the router unchanged.
     useNotificationStore.setState({
       recent: [
         makeNotification({
           id: 21,
-          title: "Hiring request submitted",
-          action_url: "/hiring-requests/1",
+          title: "Job offer awaiting your approval",
+          action_url: "/ceo/job-offers/1",
         }),
       ],
       markRead: vi.fn(),
     });
     render(<NotificationBell />);
     openPanel();
-    fireEvent.click(screen.getByRole("button", { name: /Hiring request submitted/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /Job offer awaiting your approval/i }),
+    );
 
-    expect(navigateMock).toHaveBeenCalledWith("/hiring-requests/1");
-    // Never the API path with its trailing slash.
-    expect(navigateMock).not.toHaveBeenCalledWith("/hiring-requests/1/");
+    expect(navigateMock).toHaveBeenCalledWith("/ceo/job-offers/1");
   });
 
-  it("never navigates the browser to a hiring-request API URL", () => {
+  it("never navigates the browser to a job-offer API URL", () => {
     useNotificationStore.setState({
       recent: [
         makeNotification({
           id: 22,
-          title: "Hiring request submitted",
-          action_url: `${window.location.origin}/hiring-requests/1/cv/`,
+          title: "Job offer decided",
+          action_url: "https://api.example.com/job-offers/1/cv/",
         }),
       ],
       markRead: vi.fn(),
     });
     render(<NotificationBell />);
     openPanel();
-    fireEvent.click(screen.getByRole("button", { name: /Hiring request submitted/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Job offer decided/i }));
 
-    expect(navigateMock).toHaveBeenCalledWith("/hiring-requests/1");
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 
   it("triggers mark-all-read", () => {

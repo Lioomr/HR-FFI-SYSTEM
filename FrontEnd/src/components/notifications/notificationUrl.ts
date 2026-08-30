@@ -23,36 +23,6 @@ export interface SafeNotificationUrl {
 const ABSOLUTE_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
 
 /**
- * `/hiring-requests/{id}` — and its API-shaped variants such as a trailing
- * slash or a `/cv/` suffix — as emitted by workflow deep links and hiring
- * request notifications.
- */
-const LEGACY_HIRING_REQUEST = /^\/hiring-requests\/(\d+)(?:\/[^?#]*)?$/;
-
-/**
- * Rewrites a legacy hiring-request link onto the compatibility route.
- *
- * The backend still sends `/hiring-requests/{id}`, which is the DRF endpoint
- * path and not a screen: followed as-is it 404s in the app, and hitting the API
- * directly from the browser 401s because there is no bearer header on a plain
- * navigation. `/hiring-requests/:id` is a real route that forwards to the CEO
- * or HR screen, so pointing at it keeps those links working. Any trailing API
- * segment (`/cv/`) is dropped for the same reason.
- */
-export function normalizeNotificationPath(path: string): string {
-  const [pathname, rest = ""] = splitPath(path);
-  const match = LEGACY_HIRING_REQUEST.exec(pathname);
-  if (!match) return path;
-  return `/hiring-requests/${match[1]}${rest}`;
-}
-
-/** Splits a path into its pathname and its `?query#hash` remainder. */
-function splitPath(path: string): [string, string] {
-  const cut = path.search(/[?#]/);
-  return cut === -1 ? [path, ""] : [path.slice(0, cut), path.slice(cut)];
-}
-
-/**
  * Pure classifier for a notification action URL.
  *
  * Security rules:
@@ -79,11 +49,7 @@ export function resolveSafeNotificationUrl(
   // No scheme -> a relative application path. React Router keeps it same-origin,
   // so it is inherently safe to navigate.
   if (!ABSOLUTE_SCHEME.test(trimmed)) {
-    return {
-      allowed: true,
-      kind: "internal",
-      path: normalizeNotificationPath(trimmed),
-    };
+    return { allowed: true, kind: "internal", path: trimmed };
   }
 
   // Has a scheme: it must be a well-formed http(s) URL on our own origin.
@@ -106,9 +72,7 @@ export function resolveSafeNotificationUrl(
   return {
     allowed: true,
     kind: "internal",
-    path: normalizeNotificationPath(
-      `${parsed.pathname}${parsed.search}${parsed.hash}`,
-    ),
+    path: `${parsed.pathname}${parsed.search}${parsed.hash}`,
   };
 }
 

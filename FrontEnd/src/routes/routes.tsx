@@ -9,7 +9,6 @@ import RequireCEOApprover from "./RequireCEOApprover";
 import LoginPage from "../pages/LoginPage";
 import RegisterInvitePage from "../pages/RegisterInvitePage";
 import JobOfferResponsePage from "../pages/public/JobOfferResponsePage";
-import HiringRequestRedirect from "./HiringRequestRedirect";
 import ChangePasswordPage from "../pages/ChangePasswordPage";
 import Unauthorized403Page from "../pages/Unauthorized403Page";
 import NotFound404Page from "../pages/NotFound404Page";
@@ -21,6 +20,7 @@ import AdminAuditLogsPage from "../pages/admin/AdminAuditLogsPage";
 import AdminWhatsAppIntegrationPage from "../pages/admin/AdminWhatsAppIntegrationPage";
 
 import AdminSettingsPage from "../pages/admin/AdminSettingsPage";
+import AdminWorkLocationsPage from "../pages/admin/AdminWorkLocationsPage";
 import BioTimeSettingsPage from "../pages/admin/BioTimeSettingsPage";
 import DelegationRulesPage from "../pages/hr/DelegationRulesPage";
 import EmployeeLeavesPage from "../pages/employee/EmployeeLeavesPage";
@@ -52,9 +52,6 @@ import TemplateLibraryPage from "../pages/hr/templates/TemplateLibraryPage";
 import JobOffersListPage from "../pages/hr/job-offers/JobOffersListPage";
 import JobOfferFormPage from "../pages/hr/job-offers/JobOfferFormPage";
 import JobOfferDetailPage from "../pages/hr/job-offers/JobOfferDetailPage";
-import HiringRequestsListPage from "../pages/hr/hiring-requests/HiringRequestsListPage";
-import HiringRequestFormPage from "../pages/hr/hiring-requests/HiringRequestFormPage";
-import HiringRequestDetailPage from "../pages/hr/hiring-requests/HiringRequestDetailPage";
 import EmployeePayslipsListPage from "../pages/employee/payslips/EmployeePayslipsListPage";
 import EmployeePayslipDetailsPage from "../pages/employee/payslips/EmployeePayslipDetailsPage";
 
@@ -103,8 +100,8 @@ import CEOAssetDamageReportsPage from "../pages/ceo/CEOAssetDamageReportsPage";
 import CEOAssetReturnRequestsPage from "../pages/ceo/CEOAssetReturnRequestsPage";
 import CEOEmployeeDeletionInboxPage from "../pages/ceo/CEOEmployeeDeletionInboxPage";
 import CEOEmployeeDeletionDetailPage from "../pages/ceo/CEOEmployeeDeletionDetailPage";
-import CEOHiringRequestsInboxPage from "../pages/ceo/CEOHiringRequestsInboxPage";
-import CEOHiringRequestDetailPage from "../pages/ceo/CEOHiringRequestDetailPage";
+import CEOJobOffersInboxPage from "../pages/ceo/CEOJobOffersInboxPage";
+import CEOJobOfferDetailPage from "../pages/ceo/CEOJobOfferDetailPage";
 import CFODashboardPage from "../pages/cfo/CFODashboardPage";
 import CFOLoanRequestsPage from "../pages/cfo/CFOLoanRequestsPage";
 import CFOLoanRequestDetailsPage from "../pages/cfo/CFOLoanRequestDetailsPage";
@@ -137,17 +134,6 @@ export const routes = [
   {
     path: "/job-offers/respond",
     element: <JobOfferResponsePage />,
-    errorElement: <RouteErrorBoundary />,
-  },
-
-  // Compatibility route. Notifications and workflow deep links point at
-  // /hiring-requests/{id}, which is the API path rather than a screen; this
-  // forwards the visitor to the CEO or HR screen they can actually use.
-  // It owns its own auth handling so an unauthenticated visit keeps the link
-  // as the post-login destination.
-  {
-    path: "/hiring-requests/:id",
-    element: <HiringRequestRedirect />,
     errorElement: <RouteErrorBoundary />,
   },
 
@@ -187,6 +173,10 @@ export const routes = [
               { path: "admin/invites", element: <AdminInvitesPage /> },
               { path: "admin/audit-logs", element: <AdminAuditLogsPage /> },
               { path: "admin/settings", element: <AdminSettingsPage /> },
+              {
+                path: "admin/work-locations",
+                element: <AdminWorkLocationsPage />,
+              },
               { path: "admin/biotime", element: <BioTimeSettingsPage /> },
               {
                 path: "admin/whatsapp",
@@ -238,24 +228,6 @@ export const routes = [
               { path: "hr/job-offers/new", element: <JobOfferFormPage /> },
               { path: "hr/job-offers/:id", element: <JobOfferDetailPage /> },
               { path: "hr/job-offers/:id/edit", element: <JobOfferFormPage /> },
-
-              // Hiring Requests — the approved-request gate in front of offers
-              {
-                path: "hr/hiring-requests",
-                element: <HiringRequestsListPage />,
-              },
-              {
-                path: "hr/hiring-requests/new",
-                element: <HiringRequestFormPage />,
-              },
-              {
-                path: "hr/hiring-requests/:id",
-                element: <HiringRequestDetailPage />,
-              },
-              {
-                path: "hr/hiring-requests/:id/edit",
-                element: <HiringRequestFormPage />,
-              },
 
               // Import Employees
               {
@@ -535,13 +507,14 @@ export const routes = [
                 path: "ceo/employees/deletion-requests/:id",
                 element: <CEOEmployeeDeletionDetailPage />,
               },
+              // Job Offers — the CEO approval gate before a candidate is told
               {
-                path: "ceo/hiring-requests",
-                element: <CEOHiringRequestsInboxPage />,
+                path: "ceo/job-offers",
+                element: <CEOJobOffersInboxPage />,
               },
               {
-                path: "ceo/hiring-requests/:id",
-                element: <CEOHiringRequestDetailPage />,
+                path: "ceo/job-offers/:id",
+                element: <CEOJobOfferDetailPage />,
               },
             ],
           },

@@ -2,62 +2,59 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 const navigateMock = vi.fn();
-// Mutable so each test can place itself on the create-from-request path, the
-// edit path, or the unsupported blank-create path.
+// Mutable so each test can place itself on the create path or the edit path.
 let routeParams: Record<string, string> = {};
-let queryString = "";
 vi.mock("react-router-dom", () => ({
   useNavigate: () => navigateMock,
   useParams: () => routeParams,
-  useSearchParams: () => [new URLSearchParams(queryString), vi.fn()],
 }));
 
-vi.mock("../../../services/api/jobOffersApi", () => ({
-  createJobOffer: vi.fn(),
-  getJobOffer: vi.fn(),
-  updateJobOffer: vi.fn(),
-}));
+vi.mock("../../../services/api/jobOffersApi", async (importOriginal) => {
+  // The CV constants are real: the picker and the size check read them.
+  const actual =
+    await importOriginal<typeof import("../../../services/api/jobOffersApi")>();
+  return {
+    ...actual,
+    createJobOffer: vi.fn(),
+    getJobOffer: vi.fn(),
+    updateJobOffer: vi.fn(),
+    submitJobOffer: vi.fn(),
+  };
+});
 
-vi.mock("../../../services/api/hiringRequestsApi", () => ({
-  getHiringRequest: vi.fn(),
-  downloadHiringRequestCv: vi.fn(),
+vi.mock("../../../services/api/departmentsApi", () => ({
+  listDepartments: vi.fn(),
 }));
-
-vi.mock("../../../services/api/employeesApi", () => ({ listEmployees: vi.fn() }));
-vi.mock("../../../services/api/downloads", () => ({ triggerBlobDownload: vi.fn() }));
-vi.mock("../../../services/api/departmentsApi", () => ({ listDepartments: vi.fn() }));
-vi.mock("../../../services/api/positionsApi", () => ({ listPositions: vi.fn() }));
+vi.mock("../../../services/api/positionsApi", () => ({
+  listPositions: vi.fn(),
+}));
 
 import JobOfferFormPage from "./JobOfferFormPage";
-import { calculateTotalPackage } from "./jobOfferRules";
 import * as jobOffersApi from "../../../services/api/jobOffersApi";
-import * as hiringRequestsApi from "../../../services/api/hiringRequestsApi";
-import * as employeesApi from "../../../services/api/employeesApi";
 import * as departmentsApi from "../../../services/api/departmentsApi";
 import * as positionsApi from "../../../services/api/positionsApi";
+import { makeJobOffer, makeWorkflow } from "./testFixtures";
 import { useI18nStore } from "../../../i18n/i18nStore";
 import { useAuthStore } from "../../../auth/authStore";
-import { makeHiringRequest, ok } from "../hiring-requests/testFixtures";
 
-const createJobOffer = jobOffersApi.createJobOffer as unknown as ReturnType<typeof vi.fn>;
-const updateJobOffer = jobOffersApi.updateJobOffer as unknown as ReturnType<typeof vi.fn>;
-const getJobOffer = jobOffersApi.getJobOffer as unknown as ReturnType<typeof vi.fn>;
-const getHiringRequest = hiringRequestsApi.getHiringRequest as unknown as ReturnType<typeof vi.fn>;
-const listEmployees = employeesApi.listEmployees as unknown as ReturnType<typeof vi.fn>;
-const listDepartments = departmentsApi.listDepartments as unknown as ReturnType<typeof vi.fn>;
-const listPositions = positionsApi.listPositions as unknown as ReturnType<typeof vi.fn>;
-
-function typeInto(label: string, value: string) {
-  fireEvent.change(screen.getByLabelText(label), { target: { value } });
-}
-
-/** Opens an Ant Select by its label and clicks the named option. */
-async function chooseOption(label: string, option: string) {
-  const select = screen.getByLabelText(label);
-  fireEvent.mouseDown(select);
-  await screen.findByTitle(option);
-  fireEvent.click(document.querySelector(`.ant-select-item-option[title="${option}"]`)!);
-}
+const createJobOffer = jobOffersApi.createJobOffer as unknown as ReturnType<
+  typeof vi.fn
+>;
+const updateJobOffer = jobOffersApi.updateJobOffer as unknown as ReturnType<
+  typeof vi.fn
+>;
+const getJobOffer = jobOffersApi.getJobOffer as unknown as ReturnType<
+  typeof vi.fn
+>;
+const submitJobOffer = jobOffersApi.submitJobOffer as unknown as ReturnType<
+  typeof vi.fn
+>;
+const listDepartments = departmentsApi.listDepartments as unknown as ReturnType<
+  typeof vi.fn
+>;
+const listPositions = positionsApi.listPositions as unknown as ReturnType<
+  typeof vi.fn
+>;
 
 const DEPARTMENTS = [
   { id: 3, name: "Projects", code: "PRJ" },
@@ -68,72 +65,41 @@ const POSITIONS = [
   { id: 9, name: "Accountant", code: "ACC" },
 ];
 
-const approvedRequest = () =>
-  makeHiringRequest({
-    id: 7,
-    status: "approved",
-    proposed_salary: "12000.00",
-    ceo_decision_at: "2026-08-05T10:00:00Z",
-    ceo_decision_by_name: "Chief Exec",
-  });
+const ok = <T,>(data: T) => ({ status: "success" as const, data });
 
-/** A draft offer, the only state the backend lets HR edit. */
-const draftOffer = {
-  id: 11,
-  company_id: 1,
-  employee_profile_id: null,
-  candidate_full_name: "Nora Khalid",
-  candidate_email: "nora@example.com",
-  candidate_phone_number: "+966501234567",
-  nationality: "Saudi Arabia",
-  id_passport_iqama_number: "1234567890",
-  department_id: null,
-  position_id: null,
-  position_title: "Site Engineer",
-  classification: "",
-  department: "",
-  location: "",
-  basic_salary: "10000.00",
-  housing_allowance: "0.00",
-  transportation_allowance: "0.00",
-  other_allowance: "0.00",
-  total_salary_package: "10000.00",
-  vacation: "",
-  tickets: "",
-  contract_status: "",
-  contract_type: "",
-  contract_duration: "",
-  medical_insurance: "",
-  offer_date: "2026-08-01",
-  expiry_date: "2026-08-20",
-  reference_number: "JO-2026-011",
-  status: "draft" as const,
-  status_label: "Draft",
-  has_response_token: false,
-  sent_at: null,
-  accepted_at: null,
-  rejected_at: null,
-  cancelled_at: null,
-  rejection_reason: "",
-  delivery_metadata: null,
-  created_at: "2026-08-01T08:00:00Z",
-  updated_at: "2026-08-01T08:00:00Z",
-};
+function typeInto(label: string, value: string) {
+  fireEvent.change(screen.getByLabelText(label), { target: { value } });
+}
+
+/** Opens an Ant Select by its label and clicks the named option. */
+async function chooseOption(label: string, option: string) {
+  fireEvent.mouseDown(screen.getByLabelText(label));
+  await screen.findByTitle(option);
+  fireEvent.click(
+    document.querySelector(`.ant-select-item-option[title="${option}"]`)!,
+  );
+}
+
+/** Drops a file on the CV dragger the way the browser would. */
+async function attachCv(name: string, size = 1024) {
+  const file = new File(["cv"], name, { type: "application/pdf" });
+  Object.defineProperty(file, "size", { value: size });
+  const input = document.querySelector(
+    'input[type="file"]',
+  ) as HTMLInputElement;
+  fireEvent.change(input, { target: { files: [file] } });
+  return file;
+}
 
 beforeEach(() => {
   routeParams = {};
-  queryString = "";
   navigateMock.mockClear();
   createJobOffer.mockReset();
   updateJobOffer.mockReset();
   getJobOffer.mockReset();
-  getHiringRequest.mockReset();
-  listEmployees.mockReset().mockResolvedValue({
-    status: "success",
-    data: { results: [], count: 0 },
-  });
-  listDepartments.mockReset().mockResolvedValue({ status: "success", data: DEPARTMENTS });
-  listPositions.mockReset().mockResolvedValue({ status: "success", data: POSITIONS });
+  submitJobOffer.mockReset();
+  listDepartments.mockReset().mockResolvedValue(ok(DEPARTMENTS));
+  listPositions.mockReset().mockResolvedValue(ok(POSITIONS));
   useI18nStore.getState().setLanguage("en");
   useAuthStore.setState({
     isAuthenticated: true,
@@ -141,469 +107,248 @@ beforeEach(() => {
   });
 });
 
-describe("calculateTotalPackage", () => {
-  it("adds every salary component", () => {
+/** Fills the fields the backend insists on for a create. */
+async function fillRequiredFields() {
+  typeInto("Candidate Full Name", "Nora Khalid");
+  typeInto("Candidate Email", "nora@example.com");
+  await chooseOption("Position", "Project Engineer");
+  await chooseOption("Department", "Projects");
+}
+
+describe("JobOfferFormPage direct creation", () => {
+  it("creates the offer without any hiring request in the way", async () => {
+    createJobOffer.mockResolvedValue(ok(makeJobOffer({ id: 31 })));
+
+    render(<JobOfferFormPage />);
+    await screen.findByLabelText("Candidate Full Name");
+
+    await fillRequiredFields();
+    await attachCv("cv.pdf");
+    await waitFor(() => expect(screen.getByText("cv.pdf")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /Save Draft/i }));
+
+    await waitFor(() => expect(createJobOffer).toHaveBeenCalled());
+    const payload = createJobOffer.mock.calls[0][0];
+    expect(payload.candidate_full_name).toBe("Nora Khalid");
+    expect(payload.department_id).toBe(3);
+    expect(payload.position_id).toBe(8);
+    expect(payload.cv_file).toBeInstanceOf(File);
+    // Nothing hiring-request shaped is ever sent.
+    expect(payload).not.toHaveProperty("hiring_request_id");
+    expect(navigateMock).toHaveBeenCalledWith("/hr/job-offers/31");
+  });
+
+  it("refuses to save without a CV, before any request is made", async () => {
+    render(<JobOfferFormPage />);
+    await screen.findByLabelText("Candidate Full Name");
+
+    await fillRequiredFields();
+    fireEvent.click(screen.getByRole("button", { name: /Save Draft/i }));
+
     expect(
-      calculateTotalPackage({
-        basic_salary: 10000,
-        housing_allowance: 2500,
-        transportation_allowance: 1000,
-        other_allowance: 500,
-      }),
-    ).toBe(14000);
-  });
-
-  it("treats missing and unparsable components as zero", () => {
-    expect(calculateTotalPackage({ basic_salary: 8000 })).toBe(8000);
-    expect(calculateTotalPackage({ basic_salary: "7500.50", housing_allowance: null })).toBe(7500.5);
-    expect(calculateTotalPackage({ basic_salary: "abc" })).toBe(0);
-  });
-});
-
-describe("JobOfferFormPage — creating from an approved hiring request", () => {
-  beforeEach(() => {
-    queryString = "hiring_request_id=7";
-    getHiringRequest.mockResolvedValue(ok(approvedRequest()));
-  });
-
-  it("shows the approved request as the source of the offer", async () => {
-    render(<JobOfferFormPage />);
-
-    expect(await screen.findByText("Approved Hiring Request")).toBeInTheDocument();
-    expect(getHiringRequest).toHaveBeenCalledWith("7");
-    expect(screen.getByText("Approved by Chief Exec")).toBeInTheDocument();
-    expect(screen.getAllByText("Nora Khalid").length).toBeGreaterThan(0);
-  });
-
-  it("does not offer the candidate fields the backend overwrites", async () => {
-    render(<JobOfferFormPage />);
-    await screen.findByText("Approved Hiring Request");
-
-    expect(screen.queryByLabelText("Candidate Full Name")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Candidate Email")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Candidate Phone Number")).not.toBeInTheDocument();
-    // Salary is re-copied too, so it stays visible but locked.
-    expect(screen.getByLabelText("Basic Salary")).toBeDisabled();
-  });
-
-  it("does not offer an employee profile search, because the backend creates one", async () => {
-    render(<JobOfferFormPage />);
-    await screen.findByText("Approved Hiring Request");
-
-    expect(screen.queryByLabelText("Linked Employee Profile")).not.toBeInTheDocument();
-    expect(listEmployees).not.toHaveBeenCalled();
-    expect(screen.getByText("Employee profile handled automatically")).toBeInTheDocument();
-  });
-
-  it("loads the company's department and position reference data", async () => {
-    render(<JobOfferFormPage />);
-    await screen.findByText("Approved Hiring Request");
-
-    await waitFor(() => expect(listDepartments).toHaveBeenCalledTimes(1));
-    expect(listPositions).toHaveBeenCalledTimes(1);
-    // Free text is gone: both are chosen from the reference records.
-    expect(screen.queryByLabelText("Position Title")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Position")).toBeInTheDocument();
-    expect(screen.getByLabelText("Department")).toBeInTheDocument();
-    expect(screen.getAllByText("Chosen from your company's HR reference data.").length).toBe(2);
-  });
-
-  it("sends hiring_request_id with the chosen department and position ids", async () => {
-    createJobOffer.mockResolvedValue(ok({ id: 42 }));
-
-    render(<JobOfferFormPage />);
-    await screen.findByText("Approved Hiring Request");
-
-    await chooseOption("Position", "Project Engineer");
-    await chooseOption("Department", "Projects");
-
-    fireEvent.click(screen.getByRole("button", { name: /Save Draft/i }));
-
-    await waitFor(() => expect(createJobOffer).toHaveBeenCalledTimes(1));
-    const payload = createJobOffer.mock.calls[0][0];
-    expect(payload).toMatchObject({
-      hiring_request_id: 7,
-      department_id: 3,
-      position_id: 8,
-      // The offer's own terms still travel with it.
-      classification: "",
-      location: "",
-      offer_date: expect.any(String),
-    });
-    expect(payload.expiry_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/hr/job-offers/42"));
-  });
-
-  it("leaves the derived department and position text to the backend", async () => {
-    createJobOffer.mockResolvedValue(ok({ id: 42 }));
-
-    render(<JobOfferFormPage />);
-    await screen.findByText("Approved Hiring Request");
-
-    await chooseOption("Position", "Project Engineer");
-    await chooseOption("Department", "Projects");
-    fireEvent.click(screen.getByRole("button", { name: /Save Draft/i }));
-
-    await waitFor(() => expect(createJobOffer).toHaveBeenCalledTimes(1));
-    const payload = createJobOffer.mock.calls[0][0];
-    // The reference ids are the only source of truth; a client-side copy of the
-    // names could only ever drift from what the backend writes.
-    expect(payload).not.toHaveProperty("department");
-    expect(payload).not.toHaveProperty("position_title");
-  });
-
-  it("never sends employee_profile_id, which the backend ignores here", async () => {
-    createJobOffer.mockResolvedValue(ok({ id: 42 }));
-
-    render(<JobOfferFormPage />);
-    await screen.findByText("Approved Hiring Request");
-
-    await chooseOption("Position", "Project Engineer");
-    await chooseOption("Department", "Projects");
-    fireEvent.click(screen.getByRole("button", { name: /Save Draft/i }));
-
-    await waitFor(() => expect(createJobOffer).toHaveBeenCalledTimes(1));
-    expect(createJobOffer.mock.calls[0][0]).not.toHaveProperty("employee_profile_id");
-  });
-
-  it("refuses to save until a department and a position are chosen", async () => {
-    render(<JobOfferFormPage />);
-    await screen.findByText("Approved Hiring Request");
-
-    fireEvent.click(screen.getByRole("button", { name: /Save Draft/i }));
-
-    expect(await screen.findByText("Select a position.")).toBeInTheDocument();
-    expect(screen.getByText("Select a department.")).toBeInTheDocument();
+      await screen.findByText(
+        "Attach the candidate CV before saving the offer.",
+      ),
+    ).toBeInTheDocument();
     expect(createJobOffer).not.toHaveBeenCalled();
   });
 
-  it("shows the backend's reference errors on the fields they belong to", async () => {
-    createJobOffer.mockRejectedValue({
-      response: {
-        status: 422,
-        data: {
-          status: "error",
-          message: 'Invalid pk "999" - object does not exist.',
-          errors: [
-            { field: "department_id", message: 'Invalid pk "999" - object does not exist.' },
-            { field: "position_id", message: "This field is required for hiring-request job offers." },
-          ],
-        },
-      },
-    });
-
+  it("rejects an unsupported CV type before uploading it", async () => {
     render(<JobOfferFormPage />);
-    await screen.findByText("Approved Hiring Request");
+    await screen.findByLabelText("Candidate Full Name");
 
-    await chooseOption("Position", "Project Engineer");
-    await chooseOption("Department", "Projects");
-    fireEvent.click(screen.getByRole("button", { name: /Save Draft/i }));
-
-    // Both land on their own field, not just in the page-level alert.
-    expect(
-      await screen.findByText("This field is required for hiring-request job offers."),
-    ).toHaveClass("ant-form-item-explain-error");
-    const departmentErrors = await screen.findAllByText(
-      'Invalid pk "999" - object does not exist.',
-    );
-    expect(
-      departmentErrors.some((node) => node.classList.contains("ant-form-item-explain-error")),
-    ).toBe(true);
-  });
-
-  it("tells HR to seed reference data when the company has none", async () => {
-    listDepartments.mockResolvedValue({ status: "success", data: [] });
-    listPositions.mockResolvedValue({ status: "success", data: [] });
-
-    render(<JobOfferFormPage />);
-    await screen.findByText("Approved Hiring Request");
-
-    expect(await screen.findByText("HR reference data is missing")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Save Draft/i })).toBeDisabled();
-
-    fireEvent.click(screen.getByRole("button", { name: "Manage Departments" }));
-    expect(navigateMock).toHaveBeenCalledWith("/hr/departments");
-  });
-
-  it("names only the missing reference list when just one is empty", async () => {
-    listDepartments.mockResolvedValue({ status: "success", data: DEPARTMENTS });
-    listPositions.mockResolvedValue({ status: "success", data: [] });
-
-    render(<JobOfferFormPage />);
-    await screen.findByText("Approved Hiring Request");
-
-    expect(await screen.findByText("HR reference data is missing")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Manage Positions" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Manage Departments" })).not.toBeInTheDocument();
-  });
-
-  it("refuses a request the CEO has not approved", async () => {
-    getHiringRequest.mockResolvedValue(ok(makeHiringRequest({ id: 7, status: "submitted" })));
-
-    render(<JobOfferFormPage />);
+    await attachCv("cv.exe");
 
     expect(
-      await screen.findByText("This hiring request is not approved, so it cannot become a job offer."),
+      await screen.findByText(
+        "The CV must be a PDF, DOC, DOCX, JPG or PNG file.",
+      ),
     ).toBeInTheDocument();
   });
-});
 
-describe("JobOfferFormPage — without a source request", () => {
-  it("sends HR to the hiring requests instead of a blank offer", async () => {
+  it("rejects a CV over the 5 MB cap before uploading it", async () => {
     render(<JobOfferFormPage />);
+    await screen.findByLabelText("Candidate Full Name");
 
-    expect(await screen.findByText("Start from an approved hiring request")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Position Title")).not.toBeInTheDocument();
+    await attachCv("cv.pdf", 6 * 1024 * 1024);
 
-    fireEvent.click(screen.getByRole("button", { name: /Go to Hiring Requests/i }));
-    expect(navigateMock).toHaveBeenCalledWith("/hr/hiring-requests");
+    expect(
+      await screen.findByText("The CV must be 5 MB or smaller."),
+    ).toBeInTheDocument();
+  });
+
+  /**
+   * The negative half of the required-field rule. The positive half — that
+   * choosing both records lets the create through with `position_id` and
+   * `department_id` — is already asserted by the first test in this block, so
+   * this one opens no dropdown and submits once.
+   */
+  it("blocks creation when no position or department is chosen", async () => {
+    render(<JobOfferFormPage />);
+    await screen.findByLabelText("Candidate Full Name");
+
+    typeInto("Candidate Full Name", "Nora Khalid");
+    typeInto("Candidate Email", "nora@example.com");
+    fireEvent.click(screen.getByRole("button", { name: /Save Draft/i }));
+
+    // The accessible state rather than the message text: antd marks the
+    // combobox itself invalid, which is what a screen reader gets and what
+    // survives any rewording of the copy.
+    await waitFor(() => {
+      expect(screen.getByLabelText("Position")).toHaveAttribute(
+        "aria-invalid",
+        "true",
+      );
+      expect(screen.getByLabelText("Department")).toHaveAttribute(
+        "aria-invalid",
+        "true",
+      );
+    });
+    expect(createJobOffer).not.toHaveBeenCalled();
   });
 });
 
-describe("JobOfferFormPage — editing a legacy draft with no linked request", () => {
-  beforeEach(() => {
-    routeParams = { id: "11" };
-    getJobOffer.mockResolvedValue(ok(draftOffer));
-  });
-
-  it("keeps the candidate fields editable, because nothing else owns them", async () => {
-    render(<JobOfferFormPage />);
-
-    await waitFor(() =>
-      expect(screen.getByLabelText("Candidate Full Name")).toHaveValue("Nora Khalid"),
+describe("JobOfferFormPage submission to the CEO", () => {
+  it("saves and then submits in one action", async () => {
+    createJobOffer.mockResolvedValue(ok(makeJobOffer({ id: 31 })));
+    submitJobOffer.mockResolvedValue(
+      ok({
+        job_offer: makeJobOffer({ id: 31, approval_status: "pending_ceo" }),
+        notifications: [],
+      }),
     );
-    expect(screen.getByLabelText("Basic Salary")).not.toBeDisabled();
-  });
-
-  it("still writes department and position as the free text they always were", async () => {
-    updateJobOffer.mockResolvedValue(ok({ id: 11 }));
 
     render(<JobOfferFormPage />);
-    await waitFor(() => expect(screen.getByLabelText("Position Title")).toBeInTheDocument());
+    await screen.findByLabelText("Candidate Full Name");
 
-    // No reference lookup happens at all on an offer nothing else owns.
-    expect(listDepartments).not.toHaveBeenCalled();
-    expect(listPositions).not.toHaveBeenCalled();
+    await fillRequiredFields();
+    await attachCv("cv.pdf");
+    await waitFor(() => expect(screen.getByText("cv.pdf")).toBeInTheDocument());
 
-    typeInto("Position Title", "Site Engineer II");
-    typeInto("Department", "Operations");
-    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Submit to CEO/i }));
 
-    await waitFor(() => expect(updateJobOffer).toHaveBeenCalledTimes(1));
-    const payload = updateJobOffer.mock.calls[0][1];
-    expect(payload).toMatchObject({
-      position_title: "Site Engineer II",
-      department: "Operations",
-    });
-    expect(payload).not.toHaveProperty("department_id");
-    expect(payload).not.toHaveProperty("position_id");
+    await waitFor(() => expect(createJobOffer).toHaveBeenCalled());
+    await waitFor(() => expect(submitJobOffer).toHaveBeenCalledWith(31));
+    expect(navigateMock).toHaveBeenCalledWith("/hr/job-offers/31");
   });
 
-  it("shows the running total as compensation is entered", async () => {
+  it("blocks submission with no CV rather than saving and failing", async () => {
     render(<JobOfferFormPage />);
-    await waitFor(() => expect(screen.getByLabelText("Basic Salary")).toBeInTheDocument());
+    await screen.findByLabelText("Candidate Full Name");
 
-    typeInto("Basic Salary", "10000");
-    typeInto("Housing Allowance", "2500");
-    typeInto("Transportation Allowance", "1000");
+    await fillRequiredFields();
+    fireEvent.click(screen.getByRole("button", { name: /Submit to CEO/i }));
 
-    await waitFor(() => expect(screen.getByText("13,500")).toBeInTheDocument());
-  });
-
-  it("sends the phone number in E.164 form built from the country picker", async () => {
-    updateJobOffer.mockResolvedValue(ok({ id: 11 }));
-
-    render(<JobOfferFormPage />);
-    await waitFor(() => expect(screen.getByLabelText("Candidate Phone Number")).toBeInTheDocument());
-
-    typeInto("Candidate Phone Number", "501234567");
-    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
-
-    await waitFor(() => expect(updateJobOffer).toHaveBeenCalledTimes(1));
-    expect(updateJobOffer.mock.calls[0][1].candidate_phone_number).toBe("+966501234567");
-  });
-
-  it("drops the national trunk zero so the number stays reachable", async () => {
-    updateJobOffer.mockResolvedValue(ok({ id: 11 }));
-
-    render(<JobOfferFormPage />);
-    await waitFor(() => expect(screen.getByLabelText("Candidate Phone Number")).toBeInTheDocument());
-
-    typeInto("Candidate Phone Number", "050 123-4567");
-    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
-
-    await waitFor(() => expect(updateJobOffer).toHaveBeenCalledTimes(1));
-    expect(updateJobOffer.mock.calls[0][1].candidate_phone_number).toBe("+966501234567");
-  });
-
-  it("submits the nationality chosen from the country list", async () => {
-    updateJobOffer.mockResolvedValue(ok({ id: 11 }));
-
-    render(<JobOfferFormPage />);
-    await waitFor(() => expect(screen.getByLabelText("Nationality")).toBeInTheDocument());
-
-    const nationality = screen.getByLabelText("Nationality");
-    fireEvent.mouseDown(nationality);
-    fireEvent.change(nationality, { target: { value: "Philip" } });
-    await screen.findByTitle("Philippines");
-    fireEvent.click(document.querySelector('.ant-select-item-option[title="Philippines"]')!);
-
-    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
-
-    await waitFor(() => expect(updateJobOffer).toHaveBeenCalledTimes(1));
-    expect(updateJobOffer.mock.calls[0][1].nationality).toBe("Philippines");
-  });
-
-  it("refuses to save without a candidate email or phone number", async () => {
-    render(<JobOfferFormPage />);
-    await waitFor(() => expect(screen.getByLabelText("Candidate Email")).toBeInTheDocument());
-
-    typeInto("Candidate Email", "");
-    typeInto("Candidate Phone Number", "");
-
-    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
-
-    expect(await screen.findAllByText("Enter a candidate email or phone number.")).not.toHaveLength(0);
-    expect(updateJobOffer).not.toHaveBeenCalled();
+    expect(
+      await screen.findByText("Attach a CV before submitting to the CEO."),
+    ).toBeInTheDocument();
+    expect(createJobOffer).not.toHaveBeenCalled();
+    expect(submitJobOffer).not.toHaveBeenCalled();
   });
 });
 
-describe("JobOfferFormPage — editing a draft linked to a hiring request", () => {
-  /** The same draft, but converted from an approved request. */
-  const linkedOffer = {
-    ...draftOffer,
-    hiring_request_id: 7,
-    hiring_request_reference: "HR-2026-001",
-    hiring_request_status: "converted" as const,
-    department_id: 3,
-    position_id: 8,
-    department: "Projects",
-    position_title: "Project Engineer",
-  };
-
-  beforeEach(() => {
+describe("JobOfferFormPage editing", () => {
+  it("keeps the stored CV when the edit does not replace it", async () => {
     routeParams = { id: "11" };
-    getJobOffer.mockResolvedValue(ok(linkedOffer));
-    getHiringRequest.mockResolvedValue(ok(approvedRequest()));
-  });
-
-  it("shows the source request instead of editable candidate inputs", async () => {
-    render(<JobOfferFormPage />);
-
-    expect(await screen.findByText("Approved Hiring Request")).toBeInTheDocument();
-    expect(getHiringRequest).toHaveBeenCalledWith(7);
-
-    expect(screen.queryByLabelText("Candidate Full Name")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Candidate Email")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Candidate Phone Number")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Nationality")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Linked Employee Profile")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Basic Salary")).toBeDisabled();
-  });
-
-  it("preselects the department and position the offer already references", async () => {
-    render(<JobOfferFormPage />);
-    await screen.findByText("Approved Hiring Request");
-
-    await waitFor(() => expect(listDepartments).toHaveBeenCalledTimes(1));
-    expect(screen.getByLabelText("Position")).toBeInTheDocument();
-    expect(screen.getByTitle("Project Engineer")).toBeInTheDocument();
-    expect(screen.getByTitle("Projects")).toBeInTheDocument();
-  });
-
-  it("leaves every source-controlled field out of the PATCH", async () => {
-    updateJobOffer.mockResolvedValue(ok({ id: 11 }));
+    getJobOffer.mockResolvedValue(
+      ok(
+        makeJobOffer({
+          workflow: makeWorkflow({ can_edit: true, can_submit: true }),
+        }),
+      ),
+    );
+    updateJobOffer.mockResolvedValue(ok(makeJobOffer()));
 
     render(<JobOfferFormPage />);
-    await screen.findByText("Approved Hiring Request");
+    await screen.findByDisplayValue("Nora Khalid");
+    expect(
+      screen.getByText(
+        "A CV is already attached. Upload another file only to replace it.",
+      ),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
 
-    await waitFor(() => expect(updateJobOffer).toHaveBeenCalledTimes(1));
-    const payload = updateJobOffer.mock.calls[0][1];
-    [
-      "candidate_full_name",
-      "candidate_email",
-      "candidate_phone_number",
-      "nationality",
-      "basic_salary",
-      "company",
-      "company_id",
-      "hiring_request_id",
-      // The backend rejects this one on a linked PATCH as well.
-      "employee_profile_id",
-    ].forEach((field) => {
-      expect(payload, `${field} must not be sent`).not.toHaveProperty(field);
-    });
+    await waitFor(() => expect(updateJobOffer).toHaveBeenCalled());
+    expect(updateJobOffer.mock.calls[0][1]).not.toHaveProperty("cv_file");
   });
 
-  it("still saves the offer terms that are the offer's own", async () => {
-    updateJobOffer.mockResolvedValue(ok({ id: 11 }));
+  it("resubmits an offer the CEO returned, showing their reason", async () => {
+    routeParams = { id: "11" };
+    getJobOffer.mockResolvedValue(
+      ok(
+        makeJobOffer({
+          approval_status: "changes_requested",
+          ceo_decision_reason: "Housing allowance is above the band.",
+          workflow: makeWorkflow({ can_edit: true, can_submit: true }),
+        }),
+      ),
+    );
+    updateJobOffer.mockResolvedValue(ok(makeJobOffer()));
+    submitJobOffer.mockResolvedValue(
+      ok({ job_offer: makeJobOffer(), notifications: [] }),
+    );
 
     render(<JobOfferFormPage />);
-    await screen.findByText("Approved Hiring Request");
+    await screen.findByDisplayValue("Nora Khalid");
+    expect(
+      screen.getByText("Housing allowance is above the band."),
+    ).toBeInTheDocument();
 
-    await waitFor(() => expect(listPositions).toHaveBeenCalledTimes(1));
-    await chooseOption("Position", "Accountant");
-    await chooseOption("Department", "Finance");
-    typeInto("Housing Allowance", "2500");
-    typeInto("Contract Type", "Full time");
+    fireEvent.click(screen.getByRole("button", { name: /Submit to CEO/i }));
 
-    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
-
-    await waitFor(() => expect(updateJobOffer).toHaveBeenCalledTimes(1));
-    const payload = updateJobOffer.mock.calls[0][1];
-    expect(payload).toMatchObject({
-      position_id: 9,
-      department_id: 4,
-      housing_allowance: "2500",
-      contract_type: "Full time",
-    });
-    // Same rule as on create: the names are the backend's to derive.
-    expect(payload).not.toHaveProperty("department");
-    expect(payload).not.toHaveProperty("position_title");
+    await waitFor(() => expect(updateJobOffer).toHaveBeenCalled());
+    await waitFor(() => expect(submitJobOffer).toHaveBeenCalledWith(11));
   });
 
-  it("keeps the package total derived from the read-only basic salary", async () => {
-    updateJobOffer.mockResolvedValue(ok({ id: 11 }));
+  it("locks the form and hides Submit once the backend says it is not editable", async () => {
+    routeParams = { id: "11" };
+    getJobOffer.mockResolvedValue(
+      ok(
+        makeJobOffer({
+          approval_status: "pending_ceo",
+          workflow: makeWorkflow(),
+        }),
+      ),
+    );
 
     render(<JobOfferFormPage />);
-    await screen.findByText("Approved Hiring Request");
+    await screen.findByDisplayValue("Nora Khalid");
 
-    typeInto("Housing Allowance", "2500");
-
-    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
-
-    await waitFor(() => expect(updateJobOffer).toHaveBeenCalledTimes(1));
-    // 10,000 basic (from the offer) + 2,500 housing, even though basic is not sent.
-    expect(updateJobOffer.mock.calls[0][1].total_salary_package).toBe("12500");
+    expect(
+      screen.getByText(
+        "Only drafts and offers the CEO returned for changes can be edited.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Submit to CEO/i }),
+    ).not.toBeInTheDocument();
   });
 
-  it("surfaces the backend's source-controlled 422 rather than failing silently", async () => {
-    const message = "This field is controlled by the linked hiring request and cannot be edited.";
+  it("surfaces a backend validation error on the field it belongs to", async () => {
+    routeParams = { id: "11" };
+    getJobOffer.mockResolvedValue(
+      ok(makeJobOffer({ workflow: makeWorkflow({ can_edit: true }) })),
+    );
     updateJobOffer.mockRejectedValue({
+      isAxiosError: true,
       response: {
         status: 422,
         data: {
-          status: "error",
-          message,
-          errors: [{ field: "candidate_full_name", message }],
+          message: "Validation error",
+          errors: { expiry_date: ["Expiry date cannot be before offer date."] },
         },
       },
     });
 
     render(<JobOfferFormPage />);
-    await screen.findByText("Approved Hiring Request");
+    await screen.findByDisplayValue("Nora Khalid");
 
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
 
-    expect(await screen.findByText(message)).toBeInTheDocument();
-  });
-
-  it("offers the CV of the linked request", async () => {
-    render(<JobOfferFormPage />);
-    await screen.findByText("Approved Hiring Request");
-
-    expect(screen.getByRole("button", { name: /Download CV/i })).toBeInTheDocument();
+    expect(
+      await screen.findByText("Expiry date cannot be before offer date."),
+    ).toBeInTheDocument();
   });
 });

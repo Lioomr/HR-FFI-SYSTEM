@@ -176,6 +176,14 @@ export type SettingsDto = {
   security: {
     max_login_attempts: number;
   };
+  /**
+   * Mirrors `admin_portal.serializers_settings.AttendanceSettingsSerializer`.
+   * Always present on GET; optional on PUT, where omitting it preserves the
+   * stored toggle for legacy settings clients.
+   */
+  attendance?: {
+    geofence_enabled: boolean;
+  };
   updated_at: string;
 };
 

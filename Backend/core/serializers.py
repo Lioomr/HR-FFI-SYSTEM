@@ -4,6 +4,7 @@ from rest_framework import serializers
 from core.permissions import get_role
 from employees.models import EmployeeProfile
 from organization.models import OrganizationNode, OrganizationScope, OrganizationScopeMembership
+from organization.services import get_user_accessible_company_ids, user_has_all_company_access
 
 from .models import (
     CrossCompanyManagerAssignment,
@@ -78,11 +79,16 @@ class DelegationRuleSerializer(serializers.ModelSerializer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         request = self.context.get("request")
-        if request and get_role(request.user) not in {"HRManager", "SystemAdmin"}:
+        if request and get_role(request.user) != "SystemAdmin":
             from organization.services import get_active_company_for_request
 
-            company = get_active_company_for_request(request)
-            scoped_users = delegation_rule_user_queryset().filter(employee_profile__company=company)
+            if get_role(request.user) == "HRManager":
+                scoped_users = delegation_rule_user_queryset().filter(
+                    employee_profile__company_id__in=get_user_accessible_company_ids(request.user)
+                )
+            else:
+                company = get_active_company_for_request(request)
+                scoped_users = delegation_rule_user_queryset().filter(employee_profile__company=company)
             self.fields["from_user_id"].queryset = scoped_users
             self.fields["to_user_id"].queryset = scoped_users
 
@@ -135,6 +141,9 @@ class DelegationRuleSerializer(serializers.ModelSerializer):
             member_ids = set(scope.memberships.values_list("company_id", flat=True))
             if from_company_id not in member_ids or to_company_id not in member_ids:
                 raise serializers.ValidationError({"scope_id": "The approved scope must include both users' companies."})
+            if request and get_role(request.user) == "HRManager" and not user_has_all_company_access(request.user):
+                if not member_ids.issubset(get_user_accessible_company_ids(request.user)):
+                    raise serializers.ValidationError({"scope_id": "The approved scope is outside your organization access."})
         elif "employees.read" in capabilities:
             raise serializers.ValidationError({"scope_id": "Employee-read delegation requires an approved organization scope."})
         if end_at and start_at and end_at <= start_at:
@@ -191,6 +200,12 @@ class CrossCompanyManagerAssignmentSerializer(serializers.ModelSerializer):
         )
         self.fields["employee_id"].queryset = active_profiles
         self.fields["manager_profile_id"].queryset = active_profiles
+        request = self.context.get("request")
+        if request and get_role(request.user) == "HRManager" and not user_has_all_company_access(request.user):
+            accessible_company_ids = get_user_accessible_company_ids(request.user)
+            scoped_profiles = active_profiles.filter(company_id__in=accessible_company_ids)
+            self.fields["employee_id"].queryset = scoped_profiles
+            self.fields["manager_profile_id"].queryset = scoped_profiles
 
     @staticmethod
     def _profile_data(profile):
@@ -217,6 +232,11 @@ class CrossCompanyManagerAssignmentSerializer(serializers.ModelSerializer):
         validate_cross_company_manager_assignment(
             employee, manager_profile, scope=scope, start_at=start_at, end_at=end_at, assignment=instance
         )
+        request = self.context.get("request")
+        if request and get_role(request.user) == "HRManager" and not user_has_all_company_access(request.user):
+            scope_company_ids = set(scope.memberships.values_list("company_id", flat=True)) if scope else set()
+            if not scope_company_ids.issubset(get_user_accessible_company_ids(request.user)):
+                raise serializers.ValidationError({"scope_id": "The approved scope is outside your organization access."})
         return attrs
 
 

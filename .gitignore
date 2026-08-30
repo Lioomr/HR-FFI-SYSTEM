@@ -53,6 +53,14 @@ tmp/
 /tmp_*.py
 ai_evals/
 .github/copilot-instructions.md
+/.agents/agents/
+/.agents/ecc-install-state.json
+/.agents/rules/
+/.agents/skills/
+/.agents/workflows/
+/tmp_ecc*.json
+/tmp_opencode.json
+/job_offer_*.pdf
 /*.docx
 /*.exe
 /*.sql

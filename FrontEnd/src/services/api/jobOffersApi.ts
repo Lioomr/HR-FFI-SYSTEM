@@ -4,7 +4,6 @@ import type {
   LastDeliveryStatus,
   PaginatedResponse,
 } from "./apiTypes";
-import type { HiringRequestStatus } from "./hiringRequestsApi";
 
 /** Lifecycle states the backend reports for a job offer. */
 export type JobOfferStatus =
@@ -14,6 +13,65 @@ export type JobOfferStatus =
   | "rejected"
   | "expired"
   | "cancelled";
+
+/**
+ * The CEO approval track, which is independent of the delivery lifecycle above.
+ *
+ * An offer is written as `draft`, goes to the CEO as `pending_ceo`, and only an
+ * `approved` offer may be sent to the candidate.
+ */
+export type JobOfferApprovalStatus =
+  | "draft"
+  | "pending_ceo"
+  | "approved"
+  | "changes_requested"
+  | "rejected";
+
+/** Actor recorded on a workflow snapshot or one of its history entries. */
+export type JobOfferWorkflowActor = {
+  id: number | null;
+  email: string | null;
+  full_name: string | null;
+};
+
+export type JobOfferWorkflowHistoryEntry = {
+  id: number;
+  action: string;
+  stage: string | null;
+  approver_role: string | null;
+  actor: JobOfferWorkflowActor | null;
+  at: string;
+  note: string;
+  from_status: string | null;
+  to_status: string | null;
+  from_stage: string | null;
+  to_stage: string | null;
+  metadata: Record<string, unknown> | null;
+};
+
+/**
+ * Server-computed permissions for the signed-in user.
+ *
+ * These are the authority on which actions to render. Deriving visibility from
+ * the role or the status instead would drift from the backend, which also
+ * weighs company scope, workflow stage, the CV, expiry and whether the user is
+ * the assigned approver.
+ */
+export type JobOfferWorkflow = {
+  /** Workflow-engine status, which is not the same vocabulary as `approval_status`. */
+  status: string;
+  current_stage: string | null;
+  current_actor: JobOfferWorkflowActor | null;
+  current_approver_role: string | null;
+  can_approve: boolean;
+  can_reject: boolean;
+  can_request_changes: boolean;
+  can_cancel: boolean;
+  can_edit: boolean;
+  can_submit: boolean;
+  can_send: boolean;
+  history: JobOfferWorkflowHistoryEntry[];
+};
 
 /**
  * Whether the offer's employee profile is wired to a BioTime device record.
@@ -28,11 +86,13 @@ export type JobOfferBioTimeStatus = {
 };
 
 /**
- * A job offer as returned by the HR (authenticated) endpoints.
+ * A job offer as returned by the HR and CEO (authenticated) endpoints.
  *
  * The single-use response token itself is never exposed here — the backend only
  * reports whether one exists via `has_response_token`. The token lives in the
- * candidate's delivery message and in the public URL, nowhere in HR screens.
+ * candidate's delivery message and in the public URL, nowhere in staff screens.
+ * The CV is likewise write-only: `has_cv` says whether one is stored and the
+ * bytes come from `GET /job-offers/{id}/cv/`.
  */
 export type JobOffer = {
   id: number;
@@ -40,18 +100,16 @@ export type JobOffer = {
   company_name?: string;
   employee_profile_id?: number | null;
   account_invite_id?: number | null;
-  /** Null on offers created before hiring requests existed; those stay fully usable. */
-  hiring_request_id?: number | null;
-  hiring_request_reference?: string | null;
-  hiring_request_status?: HiringRequestStatus | null;
 
   candidate_full_name: string;
   candidate_email: string;
   candidate_phone_number: string;
   nationality: string;
+  date_of_birth: string | null;
   id_passport_iqama_number: string;
+  has_cv: boolean;
+  cv_download_url: string | null;
 
-  /** Set on hiring-request offers; null on legacy ones written as free text. */
   department_id: number | null;
   position_id: number | null;
   position_title: string;
@@ -81,6 +139,16 @@ export type JobOffer = {
 
   status: JobOfferStatus;
   status_label: string;
+  approval_status: JobOfferApprovalStatus;
+  approval_status_label: string;
+  submitted_at: string | null;
+  ceo_decision_by_id: number | null;
+  ceo_decision_by_name: string | null;
+  ceo_decision_at: string | null;
+  ceo_decision_reason: string;
+  ceo_recommendation: string;
+  workflow: JobOfferWorkflow;
+
   has_response_token: boolean;
   biotime: JobOfferBioTimeStatus;
   sent_at: string | null;
@@ -146,26 +214,47 @@ export type JobOfferDeliveryResult = {
   delivery: JobOfferDeliveryMetadata;
 };
 
+/** One CEO notification attempt recorded when an offer is submitted. */
+export type JobOfferNotification = {
+  user_id?: number;
+  display_name?: string;
+  channel?: string;
+  sent?: boolean;
+  skipped?: boolean;
+  error?: string | null;
+};
+
+/** Response body of POST /job-offers/{id}/submit/. */
+export type JobOfferSubmitResult = {
+  job_offer: JobOffer;
+  notifications: JobOfferNotification[];
+};
+
 export type JobOfferListResponse = PaginatedResponse<JobOffer>;
 
 export type JobOfferListParams = {
   page?: number;
   page_size?: number;
   status?: JobOfferStatus | "";
+  approval_status?: JobOfferApprovalStatus | "";
   search?: string;
 };
 
-/** Writable fields; the backend also derives the reference, signer, status, timestamps and delivery data. */
+/**
+ * Writable fields. The backend derives the reference number, signer, both
+ * status tracks, the timestamps, the CEO decision and the delivery data, so
+ * none of those appear here.
+ */
 export type JobOfferPayload = Partial<{
-  /** Required when creating: the backend only converts an approved request. */
-  hiring_request_id: number;
-  employee_profile_id: number | null;
   candidate_full_name: string;
   candidate_email: string;
   candidate_phone_number: string;
   nationality: string;
+  date_of_birth: string;
   id_passport_iqama_number: string;
-  /** Required for hiring-request offers; the backend derives the display text. */
+  /** Required on create; write-only, and read back through `has_cv`. */
+  cv_file: File | null;
+  /** Required on create: the backend derives the display text from the record. */
   department_id: number;
   position_id: number;
   position_title: string;
@@ -186,6 +275,17 @@ export type JobOfferPayload = Partial<{
   offer_date: string;
   expiry_date: string;
 }>;
+
+/** CEO approval body; the recommendation is optional free text for HR. */
+export type JobOfferApprovalPayload = {
+  recommendation?: string;
+};
+
+/** CEO request-changes and rejection body; the reason is mandatory. */
+export type JobOfferRevisionPayload = {
+  reason: string;
+  recommendation?: string;
+};
 
 /** The candidate-facing view: no identifiers, no token, no internal metadata. */
 export type PublicJobOfferSummary = {
@@ -226,6 +326,38 @@ export type JobOfferDecisionResult = {
   biotime?: JobOfferBioTimeStatus;
 };
 
+const MULTIPART = { headers: { "Content-Type": "multipart/form-data" } };
+
+/** Client-side ceiling mirroring the backend 5 MB cap, so a bad file is rejected before upload. */
+export const MAX_CV_SIZE_BYTES = 5 * 1024 * 1024;
+
+export const ALLOWED_CV_EXTENSIONS = [
+  ".pdf",
+  ".doc",
+  ".docx",
+  ".jpg",
+  ".jpeg",
+  ".png",
+];
+
+/** `accept` attribute for the picker; the backend re-checks extension, MIME and signature. */
+export const CV_ACCEPT = ALLOWED_CV_EXTENSIONS.join(",");
+
+function toFormData(payload: JobOfferPayload): FormData {
+  const form = new FormData();
+  Object.entries(payload).forEach(([key, value]) => {
+    if (value === undefined || value === null) return;
+    if (value instanceof File) form.append(key, value);
+    else form.append(key, String(value));
+  });
+  return form;
+}
+
+/** True when the payload carries a file and therefore has to go up as multipart. */
+function hasFile(payload: JobOfferPayload): boolean {
+  return payload.cv_file instanceof File;
+}
+
 export async function listJobOffers(params: JobOfferListParams = {}) {
   const { data } = await api.get<ApiResponse<JobOfferListResponse>>(
     "/job-offers/",
@@ -240,10 +372,12 @@ export async function listJobOffers(params: JobOfferListParams = {}) {
   return data;
 }
 
+/** Always multipart: the backend requires a CV on every new offer. */
 export async function createJobOffer(payload: JobOfferPayload) {
   const { data } = await api.post<ApiResponse<JobOffer>>(
     "/job-offers/",
-    payload,
+    toFormData(payload),
+    MULTIPART,
   );
   return data;
 }
@@ -253,15 +387,83 @@ export async function getJobOffer(id: number | string) {
   return data;
 }
 
+/**
+ * Sends multipart only when a new CV is attached; a plain JSON PATCH otherwise,
+ * so editing a text field cannot blank the stored file.
+ */
 export async function updateJobOffer(
   id: number | string,
   payload: JobOfferPayload,
 ) {
+  if (hasFile(payload)) {
+    const { data } = await api.patch<ApiResponse<JobOffer>>(
+      `/job-offers/${id}/`,
+      toFormData(payload),
+      MULTIPART,
+    );
+    return data;
+  }
+  const rest: JobOfferPayload = { ...payload };
+  delete rest.cv_file;
   const { data } = await api.patch<ApiResponse<JobOffer>>(
     `/job-offers/${id}/`,
-    payload,
+    rest,
   );
   return data;
+}
+
+/** HR sends the offer to the CEO; also the resubmit path after changes. */
+export async function submitJobOffer(id: number | string) {
+  const { data } = await api.post<ApiResponse<JobOfferSubmitResult>>(
+    `/job-offers/${id}/submit/`,
+    {},
+  );
+  return data;
+}
+
+export async function approveJobOffer(
+  id: number | string,
+  payload: JobOfferApprovalPayload = {},
+) {
+  const { data } = await api.post<ApiResponse<JobOffer>>(
+    `/job-offers/${id}/approve/`,
+    { recommendation: payload.recommendation || "" },
+  );
+  return data;
+}
+
+export async function requestJobOfferChanges(
+  id: number | string,
+  payload: JobOfferRevisionPayload,
+) {
+  const { data } = await api.post<ApiResponse<JobOffer>>(
+    `/job-offers/${id}/request-changes/`,
+    { reason: payload.reason, recommendation: payload.recommendation || "" },
+  );
+  return data;
+}
+
+export async function rejectJobOffer(
+  id: number | string,
+  payload: JobOfferRevisionPayload,
+) {
+  const { data } = await api.post<ApiResponse<JobOffer>>(
+    `/job-offers/${id}/reject/`,
+    { reason: payload.reason, recommendation: payload.recommendation || "" },
+  );
+  return data;
+}
+
+/**
+ * Fetched as a blob through the same-origin path rather than following
+ * `cv_download_url`: that URL is absolute to the backend host, which the
+ * browser reaches only through this app proxy and without the bearer token.
+ */
+export async function downloadJobOfferCv(id: number | string): Promise<Blob> {
+  const response = await api.get(`/job-offers/${id}/cv/`, {
+    responseType: "blob",
+  });
+  return response.data;
 }
 
 export async function sendJobOffer(id: number | string) {
@@ -288,7 +490,7 @@ export async function cancelJobOffer(id: number | string) {
 }
 
 /**
- * Public endpoints — no auth. The token comes from the candidate's link and is
+ * Public endpoints — no auth. The token comes from the candidate link and is
  * passed straight through; it is never persisted or surfaced in HR screens.
  */
 export async function getPublicJobOffer(token: string) {

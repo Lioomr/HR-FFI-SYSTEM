@@ -7,7 +7,10 @@ import { useI18n } from "../../i18n/useI18n";
  * One visual vocabulary for offer status across the HR list, the detail header
  * and the candidate-facing page, so a "Sent" chip reads the same everywhere.
  */
-const TONE: Record<JobOfferStatus, { background: string; border: string; color: string }> = {
+const TONE: Record<
+  JobOfferStatus,
+  { background: string; border: string; color: string }
+> = {
   draft: { background: "#f8fafc", border: "#cbd5e1", color: "#475569" },
   sent: { background: "#eff6ff", border: "#bfdbfe", color: "#1d4ed8" },
   accepted: { background: "#ecfdf5", border: "#a7f3d0", color: "#047857" },

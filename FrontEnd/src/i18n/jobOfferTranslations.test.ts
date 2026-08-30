@@ -12,13 +12,15 @@ import { translations } from "./translations";
 const en = translations.en;
 const ar = translations.ar;
 
-const PREFIXES = ["jobOffers.", "publicJobOffer.", "hiringRequests."];
+const PREFIXES = ["jobOffers.", "publicJobOffer."];
 
 function namespaceKeys(dictionary: Record<string, string>) {
-  return Object.keys(dictionary).filter((key) => PREFIXES.some((prefix) => key.startsWith(prefix)));
+  return Object.keys(dictionary).filter((key) =>
+    PREFIXES.some((prefix) => key.startsWith(prefix)),
+  );
 }
 
-describe("job offer and hiring request translations", () => {
+describe("job offer translations", () => {
   it("has an Arabic string for every English job-offer key", () => {
     expect(namespaceKeys(en).filter((key) => !ar[key])).toEqual([]);
   });
@@ -28,7 +30,9 @@ describe("job offer and hiring request translations", () => {
   });
 
   it("keeps interpolation tokens in both languages", () => {
-    const tokenKeys = namespaceKeys(en).filter((key) => /\{\w+\}/.test(en[key]));
+    const tokenKeys = namespaceKeys(en).filter((key) =>
+      /\{\w+\}/.test(en[key]),
+    );
     expect(tokenKeys.length).toBeGreaterThan(0);
     tokenKeys.forEach((key) => {
       const tokens = en[key].match(/\{\w+\}/g) || [];
@@ -74,34 +78,57 @@ describe("job offer and hiring request translations", () => {
       "publicJobOffer.rejectedTitle",
       "publicJobOffer.alreadyRespondedTitle",
       "publicJobOffer.invalidTitle",
-      "layout.hiringRequests",
-      "hiringRequests.title",
-      "hiringRequests.subtitle",
-      "hiringRequests.status.draft",
-      "hiringRequests.status.submitted",
-      "hiringRequests.status.approved",
-      "hiringRequests.status.rejected",
-      "hiringRequests.status.cancelled",
-      "hiringRequests.status.converted",
-      "hiringRequests.form.section.candidate",
-      "hiringRequests.form.section.cv",
-      "hiringRequests.form.cvTooLarge",
-      "hiringRequests.form.cvWrongType",
-      "hiringRequests.form.cvRequiredForSubmit",
-      "hiringRequests.field.joiningCompany",
-      "hiringRequests.field.proposedSalary",
-      "hiringRequests.field.dateOfBirth",
-      "hiringRequests.action.createJobOffer",
-      "hiringRequests.action.openJobOffer",
-      "hiringRequests.action.downloadCv",
-      "hiringRequests.submit.success",
-      "hiringRequests.decision.rejectTitle",
-      "hiringRequests.ceo.title",
-      "hiringRequests.ceo.decisionHint",
-      "jobOffers.createFromRequest",
-      "jobOffers.source.title",
-      "jobOffers.source.requiredTitle",
-      "jobOffers.source.notApproved",
+      "jobOffers.newOffer",
+      "jobOffers.form.section.cv",
+      "jobOffers.form.submitToCeo",
+      "jobOffers.form.cvTooLarge",
+      "jobOffers.form.cvWrongType",
+      "jobOffers.form.cvRequired",
+      "jobOffers.form.cvRequiredForSubmit",
+      "jobOffers.field.dateOfBirth",
+      "jobOffers.action.downloadCv",
+      "jobOffers.action.resubmitToCeo",
+      "jobOffers.action.review",
+      "jobOffers.submit.confirmTitle",
+      "jobOffers.submit.success",
+      "jobOffers.submit.failed",
+      "jobOffers.cv.downloaded",
+      "jobOffers.cv.failed",
+      "jobOffers.col.approvalStatus",
+      "jobOffers.detail.section.ceoReview",
+      "jobOffers.detail.section.workflow",
+      "jobOffers.detail.noCv",
+      // The CEO approval gate in front of every candidate delivery
+      "jobOffers.approval.status.draft",
+      "jobOffers.approval.status.pending_ceo",
+      "jobOffers.approval.status.approved",
+      "jobOffers.approval.status.changes_requested",
+      "jobOffers.approval.status.rejected",
+      "jobOffers.approval.approvedBy",
+      "jobOffers.approval.changesRequestedBy",
+      "jobOffers.approval.rejectedBy",
+      "jobOffers.approval.reason",
+      "jobOffers.approval.reasonRequired",
+      "jobOffers.approval.recommendation",
+      "jobOffers.approval.sendBlocked",
+      "jobOffers.approval.requestChanges",
+      "jobOffers.approval.rejectTitle",
+      "jobOffers.approval.approveSuccess",
+      "jobOffers.approval.rejectSuccess",
+      "jobOffers.approval.requestChangesSuccess",
+      "jobOffers.workflow.empty",
+      "jobOffers.workflow.action.submit",
+      "jobOffers.workflow.action.approve",
+      "jobOffers.workflow.action.request_changes",
+      "jobOffers.workflow.action.reject",
+      "jobOffers.ceo.title",
+      "jobOffers.ceo.subtitle",
+      "jobOffers.ceo.decisionHint",
+      "jobOffers.ceo.noActionAvailable",
+      "jobOffers.ceo.editTerms",
+      "jobOffers.ceo.editTermsHint",
+      "jobOffers.ceo.saveTerms",
+      "jobOffers.ceo.section.commercialTerms",
       "jobOffers.delivery.candidateText",
       "jobOffers.delivery.candidateWhatsappPdf",
       "jobOffers.delivery.candidateEmailPdf",
@@ -151,9 +178,22 @@ describe("job offer and hiring request translations", () => {
     });
   });
 
+  it("keeps no hiring-request copy in either dictionary", () => {
+    expect(
+      Object.keys(en).filter((key) => key.startsWith("hiringRequests.")),
+    ).toEqual([]);
+    expect(
+      Object.keys(ar).filter((key) => key.startsWith("hiringRequests.")),
+    ).toEqual([]);
+    expect(en["layout.hiringRequests"]).toBeUndefined();
+    expect(ar["layout.hiringRequests"]).toBeUndefined();
+  });
+
   it("never names a delivery provider in candidate- or HR-facing copy", () => {
     namespaceKeys(en).forEach((key) => {
-      expect(en[key].toLowerCase(), `${key} names a provider`).not.toMatch(/bird|evolution/);
+      expect(en[key].toLowerCase(), `${key} names a provider`).not.toMatch(
+        /bird|evolution/,
+      );
     });
   });
 });

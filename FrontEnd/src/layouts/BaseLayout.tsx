@@ -17,6 +17,7 @@ import {
   UserAddOutlined,
   FileSearchOutlined,
   SettingOutlined,
+  EnvironmentOutlined,
   LogoutOutlined,
   KeyOutlined,
   ApartmentOutlined,
@@ -35,7 +36,6 @@ import {
   LockOutlined,
   FileTextOutlined,
   FileDoneOutlined,
-  SolutionOutlined,
   HomeOutlined,
   InboxOutlined,
   WhatsAppOutlined,
@@ -160,6 +160,8 @@ function getTitle(
   if (pathname.startsWith("/admin/workflow/delegations"))
     return t("layout.delegationRules", "Delegation Rules");
   if (pathname.startsWith("/admin/settings")) return t("layout.systemSettings");
+  if (pathname.startsWith("/admin/work-locations"))
+    return t("workLocations.title");
   if (pathname.startsWith("/admin/biotime"))
     return t("bioTime.pageTitle", "ZKTeco BioTime 8.5 Settings");
   if (pathname.startsWith("/admin/whatsapp"))
@@ -630,6 +632,13 @@ export default function BaseLayout() {
           label: <Link to="/admin/settings">{t("layout.settings")}</Link>,
         },
         {
+          key: "/admin/work-locations",
+          icon: <EnvironmentOutlined />,
+          label: (
+            <Link to="/admin/work-locations">{t("workLocations.title")}</Link>
+          ),
+        },
+        {
           key: "/admin/biotime",
           icon: <SettingOutlined />,
           label: (
@@ -960,15 +969,6 @@ export default function BaseLayout() {
               ),
             },
           ],
-        },
-        {
-          key: "/hr/hiring-requests",
-          icon: <SolutionOutlined />,
-          label: (
-            <Link to="/hr/hiring-requests">
-              {t("layout.hiringRequests", "Hiring Requests")}
-            </Link>
-          ),
         },
         {
           key: "/hr/job-offers",

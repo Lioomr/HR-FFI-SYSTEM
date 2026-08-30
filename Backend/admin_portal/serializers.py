@@ -6,6 +6,7 @@ from core.permissions import get_role
 from organization.models import OrganizationNode, UserOrganizationAccess
 from organization.services import (
     get_default_organization_for_user,
+    get_user_accessible_company_ids,
     get_user_accessible_organizations,
     serialize_organizations,
     user_has_all_company_access,
@@ -14,6 +15,27 @@ from organization.services import (
 User = get_user_model()
 
 ROLE_CHOICES = ("SystemAdmin", "HRManager", "Manager", "Employee", "CEO", "CFO")
+
+
+def _validate_organization_ids_within_scope(value: list[int], request) -> list[int]:
+    """Reject org IDs that don't exist, and (for non-SystemAdmin requesters without
+    all-company access) org IDs outside the requester's own accessible scope --
+    otherwise a scoped HRManager could grant a new/edited account access to
+    companies they themselves don't manage."""
+    existing_ids = set(OrganizationNode.objects.filter(id__in=value, is_active=True).values_list("id", flat=True))
+    invalid_ids = sorted({organization_id for organization_id in value if organization_id not in existing_ids})
+    if invalid_ids:
+        raise serializers.ValidationError("One or more selected organizations are invalid.")
+
+    requester = getattr(request, "user", None)
+    if requester is not None and requester.is_authenticated and get_role(requester) != "SystemAdmin":
+        if not user_has_all_company_access(requester):
+            accessible_ids = {org.id for org in get_user_accessible_organizations(requester)}
+            out_of_scope = sorted(set(value) - accessible_ids)
+            if out_of_scope:
+                raise serializers.ValidationError("One or more selected organizations are outside your access.")
+
+    return value
 
 
 def sync_user_organization_access(user, organization_ids: list[int]) -> None:
@@ -77,13 +99,26 @@ class UserListSerializer(serializers.ModelSerializer):
         return None
 
     def get_accessible_organizations(self, obj):
-        return serialize_organizations(get_user_accessible_organizations(obj))
+        organizations = get_user_accessible_organizations(obj)
+        request = self.context.get("request")
+        if request and get_role(request.user) == "HRManager" and not user_has_all_company_access(request.user):
+            allowed_ids = self.context.setdefault("_requester_company_ids", get_user_accessible_company_ids(request.user))
+            organizations = [organization for organization in organizations if organization.id in allowed_ids]
+        return serialize_organizations(organizations)
 
     def get_default_organization_id(self, obj):
         default_org = get_default_organization_for_user(obj)
+        request = self.context.get("request")
+        if request and get_role(request.user) == "HRManager" and not user_has_all_company_access(request.user):
+            allowed_ids = self.context.setdefault("_requester_company_ids", get_user_accessible_company_ids(request.user))
+            if default_org and default_org.id not in allowed_ids:
+                return None
         return default_org.id if default_org else None
 
     def get_has_all_company_access(self, obj):
+        request = self.context.get("request")
+        if request and get_role(request.user) == "HRManager" and not user_has_all_company_access(request.user):
+            return False
         return user_has_all_company_access(obj)
 
 
@@ -114,11 +149,7 @@ class CreateUserSerializer(serializers.Serializer):
     def validate_organization_ids(self, value):
         if not value:
             return []
-
-        existing_ids = set(OrganizationNode.objects.filter(id__in=value, is_active=True).values_list("id", flat=True))
-        invalid_ids = sorted({organization_id for organization_id in value if organization_id not in existing_ids})
-        if invalid_ids:
-            raise serializers.ValidationError("One or more selected organizations are invalid.")
+        value = _validate_organization_ids_within_scope(value, self.context.get("request"))
         return list(dict.fromkeys(value))
 
     def create(self, validated_data):
@@ -166,10 +197,7 @@ class UpdateUserOrganizationsSerializer(serializers.Serializer):
     )
 
     def validate_organization_ids(self, value):
-        existing_ids = set(OrganizationNode.objects.filter(id__in=value, is_active=True).values_list("id", flat=True))
-        invalid_ids = sorted({organization_id for organization_id in value if organization_id not in existing_ids})
-        if invalid_ids:
-            raise serializers.ValidationError("One or more selected organizations are invalid.")
+        value = _validate_organization_ids_within_scope(value, self.context.get("request"))
         return list(dict.fromkeys(value))
 
 

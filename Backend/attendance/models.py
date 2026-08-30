@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 
 
@@ -79,6 +80,56 @@ class AttendanceRecord(models.Model):
 
     def __str__(self):
         return f"{self.employee_profile} - {self.date} ({self.status})"
+
+
+class WorkLocation(models.Model):
+    """A company-owned site at which mobile attendance may be recorded."""
+
+    company = models.ForeignKey(
+        "organization.OrganizationNode", on_delete=models.PROTECT, related_name="attendance_work_locations"
+    )
+    name = models.CharField(max_length=120)
+    latitude = models.DecimalField(max_digits=9, decimal_places=6)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6)
+    radius_meters = models.PositiveIntegerField()
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name", "id"]
+        constraints = [
+            models.CheckConstraint(condition=Q(latitude__gte=-90) & Q(latitude__lte=90), name="work_location_latitude_range"),
+            models.CheckConstraint(
+                condition=Q(longitude__gte=-180) & Q(longitude__lte=180), name="work_location_longitude_range"
+            ),
+            models.CheckConstraint(condition=Q(radius_meters__gt=0), name="work_location_positive_radius"),
+            models.UniqueConstraint(
+                fields=["company", "name"],
+                condition=Q(is_active=True),
+                name="unique_active_work_location_name",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.company} - {self.name}"
+
+    def clean(self):
+        super().clean()
+        if not self.company_id:
+            raise ValidationError({"company": "A company is required."})
+        if self.company.node_type != self.company.NodeType.COMPANY or not self.company.is_active:
+            raise ValidationError({"company": "Work locations must belong to an active company."})
+        if not -90 <= self.latitude <= 90:
+            raise ValidationError({"latitude": "Latitude must be between -90 and 90."})
+        if not -180 <= self.longitude <= 180:
+            raise ValidationError({"longitude": "Longitude must be between -180 and 180."})
+        if self.radius_meters <= 0:
+            raise ValidationError({"radius_meters": "Radius must be greater than zero."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
 
 
 class AttendanceCorrectionRequest(models.Model):

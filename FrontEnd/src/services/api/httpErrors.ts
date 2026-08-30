@@ -65,6 +65,17 @@ export function isNotFound(err: unknown): boolean {
 }
 
 /**
+ * Type guard to check if error is a 409 Conflict.
+ *
+ * The approval APIs answer 409 when the record moved on under the user — an
+ * offer already decided, already sent, or no longer editable. That is a stale
+ * view rather than a failure, so callers reload instead of only complaining.
+ */
+export function isConflict(err: unknown): boolean {
+  return getHttpStatus(err) === 409;
+}
+
+/**
  * Type guard to check if error is a 422 Unprocessable Entity (validation error)
  *
  * @example

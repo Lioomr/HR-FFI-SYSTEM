@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   Alert,
   Button,
@@ -12,17 +12,23 @@ import {
   Select,
   Space,
   Typography,
+  Upload,
   message,
 } from "antd";
+import type { UploadFile } from "antd";
 import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
-import { ArrowLeftOutlined, SaveOutlined } from "@ant-design/icons";
+import {
+  ArrowLeftOutlined,
+  InboxOutlined,
+  SaveOutlined,
+  SendOutlined,
+} from "@ant-design/icons";
 
 import LoadingState from "../../../components/ui/LoadingState";
 import PageHeader from "../../../components/ui/PageHeader";
 import PhoneNumberInput from "../../../components/ui/PhoneNumberInput";
 import NationalitySelect from "../../../components/ui/NationalitySelect";
-import HiringRequestSourcePanel from "../../../components/hiringRequests/HiringRequestSourcePanel";
 import SARIcon from "../../../components/icons/SARIcon";
 import Unauthorized403Page from "../../Unauthorized403Page";
 
@@ -32,10 +38,6 @@ import {
   isValidationError,
 } from "../../../services/api/httpErrors";
 import {
-  listEmployees,
-  type Employee,
-} from "../../../services/api/employeesApi";
-import {
   listDepartments,
   type Department,
 } from "../../../services/api/departmentsApi";
@@ -44,25 +46,26 @@ import {
   type Position,
 } from "../../../services/api/positionsApi";
 import {
+  CV_ACCEPT,
   createJobOffer,
   getJobOffer,
+  submitJobOffer,
   updateJobOffer,
   type JobOffer,
   type JobOfferPayload,
 } from "../../../services/api/jobOffersApi";
-import {
-  downloadHiringRequestCv,
-  getHiringRequest,
-  type HiringRequest,
-} from "../../../services/api/hiringRequestsApi";
-import { triggerBlobDownload } from "../../../services/api/downloads";
 import { useI18n } from "../../../i18n/useI18n";
 import {
   apply422ToForm,
   getFirstApiErrorMessage,
 } from "../../../utils/formErrors";
 import { formatNumber } from "../../../utils/currency";
-import { AMOUNT_FIELDS, calculateTotalPackage } from "./jobOfferRules";
+import {
+  AMOUNT_FIELDS,
+  calculateTotalPackage,
+  canSubmit,
+  isAllowedCvFile,
+} from "./jobOfferRules";
 
 const { Text } = Typography;
 
@@ -70,18 +73,15 @@ const DATE_FORMAT = "YYYY-MM-DD";
 const E164 = /^\+[1-9]\d{7,14}$/;
 
 type JobOfferFormValues = {
-  employee_profile_id?: number | null;
   candidate_full_name: string;
   candidate_email?: string;
   candidate_phone_number?: string;
   nationality?: string;
+  date_of_birth?: Dayjs;
   id_passport_iqama_number?: string;
-  /** Reference ids; only hiring-request offers carry them. */
   department_id?: number;
   position_id?: number;
-  position_title: string;
   classification?: string;
-  department?: string;
   location?: string;
   basic_salary?: number;
   housing_allowance?: number;
@@ -146,94 +146,45 @@ export default function JobOfferFormPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
   const params = useParams();
-  const [searchParams] = useSearchParams();
   const offerId = params.id;
   const isEdit = Boolean(offerId);
-  // A new offer only exists as the conversion of an approved hiring request;
-  // the backend rejects a create without one.
-  const hiringRequestId = (searchParams.get("hiring_request_id") || "").trim();
-  const fromRequest = !isEdit && Boolean(hiringRequestId);
   const [form] = Form.useForm<JobOfferFormValues>();
   const [messageApi, messageContext] = message.useMessage();
 
   const [loading, setLoading] = useState(isEdit);
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving] = useState<"draft" | "submit" | null>(null);
   const [forbidden, setForbidden] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
   const [offer, setOffer] = useState<JobOffer | null>(null);
-  const [profiles, setProfiles] = useState<Employee[]>([]);
-  const [profilesLoading, setProfilesLoading] = useState(false);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
   const [referenceLoading, setReferenceLoading] = useState(false);
   const [referenceLoaded, setReferenceLoaded] = useState(false);
-  const [hiringRequest, setHiringRequest] = useState<HiringRequest | null>(null);
-  const [downloadingCv, setDownloadingCv] = useState(false);
+  const [cvFile, setCvFile] = useState<File | null>(null);
+  const [fileList, setFileList] = useState<UploadFile[]>([]);
+  const [cvError, setCvError] = useState<string | null>(null);
 
-  /**
-   * The linked request id, whether it arrived on the create URL or is already
-   * recorded on the offer being edited.
-   */
-  const sourceRequestId = fromRequest
-    ? hiringRequestId
-    : offer?.hiring_request_id != null
-      ? String(offer.hiring_request_id)
-      : "";
-
-  /**
-   * True while a hiring request owns the candidate identity and basic salary.
-   *
-   * On create the backend re-copies those fields from the request; on a PATCH
-   * it rejects them outright with a 422. Either way they must not be sent, and
-   * showing them as inputs would promise an edit that cannot happen.
-   */
-  const sourceControlled = Boolean(sourceRequestId);
-
-  const watched = Form.useWatch([], form);
-  const totalPackage = useMemo(
-    () => calculateTotalPackage(watched || {}),
-    [watched],
+  // Watch the four salary components rather than the whole form: a blanket
+  // `useWatch([], form)` re-renders every field on each keystroke, and the
+  // total only ever depends on these.
+  const basicSalary = Form.useWatch("basic_salary", form);
+  const housingAllowance = Form.useWatch("housing_allowance", form);
+  const transportationAllowance = Form.useWatch(
+    "transportation_allowance",
+    form,
   );
-
-  useEffect(() => {
-    if (!fromRequest) return;
-    const run = async () => {
-      setLoading(true);
-      setLoadError(null);
-      try {
-        const response = await getHiringRequest(hiringRequestId);
-        if (isApiError(response)) {
-          setLoadError(response.message || t("jobOffers.source.loadFailed"));
-          return;
-        }
-        const data = response.data;
-        if (data.status !== "approved") {
-          setLoadError(t("jobOffers.source.notApproved"));
-          return;
-        }
-        setHiringRequest(data);
-        // Seeded for display and for the package total; the backend re-copies
-        // these from the request, so what is sent here does not decide them.
-        form.setFieldsValue({
-          candidate_full_name: data.candidate_full_name,
-          candidate_email: data.candidate_email,
-          candidate_phone_number: data.candidate_phone_number,
-          nationality: data.nationality,
-          basic_salary: Number(data.proposed_salary) || 0,
-        } as Partial<JobOfferFormValues> as JobOfferFormValues);
-      } catch (err: unknown) {
-        if (isForbidden(err)) {
-          setForbidden(true);
-          return;
-        }
-        setLoadError((err as Error)?.message || t("jobOffers.source.loadFailed"));
-      } finally {
-        setLoading(false);
-      }
-    };
-    void run();
-  }, [fromRequest, hiringRequestId, form, t]);
+  const otherAllowance = Form.useWatch("other_allowance", form);
+  const totalPackage = useMemo(
+    () =>
+      calculateTotalPackage({
+        basic_salary: basicSalary,
+        housing_allowance: housingAllowance,
+        transportation_allowance: transportationAllowance,
+        other_allowance: otherAllowance,
+      }),
+    [basicSalary, housingAllowance, transportationAllowance, otherAllowance],
+  );
 
   useEffect(() => {
     if (!isEdit) {
@@ -254,28 +205,18 @@ export default function JobOfferFormPage() {
         }
         const data = response.data;
         setOffer(data);
-        if (data.hiring_request_id != null) {
-          // Needed for the source panel; a failure here must not block editing
-          // the offer terms, so the panel is simply omitted.
-          try {
-            const source = await getHiringRequest(data.hiring_request_id);
-            if (!isApiError(source)) setHiringRequest(source.data);
-          } catch {
-            setHiringRequest(null);
-          }
-        }
         form.setFieldsValue({
-          employee_profile_id: data.employee_profile_id ?? null,
           department_id: data.department_id ?? undefined,
           position_id: data.position_id ?? undefined,
           candidate_full_name: data.candidate_full_name,
           candidate_email: data.candidate_email,
           candidate_phone_number: data.candidate_phone_number,
           nationality: data.nationality,
+          date_of_birth: data.date_of_birth
+            ? dayjs(data.date_of_birth)
+            : undefined,
           id_passport_iqama_number: data.id_passport_iqama_number,
-          position_title: data.position_title,
           classification: data.classification,
-          department: data.department,
           location: data.location,
           basic_salary: Number(data.basic_salary) || 0,
           housing_allowance: Number(data.housing_allowance) || 0,
@@ -305,49 +246,11 @@ export default function JobOfferFormPage() {
     void run();
   }, [isEdit, offerId, form, t]);
 
-  const loadProfiles = useCallback(async (search?: string) => {
-    setProfilesLoading(true);
-    try {
-      const response = await listEmployees({
-        page: 1,
-        page_size: 20,
-        ...(search ? { search } : {}),
-      });
-      if (!isApiError(response)) setProfiles(response.data.results || []);
-    } catch {
-      // A missing pre-hire list must not block writing the offer by hand.
-      setProfiles([]);
-    } finally {
-      setProfilesLoading(false);
-    }
-  }, []);
-
-  // A hiring-request offer gets its profile from the backend, which creates the
-  // pre-hire record itself. Searching for one by hand would only offer a link
-  // the API ignores on create and rejects with a 422 on a PATCH.
-  useEffect(() => {
-    if (sourceControlled) return;
-    void loadProfiles();
-  }, [loadProfiles, sourceControlled]);
-
-  const profileOptions = useMemo(
-    () =>
-      profiles.map((employee) => ({
-        value: employee.id,
-        label: `${employee.full_name_en || employee.full_name || employee.employee_id}${
-          employee.employee_id ? ` — ${employee.employee_id}` : ""
-        }`,
-      })),
-    [profiles],
-  );
-
   /**
-   * Department and position on a hiring-request offer are company HR reference
-   * records, not free text: the backend validates the ids and derives the
-   * display text from them.
+   * Department and position are company HR reference records, not free text:
+   * the backend validates the ids and derives the display text from them.
    */
   useEffect(() => {
-    if (!sourceControlled) return;
     let cancelled = false;
     const run = async () => {
       setReferenceLoading(true);
@@ -379,7 +282,7 @@ export default function JobOfferFormPage() {
     return () => {
       cancelled = true;
     };
-  }, [sourceControlled]);
+  }, []);
 
   const departmentOptions = useMemo(
     () =>
@@ -401,22 +304,22 @@ export default function JobOfferFormPage() {
 
   /** Reference data exists but is empty — HR has to seed it before saving. */
   const referenceEmpty =
-    sourceControlled &&
-    referenceLoaded &&
-    (departments.length === 0 || positions.length === 0);
+    referenceLoaded && (departments.length === 0 || positions.length === 0);
 
   const buildPayload = useCallback(
     (values: JobOfferFormValues): JobOfferPayload => {
-      // Offer terms: always writable, on both a create and a PATCH.
       const payload: JobOfferPayload = {
+        candidate_full_name: values.candidate_full_name?.trim(),
+        candidate_email: values.candidate_email?.trim() || "",
+        candidate_phone_number: values.candidate_phone_number?.trim() || "",
+        nationality: values.nationality?.trim() || "",
         id_passport_iqama_number: values.id_passport_iqama_number?.trim() || "",
         classification: values.classification?.trim() || "",
         location: values.location?.trim() || "",
+        basic_salary: String(values.basic_salary ?? 0),
         housing_allowance: String(values.housing_allowance ?? 0),
         transportation_allowance: String(values.transportation_allowance ?? 0),
         other_allowance: String(values.other_allowance ?? 0),
-        // Still derived from the real basic salary, which the form holds even
-        // when the field itself is read-only.
         total_salary_package: String(calculateTotalPackage(values)),
         vacation: values.vacation?.trim() || "",
         tickets: values.tickets?.trim() || "",
@@ -428,68 +331,120 @@ export default function JobOfferFormPage() {
         expiry_date: values.expiry_date?.format(DATE_FORMAT),
       };
 
-      if (!sourceControlled) {
-        // A legacy offer with no linked request owns its own candidate data,
-        // its own profile link, and its department/position as free text.
-        payload.employee_profile_id = values.employee_profile_id ?? null;
-        payload.position_title = values.position_title?.trim();
-        payload.department = values.department?.trim() || "";
-        payload.candidate_full_name = values.candidate_full_name?.trim();
-        payload.candidate_email = values.candidate_email?.trim() || "";
-        payload.candidate_phone_number = values.candidate_phone_number?.trim() || "";
-        payload.nationality = values.nationality?.trim() || "";
-        payload.basic_salary = String(values.basic_salary ?? 0);
-        return payload;
-      }
-
-      // The reference ids are the whole story here: the backend derives the
-      // department and position text from those records, so sending our own
-      // copy could only ever disagree with it.
-      if (values.department_id != null) payload.department_id = values.department_id;
+      if (values.date_of_birth)
+        payload.date_of_birth = values.date_of_birth.format(DATE_FORMAT);
+      // The backend derives the department and position text from the reference
+      // records, so sending our own copy could only ever disagree with it.
+      if (values.department_id != null)
+        payload.department_id = values.department_id;
       if (values.position_id != null) payload.position_id = values.position_id;
-
-      // Creating still has to name the request it converts; a PATCH must not,
-      // because the link itself is source-controlled too.
-      if (fromRequest) payload.hiring_request_id = Number(hiringRequestId);
+      // Only sent when HR actually picked a file: an edit without one must not
+      // blank the CV already on file.
+      if (cvFile) payload.cv_file = cvFile;
       return payload;
     },
-    [sourceControlled, fromRequest, hiringRequestId],
+    [cvFile],
   );
 
-  const handleSubmit = useCallback(
-    async (values: JobOfferFormValues) => {
-      setSaving(true);
-      setServerError(null);
-      try {
-        const payload = buildPayload(values);
-        const response = isEdit
-          ? await updateJobOffer(offerId!, payload)
-          : await createJobOffer(payload);
-        if (isApiError(response)) {
-          setServerError(response.message || t("jobOffers.form.saveFailed"));
-          return;
-        }
-        messageApi.success(
-          isEdit ? t("jobOffers.form.updated") : t("jobOffers.form.created"),
-        );
-        navigate(`/hr/job-offers/${response.data.id}`);
-      } catch (err: unknown) {
-        if (isValidationError(err)) {
-          apply422ToForm(form, err);
-          setServerError(
-            getFirstApiErrorMessage(err) || t("jobOffers.form.saveFailed"),
-          );
-        } else {
-          setServerError(
-            (err as Error)?.message || t("jobOffers.form.saveFailed"),
-          );
-        }
-      } finally {
-        setSaving(false);
+  /** Saves the offer and hands back its id, so Submit can chain onto a create. */
+  const persist = useCallback(
+    async (values: JobOfferFormValues): Promise<number | null> => {
+      const payload = buildPayload(values);
+      const response = isEdit
+        ? await updateJobOffer(offerId!, payload)
+        : await createJobOffer(payload);
+      if (isApiError(response)) {
+        setServerError(response.message || t("jobOffers.form.saveFailed"));
+        return null;
+      }
+      return response.data.id;
+    },
+    [buildPayload, isEdit, offerId, t],
+  );
+
+  const handleFailure = useCallback(
+    (err: unknown, fallbackKey: string) => {
+      if (isValidationError(err)) {
+        apply422ToForm(form, err);
+        setServerError(getFirstApiErrorMessage(err) || t(fallbackKey));
+      } else {
+        setServerError((err as Error)?.message || t(fallbackKey));
       }
     },
-    [buildPayload, isEdit, offerId, form, messageApi, navigate, t],
+    [form, t],
   );
+
+  /** The backend requires a CV on create and before any submission. */
+  const missingCv = !cvFile && !offer?.has_cv;
+
+  const handleSave = useCallback(async () => {
+    setServerError(null);
+    setCvError(null);
+    let values: JobOfferFormValues;
+    try {
+      values = await form.validateFields();
+    } catch {
+      return;
+    }
+    if (!isEdit && missingCv) {
+      setCvError(t("jobOffers.form.cvRequired"));
+      return;
+    }
+    setSaving("draft");
+    try {
+      const id = await persist(values);
+      if (id === null) return;
+      messageApi.success(
+        isEdit ? t("jobOffers.form.updated") : t("jobOffers.form.created"),
+      );
+      navigate(`/hr/job-offers/${id}`);
+    } catch (err: unknown) {
+      handleFailure(err, "jobOffers.form.saveFailed");
+    } finally {
+      setSaving(null);
+    }
+  }, [
+    form,
+    isEdit,
+    missingCv,
+    persist,
+    messageApi,
+    navigate,
+    t,
+    handleFailure,
+  ]);
+
+  const handleSubmitToCeo = useCallback(async () => {
+    setServerError(null);
+    setCvError(null);
+    let values: JobOfferFormValues;
+    try {
+      values = await form.validateFields();
+    } catch {
+      return;
+    }
+    // Saying so here beats saving the offer and then failing on the second call.
+    if (missingCv) {
+      setCvError(t("jobOffers.form.cvRequiredForSubmit"));
+      return;
+    }
+    setSaving("submit");
+    try {
+      const id = await persist(values);
+      if (id === null) return;
+      const response = await submitJobOffer(id);
+      if (isApiError(response)) {
+        setServerError(response.message || t("jobOffers.submit.failed"));
+        return;
+      }
+      messageApi.success(t("jobOffers.submit.success"));
+      navigate(`/hr/job-offers/${id}`);
+    } catch (err: unknown) {
+      handleFailure(err, "jobOffers.submit.failed");
+    } finally {
+      setSaving(null);
+    }
+  }, [form, missingCv, persist, messageApi, navigate, t, handleFailure]);
 
   // Either channel alone is enough; the backend refuses to send with neither.
   const validateContact = useCallback(async () => {
@@ -499,24 +454,14 @@ export default function JobOfferFormPage() {
       throw new Error(t("jobOffers.validation.contactRequired"));
   }, [form, t]);
 
-  const handleCvDownload = useCallback(async () => {
-    if (!sourceRequestId) return;
-    setDownloadingCv(true);
-    try {
-      const blob = await downloadHiringRequestCv(sourceRequestId);
-      triggerBlobDownload(blob, `hiring_request_${sourceRequestId}_cv`);
-    } catch (err: unknown) {
-      messageApi.error((err as Error)?.message || t("hiringRequests.cv.failed"));
-    } finally {
-      setDownloadingCv(false);
-    }
-  }, [sourceRequestId, messageApi, t]);
-
   if (forbidden) return <Unauthorized403Page />;
 
-  const editingBlocked = isEdit && offer !== null && offer.status !== "draft";
-  // Creating an offer out of thin air is no longer a supported path.
-  const missingSourceRequest = !isEdit && !hiringRequestId;
+  // Editing is the backend call: HR keeps drafts and returned offers open,
+  // everything else is read-only.
+  const editingBlocked = isEdit && offer !== null && !offer.workflow?.can_edit;
+  // A brand-new offer is always submittable once saved; an existing one only
+  // while the backend still says so.
+  const submitAvailable = !isEdit || (offer !== null && canSubmit(offer));
 
   return (
     <div style={{ maxWidth: 1180, margin: "0 auto", paddingBottom: 32 }}>
@@ -545,26 +490,7 @@ export default function JobOfferFormPage() {
         }
       />
 
-      {missingSourceRequest ? (
-        <Alert
-          type="info"
-          showIcon
-          style={{ borderRadius: 12 }}
-          message={t("jobOffers.source.requiredTitle")}
-          description={
-            <div>
-              <div style={{ marginBottom: 12 }}>{t("jobOffers.source.requiredBody")}</div>
-              <Button
-                type="primary"
-                onClick={() => navigate("/hr/hiring-requests")}
-                style={{ borderRadius: 10, fontWeight: 600 }}
-              >
-                {t("jobOffers.source.goToRequests")}
-              </Button>
-            </div>
-          }
-        />
-      ) : loading ? (
+      {loading ? (
         <LoadingState title={t("loading.generic")} lines={8} />
       ) : loadError ? (
         <Alert
@@ -578,7 +504,6 @@ export default function JobOfferFormPage() {
           form={form}
           layout="vertical"
           requiredMark
-          onFinish={handleSubmit}
           disabled={editingBlocked}
         >
           {editingBlocked && (
@@ -589,6 +514,16 @@ export default function JobOfferFormPage() {
               style={{ borderRadius: 12, marginBottom: 16 }}
             />
           )}
+          {offer?.approval_status === "changes_requested" &&
+            offer.ceo_decision_reason && (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ borderRadius: 12, marginBottom: 16 }}
+                message={t("jobOffers.approval.changesRequestedTitle")}
+                description={offer.ceo_decision_reason}
+              />
+            )}
           {serverError && (
             <Alert
               type="error"
@@ -600,83 +535,82 @@ export default function JobOfferFormPage() {
             />
           )}
 
-          {sourceControlled && hiringRequest && (
-            <HiringRequestSourcePanel
-              request={hiringRequest}
-              onDownloadCv={handleCvDownload}
-              downloadingCv={downloadingCv}
-            />
-          )}
-
           <SectionCard title={t("jobOffers.form.section.candidate")}>
             <Row gutter={16}>
-              {/* Owned by the linked hiring request: re-copied from it on
-                  create, and rejected with a 422 on a PATCH. They are shown in
-                  the source panel above instead of as inputs that cannot save. */}
-              {!sourceControlled && (
-                <>
-                <Col xs={24} md={12}>
-                  <Form.Item
-                    name="candidate_full_name"
-                    label={t("jobOffers.field.candidateFullName")}
-                    rules={[
-                      {
-                        required: true,
-                        message: t("jobOffers.validation.required"),
-                      },
-                    ]}
-                  >
-                    <Input />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} md={12}>
-                  <Form.Item
-                    name="candidate_email"
-                    label={t("jobOffers.field.candidateEmail")}
-                    dependencies={["candidate_phone_number"]}
-                    rules={[
-                      {
-                        type: "email",
-                        message: t("jobOffers.validation.emailInvalid"),
-                      },
-                      { validator: validateContact },
-                    ]}
-                  >
-                    <Input inputMode="email" />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} md={12}>
-                  <Form.Item
-                    name="candidate_phone_number"
-                    label={t("jobOffers.field.candidatePhone")}
-                    extra={t("jobOffers.form.contactHint")}
-                    dependencies={["candidate_email"]}
-                    rules={[
-                      {
-                        pattern: E164,
-                        message: t("jobOffers.validation.phoneInvalid"),
-                      },
-                      { validator: validateContact },
-                    ]}
-                  >
-                    {/* Country code comes from the picker, so the value reaching
-                        the backend is always E.164 and never a locally formatted
-                        number the messaging channel would reject. */}
-                    <PhoneNumberInput size="middle" placeholder="501234567" />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} md={12}>
-                  <Form.Item
-                    name="nationality"
-                    label={t("jobOffers.field.nationality")}
-                  >
-                    <NationalitySelect
-                      placeholder={t("jobOffers.form.nationalityPlaceholder")}
-                    />
-                  </Form.Item>
-                </Col>
-                </>
-              )}
+              <Col xs={24} md={12}>
+                <Form.Item
+                  name="candidate_full_name"
+                  label={t("jobOffers.field.candidateFullName")}
+                  rules={[
+                    {
+                      required: true,
+                      message: t("jobOffers.validation.required"),
+                    },
+                  ]}
+                >
+                  <Input />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={12}>
+                <Form.Item
+                  name="candidate_email"
+                  label={t("jobOffers.field.candidateEmail")}
+                  dependencies={["candidate_phone_number"]}
+                  rules={[
+                    {
+                      type: "email",
+                      message: t("jobOffers.validation.emailInvalid"),
+                    },
+                    { validator: validateContact },
+                  ]}
+                >
+                  <Input inputMode="email" />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={12}>
+                <Form.Item
+                  name="candidate_phone_number"
+                  label={t("jobOffers.field.candidatePhone")}
+                  extra={t("jobOffers.form.contactHint")}
+                  dependencies={["candidate_email"]}
+                  rules={[
+                    {
+                      pattern: E164,
+                      message: t("jobOffers.validation.phoneInvalid"),
+                    },
+                    { validator: validateContact },
+                  ]}
+                >
+                  {/* Country code comes from the picker, so the value reaching
+                      the backend is always E.164 and never a locally formatted
+                      number the messaging channel would reject. */}
+                  <PhoneNumberInput size="middle" placeholder="501234567" />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={12}>
+                <Form.Item
+                  name="nationality"
+                  label={t("jobOffers.field.nationality")}
+                >
+                  <NationalitySelect
+                    placeholder={t("jobOffers.form.nationalityPlaceholder")}
+                  />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={12}>
+                <Form.Item
+                  name="date_of_birth"
+                  label={t("jobOffers.field.dateOfBirth")}
+                >
+                  <DatePicker
+                    style={{ width: "100%" }}
+                    format={DATE_FORMAT}
+                    disabledDate={(current) =>
+                      current && current.isAfter(dayjs(), "day")
+                    }
+                  />
+                </Form.Item>
+              </Col>
               <Col xs={24} md={12}>
                 <Form.Item
                   name="id_passport_iqama_number"
@@ -685,39 +619,66 @@ export default function JobOfferFormPage() {
                   <Input />
                 </Form.Item>
               </Col>
-              {/* The backend creates and links the pre-hire profile itself for a
-                  hiring-request offer, so there is nothing here to pick. */}
-              {!sourceControlled && (
-                <Col xs={24} md={12}>
-                  <Form.Item
-                    name="employee_profile_id"
-                    label={t("jobOffers.field.employeeProfile")}
-                    extra={t("jobOffers.form.employeeProfileHint")}
-                  >
-                    <Select
-                      allowClear
-                      showSearch
-                      filterOption={false}
-                      loading={profilesLoading}
-                      onSearch={(value) => loadProfiles(value)}
-                      options={profileOptions}
-                      placeholder={t("jobOffers.form.employeeProfilePlaceholder")}
-                    />
-                  </Form.Item>
-                </Col>
-              )}
-              {sourceControlled && (
-                <Col xs={24} md={12}>
-                  <Alert
-                    type="info"
-                    showIcon
-                    style={{ borderRadius: 12 }}
-                    message={t("jobOffers.form.profileAutomatic")}
-                    description={t("jobOffers.form.profileAutomaticHint")}
-                  />
-                </Col>
-              )}
             </Row>
+          </SectionCard>
+
+          <SectionCard title={t("jobOffers.form.section.cv")}>
+            {offer?.has_cv && !cvFile && (
+              <Alert
+                type="success"
+                showIcon
+                message={t("jobOffers.form.cvAlreadyAttached")}
+                style={{ borderRadius: 12, marginBottom: 16 }}
+              />
+            )}
+            <Upload.Dragger
+              name="cv_file"
+              accept={CV_ACCEPT}
+              maxCount={1}
+              fileList={fileList}
+              // Selection is held locally and sent with the form, so nothing is
+              // uploaded until HR actually saves.
+              beforeUpload={(file) => {
+                const check = isAllowedCvFile(file);
+                if (!check.ok) {
+                  setCvError(
+                    check.reason === "size"
+                      ? t("jobOffers.form.cvTooLarge")
+                      : t("jobOffers.form.cvWrongType"),
+                  );
+                  return Upload.LIST_IGNORE;
+                }
+                setCvError(null);
+                setCvFile(file);
+                setFileList([
+                  { uid: file.name, name: file.name, status: "done" },
+                ]);
+                return false;
+              }}
+              onRemove={() => {
+                setCvFile(null);
+                setFileList([]);
+                return true;
+              }}
+            >
+              <p className="ant-upload-drag-icon" style={{ marginBottom: 8 }}>
+                <InboxOutlined aria-hidden style={{ color: "#f97316" }} />
+              </p>
+              <p style={{ fontWeight: 600, color: "#0f172a", margin: 0 }}>
+                {t("jobOffers.form.cvDropzone")}
+              </p>
+              <p style={{ color: "#64748b", fontSize: 13, marginTop: 6 }}>
+                {t("jobOffers.form.cvHint")}
+              </p>
+            </Upload.Dragger>
+            {cvError && (
+              <div
+                role="alert"
+                style={{ color: "#dc2626", marginTop: 10, fontSize: 13 }}
+              >
+                {cvError}
+              </div>
+            )}
           </SectionCard>
 
           <SectionCard title={t("jobOffers.form.section.job")}>
@@ -759,82 +720,50 @@ export default function JobOfferFormPage() {
               />
             )}
             <Row gutter={16}>
-              {/* A hiring-request offer names a company reference record; the
-                  backend validates the id and writes the display text itself.
-                  Legacy offers keep the free text they were written with. */}
-              {sourceControlled ? (
-                <>
-                  <Col xs={24} md={12}>
-                    <Form.Item
-                      name="position_id"
-                      label={t("jobOffers.field.position")}
-                      extra={t("jobOffers.form.referenceHint")}
-                      rules={[
-                        {
-                          required: true,
-                          message: t("jobOffers.validation.positionRequired"),
-                        },
-                      ]}
-                    >
-                      <Select
-                        showSearch
-                        optionFilterProp="label"
-                        loading={referenceLoading}
-                        options={positionOptions}
-                        placeholder={t("jobOffers.form.positionPlaceholder")}
-                        notFoundContent={t("jobOffers.reference.emptyPositions")}
-                      />
-                    </Form.Item>
-                  </Col>
-                  <Col xs={24} md={12}>
-                    <Form.Item
-                      name="department_id"
-                      label={t("jobOffers.field.departmentRef")}
-                      extra={t("jobOffers.form.referenceHint")}
-                      rules={[
-                        {
-                          required: true,
-                          message: t("jobOffers.validation.departmentRequired"),
-                        },
-                      ]}
-                    >
-                      <Select
-                        showSearch
-                        optionFilterProp="label"
-                        loading={referenceLoading}
-                        options={departmentOptions}
-                        placeholder={t("jobOffers.form.departmentPlaceholder")}
-                        notFoundContent={t("jobOffers.reference.emptyDepartments")}
-                      />
-                    </Form.Item>
-                  </Col>
-                </>
-              ) : (
-                <>
-                  <Col xs={24} md={12}>
-                    <Form.Item
-                      name="position_title"
-                      label={t("jobOffers.field.positionTitle")}
-                      rules={[
-                        {
-                          required: true,
-                          message: t("jobOffers.validation.required"),
-                        },
-                      ]}
-                    >
-                      <Input />
-                    </Form.Item>
-                  </Col>
-                  <Col xs={24} md={12}>
-                    <Form.Item
-                      name="department"
-                      label={t("jobOffers.field.department")}
-                    >
-                      <Input />
-                    </Form.Item>
-                  </Col>
-                </>
-              )}
+              <Col xs={24} md={12}>
+                <Form.Item
+                  name="position_id"
+                  label={t("jobOffers.field.position")}
+                  extra={t("jobOffers.form.referenceHint")}
+                  rules={[
+                    {
+                      required: true,
+                      message: t("jobOffers.validation.positionRequired"),
+                    },
+                  ]}
+                >
+                  <Select
+                    showSearch
+                    optionFilterProp="label"
+                    loading={referenceLoading}
+                    options={positionOptions}
+                    placeholder={t("jobOffers.form.positionPlaceholder")}
+                    notFoundContent={t("jobOffers.reference.emptyPositions")}
+                  />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={12}>
+                <Form.Item
+                  name="department_id"
+                  label={t("jobOffers.field.departmentRef")}
+                  extra={t("jobOffers.form.referenceHint")}
+                  rules={[
+                    {
+                      required: true,
+                      message: t("jobOffers.validation.departmentRequired"),
+                    },
+                  ]}
+                >
+                  <Select
+                    showSearch
+                    optionFilterProp="label"
+                    loading={referenceLoading}
+                    options={departmentOptions}
+                    placeholder={t("jobOffers.form.departmentPlaceholder")}
+                    notFoundContent={t("jobOffers.reference.emptyDepartments")}
+                  />
+                </Form.Item>
+              </Col>
               <Col xs={24} md={12}>
                 <Form.Item
                   name="classification"
@@ -880,14 +809,7 @@ export default function JobOfferFormPage() {
                       },
                     ]}
                   >
-                    <InputNumber
-                      min={0}
-                      step={100}
-                      style={{ width: "100%" }}
-                      // Basic salary comes from the approved request; the
-                      // backend overwrites whatever is posted here.
-                      disabled={sourceControlled && field === "basic_salary"}
-                    />
+                    <InputNumber min={0} step={100} style={{ width: "100%" }} />
                   </Form.Item>
                 </Col>
               ))}
@@ -980,8 +902,8 @@ export default function JobOfferFormPage() {
             <Alert
               type="info"
               showIcon
-              title={t("jobOffers.form.automationHint")}
-              style={{ marginBottom: 18 }}
+              message={t("jobOffers.form.automationHint")}
+              style={{ marginBottom: 18, borderRadius: 12 }}
             />
             <Row gutter={16}>
               <Col xs={24} md={12}>
@@ -1051,24 +973,35 @@ export default function JobOfferFormPage() {
               {t("jobOffers.form.discard")}
             </Button>
             <Button
-              type="primary"
-              htmlType="submit"
               icon={<SaveOutlined aria-hidden />}
-              loading={saving}
-              // Nothing valid can be submitted until the company has the
-              // reference records the backend insists on.
+              loading={saving === "draft"}
+              onClick={handleSave}
+              // Nothing valid can be saved until the company has the reference
+              // records the backend insists on.
               disabled={referenceEmpty}
-              style={{
-                borderRadius: 10,
-                minHeight: 42,
-                fontWeight: 600,
-                paddingInline: 24,
-              }}
+              style={{ borderRadius: 10, minHeight: 42, fontWeight: 600 }}
             >
               {isEdit
                 ? t("jobOffers.form.saveChanges")
                 : t("jobOffers.form.saveDraft")}
             </Button>
+            {submitAvailable && (
+              <Button
+                type="primary"
+                icon={<SendOutlined aria-hidden />}
+                loading={saving === "submit"}
+                onClick={handleSubmitToCeo}
+                disabled={referenceEmpty}
+                style={{
+                  borderRadius: 10,
+                  minHeight: 42,
+                  fontWeight: 600,
+                  paddingInline: 24,
+                }}
+              >
+                {t("jobOffers.form.submitToCeo")}
+              </Button>
+            )}
           </div>
         </Form>
       )}

@@ -8,6 +8,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.cache import cache
 from django.db.models import Q
+from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
 from django.utils import timezone
 from rest_framework import status
@@ -16,10 +17,11 @@ from rest_framework.views import APIView
 from accounts.password_policy import get_password_policy
 from audit.utils import audit
 from core.pagination import StandardPagination
-from core.permissions import IsHRManagerOrAdmin, IsSystemAdmin
+from core.permissions import IsHRManagerOrAdmin, IsSystemAdmin, get_role
 from core.responses import error, success
 from core.services.bird_email_service import _load_logo_base64
 from core.services.email_service import EmailService
+from organization.services import get_user_accessible_company_ids, user_has_all_company_access
 
 from .serializers import (
     CreateUserSerializer,
@@ -113,6 +115,13 @@ class UsersListCreateView(APIView):
             .order_by("-id")
         )
 
+        if get_role(request.user) == "HRManager" and not user_has_all_company_access(request.user):
+            accessible_company_ids = get_user_accessible_company_ids(request.user)
+            qs = qs.filter(
+                Q(employee_profile__company_id__in=accessible_company_ids)
+                | Q(organization_access_entries__organization_id__in=accessible_company_ids)
+            ).distinct()
+
         if search:
             qs = qs.filter(Q(email__icontains=search) | Q(full_name__icontains=search))
         if role in ("SystemAdmin", "HRManager", "Manager", "Employee", "CEO", "CFO"):
@@ -124,7 +133,7 @@ class UsersListCreateView(APIView):
 
         paginator = StandardPagination()
         page = paginator.paginate_queryset(qs, request)
-        data = UserListSerializer(page, many=True).data
+        data = UserListSerializer(page, many=True, context={"request": request}).data
         return paginator.get_paginated_response(data)
 
     def post(self, request):
@@ -163,23 +172,23 @@ class UsersListCreateView(APIView):
             },
         )
 
-        return success(UserListSerializer(user).data, status=status.HTTP_201_CREATED)
+        return success(UserListSerializer(user, context={"request": request}).data, status=status.HTTP_201_CREATED)
 
 
 class UserDetailView(APIView):
     permission_classes = [IsSystemAdmin]
 
     def get(self, request, user_id):
-        user = (
+        user = get_object_or_404(
             User.objects.select_related("employee_profile")
-            .prefetch_related("groups", "organization_access_entries__organization")
-            .get(pk=user_id)
+            .prefetch_related("groups", "organization_access_entries__organization"),
+            pk=user_id,
         )
-        return success(UserListSerializer(user).data)
+        return success(UserListSerializer(user, context={"request": request}).data)
 
     def patch(self, request, user_id):
-        user = User.objects.get(pk=user_id)
-        serializer = UpdateUserOrganizationsSerializer(data=request.data)
+        user = get_object_or_404(User, pk=user_id)
+        serializer = UpdateUserOrganizationsSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
 
         if not user.groups.filter(name="HRManager").exists():
@@ -201,14 +210,14 @@ class UserDetailView(APIView):
             .prefetch_related("groups", "organization_access_entries__organization")
             .get(pk=user.pk)
         )
-        return success(UserListSerializer(refreshed_user).data)
+        return success(UserListSerializer(refreshed_user, context={"request": request}).data)
 
 
 class UserStatusView(APIView):
     permission_classes = [IsSystemAdmin]
 
     def patch(self, request, user_id):
-        user = User.objects.get(pk=user_id)
+        user = get_object_or_404(User, pk=user_id)
         s = UpdateStatusSerializer(data=request.data)
         s.is_valid(raise_exception=True)
 
@@ -227,14 +236,14 @@ class UserStatusView(APIView):
 
         audit(request, "user_status_changed", entity="user", entity_id=user.id, metadata={"is_active": user.is_active})
 
-        return success(UserListSerializer(user).data)
+        return success(UserListSerializer(user, context={"request": request}).data)
 
 
 class UserRoleView(APIView):
     permission_classes = [IsSystemAdmin]
 
     def put(self, request, user_id):
-        user = User.objects.get(pk=user_id)
+        user = get_object_or_404(User, pk=user_id)
         s = UpdateRoleSerializer(data=request.data, context={"request": request})
         s.is_valid(raise_exception=True)
 
@@ -251,14 +260,14 @@ class UserRoleView(APIView):
 
         audit(request, "user_role_changed", entity="user", entity_id=user.id, metadata={"role": new_role})
 
-        return success(UserListSerializer(user).data)
+        return success(UserListSerializer(user, context={"request": request}).data)
 
 
 class UserResetPasswordView(APIView):
     permission_classes = [IsSystemAdmin]
 
     def post(self, request, user_id):
-        user = User.objects.get(pk=user_id)
+        user = get_object_or_404(User, pk=user_id)
         s = ResetPasswordSerializer(data=request.data)
         s.is_valid(raise_exception=True)
 

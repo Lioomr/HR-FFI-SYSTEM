@@ -122,11 +122,11 @@ export function buildCeoMenuItems(t: TranslateFn): MenuProps["items"] {
           ),
         },
         {
-          key: "/ceo/hiring-requests",
+          key: "/ceo/job-offers",
           icon: <SolutionOutlined />,
           label: (
-            <Link to="/ceo/hiring-requests">
-              {t("layout.hiringRequests", "Hiring Requests")}
+            <Link to="/ceo/job-offers">
+              {t("layout.jobOffers", "Job Offers")}
             </Link>
           ),
         },
