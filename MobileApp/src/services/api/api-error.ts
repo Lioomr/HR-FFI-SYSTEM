@@ -4,6 +4,7 @@ export type ApiErrorCode =
   | 'invalid_response'
   | 'network_unavailable'
   | 'not_found'
+  | 'outside_work_location'
   | 'request_failed'
   | 'secure_storage_unavailable'
   | 'session_expired'
@@ -16,6 +17,7 @@ const SAFE_MESSAGES: Readonly<Record<ApiErrorCode, string>> = Object.freeze({
   invalid_response: 'The service returned an invalid response.',
   network_unavailable: 'The service is currently unavailable.',
   not_found: 'The requested information is not available.',
+  outside_work_location: 'You are not at an approved work location.',
   request_failed: 'The request could not be completed.',
   secure_storage_unavailable: 'Secure session storage is unavailable.',
   session_expired: 'Your session has expired. Please sign in again.',
@@ -65,6 +67,29 @@ export function safeValidationDetails(status: number, payload: unknown): string[
 }
 
 /**
+ * The single 403 body the client is allowed to recognise, quoted verbatim from the
+ * "Mobile self-service GPS contract" failure table in
+ * `plans/Geofenced Attendance Phase 8 Backend Contract.md`.
+ *
+ * It is a closed-set sentinel used only for classification. It is compared with `===`,
+ * never rendered, and never stored on the error, so the outside-site UI state cannot be
+ * driven by arbitrary server text or by a message the contract does not define.
+ */
+export const OUTSIDE_WORK_LOCATION_MESSAGE = 'You are not within an approved work location.';
+
+/**
+ * Recognises that one message on a 403 and nothing else. Every other forbidden response,
+ * including the archived-profile and active-company rejections that share the status,
+ * stays fully redacted as a generic `forbidden`.
+ */
+export function isOutsideWorkLocationEnvelope(status: number, payload: unknown): boolean {
+  if (status !== 403) return false;
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return false;
+  const envelope = payload as { message?: unknown; status?: unknown };
+  return envelope.status === 'error' && envelope.message === OUTSIDE_WORK_LOCATION_MESSAGE;
+}
+
+/**
  * A deliberately redacted error: it never retains URLs, payloads, headers, or tokens.
  * `details` is populated only from server validation envelopes on 400/422 and is
  * sanitized before it is stored.
@@ -94,12 +119,13 @@ export function safeApiError(
   status: number,
   authenticated: boolean,
   details: readonly string[] = [],
+  outsideWorkLocation = false,
 ): ApiError {
   if (status === 401) {
     return new ApiError(authenticated ? 'session_expired' : 'authentication_failed', status);
   }
   if (status === 403) {
-    return new ApiError('forbidden', status);
+    return new ApiError(outsideWorkLocation ? 'outside_work_location' : 'forbidden', status);
   }
   if (status === 404) {
     return new ApiError('not_found', status);

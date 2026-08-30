@@ -47,6 +47,57 @@ export function BootstrapUnreachableScreen({ onRetry }: Required<RetryableStateP
   );
 }
 
+/**
+ * Gate 4 cold-launch lock. A stored session was restored but the device owner has not
+ * been re-verified, so no HR data is rendered behind this screen. The challenge runs on
+ * mount and can be retried; signing out is the only other way forward.
+ */
+export function SessionLockedScreen({
+  busy,
+  onSignOut,
+  onUnlock,
+  reason,
+}: {
+  busy: boolean;
+  onSignOut: () => void;
+  onUnlock: () => void;
+  reason: 'refused' | 'unavailable' | null;
+}) {
+  const { t } = useLocalization();
+  // A device with no biometric and no passcode cannot pass the challenge at all, so it
+  // is told what to change rather than being looped through a futile retry.
+  const unprotected = reason === 'unavailable';
+  return (
+    <Screen>
+      <ErrorState
+        action={
+          <>
+            <Button
+              accessibilityHint={t('lock.unlockHint')}
+              disabled={busy}
+              fullWidth
+              label={busy ? t('lock.unlocking') : t('lock.unlock')}
+              loading={busy}
+              onPress={onUnlock}
+              testID="session-unlock"
+            />
+            <Button
+              disabled={busy}
+              fullWidth
+              label={t('auth.logout')}
+              onPress={onSignOut}
+              testID="session-lock-sign-out"
+              variant="secondary"
+            />
+          </>
+        }
+        message={unprotected ? t('lock.unprotectedBody') : t('lock.body')}
+        title={unprotected ? t('lock.unprotectedTitle') : t('lock.title')}
+      />
+    </Screen>
+  );
+}
+
 export function ShellEmptyState({ emoji }: { emoji?: string }) {
   const { t } = useLocalization();
   return <EmptyState emoji={emoji} title={t('state.emptyTitle')} message={t('state.emptyBody')} />;

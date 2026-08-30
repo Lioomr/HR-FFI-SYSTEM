@@ -18,6 +18,9 @@ export const appRoutes = Object.freeze({
  * session is still valid and is retried rather than discarded.
  */
 export function initialRouteForAuthStatus(status: AuthStatus) {
-  if (status === 'bootstrapping' || status === 'bootstrap-unreachable') return null;
+  // `locked` holds navigation on the entry route so the lock screen stays in control.
+  if (status === 'bootstrapping' || status === 'bootstrap-unreachable' || status === 'locked') {
+    return null;
+  }
   return status === 'authenticated' ? appRoutes.home : appRoutes.login;
 }

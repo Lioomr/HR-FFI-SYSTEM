@@ -34,8 +34,10 @@ function resolveProfile(profileName: string, resolving = new Set<string>()): Eas
 
 describe('EAS iOS readiness configuration', () => {
   it('pins the EAS project and iOS application identity', () => {
-    expect(appConfigSource).toContain("bundleIdentifier: 'com.ffihr.employee'");
-    expect(appConfigSource).toContain("scheme: 'ffihr'");
+    expect(appConfigSource).toContain("'com.ffihr.employee'");
+    expect(appConfigSource).toContain("'com.ffihr.employee.test'");
+    expect(appConfigSource).toContain("'ffihr'");
+    expect(appConfigSource).toContain("'ffihr-test'");
 
     const projectId = appConfigSource.match(/projectId:\s*'([^']+)'/u)?.[1];
     expect(projectId).toMatch(
@@ -47,6 +49,7 @@ describe('EAS iOS readiness configuration', () => {
     for (const [profile, environment] of [
       ['development', 'development'],
       ['ios-simulator', 'development'],
+      ['test', 'preview'],
       ['preview', 'preview'],
       ['production', 'production'],
     ] as const) {
@@ -54,6 +57,8 @@ describe('EAS iOS readiness configuration', () => {
     }
 
     expect(easConfig.build.development?.env?.FFI_REQUIRE_EXPLICIT_API_ORIGIN).toBe('true');
+    expect(easConfig.build.test?.env?.FFI_APP_ENV).toBe('test');
+    expect(easConfig.build.test?.env?.FFI_REQUIRE_EXPLICIT_API_ORIGIN).toBe('true');
     expect(easConfig.build.preview?.env?.FFI_REQUIRE_EXPLICIT_API_ORIGIN).toBe('true');
     expect(easConfig.build.production?.env?.FFI_REQUIRE_EXPLICIT_API_ORIGIN).toBe('true');
     expect(easConfig.build['ios-simulator']).toMatchObject({
