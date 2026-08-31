@@ -1134,6 +1134,7 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.leaveBalances.employeeId": "Employee ID",
     "hr.leaveBalances.enterEmployeeId": "Enter Employee ID",
     "hr.leaveBalances.year": "Year",
+    "hr.leaveBalances.allYears": "All years",
     "hr.leaveBalances.idRequired": "Employee ID is required",
     "hr.leaveBalances.fetchFailed": "Failed to fetch leave balances",
     "leave.type": "Leave Type",
@@ -2174,6 +2175,7 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.employees.balances.adjustTitle": "Adjust Leave Balance",
     "hr.employees.balances.selectLeaveType": "Select leave type",
     "hr.employees.balances.adjustmentDays": "Adjustment Days (+/-)",
+    "hr.employees.balances.adjustmentYear": "Adjustment Year",
     "hr.employees.balances.enterDays": "Enter days",
     "hr.employees.balances.adjustmentHelp":
       "Enter positive number to add days, negative to deduct.",
@@ -4403,6 +4405,7 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.leaveBalances.employeeId": "رقم الموظف",
     "hr.leaveBalances.enterEmployeeId": "أدخل رقم الموظف",
     "hr.leaveBalances.year": "السنة",
+    "hr.leaveBalances.allYears": "كل السنوات",
     "hr.leaveBalances.idRequired": "رقم الموظف مطلوب",
     "hr.leaveBalances.fetchFailed": "فشل في جلب أرصدة الإجازات",
     "leave.type": "نوع الإجازة",
@@ -5411,6 +5414,7 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.employees.balances.adjustTitle": "تعديل رصيد الإجازة",
     "hr.employees.balances.selectLeaveType": "اختر نوع الإجازة",
     "hr.employees.balances.adjustmentDays": "أيام التعديل (+/-)",
+    "hr.employees.balances.adjustmentYear": "سنة التعديل",
     "hr.employees.balances.enterDays": "أدخل الأيام",
     "hr.employees.balances.adjustmentHelp":
       "أدخل رقمًا موجبًا لإضافة أيام، أو سالبًا للخصم.",

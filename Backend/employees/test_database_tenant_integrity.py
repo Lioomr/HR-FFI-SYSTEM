@@ -150,6 +150,7 @@ class DatabaseTenantIntegrityTests(TransactionTestCase):
                         company=self.company_a,
                         leave_type=self.leave_type_b,
                         adjustment_days=Decimal("1.00"),
+                        year=2026,
                         reason="Invalid cross-company adjustment",
                     )
                 ]
