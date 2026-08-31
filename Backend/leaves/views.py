@@ -1563,6 +1563,18 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             # Relax validation or allow all for list
             qs = qs.filter(status=status_param)
 
+        source_param = params.get("source")
+        if source_param:
+            qs = qs.filter(source=source_param)
+
+        year_param = params.get("year")
+        if year_param:
+            try:
+                year = int(year_param)
+            except ValueError:
+                return error("Validation error", errors=["year must be a valid integer."], status=422)
+            qs = qs.filter(start_date__lte=date(year, 12, 31), end_date__gte=date(year, 1, 1))
+
         employee_id = params.get("employee_id")
         if employee_id:
             qs = qs.filter(employee_id=employee_id)
@@ -2004,7 +2016,15 @@ class HRManualLeaveRequestViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         if self.action == "list":
-            return filter_queryset_by_company_scope(super().get_queryset(), self.request)
+            queryset = filter_queryset_by_company_scope(super().get_queryset(), self.request)
+            year_param = self.request.query_params.get("year")
+            if year_param:
+                try:
+                    year = int(year_param)
+                except ValueError:
+                    return queryset.none()
+                queryset = queryset.filter(start_date__lte=date(year, 12, 31), end_date__gte=date(year, 1, 1))
+            return queryset
         return filter_queryset_by_accessible_companies(super().get_queryset(), self.request)
 
     def _notify_manager(self, instance: LeaveRequest, action_label: str):
@@ -2462,7 +2482,7 @@ class LeaveBalanceAdjustmentViewSet(viewsets.ModelViewSet):
     serializer_class = LeaveBalanceAdjustmentSerializer
     permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ["employee", "leave_type"]
+    filterset_fields = ["employee", "leave_type", "year"]
 
     def get_queryset(self):
         if self.action == "list":

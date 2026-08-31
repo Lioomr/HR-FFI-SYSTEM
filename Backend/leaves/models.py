@@ -337,6 +337,7 @@ class LeaveBalanceAdjustment(models.Model):
     adjustment_days = models.DecimalField(
         max_digits=5, decimal_places=2, help_text=_("Number of days to add (positive) or deduct (negative).")
     )
+    year = models.IntegerField(help_text=_("Leave year to which this adjustment applies."))
     reason = models.TextField(help_text=_("Reason for adjustment."))
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="created_balance_adjustments"

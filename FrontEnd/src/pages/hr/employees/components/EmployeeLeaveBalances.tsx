@@ -33,6 +33,7 @@ export default function EmployeeLeaveBalances({
 }: EmployeeLeaveBalancesProps) {
   const { t } = useI18n();
   const [balances, setBalances] = useState<LeaveBalance[]>([]);
+  const [year, setYear] = useState(new Date().getFullYear());
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -58,7 +59,7 @@ export default function EmployeeLeaveBalances({
     setLoading(true);
     try {
       const [balRes, typeRes] = await Promise.all([
-        getLeaveBalances(employeeId, new Date().getFullYear()),
+        getLeaveBalances(employeeId, year),
         getLeaveTypes(),
       ]);
 
@@ -79,7 +80,7 @@ export default function EmployeeLeaveBalances({
     if (employeeId) {
       loadData();
     }
-  }, [employeeId]);
+  }, [employeeId, year]);
 
   const handleAdjust = async (values: any) => {
     setSubmitting(true);
@@ -88,6 +89,7 @@ export default function EmployeeLeaveBalances({
         employee_id: employeeId,
         leave_type: values.leave_type,
         adjustment_days: values.adjustment_days,
+        year,
         reason: values.reason,
       });
       message.success(t("hr.employees.balances.adjustSuccess"));
@@ -146,7 +148,11 @@ export default function EmployeeLeaveBalances({
       dataIndex: "requestable_days",
       key: "requestable_days",
       render: (val: any) =>
-        val === undefined || val === null ? "-" : <strong>{formatLeaveDays(val)}</strong>,
+        val === undefined || val === null ? (
+          "-"
+        ) : (
+          <strong>{formatLeaveDays(val)}</strong>
+        ),
     },
   ];
 
@@ -185,13 +191,30 @@ export default function EmployeeLeaveBalances({
         }}
       >
         <h3>{t("hr.employees.balances.title")}</h3>
-        <Button
-          type="primary"
-          icon={<CalculatorOutlined />}
-          onClick={() => setIsModalOpen(true)}
-        >
-          {t("hr.employees.balances.adjustBtn")}
-        </Button>
+        <Space>
+          <Select
+            value={year}
+            onChange={setYear}
+            style={{ width: 110 }}
+            aria-label={t("hr.leaveBalances.year")}
+          >
+            {Array.from(
+              { length: 11 },
+              (_, index) => new Date().getFullYear() + 5 - index,
+            ).map((optionYear) => (
+              <Select.Option key={optionYear} value={optionYear}>
+                {optionYear}
+              </Select.Option>
+            ))}
+          </Select>
+          <Button
+            type="primary"
+            icon={<CalculatorOutlined />}
+            onClick={() => setIsModalOpen(true)}
+          >
+            {t("hr.employees.balances.adjustBtn")}
+          </Button>
+        </Space>
       </div>
 
       <Table
@@ -250,6 +273,10 @@ export default function EmployeeLeaveBalances({
               step={0.5}
               placeholder={t("hr.employees.balances.adjustmentPlaceholder")}
             />
+          </Form.Item>
+
+          <Form.Item label={t("hr.employees.balances.adjustmentYear")}>
+            <InputNumber value={year} disabled style={{ width: "100%" }} />
           </Form.Item>
 
           <Form.Item

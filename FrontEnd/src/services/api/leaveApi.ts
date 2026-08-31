@@ -133,7 +133,9 @@ export interface CreateLeaveRequestPayload {
  */
 export interface LeaveRequestFilter {
   status?: string;
+  source?: "employee" | "hr_manual";
   employee_id?: number;
+  year?: number;
   date_from?: string;
   date_to?: string;
   page?: number;
@@ -429,6 +431,7 @@ export interface CreateAdjustmentPayload {
   employee_id: number;
   leave_type: number;
   adjustment_days: number;
+  year: number;
   reason: string;
 }
 

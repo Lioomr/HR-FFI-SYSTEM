@@ -537,6 +537,7 @@ class LeaveBalanceAdjustmentSerializer(serializers.ModelSerializer):
             "employee_name",
             "leave_type",
             "adjustment_days",
+            "year",
             "reason",
             "created_by",
             "created_by_name",

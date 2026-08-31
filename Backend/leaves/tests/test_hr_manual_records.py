@@ -311,6 +311,7 @@ class HRManualLeaveRecordTests(APITestCase):
             {
                 "employee_id": external_profile.id,
                 "leave_type": self.sick.id,
+                "year": 2026,
                 "adjustment_days": "-100",
                 "reason": "Too much",
             },
@@ -325,3 +326,68 @@ class HRManualLeaveRecordTests(APITestCase):
         balances = calculate_leave_balance(None, date.today().year, profile=external_profile)
         sick_balance = next(b for b in balances if b["leave_code"] == "SICK")
         self.assertEqual(float(sick_balance["adjustments"]), -100.0)
+
+    def test_balance_adjustments_are_scoped_to_effective_year(self):
+        LeaveBalanceAdjustment.objects.create(
+            employee=self.employee_user,
+            employee_profile=self.employee_profile,
+            company=self.company,
+            leave_type=self.annual,
+            adjustment_days=5,
+            year=2025,
+            reason="Historical adjustment",
+            created_by=self.hr_user,
+        )
+        LeaveBalanceAdjustment.objects.create(
+            employee=self.employee_user,
+            employee_profile=self.employee_profile,
+            company=self.company,
+            leave_type=self.annual,
+            adjustment_days=2,
+            year=2026,
+            reason="Current adjustment",
+            created_by=self.hr_user,
+        )
+
+        balance_2025 = calculate_leave_balance(self.employee_user, 2025, profile=self.employee_profile)
+        balance_2026 = calculate_leave_balance(self.employee_user, 2026, profile=self.employee_profile)
+
+        annual_2025 = next(item for item in balance_2025 if item["leave_code"] == "ANNUAL")
+        annual_2026 = next(item for item in balance_2026 if item["leave_code"] == "ANNUAL")
+        self.assertEqual(float(annual_2025["adjustments"]), 5.0)
+        self.assertEqual(float(annual_2026["adjustments"]), 2.0)
+
+    def test_hr_leave_list_filters_manual_records_by_year_overlap(self):
+        LeaveRequest.objects.create(
+            employee=self.employee_user,
+            employee_profile=self.employee_profile,
+            company=self.company,
+            leave_type=self.annual,
+            start_date=date(2025, 12, 30),
+            end_date=date(2026, 1, 3),
+            reason="Cross-year historical leave",
+            status=LeaveRequest.RequestStatus.APPROVED,
+            source=LeaveRequest.RequestSource.HR_MANUAL,
+        )
+        LeaveRequest.objects.create(
+            employee=self.employee_user,
+            employee_profile=self.employee_profile,
+            company=self.company,
+            leave_type=self.annual,
+            start_date=date(2024, 1, 1),
+            end_date=date(2024, 1, 2),
+            reason="Older historical leave",
+            status=LeaveRequest.RequestStatus.APPROVED,
+            source=LeaveRequest.RequestSource.HR_MANUAL,
+        )
+
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.get(
+            "/api/leaves/leave-requests/",
+            {"year": 2026, "source": LeaveRequest.RequestSource.HR_MANUAL},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        rows = response.data["data"]["items"]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["start_date"], "2025-12-30")

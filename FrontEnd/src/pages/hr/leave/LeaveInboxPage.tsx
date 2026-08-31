@@ -84,6 +84,11 @@ export default function LeaveInboxPage() {
   const [pageSize, setPageSize] = useState(10);
 
   // Filters
+  const currentYear = new Date().getFullYear();
+  const years = Array.from(
+    { length: 11 },
+    (_, index) => currentYear + 5 - index,
+  );
   const [filters, setFilters] = useState<LeaveRequestFilter>({});
   const [form] = Form.useForm();
   const [manualForm] = Form.useForm();
@@ -176,6 +181,8 @@ export default function LeaveInboxPage() {
   const handleFilterChange = (values: any) => {
     const newFilters: LeaveRequestFilter = {};
     if (values.status) newFilters.status = values.status;
+    if (values.source) newFilters.source = values.source;
+    if (values.year) newFilters.year = values.year;
     if (values.dates && values.dates[0]) {
       newFilters.date_from = values.dates[0].format("YYYY-MM-DD");
       newFilters.date_to = values.dates[1].format("YYYY-MM-DD");
@@ -528,6 +535,27 @@ export default function LeaveInboxPage() {
       <Card style={{ marginBottom: 16, borderRadius: 16 }}>
         <Form form={form} layout="vertical" onValuesChange={handleFilterChange}>
           <Row gutter={[16, 8]}>
+            <Col xs={24} md={12} lg={8}>
+              <Form.Item label={t("hr.leaveBalances.year")} name="year">
+                <Select allowClear placeholder={t("hr.leaveBalances.allYears")}>
+                  {years.map((optionYear) => (
+                    <Option key={optionYear} value={optionYear}>
+                      {optionYear}
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12} lg={8}>
+              <Form.Item label={t("leave.requestSource")} name="source">
+                <Select allowClear>
+                  <Option value="hr_manual">{t("leave.manual.badge")}</Option>
+                  <Option value="employee">
+                    {t("leave.approvalMap.employeeRequest")}
+                  </Option>
+                </Select>
+              </Form.Item>
+            </Col>
             <Col xs={24} md={12} lg={8}>
               <Form.Item label={t("common.status")} name="status">
                 <Select

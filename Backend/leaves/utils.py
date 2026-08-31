@@ -743,7 +743,7 @@ def get_adjustments_for_type(user, leave_type: LeaveType, year: int):
             leave_type__company_id=profile.company_id,
         )
 
-    adjs = adjustments.filter(leave_type=leave_type, created_at__year=year).aggregate(Sum("adjustment_days"))[
+    adjs = adjustments.filter(leave_type=leave_type, year=year).aggregate(Sum("adjustment_days"))[
         "adjustment_days__sum"
     ] or Decimal("0")
     return float(adjs)
@@ -1147,15 +1147,15 @@ def get_leave_request_payment_context(instances):
         Q(employee_profile_id__in=profile_ids) | Q(employee_id__in=user_ids),
         company_id__in=company_ids,
         leave_type__company_id__in=company_ids,
-        created_at__year__gte=minimum_year,
-        created_at__year__lte=maximum_year,
+        year__gte=minimum_year,
+        year__lte=maximum_year,
     ).values(
         "id",
         "employee_id",
         "employee_profile_id",
         "leave_type_id",
         "adjustment_days",
-        "created_at",
+        "year",
         "company_id",
         "leave_type__company_id",
     )
@@ -1167,7 +1167,7 @@ def get_leave_request_payment_context(instances):
                 and row["company_id"] == profile.company_id
                 and row["leave_type__company_id"] == profile.company_id
             ):
-                adjustments[(profile.id, row["leave_type_id"], row["created_at"].year)] += float(row["adjustment_days"])
+                adjustments[(profile.id, row["leave_type_id"], row["year"])] += float(row["adjustment_days"])
 
     payment_rows = list(
         AnnualLeavePaymentRequest.objects.filter(employee_profile_id__in=profile_ids).values(
