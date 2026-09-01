@@ -16,6 +16,7 @@ from core.permissions import get_role, is_department_ceo_approver_user
 from core.responses import error
 from core.services import (
     build_pending_approval_item,
+    get_ceo_approver_users,
     get_pending_approvals_for_role,
     get_pending_approvals_for_user,
     get_workflow_snapshot,
@@ -45,6 +46,14 @@ class RoleResolutionTests(TestCase):
         user.groups.add(ceo_group)
 
         self.assertTrue(is_department_ceo_approver_user(user))
+
+    def test_ceo_approver_recipient_lookup_resolves_group_users(self):
+        user_model = get_user_model()
+        user = user_model.objects.create_user(email="ceo-recipient@test.com", password="password")
+        ceo_group, _ = Group.objects.get_or_create(name="CEO")
+        user.groups.add(ceo_group)
+
+        self.assertIn(user.id, set(get_ceo_approver_users().values_list("id", flat=True)))
 
 
 class HrSummaryViewTests(APITestCase):

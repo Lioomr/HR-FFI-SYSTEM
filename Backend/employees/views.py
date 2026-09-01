@@ -1599,12 +1599,17 @@ class EmployeeDeletionRequestViewSet(viewsets.ModelViewSet):
             )
 
         instance.refresh_from_db()
-        reroute_pending_manager_requests(
-            EmployeeProfile.objects.select_related("user", "manager_profile", "manager_profile__user").filter(
-                manager_profile=profile
-            ),
-            actor=request.user,
-        )
+        try:
+            reroute_pending_manager_requests(
+                EmployeeProfile.objects.select_related("user", "manager_profile", "manager_profile__user").filter(
+                    manager_profile=profile
+                ),
+                actor=request.user,
+            )
+        except Exception:
+            # The CEO's archive decision has completed. A downstream reroute
+            # for direct reports must not undo it or return a 500 response.
+            logger.exception("employee_archive_manager_request_reroute_failed", extra={"request_id": instance.id})
         audit(
             request,
             "employee_archived",

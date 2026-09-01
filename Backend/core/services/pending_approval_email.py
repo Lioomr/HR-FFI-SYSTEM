@@ -5,6 +5,7 @@ from typing import Iterable
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.db.models import Q
 from django.template.loader import render_to_string
 
 from core.permissions import CEO_APPROVER_DEPARTMENT_ID
@@ -69,10 +70,21 @@ def get_cfo_approver_users():
 
 
 def get_ceo_approver_users():
+    # Keep this as one queryset. Combining querysets where one side has a
+    # DISTINCT clause and the other does not can raise Django's "Cannot
+    # combine a unique query with a non-unique query" TypeError.
     return (
-        _active_users_in_groups(["CEO", "SystemAdmin"])
-        | _active_profile_users_by_department(CEO_APPROVER_DEPARTMENT_ID)
-    ).distinct()
+        User.objects.filter(is_active=True)
+        .exclude(email="")
+        .filter(
+            Q(groups__name__in=["CEO", "SystemAdmin"])
+            | Q(
+                employee_profile__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+                employee_profile__department_ref_id=CEO_APPROVER_DEPARTMENT_ID,
+            )
+        )
+        .distinct()
+    )
 
 
 def get_disbursement_approver_users():
