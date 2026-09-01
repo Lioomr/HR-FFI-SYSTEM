@@ -1172,6 +1172,33 @@ class EmployeeDeletionWorkflowTests(TestCase):
         self.assertTrue(self.employee_user.is_active)
         self.assertTrue(AuditLog.objects.filter(action="employee_restored", entity_id=self.profile.id).exists())
 
+    @patch("employees.views.reroute_pending_manager_requests", side_effect=RuntimeError("reroute unavailable"))
+    def test_approval_succeeds_when_direct_report_rerouting_fails(self, reroute_mock):
+        request_obj = EmployeeDeletionRequest.objects.create(
+            company=self.company,
+            employee_profile=self.profile,
+            target_user=self.employee_user,
+            requested_by=self.hr_user,
+            reason="Archive despite reroute failure",
+            archive_reason=EmployeeProfile.ArchiveReason.OTHER,
+            request_snapshot={"employee_id": self.profile.employee_id, "full_name": self.profile.full_name},
+        )
+
+        self.client.force_authenticate(user=self.ceo_user)
+        response = self.client.post(
+            f"/api/employees/deletion-requests/{request_obj.id}/approve/",
+            {},
+            format="json",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        reroute_mock.assert_called_once()
+        request_obj.refresh_from_db()
+        self.profile.refresh_from_db()
+        self.assertEqual(request_obj.status, EmployeeDeletionRequest.Status.EXECUTED)
+        self.assertTrue(self.profile.is_archived)
+
     def test_hr_manager_cannot_patch_deletion_request_to_executed(self):
         request_obj = EmployeeDeletionRequest.objects.create(
             company=self.company,
