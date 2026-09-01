@@ -12,6 +12,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from audit.models import AuditLog
+from attendance.models import BioTimeEmployeeMap
 from hr_reference.models import Department, Position
 from leaves.models import LeaveRequest, LeaveType
 from organization.models import OrganizationNode, UserOrganizationAccess
@@ -1225,6 +1226,36 @@ class EmployeeDeletionWorkflowTests(TestCase):
         self.profile.refresh_from_db()
         self.assertEqual(request_obj.status, EmployeeDeletionRequest.Status.EXECUTED)
         self.assertTrue(self.profile.is_archived)
+
+    def test_approval_retires_biotime_mapping_before_archiving_employee(self):
+        mapping = BioTimeEmployeeMap.objects.create(employee_profile=self.profile, biotime_emp_code="BIO-DEL-001")
+        request_obj = EmployeeDeletionRequest.objects.create(
+            company=self.company,
+            employee_profile=self.profile,
+            target_user=self.employee_user,
+            requested_by=self.hr_user,
+            reason="Archive employee no longer active in BioTime",
+            archive_reason=EmployeeProfile.ArchiveReason.OTHER,
+            request_snapshot={"employee_id": self.profile.employee_id, "full_name": self.profile.full_name},
+        )
+
+        self.client.force_authenticate(user=self.ceo_user)
+        response = self.client.post(
+            f"/api/employees/deletion-requests/{request_obj.id}/approve/",
+            {},
+            format="json",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.profile.refresh_from_db()
+        request_obj.refresh_from_db()
+        self.assertTrue(self.profile.is_archived)
+        self.assertFalse(BioTimeEmployeeMap.objects.filter(pk=mapping.pk).exists())
+        self.assertEqual(
+            request_obj.execution_snapshot["biotime_mappings_removed"],
+            [{"id": mapping.id, "biotime_emp_code": "BIO-DEL-001"}],
+        )
 
     def test_hr_manager_cannot_patch_deletion_request_to_executed(self):
         request_obj = EmployeeDeletionRequest.objects.create(

@@ -1561,6 +1561,20 @@ class EmployeeDeletionRequestViewSet(viewsets.ModelViewSet):
                 return error("Validation error", errors=["Employee is already archived."], status=422)
 
             execution_snapshot = self._build_execution_snapshot(instance)
+            # BioTime mappings may only point to active employees. Retire the
+            # integration routing link before archiving the profile; historical
+            # attendance records remain untouched and the removed mapping is
+            # retained in the archive snapshot for auditability.
+            from attendance.models import BioTimeEmployeeMap
+
+            biotime_mappings = list(
+                BioTimeEmployeeMap.objects.select_for_update().filter(employee_profile_id=profile.id)
+            )
+            if biotime_mappings:
+                execution_snapshot["biotime_mappings_removed"] = [
+                    {"id": mapping.id, "biotime_emp_code": mapping.biotime_emp_code} for mapping in biotime_mappings
+                ]
+                BioTimeEmployeeMap.objects.filter(pk__in=[mapping.pk for mapping in biotime_mappings]).delete()
             now = timezone.now()
             profile.is_archived = True
             profile.archived_at = now
