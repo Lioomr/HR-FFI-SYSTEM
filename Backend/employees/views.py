@@ -1544,12 +1544,12 @@ class EmployeeDeletionRequestViewSet(viewsets.ModelViewSet):
         if get_role(request.user) not in ["CEO", "SystemAdmin"]:
             return error("Forbidden", status=status.HTTP_403_FORBIDDEN)
 
+        request_id = self.get_object().pk
         with transaction.atomic():
-            instance = (
-                EmployeeDeletionRequest.objects.select_for_update(of=("self",))
-                .select_related("employee_profile", "employee_profile__user", "target_user")
-                .get(pk=self.get_object().pk)
-            )
+            # PostgreSQL cannot apply FOR UPDATE to the nullable outer joins
+            # introduced by select_related() on these optional relations.
+            # Lock the request row directly, then load its relations normally.
+            instance = EmployeeDeletionRequest.objects.select_for_update().get(pk=request_id)
             if instance.status != EmployeeDeletionRequest.Status.PENDING_CEO:
                 return error("Validation error", errors=["Request is not pending CEO approval."], status=422)
 
