@@ -37,7 +37,7 @@ class HiringRequestRemovalMigrationTests(TransactionTestCase):
         ("accounts", "0004_user_auth_token_version"),
         ("core", "0008_alter_workflowaction_action"),
         ("in_app_notifications", "0002_notificationdelivery"),
-        ("job_offers", "0007_remove_hiringrequest_job_offers__company_be4aa4_idx_and_more"),
+        ("job_offers", "0008_startingworkacknowledgment_hr_verification"),
     ]
 
     def setUp(self):
@@ -65,6 +65,28 @@ class HiringRequestRemovalMigrationTests(TransactionTestCase):
         self._schema_rolled_back = True
 
     def _assert_current_job_offer_write(self):
+        with connection.cursor() as cursor:
+            acknowledgment_columns = {
+                column.name
+                for column in connection.introspection.get_table_description(
+                    cursor, "job_offers_startingworkacknowledgment"
+                )
+            }
+        self.assertTrue(
+            {
+                "approved_by_id",
+                "approved_at",
+                "rejected_by_id",
+                "rejected_at",
+                "rejection_reason",
+            }.issubset(acknowledgment_columns)
+        )
+        self.assertTrue(
+            any(
+                table.startswith("job_offers_startingworkacknowledgment_affected_attendance_")
+                for table in connection.introspection.table_names()
+            )
+        )
         suffix = uuid.uuid4().hex[:12]
         user_model = get_user_model()
         user = user_model.objects.create_user(

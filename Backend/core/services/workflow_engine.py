@@ -90,6 +90,13 @@ WORKFLOW_TEMPLATES = {
             {"key": "ceo", "title": "CEO Review", "approver_role": "ceo", "order": 1},
         ],
     },
+    "starting_work_acknowledgment": {
+        "name": "Starting Work BioTime Verification Workflow",
+        "module_key": "job_offers",
+        "stages": [
+            {"key": "hr", "title": "HR BioTime Verification", "approver_role": "hr", "order": 1},
+        ],
+    },
 }
 
 
@@ -113,6 +120,8 @@ def _build_action_url_path(workflow_key: str, role: str, object_id: int) -> str:
         audience = "ceo" if role == "ceo" else "hr"
         path = f"/{audience}/job-offers/{object_id}"
         return f"{settings.FRONTEND_URL.rstrip('/')}/{path.lstrip('/')}"
+    if workflow_key == "starting_work_acknowledgment":
+        return f"{settings.FRONTEND_URL.rstrip('/')}/hr/starting-work-acknowledgments/{object_id}"
 
     route_map = {
         ("leave_request", "delegate"): f"/employee/leave/requests/{object_id}",
@@ -1182,6 +1191,84 @@ def _legacy_events_for_job_offer(instance) -> list[WorkflowEvent]:
     return events
 
 
+def _legacy_status_snapshot_for_starting_work_acknowledgment(instance):
+    from job_offers.models import StartingWorkAcknowledgment
+
+    if instance.status == StartingWorkAcknowledgment.Status.PENDING_HR:
+        status = WorkflowInstance.Status.SUBMITTED
+        current_stage = "hr"
+        current_role = "hr"
+        decided_at = None
+    elif instance.status == StartingWorkAcknowledgment.Status.APPROVED:
+        status = WorkflowInstance.Status.APPROVED
+        current_stage = ""
+        current_role = ""
+        decided_at = instance.approved_at or instance.generated_at
+    else:
+        status = WorkflowInstance.Status.REJECTED
+        current_stage = ""
+        current_role = ""
+        decided_at = instance.rejected_at or instance.generated_at
+    return {
+        "status": status,
+        "current_stage": current_stage,
+        "current_role": current_role,
+        "current_actor_user": None,
+        "submitted_by": None,
+        "submitted_at": instance.generated_at,
+        "decided_at": decided_at,
+        "cancelled_at": None,
+    }
+
+
+def _legacy_events_for_starting_work_acknowledgment(instance) -> list[WorkflowEvent]:
+    events = [
+        WorkflowEvent(
+            signature=f"starting-work:{instance.id}:submitted:{instance.generated_at.isoformat()}",
+            action=WorkflowAction.Action.SUBMIT,
+            approver_role="",
+            from_status="",
+            to_status="pending_hr",
+            from_stage="",
+            to_stage="hr",
+            at=instance.generated_at,
+            metadata={"legacy_signature": "submitted", "workflow_key": "starting_work_acknowledgment"},
+        )
+    ]
+    if instance.rejected_at:
+        events.append(
+            WorkflowEvent(
+                signature=f"starting-work:{instance.id}:rejected:{instance.rejected_at.isoformat()}",
+                action=WorkflowAction.Action.REJECT,
+                approver_role="hr",
+                from_status="pending_hr",
+                to_status="rejected",
+                from_stage="hr",
+                to_stage="",
+                actor=instance.rejected_by,
+                note=instance.rejection_reason,
+                at=instance.rejected_at,
+                metadata={"legacy_signature": "rejected", "workflow_key": "starting_work_acknowledgment"},
+            )
+        )
+    if instance.approved_at:
+        events.append(
+            WorkflowEvent(
+                signature=f"starting-work:{instance.id}:approved:{instance.approved_at.isoformat()}",
+                action=WorkflowAction.Action.APPROVE,
+                approver_role="hr",
+                from_status="rejected" if instance.rejected_at else "pending_hr",
+                to_status="approved",
+                from_stage="hr",
+                to_stage="",
+                actor=instance.approved_by,
+                at=instance.approved_at,
+                metadata={"legacy_signature": "approved", "workflow_key": "starting_work_acknowledgment"},
+            )
+        )
+    return events
+
+
 def _adapter_for_instance(instance):
     class_name = instance.__class__.__name__
     if class_name == "LeaveRequest":
@@ -1206,6 +1293,12 @@ def _adapter_for_instance(instance):
         )
     if class_name == "JobOffer":
         return "job_offer", _legacy_status_snapshot_for_job_offer, _legacy_events_for_job_offer
+    if class_name == "StartingWorkAcknowledgment":
+        return (
+            "starting_work_acknowledgment",
+            _legacy_status_snapshot_for_starting_work_acknowledgment,
+            _legacy_events_for_starting_work_acknowledgment,
+        )
     raise ValueError(f"Unsupported workflow instance class: {class_name}")
 
 

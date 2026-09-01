@@ -8,7 +8,7 @@ from core.services.workflow_engine import get_workflow_snapshot
 from hr_reference.models import Department, Position
 
 from .file_validation import validate_job_offer_cv
-from .models import JobOffer
+from .models import JobOffer, StartingWorkAcknowledgment
 from .services import get_biotime_status
 
 
@@ -303,3 +303,103 @@ class PublicJobOfferSerializer(serializers.ModelSerializer):
 
     def get_can_respond(self, obj: JobOffer) -> bool:
         return obj.status == JobOffer.Status.SENT and not obj.is_expired()
+
+
+class StartingWorkAcknowledgmentSerializer(serializers.ModelSerializer):
+    status_label = serializers.CharField(source="get_status_display", read_only=True)
+    employee = serializers.SerializerMethodField()
+    company = serializers.SerializerMethodField()
+    first_biotime_attendance_date = serializers.DateField(source="attendance_record.date", read_only=True)
+    approved_by = serializers.SerializerMethodField()
+    rejected_by = serializers.SerializerMethodField()
+    document_available = serializers.SerializerMethodField()
+    document_download_url = serializers.SerializerMethodField()
+    affected_attendance_count = serializers.SerializerMethodField()
+    actions = serializers.SerializerMethodField()
+    workflow = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StartingWorkAcknowledgment
+        fields = [
+            "id",
+            "reference_number",
+            "status",
+            "status_label",
+            "employee",
+            "company",
+            "first_biotime_attendance_date",
+            "generated_at",
+            "approved_by",
+            "approved_at",
+            "rejected_by",
+            "rejected_at",
+            "rejection_reason",
+            "document_available",
+            "document_download_url",
+            "affected_attendance_count",
+            "actions",
+            "workflow",
+        ]
+
+    @staticmethod
+    def _user_identity(user):
+        if not user:
+            return None
+        return {"id": user.id, "name": (user.full_name or user.email or "").strip(), "email": user.email}
+
+    def get_employee(self, obj):
+        profile = obj.employee_profile
+        return {"id": profile.id, "employee_id": profile.employee_id, "name": profile.full_name}
+
+    def get_company(self, obj):
+        return {"id": obj.company_id, "code": obj.company.code, "name": obj.company.name}
+
+    def get_approved_by(self, obj):
+        return self._user_identity(obj.approved_by)
+
+    def get_rejected_by(self, obj):
+        return self._user_identity(obj.rejected_by)
+
+    def get_document_available(self, obj):
+        return bool(obj.document_id and obj.document.file)
+
+    def get_document_download_url(self, obj):
+        if not self.get_document_available(obj):
+            return None
+        path = f"/starting-work-acknowledgments/{obj.id}/pdf/"
+        request = self.context.get("request")
+        return request.build_absolute_uri(path) if request else path
+
+    def get_affected_attendance_count(self, obj):
+        return obj.affected_attendance_records.count()
+
+    def get_actions(self, obj):
+        request = self.context.get("request")
+        is_hr = bool(request and get_role(request.user) in {"HRManager", "SystemAdmin"})
+        return {
+            "can_approve": is_hr
+            and obj.status in {
+                StartingWorkAcknowledgment.Status.PENDING_HR,
+                StartingWorkAcknowledgment.Status.REJECTED,
+            },
+            "can_reject": is_hr and obj.status == StartingWorkAcknowledgment.Status.PENDING_HR,
+            "can_download": is_hr and bool(obj.document_id and obj.document.file),
+        }
+
+    def get_workflow(self, obj):
+        request = self.context.get("request")
+        snapshot = get_workflow_snapshot(obj, actor=request.user if request else None)
+        actions = self.get_actions(obj)
+        snapshot["can_approve"] = actions["can_approve"]
+        snapshot["can_reject"] = actions["can_reject"]
+        snapshot["can_download"] = actions["can_download"]
+        return snapshot
+
+
+class StartingWorkRejectionSerializer(serializers.Serializer):
+    reason = serializers.CharField(max_length=4000, trim_whitespace=True)
+
+    def validate_reason(self, value):
+        if not value.strip():
+            raise serializers.ValidationError("This field may not be blank.")
+        return value.strip()

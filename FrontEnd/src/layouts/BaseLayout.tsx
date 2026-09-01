@@ -39,6 +39,7 @@ import {
   HomeOutlined,
   InboxOutlined,
   WhatsAppOutlined,
+  SafetyCertificateOutlined,
 } from "@ant-design/icons";
 import type { MenuProps } from "antd";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -976,6 +977,15 @@ export default function BaseLayout() {
           label: (
             <Link to="/hr/job-offers">
               {t("layout.jobOffers", "Job Offers")}
+            </Link>
+          ),
+        },
+        {
+          key: "/hr/starting-work-acknowledgments",
+          icon: <SafetyCertificateOutlined />,
+          label: (
+            <Link to="/hr/starting-work-acknowledgments">
+              {t("layout.startingWorkAcknowledgments", "BioTime Verifications")}
             </Link>
           ),
         },

@@ -21,7 +21,7 @@ from organization.models import OrganizationNode
 from organization.services import filter_queryset_by_company_scope, get_active_company_for_request
 
 from .automation import generate_reference_number, signer_snapshot
-from .models import JobOffer
+from .models import JobOffer, StartingWorkAcknowledgment
 from .notifications import (
     notify_job_offer_biotime_mapping_missing,
     notify_job_offer_decided,
@@ -35,6 +35,8 @@ from .serializers import (
     JobOfferRevisionSerializer,
     JobOfferSerializer,
     PublicJobOfferSerializer,
+    StartingWorkAcknowledgmentSerializer,
+    StartingWorkRejectionSerializer,
 )
 from .services import (
     create_and_send_employee_invite,
@@ -43,6 +45,7 @@ from .services import (
     get_biotime_status,
     update_employee_profile_from_offer,
 )
+from .starting_work_service import approve_starting_work_acknowledgment, reject_starting_work_acknowledgment
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +70,23 @@ CEO_COMMERCIAL_FIELDS = {
     "offer_date",
     "expiry_date",
 }
+
+
+def _scoped_starting_work_acknowledgments(request):
+    queryset = StartingWorkAcknowledgment.objects.select_related(
+        "employee_profile",
+        "employee_profile__user",
+        "attendance_record",
+        "company",
+        "document",
+        "approved_by",
+        "rejected_by",
+    ).prefetch_related("affected_attendance_records")
+    return filter_queryset_by_company_scope(queryset, request)
+
+
+def _serialize_starting_work_acknowledgment(acknowledgment, request):
+    return StartingWorkAcknowledgmentSerializer(acknowledgment, context={"request": request}).data
 
 
 def _is_hr_or_admin(user) -> bool:
@@ -833,4 +853,131 @@ class JobOfferRespondView(APIView):
                 "invitation": invitation,
                 "biotime": biotime,
             }
+        )
+
+
+class StartingWorkAcknowledgmentListView(APIView):
+    permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
+
+    def get(self, request):
+        queryset = _scoped_starting_work_acknowledgments(request)
+        status_filter = (request.query_params.get("status") or "").strip()
+        if status_filter:
+            valid_statuses = {value for value, _label in StartingWorkAcknowledgment.Status.choices}
+            if status_filter not in valid_statuses:
+                return error(
+                    "Invalid status.",
+                    errors={"status": [f"Use one of: {', '.join(sorted(valid_statuses))}."]},
+                    status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                )
+            queryset = queryset.filter(status=status_filter)
+        paginator = JobOfferPagination()
+        page = paginator.paginate_queryset(queryset, request)
+        serializer = StartingWorkAcknowledgmentSerializer(page, many=True, context={"request": request})
+        return paginator.get_paginated_response(serializer.data)
+
+
+class StartingWorkAcknowledgmentDetailView(APIView):
+    permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
+
+    def get(self, request, acknowledgment_id: int):
+        acknowledgment = _scoped_starting_work_acknowledgments(request).filter(pk=acknowledgment_id).first()
+        if acknowledgment is None:
+            return error("Starting work acknowledgement not found.", status=status.HTTP_404_NOT_FOUND)
+        return success(_serialize_starting_work_acknowledgment(acknowledgment, request))
+
+
+class StartingWorkAcknowledgmentPdfView(APIView):
+    permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
+
+    def get(self, request, acknowledgment_id: int):
+        acknowledgment = _scoped_starting_work_acknowledgments(request).filter(pk=acknowledgment_id).first()
+        if acknowledgment is None:
+            return error("Starting work acknowledgement not found.", status=status.HTTP_404_NOT_FOUND)
+        try:
+            filename = acknowledgment.document.original_filename or f"starting-work-{acknowledgment.id}.pdf"
+            response = FileResponse(
+                acknowledgment.document.file.open("rb"),
+                content_type="application/pdf",
+                as_attachment=True,
+                filename=Path(filename).name,
+            )
+            response["X-Content-Type-Options"] = "nosniff"
+            response["Cache-Control"] = "private, no-store"
+            audit(
+                request,
+                "starting_work_acknowledgment_pdf_downloaded",
+                entity="StartingWorkAcknowledgment",
+                entity_id=acknowledgment.id,
+                metadata={"company_id": acknowledgment.company_id, "document_id": acknowledgment.document_id},
+            )
+            return response
+        except FileNotFoundError:
+            return error("Acknowledgement PDF is missing from storage.", status=status.HTTP_404_NOT_FOUND)
+
+
+class StartingWorkAcknowledgmentApproveView(APIView):
+    permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
+
+    def post(self, request, acknowledgment_id: int):
+        acknowledgment = _scoped_starting_work_acknowledgments(request).filter(pk=acknowledgment_id).first()
+        if acknowledgment is None:
+            return error("Starting work acknowledgement not found.", status=status.HTTP_404_NOT_FOUND)
+        previous_status = acknowledgment.status
+        try:
+            acknowledgment = approve_starting_work_acknowledgment(acknowledgment, request.user)
+        except ValueError as exc:
+            return error(str(exc), status=status.HTTP_409_CONFLICT)
+        audit(
+            request,
+            "starting_work_acknowledgment_approved",
+            entity="StartingWorkAcknowledgment",
+            entity_id=acknowledgment.id,
+            metadata={
+                "company_id": acknowledgment.company_id,
+                "from_status": previous_status,
+                "to_status": acknowledgment.status,
+                "affected_attendance_count": acknowledgment.affected_attendance_records.count(),
+            },
+        )
+        return success(
+            _serialize_starting_work_acknowledgment(acknowledgment, request),
+            message="Starting work attendance approved.",
+        )
+
+
+class StartingWorkAcknowledgmentRejectView(APIView):
+    permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
+
+    def post(self, request, acknowledgment_id: int):
+        serializer = StartingWorkRejectionSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error(
+                "Validation error",
+                errors=serializer.errors,
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+        acknowledgment = _scoped_starting_work_acknowledgments(request).filter(pk=acknowledgment_id).first()
+        if acknowledgment is None:
+            return error("Starting work acknowledgement not found.", status=status.HTTP_404_NOT_FOUND)
+        try:
+            acknowledgment = reject_starting_work_acknowledgment(
+                acknowledgment, request.user, serializer.validated_data["reason"]
+            )
+        except ValueError as exc:
+            return error(str(exc), status=status.HTTP_409_CONFLICT)
+        audit(
+            request,
+            "starting_work_acknowledgment_rejected",
+            entity="StartingWorkAcknowledgment",
+            entity_id=acknowledgment.id,
+            metadata={
+                "company_id": acknowledgment.company_id,
+                "rejection_reason": acknowledgment.rejection_reason,
+                "affected_attendance_count": acknowledgment.affected_attendance_records.count(),
+            },
+        )
+        return success(
+            _serialize_starting_work_acknowledgment(acknowledgment, request),
+            message="Starting work attendance rejected.",
         )

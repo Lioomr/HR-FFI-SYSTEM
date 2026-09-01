@@ -12,6 +12,11 @@ from .views import (
     JobOfferRespondView,
     JobOfferSendView,
     JobOfferSubmitView,
+    StartingWorkAcknowledgmentApproveView,
+    StartingWorkAcknowledgmentDetailView,
+    StartingWorkAcknowledgmentListView,
+    StartingWorkAcknowledgmentPdfView,
+    StartingWorkAcknowledgmentRejectView,
 )
 
 urlpatterns = [
@@ -30,4 +35,29 @@ urlpatterns = [
     path("job-offers/<int:offer_id>/send/", JobOfferSendView.as_view(), name="job-offer-send"),
     path("job-offers/<int:offer_id>/pdf/", JobOfferPdfView.as_view(), name="job-offer-pdf"),
     path("job-offers/<int:offer_id>/cancel/", JobOfferCancelView.as_view(), name="job-offer-cancel"),
+    path(
+        "starting-work-acknowledgments/",
+        StartingWorkAcknowledgmentListView.as_view(),
+        name="starting-work-acknowledgment-list",
+    ),
+    path(
+        "starting-work-acknowledgments/<int:acknowledgment_id>/",
+        StartingWorkAcknowledgmentDetailView.as_view(),
+        name="starting-work-acknowledgment-detail",
+    ),
+    path(
+        "starting-work-acknowledgments/<int:acknowledgment_id>/pdf/",
+        StartingWorkAcknowledgmentPdfView.as_view(),
+        name="starting-work-acknowledgment-pdf",
+    ),
+    path(
+        "starting-work-acknowledgments/<int:acknowledgment_id>/approve/",
+        StartingWorkAcknowledgmentApproveView.as_view(),
+        name="starting-work-acknowledgment-approve",
+    ),
+    path(
+        "starting-work-acknowledgments/<int:acknowledgment_id>/reject/",
+        StartingWorkAcknowledgmentRejectView.as_view(),
+        name="starting-work-acknowledgment-reject",
+    ),
 ]
