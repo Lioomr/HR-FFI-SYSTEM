@@ -1199,6 +1199,33 @@ class EmployeeDeletionWorkflowTests(TestCase):
         self.assertEqual(request_obj.status, EmployeeDeletionRequest.Status.EXECUTED)
         self.assertTrue(self.profile.is_archived)
 
+    def test_approval_archives_profile_without_linked_user(self):
+        self.profile.user = None
+        self.profile.save(update_fields=["user", "updated_at"])
+        request_obj = EmployeeDeletionRequest.objects.create(
+            company=self.company,
+            employee_profile=self.profile,
+            target_user=None,
+            requested_by=self.hr_user,
+            reason="Archive an imported profile",
+            archive_reason=EmployeeProfile.ArchiveReason.OTHER,
+            request_snapshot={"employee_id": self.profile.employee_id, "full_name": self.profile.full_name},
+        )
+
+        self.client.force_authenticate(user=self.ceo_user)
+        response = self.client.post(
+            f"/api/employees/deletion-requests/{request_obj.id}/approve/",
+            {},
+            format="json",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        request_obj.refresh_from_db()
+        self.profile.refresh_from_db()
+        self.assertEqual(request_obj.status, EmployeeDeletionRequest.Status.EXECUTED)
+        self.assertTrue(self.profile.is_archived)
+
     def test_hr_manager_cannot_patch_deletion_request_to_executed(self):
         request_obj = EmployeeDeletionRequest.objects.create(
             company=self.company,
