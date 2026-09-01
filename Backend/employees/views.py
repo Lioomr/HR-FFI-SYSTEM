@@ -1539,6 +1539,29 @@ class EmployeeDeletionRequestViewSet(viewsets.ModelViewSet):
         snapshot["target_user_was_active"] = bool(target_user and target_user.is_active)
         return snapshot
 
+    @staticmethod
+    def _retire_biotime_mapping_and_archive_profile(profile, execution_snapshot, actor, archive_reason, archived_at):
+        """Retire only live BioTime routing, never the employee's attendance history."""
+        from attendance.models import BioTimeEmployeeMap
+
+        # Keep this as a savepoint so a database rule failure leaves both the
+        # profile and its live mapping unchanged and can be reported cleanly.
+        with transaction.atomic():
+            biotime_mappings = list(
+                BioTimeEmployeeMap.objects.select_for_update().filter(employee_profile_id=profile.id)
+            )
+            if biotime_mappings:
+                execution_snapshot["biotime_mappings_removed"] = [
+                    {"id": mapping.id, "biotime_emp_code": mapping.biotime_emp_code} for mapping in biotime_mappings
+                ]
+                BioTimeEmployeeMap.objects.filter(pk__in=[mapping.pk for mapping in biotime_mappings]).delete()
+
+            profile.is_archived = True
+            profile.archived_at = archived_at
+            profile.archived_by = actor
+            profile.archive_reason = archive_reason
+            profile.save(update_fields=["is_archived", "archived_at", "archived_by", "archive_reason", "updated_at"])
+
     @action(detail=True, methods=["post"], url_path="approve")
     def approve(self, request, pk=None):
         if get_role(request.user) not in ["CEO", "SystemAdmin"]:
@@ -1561,26 +1584,25 @@ class EmployeeDeletionRequestViewSet(viewsets.ModelViewSet):
                 return error("Validation error", errors=["Employee is already archived."], status=422)
 
             execution_snapshot = self._build_execution_snapshot(instance)
-            # BioTime mappings may only point to active employees. Retire the
-            # integration routing link before archiving the profile; historical
-            # attendance records remain untouched and the removed mapping is
-            # retained in the archive snapshot for auditability.
-            from attendance.models import BioTimeEmployeeMap
-
-            biotime_mappings = list(
-                BioTimeEmployeeMap.objects.select_for_update().filter(employee_profile_id=profile.id)
-            )
-            if biotime_mappings:
-                execution_snapshot["biotime_mappings_removed"] = [
-                    {"id": mapping.id, "biotime_emp_code": mapping.biotime_emp_code} for mapping in biotime_mappings
-                ]
-                BioTimeEmployeeMap.objects.filter(pk__in=[mapping.pk for mapping in biotime_mappings]).delete()
             now = timezone.now()
-            profile.is_archived = True
-            profile.archived_at = now
-            profile.archived_by = request.user
-            profile.archive_reason = instance.archive_reason
-            profile.save(update_fields=["is_archived", "archived_at", "archived_by", "archive_reason", "updated_at"])
+            try:
+                self._retire_biotime_mapping_and_archive_profile(
+                    profile,
+                    execution_snapshot,
+                    request.user,
+                    instance.archive_reason,
+                    now,
+                )
+            except IntegrityError:
+                logger.exception("employee_archive_integrity_check_failed", extra={"request_id": instance.id})
+                return error(
+                    "Archive cannot be completed.",
+                    errors=[
+                        "The employee could not be archived because an active record still blocks the request. "
+                        "No attendance history or BioTime mapping was changed. Please contact HR support."
+                    ],
+                    status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                )
             execution_snapshot.update(
                 {
                     "is_archived": True,

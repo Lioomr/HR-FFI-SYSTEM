@@ -5,6 +5,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import IntegrityError
 from django.test import TestCase
 from django.utils import timezone
 from openpyxl import Workbook, load_workbook
@@ -1256,6 +1257,35 @@ class EmployeeDeletionWorkflowTests(TestCase):
             request_obj.execution_snapshot["biotime_mappings_removed"],
             [{"id": mapping.id, "biotime_emp_code": "BIO-DEL-001"}],
         )
+
+    @patch("employees.views.EmployeeProfile.save", side_effect=IntegrityError("archive guard failed"))
+    def test_approval_returns_a_clear_reason_when_an_archive_integrity_check_fails(self, _save_mock):
+        mapping = BioTimeEmployeeMap.objects.create(employee_profile=self.profile, biotime_emp_code="BIO-DEL-BLOCKED")
+        request_obj = EmployeeDeletionRequest.objects.create(
+            company=self.company,
+            employee_profile=self.profile,
+            target_user=self.employee_user,
+            requested_by=self.hr_user,
+            reason="Archive should explain an integrity failure",
+            archive_reason=EmployeeProfile.ArchiveReason.OTHER,
+            request_snapshot={"employee_id": self.profile.employee_id, "full_name": self.profile.full_name},
+        )
+
+        self.client.force_authenticate(user=self.ceo_user)
+        response = self.client.post(
+            f"/api/employees/deletion-requests/{request_obj.id}/approve/",
+            {},
+            format="json",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY, response.data)
+        self.assertIn("active record still blocks", str(response.data))
+        self.profile.refresh_from_db()
+        request_obj.refresh_from_db()
+        self.assertFalse(self.profile.is_archived)
+        self.assertEqual(request_obj.status, EmployeeDeletionRequest.Status.PENDING_CEO)
+        self.assertTrue(BioTimeEmployeeMap.objects.filter(pk=mapping.pk).exists())
 
     def test_hr_manager_cannot_patch_deletion_request_to_executed(self):
         request_obj = EmployeeDeletionRequest.objects.create(
