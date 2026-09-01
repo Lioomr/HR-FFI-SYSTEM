@@ -674,7 +674,7 @@ class BioTimeSyncTests(TestCase):
         self.assertEqual(result["created"], 1)
         record = AttendanceRecord.objects.get(employee_profile=self.profile, date=date(2026, 4, 1))
         self.assertEqual(record.source, AttendanceRecord.Source.SYSTEM)
-        self.assertEqual(record.status, AttendanceRecord.Status.PRESENT)
+        self.assertEqual(record.status, AttendanceRecord.Status.PENDING_HR)
         self.assertIsNotNone(record.check_in_at)
         self.assertIsNotNone(record.check_out_at)
         self.assertIsNotNone(BioTimeConfig.get_solo().last_sync_time)
@@ -817,7 +817,7 @@ class BioTimeSyncTests(TestCase):
         self.assertEqual(manual.check_in_at, timezone.make_aware(datetime(2026, 4, 3, 9, 0)))
         self.assertEqual(system.check_in_at, timezone.make_aware(datetime(2026, 4, 4, 8, 0)))
         self.assertEqual(system.check_out_at, timezone.make_aware(datetime(2026, 4, 4, 18, 0)))
-        self.assertEqual(system.status, AttendanceRecord.Status.PRESENT)
+        self.assertEqual(system.status, AttendanceRecord.Status.PENDING_HR)
         self.assertEqual(system.biotime_emp_code, "100001")
         self.assertEqual(system.biotime_terminal_sn, "DEV-1")
 

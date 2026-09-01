@@ -37,6 +37,7 @@ import {
 import { isApiError } from "../../services/api/apiTypes";
 import { useI18n } from "../../i18n/useI18n";
 import { downloadBlob } from "../../utils/download";
+import { formatDateTime } from "../../utils/dateTime";
 
 const { Text } = Typography;
 
@@ -412,7 +413,13 @@ function genericMetadataFields(items: EmployeeDocument[]): MetadataField[] {
   return keys.map((key) => ({
     key,
     labelKey: EXTRACTED_FIELD_LABEL_KEYS[key],
-    value: (doc: EmployeeDocument) => textValue(doc.extracted_fields?.[key]),
+    value: (doc: EmployeeDocument) => {
+      const value = textValue(doc.extracted_fields?.[key]);
+      // System-generated documents retain approval timestamps as ISO UTC in
+      // their audit metadata. Archive readers should see the same local time
+      // used by the rest of the HR UI, never the raw database value.
+      return key.endsWith("_at") && value ? formatDateTime(value, "") : value;
+    },
     width: 140,
   }));
 }

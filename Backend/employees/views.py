@@ -617,10 +617,13 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         return profile, None
 
     @staticmethod
-    def _documents_for_profile(profile):
-        return profile.documents.select_related("uploaded_by", "company", "leave_request").filter(
+    def _documents_for_profile(profile, *, include_hr_only=True):
+        queryset = profile.documents.select_related("uploaded_by", "company", "leave_request").filter(
             company_id=profile.company_id
         )
+        if not include_hr_only:
+            queryset = queryset.exclude(starting_work_acknowledgment__isnull=False)
+        return queryset
 
     @action(detail=True, methods=["get", "post"], url_path="documents")
     def documents(self, request, pk=None):
@@ -631,7 +634,10 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             return error_response
 
         if request.method == "GET":
-            qs = self._documents_for_profile(profile)
+            qs = self._documents_for_profile(
+                profile,
+                include_hr_only=get_role(request.user) in {"SystemAdmin", "HRManager"},
+            )
             serializer = EmployeeDocumentSerializer(qs, many=True, context={"request": request})
             return success(serializer.data)
 
@@ -677,7 +683,10 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         if error_response:
             return error_response
 
-        document = self._documents_for_profile(profile).filter(pk=document_id).first()
+        document = self._documents_for_profile(
+            profile,
+            include_hr_only=get_role(request.user) in {"SystemAdmin", "HRManager"},
+        ).filter(pk=document_id).first()
         if document is None:
             return error("Not found", errors=["Not found."], status=404)
 

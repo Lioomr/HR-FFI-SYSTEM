@@ -95,6 +95,7 @@ class EmployeeDocumentSecurityTests(TestCase):
         self.assertIn("attachment", download_response["Content-Disposition"].lower())
         self.assertEqual(download_response["X-Content-Type-Options"], "nosniff")
         self.assertEqual(download_response["Cache-Control"], "private, no-store")
+        downloaded_bytes = b"".join(download_response.streaming_content)
         for resource_closer in download_response._resource_closers:
             resource_closer()
         download_response._resource_closers.clear()
@@ -105,7 +106,7 @@ class EmployeeDocumentSecurityTests(TestCase):
         )
         self.assertEqual(other_profile_response.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(foreign_document_response.status_code, status.HTTP_404_NOT_FOUND)
-        self.assertTrue(b"".join(download_response.streaming_content).startswith(b"%PDF"))
+        self.assertTrue(downloaded_bytes.startswith(b"%PDF"))
 
     def test_hr_direct_document_routes_are_limited_to_active_company(self):
         foreign_document = self._document(self.other_profile)

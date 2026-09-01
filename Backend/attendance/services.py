@@ -153,7 +153,7 @@ class SyncBioTimeService:
                         try:
                             from job_offers.starting_work_service import generate_starting_work_acknowledgment
 
-                            generate_starting_work_acknowledgment(record)
+                            generate_starting_work_acknowledgment(record, received_from_biotime=True)
                         except Exception:
                             logger.exception(
                                 "starting_work_acknowledgment_generation_failed",
@@ -173,9 +173,6 @@ class SyncBioTimeService:
                     if check_out_at and (not record.check_out_at or check_out_at > record.check_out_at):
                         record.check_out_at = check_out_at
                         update_fields.append("check_out_at")
-                    if record.status != AttendanceRecord.Status.PRESENT:
-                        record.status = AttendanceRecord.Status.PRESENT
-                        update_fields.append("status")
                     if record.biotime_emp_code != emp_code:
                         record.biotime_emp_code = emp_code
                         update_fields.append("biotime_emp_code")
@@ -186,7 +183,35 @@ class SyncBioTimeService:
                     if update_fields:
                         record.save(update_fields=[*update_fields, "updated_at"])
                         counts["updated"] += 1
-                    else:
+
+                    acknowledgment = None
+                    try:
+                        from job_offers.starting_work_service import generate_starting_work_acknowledgment
+
+                        acknowledgment = generate_starting_work_acknowledgment(record, received_from_biotime=True)
+                    except Exception:
+                        logger.exception(
+                            "starting_work_acknowledgment_verification_hold_failed",
+                            extra={"attendance_record_id": record.id},
+                        )
+                    if acknowledgment is None:
+                        from job_offers.models import StartingWorkAcknowledgment
+
+                        acknowledgment = StartingWorkAcknowledgment.objects.filter(
+                            employee_profile=record.employee_profile
+                        ).first()
+                    record.refresh_from_db(fields=["status", "source", "is_overridden"])
+                    if (
+                        record.source == AttendanceRecord.Source.SYSTEM
+                        and not record.is_overridden
+                        and (acknowledgment is None or acknowledgment.status == "approved")
+                        and record.status != AttendanceRecord.Status.PRESENT
+                    ):
+                        record.status = AttendanceRecord.Status.PRESENT
+                        record.save(update_fields=["status", "updated_at"])
+                        if not update_fields:
+                            counts["updated"] += 1
+                    elif not update_fields:
                         counts["skipped"] += 1
 
         logger.info("BioTime sync completed: %s", counts)

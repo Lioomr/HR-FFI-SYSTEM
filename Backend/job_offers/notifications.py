@@ -229,14 +229,14 @@ def notify_starting_work_acknowledgment_ready(
         or getattr(profile.user, "full_name", "")
         or profile.employee_id
     )
-    profile_path = f"/hr/employees/{profile.id}"
+    profile_path = f"/hr/starting-work-acknowledgments/{acknowledgment.id}"
     profile_url = _frontend_url(profile_path)
     backend_url = (getattr(settings, "BACKEND_PUBLIC_URL", "") or "").rstrip("/")
-    download_path = f"/api/employees/{profile.id}/documents/{acknowledgment.document_id}/download/"
+    download_path = f"/starting-work-acknowledgments/{acknowledgment.id}/pdf/"
     download_url = f"{backend_url}{download_path}" if backend_url else download_path
     start_date = acknowledgment.attendance_record.date.isoformat()
     message = (
-        f"Starting Work Acknowledgment is ready to download. Employee: {employee_name}; "
+        f"Starting Work Acknowledgment requires HR BioTime verification. Employee: {employee_name}; "
         f"Employee ID: {profile.employee_id}; Start date: {start_date}; "
         f"Profile: {profile_url}; Document: {download_url}"
     )
@@ -245,8 +245,8 @@ def notify_starting_work_acknowledgment_ready(
     for recipient in get_company_hr_recipients(acknowledgment.company):
         dispatch = dispatch_notification_channels(
             recipient=recipient,
-            event_key="starting_work_acknowledgment.ready",
-            title=f"Starting Work Acknowledgment ready for {employee_name}",
+            event_key="starting_work_acknowledgment.pending_hr",
+            title=f"Verify starting work attendance for {employee_name}",
             message=message,
             category=Notification.Category.DOCUMENT,
             action_url=profile_path,
@@ -258,7 +258,7 @@ def notify_starting_work_acknowledgment_ready(
                 "document_id": acknowledgment.document_id,
                 "start_date": start_date,
             },
-            deduplication_key=f"starting_work_acknowledgment.ready:{acknowledgment.id}",
+            deduplication_key=f"starting_work_acknowledgment.pending_hr:{acknowledgment.id}",
             company=acknowledgment.company,
             whatsapp_enabled=True,
             email_enabled=False,
@@ -266,11 +266,11 @@ def notify_starting_work_acknowledgment_ready(
         recipient_name = recipient.full_name or recipient.email
         email = _safe_email(
             to_email=recipient.email,
-            subject=f"Starting Work Acknowledgment ready for {employee_name}",
+            subject=f"Verify starting work attendance for {employee_name}",
             html=(
                 f"<p>Dear {escape(recipient_name)},</p><p>{escape(message)}</p>"
-                f'<p><a href="{escape(profile_url)}">Open employee profile</a></p>'
-                f'<p><a href="{escape(download_url)}">Download acknowledgment</a></p>'
+                f'<p><a href="{escape(profile_url)}">Open HR verification</a></p>'
+                f'<p><a href="{escape(download_url)}">Download private acknowledgement</a></p>'
             ),
             text=f"{message}\nProfile: {profile_url}\nDocument: {download_url}",
         )

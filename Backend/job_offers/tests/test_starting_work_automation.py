@@ -144,7 +144,7 @@ class StartingWorkAcknowledgmentAutomationTests(TestCase):
         )
         self.assertEqual(acknowledgment.job_offer, offer)
         self.assertEqual(acknowledgment.reference_number, "SWA-SWA-EMP-100-20260401")
-        self.assertEqual(acknowledgment.status, StartingWorkAcknowledgment.Status.GENERATED)
+        self.assertEqual(acknowledgment.status, StartingWorkAcknowledgment.Status.PENDING_HR)
         self.assertTrue(acknowledgment.generated_by_system)
         self.assertEqual(acknowledgment.document.document_type, EmployeeDocument.DocumentType.OTHER)
         self.assertEqual(acknowledgment.document.custom_name, "Starting Work Acknowledgment")
@@ -159,9 +159,10 @@ class StartingWorkAcknowledgmentAutomationTests(TestCase):
         self.assertEqual(
             set(AuditLog.objects.filter(entity_id=str(acknowledgment.id)).values_list("action", flat=True)),
             {
-                "starting_work_acknowledgment_generated",
+                "starting_work_acknowledgment_pending_hr_created",
                 "starting_work_acknowledgment_document_archived",
                 "starting_work_acknowledgment_hr_notified",
+                "workflow_transition",
             },
         )
 
@@ -308,12 +309,14 @@ class StartingWorkAcknowledgmentAutomationTests(TestCase):
             date=date(2026, 4, 1),
             source=AttendanceRecord.Source.SYSTEM,
             status=AttendanceRecord.Status.PRESENT,
+            biotime_emp_code=self.mapping.biotime_emp_code,
         )
         later = AttendanceRecord.objects.create(
             employee_profile=self.profile,
             date=date(2026, 4, 2),
             source=AttendanceRecord.Source.SYSTEM,
             status=AttendanceRecord.Status.PRESENT,
+            biotime_emp_code=self.mapping.biotime_emp_code,
         )
 
         self.assertIsNone(generate_starting_work_acknowledgment(later))

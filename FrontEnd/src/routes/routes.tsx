@@ -52,6 +52,8 @@ import TemplateLibraryPage from "../pages/hr/templates/TemplateLibraryPage";
 import JobOffersListPage from "../pages/hr/job-offers/JobOffersListPage";
 import JobOfferFormPage from "../pages/hr/job-offers/JobOfferFormPage";
 import JobOfferDetailPage from "../pages/hr/job-offers/JobOfferDetailPage";
+import StartingWorkAcknowledgmentsListPage from "../pages/hr/starting-work-acknowledgments/StartingWorkAcknowledgmentsListPage";
+import StartingWorkAcknowledgmentDetailPage from "../pages/hr/starting-work-acknowledgments/StartingWorkAcknowledgmentDetailPage";
 import EmployeePayslipsListPage from "../pages/employee/payslips/EmployeePayslipsListPage";
 import EmployeePayslipDetailsPage from "../pages/employee/payslips/EmployeePayslipDetailsPage";
 
@@ -228,6 +230,17 @@ export const routes = [
               { path: "hr/job-offers/new", element: <JobOfferFormPage /> },
               { path: "hr/job-offers/:id", element: <JobOfferDetailPage /> },
               { path: "hr/job-offers/:id/edit", element: <JobOfferFormPage /> },
+
+              // Starting work acknowledgements: HR-only BioTime verification.
+              // There is deliberately no employee-facing counterpart.
+              {
+                path: "hr/starting-work-acknowledgments",
+                element: <StartingWorkAcknowledgmentsListPage />,
+              },
+              {
+                path: "hr/starting-work-acknowledgments/:id",
+                element: <StartingWorkAcknowledgmentDetailPage />,
+              },
 
               // Import Employees
               {

@@ -154,7 +154,9 @@ class JobOffer(models.Model):
 
 class StartingWorkAcknowledgment(models.Model):
     class Status(models.TextChoices):
-        GENERATED = "generated", "Generated"
+        PENDING_HR = "pending_hr", "Pending HR Verification"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
 
     employee_profile = models.OneToOneField(
         "employees.EmployeeProfile",
@@ -179,9 +181,31 @@ class StartingWorkAcknowledgment(models.Model):
         related_name="starting_work_acknowledgments",
     )
     reference_number = models.CharField(max_length=100)
-    status = models.CharField(max_length=16, choices=Status.choices, default=Status.GENERATED, db_index=True)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING_HR, db_index=True)
     generated_at = models.DateTimeField(default=timezone.now)
     generated_by_system = models.BooleanField(default=True)
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="approved_starting_work_acknowledgments",
+        null=True,
+        blank=True,
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    rejected_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="rejected_starting_work_acknowledgments",
+        null=True,
+        blank=True,
+    )
+    rejected_at = models.DateTimeField(null=True, blank=True)
+    rejection_reason = models.TextField(blank=True)
+    affected_attendance_records = models.ManyToManyField(
+        "attendance.AttendanceRecord",
+        related_name="starting_work_verifications",
+        blank=True,
+    )
     document = models.OneToOneField(
         "employees.EmployeeDocument",
         on_delete=models.PROTECT,
