@@ -22,13 +22,16 @@ from announcements.models import Announcement
 from audit.utils import audit
 from core.exporting import audit_export, xlsx_response
 from core.pagination import EmployeePagination, StandardPagination
-from core.permissions import get_role
+from core.permissions import get_role, is_department_ceo_approver_user
 from core.responses import error, success
 from core.services import (
     get_ceo_approver_users,
+    get_workflow_snapshots,
     notify_profile_request_status_whatsapp,
     notify_users_for_pending_status,
+    sync_workflow,
 )
+from in_app_notifications.models import Notification
 from leaves.models import LeaveRequest
 from loans.models import LoanRequest
 from organization.services import (
@@ -41,11 +44,22 @@ from organization.services import (
     get_scope_company_ids,
 )
 
+from .contract_expiry import (
+    ensure_contract_decision,
+    finalize_decision,
+    notify_hr_final,
+    notify_manual_resolution,
+    reject_decision,
+    submit_decision,
+)
 from .document_extraction import extract_document_fields
-from .models import EmployeeDeletionRequest, EmployeeDocument, EmployeeImport, EmployeeProfile
+from .models import ContractDecision, EmployeeDeletionRequest, EmployeeDocument, EmployeeImport, EmployeeProfile
 from .notifications import notify_document_expiry_in_app
 from .permissions import IsEmployeeOwner, IsHRManagerOnly, IsHRManagerOrAdmin
 from .serializers import (
+    ContractDecisionCommentSerializer,
+    ContractDecisionReadSerializer,
+    ContractDecisionSubmitSerializer,
     DelegationCandidateSerializer,
     EmployeeDeletionRequestCreateSerializer,
     EmployeeDeletionRequestReadSerializer,
@@ -1352,6 +1366,29 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
 
         return success({"delivery": delivery})
 
+    @action(detail=True, methods=["post"], url_path="contract-decisions")
+    def contract_decisions(self, request, pk=None):
+        if get_role(request.user) not in ["SystemAdmin", "HRManager"]:
+            return error("Forbidden", status=status.HTTP_403_FORBIDDEN)
+        profile = self.get_object()
+        if not profile.contract_expiry:
+            return error(
+                "Validation error",
+                errors=["Employee does not have a contract expiry date."],
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+        serializer = ContractDecisionSubmitSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error("Validation error", errors=serializer.errors, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        decision, _ = ensure_contract_decision(profile)
+        try:
+            decision = submit_decision(decision.id, actor=request.user, **serializer.validated_data)
+        except ValueError as exc:
+            return error("Validation error", errors=[str(exc)], status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        except ContractDecision.DoesNotExist:
+            return error("Contract decision not found.", status=status.HTTP_404_NOT_FOUND)
+        return success(ContractDecisionReadSerializer(decision, context={"request": request}).data)
+
     @action(
         detail=False,
         methods=["post"],
@@ -1408,6 +1445,132 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             return response
         except Exception as e:
             return error(f"Failed to download template: {str(e)}", status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ContractDecisionViewSet(viewsets.ReadOnlyModelViewSet):
+    permission_classes = [IsAuthenticated]
+    serializer_class = ContractDecisionReadSerializer
+    pagination_class = StandardPagination
+
+    def get_queryset(self):
+        qs = ContractDecision.objects.select_related(
+            "company", "employee_profile", "requested_by", "ceo_decided_by", "finalized_by"
+        )
+        role = get_role(self.request.user)
+        if role in ["SystemAdmin", "HRManager"]:
+            return filter_queryset_by_company_scope(qs, self.request)
+        if is_department_ceo_approver_user(self.request.user):
+            return filter_queryset_by_company_scope(
+                qs.filter(
+                    Q(status=ContractDecision.Status.PENDING_CEO)
+                    | Q(ceo_decided_by=self.request.user)
+                    | Q(
+                        status__in=[
+                            ContractDecision.Status.AUTO_RENEWAL_FAILED,
+                            ContractDecision.Status.MANUAL_RESOLUTION_REQUIRED,
+                        ]
+                    )
+                ),
+                self.request,
+            )
+        return qs.none()
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        status_value = request.query_params.get("status")
+        if status_value:
+            queryset = queryset.filter(status=status_value)
+        employee_id = request.query_params.get("employee_id")
+        if employee_id:
+            queryset = queryset.filter(employee_profile__employee_id__icontains=employee_id)
+        page = self.paginate_queryset(queryset)
+        items = list(page if page is not None else queryset)
+        decision_ids = [item.id for item in items]
+        workflows = get_workflow_snapshots(items, actor=request.user)
+        notifications = Notification.objects.filter(
+            related_object_type="employees.contractdecision",
+            related_object_id__in=[str(item_id) for item_id in decision_ids],
+        ).prefetch_related("deliveries")
+        notification_status = {decision_id: [] for decision_id in decision_ids}
+        for notification in notifications:
+            notification_status.setdefault(int(notification.related_object_id), []).append(
+                {
+                    "id": notification.id,
+                    "event_key": notification.event_key,
+                    "milestone": (notification.metadata or {}).get("milestone"),
+                    "created_at": notification.created_at.isoformat(),
+                    "deliveries": [
+                        {"channel": delivery.channel, "status": delivery.status}
+                        for delivery in notification.deliveries.all()
+                        if delivery.recipient_id == notification.recipient_id
+                    ],
+                }
+            )
+        context = {
+            "request": request,
+            "workflow_snapshots": workflows,
+            "notification_status_by_decision_id": notification_status,
+        }
+        serializer = self.get_serializer(items, many=True, context=context)
+        if page is not None:
+            return self.get_paginated_response(serializer.data)
+        return success({"results": serializer.data, "count": queryset.count()})
+
+    def retrieve(self, request, *args, **kwargs):
+        return success(self.get_serializer(self.get_object(), context={"request": request}).data)
+
+    @action(detail=True, methods=["post"])
+    def approve(self, request, pk=None):
+        if not is_department_ceo_approver_user(request.user):
+            return error("Only a CEO approver can approve contract decisions.", status=status.HTTP_403_FORBIDDEN)
+        serializer = ContractDecisionCommentSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error("Validation error", errors=serializer.errors, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        decision = self.get_object()
+        workflow = sync_workflow(decision, actor=request.user)
+        from core.services.workflow_engine import can_user_act_on_instance
+
+        if not can_user_act_on_instance(request.user, decision, workflow):
+            return error("You cannot act on this contract decision.", status=status.HTTP_403_FORBIDDEN)
+        try:
+            decision = finalize_decision(decision.id, actor=request.user, comment=serializer.validated_data.get("comment", ""))
+        except ValueError as exc:
+            return error("Validation error", errors=[str(exc)], status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        try:
+            if decision.status == ContractDecision.Status.MANUAL_RESOLUTION_REQUIRED:
+                notify_manual_resolution(decision)
+            else:
+                notify_hr_final(decision)
+        except Exception:
+            logger.exception("contract_decision_final_notification_failed", extra={"decision_id": decision.id})
+        return success(self.get_serializer(decision, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"])
+    def reject(self, request, pk=None):
+        if not is_department_ceo_approver_user(request.user):
+            return error("Only a CEO approver can reject contract decisions.", status=status.HTTP_403_FORBIDDEN)
+        serializer = ContractDecisionCommentSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error("Validation error", errors=serializer.errors, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        decision = self.get_object()
+        workflow = sync_workflow(decision, actor=request.user)
+        from core.services.workflow_engine import can_user_act_on_instance
+
+        if not can_user_act_on_instance(request.user, decision, workflow):
+            return error("You cannot act on this contract decision.", status=status.HTTP_403_FORBIDDEN)
+        try:
+            decision = reject_decision(
+                decision.id,
+                actor=request.user,
+                comment=serializer.validated_data.get("comment", ""),
+            )
+        except ValueError as exc:
+            return error("Validation error", errors=[str(exc)], status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        try:
+            notify_hr_final(decision)
+        except Exception:
+            logger.exception("contract_decision_rejection_notification_failed", extra={"decision_id": decision.id})
+        return success(self.get_serializer(decision, context={"request": request}).data)
 
 
 class EmployeeDeletionRequestViewSet(viewsets.ModelViewSet):

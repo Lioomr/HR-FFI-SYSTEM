@@ -21,7 +21,11 @@ import {
   message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { ReloadOutlined, SearchOutlined } from "@ant-design/icons";
+import {
+  DownloadOutlined,
+  ReloadOutlined,
+  SearchOutlined,
+} from "@ant-design/icons";
 import dayjs from "dayjs";
 
 import PageHeader from "../../components/ui/PageHeader";
@@ -51,7 +55,17 @@ import {
   formatDurationBetween,
   formatTimeOnly,
 } from "../../utils/dateTime";
+import { downloadBlob } from "../../utils/download";
 import { useI18n } from "../../i18n/useI18n";
+
+const EXPORT_PAGE_SIZE = 200;
+const EXPORT_MAX_ROWS = 10000;
+
+/** Quote a CSV field only when it contains a delimiter, quote, or newline. */
+const csvCell = (value: unknown): string => {
+  const text = value == null ? "" : String(value);
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+};
 
 const { RangePicker } = DatePicker;
 const { Text } = Typography;
@@ -117,6 +131,7 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
   >({});
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const [status, setStatus] = useState<AttendanceStatus | "ALL">("ALL");
@@ -175,24 +190,31 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
     };
   }, [employeeQueryInput]);
 
+  // Filter params shared by the paged table fetch and the CSV export, minus
+  // pagination — the export walks its own pages.
+  const buildBaseParams = useCallback((): AttendanceFilters => {
+    const params: AttendanceFilters = {};
+    if (status !== "ALL") params.status = status;
+    if (dateRange) {
+      params.date_from = dateRange[0].format("YYYY-MM-DD");
+      params.date_to = dateRange[1].format("YYYY-MM-DD");
+    }
+    if (search) params.search = search;
+    if (supportsAdvancedFilters) {
+      if (source !== "ALL") params.source = source;
+      if (employeeId) params.employee_id = employeeId;
+    }
+    return params;
+  }, [dateRange, employeeId, search, source, status, supportsAdvancedFilters]);
+
   const fetchRecords = useCallback(async () => {
     setLoading(true);
     try {
       const params: AttendanceFilters = {
+        ...buildBaseParams(),
         page: pagination.current,
         page_size: pagination.pageSize,
       };
-
-      if (status !== "ALL") params.status = status;
-      if (dateRange) {
-        params.date_from = dateRange[0].format("YYYY-MM-DD");
-        params.date_to = dateRange[1].format("YYYY-MM-DD");
-      }
-      if (search) params.search = search;
-      if (supportsAdvancedFilters) {
-        if (source !== "ALL") params.source = source;
-        if (employeeId) params.employee_id = employeeId;
-      }
 
       const response =
         role === "ceo"
@@ -218,16 +240,7 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [
-    dateRange,
-    employeeId,
-    pagination,
-    role,
-    search,
-    source,
-    status,
-    supportsAdvancedFilters,
-  ]);
+  }, [buildBaseParams, pagination, role]);
 
   useEffect(() => {
     fetchRecords();
@@ -404,6 +417,82 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
     }
   };
 
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const base = buildBaseParams();
+      const rows: AttendanceRecord[] = [];
+      let page = 1;
+      let expected = Infinity;
+
+      while (rows.length < expected && rows.length < EXPORT_MAX_ROWS) {
+        const pageParams: AttendanceFilters = {
+          ...base,
+          page,
+          page_size: EXPORT_PAGE_SIZE,
+        };
+        const response =
+          role === "ceo"
+            ? await getCEOAttendance(pageParams)
+            : await getGlobalAttendance(pageParams);
+        const data = unwrapEnvelope(response);
+        const normalized = normalizeListData<AttendanceRecord>(data);
+        rows.push(...normalized.items);
+        expected = normalized.total || rows.length;
+        if (normalized.items.length === 0) break;
+        page += 1;
+      }
+
+      if (rows.length === 0) {
+        message.info(t("attendancePreview.export.empty"));
+        return;
+      }
+
+      const header = [
+        t("common.employee"),
+        t("common.date"),
+        t("attendance.checkIn"),
+        t("attendance.checkOut"),
+        t("attendancePreview.columns.duration"),
+        t("common.status"),
+        t("attendancePreview.columns.lateBy"),
+        t("hr.attendance.source"),
+      ];
+      const body = rows.map((record) => [
+        getEmployeeName(record),
+        formatDateOnly(record.date),
+        formatTimeOnly(record.check_in_at, ""),
+        formatTimeOnly(record.check_out_at, ""),
+        formatDurationBetween(record.check_in_at, record.check_out_at, ""),
+        getStatusLabel(record.status),
+        record.late_minutes && record.late_minutes > 0
+          ? String(record.late_minutes)
+          : "",
+        getSourceLabel(record.source),
+      ]);
+      const csv = [header, ...body]
+        .map((cols) => cols.map(csvCell).join(","))
+        .join("\r\n");
+
+      // Prepend a UTF-8 BOM so Excel reads non-ASCII (e.g. Arabic names) right.
+      const bom = String.fromCharCode(0xfeff);
+      downloadBlob(
+        new Blob([bom + csv], { type: "text/csv;charset=utf-8;" }),
+        `attendance-${dayjs().format("YYYY-MM-DD")}.csv`,
+      );
+
+      if (rows.length >= EXPORT_MAX_ROWS && expected > EXPORT_MAX_ROWS) {
+        message.warning(
+          t("attendancePreview.export.capped", { max: EXPORT_MAX_ROWS }),
+        );
+      }
+    } catch (error: any) {
+      message.error(error?.message || t("attendancePreview.export.failed"));
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const employeeOptions = useMemo(
     () =>
       employeeOptionsSource.map((employee) => {
@@ -428,11 +517,29 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
     (summary.PENDING_MGR || 0) +
     (summary.PENDING_CEO || 0);
 
-  const summaryItems: Array<{ label: string; value: number; color: string }> = [
+  // Attendance rate = present-or-late as a share of every accountable record
+  // (i.e. excluding pending and rejected). "—" when nothing is accountable yet.
+  const onTimeOrLate = (summary.PRESENT || 0) + (summary.LATE || 0);
+  const accountable = onTimeOrLate + (summary.ABSENT || 0);
+  const attendanceRate =
+    accountable > 0
+      ? `${Math.round((onTimeOrLate / accountable) * 100)}%`
+      : "—";
+
+  const summaryItems: Array<{
+    label: string;
+    value: number | string;
+    color: string;
+  }> = [
     {
       label: t("attendancePreview.summary.total"),
       value: total,
       color: "#0f172a",
+    },
+    {
+      label: t("attendancePreview.summary.attendanceRate"),
+      value: attendanceRate,
+      color: "#0ea5e9",
     },
     {
       label: t("attendancePreview.status.present"),
@@ -516,12 +623,34 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
         formatDurationBetween(record.check_in_at, record.check_out_at, "-"),
     },
     {
+      title: t("attendancePreview.columns.lateBy"),
+      key: "late_minutes",
+      width: 100,
+      render: (_: unknown, record: AttendanceRecord) =>
+        record.late_minutes && record.late_minutes > 0 ? (
+          <Text style={{ color: "#f59e0b", fontWeight: 600 }}>
+            +{record.late_minutes}m
+          </Text>
+        ) : (
+          <Text type="secondary">—</Text>
+        ),
+    },
+    {
       title: t("common.status"),
       dataIndex: "status",
       key: "status",
-      width: 150,
-      render: (value: AttendanceStatus) => (
-        <Tag color={statusColors[value]}>{getStatusLabel(value)}</Tag>
+      width: 170,
+      render: (value: AttendanceStatus, record: AttendanceRecord) => (
+        <Space size={4} wrap>
+          <Tag color={statusColors[value]} style={{ marginInlineEnd: 0 }}>
+            {getStatusLabel(value)}
+          </Tag>
+          {record.is_late_flagged && value.startsWith("PENDING") && (
+            <Tag color="gold" style={{ marginInlineEnd: 0 }}>
+              {t("attendancePreview.lateArrivalTag")}
+            </Tag>
+          )}
+        </Space>
       ),
     },
     {
@@ -613,13 +742,23 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
             : t("attendancePreview.subtitle")
         }
         actions={
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={fetchRecords}
-            loading={loading}
-          >
-            {t("common.refresh")}
-          </Button>
+          <Space>
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={handleExport}
+              loading={exporting}
+              disabled={loading || records.length === 0}
+            >
+              {t("attendancePreview.export.button")}
+            </Button>
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={fetchRecords}
+              loading={loading}
+            >
+              {t("common.refresh")}
+            </Button>
+          </Space>
         }
       />
 

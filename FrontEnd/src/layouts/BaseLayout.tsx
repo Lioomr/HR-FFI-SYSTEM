@@ -745,6 +745,14 @@ export default function BaseLayout() {
                 </Link>
               ),
             },
+            {
+              key: "/hr/contract-decisions",
+              label: (
+                <Link to="/hr/contract-decisions">
+                  {t("layout.contractDecisions", "Contract Decisions")}
+                </Link>
+              ),
+            },
           ],
         },
         {
@@ -1247,6 +1255,15 @@ export default function BaseLayout() {
                 label: (
                   <Link to="/ceo/employees/deletion-requests">
                     {t("employees.removalInbox.menu", "Employee Removals")}
+                  </Link>
+                ),
+              },
+              {
+                key: "/ceo/contract-decisions",
+                icon: <FileTextOutlined />,
+                label: (
+                  <Link to="/ceo/contract-decisions">
+                    {t("layout.contractDecisions", "Contract Decisions")}
                   </Link>
                 ),
               },

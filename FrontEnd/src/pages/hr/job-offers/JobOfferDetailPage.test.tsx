@@ -26,6 +26,11 @@ vi.mock("../../../services/api/downloads", () => ({
   triggerBlobDownload: vi.fn(),
 }));
 
+vi.mock("../../../utils/download", () => ({
+  openBlob: vi.fn(),
+  previewBlob: vi.fn().mockResolvedValue(true),
+}));
+
 vi.mock("../../../services/api/employeesApi", () => ({
   getEmployeeDocuments: vi.fn(),
   downloadEmployeeDocument: vi.fn(),
@@ -34,6 +39,7 @@ vi.mock("../../../services/api/employeesApi", () => ({
 import JobOfferDetailPage from "./JobOfferDetailPage";
 import * as jobOffersApi from "../../../services/api/jobOffersApi";
 import * as downloads from "../../../services/api/downloads";
+import * as downloadUtils from "../../../utils/download";
 import * as employeesApi from "../../../services/api/employeesApi";
 import { makeJobOffer, makeWorkflow } from "./testFixtures";
 import { useI18nStore } from "../../../i18n/i18nStore";
@@ -54,6 +60,10 @@ const downloadJobOfferCv =
   jobOffersApi.downloadJobOfferCv as unknown as ReturnType<typeof vi.fn>;
 const triggerBlobDownload =
   downloads.triggerBlobDownload as unknown as ReturnType<typeof vi.fn>;
+const openBlob = downloadUtils.openBlob as unknown as ReturnType<typeof vi.fn>;
+const previewBlob = downloadUtils.previewBlob as unknown as ReturnType<
+  typeof vi.fn
+>;
 const getEmployeeDocuments =
   employeesApi.getEmployeeDocuments as unknown as ReturnType<typeof vi.fn>;
 const downloadEmployeeDocument =
@@ -106,6 +116,9 @@ beforeEach(() => {
   submitJobOffer.mockReset();
   downloadJobOfferCv.mockReset();
   triggerBlobDownload.mockReset();
+  openBlob.mockReset();
+  previewBlob.mockReset().mockResolvedValue(true);
+  vi.spyOn(window, "open").mockReturnValue(null);
   getEmployeeDocuments
     .mockReset()
     .mockResolvedValue({ status: "success", data: [] });
@@ -188,6 +201,63 @@ describe("JobOfferDetailPage", () => {
 
     await waitFor(() => expect(downloadJobOfferPdf).toHaveBeenCalledWith("11"));
     expect(triggerBlobDownload).toHaveBeenCalledWith(blob, "job_offer_11.pdf");
+  });
+
+  it("previews the offer PDF in the browser instead of downloading it", async () => {
+    getJobOffer.mockResolvedValue({ status: "success", data: draftOffer });
+    const blob = new Blob(["pdf"], { type: "application/pdf" });
+    downloadJobOfferPdf.mockResolvedValue(blob);
+
+    render(<JobOfferDetailPage />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Preview PDF/i }),
+    );
+
+    await waitFor(() => expect(downloadJobOfferPdf).toHaveBeenCalledWith("11"));
+    expect(previewBlob).toHaveBeenCalled();
+    expect(previewBlob.mock.calls[0][0]).toBe(blob);
+    // A preview must never fall through to a file download.
+    expect(triggerBlobDownload).not.toHaveBeenCalled();
+  });
+
+  it("previews the CV in a new tab, without downloading, when it is renderable", async () => {
+    getJobOffer.mockResolvedValue({
+      status: "success",
+      data: { ...draftOffer, has_cv: true },
+    });
+    const blob = new Blob(["%PDF-1.7"], { type: "application/octet-stream" });
+    downloadJobOfferCv.mockResolvedValue(blob);
+    previewBlob.mockResolvedValue(true);
+
+    render(<JobOfferDetailPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Preview CV/i }));
+
+    await waitFor(() => expect(downloadJobOfferCv).toHaveBeenCalledWith("11"));
+    expect(previewBlob).toHaveBeenCalled();
+    expect(previewBlob.mock.calls[0][0]).toBe(blob);
+    expect(triggerBlobDownload).not.toHaveBeenCalled();
+  });
+
+  it("falls back to downloading the CV when it cannot be previewed", async () => {
+    getJobOffer.mockResolvedValue({
+      status: "success",
+      data: { ...draftOffer, has_cv: true },
+    });
+    const blob = new Blob(["PK"], {
+      type: "application/octet-stream",
+    });
+    downloadJobOfferCv.mockResolvedValue(blob);
+    previewBlob.mockResolvedValue(false);
+
+    render(<JobOfferDetailPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Preview CV/i }));
+
+    await waitFor(() =>
+      expect(triggerBlobDownload).toHaveBeenCalledWith(blob, "job_offer_11_cv"),
+    );
   });
 
   it("hides send and cancel once the offer is accepted", async () => {

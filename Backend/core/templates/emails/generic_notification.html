@@ -1,0 +1,72 @@
+{% extends "emails/base_email.html" %}
+{% comment %}
+Generic bilingual notification. Driven entirely by context — no bespoke markup.
+
+Required : title, title_ar, message, message_ar, employee_name
+Optional : subtitle, subtitle_ar
+           status_label, status_label_ar, status_color   (e.g. #C2410C action, #15803d success, #b42318 danger, #1d4ed8 info)
+           rows            list of {"label", "label_ar", "value", "value_ar"(opt), "value_color"(opt)}
+           details_title, details_title_ar
+           next_steps_html, next_steps_html_ar           safe HTML string for the "what happens next" note
+           action_url, action_text, action_text_ar
+           security_note, security_note_ar
+           preheader, preheader_ar
+{% endcomment %}
+
+{% block details %}
+{% if rows %}
+{% if details_title %}<p
+  style="margin:0 0 8px;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#a4abb4;">
+  {{ details_title }}</p>{% endif %}
+<table class="rows-table" role="presentation" width="100%"
+  style="width:100%;border-collapse:collapse;margin:0 0 26px;">
+  {% for row in rows %}
+  <tr>
+    <td class="row-label"
+      style="padding:14px 0;font-size:13px;line-height:1.6;border-bottom:1px solid #f0f0f2;vertical-align:top;color:#6b7280;width:46%;">
+      {{ row.label }}{% if row.label_ar %} <span style="color:#a4abb4;">/ {{ row.label_ar }}</span>{% endif %}</td>
+    <td class="row-value"
+      style="padding:14px 0;font-size:14px;line-height:1.6;border-bottom:1px solid #f0f0f2;vertical-align:top;color:{{ row.value_color|default:'#1c1f24' }};font-weight:600;text-align:left;">
+      {% if row.value_html %}{{ row.value_html|safe }}{% else %}{{ row.value }}{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+{% endblock %}
+
+{% block details_ar %}
+{% if rows %}
+{% if details_title_ar %}<p
+  style="margin:0 0 8px;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#a4abb4;">
+  {{ details_title_ar }}</p>{% endif %}
+<table class="rows-table" role="presentation" width="100%"
+  style="width:100%;border-collapse:collapse;margin:0 0 26px;direction:rtl;">
+  {% for row in rows %}
+  <tr>
+    <td class="row-label"
+      style="padding:14px 0;font-size:13px;line-height:1.7;border-bottom:1px solid #f0f0f2;vertical-align:top;color:#6b7280;width:46%;">
+      {{ row.label_ar|default:row.label }}</td>
+    <td class="row-value"
+      style="padding:14px 0;font-size:14px;line-height:1.7;border-bottom:1px solid #f0f0f2;vertical-align:top;color:{{ row.value_color|default:'#1c1f24' }};font-weight:600;text-align:right;">
+      {% if row.value_html %}{{ row.value_html|safe }}{% else %}{{ row.value_ar|default:row.value }}{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+{% endblock %}
+
+{% block next_steps %}
+{% if next_steps_html %}
+<div class="note-card"
+  style="margin:0 0 24px;border:1px solid #eceef1;border-left:3px solid #C2410C;background:#fbfbfc;padding:14px 16px;font-size:14px;line-height:1.7;color:#4a4f57;">
+  {{ next_steps_html|safe }}</div>
+{% endif %}
+{% endblock %}
+
+{% block next_steps_ar %}
+{% if next_steps_html_ar %}
+<div class="note-card"
+  style="margin:0 0 24px;border:1px solid #eceef1;border-right:3px solid #C2410C;background:#fbfbfc;padding:14px 16px;font-size:14px;line-height:1.9;mso-line-height-rule:exactly;color:#4a4f57;">
+  {{ next_steps_html_ar|safe }}</div>
+{% endif %}
+{% endblock %}

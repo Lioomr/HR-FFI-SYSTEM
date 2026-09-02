@@ -11,7 +11,7 @@ from django.template.loader import render_to_string
 from core.permissions import CEO_APPROVER_DEPARTMENT_ID
 from employees.models import EmployeeProfile
 
-from .bird_email_service import _load_logo_base64
+from .bird_email_service import _resolve_logo_source
 from .email_service import EmailService
 
 logger = logging.getLogger(__name__)
@@ -37,7 +37,7 @@ def _active_profile_users_by_position(position_ref_id: int):
         is_active=True,
         employee_profile__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
         employee_profile__position_ref_id=position_ref_id,
-    ).exclude(email="")
+    ).exclude(email="").distinct()
 
 
 def _active_profile_users_by_department(department_ref_id: int):
@@ -45,7 +45,7 @@ def _active_profile_users_by_department(department_ref_id: int):
         is_active=True,
         employee_profile__employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
         employee_profile__department_ref_id=department_ref_id,
-    ).exclude(email="")
+    ).exclude(email="").distinct()
 
 
 def get_direct_manager_user(employee_user):
@@ -114,25 +114,39 @@ def send_pending_approval_email(
     action_url = _build_action_url(action_path)
     subject = f"{request_type} pending approval - #{request_id}"
 
+    message = f"A new {request_type} request from {requester_name} (#{request_id}) is pending your review."
+    message_ar = f"طلب {request_type} جديد من {requester_name} (رقم {request_id}) بانتظار مراجعتك."
+    rows = [
+        {"label": "Request ID", "label_ar": "رقم الطلب", "value": f"#{request_id}"},
+        {"label": "Requested by", "label_ar": "مقدّم الطلب", "value": requester_name},
+        {"label": "Status", "label_ar": "الحالة", "value": status_label},
+    ]
+    for item in details or []:
+        rows.append({"label": "Detail", "label_ar": "تفصيل", "value": str(item)})
     context = {
-        "logo_url": _load_logo_base64(),
+        "logo_url": _resolve_logo_source(),
         "contact_email": getattr(settings, "EMAIL_CONTACT_EMAIL", "hr@fficontracting.com"),
+        "contact_name": getattr(settings, "EMAIL_CONTACT_NAME", "") or "",
+        "contact_phone": getattr(settings, "EMAIL_CONTACT_PHONE", "") or "",
         "title": f"{request_type} requires your review",
         "title_ar": f"طلب {request_type} يتطلب مراجعتك",
         "employee_name": approver_name,
-        "message": "A new request is pending your action.",
-        "message_ar": "هناك طلب جديد معلق بانتظار إجراء منك.",
-        "request_type": request_type,
-        "request_id": request_id,
-        "requester_name": requester_name,
-        "status_label": status_label,
-        "details": details,
+        "message": message,
+        "message_ar": message_ar,
+        "preheader": message,
+        "preheader_ar": message_ar,
+        "rows": rows,
+        "details_title": f"{request_type} details",
+        "details_title_ar": "تفاصيل الطلب",
+        "status_label": "Action required",
+        "status_label_ar": "إجراء مطلوب",
+        "status_color": "#C2410C",
         "action_url": action_url,
         "action_text": "Review Request",
         "action_text_ar": "مراجعة الطلب",
     }
 
-    html = render_to_string("emails/pending_approval_email.html", context)
+    html = render_to_string("emails/generic_notification.html", context)
     details_list = [str(item) for item in (details or [])]
     details_text = "\n".join(f"- {item}" for item in details_list) if details_list else "-"
 

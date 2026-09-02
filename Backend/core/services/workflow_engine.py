@@ -97,6 +97,14 @@ WORKFLOW_TEMPLATES = {
             {"key": "hr", "title": "HR BioTime Verification", "approver_role": "hr", "order": 1},
         ],
     },
+    "contract_decision": {
+        "name": "Contract Decision Workflow",
+        "module_key": "employees",
+        "stages": [
+            {"key": "hr", "title": "HR Contract Decision", "approver_role": "hr", "order": 1},
+            {"key": "ceo", "title": "CEO Contract Approval", "approver_role": "ceo", "order": 2},
+        ],
+    },
 }
 
 
@@ -142,6 +150,8 @@ def _build_action_url_path(workflow_key: str, role: str, object_id: int) -> str:
         ("asset_return_request", "hr"): "/hr/assets",
         ("asset_return_request", "ceo"): "/ceo/assets/return-requests",
         ("employee_deletion_request", "ceo"): f"/ceo/employees/deletion-requests/{object_id}",
+        ("contract_decision", "hr"): f"/hr/contract-decisions/{object_id}",
+        ("contract_decision", "ceo"): f"/ceo/contract-decisions/{object_id}",
     }
     return route_map.get((workflow_key, role), "")
 
@@ -1191,6 +1201,117 @@ def _legacy_events_for_job_offer(instance) -> list[WorkflowEvent]:
     return events
 
 
+def _legacy_status_snapshot_for_contract_decision(instance):
+    from employees.models import ContractDecision
+
+    terminal_at = None
+    if instance.status in {ContractDecision.Status.APPROVED, ContractDecision.Status.AUTO_APPROVED,
+                            ContractDecision.Status.AUTO_RENEWED}:
+        status = WorkflowInstance.Status.APPROVED
+        terminal_at = instance.finalized_at or instance.updated_at
+        current_stage = current_role = ""
+    elif instance.status in {ContractDecision.Status.REJECTED, ContractDecision.Status.AUTO_RENEWAL_FAILED}:
+        status = WorkflowInstance.Status.REJECTED
+        terminal_at = instance.finalized_at or instance.updated_at
+        current_stage = current_role = ""
+    elif instance.status == ContractDecision.Status.PENDING_CEO:
+        status = WorkflowInstance.Status.IN_REVIEW
+        current_stage, current_role = "ceo", "ceo"
+    else:
+        status = WorkflowInstance.Status.IN_REVIEW
+        current_stage, current_role = "hr", "hr"
+    return {
+        "status": status,
+        "current_stage": current_stage,
+        "current_role": current_role,
+        "current_actor_user": None,
+        "submitted_by": instance.requested_by,
+        "submitted_at": instance.submitted_at or instance.created_at,
+        "decided_at": terminal_at if status in {WorkflowInstance.Status.APPROVED, WorkflowInstance.Status.REJECTED} else None,
+        "cancelled_at": None,
+    }
+
+
+def _legacy_events_for_contract_decision(instance) -> list[WorkflowEvent]:
+    from employees.models import ContractDecision
+
+    events = [
+        WorkflowEvent(
+            signature=f"contract-decision:created:{instance.id}:{instance.created_at.isoformat()}",
+            action=WorkflowAction.Action.SUBMIT,
+            approver_role="",
+            from_status="draft",
+            to_status="in_review",
+            from_stage="",
+            to_stage="hr" if instance.status == ContractDecision.Status.PENDING_HR else "ceo",
+            actor=instance.requested_by,
+            note="Contract expiry workflow created",
+            at=instance.created_at,
+            metadata={"legacy_signature": "created", "workflow_key": "contract_decision"},
+        )
+    ]
+    if instance.submitted_at:
+        events.append(
+            WorkflowEvent(
+                signature=f"contract-decision:hr:{instance.id}:{instance.submitted_at.isoformat()}",
+                action=WorkflowAction.Action.ADVANCE,
+                approver_role="hr",
+                from_status="in_review",
+                to_status="in_review",
+                from_stage="hr",
+                to_stage="ceo",
+                actor=instance.requested_by,
+                note=instance.hr_comment or instance.get_decision_type_display(),
+                at=instance.submitted_at,
+                metadata={"legacy_signature": "hr", "workflow_key": "contract_decision"},
+            )
+        )
+    if instance.ceo_decided_at:
+        is_rejected = instance.status == ContractDecision.Status.REJECTED
+        is_manual_resolution = instance.status == ContractDecision.Status.MANUAL_RESOLUTION_REQUIRED
+        events.append(
+            WorkflowEvent(
+                signature=f"contract-decision:ceo:{instance.id}:{instance.ceo_decided_at.isoformat()}",
+                action=(
+                    WorkflowAction.Action.REJECT
+                    if is_rejected
+                    else WorkflowAction.Action.ADVANCE
+                    if is_manual_resolution
+                    else WorkflowAction.Action.APPROVE
+                ),
+                approver_role="ceo",
+                from_status="in_review",
+                to_status="rejected" if is_rejected else "in_review" if is_manual_resolution else "approved",
+                from_stage="ceo",
+                to_stage="hr" if is_manual_resolution else "",
+                actor=instance.ceo_decided_by,
+                note=instance.ceo_comment or "",
+                at=instance.ceo_decided_at,
+                metadata={
+                    "legacy_signature": "ceo",
+                    "workflow_key": "contract_decision",
+                    "automatic": instance.status == ContractDecision.Status.AUTO_APPROVED,
+                },
+            )
+        )
+    if instance.status == ContractDecision.Status.AUTO_RENEWED and instance.finalized_at:
+        events.append(
+            WorkflowEvent(
+                signature=f"contract-decision:auto-renewed:{instance.id}:{instance.finalized_at.isoformat()}",
+                action=WorkflowAction.Action.OVERRIDE,
+                approver_role="",
+                from_status="in_review",
+                to_status="approved",
+                from_stage="hr",
+                to_stage="",
+                note="Automatically renewed because HR took no action",
+                at=instance.finalized_at,
+                metadata={"legacy_signature": "auto-renewed", "workflow_key": "contract_decision"},
+            )
+        )
+    return events
+
+
 def _legacy_status_snapshot_for_starting_work_acknowledgment(instance):
     from job_offers.models import StartingWorkAcknowledgment
 
@@ -1299,6 +1420,8 @@ def _adapter_for_instance(instance):
             _legacy_status_snapshot_for_starting_work_acknowledgment,
             _legacy_events_for_starting_work_acknowledgment,
         )
+    if class_name == "ContractDecision":
+        return "contract_decision", _legacy_status_snapshot_for_contract_decision, _legacy_events_for_contract_decision
     raise ValueError(f"Unsupported workflow instance class: {class_name}")
 
 
@@ -1598,6 +1721,7 @@ def build_pending_approval_item(workflow: WorkflowInstance) -> dict[str, Any] | 
         "attendance_correction_request": "Attendance Correction",
         "asset_return_request": "Asset Return",
         "employee_deletion_request": "Employee Deletion",
+        "contract_decision": "Contract Decision",
     }
     review_path = _build_action_url_path(workflow_key, workflow.current_approver_role, obj.pk)
     if workflow_key == "leave_request":
@@ -1631,6 +1755,11 @@ def build_pending_approval_item(workflow: WorkflowInstance) -> dict[str, Any] | 
         name = snapshot.get("full_name") or snapshot.get("employee_id") or f"Request #{obj.pk}"
         action = "Employee hard delete request"
         request_type = "EMPLOYEE_DELETION"
+    elif workflow_key == "contract_decision":
+        profile = getattr(obj, "employee_profile", None)
+        name = getattr(profile, "full_name", "") or getattr(profile, "employee_id", f"Request #{obj.pk}")
+        action = f"Contract: {getattr(obj, 'get_decision_type_display', lambda: 'HR decision')()}"
+        request_type = "CONTRACT_DECISION"
     else:
         profile = getattr(obj, "employee_profile", None)
         user = getattr(profile, "user", None)

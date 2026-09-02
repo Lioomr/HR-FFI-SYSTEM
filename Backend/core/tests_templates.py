@@ -38,6 +38,7 @@ class TemplateLibraryTests(TestCase):
         keys = {item["key"] for item in items}
         self.assertIn("leave_request", keys)
         self.assertIn("loan_request", keys)
+        self.assertIn("annual_entitlements_disbursement", keys)
         self.assertIn("termination_letter", keys)
         self.assertIn("job_offer", keys)
         self.assertIn("starting_work_acknowledgment", keys)

@@ -7,10 +7,11 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from core.permissions import get_role
-from core.services import get_workflow_snapshot
+from core.services import get_workflow_snapshot, get_workflow_snapshot_read_only
 from hr_reference.models import Department, Position, Sponsor, TaskGroup
+from in_app_notifications.models import Notification
 
-from .models import EmployeeDeletionRequest, EmployeeDocument, EmployeeImport, EmployeeProfile
+from .models import ContractDecision, EmployeeDeletionRequest, EmployeeDocument, EmployeeImport, EmployeeProfile
 from .services.manager_relationships import validate_manager_assignment
 
 EMPLOYEE_DOCUMENT_ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png"}
@@ -28,6 +29,92 @@ class UserMinimalSerializer(serializers.ModelSerializer):
 
     def get_role(self, obj):
         return get_role(obj)
+
+
+class ContractDecisionReadSerializer(serializers.ModelSerializer):
+    employee = serializers.SerializerMethodField()
+    decision_type_label = serializers.CharField(source="get_decision_type_display", read_only=True)
+    status_label = serializers.CharField(source="get_status_display", read_only=True)
+    workflow = serializers.SerializerMethodField()
+    notification_status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ContractDecision
+        fields = [
+            "id", "company", "employee", "decision_type", "decision_type_label", "status", "status_label",
+            "original_contract_date", "original_contract_expiry", "proposed_contract_date",
+            "proposed_contract_expiry", "original_terms", "proposed_terms", "requested_by", "ceo_decided_by",
+            "hr_comment", "ceo_comment", "failure_reason", "submitted_at", "ceo_deadline", "ceo_decided_at",
+            "last_ceo_reminder_at", "ceo_reminder_count", "finalized_at", "finalized_by", "finalized_by_system",
+            "automatic_renewal", "automatic_renewal_reason",
+            "final_notification_sent_at", "final_notification_attempts", "last_final_notification_attempt_at",
+            "workflow", "notification_status", "created_at", "updated_at",
+        ]
+
+    def get_employee(self, obj):
+        profile = obj.employee_profile
+        return {
+            "id": profile.id,
+            "employee_id": profile.employee_id,
+            "full_name": profile.full_name or profile.full_name_en or profile.employee_id,
+            "company_id": profile.company_id,
+        }
+
+    def get_workflow(self, obj):
+        request = self.context.get("request")
+        snapshots = self.context.get("workflow_snapshots") or {}
+        if obj.pk in snapshots:
+            return snapshots[obj.pk]
+        return get_workflow_snapshot_read_only(obj, actor=request.user if request else None)
+
+    def get_notification_status(self, obj):
+        prefetched = self.context.get("notification_status_by_decision_id") or {}
+        if obj.pk in prefetched:
+            return prefetched[obj.pk]
+        notifications = Notification.objects.filter(
+            related_object_type="employees.contractdecision",
+            related_object_id=str(obj.id),
+        ).prefetch_related("deliveries")
+        return [
+            {
+                "id": notification.id,
+                "event_key": notification.event_key,
+                "milestone": (notification.metadata or {}).get("milestone"),
+                "created_at": notification.created_at.isoformat(),
+                "deliveries": [
+                    {"channel": delivery.channel, "status": delivery.status}
+                    for delivery in notification.deliveries.all()
+                    if delivery.recipient_id == notification.recipient_id
+                ],
+            }
+            for notification in notifications
+        ]
+
+
+class ContractDecisionSubmitSerializer(serializers.Serializer):
+    decision_type = serializers.ChoiceField(choices=ContractDecision.DecisionType.choices)
+    proposed_contract_date = serializers.DateField(required=False, allow_null=True)
+    proposed_contract_expiry = serializers.DateField(required=False, allow_null=True)
+    proposed_terms = serializers.DictField(required=False)
+    hr_comment = serializers.CharField(required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        decision_type = attrs["decision_type"]
+        if decision_type == ContractDecision.DecisionType.TERMINATE:
+            attrs["proposed_contract_date"] = None
+            attrs["proposed_contract_expiry"] = None
+            attrs["proposed_terms"] = {}
+        elif (
+            attrs.get("proposed_contract_date")
+            and attrs.get("proposed_contract_expiry")
+            and attrs["proposed_contract_expiry"] < attrs["proposed_contract_date"]
+        ):
+            raise serializers.ValidationError({"proposed_contract_expiry": "Expiry must be on or after the start date."})
+        return attrs
+
+
+class ContractDecisionCommentSerializer(serializers.Serializer):
+    comment = serializers.CharField(required=False, allow_blank=True)
 
 
 class EmployeeProfileReadSerializer(serializers.ModelSerializer):

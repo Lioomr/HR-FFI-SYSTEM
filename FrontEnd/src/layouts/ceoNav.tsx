@@ -6,6 +6,7 @@ import {
   DashboardOutlined,
   DollarOutlined,
   FileSearchOutlined,
+  FileTextOutlined,
   IdcardOutlined,
   InboxOutlined,
   SolutionOutlined,
@@ -136,6 +137,15 @@ export function buildCeoMenuItems(t: TranslateFn): MenuProps["items"] {
           label: (
             <Link to="/ceo/employees/deletion-requests">
               {t("employees.removalInbox.menu", "Employee Removals")}
+            </Link>
+          ),
+        },
+        {
+          key: "/ceo/contract-decisions",
+          icon: <FileTextOutlined />,
+          label: (
+            <Link to="/ceo/contract-decisions">
+              {t("layout.contractDecisions", "Contract Decisions")}
             </Link>
           ),
         },

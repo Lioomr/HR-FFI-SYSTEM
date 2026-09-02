@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import logging
-from html import escape
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db.models import Q
 
 from core.permissions import CEO_APPROVER_DEPARTMENT_ID
-from core.services import EmailService
+from core.services.bird_email_service import send_generic_notification_email
 from employees.models import EmployeeProfile
 from in_app_notifications.dispatcher import dispatch_notification_channels
 from in_app_notifications.models import Notification
@@ -43,19 +42,23 @@ def _frontend_url(path: str) -> str:
     return f"{settings.FRONTEND_URL.rstrip('/')}/{path.lstrip('/')}"
 
 
-def _safe_email(*, to_email: str, subject: str, html: str, text: str) -> dict:
-    if not to_email:
+def _safe_email(**kwargs) -> dict:
+    """Send a branded bilingual job-offer email, swallowing delivery errors."""
+    if not kwargs.get("to_email"):
         return {"success": False, "skipped": True, "error": "Recipient email is missing."}
     try:
-        return EmailService().send_html_email(
-            to_email=to_email,
-            subject=subject,
-            html_content=html,
-            fallback_text=text,
-        )
+        return send_generic_notification_email(**kwargs)
     except Exception:
         logger.exception("job_offer_email_failed")
         return {"success": False, "error": "Email delivery failed."}
+
+
+def _link(url: str, label: str) -> str:
+    return (
+        f'<a href="{url}" style="display:inline-block;margin:6px 8px 0 0;padding:9px 16px;'
+        f'border-radius:4px;background-color:#1c1f24;color:#ffffff;text-decoration:none;'
+        f'font-weight:600;font-size:13px;">{label}</a>'
+    )
 
 
 def _approval_event_key(offer: JobOffer) -> str:
@@ -102,13 +105,30 @@ def notify_job_offer_submitted(offer: JobOffer) -> list[dict]:
         email = _safe_email(
             to_email=recipient.email,
             subject=f"Job Offer {offer.reference_number} requires CEO review",
-            html=(
-                f"<p>Dear {escape(recipient_name)},</p><p>{escape(message)}</p>"
-                f"<p>Requested by: {escape(requester_name)}</p>"
-                f'<p><a href="{escape(review_url)}">Review job offer</a></p>'
-                f'<p><a href="{escape(cv_url)}">Open CV through the authenticated CV endpoint</a></p>'
+            title="Job offer requires your review",
+            title_ar="عرض عمل يتطلب مراجعتك",
+            employee_name=recipient_name,
+            message=f"Job offer {offer.reference_number}, submitted by {requester_name}, is awaiting your review.",
+            message_ar=(
+                f"عرض العمل {offer.reference_number} المقدَّم من {requester_name} بانتظار مراجعتك."
             ),
-            text=(f"{message}\nRequested by: {requester_name}\nReview: {review_url}\nProtected CV: {cv_url}"),
+            status="Action required",
+            status_ar="إجراء مطلوب",
+            status_tone="action",
+            details_title="Job offer details",
+            details_title_ar="تفاصيل عرض العمل",
+            rows=[
+                {"label": "Candidate", "label_ar": "المرشّح", "value": offer.candidate_full_name},
+                {"label": "Company", "label_ar": "الشركة", "value": offer.company.name},
+                {"label": "Reference", "label_ar": "الرقم المرجعي", "value": offer.reference_number},
+                {"label": "Salary package", "label_ar": "إجمالي الراتب", "value": offer.total_salary_package},
+                {"label": "Requested by", "label_ar": "مقدّم الطلب", "value": requester_name},
+            ],
+            next_steps_html=_link(cv_url, "Open candidate CV"),
+            next_steps_html_ar=_link(cv_url, "فتح السيرة الذاتية للمرشّح"),
+            action_url=review_url,
+            action_text="Review job offer",
+            action_text_ar="مراجعة عرض العمل",
         )
         results.append(
             {
@@ -128,6 +148,8 @@ def notify_job_offer_decided(offer: JobOffer) -> list[dict]:
     reason_text = f" Reason: {offer.ceo_decision_reason}" if offer.ceo_decision_reason else ""
     recommendation_text = f" Recommendation: {offer.ceo_recommendation}" if offer.ceo_recommendation else ""
     message = f"Job offer {offer.reference_number} is {decision.lower()}.{reason_text}{recommendation_text}"
+    approved = "approv" in str(offer.approval_status).lower()
+    rejected = "reject" in str(offer.approval_status).lower()
     results = []
     event_key = _approval_event_key(offer)
     for recipient in get_company_hr_recipients(offer.company):
@@ -149,11 +171,33 @@ def notify_job_offer_decided(offer: JobOffer) -> list[dict]:
             whatsapp_enabled=True,
             email_enabled=False,
         )
+        rows = [
+            {"label": "Reference", "label_ar": "الرقم المرجعي", "value": offer.reference_number},
+            {"label": "Candidate", "label_ar": "المرشّح", "value": offer.candidate_full_name},
+            {"label": "Decision", "label_ar": "القرار", "value": decision,
+             "value_color": "#15803d" if approved else "#b42318" if rejected else None},
+        ]
+        if offer.ceo_decision_reason:
+            rows.append({"label": "Reason", "label_ar": "السبب", "value": offer.ceo_decision_reason})
+        if offer.ceo_recommendation:
+            rows.append({"label": "Recommendation", "label_ar": "التوصية", "value": offer.ceo_recommendation})
         email = _safe_email(
             to_email=recipient.email,
             subject=f"Job Offer {offer.reference_number}: {decision}",
-            html=f'<p>{escape(message)}</p><p><a href="{escape(detail_url)}">View job offer</a></p>',
-            text=f"{message}\n{detail_url}",
+            title=f"Job offer {decision.lower()}",
+            title_ar="تم البتّ في عرض العمل",
+            employee_name=recipient.full_name or recipient.email,
+            message=f"Job offer {offer.reference_number} has been {decision.lower()} by the CEO.",
+            message_ar=f"تم {'اعتماد' if approved else 'رفض' if rejected else 'تحديث'} عرض العمل {offer.reference_number} من قِبل الرئيس التنفيذي.",
+            status=decision,
+            status_ar="معتمد" if approved else "مرفوض" if rejected else decision,
+            status_tone="success" if approved else "danger" if rejected else "info",
+            details_title="Decision details",
+            details_title_ar="تفاصيل القرار",
+            rows=rows,
+            action_url=detail_url,
+            action_text="View job offer",
+            action_text_ar="عرض تفاصيل العرض",
         )
         results.append(
             {
@@ -267,12 +311,27 @@ def notify_starting_work_acknowledgment_ready(
         email = _safe_email(
             to_email=recipient.email,
             subject=f"Verify starting work attendance for {employee_name}",
-            html=(
-                f"<p>Dear {escape(recipient_name)},</p><p>{escape(message)}</p>"
-                f'<p><a href="{escape(profile_url)}">Open HR verification</a></p>'
-                f'<p><a href="{escape(download_url)}">Download private acknowledgement</a></p>'
-            ),
-            text=f"{message}\nProfile: {profile_url}\nDocument: {download_url}",
+            title="Starting work attendance needs verification",
+            title_ar="إثبات مباشرة العمل يحتاج إلى تحقّق",
+            employee_name=recipient_name,
+            message=f"The Starting Work Acknowledgment for {employee_name} requires HR BioTime verification.",
+            message_ar=f"إثبات مباشرة العمل للموظف {employee_name} يتطلب التحقق من قِبل الموارد البشرية عبر نظام البصمة.",
+            status="Action required",
+            status_ar="إجراء مطلوب",
+            status_tone="action",
+            details_title="Acknowledgment details",
+            details_title_ar="تفاصيل الإثبات",
+            rows=[
+                {"label": "Employee", "label_ar": "الموظف", "value": employee_name},
+                {"label": "Employee ID", "label_ar": "الرقم الوظيفي", "value": profile.employee_id},
+                {"label": "Start date", "label_ar": "تاريخ المباشرة", "value": start_date},
+                {"label": "Reference", "label_ar": "الرقم المرجعي", "value": acknowledgment.reference_number},
+            ],
+            next_steps_html=_link(download_url, "Download acknowledgment"),
+            next_steps_html_ar=_link(download_url, "تنزيل الإثبات"),
+            action_url=profile_url,
+            action_text="Open HR verification",
+            action_text_ar="فتح شاشة التحقق",
         )
         results.append(
             {

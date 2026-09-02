@@ -61,6 +61,11 @@ class AttendanceRecord(models.Model):
     override_reason = models.TextField(null=True, blank=True)
     notes = models.TextField(null=True, blank=True)
 
+    # True when the check-in time was past the company late cutoff at the moment
+    # the record was created. Lets approvers preserve a LATE outcome through the
+    # pending -> approved workflow for employee self check-ins.
+    is_late_flagged = models.BooleanField(default=False)
+
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="attendance_created"
     )

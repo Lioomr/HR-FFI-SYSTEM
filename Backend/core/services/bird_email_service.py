@@ -20,15 +20,21 @@ def _load_logo_base64() -> str:
     """
     configured_logo_path = getattr(settings, "EMAIL_LOGO_PATH", "")
     default_candidates = [
+        os.path.join(str(settings.BASE_DIR), "static", "email", "ffi-logo.png"),
         os.path.join(str(settings.BASE_DIR), "ffi-logo.png"),
         os.path.join(str(settings.BASE_DIR.parent), "ffi-logo.png"),
+        "/app/static/email/ffi-logo.png",
         "/app/ffi-logo.png",
         os.path.join(str(settings.BASE_DIR.parent), "FrontEnd", "public", "ffi-logo.png"),
         os.path.join(str(settings.BASE_DIR.parent), "Logo FFI.png"),
         os.path.join(str(settings.BASE_DIR), "Logo FFI.png"),
         "/app/Logo FFI.png",
     ]
-    candidate_paths = [configured_logo_path] if configured_logo_path else default_candidates
+    # An EMAIL_LOGO_PATH is only usable if it actually exists (the Docker path
+    # is meaningless on a local checkout); otherwise fall through to the defaults.
+    candidate_paths = (
+        [configured_logo_path, *default_candidates] if configured_logo_path else default_candidates
+    )
     logo_path = next((path for path in candidate_paths if path and os.path.exists(path)), "")
     try:
         with open(logo_path, "rb") as fh:
@@ -49,9 +55,26 @@ def _is_inline_logo(value: Any) -> bool:
 
 
 def _resolve_logo_source() -> str:
+    """Return the best available logo source for email clients.
+
+    Priority:
+      1. EMAIL_LOGO_URL (explicit hosted URL — most reliable).
+      2. FRONTEND_URL/ffi-logo.png — the logo shipped in FrontEnd/public/,
+         served at the site root in every non-local deployment. Gmail and
+         Outlook render hosted images but strip base64, so this is preferred.
+      3. Base64 inline data URI (local dev / offline fallback only).
+    """
+    _PLACEHOLDER_HOSTS = ("your-domain.com", "example.com", "example.org", "changeme")
     configured_logo_url = (getattr(settings, "EMAIL_LOGO_URL", "") or "").strip()
-    if configured_logo_url:
+    if configured_logo_url and not any(host in configured_logo_url for host in _PLACEHOLDER_HOSTS):
         return configured_logo_url
+
+    frontend = (getattr(settings, "FRONTEND_URL", "") or "").strip().rstrip("/")
+    if frontend.startswith("https://") or (
+        frontend.startswith("http://") and "localhost" not in frontend and "127.0.0.1" not in frontend
+    ):
+        return f"{frontend}/ffi-logo.png"
+
     return _load_logo_base64()
 
 
@@ -282,18 +305,86 @@ def _base_email_context(
     action_url: str | None = None,
     action_text: str | None = None,
     action_text_ar: str | None = None,
+    preheader: str | None = None,
+    preheader_ar: str | None = None,
+    security_note: str | None = None,
+    security_note_ar: str | None = None,
 ) -> dict[str, Any]:
     return {
         "logo_url": _resolve_logo_source(),
         "contact_email": getattr(settings, "EMAIL_CONTACT_EMAIL", "hr@fficontracting.com"),
+        "contact_name": getattr(settings, "EMAIL_CONTACT_NAME", "") or "",
+        "contact_phone": getattr(settings, "EMAIL_CONTACT_PHONE", "") or "",
         "title": title,
         "title_ar": title_ar,
         "employee_name": employee_name,
         "message": message,
         "message_ar": message_ar,
+        # Inbox preview line; falls back to the message body in the template.
+        "preheader": preheader or message,
+        "preheader_ar": preheader_ar or message_ar,
+        "security_note": security_note,
+        "security_note_ar": security_note_ar,
         "action_url": action_url,
         "action_text": action_text or "View Details",
         "action_text_ar": action_text_ar or "عرض التفاصيل",
+    }
+
+
+_STATUS_COLORS = {
+    "action": "#C2410C",
+    "success": "#15803d",
+    "danger": "#b42318",
+    "info": "#1d4ed8",
+    "invite": "#6d28d9",
+    "neutral": "#6b7280",
+}
+
+
+def _row(
+    label: str,
+    label_ar: str,
+    value: Any,
+    value_ar: Any | None = None,
+    value_color: str | None = None,
+    value_html: str | None = None,
+) -> dict[str, Any]:
+    """Build one bilingual detail row for generic_notification.html.
+
+    ``value`` / ``value_ar`` are always escaped. ``value_html`` is rendered raw
+    and must only ever carry template-controlled markup (never user input).
+    """
+    row: dict[str, Any] = {"label": label, "label_ar": label_ar, "value": value}
+    if value_ar is not None:
+        row["value_ar"] = value_ar
+    if value_color:
+        row["value_color"] = value_color
+    if value_html:
+        row["value_html"] = value_html
+    return row
+
+
+def _details(
+    rows: list[dict[str, Any]],
+    *,
+    status: str | None = None,
+    status_ar: str | None = None,
+    status_tone: str = "info",
+    title: str = "Details",
+    title_ar: str = "التفاصيل",
+    next_steps_html: str | None = None,
+    next_steps_html_ar: str | None = None,
+) -> dict[str, Any]:
+    """Extra context keys consumed by generic_notification.html."""
+    return {
+        "rows": rows,
+        "status_label": status,
+        "status_label_ar": status_ar or status,
+        "status_color": _STATUS_COLORS.get(status_tone, "#1d4ed8"),
+        "details_title": title,
+        "details_title_ar": title_ar,
+        "next_steps_html": next_steps_html,
+        "next_steps_html_ar": next_steps_html_ar,
     }
 
 
@@ -318,19 +409,28 @@ def send_leave_request_submitted_email(
         action_url=action_url,
         action_text_ar="عرض الطلب",
     )
+    rows = [
+        _row("Leave type", "نوع الإجازة", leave_type),
+        _row("Start date", "تاريخ البداية", start_date),
+        _row("End date", "تاريخ النهاية", end_date),
+        _row("Total days", "إجمالي الأيام", total_days),
+    ]
+    if manager_name:
+        rows.append(_row("Approver", "المعتمد", manager_name))
     context.update(
-        {
-            "leave_type": leave_type,
-            "start_date": start_date,
-            "end_date": end_date,
-            "total_days": total_days,
-            "manager_name": manager_name,
-        }
+        _details(
+            rows,
+            status="Pending review",
+            status_ar="قيد المراجعة",
+            status_tone="info",
+            title="Leave request",
+            title_ar="طلب الإجازة",
+        )
     )
     return service.send_template_email(
         to_email=to_email,
         subject="Leave Request Submitted",
-        template_name="leave_request_submitted.html",
+        template_name="generic_notification.html",
         context=context,
     )
 
@@ -356,17 +456,24 @@ def send_leave_approved_email(
         action_text_ar="عرض الطلب",
     )
     context.update(
-        {
-            "leave_type": leave_type,
-            "start_date": start_date,
-            "end_date": end_date,
-            "total_days": total_days,
-        }
+        _details(
+            [
+                _row("Leave type", "نوع الإجازة", leave_type),
+                _row("Approved from", "بداية الإجازة المعتمدة", start_date),
+                _row("Approved to", "نهاية الإجازة المعتمدة", end_date),
+                _row("Total days", "إجمالي الأيام", total_days),
+            ],
+            status="Approved",
+            status_ar="معتمد",
+            status_tone="success",
+            title="Approval details",
+            title_ar="تفاصيل الموافقة",
+        )
     )
     return service.send_template_email(
         to_email=to_email,
         subject="Leave Request Approved",
-        template_name="leave_request_approved.html",
+        template_name="generic_notification.html",
         context=context,
     )
 
@@ -391,18 +498,35 @@ def send_leave_rejected_email(
         action_url=action_url,
         action_text_ar="تقديم طلب جديد",
     )
+    rows = [
+        _row("Leave type", "نوع الإجازة", leave_type),
+        _row("Requested from", "بداية الإجازة المطلوبة", start_date),
+        _row("Requested to", "نهاية الإجازة المطلوبة", end_date),
+    ]
+    if rejection_reason:
+        rows.append(_row("Reason", "السبب", rejection_reason, value_color="#b42318"))
     context.update(
-        {
-            "leave_type": leave_type,
-            "start_date": start_date,
-            "end_date": end_date,
-            "rejection_reason": rejection_reason,
-        }
+        _details(
+            rows,
+            status="Not approved",
+            status_ar="غير معتمد",
+            status_tone="danger",
+            title="Request details",
+            title_ar="تفاصيل الطلب",
+            next_steps_html=(
+                "<strong>Next step:</strong> you can adjust the dates and submit a new "
+                "request, or contact HR if you have questions about this decision."
+            ),
+            next_steps_html_ar=(
+                "<strong>الخطوة التالية:</strong> يمكنك تعديل التواريخ وتقديم طلب جديد، "
+                "أو التواصل مع الموارد البشرية لأي استفسار بخصوص هذا القرار."
+            ),
+        )
     )
     return service.send_template_email(
         to_email=to_email,
         subject="Leave Request Rejected",
-        template_name="leave_request_rejected.html",
+        template_name="generic_notification.html",
         context=context,
     )
 
@@ -427,17 +551,43 @@ def send_document_expiry_reminder_email(
         action_text="Update Document",
         action_text_ar="تحديث المستند",
     )
+    rows = [
+        _row("Document", "المستند", document_type),
+        _row("Expiry date", "تاريخ الانتهاء", expiry_date, value_color="#b42318"),
+    ]
+    if days_remaining is not None:
+        urgent = days_remaining <= 30
+        rows.append(
+            _row(
+                "Days remaining",
+                "الأيام المتبقية",
+                f"{days_remaining} days",
+                value_ar=f"{days_remaining} يوم",
+                value_color="#b42318" if urgent else "#15803d",
+            )
+        )
     context.update(
-        {
-            "document_type": document_type,
-            "expiry_date": expiry_date,
-            "days_remaining": days_remaining,
-        }
+        _details(
+            rows,
+            status="Action required",
+            status_ar="إجراء مطلوب",
+            status_tone="action",
+            title="Document details",
+            title_ar="تفاصيل المستند",
+            next_steps_html=(
+                "<strong>Next step:</strong> upload the renewed document from your "
+                "profile page, or contact HR if you need assistance with the renewal."
+            ),
+            next_steps_html_ar=(
+                "<strong>الخطوة التالية:</strong> ارفع المستند بعد تجديده من صفحة ملفك "
+                "الشخصي، أو تواصل مع الموارد البشرية للمساعدة في إجراءات التجديد."
+            ),
+        )
     )
     return service.send_template_email(
         to_email=to_email,
         subject="Document Expiry Reminder",
-        template_name="document_expiry_reminder.html",
+        template_name="generic_notification.html",
         context=context,
     )
 
@@ -513,24 +663,54 @@ def send_meeting_notification_email(
         action_text="Open Meeting",
         action_text_ar="فتح الاجتماع",
     )
+    rows = [
+        _row("Title", "العنوان", meeting_title),
+        _row("Organizer", "المنظّم", organizer_name),
+        _row("Date &amp; time", "التاريخ والوقت", f"{meeting_date} &middot; {meeting_time}"),
+    ]
+    if duration_minutes:
+        rows.append(_row("Duration", "المدة", f"{duration_minutes} minutes", value_ar=f"{duration_minutes} دقيقة"))
+    if location:
+        rows.append(_row("Location", "المكان", location))
+    if agenda:
+        from django.utils.html import escape as _esc
+
+        rows.append(
+            _row("Agenda", "جدول الأعمال", agenda, value_html=_esc(str(agenda)).replace("\n", "<br>"))
+        )
+
+    def _join_links(align: str) -> str:
+        links = []
+        for url, name in (
+            (google_meet_url, "Google Meet"),
+            (microsoft_teams_url, "Microsoft Teams"),
+            (zoom_url, "Zoom"),
+        ):
+            if url:
+                links.append(
+                    f'<a href="{url}" style="display:inline-block;margin:6px 8px 0 0;padding:9px 16px;'
+                    f'border-radius:4px;background-color:#1c1f24;color:#ffffff;text-decoration:none;'
+                    f'font-weight:600;font-size:13px;">Join {name}</a>'
+                )
+        return "".join(links) if links else ""
+
+    join_html = _join_links("left")
     context.update(
-        {
-            "meeting_title": meeting_title,
-            "meeting_date": meeting_date,
-            "meeting_time": meeting_time,
-            "organizer_name": organizer_name,
-            "duration_minutes": duration_minutes,
-            "location": location,
-            "agenda": agenda,
-            "google_meet_url": google_meet_url,
-            "microsoft_teams_url": microsoft_teams_url,
-            "zoom_url": zoom_url,
-        }
+        _details(
+            rows,
+            status="Meeting invitation",
+            status_ar="دعوة اجتماع",
+            status_tone="info",
+            title="Meeting details",
+            title_ar="تفاصيل الاجتماع",
+            next_steps_html=join_html or None,
+            next_steps_html_ar=join_html or None,
+        )
     )
     return service.send_template_email(
         to_email=to_email,
         subject=f"Meeting Invitation: {meeting_title}",
-        template_name="meeting_notification.html",
+        template_name="generic_notification.html",
         context=context,
     )
 
@@ -542,6 +722,7 @@ def send_user_invite_email(
     invite_link: str,
     expires_in_hours: int,
     inviter_name: str | None = None,
+    invitee_name: str | None = None,
     is_reminder: bool = False,
 ) -> dict[str, Any]:
     service = BirdEmailService()
@@ -572,28 +753,39 @@ def send_user_invite_email(
         )
         subject = "Invitation Reminder: FFI HR System"
 
+    greeting_name = (invitee_name or "").strip() or "Colleague / الزميل"
     context = _base_email_context(
         title=title,
         title_ar=title_ar,
-        employee_name=to_email,
+        employee_name=greeting_name,
         message=message,
         message_ar=message_ar,
         action_url=invite_link,
         action_text=action_text,
         action_text_ar=action_text_ar,
+        preheader=message,
+        preheader_ar=message_ar,
+    )
+    rows = [_row("Assigned role", "الدور المُسند", role)]
+    if inviter_name:
+        rows.append(_row("Invited by", "بدعوة من", inviter_name))
+    rows.append(
+        _row("Invitation expires in", "تنتهي الدعوة خلال", f"{expires_in_hours} hours", value_ar=f"{expires_in_hours} ساعة")
     )
     context.update(
-        {
-            "role": role,
-            "invite_link": invite_link,
-            "expires_in_hours": expires_in_hours,
-            "inviter_name": inviter_name or "",
-        }
+        _details(
+            rows,
+            status="Invitation Reminder" if is_reminder else "You're invited",
+            status_ar="تذكير بالدعوة" if is_reminder else "دعوة",
+            status_tone="invite",
+            title="Invitation details",
+            title_ar="تفاصيل الدعوة",
+        )
     )
     return service.send_template_email(
         to_email=to_email,
         subject=subject,
-        template_name="invite_user.html",
+        template_name="generic_notification.html",
         context=context,
     )
 
@@ -633,22 +825,91 @@ def send_delegation_notification_email(
         action_text_ar="عرض الموظف البديل",
     )
     context.update(
-        {
-            "subtitle": "Details",
-            "subtitle_ar": "تفاصيل الموظف البديل",
-            "from_user_name": from_user_name,
-            "to_user_name": to_user_name,
-            "start_at": start_at,
-            "end_at": end_at,
-            "reason": reason,
-        }
+        _details(
+            [
+                _row("From", "من", from_user_name),
+                _row("To", "إلى", to_user_name),
+                _row("Start", "تاريخ البدء", start_at),
+                _row("End", "تاريخ الانتهاء", end_at or "No end date", value_ar=end_at or "بدون تاريخ انتهاء"),
+                _row("Reason", "السبب", reason or "Not provided", value_ar=reason or "غير محدد"),
+            ],
+            status="Deputy approver",
+            status_ar="نائب المعتمد",
+            status_tone="info",
+            title="Delegation details",
+            title_ar="تفاصيل التفويض",
+        )
     )
-    subject = f"Alternative employee active: {from_user_name} -> {to_user_name}"
+    subject = f"Deputy approver active: {from_user_name} -> {to_user_name}"
     return service.send_template_email(
         to_email=to_email,
         subject=subject,
-        template_name="delegation_notification.html",
+        template_name="generic_notification.html",
         context=context,
+    )
+
+
+def send_generic_notification_email(
+    *,
+    to_email: str,
+    subject: str,
+    title: str,
+    title_ar: str,
+    message: str,
+    message_ar: str,
+    employee_name: str = "Colleague / الزميل",
+    rows: list[dict[str, Any]] | None = None,
+    status: str | None = None,
+    status_ar: str | None = None,
+    status_tone: str = "info",
+    details_title: str = "Details",
+    details_title_ar: str = "التفاصيل",
+    next_steps_html: str | None = None,
+    next_steps_html_ar: str | None = None,
+    action_url: str | None = None,
+    action_text: str | None = None,
+    action_text_ar: str | None = None,
+    security_note: str | None = None,
+    security_note_ar: str | None = None,
+    attachments: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Render any bilingual notification through generic_notification.html.
+
+    Use this for events that don't have (and don't need) their own template —
+    the dispatcher fallback and the job-offer notifications route through here.
+    """
+    context = _base_email_context(
+        title=title,
+        title_ar=title_ar,
+        employee_name=employee_name,
+        message=message,
+        message_ar=message_ar,
+        action_url=action_url,
+        action_text=action_text,
+        action_text_ar=action_text_ar,
+        preheader=message,
+        preheader_ar=message_ar,
+        security_note=security_note,
+        security_note_ar=security_note_ar,
+    )
+    context.update(
+        _details(
+            rows or [],
+            status=status,
+            status_ar=status_ar,
+            status_tone=status_tone,
+            title=details_title,
+            title_ar=details_title_ar,
+            next_steps_html=next_steps_html,
+            next_steps_html_ar=next_steps_html_ar,
+        )
+    )
+    return BirdEmailService().send_template_email(
+        to_email=to_email,
+        subject=subject,
+        template_name="generic_notification.html",
+        context=context,
+        attachments=attachments,
     )
 
 

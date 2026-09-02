@@ -6,7 +6,7 @@ from typing import Iterable
 from django.conf import settings
 from django.template.loader import render_to_string
 
-from .bird_email_service import _load_logo_base64
+from .bird_email_service import _resolve_logo_source
 from .email_service import EmailService
 
 logger = logging.getLogger(__name__)
@@ -38,24 +38,39 @@ def _send_request_submission_email_provider(
     action_url = _build_action_url(action_path)
     subject = f"{request_type} submitted - #{request_id}"
 
+    message = f"Your {request_type} request (#{request_id}) has been submitted and is now {status_label}."
+    message_ar = f"تم تقديم طلب {request_type} (رقم {request_id}) بنجاح وهو الآن في حالة: {status_label}."
     context = {
-        "logo_url": _load_logo_base64(),
+        "logo_url": _resolve_logo_source(),
         "contact_email": getattr(settings, "EMAIL_CONTACT_EMAIL", "hr@fficontracting.com"),
+        "contact_name": getattr(settings, "EMAIL_CONTACT_NAME", "") or "",
+        "contact_phone": getattr(settings, "EMAIL_CONTACT_PHONE", "") or "",
         "title": f"{request_type} submitted successfully",
         "title_ar": f"تم تقديم طلب {request_type} بنجاح",
         "employee_name": employee_name,
-        "message": f"Your request has been submitted and is now in {status_label}.",
-        "message_ar": f"تم تقديم طلبك بنجاح وهو الآن في حالة {status_label}.",
-        "request_type": request_type,
-        "request_id": request_id,
-        "status_label": status_label,
-        "details": details,
+        "message": message,
+        "message_ar": message_ar,
+        "preheader": message,
+        "preheader_ar": message_ar,
+        "rows": [
+            {"label": "Request ID", "label_ar": "رقم الطلب", "value": f"#{request_id}"},
+            {"label": "Status", "label_ar": "الحالة", "value": status_label},
+            *(
+                {"label": "Detail", "label_ar": "تفصيل", "value": str(item)}
+                for item in (details or [])
+            ),
+        ],
+        "details_title": f"{request_type} details",
+        "details_title_ar": "تفاصيل الطلب",
+        "status_label": "Submitted",
+        "status_label_ar": "تم التقديم",
+        "status_color": "#1d4ed8",
         "action_url": action_url,
         "action_text": "View Request",
         "action_text_ar": "عرض الطلب",
     }
 
-    html = render_to_string("emails/request_submission_email.html", context)
+    html = render_to_string("emails/generic_notification.html", context)
     details_list = [str(item) for item in (details or [])]
     details_text = "\n".join(f"- {item}" for item in details_list) if details_list else "-"
 

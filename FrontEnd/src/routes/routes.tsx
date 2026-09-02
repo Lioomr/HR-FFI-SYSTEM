@@ -116,6 +116,7 @@ import HRAttendanceCorrectionRequestsPage from "../pages/hr/attendance/Attendanc
 import RouteErrorBoundary from "./RouteErrorBoundary";
 import PendingInboxPage from "../pages/shared/PendingInboxPage";
 import NotificationsPage from "../pages/shared/NotificationsPage";
+import ContractDecisionsPage from "../pages/shared/ContractDecisionsPage";
 
 import BaseLayout from "../layouts/BaseLayout";
 
@@ -291,6 +292,8 @@ export const routes = [
                 path: "hr/loan-requests/:id",
                 element: <HrLoanRequestDetailsPage />,
               },
+              { path: "hr/contract-decisions", element: <ContractDecisionsPage /> },
+              { path: "hr/contract-decisions/:id", element: <ContractDecisionsPage /> },
               {
                 path: "hr/workflow/delegations",
                 element: <DelegationRulesPage />,
@@ -520,6 +523,8 @@ export const routes = [
                 path: "ceo/employees/deletion-requests/:id",
                 element: <CEOEmployeeDeletionDetailPage />,
               },
+              { path: "ceo/contract-decisions", element: <ContractDecisionsPage /> },
+              { path: "ceo/contract-decisions/:id", element: <ContractDecisionsPage /> },
               // Job Offers — the CEO approval gate before a candidate is told
               {
                 path: "ceo/job-offers",
