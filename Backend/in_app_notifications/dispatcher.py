@@ -136,8 +136,31 @@ def _send_email(*, recipient, title, message, action_url, template, context, tim
         email_context.setdefault("action_url", action_url)
         html = render_to_string(template_name, email_context)
     else:
-        action_html = f'<p><a href="{escape(action_url)}">View details</a></p>' if action_url else ""
-        html = f"<h2>{escape(title)}</h2><p>{escape(message)}</p>{action_html}"
+        # No bespoke template — render the branded bilingual generic template.
+        from django.template.loader import render_to_string
+
+        from core.services.bird_email_service import _resolve_logo_source
+
+        generic_context = {
+            "logo_url": _resolve_logo_source(),
+            "title": title,
+            "title_ar": email_context.get("title_ar") or title,
+            "message": message,
+            "message_ar": email_context.get("message_ar") or message,
+            "employee_name": email_context.get("employee_name")
+            or getattr(recipient, "full_name", "")
+            or "Colleague / الزميل",
+            "rows": email_context.get("rows") or [],
+            "details_title": email_context.get("details_title", "Details"),
+            "details_title_ar": email_context.get("details_title_ar", "التفاصيل"),
+            "status_label": email_context.get("status_label"),
+            "status_label_ar": email_context.get("status_label_ar"),
+            "status_color": email_context.get("status_color", "#1d4ed8"),
+            "action_url": action_url,
+            "action_text": email_context.get("action_text", "View details"),
+            "action_text_ar": email_context.get("action_text_ar", "عرض التفاصيل"),
+        }
+        html = render_to_string("emails/generic_notification.html", generic_context)
     return EmailService(timeout_seconds=timeout).send_html_email(
         to_email=email,
         subject=title,

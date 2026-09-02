@@ -6,7 +6,8 @@ export type PendingRequestType =
   | "LOAN"
   | "ATTENDANCE"
   | "ASSET"
-  | "EMPLOYEE_DELETION";
+  | "EMPLOYEE_DELETION"
+  | "CONTRACT_DECISION";
 
 export interface PendingRequestItem {
   id: number;
@@ -15,6 +16,7 @@ export interface PendingRequestItem {
   request_type_label: string;
   name: string;
   action: string;
+  details?: string;
   time: string;
   avatar: string;
   review_path: string;

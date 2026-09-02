@@ -5,6 +5,7 @@ from rest_framework import serializers
 from core.services import get_workflow_snapshot
 
 from .models import AttendanceCorrectionRequest, AttendanceRecord, BioTimeConfig, BioTimeEmployeeMap, WorkLocation
+from .schedule import get_work_schedule
 
 
 class AttendanceRecordSerializer(serializers.ModelSerializer):
@@ -12,6 +13,7 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
     employee_name_en = serializers.CharField(source="employee_profile.full_name_en", read_only=True)
     employee_name_ar = serializers.CharField(source="employee_profile.full_name_ar", read_only=True)
     employee_email = serializers.EmailField(source="employee_profile.user.email", read_only=True)
+    late_minutes = serializers.SerializerMethodField()
     workflow = serializers.SerializerMethodField()
 
     class Meta:
@@ -37,6 +39,8 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
             "ceo_decision_by",
             "ceo_decision_note",
             "is_overridden",
+            "is_late_flagged",
+            "late_minutes",
             "override_reason",
             "notes",
             "workflow",
@@ -50,6 +54,8 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
             "check_in_at",
             "check_out_at",
             "source",
+            "is_late_flagged",
+            "late_minutes",
             "biotime_emp_code",
             "biotime_terminal_sn",
             "manager_decision_at",
@@ -64,6 +70,23 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
             "updated_at",
             "is_overridden",
         ]
+
+    def _work_schedule(self):
+        # Cache on the serializer instance so a list response resolves the
+        # singleton schedule once rather than per row.
+        cached = getattr(self, "_cached_schedule", None)
+        if cached is None:
+            cached = get_work_schedule()
+            self._cached_schedule = cached
+        return cached
+
+    def get_late_minutes(self, obj):
+        if not obj.check_in_at:
+            return 0
+        try:
+            return self._work_schedule().late_minutes(obj.check_in_at, obj.date)
+        except Exception:
+            return 0
 
     def get_workflow(self, obj):
         request = self.context.get("request")

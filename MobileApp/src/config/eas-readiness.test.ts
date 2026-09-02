@@ -34,6 +34,8 @@ function resolveProfile(profileName: string, resolving = new Set<string>()): Eas
 
 describe('EAS iOS readiness configuration', () => {
   it('pins the EAS project and iOS application identity', () => {
+    expect(appConfigSource).toContain("slug: 'ffi-hr-employee'");
+    expect(appConfigSource).not.toContain("slug: isTestVariant ? 'ffi-hr-employee-test'");
     expect(appConfigSource).toContain("'com.ffihr.employee'");
     expect(appConfigSource).toContain("'com.ffihr.employee.test'");
     expect(appConfigSource).toContain("'ffihr'");
@@ -59,6 +61,7 @@ describe('EAS iOS readiness configuration', () => {
     expect(easConfig.build.development?.env?.FFI_REQUIRE_EXPLICIT_API_ORIGIN).toBe('true');
     expect(easConfig.build.test?.env?.FFI_APP_ENV).toBe('test');
     expect(easConfig.build.test?.env?.FFI_REQUIRE_EXPLICIT_API_ORIGIN).toBe('true');
+    expect(easConfig.build.test?.env?.EXPO_PUBLIC_API_BASE_URL).toBe('https://api.asecopro.com');
     expect(easConfig.build.preview?.env?.FFI_REQUIRE_EXPLICIT_API_ORIGIN).toBe('true');
     expect(easConfig.build.production?.env?.FFI_REQUIRE_EXPLICIT_API_ORIGIN).toBe('true');
     expect(easConfig.build['ios-simulator']).toMatchObject({

@@ -20,6 +20,7 @@ import {
   ArrowLeftOutlined,
   DownloadOutlined,
   EditOutlined,
+  EyeOutlined,
   ReloadOutlined,
   SaveOutlined,
 } from "@ant-design/icons";
@@ -48,6 +49,7 @@ import {
   isNotFound,
 } from "../../services/api/httpErrors";
 import { triggerBlobDownload } from "../../services/api/downloads";
+import { previewBlob } from "../../utils/download";
 import {
   listDepartments,
   type Department,
@@ -180,6 +182,7 @@ export default function CEOJobOfferDetailPage() {
   const [forbidden, setForbidden] = useState(false);
   const [deciding, setDeciding] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [cvPreviewing, setCvPreviewing] = useState(false);
   const [editing, setEditing] = useState(false);
   const [savingTerms, setSavingTerms] = useState(false);
   const [termsError, setTermsError] = useState<string | null>(null);
@@ -407,6 +410,29 @@ export default function CEOJobOfferDetailPage() {
     }
   }, [id, messageApi, t, reportActionError]);
 
+  /**
+   * Opens the CV in a new tab. A Word document cannot render there, so it falls
+   * back to a download rather than leaving the user on a blank viewer. The tab
+   * is opened synchronously so the browser does not block it as a popup once
+   * the bytes have been fetched.
+   */
+  const handleCvPreview = useCallback(async () => {
+    const tab = window.open("about:blank", "_blank");
+    setCvPreviewing(true);
+    try {
+      const blob = await downloadJobOfferCv(id!);
+      if (!(await previewBlob(blob, tab))) {
+        triggerBlobDownload(blob, `job_offer_${id}_cv`);
+        messageApi.info(t("jobOffers.cv.previewUnavailable"));
+      }
+    } catch (err: unknown) {
+      tab?.close();
+      messageApi.error(reportActionError(err, "jobOffers.cv.failed"));
+    } finally {
+      setCvPreviewing(false);
+    }
+  }, [id, messageApi, t, reportActionError]);
+
   const departmentOptions = useMemo(
     () =>
       departments.map((department) => ({
@@ -491,14 +517,24 @@ export default function CEOJobOfferDetailPage() {
               {t("jobOffers.action.refresh")}
             </Button>
             {offer.has_cv && (
-              <Button
-                icon={<DownloadOutlined aria-hidden />}
-                loading={downloading}
-                onClick={handleCvDownload}
-                style={{ borderRadius: 10, minHeight: 40 }}
-              >
-                {t("jobOffers.action.downloadCv")}
-              </Button>
+              <>
+                <Button
+                  icon={<EyeOutlined aria-hidden />}
+                  loading={cvPreviewing}
+                  onClick={handleCvPreview}
+                  style={{ borderRadius: 10, minHeight: 40 }}
+                >
+                  {t("jobOffers.action.previewCv")}
+                </Button>
+                <Button
+                  icon={<DownloadOutlined aria-hidden />}
+                  loading={downloading}
+                  onClick={handleCvDownload}
+                  style={{ borderRadius: 10, minHeight: 40 }}
+                >
+                  {t("jobOffers.action.downloadCv")}
+                </Button>
+              </>
             )}
             {editable && !editing && (
               <Button
@@ -564,14 +600,24 @@ export default function CEOJobOfferDetailPage() {
               }}
             >
               {offer.has_cv ? (
-                <Button
-                  icon={<DownloadOutlined aria-hidden />}
-                  loading={downloading}
-                  onClick={handleCvDownload}
-                  style={{ borderRadius: 10 }}
-                >
-                  {t("jobOffers.action.downloadCv")}
-                </Button>
+                <Space size={8} wrap>
+                  <Button
+                    icon={<EyeOutlined aria-hidden />}
+                    loading={cvPreviewing}
+                    onClick={handleCvPreview}
+                    style={{ borderRadius: 10 }}
+                  >
+                    {t("jobOffers.action.previewCv")}
+                  </Button>
+                  <Button
+                    icon={<DownloadOutlined aria-hidden />}
+                    loading={downloading}
+                    onClick={handleCvDownload}
+                    style={{ borderRadius: 10 }}
+                  >
+                    {t("jobOffers.action.downloadCv")}
+                  </Button>
+                </Space>
               ) : (
                 <Text type="secondary">{t("jobOffers.detail.noCv")}</Text>
               )}

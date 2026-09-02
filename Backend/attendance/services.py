@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from .biotime_client import BioTimeClient
 from .models import AttendanceRecord, BioTimeConfig, BioTimeEmployeeMap
+from .schedule import classify_check_in, get_work_schedule
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +121,7 @@ class SyncBioTimeService:
             )
         }
 
+        schedule = get_work_schedule()
         with transaction.atomic():
             for emp_code, dates in grouped.items():
                 employee_profile = mappings.get(emp_code)
@@ -135,6 +137,7 @@ class SyncBioTimeService:
                     check_in_at = min(punches)
                     check_out_at = max(punches) if len(punches) > 1 else None
                     terminal_sn = ",".join(sorted(terminal_codes[(emp_code, record_date)]))
+                    system_status = classify_check_in(check_in_at, record_date, schedule)
 
                     record, created = AttendanceRecord.objects.get_or_create(
                         employee_profile=employee_profile,
@@ -143,7 +146,8 @@ class SyncBioTimeService:
                             "check_in_at": check_in_at,
                             "check_out_at": check_out_at,
                             "source": AttendanceRecord.Source.SYSTEM,
-                            "status": AttendanceRecord.Status.PRESENT,
+                            "status": system_status,
+                            "is_late_flagged": system_status == AttendanceRecord.Status.LATE,
                             "biotime_emp_code": emp_code,
                             "biotime_terminal_sn": terminal_sn,
                         },
@@ -201,14 +205,29 @@ class SyncBioTimeService:
                             employee_profile=record.employee_profile
                         ).first()
                     record.refresh_from_db(fields=["status", "source", "is_overridden"])
+                    promotable = {
+                        AttendanceRecord.Status.PENDING,
+                        AttendanceRecord.Status.PENDING_MANAGER,
+                        AttendanceRecord.Status.PENDING_HR,
+                        AttendanceRecord.Status.PENDING_CEO,
+                        AttendanceRecord.Status.ABSENT,
+                        AttendanceRecord.Status.LATE,
+                        AttendanceRecord.Status.PRESENT,
+                    }
+                    resolved_status = classify_check_in(record.check_in_at, record.date, schedule)
                     if (
                         record.source == AttendanceRecord.Source.SYSTEM
                         and not record.is_overridden
                         and (acknowledgment is None or acknowledgment.status == "approved")
-                        and record.status != AttendanceRecord.Status.PRESENT
+                        and record.status in promotable
+                        and (
+                            record.status != resolved_status
+                            or record.is_late_flagged != (resolved_status == AttendanceRecord.Status.LATE)
+                        )
                     ):
-                        record.status = AttendanceRecord.Status.PRESENT
-                        record.save(update_fields=["status", "updated_at"])
+                        record.status = resolved_status
+                        record.is_late_flagged = resolved_status == AttendanceRecord.Status.LATE
+                        record.save(update_fields=["status", "is_late_flagged", "updated_at"])
                         if not update_fields:
                             counts["updated"] += 1
                     elif not update_fields:

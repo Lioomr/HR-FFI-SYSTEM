@@ -260,6 +260,97 @@ class EmployeeProfile(models.Model):
         super().save(*args, **kwargs)
 
 
+class ContractDecision(models.Model):
+    class DecisionType(models.TextChoices):
+        RENEW = "RENEW", _("Renew")
+        RENEW_WITH_CHANGES = "RENEW_WITH_CHANGES", _("Renew with changes")
+        TERMINATE = "TERMINATE", _("Terminate")
+
+    class Status(models.TextChoices):
+        PENDING_HR = "PENDING_HR", _("Pending HR")
+        PENDING_CEO = "PENDING_CEO", _("Pending CEO")
+        APPROVED = "APPROVED", _("Approved")
+        AUTO_APPROVED = "AUTO_APPROVED", _("Automatically approved")
+        REJECTED = "REJECTED", _("Rejected")
+        AUTO_RENEWED = "AUTO_RENEWED", _("Automatically renewed")
+        AUTO_RENEWAL_FAILED = "AUTO_RENEWAL_FAILED", _("Automatic renewal failed")
+        MANUAL_RESOLUTION_REQUIRED = "MANUAL_RESOLUTION_REQUIRED", _("Manual resolution required")
+
+    company = models.ForeignKey(
+        OrganizationNode,
+        on_delete=models.PROTECT,
+        related_name="contract_decisions",
+    )
+    employee_profile = models.ForeignKey(
+        EmployeeProfile,
+        on_delete=models.PROTECT,
+        related_name="contract_decisions",
+    )
+    decision_type = models.CharField(max_length=32, choices=DecisionType.choices, blank=True)
+    status = models.CharField(max_length=32, choices=Status.choices, default=Status.PENDING_HR, db_index=True)
+    original_contract_date = models.DateField(null=True, blank=True)
+    original_contract_expiry = models.DateField(db_index=True)
+    proposed_contract_date = models.DateField(null=True, blank=True)
+    proposed_contract_expiry = models.DateField(null=True, blank=True)
+    original_terms = models.JSONField(default=dict, blank=True)
+    proposed_terms = models.JSONField(default=dict, blank=True)
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="contract_decisions_requested",
+    )
+    ceo_decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="contract_decisions_decided",
+    )
+    finalized_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="contract_decisions_finalized",
+    )
+    hr_comment = models.TextField(blank=True)
+    ceo_comment = models.TextField(blank=True)
+    failure_reason = models.TextField(blank=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    ceo_deadline = models.DateTimeField(null=True, blank=True, db_index=True)
+    ceo_decided_at = models.DateTimeField(null=True, blank=True)
+    last_ceo_reminder_at = models.DateTimeField(null=True, blank=True)
+    ceo_reminder_count = models.PositiveSmallIntegerField(default=0)
+    finalized_at = models.DateTimeField(null=True, blank=True)
+    finalized_by_system = models.BooleanField(default=False)
+    automatic_renewal = models.BooleanField(default=False)
+    automatic_renewal_reason = models.TextField(blank=True)
+    final_notification_sent_at = models.DateTimeField(null=True, blank=True)
+    final_notification_attempts = models.PositiveSmallIntegerField(default=0)
+    last_final_notification_attempt_at = models.DateTimeField(null=True, blank=True)
+    notification_milestones = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["original_contract_expiry", "-created_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["employee_profile", "original_contract_expiry"],
+                name="employee_contract_decision_cycle_unique",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["company", "status"], name="contract_dec_comp_status_idx"),
+            models.Index(fields=["status", "ceo_deadline"], name="contract_dec_deadline_idx"),
+        ]
+
+    def __str__(self):
+        return f"Contract:{self.employee_profile_id}:{self.original_contract_expiry}:{self.status}"
+
+
 class EmployeeImport(models.Model):
     class Status(models.TextChoices):
         SUCCESS = "success", _("Success")

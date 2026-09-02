@@ -46,6 +46,7 @@ from organization.services import (
 
 from .geofence import GeofencePayloadError, validate_mobile_geofence
 from .models import AttendanceCorrectionRequest, AttendanceRecord, WorkLocation
+from .schedule import classify_check_in
 from .permissions import IsAttendanceSelfServiceRole
 from .serializers import (
     AttendanceCorrectionRequestSerializer,
@@ -428,13 +429,19 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
             )
         # Fallback/Legacy note: PENDING_HR maps to old 'PENDING' concept effectively
 
+        check_in_at = timezone.now()
+        # Employee self check-ins keep the approval workflow; we only record
+        # whether the arrival was late so approvers can preserve a LATE outcome.
+        is_late_flagged = classify_check_in(check_in_at, today) == AttendanceRecord.Status.LATE
+
         try:
             with transaction.atomic():
                 record = AttendanceRecord.objects.create(
                     employee_profile=profile,
                     date=today,
-                    check_in_at=timezone.now(),
+                    check_in_at=check_in_at,
                     status=status_value,
+                    is_late_flagged=is_late_flagged,
                     source=AttendanceRecord.Source.EMPLOYEE,
                     created_by=user,
                     updated_by=user,
@@ -966,33 +973,51 @@ class ManagerAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
             return base_qs
         return qs.filter(_manager_scope_filter(self.request.user)).distinct()
 
-    @action(detail=True, methods=["post"])
-    def approve(self, request, pk=None):
-        try:
-            instance = self.get_queryset().get(pk=pk)
-        except AttendanceRecord.DoesNotExist:
-            return error("Not found", errors=["Not found."], status=404)
+    def _locked_manager_record(self, request, pk):
+        """Scope-check unlocked, then re-fetch the row under a write lock.
 
+        Returns ``(instance, actor_source, None)`` on success or
+        ``(None, None, error_response)`` to short-circuit the caller.
+        """
+        if not self.get_queryset().filter(pk=pk).exists():
+            return None, None, error("Not found", errors=["Not found."], status=404)
+        # of=("self",) locks only the attendance row; select_related pulls the
+        # nullable user OneToOne via an outer join, which Postgres refuses to
+        # lock.
+        instance = (
+            AttendanceRecord.objects.select_for_update(of=("self",))
+            .select_related("employee_profile__user")
+            .get(pk=pk)
+        )
         actor_source = manager_approval_actor_source(
             request.user,
             instance.employee_profile,
             capability="attendance.approve",
             allow_admin=True,
         )
-        if not actor_source:
-            return error("Forbidden", errors=["You cannot approve this attendance request."], status=403)
+        return instance, actor_source, None
 
-        if instance.status != AttendanceRecord.Status.PENDING_MANAGER:
-            return error(
-                "Validation error", errors=["Request is not in a state to be approved by manager."], status=422
-            )
+    @action(detail=True, methods=["post"])
+    def approve(self, request, pk=None):
+        with transaction.atomic():
+            instance, actor_source, early = self._locked_manager_record(request, pk)
+            if early:
+                return early
+            if not actor_source:
+                return error("Forbidden", errors=["You cannot approve this attendance request."], status=403)
+            if instance.status != AttendanceRecord.Status.PENDING_MANAGER:
+                return error(
+                    "Validation error",
+                    errors=["Request is not in a state to be approved by manager."],
+                    status=422,
+                )
 
-        instance.status = AttendanceRecord.Status.PENDING_HR
-        instance.manager_decision_by = request.user
-        instance.manager_decision_at = timezone.now()
-        instance.manager_decision_note = request.data.get("notes", "")  # Simple note
-        instance.save()
-        sync_workflow(instance, actor=request.user)
+            instance.status = AttendanceRecord.Status.PENDING_HR
+            instance.manager_decision_by = request.user
+            instance.manager_decision_at = timezone.now()
+            instance.manager_decision_note = request.data.get("notes", "")  # Simple note
+            instance.save()
+            sync_workflow(instance, actor=request.user)
 
         audit(
             request,
@@ -1022,35 +1047,29 @@ class ManagerAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=True, methods=["post"])
     def reject(self, request, pk=None):
-        try:
-            instance = self.get_queryset().get(pk=pk)
-        except AttendanceRecord.DoesNotExist:
-            return error("Not found", errors=["Not found."], status=404)
-
-        actor_source = manager_approval_actor_source(
-            request.user,
-            instance.employee_profile,
-            capability="attendance.approve",
-            allow_admin=True,
-        )
-        if not actor_source:
-            return error("Forbidden", errors=["You cannot reject this attendance request."], status=403)
-
-        if instance.status != AttendanceRecord.Status.PENDING_MANAGER:
-            return error(
-                "Validation error", errors=["Request is not in a state to be rejected by manager."], status=422
-            )
-
         note = request.data.get("notes", "")
         if not note:
             return error("Validation error", errors=["notes/comment is required for rejection."], status=422)
 
-        instance.status = AttendanceRecord.Status.REJECTED
-        instance.manager_decision_by = request.user
-        instance.manager_decision_at = timezone.now()
-        instance.manager_decision_note = note
-        instance.save()
-        sync_workflow(instance, actor=request.user)
+        with transaction.atomic():
+            instance, actor_source, early = self._locked_manager_record(request, pk)
+            if early:
+                return early
+            if not actor_source:
+                return error("Forbidden", errors=["You cannot reject this attendance request."], status=403)
+            if instance.status != AttendanceRecord.Status.PENDING_MANAGER:
+                return error(
+                    "Validation error",
+                    errors=["Request is not in a state to be rejected by manager."],
+                    status=422,
+                )
+
+            instance.status = AttendanceRecord.Status.REJECTED
+            instance.manager_decision_by = request.user
+            instance.manager_decision_at = timezone.now()
+            instance.manager_decision_note = note
+            instance.save()
+            sync_workflow(instance, actor=request.user)
 
         audit(
             request,
@@ -1124,26 +1143,34 @@ class CEOAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
-        instance = self.get_object()
-        if instance.status != AttendanceRecord.Status.PENDING_CEO:
-            return error("Validation error", errors=["Request is not pending CEO approval."], status=422)
-        if _is_hr_manager_origin_record(instance) and instance.employee_profile.user_id == request.user.id:
-            return error("Validation error", errors=["Self approval is not allowed."], status=422)
+        self.get_object()  # 404 + object-permission check
+        with transaction.atomic():
+            instance = AttendanceRecord.objects.select_for_update(of=("self",)).select_related(
+                "employee_profile__user"
+            ).get(pk=pk)
+            if instance.status != AttendanceRecord.Status.PENDING_CEO:
+                return error("Validation error", errors=["Request is not pending CEO approval."], status=422)
+            if _is_hr_manager_origin_record(instance) and instance.employee_profile.user_id == request.user.id:
+                return error("Validation error", errors=["Self approval is not allowed."], status=422)
 
-        instance.status = AttendanceRecord.Status.PRESENT
-        instance.ceo_decision_by = request.user
-        instance.ceo_decision_at = timezone.now()
-        instance.ceo_decision_note = request.data.get("notes", "")
-        instance.save(
-            update_fields=[
-                "status",
-                "ceo_decision_by",
-                "ceo_decision_at",
-                "ceo_decision_note",
-                "updated_at",
-            ]
-        )
-        sync_workflow(instance, actor=request.user)
+            instance.status = (
+                AttendanceRecord.Status.LATE
+                if instance.is_late_flagged
+                else AttendanceRecord.Status.PRESENT
+            )
+            instance.ceo_decision_by = request.user
+            instance.ceo_decision_at = timezone.now()
+            instance.ceo_decision_note = request.data.get("notes", "")
+            instance.save(
+                update_fields=[
+                    "status",
+                    "ceo_decision_by",
+                    "ceo_decision_at",
+                    "ceo_decision_note",
+                    "updated_at",
+                ]
+            )
+            sync_workflow(instance, actor=request.user)
         audit(request, "approve_ceo", entity="AttendanceRecord", entity_id=instance.id)
         try:
             notify_profile_request_status_whatsapp(
@@ -1165,30 +1192,34 @@ class CEOAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=True, methods=["post"])
     def reject(self, request, pk=None):
-        instance = self.get_object()
-        if instance.status != AttendanceRecord.Status.PENDING_CEO:
-            return error("Validation error", errors=["Request is not pending CEO approval."], status=422)
-        if _is_hr_manager_origin_record(instance) and instance.employee_profile.user_id == request.user.id:
-            return error("Validation error", errors=["Self approval is not allowed."], status=422)
-
         note = (request.data.get("notes") or "").strip()
         if not note:
             return error("Validation error", errors=["notes/comment is required for rejection."], status=422)
 
-        instance.status = AttendanceRecord.Status.REJECTED
-        instance.ceo_decision_by = request.user
-        instance.ceo_decision_at = timezone.now()
-        instance.ceo_decision_note = note
-        instance.save(
-            update_fields=[
-                "status",
-                "ceo_decision_by",
-                "ceo_decision_at",
-                "ceo_decision_note",
-                "updated_at",
-            ]
-        )
-        sync_workflow(instance, actor=request.user)
+        self.get_object()  # 404 + object-permission check
+        with transaction.atomic():
+            instance = AttendanceRecord.objects.select_for_update(of=("self",)).select_related(
+                "employee_profile__user"
+            ).get(pk=pk)
+            if instance.status != AttendanceRecord.Status.PENDING_CEO:
+                return error("Validation error", errors=["Request is not pending CEO approval."], status=422)
+            if _is_hr_manager_origin_record(instance) and instance.employee_profile.user_id == request.user.id:
+                return error("Validation error", errors=["Self approval is not allowed."], status=422)
+
+            instance.status = AttendanceRecord.Status.REJECTED
+            instance.ceo_decision_by = request.user
+            instance.ceo_decision_at = timezone.now()
+            instance.ceo_decision_note = note
+            instance.save(
+                update_fields=[
+                    "status",
+                    "ceo_decision_by",
+                    "ceo_decision_at",
+                    "ceo_decision_note",
+                    "updated_at",
+                ]
+            )
+            sync_workflow(instance, actor=request.user)
         audit(request, "reject_ceo", entity="AttendanceRecord", entity_id=instance.id)
         try:
             notify_profile_request_status_whatsapp(

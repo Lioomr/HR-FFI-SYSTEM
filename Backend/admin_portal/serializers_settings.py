@@ -25,6 +25,18 @@ class SecuritySerializer(serializers.Serializer):
 
 class AttendanceSettingsSerializer(serializers.Serializer):
     geofence_enabled = serializers.BooleanField()
+    work_day_start_time = serializers.TimeField(required=False)
+    late_grace_minutes = serializers.IntegerField(required=False, min_value=0, max_value=240)
+    absence_detection_enabled = serializers.BooleanField(required=False)
+    work_week_days = serializers.ListField(
+        child=serializers.IntegerField(min_value=0, max_value=6),
+        required=False,
+        allow_empty=False,
+        max_length=7,
+    )
+
+    def validate_work_week_days(self, value):
+        return sorted(set(value))
 
 
 class SettingsResponseSerializer(serializers.Serializer):
@@ -63,6 +75,10 @@ class SettingsUpdateSerializer(serializers.Serializer):
             "max_login_attempts": settings_obj.max_login_attempts,
             "default_invite_expiry_hours": settings_obj.default_invite_expiry_hours,
             "geofence_attendance_enabled": settings_obj.geofence_attendance_enabled,
+            "work_day_start_time": settings_obj.work_day_start_time.isoformat(),
+            "late_grace_minutes": settings_obj.late_grace_minutes,
+            "absence_detection_enabled": settings_obj.absence_detection_enabled,
+            "work_week_days": list(settings_obj.work_week_days or []),
         }
 
         pp = self.validated_data["password_policy"]
@@ -82,6 +98,14 @@ class SettingsUpdateSerializer(serializers.Serializer):
         settings_obj.max_login_attempts = sec["max_login_attempts"]
         if attendance is not None:
             settings_obj.geofence_attendance_enabled = attendance["geofence_enabled"]
+            if "work_day_start_time" in attendance:
+                settings_obj.work_day_start_time = attendance["work_day_start_time"]
+            if "late_grace_minutes" in attendance:
+                settings_obj.late_grace_minutes = attendance["late_grace_minutes"]
+            if "absence_detection_enabled" in attendance:
+                settings_obj.absence_detection_enabled = attendance["absence_detection_enabled"]
+            if "work_week_days" in attendance:
+                settings_obj.work_week_days = attendance["work_week_days"]
 
         settings_obj.save()
 
@@ -95,6 +119,10 @@ class SettingsUpdateSerializer(serializers.Serializer):
             "max_login_attempts": settings_obj.max_login_attempts,
             "default_invite_expiry_hours": settings_obj.default_invite_expiry_hours,
             "geofence_attendance_enabled": settings_obj.geofence_attendance_enabled,
+            "work_day_start_time": settings_obj.work_day_start_time.isoformat(),
+            "late_grace_minutes": settings_obj.late_grace_minutes,
+            "absence_detection_enabled": settings_obj.absence_detection_enabled,
+            "work_week_days": list(settings_obj.work_week_days or []),
         }
 
         changed = {k: {"from": before[k], "to": after[k]} for k in before.keys() if before[k] != after[k]}
@@ -121,6 +149,10 @@ def to_settings_response(settings_obj: SystemSettings):
         },
         "attendance": {
             "geofence_enabled": settings_obj.geofence_attendance_enabled,
+            "work_day_start_time": settings_obj.work_day_start_time.strftime("%H:%M"),
+            "late_grace_minutes": settings_obj.late_grace_minutes,
+            "absence_detection_enabled": settings_obj.absence_detection_enabled,
+            "work_week_days": list(settings_obj.work_week_days or []),
         },
         "updated_at": settings_obj.updated_at,
     }

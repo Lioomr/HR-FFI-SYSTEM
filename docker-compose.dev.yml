@@ -138,6 +138,12 @@ services:
     volumes:
       - ./Backend/static/pdf_templates:/hr/templates:ro
       - private_uploads:/app/private_uploads
+    healthcheck:
+      test: ["CMD", "python", "-c", "import glob,sys; sys.exit(0 if any(b'celery' in open(p+'/cmdline','rb').read() and b'beat' in open(p+'/cmdline','rb').read() for p in glob.glob('/proc/[0-9]*')) else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
   frontend:
     build:

@@ -36,7 +36,7 @@ class BirdEmailServiceTests(SimpleTestCase):
         result = service.send_template_email(
             to_email="employee@example.com",
             subject="Invitation",
-            template_name="invite_user.html",
+            template_name="generic_notification.html",
             context={
                 "logo_url": "data:image/png;base64,AAAA",
                 "title": "Invitation",

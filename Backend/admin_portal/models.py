@@ -1,4 +1,13 @@
+from datetime import time
+
 from django.db import models
+
+# Python weekday(): Monday=0 .. Sunday=6. Default working week: Sunday–Thursday.
+DEFAULT_WORK_WEEK_DAYS = [6, 0, 1, 2, 3]
+
+
+def default_work_week_days():
+    return list(DEFAULT_WORK_WEEK_DAYS)
 
 
 class SystemSettings(models.Model):
@@ -25,6 +34,12 @@ class SystemSettings(models.Model):
 
     # Attendance
     geofence_attendance_enabled = models.BooleanField(default=False)
+    # Company-wide work schedule used to classify Late arrivals and detect Absences.
+    work_day_start_time = models.TimeField(default=time(9, 0))
+    late_grace_minutes = models.PositiveIntegerField(default=15)
+    absence_detection_enabled = models.BooleanField(default=True)
+    # List of Python weekday() ints (Mon=0 .. Sun=6) considered working days.
+    work_week_days = models.JSONField(default=default_work_week_days, blank=True)
 
     updated_at = models.DateTimeField(auto_now=True)
 

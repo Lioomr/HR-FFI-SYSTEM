@@ -24,7 +24,8 @@
       "environment": "preview",
       "env": {
         "FFI_APP_ENV": "test",
-        "FFI_REQUIRE_EXPLICIT_API_ORIGIN": "true"
+        "FFI_REQUIRE_EXPLICIT_API_ORIGIN": "true",
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.asecopro.com"
       }
     },
     "preview": {

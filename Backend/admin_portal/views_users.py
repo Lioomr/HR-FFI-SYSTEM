@@ -19,7 +19,7 @@ from audit.utils import audit
 from core.pagination import StandardPagination
 from core.permissions import IsHRManagerOrAdmin, IsSystemAdmin, get_role
 from core.responses import error, success
-from core.services.bird_email_service import _load_logo_base64
+from core.services.bird_email_service import _resolve_logo_source
 from core.services.email_service import EmailService
 from organization.services import get_user_accessible_company_ids, user_has_all_company_access
 
@@ -280,19 +280,29 @@ class UserResetPasswordView(APIView):
             user.save(update_fields=["password"])
 
             context = {
-                "logo_url": _load_logo_base64(),
+                "logo_url": _resolve_logo_source(),
                 "contact_email": getattr(settings, "EMAIL_CONTACT_EMAIL", "hr@fficontracting.com"),
+                "contact_name": getattr(settings, "EMAIL_CONTACT_NAME", "") or "",
+                "contact_phone": getattr(settings, "EMAIL_CONTACT_PHONE", "") or "",
                 "title": "Your temporary password",
                 "title_ar": "كلمة المرور المؤقتة الخاصة بك",
                 "employee_name": user.full_name or user.email,
-                "message": "Your password has been reset by an administrator.",
-                "message_ar": "تمت إعاده تعيين كلمة المرور الخاصة بك من قبل مسؤول النظام.",
-                "reset_instructions": "Use the temporary password below to log in. You will be prompted to change it immediately.",
-                "reset_instructions_ar": "استخدم كلمة المرور المؤقتة أدناه لتسجيل الدخول. سيُطلب منك تغييرها على الفور.",
-                "temp_password": temp_password,
-                "requested_at": requested_at,
+                "message": "Your password has been reset by an administrator. Use the temporary password below to sign in — you will be asked to change it immediately.",
+                "message_ar": "تمت إعادة تعيين كلمة المرور الخاصة بك من قِبل مسؤول النظام. استخدم كلمة المرور المؤقتة أدناه لتسجيل الدخول، وسيُطلب منك تغييرها فوراً.",
+                "status_label": "Security",
+                "status_label_ar": "أمان",
+                "status_color": "#C2410C",
+                "rows": [
+                    {"label": "Temporary password", "label_ar": "كلمة المرور المؤقتة", "value": temp_password,
+                     "value_html": f"<span style='font-family:Consolas,\"Courier New\",monospace;font-size:16px;letter-spacing:2px;color:#1c1f24;'>{temp_password}</span>"},
+                    {"label": "Issued at", "label_ar": "وقت الإصدار", "value": requested_at},
+                ],
+                "details_title": "Sign-in details",
+                "details_title_ar": "بيانات تسجيل الدخول",
+                "security_note": "If you did not expect this change, contact HR immediately.",
+                "security_note_ar": "إذا لم تكن تتوقع هذا التغيير، يُرجى التواصل مع الموارد البشرية فوراً.",
             }
-            html = render_to_string("emails/password_reset_email.html", context)
+            html = render_to_string("emails/generic_notification.html", context)
 
             _send_password_reset_material(
                 user,
@@ -311,19 +321,30 @@ class UserResetPasswordView(APIView):
         reset_link = f"{settings.FRONTEND_URL.rstrip('/')}/change-password?token={token}&uid={user.id}"
 
         context = {
-            "logo_url": _load_logo_base64(),
+            "logo_url": _resolve_logo_source(),
             "contact_email": getattr(settings, "EMAIL_CONTACT_EMAIL", "hr@fficontracting.com"),
+            "contact_name": getattr(settings, "EMAIL_CONTACT_NAME", "") or "",
+            "contact_phone": getattr(settings, "EMAIL_CONTACT_PHONE", "") or "",
             "title": "Reset your password",
             "title_ar": "إعادة تعيين كلمة المرور",
             "employee_name": user.full_name or user.email,
-            "message": "Your password reset was requested by an administrator.",
-            "message_ar": "تم طلب إعادة تعيين كلمة المرور الخاصة بك من قبل مسؤول النظام.",
-            "reset_instructions": "Click the button below to set a new password. This link is only valid once.",
-            "reset_instructions_ar": "انقر على الزر أدناه لتعيين كلمة مرور جديدة. هذا الرابط صالح للاستخدام مرة واحدة فقط.",
-            "reset_link": reset_link,
-            "requested_at": requested_at,
+            "message": "A password reset was requested for your account by an administrator. Click the button below to set a new password — the link can be used once and then expires.",
+            "message_ar": "تم طلب إعادة تعيين كلمة المرور لحسابك من قِبل مسؤول النظام. انقر على الزر أدناه لتعيين كلمة مرور جديدة — الرابط صالح للاستخدام مرة واحدة فقط ثم تنتهي صلاحيته.",
+            "status_label": "Security",
+            "status_label_ar": "أمان",
+            "status_color": "#C2410C",
+            "rows": [
+                {"label": "Requested at", "label_ar": "وقت الطلب", "value": requested_at},
+            ],
+            "details_title": "Request details",
+            "details_title_ar": "تفاصيل الطلب",
+            "action_url": reset_link,
+            "action_text": "Reset password",
+            "action_text_ar": "إعادة تعيين كلمة المرور",
+            "security_note": "If you did not expect this, contact HR immediately and do not use the link.",
+            "security_note_ar": "إذا لم تكن تتوقع ذلك، تواصل مع الموارد البشرية فوراً ولا تستخدم الرابط.",
         }
-        html = render_to_string("emails/password_reset_email.html", context)
+        html = render_to_string("emails/generic_notification.html", context)
 
         _send_password_reset_material(
             user,

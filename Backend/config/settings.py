@@ -167,6 +167,8 @@ TEXTBEE_DEVICE_ID = os.environ.get("TEXTBEE_DEVICE_ID", "")
 EMAIL_LOGO_PATH = os.environ.get("EMAIL_LOGO_PATH", "")
 EMAIL_LOGO_URL = os.environ.get("EMAIL_LOGO_URL", "")
 EMAIL_CONTACT_EMAIL = os.environ.get("EMAIL_CONTACT_EMAIL", "hr@fficontracting.com")
+EMAIL_CONTACT_NAME = os.environ.get("EMAIL_CONTACT_NAME", "")
+EMAIL_CONTACT_PHONE = os.environ.get("EMAIL_CONTACT_PHONE", "")
 
 if not BIRD_API_KEY:
     BIRD_API_KEY = BIRD_ACCESS_KEY

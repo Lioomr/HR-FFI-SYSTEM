@@ -504,6 +504,14 @@ class AttendanceTests(TestCase):
         self.assertTrue(AuditLog.objects.filter(action="attendance.check_in").exists())
 
     def test_hr_manager_check_in_goes_to_pending_ceo_and_ceo_can_approve(self):
+        # Keep this routing test independent of the wall clock vs. the company
+        # late cutoff: a huge grace window guarantees an on-time classification.
+        from admin_portal.models import SystemSettings
+
+        settings_obj = SystemSettings.get_solo()
+        settings_obj.late_grace_minutes = 24 * 60
+        settings_obj.save(update_fields=["late_grace_minutes", "updated_at"])
+
         self.client.force_authenticate(user=self.hr)
         create_response = self.client.post("/api/attendance/me/check-in/")
         self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)

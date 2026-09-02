@@ -1,0 +1,31 @@
+{
+  "template": "loan_request_blank.pdf",
+  "page_size": "A4",
+  "coordinate_origin": "bottom_left",
+  "fields": {
+    "reference_no": { "page": 1, "x": 94, "y": 749, "width": 151, "height": 18, "font_size": 8.2 },
+    "request_date": { "page": 1, "x": 390, "y": 749, "width": 142, "height": 18, "font_size": 8.2 },
+    "employee_name": { "page": 1, "x": 84, "y": 691, "width": 425, "height": 19, "font_size": 7.8, "shrink": true },
+    "employee_id": { "page": 1, "x": 84, "y": 665, "width": 425, "height": 19, "font_size": 7.8, "shrink": true },
+    "department": { "page": 1, "x": 84, "y": 639, "width": 425, "height": 19, "font_size": 7.8, "shrink": true },
+    "job_title": { "page": 1, "x": 84, "y": 613, "width": 425, "height": 19, "font_size": 7.8, "shrink": true },
+    "hire_date": { "page": 1, "x": 84, "y": 587, "width": 425, "height": 19, "font_size": 7.8 },
+    "total_salary": { "page": 1, "x": 84, "y": 561, "width": 425, "height": 19, "font_size": 7.8 },
+    "requested_amount": { "page": 1, "x": 112, "y": 515, "width": 398, "height": 20, "font_size": 8.2 },
+    "monthly_deduction": { "page": 1, "x": 112, "y": 489, "width": 398, "height": 20, "font_size": 8.2 },
+    "deduction_start_date": { "page": 1, "x": 112, "y": 463, "width": 398, "height": 20, "font_size": 8.2 },
+    "has_previous_loan": { "page": 1, "checkboxes": { "yes": [382, 438], "no": [248, 438] } },
+    "previous_loan_note": { "page": 1, "x": 28, "y": 414, "width": 540, "height": 25, "font_size": 7.2, "multiline": true, "max_lines": 2 },
+    "previous_loan_type": { "page": 1, "x": 112, "y": 384, "width": 398, "height": 20, "font_size": 8.0 },
+    "previous_loan_value": { "page": 1, "x": 112, "y": 358, "width": 398, "height": 20, "font_size": 8.0 },
+    "previous_loan_payment_end_date": { "page": 1, "x": 112, "y": 332, "width": 398, "height": 20, "font_size": 8.0 },
+    "accounts_officer_name": { "page": 1, "x": 312, "y": 267, "width": 247, "height": 20, "font_size": 8.0, "shrink": true },
+    "accounts_officer_signature": { "page": 1, "x": 312, "y": 238, "width": 247, "height": 20, "font_size": 8.0, "shrink": true },
+    "financial_manager_name": { "page": 1, "x": 28, "y": 267, "width": 247, "height": 20, "font_size": 8.0, "shrink": true },
+    "financial_manager_signature": { "page": 1, "x": 28, "y": 238, "width": 247, "height": 20, "font_size": 8.0, "shrink": true },
+    "hr_manager_name": { "page": 1, "x": 28, "y": 205, "width": 540, "height": 20, "font_size": 8.0, "shrink": true },
+    "hr_manager_signature": { "page": 1, "x": 28, "y": 177, "width": 540, "height": 20, "font_size": 8.0, "shrink": true },
+    "status": { "page": 1, "checkboxes": { "approved": [542, 128], "rejected": [542, 101] } },
+    "notes": { "page": 1, "x": 196, "y": 101, "width": 363, "height": 47, "font_size": 7.2, "multiline": true, "max_lines": 3 }
+  }
+}

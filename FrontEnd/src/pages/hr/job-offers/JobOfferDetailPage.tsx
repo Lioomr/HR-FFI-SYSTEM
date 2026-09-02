@@ -19,6 +19,7 @@ import {
   CloseCircleOutlined,
   EditOutlined,
   DownloadOutlined,
+  EyeOutlined,
   FilePdfOutlined,
   MailOutlined,
   ReloadOutlined,
@@ -48,6 +49,7 @@ import {
   isNotFound,
 } from "../../../services/api/httpErrors";
 import { triggerBlobDownload } from "../../../services/api/downloads";
+import { previewBlob } from "../../../utils/download";
 import {
   downloadEmployeeDocument,
   getEmployeeDocuments,
@@ -249,7 +251,14 @@ export default function JobOfferDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [forbidden, setForbidden] = useState(false);
   const [acting, setActing] = useState<
-    "send" | "cancel" | "pdf" | "submit" | "cv" | null
+    | "send"
+    | "cancel"
+    | "pdf"
+    | "pdfPreview"
+    | "submit"
+    | "cv"
+    | "cvPreview"
+    | null
   >(null);
   const [acknowledgment, setAcknowledgment] = useState<EmployeeDocument | null>(
     null,
@@ -396,6 +405,29 @@ export default function JobOfferDetailPage() {
     }
   }, [id, messageApi, t, reportActionError]);
 
+  /**
+   * Opens the CV in a new tab. A Word document cannot render there, so it falls
+   * back to a download rather than leaving the user on a blank viewer. The tab
+   * is opened synchronously so the browser does not treat it as a popup once
+   * the bytes have been fetched.
+   */
+  const handleCvPreview = useCallback(async () => {
+    const tab = window.open("about:blank", "_blank");
+    setActing("cvPreview");
+    try {
+      const blob = await downloadJobOfferCv(id!);
+      if (!(await previewBlob(blob, tab))) {
+        triggerBlobDownload(blob, `job_offer_${id}_cv`);
+        messageApi.info(t("jobOffers.cv.previewUnavailable"));
+      }
+    } catch (err: unknown) {
+      tab?.close();
+      reportActionError(err, "jobOffers.cv.failed");
+    } finally {
+      setActing(null);
+    }
+  }, [id, messageApi, t, reportActionError]);
+
   const handleSend = useCallback(() => {
     modal.confirm({
       title: t("jobOffers.send.confirmTitle"),
@@ -460,6 +492,30 @@ export default function JobOfferDetailPage() {
       messageApi.success(t("jobOffers.pdf.success"));
     } catch (err: unknown) {
       messageApi.error((err as Error)?.message || t("jobOffers.pdf.failed"));
+    } finally {
+      setActing(null);
+    }
+  }, [id, messageApi, t]);
+
+  /**
+   * Opens the offer PDF in a new tab for a quick look instead of saving it.
+   * The tab is opened synchronously so it is not blocked as a popup, and
+   * `previewBlob` normalises the MIME type so it renders inline even when the
+   * backend labels the stream as a generic attachment.
+   */
+  const handlePdfPreview = useCallback(async () => {
+    const tab = window.open("about:blank", "_blank");
+    setActing("pdfPreview");
+    try {
+      const blob = await downloadJobOfferPdf(id!);
+      if (!(await previewBlob(blob, tab))) {
+        messageApi.error(t("jobOffers.pdf.previewFailed"));
+      }
+    } catch (err: unknown) {
+      tab?.close();
+      messageApi.error(
+        (err as Error)?.message || t("jobOffers.pdf.previewFailed"),
+      );
     } finally {
       setActing(null);
     }
@@ -697,15 +753,33 @@ export default function JobOfferDetailPage() {
               </Button>
             )}
             {offer.has_cv && (
-              <Button
-                icon={<DownloadOutlined aria-hidden />}
-                loading={acting === "cv"}
-                onClick={handleCvDownload}
-                style={{ borderRadius: 10, minHeight: 40 }}
-              >
-                {t("jobOffers.action.downloadCv")}
-              </Button>
+              <>
+                <Button
+                  icon={<EyeOutlined aria-hidden />}
+                  loading={acting === "cvPreview"}
+                  onClick={handleCvPreview}
+                  style={{ borderRadius: 10, minHeight: 40 }}
+                >
+                  {t("jobOffers.action.previewCv")}
+                </Button>
+                <Button
+                  icon={<DownloadOutlined aria-hidden />}
+                  loading={acting === "cv"}
+                  onClick={handleCvDownload}
+                  style={{ borderRadius: 10, minHeight: 40 }}
+                >
+                  {t("jobOffers.action.downloadCv")}
+                </Button>
+              </>
             )}
+            <Button
+              icon={<EyeOutlined aria-hidden />}
+              loading={acting === "pdfPreview"}
+              onClick={handlePdfPreview}
+              style={{ borderRadius: 10, minHeight: 40 }}
+            >
+              {t("jobOffers.action.previewPdf")}
+            </Button>
             <Button
               icon={<FilePdfOutlined aria-hidden />}
               loading={acting === "pdf"}

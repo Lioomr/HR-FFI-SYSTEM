@@ -16,6 +16,10 @@ vi.mock("../../services/api/employeesApi", () => ({
   listEmployees: vi.fn(),
 }));
 
+vi.mock("../../utils/download", () => ({
+  downloadBlob: vi.fn(),
+}));
+
 import AttendancePreviewPage from "./AttendancePreviewPage";
 import {
   getCEOAttendance,
@@ -23,6 +27,7 @@ import {
 } from "../../services/api/attendanceApi";
 import { listEmployees } from "../../services/api/employeesApi";
 import type { Employee } from "../../services/api/employeesApi";
+import { downloadBlob } from "../../utils/download";
 import type { AttendanceRecord } from "../../types/attendance";
 import { useI18nStore } from "../../i18n/i18nStore";
 import { useAuthStore } from "../../auth/authStore";
@@ -30,6 +35,7 @@ import { useAuthStore } from "../../auth/authStore";
 const getGlobal = getGlobalAttendance as unknown as ReturnType<typeof vi.fn>;
 const getCEO = getCEOAttendance as unknown as ReturnType<typeof vi.fn>;
 const listEmployeesMock = listEmployees as unknown as ReturnType<typeof vi.fn>;
+const downloadBlobMock = downloadBlob as unknown as ReturnType<typeof vi.fn>;
 
 const record = (
   overrides: Partial<AttendanceRecord> = {},
@@ -95,6 +101,7 @@ beforeEach(() => {
   getGlobal.mockReset();
   getCEO.mockReset();
   listEmployeesMock.mockReset();
+  downloadBlobMock.mockReset();
 
   useI18nStore.getState().setLanguage("en");
   useAuthStore.setState({
@@ -307,5 +314,87 @@ describe("AttendancePreviewPage states", () => {
     expect(
       await screen.findByText("Invalid attendance filter: source"),
     ).toBeInTheDocument();
+  });
+});
+
+describe("AttendancePreviewPage late + absence surfacing", () => {
+  it("shows minutes late for LATE rows and a dash otherwise", async () => {
+    getGlobal.mockResolvedValue(
+      listResponse([
+        record({ id: 1, status: "LATE", late_minutes: 23 }),
+        record({ id: 2, status: "PRESENT", late_minutes: 0 }),
+      ]),
+    );
+
+    render(<AttendancePreviewPage role="hr" />);
+
+    expect(await screen.findByText("+23m")).toBeInTheDocument();
+    expect(
+      screen.getByRole("columnheader", { name: "Late by" }),
+    ).toBeInTheDocument();
+  });
+
+  it("tags a pending row the backend flagged as a late arrival", async () => {
+    getGlobal.mockResolvedValue(
+      listResponse([
+        record({
+          id: 3,
+          status: "PENDING_HR",
+          source: "EMPLOYEE",
+          is_late_flagged: true,
+          check_out_at: null,
+        }),
+      ]),
+    );
+
+    render(<AttendancePreviewPage role="hr" />);
+
+    const table = await screen.findByRole("table");
+    expect(await within(table).findByText("Late arrival")).toBeInTheDocument();
+  });
+
+  it("does not tag a settled row even when it was flagged late", async () => {
+    getGlobal.mockResolvedValue(
+      listResponse([record({ id: 4, status: "LATE", is_late_flagged: true })]),
+    );
+
+    render(<AttendancePreviewPage role="hr" />);
+
+    await screen.findByText("Sara Ali");
+    expect(screen.queryByText("Late arrival")).not.toBeInTheDocument();
+  });
+
+  it("derives the attendance-rate tile from the summary counts", async () => {
+    getGlobal.mockResolvedValue({
+      status: "success" as const,
+      data: {
+        items: [record()],
+        count: 1,
+        summary: { PRESENT: 8, LATE: 2, ABSENT: 5, PENDING_HR: 4 },
+      },
+    });
+
+    render(<AttendancePreviewPage role="hr" />);
+
+    await screen.findByText("Sara Ali");
+    // (8 present + 2 late) / (8 + 2 + 5 accountable) = 67%. Pending is excluded.
+    expect(screen.getByText("Attendance rate")).toBeInTheDocument();
+    expect(screen.getByText("67%")).toBeInTheDocument();
+  });
+
+  it("exports the filtered rows as a dated CSV file", async () => {
+    getGlobal.mockResolvedValue(
+      listResponse([record({ id: 9, status: "LATE", late_minutes: 12 })]),
+    );
+
+    render(<AttendancePreviewPage role="hr" />);
+    await screen.findByText("Sara Ali");
+
+    fireEvent.click(screen.getByRole("button", { name: /export/i }));
+
+    await waitFor(() => expect(downloadBlobMock).toHaveBeenCalled());
+    const [blob, filename] = downloadBlobMock.mock.calls[0];
+    expect(blob).toBeInstanceOf(Blob);
+    expect(filename).toMatch(/^attendance-\d{4}-\d{2}-\d{2}\.csv$/);
   });
 });

@@ -470,6 +470,10 @@ def _build_loan_request_pdf(instance: LoanRequest) -> bytes:
     overlay = BytesIO()
     pdf = canvas.Canvas(overlay, pagesize=(width, height))
     pdf.setTitle(f"Loan Request {instance.id}")
+    # Keep the document title machine-readable while the approved visual template remains image-based.
+    pdf.setFillColorRGB(1, 1, 1)
+    pdf.setFont(regular_font, 0.1)
+    pdf.drawString(0.5, 0.5, f"Loan Request | {loan_type_en}")
     _mask_input_lines(pdf)
 
     left_x = 175

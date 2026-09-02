@@ -7,6 +7,7 @@ export const PENDING_TYPE_COLORS: Record<PendingRequestType, string> = {
   ATTENDANCE: "orange",
   ASSET: "purple",
   EMPLOYEE_DELETION: "red",
+  CONTRACT_DECISION: "cyan",
 };
 
 export const PENDING_TYPE_LABEL_KEYS: Record<PendingRequestType, string> = {
@@ -15,4 +16,5 @@ export const PENDING_TYPE_LABEL_KEYS: Record<PendingRequestType, string> = {
   ATTENDANCE: "pendingInbox.requestType.ATTENDANCE",
   ASSET: "pendingInbox.requestType.ASSET",
   EMPLOYEE_DELETION: "pendingInbox.requestType.EMPLOYEE_DELETION",
+  CONTRACT_DECISION: "pendingInbox.requestType.CONTRACT_DECISION",
 };

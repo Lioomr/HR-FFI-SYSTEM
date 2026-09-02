@@ -179,10 +179,20 @@ export type SettingsDto = {
   /**
    * Mirrors `admin_portal.serializers_settings.AttendanceSettingsSerializer`.
    * Always present on GET; optional on PUT, where omitting it preserves the
-   * stored toggle for legacy settings clients.
+   * stored values for legacy settings clients. On PUT `geofence_enabled` stays
+   * required whenever `attendance` is sent; the work-schedule keys are optional
+   * and omitting one leaves it unchanged.
    */
   attendance?: {
     geofence_enabled: boolean;
+    /** "HH:MM" (24h). A check-in after this + grace is classified LATE. */
+    work_day_start_time?: string;
+    /** Minutes after `work_day_start_time` before a check-in counts as late (0–240). */
+    late_grace_minutes?: number;
+    /** When true, a daily job marks Absent anyone with no record and no approved leave. */
+    absence_detection_enabled?: boolean;
+    /** Working weekdays as Python `date.weekday()` (Mon=0 … Sun=6). Default [6,0,1,2,3] = Sun–Thu. */
+    work_week_days?: number[];
   };
   updated_at: string;
 };

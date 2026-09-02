@@ -75,6 +75,15 @@ TEMPLATE_CATALOG = [
         "description_ar": "نموذج طلب سلفة فارغ مع مسار الموافقة والتوقيعات.",
     },
     {
+        "key": "annual_entitlements_disbursement",
+        "category": "request",
+        "filename": "annual_entitlements_disbursement_blank.pdf",
+        "title_en": "Annual Entitlements Disbursement Request",
+        "title_ar": "طلب صرف المستحقات السنوية",
+        "description_en": "Blank bilingual annual entitlements disbursement request form.",
+        "description_ar": "نموذج طلب صرف المستحقات السنوية ثنائي اللغة.",
+    },
+    {
         "key": "asset_damage_report",
         "category": "request",
         "filename": "asset_damage_report_blank.pdf",

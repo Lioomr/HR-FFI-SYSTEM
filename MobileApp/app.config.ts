@@ -19,7 +19,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   return {
     ...config,
     name: isTestVariant ? 'FFI HR Employee Test' : 'FFI HR Employee',
-    slug: isTestVariant ? 'ffi-hr-employee-test' : 'ffi-hr-employee',
+    // EAS project IDs are permanently associated with one Expo slug. The test
+    // variant remains isolated through its package ID, display name, and scheme.
+    slug: 'ffi-hr-employee',
     scheme: isTestVariant ? 'ffihr-test' : 'ffihr',
     version: '1.0.0',
     orientation: 'portrait',

@@ -25,6 +25,18 @@ export interface AttendanceRecord {
   biotime_emp_code?: string | null;
   /** Serial number of the BioTime terminal that produced this record. */
   biotime_terminal_sn?: string | null;
+  /**
+   * The check-in was past the late cutoff when the record was created. Stable
+   * "was late" signal for rows still `PENDING_*`; unlike `late_minutes` it does
+   * not shift when an admin edits the grace period.
+   */
+  is_late_flagged?: boolean;
+  /**
+   * Whole minutes past the grace cutoff for `check_in_at`, recomputed from the
+   * current schedule on every read. `0` when on time, with no check-in, or on a
+   * non-working day. Display only when `> 0`.
+   */
+  late_minutes?: number;
   is_overridden: boolean;
   override_reason: string | null;
   notes: string | null;

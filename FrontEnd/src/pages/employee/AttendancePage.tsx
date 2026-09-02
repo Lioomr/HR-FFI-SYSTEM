@@ -148,6 +148,19 @@ const EmployeeAttendancePage: React.FC = () => {
       render: (val: string | null) => formatTimeOnly12(val),
     },
     {
+      title: t("attendancePreview.columns.lateBy"),
+      dataIndex: "late_minutes",
+      key: "late_minutes",
+      width: 100,
+      responsive: ["sm" as const],
+      render: (val: number | undefined) =>
+        val && val > 0 ? (
+          <span style={{ color: "#f59e0b", fontWeight: 600 }}>+{val}m</span>
+        ) : (
+          "—"
+        ),
+    },
+    {
       title: t("attendance.notes"),
       dataIndex: "notes",
       key: "notes",
