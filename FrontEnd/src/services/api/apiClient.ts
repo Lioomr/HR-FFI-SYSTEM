@@ -1,5 +1,11 @@
-import axios from "axios";
-import { getToken, clearToken } from "./tokenStorage";
+import axios, { type AxiosRequestConfig } from "axios";
+import {
+  clearToken,
+  getRefreshToken,
+  getToken,
+  setRefreshToken,
+  setToken,
+} from "./tokenStorage";
 import {
   resolveAuthorizedActiveOrganizationId,
   useAuthStore,
@@ -15,6 +21,51 @@ export const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+// This deliberately has no interceptors: a failed refresh must not recurse
+// into another refresh attempt.
+const refreshApi = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL || "",
+  timeout: 20000,
+  headers: { "Content-Type": "application/json" },
+});
+
+type RetriableRequestConfig = AxiosRequestConfig & {
+  _refreshRetried?: boolean;
+};
+
+let refreshPromise: Promise<string> | null = null;
+
+async function refreshAccessToken(): Promise<string> {
+  const refresh = getRefreshToken();
+  if (!refresh) throw new Error("No refresh token is available.");
+
+  if (!refreshPromise) {
+    refreshPromise = refreshApi
+      .post("/auth/refresh", { refresh })
+      .then(({ data }) => {
+        const payload = data?.data ?? data;
+        if (typeof payload?.access !== "string" || !payload.access) {
+          throw new Error("The token refresh response was invalid.");
+        }
+        setToken(payload.access);
+        if (typeof payload.refresh === "string" && payload.refresh) {
+          setRefreshToken(payload.refresh);
+        }
+        return payload.access;
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+  return refreshPromise;
+}
+
+function clearAuthenticationAndRedirect() {
+  clearToken();
+  useAuthStore.getState().logout();
+  window.location.href = "/login";
+}
+
 function shouldRedirectOnUnauthorized(err: any): boolean {
   const status = err?.response?.status;
   if (status !== 401) return false;
@@ -23,7 +74,9 @@ function shouldRedirectOnUnauthorized(err: any): boolean {
   if (!token) return false;
 
   const requestUrl = String(err?.config?.url || "");
-  return !requestUrl.includes("/auth/login");
+  return (
+    !requestUrl.includes("/auth/login") && !requestUrl.includes("/auth/refresh")
+  );
 }
 
 type CompanySelectorConfig = {
@@ -101,15 +154,22 @@ api.interceptors.request.use((config) => {
 // Global 401 handling => logout
 api.interceptors.response.use(
   (res) => res,
-  (err) => {
+  async (err) => {
     const data = err?.response?.data;
 
     if (shouldRedirectOnUnauthorized(err)) {
-      clearToken();
-      // Zustand store action without hook usage:
-      useAuthStore.getState().logout();
-      // Optional: hard redirect to login (works even outside router context)
-      window.location.href = "/login";
+      const request = err.config as RetriableRequestConfig | undefined;
+      if (request && !request._refreshRetried) {
+        request._refreshRetried = true;
+        try {
+          await refreshAccessToken();
+          return api.request(request);
+        } catch {
+          clearAuthenticationAndRedirect();
+        }
+      } else {
+        clearAuthenticationAndRedirect();
+      }
     }
 
     // Try to extract a user-friendly message

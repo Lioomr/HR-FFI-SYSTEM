@@ -1,4 +1,5 @@
 const TOKEN_KEY = "ffi_hr_token";
+const REFRESH_TOKEN_KEY = "ffi_hr_refresh_token";
 const USER_KEY = "ffi_hr_user";
 
 export function getToken(): string | null {
@@ -7,6 +8,18 @@ export function getToken(): string | null {
 
 export function setToken(token: string) {
   sessionStorage.setItem(TOKEN_KEY, token);
+}
+
+/**
+ * The refresh token is kept in the same session-scoped storage as the access
+ * token. It is rotated by the API and is never sent except to /auth/refresh.
+ */
+export function getRefreshToken(): string | null {
+  return sessionStorage.getItem(REFRESH_TOKEN_KEY);
+}
+
+export function setRefreshToken(token: string) {
+  sessionStorage.setItem(REFRESH_TOKEN_KEY, token);
 }
 
 // Minimal user shape for storage (versioned)
@@ -56,7 +69,9 @@ export function setStoredUser(user: {
 
 export function clearToken() {
   sessionStorage.removeItem(TOKEN_KEY);
+  sessionStorage.removeItem(REFRESH_TOKEN_KEY);
   sessionStorage.removeItem(USER_KEY);
   localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
 }

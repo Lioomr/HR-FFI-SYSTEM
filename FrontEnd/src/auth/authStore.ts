@@ -2,6 +2,7 @@ import { create } from "zustand";
 import {
   clearToken,
   getToken,
+  setRefreshToken,
   setToken,
   getStoredUser,
   setStoredUser,
@@ -30,7 +31,7 @@ type AuthState = {
   isAuthenticated: boolean;
   user: AuthUser | null;
 
-  login: (user: AuthUser, token?: string) => void;
+  login: (user: AuthUser, token?: string, refreshToken?: string) => void;
   logout: () => void;
   setActiveOrganization: (organizationId: string | number | null) => void;
 
@@ -66,8 +67,9 @@ export const useAuthStore = create<AuthState>((set) => ({
   isAuthenticated: false,
   user: null,
 
-  login: (user, token) => {
+  login: (user, token, refreshToken) => {
     if (token) setToken(token);
+    if (refreshToken) setRefreshToken(refreshToken);
     const normalizedUser = {
       ...user,
       active_organization_id: resolveAuthorizedActiveOrganizationId(user),
