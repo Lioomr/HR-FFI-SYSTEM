@@ -8,6 +8,8 @@ import type { ApiResponse, OrganizationNodeDto } from "./apiTypes";
 export type LoginRequest = { identifier: string; password: string };
 export type LoginResponse = {
   token: string;
+  access?: string;
+  refresh?: string;
   user: {
     id: string;
     email: string;

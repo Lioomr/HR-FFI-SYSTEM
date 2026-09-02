@@ -132,7 +132,7 @@ export default function LoginPage() {
         setError(buildLoginError(res.message || t("auth.loginFailed")));
         return;
       }
-      login(res.data.user, res.data.token);
+      login(res.data.user, res.data.access || res.data.token, res.data.refresh);
       const role = res.data.user.role;
       navigate(getPostLoginDestination(role), { replace: true });
     } catch (e: unknown) {
