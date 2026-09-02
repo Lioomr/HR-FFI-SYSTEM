@@ -10,7 +10,12 @@ from .serializers_settings import SettingsUpdateSerializer, to_settings_response
 
 
 class SettingsView(APIView):
-    permission_classes = [IsAuthenticated, IsSystemAdmin]
+    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        if self.request.method == "PUT":
+            return [IsAuthenticated(), IsSystemAdmin()]
+        return [IsAuthenticated()]
 
     def get(self, request):
         obj = SystemSettings.get_solo()
