@@ -73,6 +73,16 @@ ai_evals/
 /*مباشرة عمل*.pdf
 *AutoRecovered*.pdf
 
+# Locally generated PDFs and handoff reports
+/.tmp-starting-work-pdf/
+/2026-08-30T12_25_53.182Z.pdf
+/asset_labels_*.pdf
+/starting_work_acknowledgment_FFI-064303-20260830*.pdf
+/plans/Attendance Late + Absence — Frontend Handoff.md
+/plans/Attendance Production Audit Report.md
+/plans/Contract Expiry Deployment Runbook.md
+/plans/Contract Expiry Production Audit Report.md
+
 # Local transfer/docs/scripts artifacts
 BioTime 8.5 API User Manual.pdf
 biotime_manual.txt
@@ -94,6 +104,4 @@ Backend/static/pdf_templates/
 Backend/static/pdf_templates/*
 !Backend/static/pdf_templates/generate_leave_request_final.py
 !Backend/static/pdf_templates/leave_request_blank_field_map.json
-!Backend/static/pdf_templates/loan_request_blank_field_map.json
 !Backend/static/pdf_templates/annual_entitlements_disbursement_blank.pdf
-!Backend/static/pdf_templates/annual_entitlements_disbursement_blank_field_map.json
