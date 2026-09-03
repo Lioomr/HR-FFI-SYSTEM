@@ -34,8 +34,8 @@ class JobOfferApiTests(APITestCase):
     def setUp(self):
         hr_group, _ = Group.objects.get_or_create(name="HRManager")
         employee_group, _ = Group.objects.get_or_create(name="Employee")
-        self.company = OrganizationNode.objects.create(
-            code="FFI", name="Job Offer Company", node_type=OrganizationNode.NodeType.COMPANY
+        self.company, _ = OrganizationNode.objects.get_or_create(
+            code="FFI", defaults={"name": "Job Offer Company", "node_type": OrganizationNode.NodeType.COMPANY}
         )
         self.other_company = OrganizationNode.objects.create(
             code="JO-OTHER", name="Other Company", node_type=OrganizationNode.NodeType.COMPANY

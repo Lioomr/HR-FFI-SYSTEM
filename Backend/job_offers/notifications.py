@@ -8,6 +8,7 @@ from django.db.models import Q
 
 from core.permissions import CEO_APPROVER_DEPARTMENT_ID
 from core.services.bird_email_service import send_generic_notification_email
+from core.services.email_html import email_button
 from employees.models import EmployeeProfile
 from in_app_notifications.dispatcher import dispatch_notification_channels
 from in_app_notifications.models import Notification
@@ -54,11 +55,7 @@ def _safe_email(**kwargs) -> dict:
 
 
 def _link(url: str, label: str) -> str:
-    return (
-        f'<a href="{url}" style="display:inline-block;margin:6px 8px 0 0;padding:9px 16px;'
-        f'border-radius:4px;background-color:#1c1f24;color:#ffffff;text-decoration:none;'
-        f'font-weight:600;font-size:13px;">{label}</a>'
-    )
+    return email_button(url, label)
 
 
 def _approval_event_key(offer: JobOffer) -> str:

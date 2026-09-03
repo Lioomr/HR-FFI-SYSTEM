@@ -16,7 +16,6 @@ from .schedule import classify_check_in, get_work_schedule
 from .services import SyncBioTimeService
 from .tasks import mark_daily_absentees
 
-
 User = get_user_model()
 
 

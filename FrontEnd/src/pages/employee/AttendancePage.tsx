@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useCallback, useEffect, useMemo } from "react";
 import {
   Table,
   Button,
@@ -7,6 +7,7 @@ import {
   Row,
   Col,
   Typography,
+  Space,
   Tag,
   message,
 } from "antd";
@@ -17,7 +18,10 @@ import {
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useEmployeeAttendanceStore } from "../../stores/attendanceStore";
-import type { AttendanceStatus } from "../../types/attendance";
+import type {
+  AttendanceRecord,
+  AttendanceStatus,
+} from "../../types/attendance";
 import { useI18n } from "../../i18n/useI18n";
 import { formatDateOnly, formatTimeOnly12 } from "../../utils/dateTime";
 
@@ -67,18 +71,27 @@ const EmployeeAttendancePage: React.FC = () => {
     pageSize: 25,
   });
 
-  const fetchData = () => {
-    fetchMyRecords({
+  /**
+   * The filter the table is showing. Check-in and check-out reload with this
+   * same object, so a new record cannot land outside the visible range.
+   */
+  const currentFilters = useMemo(
+    () => ({
       date_from: dateRange[0].format("YYYY-MM-DD"),
       date_to: dateRange[1].format("YYYY-MM-DD"),
       page: pagination.current,
       page_size: pagination.pageSize,
-    });
-  };
+    }),
+    [dateRange, pagination],
+  );
+
+  const fetchData = useCallback(() => {
+    fetchMyRecords(currentFilters);
+  }, [fetchMyRecords, currentFilters]);
 
   useEffect(() => {
     fetchData();
-  }, [dateRange, pagination]);
+  }, [fetchData]);
 
   useEffect(() => {
     if (error) {
@@ -88,7 +101,7 @@ const EmployeeAttendancePage: React.FC = () => {
 
   const handleCheckIn = async () => {
     try {
-      await performCheckIn();
+      await performCheckIn(currentFilters);
       message.success(t("attendance.checkedIn"));
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (_e) {
@@ -98,7 +111,7 @@ const EmployeeAttendancePage: React.FC = () => {
 
   const handleCheckOut = async () => {
     try {
-      await performCheckOut();
+      await performCheckOut(currentFilters);
       message.success(t("attendance.checkedOut"));
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (_e) {
@@ -126,9 +139,20 @@ const EmployeeAttendancePage: React.FC = () => {
       title: t("common.status"),
       dataIndex: "status",
       key: "status",
-      width: 110,
-      render: (status: AttendanceStatus) => (
-        <Tag color={getStatusColor(status)}>{status}</Tag>
+      width: 160,
+      render: (status: AttendanceStatus, record: AttendanceRecord) => (
+        <Space size={4} wrap>
+          <Tag color={getStatusColor(status)} style={{ marginInlineEnd: 0 }}>
+            {status}
+          </Tag>
+          {/* `is_late_flagged` is the stable "was late" signal for a row still
+              awaiting approval, where `status` only says PENDING_*. */}
+          {record.is_late_flagged && status.startsWith("PENDING") ? (
+            <Tag color="gold" style={{ marginInlineEnd: 0 }}>
+              {t("attendancePreview.lateArrivalTag")}
+            </Tag>
+          ) : null}
+        </Space>
       ),
     },
     {

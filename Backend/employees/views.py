@@ -1704,26 +1704,9 @@ class EmployeeDeletionRequestViewSet(viewsets.ModelViewSet):
 
     @staticmethod
     def _retire_biotime_mapping_and_archive_profile(profile, execution_snapshot, actor, archive_reason, archived_at):
-        """Retire only live BioTime routing, never the employee's attendance history."""
-        from attendance.models import BioTimeEmployeeMap
+        from employees.services.archiving import retire_biotime_mapping_and_archive_profile
 
-        # Keep this as a savepoint so a database rule failure leaves both the
-        # profile and its live mapping unchanged and can be reported cleanly.
-        with transaction.atomic():
-            biotime_mappings = list(
-                BioTimeEmployeeMap.objects.select_for_update().filter(employee_profile_id=profile.id)
-            )
-            if biotime_mappings:
-                execution_snapshot["biotime_mappings_removed"] = [
-                    {"id": mapping.id, "biotime_emp_code": mapping.biotime_emp_code} for mapping in biotime_mappings
-                ]
-                BioTimeEmployeeMap.objects.filter(pk__in=[mapping.pk for mapping in biotime_mappings]).delete()
-
-            profile.is_archived = True
-            profile.archived_at = archived_at
-            profile.archived_by = actor
-            profile.archive_reason = archive_reason
-            profile.save(update_fields=["is_archived", "archived_at", "archived_by", "archive_reason", "updated_at"])
+        retire_biotime_mapping_and_archive_profile(profile, execution_snapshot, actor, archive_reason, archived_at)
 
     @action(detail=True, methods=["post"], url_path="approve")
     def approve(self, request, pk=None):

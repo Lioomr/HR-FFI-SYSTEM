@@ -421,7 +421,26 @@ class TenantScopeContractTests(APITestCase):
         self.assertEqual(detail_response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(expired_approval.status_code, status.HTTP_404_NOT_FOUND)
 
+    def test_hr_cannot_assign_a_manager_from_a_company_outside_their_access(self):
+        self.client.force_authenticate(user=self.hr)
+        response = self.client.post(
+            "/api/core/cross-company-manager-assignments/",
+            {
+                "employee_id": self.employee_a.employee_profile.id,
+                "manager_profile_id": self.employee_b.employee_profile.id,
+                "scope_id": self.scope.id,
+                "start_at": (timezone.now() - timedelta(minutes=1)).isoformat(),
+                "end_at": (timezone.now() + timedelta(hours=1)).isoformat(),
+            },
+            format="json", HTTP_X_ACTIVE_COMPANY_ID=str(self.company_a.id),
+        )
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(CrossCompanyManagerAssignment.objects.count(), 0)
+
     def test_hr_can_create_cross_company_manager_assignment_without_changing_direct_manager(self):
+        # Grant authority over both companies in the requested scope; scope
+        # membership alone must never confer HR access to another tenant.
+        UserOrganizationAccess.objects.create(user=self.hr, organization=self.company_b)
         self.client.force_authenticate(user=self.hr)
         create = self.client.post(
             "/api/core/cross-company-manager-assignments/",

@@ -1,38 +1,15 @@
 import { api } from "./apiClient";
 import type { ApiResponse } from "./apiTypes";
-import type { AttendanceFilters } from "../../types/attendance";
-import type { WorkflowSnapshot } from "../../types/workflow";
+import type {
+  AttendanceFilters,
+  AttendanceRecord,
+} from "../../types/attendance";
 
-// Attendance record type
-export interface AttendanceRecord {
-  id: number;
-  employee_profile: number;
-  employee_name?: string;
-  employee_name_en?: string | null;
-  employee_name_ar?: string | null;
-  employee_email?: string;
-  date: string;
-  check_in_at: string | null;
-  check_out_at: string | null;
-  status:
-    | "PRESENT"
-    | "ABSENT"
-    | "LATE"
-    | "PENDING"
-    | "PENDING_HR"
-    | "PENDING_MGR"
-    | "PENDING_CEO"
-    | "REJECTED";
-  source: "EMPLOYEE" | "HR" | "SYSTEM";
-  biotime_emp_code?: string | null;
-  biotime_terminal_sn?: string | null;
-  is_overridden: boolean;
-  notes?: string;
-  override_reason?: string;
-  workflow?: WorkflowSnapshot;
-  created_at: string;
-  updated_at: string;
-}
+// `types/attendance.ts` holds the single record shape. This module used to
+// carry a second copy that had drifted — it was missing `is_late_flagged` and
+// `late_minutes`, so `AttendanceListResponse` was typed without the late fields
+// the pages already read. Re-export instead of redeclaring.
+export type { AttendanceRecord };
 
 export interface AttendanceListResponse {
   results: AttendanceRecord[];

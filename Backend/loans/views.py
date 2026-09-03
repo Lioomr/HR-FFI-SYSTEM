@@ -29,7 +29,6 @@ from employees.services.manager_relationships import (
     manager_approval_actor_source,
     manager_scope_q,
 )
-from leaves.permissions import IsOwnerOrHR
 from organization.services import filter_queryset_by_accessible_companies, filter_queryset_by_company_scope
 
 from .models import LoanRequest
@@ -39,6 +38,7 @@ from .permissions import (
     IsEmployeeOnly,
     IsFinanceApproverOrAdmin,
     IsHRApproverOrAdmin,
+    IsLoanOwnerOrHR,
     IsManagerOrAdmin,
     get_active_workflow_config,
     is_accountant_user,
@@ -573,6 +573,8 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
     ordering = ["-created_at"]
 
     def get_permissions(self):
+        if self.action == "pdf":
+            return [IsAuthenticated(), IsLoanOwnerOrHR()]
         if self.action == "create":
             return [IsAuthenticated(), IsEmployeeOnly()]
         if self.action in ["list", "retrieve", "approve", "reject"]:
@@ -876,7 +878,7 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
         audit(request, "loan_request_cancelled", entity="LoanRequest", entity_id=instance.id)
         return success(LoanRequestReadSerializer(instance).data)
 
-    @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated, IsOwnerOrHR])
+    @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated, IsLoanOwnerOrHR])
     def pdf(self, request, pk=None):
         instance = self.get_queryset().filter(pk=pk).first()
         if not instance:

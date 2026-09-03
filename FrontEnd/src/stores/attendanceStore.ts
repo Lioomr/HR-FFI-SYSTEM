@@ -16,8 +16,13 @@ interface EmployeeAttendanceState {
   error: string | null;
 
   fetchMyRecords: (params?: AttendanceFilters) => Promise<void>;
-  performCheckIn: () => Promise<void>;
-  performCheckOut: () => Promise<void>;
+  /**
+   * `refreshParams` is the caller's current filter. Reloading without it would
+   * refetch the backend default range and drop the range the page is showing,
+   * so the new check-in could land outside the visible rows.
+   */
+  performCheckIn: (refreshParams?: AttendanceFilters) => Promise<void>;
+  performCheckOut: (refreshParams?: AttendanceFilters) => Promise<void>;
   reset: () => void;
 }
 
@@ -46,14 +51,14 @@ export const useEmployeeAttendanceStore = create<EmployeeAttendanceState>(
       }
     },
 
-    performCheckIn: async () => {
+    performCheckIn: async (refreshParams) => {
       set({ loading: true, error: null });
       try {
         const response = await checkIn();
         unwrapEnvelope(response);
         set({ loading: false });
-        // Refresh list
-        await get().fetchMyRecords({});
+        // Refresh list, keeping the caller's filter so the new row stays in view
+        await get().fetchMyRecords(refreshParams ?? {});
       } catch (err: any) {
         const msg =
           err.response?.data?.message || err.message || "Check-in failed";
@@ -62,14 +67,14 @@ export const useEmployeeAttendanceStore = create<EmployeeAttendanceState>(
       }
     },
 
-    performCheckOut: async () => {
+    performCheckOut: async (refreshParams) => {
       set({ loading: true, error: null });
       try {
         const response = await checkOut();
         unwrapEnvelope(response);
         set({ loading: false });
-        // Refresh list
-        await get().fetchMyRecords({});
+        // Refresh list, keeping the caller's filter so the new row stays in view
+        await get().fetchMyRecords(refreshParams ?? {});
       } catch (err: any) {
         const msg =
           err.response?.data?.message || err.message || "Check-out failed";
