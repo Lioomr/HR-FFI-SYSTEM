@@ -35,12 +35,14 @@ from .schedule import get_work_schedule
 logger = logging.getLogger(__name__)
 
 
-def _active_employee_profiles():
+def _active_employee_profiles(target_date: date_type):
     """Profiles eligible for absence marking.
 
     Eligibility = archived is False, owning company is an active COMPANY node,
     employment status is ACTIVE, and (no linked user OR the user is enabled).
-    Prehire / suspended / terminated / disabled-login profiles are excluded.
+    The hire date must be absent or on/before the target date. Prehire /
+    suspended / terminated / disabled-login profiles are excluded, including
+    backfills: historical eligibility cannot be reconstructed from current status.
     """
     return (
         EmployeeProfile.objects.filter(
@@ -51,6 +53,7 @@ def _active_employee_profiles():
             employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
         )
         .filter(Q(user__isnull=True) | Q(user__is_active=True))
+        .filter(Q(hire_date__isnull=True) | Q(hire_date__lte=target_date))
         .select_related("company", "user")
     )
 
@@ -111,7 +114,7 @@ def mark_absentees_for_date(target_date: date_type, *, force: bool = False) -> d
         logger.info("%s is not a working day; skipping absence detection.", target_date)
         return result
 
-    profiles = list(_active_employee_profiles())
+    profiles = list(_active_employee_profiles(target_date))
     existing_ids = set(
         AttendanceRecord.objects.filter(
             date=target_date, employee_profile__in=profiles

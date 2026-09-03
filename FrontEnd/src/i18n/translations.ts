@@ -77,6 +77,19 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "annualPayment.requestTitle": "Request Annual Leave Payment",
     "annualPayment.submitSuccess": "Annual Leave payment request submitted.",
     "annualPayment.notAvailable": "Annual Leave payment is not available.",
+    "annualPayment.reason.profileRequired": "Employee profile is required.",
+    "annualPayment.reason.companyMismatch":
+      "Employee does not belong to the active company.",
+    "annualPayment.reason.contractDateRequired":
+      "Employee contract date is required for Annual Leave payment.",
+    "annualPayment.reason.minimumService":
+      "Annual Leave payment is available after completing 6 months of service.",
+    "annualPayment.reason.windowClosed":
+      "The Annual Leave payment window opens only during the final 5 days of the contract year.",
+    "annualPayment.reason.pendingLeave":
+      "Annual Leave payment cannot be requested while Annual Leave requests are pending.",
+    "annualPayment.reason.noEligibleDays":
+      "There are no eligible whole Annual Leave days available for payment.",
     "annualPayment.windowNotice":
       "The request window opens during the final five days of the contract year.",
     "annualPayment.activeRequestNotice":
@@ -199,6 +212,7 @@ export const translations: Record<AppLanguage, TranslationMap> = {
       "Run generate_blank_templates to populate the library.",
     "layout.myAssets": "My Assets",
     "layout.leaveInbox": "Leave Inbox",
+    "layout.annualLeaveSettlements": "Annual Leave Settlements",
     "layout.attendance": "Attendance",
     "layout.home": "Home",
     "layout.leaveBalance": "Leave Balance",
@@ -287,6 +301,7 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "common.error.genericDetailed":
       "We could not complete your request. Please try again.",
     "common.retry": "Retry",
+    "common.forbidden": "Access denied",
     "common.tryAgain": "Please try again later",
     "common.success": "Success",
     "common.noData": "No data",
@@ -2846,9 +2861,56 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "contractDecisions.autoApproved": "CEO auto-approved",
     "contractDecisions.autoRenewedShort": "Automatically renewed",
     "contractDecisions.rejected": "Rejected",
-    "contractDecisions.renewalFailed": "Manual resolution required",
+    "contractDecisions.renewalFailed": "Automatic renewal failed",
     "contractDecisions.manualResolution": "Manual resolution required",
     "contractDecisions.automaticReason": "Automatic processing reason",
+    "contractDecisions.subtitleCeo": "Review HR contract decisions.",
+    "contractDecisions.ceoComment": "CEO comment",
+    "contractDecisions.automaticRenewal": "Automatic renewal",
+    "contractDecisions.proposedTerms": "Proposed terms",
+    "contractDecisions.history": "Workflow history",
+    "contractDecisions.historyEmpty":
+      "No workflow steps have been recorded yet.",
+    "contractDecisions.loading": "Loading the contract decision…",
+    "contractDecisions.notFound": "This contract decision is not available.",
+    "contractDecisions.forbidden":
+      "You do not have access to contract decisions for this company.",
+    "contractDecisions.empty": "No contract decisions match this filter.",
+    "contractDecisions.resolve": "Resolve manually",
+    "contractDecisions.resultStatus": "Backend status: {status}",
+    "contractDecisions.staleAction":
+      "This decision moved on before your action was saved. The latest state has been reloaded.",
+    "contractDecisions.validationTitle": "The backend rejected this request",
+    "contractDecisions.invalidAmount":
+      "Enter a non-negative amount with at most ten digits and two decimal places.",
+    "contractDecisions.derivedTotal": "Total salary (derived by the backend)",
+    "contractDecisions.derivedTotalInvalid": "Not calculable",
+    "contractDecisions.deliveryInAppOnly": "in-app only",
+    "contractDecisions.finalNotificationSent": "Sent",
+    "contractDecisions.finalNotificationPending": "Pending retry",
+    "contractDecisions.autoApprovedNotice":
+      "The CEO deadline passed, so this decision was approved automatically.",
+    "contractDecisions.renewalFailedNotice":
+      "Automatic renewal failed. HR cannot resubmit this record; review it with the system administrator.",
+    "contractDecisions.manualResolutionNotice":
+      "This decision needs manual HR resolution. Submit a new decision to continue.",
+    "contractDecisions.terms.basic_salary": "Basic salary",
+    "contractDecisions.terms.transportation_allowance":
+      "Transportation allowance",
+    "contractDecisions.terms.accommodation_allowance":
+      "Accommodation allowance",
+    "contractDecisions.terms.telephone_allowance": "Telephone allowance",
+    "contractDecisions.terms.petrol_allowance": "Petrol allowance",
+    "contractDecisions.terms.other_allowance": "Other allowance",
+    "contractDecisions.terms.total_salary": "Total salary",
+
+    // Loan request PDF
+    "loans.pdf.download": "Download PDF",
+    "loans.pdf.unauthorized": "Your session expired. Sign in and try again.",
+    "loans.pdf.forbidden":
+      "You are not allowed to download this loan request PDF.",
+    "loans.pdf.notFound": "This loan request PDF is not available.",
+    "loans.pdf.failed": "The loan request PDF could not be downloaded.",
 
     // Attendance Corrections
     "layout.attendanceCorrections": "Attendance Corrections",
@@ -3511,6 +3573,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "annualPayment.paymentAmount": "مبلغ الدفع",
     "annualPayment.estimatedPaymentAmount": "مبلغ الدفع التقديري",
     "annualPayment.resolution": "القرار",
+    "annualPayment.resolution.pay": "دفع",
+    "annualPayment.resolution.carryForward": "ترحيل",
     "annualPayment.pendingAnnualLeave": "إجازة سنوية معلقة",
     "annualPayment.employeeNote": "ملاحظة الموظف",
     "annualPayment.ceoComment": "ملاحظة الرئيس التنفيذي",
@@ -3536,6 +3600,19 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "annualPayment.requestTitle": "طلب دفع الإجازة السنوية",
     "annualPayment.submitSuccess": "تم إرسال طلب دفع الإجازة السنوية.",
     "annualPayment.notAvailable": "دفع الإجازة السنوية غير متاح.",
+    "annualPayment.reason.profileRequired": "ملف الموظف مطلوب.",
+    "annualPayment.reason.companyMismatch":
+      "الموظف لا ينتمي إلى الشركة النشطة.",
+    "annualPayment.reason.contractDateRequired":
+      "تاريخ عقد الموظف مطلوب لدفع الإجازة السنوية.",
+    "annualPayment.reason.minimumService":
+      "يتاح دفع الإجازة السنوية بعد إكمال 6 أشهر من الخدمة.",
+    "annualPayment.reason.windowClosed":
+      "تفتح فترة دفع الإجازة السنوية خلال آخر 5 أيام فقط من سنة العقد.",
+    "annualPayment.reason.pendingLeave":
+      "لا يمكن طلب دفع الإجازة السنوية أثناء وجود طلبات إجازة سنوية معلقة.",
+    "annualPayment.reason.noEligibleDays":
+      "لا توجد أيام إجازة سنوية كاملة مستحقة للدفع.",
     "annualPayment.windowNotice":
       "تفتح نافذة الطلب في آخر خمسة أيام من سنة العقد.",
     "annualPayment.activeRequestNotice":
@@ -3657,6 +3734,7 @@ export const translations: Record<AppLanguage, TranslationMap> = {
       "قم بتشغيل الأمر generate_blank_templates لتعبئة المكتبة.",
     "layout.myAssets": "عهدي",
     "layout.leaveInbox": "صندوق الإجازات",
+    "layout.annualLeaveSettlements": "تسويات الإجازة السنوية",
     "layout.attendance": "الحضور",
     "layout.home": "الرئيسية",
     "layout.leaveBalance": "رصيد الإجازات",
@@ -3743,6 +3821,7 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "common.error.forbiddenDetailed": "ليس لديك صلاحية لتنفيذ هذا الإجراء.",
     "common.error.genericDetailed": "تعذر إكمال طلبك. يرجى المحاولة مرة أخرى.",
     "common.retry": "إعادة المحاولة",
+    "common.forbidden": "الوصول مرفوض",
     "common.tryAgain": "يرجى المحاولة مرة أخرى لاحقاً",
     "common.success": "نجاح",
     "common.noData": "لا توجد بيانات",
@@ -6223,9 +6302,55 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "contractDecisions.autoApproved": "اعتماد تلقائي من الرئيس التنفيذي",
     "contractDecisions.autoRenewedShort": "تم التجديد تلقائياً",
     "contractDecisions.rejected": "مرفوض",
-    "contractDecisions.renewalFailed": "يتطلب معالجة يدوية",
+    "contractDecisions.renewalFailed": "تعذّر التجديد التلقائي",
     "contractDecisions.manualResolution": "يتطلب معالجة يدوية",
     "contractDecisions.automaticReason": "سبب المعالجة التلقائية",
+    "contractDecisions.subtitleCeo":
+      "مراجعة قرارات العقود المرفوعة من الموارد البشرية.",
+    "contractDecisions.ceoComment": "ملاحظة الرئيس التنفيذي",
+    "contractDecisions.automaticRenewal": "تجديد تلقائي",
+    "contractDecisions.proposedTerms": "الشروط المقترحة",
+    "contractDecisions.history": "سجل سير العمل",
+    "contractDecisions.historyEmpty": "لم تُسجَّل أي خطوات في سير العمل بعد.",
+    "contractDecisions.loading": "جارٍ تحميل قرار العقد…",
+    "contractDecisions.notFound": "قرار العقد هذا غير متاح.",
+    "contractDecisions.forbidden":
+      "لا تملك صلاحية الوصول إلى قرارات العقود لهذه الشركة.",
+    "contractDecisions.empty": "لا توجد قرارات عقود مطابقة لهذا الفلتر.",
+    "contractDecisions.resolve": "معالجة يدوية",
+    "contractDecisions.resultStatus": "حالة الخادم: {status}",
+    "contractDecisions.staleAction":
+      "تغيّر هذا القرار قبل حفظ إجرائك. تم تحديث الحالة الأخيرة.",
+    "contractDecisions.validationTitle": "رفض الخادم هذا الطلب",
+    "contractDecisions.invalidAmount":
+      "أدخل مبلغًا غير سالب بعشرة أرقام صحيحة كحد أقصى وخانتين عشريتين.",
+    "contractDecisions.derivedTotal": "إجمالي الراتب (يحتسبه الخادم)",
+    "contractDecisions.derivedTotalInvalid": "غير قابل للاحتساب",
+    "contractDecisions.deliveryInAppOnly": "داخل التطبيق فقط",
+    "contractDecisions.finalNotificationSent": "أُرسل",
+    "contractDecisions.finalNotificationPending": "بانتظار إعادة المحاولة",
+    "contractDecisions.autoApprovedNotice":
+      "انقضى الموعد النهائي للرئيس التنفيذي، لذلك تمت الموافقة على هذا القرار تلقائيًا.",
+    "contractDecisions.renewalFailedNotice":
+      "تعذّر التجديد التلقائي. لا يمكن للموارد البشرية إعادة إرسال هذا السجل؛ راجعه مع مسؤول النظام.",
+    "contractDecisions.manualResolutionNotice":
+      "يتطلب هذا القرار معالجة يدوية من الموارد البشرية. أرسل قرارًا جديدًا للمتابعة.",
+    "contractDecisions.terms.basic_salary": "الراتب الأساسي",
+    "contractDecisions.terms.transportation_allowance": "بدل النقل",
+    "contractDecisions.terms.accommodation_allowance": "بدل السكن",
+    "contractDecisions.terms.telephone_allowance": "بدل الهاتف",
+    "contractDecisions.terms.petrol_allowance": "بدل الوقود",
+    "contractDecisions.terms.other_allowance": "بدلات أخرى",
+    "contractDecisions.terms.total_salary": "إجمالي الراتب",
+
+    // Loan request PDF
+    "loans.pdf.download": "تنزيل PDF",
+    "loans.pdf.unauthorized":
+      "انتهت صلاحية جلستك. سجّل الدخول ثم أعد المحاولة.",
+    "loans.pdf.forbidden": "لا تملك صلاحية تنزيل ملف طلب السلفة هذا.",
+    "loans.pdf.notFound": "ملف طلب السلفة هذا غير متاح.",
+    "loans.pdf.failed": "تعذّر تنزيل ملف طلب السلفة.",
+
     "pendingInbox.col.employee": "الموظف",
     "pendingInbox.col.requestType": "نوع الطلب",
     "pendingInbox.col.action": "الإجراء المطلوب",

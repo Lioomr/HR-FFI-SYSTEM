@@ -226,6 +226,71 @@ export function getFieldApiError(
 }
 
 /**
+ * Collects every human-readable message a backend validation payload carries,
+ * in order, so a form can show the whole list rather than only the first one.
+ *
+ * The backend emits two shapes and both stay supported: a plain string array
+ * (`errors: ["total_salary must equal the sum of the salary components."]`) and
+ * the serializer form (`errors: [{field, message}]`). A field-scoped entry is
+ * prefixed with its field so the reader can tell the messages apart. The legacy
+ * `{field: ["msg"]}` object map is normalised the same way.
+ *
+ * @example
+ * catch (err) {
+ *   setErrors(collectApiErrorMessages(err));
+ * }
+ */
+export function collectApiErrorMessages(error: unknown): string[] {
+  if (!error || typeof error !== "object") return [];
+
+  const anyError = error as any;
+  const candidates = [
+    anyError.response?.data,
+    anyError.apiData,
+    anyError,
+  ].filter((candidate) => candidate && typeof candidate === "object");
+
+  for (const candidate of candidates) {
+    const errors = candidate.errors;
+    const messages: string[] = [];
+
+    if (Array.isArray(errors)) {
+      for (const item of errors) {
+        if (typeof item === "string" && item.trim()) {
+          messages.push(item.trim());
+        } else if (
+          typeof item === "object" &&
+          item !== null &&
+          typeof item.message === "string" &&
+          item.message.trim()
+        ) {
+          messages.push(
+            item.field ? `${item.field}: ${item.message}` : item.message,
+          );
+        }
+      }
+    } else if (errors && typeof errors === "object") {
+      for (const [field, value] of Object.entries(errors)) {
+        const list = Array.isArray(value) ? value : [value];
+        for (const entry of list) {
+          if (typeof entry === "string" && entry.trim()) {
+            messages.push(`${field}: ${entry}`);
+          }
+        }
+      }
+    }
+
+    if (messages.length) return messages;
+
+    if (typeof candidate.message === "string" && candidate.message.trim()) {
+      return [candidate.message];
+    }
+  }
+
+  return [];
+}
+
+/**
  * Extracts the first human-readable validation message from an API error payload.
  */
 export function getFirstApiErrorMessage(error: unknown): string | undefined {

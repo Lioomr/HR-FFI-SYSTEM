@@ -46,8 +46,8 @@ from organization.services import (
 
 from .geofence import GeofencePayloadError, validate_mobile_geofence
 from .models import AttendanceCorrectionRequest, AttendanceRecord, WorkLocation
-from .schedule import classify_check_in
 from .permissions import IsAttendanceSelfServiceRole
+from .schedule import classify_check_in
 from .serializers import (
     AttendanceCorrectionRequestSerializer,
     AttendanceOverrideSerializer,

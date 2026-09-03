@@ -8,6 +8,8 @@ from django.conf import settings
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 
+from core.services.email_html import email_action_url, email_button, safe_email_url
+
 logger = logging.getLogger(__name__)
 
 
@@ -325,7 +327,7 @@ def _base_email_context(
         "preheader_ar": preheader_ar or message_ar,
         "security_note": security_note,
         "security_note_ar": security_note_ar,
-        "action_url": action_url,
+        "action_url": email_action_url(action_url),
         "action_text": action_text or "View Details",
         "action_text_ar": action_text_ar or "عرض التفاصيل",
     }
@@ -623,7 +625,7 @@ def send_announcement_notification_email(
             "published_at": published_at,
             "publisher_name": publisher_name,
             "attachment_name": attachment_name,
-            "attachment_url": attachment_url,
+            "attachment_url": safe_email_url(attachment_url),
         }
     )
     return service.send_template_email(
@@ -659,7 +661,11 @@ def send_meeting_notification_email(
         employee_name=employee_name,
         message=meeting_message,
         message_ar=meeting_message,
-        action_url=action_url or google_meet_url or microsoft_teams_url or zoom_url,
+        action_url=next(
+            (safe_email_url(url) for url in (action_url, google_meet_url, microsoft_teams_url, zoom_url)
+             if safe_email_url(url)),
+            "",
+        ),
         action_text="Open Meeting",
         action_text_ar="فتح الاجتماع",
     )
@@ -679,22 +685,17 @@ def send_meeting_notification_email(
             _row("Agenda", "جدول الأعمال", agenda, value_html=_esc(str(agenda)).replace("\n", "<br>"))
         )
 
-    def _join_links(align: str) -> str:
+    def _join_links() -> str:
         links = []
         for url, name in (
             (google_meet_url, "Google Meet"),
             (microsoft_teams_url, "Microsoft Teams"),
             (zoom_url, "Zoom"),
         ):
-            if url:
-                links.append(
-                    f'<a href="{url}" style="display:inline-block;margin:6px 8px 0 0;padding:9px 16px;'
-                    f'border-radius:4px;background-color:#1c1f24;color:#ffffff;text-decoration:none;'
-                    f'font-weight:600;font-size:13px;">Join {name}</a>'
-                )
+            links.append(email_button(url, f"Join {name}"))
         return "".join(links) if links else ""
 
-    join_html = _join_links("left")
+    join_html = _join_links()
     context.update(
         _details(
             rows,

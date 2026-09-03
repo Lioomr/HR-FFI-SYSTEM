@@ -3,13 +3,13 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Callable
-from html import escape
 
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import transaction
 
+from core.services.email_html import email_action_url
 from core.services.email_service import EmailService
 from core.services.messaging_providers import EvolutionWhatsAppProvider, is_e164, normalize_phone_number
 from core.services.whatsapp_service import WhatsAppService
@@ -126,6 +126,7 @@ def _send_email(*, recipient, title, message, action_url, template, context, tim
     if callable(template):
         email_context.setdefault("to_email", email)
         return template(**email_context)
+    action_url = email_action_url(action_url)
     template_name = str(template or "").strip()
     if template_name:
         from django.template.loader import render_to_string
@@ -133,7 +134,7 @@ def _send_email(*, recipient, title, message, action_url, template, context, tim
         email_context.setdefault("recipient", recipient)
         email_context.setdefault("title", title)
         email_context.setdefault("message", message)
-        email_context.setdefault("action_url", action_url)
+        email_context["action_url"] = email_action_url(email_context.get("action_url", action_url))
         html = render_to_string(template_name, email_context)
     else:
         # No bespoke template — render the branded bilingual generic template.

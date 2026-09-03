@@ -29,6 +29,7 @@ import { approvalStatusLabel } from "../ceo/approvalStatusLabel";
 import TeamMemberCell from "../manager/TeamMemberCell";
 import LoanApprovalMap from "../loans/LoanApprovalMap";
 import LoanDecisionTimeline from "./LoanDecisionTimeline";
+import LoanPdfDownloadButton from "./LoanPdfDownloadButton";
 import { isApiError } from "../../services/api/apiTypes";
 import type { LoanRequest } from "../../services/api/loanApi";
 import { formatNumber } from "../../utils/currency";
@@ -53,6 +54,13 @@ type Props = {
     danger?: boolean;
   };
   canActWhenStatus: string | string[];
+  /**
+   * Offers the loan PDF download. The backend allows that route only for the
+   * loan's own employee, an HRManager or a SystemAdmin, so this stays off by
+   * default: the CEO, CFO and manager surfaces reuse this component and would
+   * otherwise show a button that can only answer 403.
+   */
+  showPdfDownload?: boolean;
   approveLabel?: string;
   rejectLabel?: string;
   approveSuccessMessage?: string;
@@ -106,6 +114,7 @@ export default function LoanRequestDetailsPage({
   reject,
   extraAction,
   canActWhenStatus,
+  showPdfDownload = false,
   approveLabel,
   rejectLabel,
   approveSuccessMessage,
@@ -308,14 +317,19 @@ export default function LoanRequestDetailsPage({
           />
         }
         actions={
-          <Button
-            icon={<ReloadOutlined aria-hidden />}
-            onClick={load}
-            aria-label={t("common.refresh")}
-            style={{ borderRadius: 10, minHeight: 40 }}
-          >
-            {t("common.refresh")}
-          </Button>
+          <Space wrap>
+            {showPdfDownload ? (
+              <LoanPdfDownloadButton loanId={item.id} />
+            ) : null}
+            <Button
+              icon={<ReloadOutlined aria-hidden />}
+              onClick={load}
+              aria-label={t("common.refresh")}
+              style={{ borderRadius: 10, minHeight: 40 }}
+            >
+              {t("common.refresh")}
+            </Button>
+          </Space>
         }
       />
 

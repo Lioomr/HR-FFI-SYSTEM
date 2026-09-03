@@ -313,6 +313,27 @@ export async function getDisbursementLoanRequest(id: number | string) {
   return data;
 }
 
+/**
+ * Downloads the loan request PDF as an authenticated blob.
+ *
+ * `LoanRequestViewSet.get_permissions` gates the `pdf` action on
+ * `IsLoanOwnerOrHR` after the company scope filter, so only the requesting
+ * employee, an HRManager or a SystemAdmin gets bytes back: a same-company
+ * non-owner receives 403 and an out-of-scope object 404. The response is an
+ * `application/octet-stream` attachment with `nosniff` and
+ * `Cache-Control: private, no-store`; it must stay a blob request carrying the
+ * bearer token and `X-Active-Company-Id` header. Never build a plain link that
+ * puts the object or a token in a query string.
+ */
+export async function downloadLoanRequestPdf(
+  id: number | string,
+): Promise<Blob> {
+  const response = await api.get(`/api/loans/loan-requests/${id}/pdf/`, {
+    responseType: "blob",
+  });
+  return response.data;
+}
+
 export async function markLoanDisbursed(id: number | string, comment?: string) {
   const { data } = await api.post<ApiResponse<LoanRequest>>(
     `/api/loans/disbursements/${id}/mark-disbursed/`,
