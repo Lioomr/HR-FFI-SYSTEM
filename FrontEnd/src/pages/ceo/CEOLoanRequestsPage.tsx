@@ -9,6 +9,9 @@ export default function CEOLoanRequestsPage() {
       title={t("loans.inbox.ceoRequestsTitle")}
       subtitle={t("loans.inbox.ceoRequestsSubtitle")}
       detailsBasePath="/ceo/loan-requests"
+      employeeProfilePath={(employeeProfileId) =>
+        `/manager/team/${employeeProfileId}`
+      }
       defaultStatus="pending_ceo"
       fetcher={getCEOLoanRequests}
     />

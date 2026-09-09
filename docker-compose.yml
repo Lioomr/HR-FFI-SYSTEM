@@ -46,13 +46,18 @@ services:
       DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
       CORS_ALLOWED_ORIGINS: http://localhost:5173
       CSRF_TRUSTED_ORIGINS: http://localhost:5173
-      FRONTEND_URL: http://localhost:5173
+      # Email links are rendered by the notification worker. Let production
+      # supply its public URL instead of sending recipients a localhost link.
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/2
       CELERY_RESULT_BACKEND: redis://redis:6379/3
       COGNEE_ENABLED: ${COGNEE_ENABLED:-false}
       COGNEE_BASE_URL: ${COGNEE_BASE_URL:-http://cognee:8000}
       COGNEE_API_KEY: ${COGNEE_API_KEY:-}
+      # OCR models are baked into the image at /opt/paddleocr. Point this at a
+      # mounted volume instead if you provision them outside the build.
+      EMPLOYEE_DOCUMENT_OCR_MODEL_DIR: ${EMPLOYEE_DOCUMENT_OCR_MODEL_DIR:-/opt/paddleocr}
     depends_on:
       db:
         condition: service_healthy
@@ -63,7 +68,9 @@ services:
     volumes:
       - private_uploads:/app/private_uploads
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz/', timeout=3)"]
+      # /healthz/ only returns dependency status to callers that present the probe
+      # token, so pass it here to keep this an actual readiness check.
+      test: ["CMD", "python", "-c", "import os, urllib.request; urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:8000/healthz/', headers={'X-Health-Token': os.environ.get('HEALTH_CHECK_TOKEN', '')}), timeout=3)"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -126,6 +133,10 @@ services:
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/2
       CELERY_RESULT_BACKEND: redis://redis:6379/3
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      # This worker also runs employee document OCR; the models it loads live in
+      # the image and are read-only at runtime.
+      EMPLOYEE_DOCUMENT_OCR_MODEL_DIR: ${EMPLOYEE_DOCUMENT_OCR_MODEL_DIR:-/opt/paddleocr}
     depends_on:
       backend:
         condition: service_started
@@ -164,6 +175,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/2
       CELERY_RESULT_BACKEND: redis://redis:6379/3
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
     depends_on:
       backend:
         condition: service_started

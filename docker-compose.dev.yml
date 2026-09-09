@@ -62,7 +62,9 @@ services:
       - ./Backend/static/pdf_templates:/hr/templates:ro
       - private_uploads:/app/private_uploads
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz/', timeout=3)"]
+      # /healthz/ only returns dependency status to callers that present the probe
+      # token, so pass it here to keep this an actual readiness check.
+      test: ["CMD", "python", "-c", "import os, urllib.request; urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:8000/healthz/', headers={'X-Health-Token': os.environ.get('HEALTH_CHECK_TOKEN', '')}), timeout=3)"]
       interval: 15s
       timeout: 5s
       retries: 5

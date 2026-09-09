@@ -311,7 +311,7 @@ def _build_loan_request_pdf_fallback(instance: LoanRequest) -> bytes:
     return render_request_pdf(doc)
 
 
-def _build_loan_request_pdf(instance: LoanRequest) -> bytes:
+def _build_loan_request_pdf_legacy(instance: LoanRequest) -> bytes:
     from io import BytesIO
 
     from pypdf import PdfReader, PdfWriter
@@ -561,6 +561,14 @@ def _build_loan_request_pdf(instance: LoanRequest) -> bytes:
     writer.write(output)
     output.seek(0)
     return output.getvalue()
+
+
+def _build_loan_request_pdf(instance: LoanRequest) -> bytes:
+    """Build the mapped form, falling back only when its paired asset is absent."""
+
+    from .pdf_loan_request import build_loan_request_pdf
+
+    return build_loan_request_pdf(instance, fallback=_build_loan_request_pdf_fallback)
 
 
 class LoanRequestViewSet(viewsets.ModelViewSet):

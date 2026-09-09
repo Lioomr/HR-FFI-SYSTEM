@@ -29,7 +29,13 @@ const { Text, Title } = Typography;
  * already answered or otherwise closed) and `invalid` is the 422 case (bad or
  * expired token) — the two are separated because they need different copy.
  */
-type PageState = "loading" | "ready" | "accepted" | "rejected" | "terminal" | "invalid";
+type PageState =
+  | "loading"
+  | "ready"
+  | "accepted"
+  | "rejected"
+  | "terminal"
+  | "invalid";
 
 function OutcomePanel({
   icon,
@@ -46,17 +52,36 @@ function OutcomePanel({
 }) {
   return (
     <div style={{ textAlign: "center", padding: "24px 8px" }}>
-      <div style={{ fontSize: 56, color: tone, lineHeight: 1, marginBottom: 16 }}>{icon}</div>
+      <div
+        style={{ fontSize: 56, color: tone, lineHeight: 1, marginBottom: 16 }}
+      >
+        {icon}
+      </div>
       <Title level={3} style={{ margin: 0, fontWeight: 800, color: "#0f172a" }}>
         {title}
       </Title>
-      <Text style={{ display: "block", marginTop: 10, color: "#475569", fontSize: 15 }}>{body}</Text>
+      <Text
+        style={{
+          display: "block",
+          marginTop: 10,
+          color: "#475569",
+          fontSize: 15,
+        }}
+      >
+        {body}
+      </Text>
       {extra && <div style={{ marginTop: 16 }}>{extra}</div>}
     </div>
   );
 }
 
-function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+function DetailRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
   return (
     <div
       style={{
@@ -83,7 +108,9 @@ export default function JobOfferResponsePage() {
 
   const [state, setState] = useState<PageState>("loading");
   const [offer, setOffer] = useState<PublicJobOfferSummary | null>(null);
-  const [invitation, setInvitation] = useState<JobOfferInvitationResult | null>(null);
+  const [invitation, setInvitation] = useState<JobOfferInvitationResult | null>(
+    null,
+  );
   const [outcome, setOutcome] = useState<JobOfferDecisionResult | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -145,7 +172,9 @@ export default function JobOfferResponsePage() {
           setState("invalid");
           return;
         }
-        setSubmitError((err as Error)?.message || t("publicJobOffer.submitFailed"));
+        setSubmitError(
+          (err as Error)?.message || t("publicJobOffer.submitFailed"),
+        );
       } finally {
         setSubmitting(false);
       }
@@ -190,7 +219,11 @@ export default function JobOfferResponsePage() {
           type={sent ? "success" : "info"}
           showIcon
           style={{ borderRadius: 12, textAlign: "start" }}
-          message={sent ? t("publicJobOffer.invitationSent") : t("publicJobOffer.invitationPending")}
+          message={
+            sent
+              ? t("publicJobOffer.invitationSent")
+              : t("publicJobOffer.invitationPending")
+          }
         />,
       );
     }
@@ -234,7 +267,8 @@ export default function JobOfferResponsePage() {
       dir={direction}
       style={{
         minHeight: "100vh",
-        background: "linear-gradient(160deg, #0f172a 0%, #1e293b 45%, #f8fafc 45%, #f8fafc 100%)",
+        background:
+          "linear-gradient(160deg, #0f172a 0%, #1e293b 45%, #f8fafc 45%, #f8fafc 100%)",
         padding: "48px 16px",
       }}
     >
@@ -282,7 +316,9 @@ export default function JobOfferResponsePage() {
           {state === "loading" && (
             <div style={{ textAlign: "center", padding: "40px 0" }}>
               <Spin size="large" />
-              <div style={{ marginTop: 16, color: "#64748b" }}>{t("publicJobOffer.loading")}</div>
+              <div style={{ marginTop: 16, color: "#64748b" }}>
+                {t("publicJobOffer.loading")}
+              </div>
             </div>
           )}
 
@@ -291,7 +327,11 @@ export default function JobOfferResponsePage() {
               icon={<ExclamationCircleFilled aria-hidden />}
               tone="#f97316"
               title={t("publicJobOffer.invalidTitle")}
-              body={token ? t("publicJobOffer.invalidBody") : t("publicJobOffer.missingToken")}
+              body={
+                token
+                  ? t("publicJobOffer.invalidBody")
+                  : t("publicJobOffer.missingToken")
+              }
             />
           )}
 
@@ -325,20 +365,43 @@ export default function JobOfferResponsePage() {
 
           {state === "ready" && offer && (
             <>
-              <Title level={3} style={{ margin: 0, fontWeight: 800, color: "#0f172a" }}>
+              <Title
+                level={3}
+                style={{ margin: 0, fontWeight: 800, color: "#0f172a" }}
+              >
                 {t("publicJobOffer.title")}
               </Title>
-              <Text style={{ display: "block", marginTop: 6, color: "#475569", fontSize: 15 }}>
-                {t("publicJobOffer.greeting", { name: offer.candidate_full_name })}
+              <Text
+                style={{
+                  display: "block",
+                  marginTop: 6,
+                  color: "#475569",
+                  fontSize: 15,
+                }}
+              >
+                {t("publicJobOffer.greeting", {
+                  name: offer.candidate_full_name,
+                })}
               </Text>
-              <Text style={{ display: "block", marginTop: 2, color: "#64748b" }}>
+              <Text
+                style={{ display: "block", marginTop: 2, color: "#64748b" }}
+              >
                 {t("publicJobOffer.intro")}
               </Text>
 
               <div style={{ marginTop: 24 }}>
-                <DetailRow label={t("publicJobOffer.position")} value={offer.position_title || "—"} />
-                <DetailRow label={t("publicJobOffer.department")} value={offer.department || "—"} />
-                <DetailRow label={t("publicJobOffer.location")} value={offer.location || "—"} />
+                <DetailRow
+                  label={t("publicJobOffer.position")}
+                  value={offer.position_title || "—"}
+                />
+                <DetailRow
+                  label={t("publicJobOffer.department")}
+                  value={offer.department || "—"}
+                />
+                <DetailRow
+                  label={t("publicJobOffer.location")}
+                  value={offer.location || "—"}
+                />
                 <DetailRow
                   label={t("publicJobOffer.package")}
                   value={
@@ -348,12 +411,21 @@ export default function JobOfferResponsePage() {
                     </Space>
                   }
                 />
-                <DetailRow label={t("publicJobOffer.offerDate")} value={offer.offer_date || "—"} />
-                <DetailRow label={t("publicJobOffer.expiryDate")} value={offer.expiry_date || "—"} />
+                <DetailRow
+                  label={t("publicJobOffer.offerDate")}
+                  value={offer.offer_date || "—"}
+                />
+                <DetailRow
+                  label={t("publicJobOffer.expiryDate")}
+                  value={offer.expiry_date || "—"}
+                />
                 <DetailRow
                   label={t("publicJobOffer.status")}
                   value={
-                    <JobOfferStatusTag status={offer.status} fallbackLabel={offer.status_label} />
+                    <JobOfferStatusTag
+                      status={offer.status}
+                      fallbackLabel={offer.status_label}
+                    />
                   }
                 />
               </div>
@@ -381,7 +453,12 @@ export default function JobOfferResponsePage() {
                     size="large"
                     loading={submitting}
                     onClick={handleAccept}
-                    style={{ flex: "1 1 200px", borderRadius: 12, fontWeight: 700, minHeight: 48 }}
+                    style={{
+                      flex: "1 1 200px",
+                      borderRadius: 12,
+                      fontWeight: 700,
+                      minHeight: 48,
+                    }}
                   >
                     {t("publicJobOffer.accept")}
                   </Button>
@@ -393,7 +470,12 @@ export default function JobOfferResponsePage() {
                       setReasonError(null);
                       setRejectOpen(true);
                     }}
-                    style={{ flex: "1 1 200px", borderRadius: 12, fontWeight: 700, minHeight: 48 }}
+                    style={{
+                      flex: "1 1 200px",
+                      borderRadius: 12,
+                      fontWeight: 700,
+                      minHeight: 48,
+                    }}
                   >
                     {t("publicJobOffer.reject")}
                   </Button>
@@ -426,7 +508,9 @@ export default function JobOfferResponsePage() {
           status={reasonError ? "error" : undefined}
         />
         {reasonError && (
-          <div style={{ color: "#dc2626", marginTop: 8, fontSize: 13 }}>{reasonError}</div>
+          <div style={{ color: "#dc2626", marginTop: 8, fontSize: 13 }}>
+            {reasonError}
+          </div>
         )}
       </Modal>
     </div>

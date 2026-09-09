@@ -215,7 +215,7 @@ class StartingWorkVerificationTests(TestCase):
         second.status = AttendanceRecord.Status.LATE
         second.save(update_fields=["source", "is_overridden", "status", "updated_at"])
 
-        with patch("job_offers.starting_work_pdf.resolve_template_path", return_value=None):
+        with patch("core.pdf_forms.resolve_template_path", return_value=""):
             approved = self._hr_client().post(
                 f"/starting-work-acknowledgments/{acknowledgment.id}/approve/", {}, format="json"
             )

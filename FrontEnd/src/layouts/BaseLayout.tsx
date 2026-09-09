@@ -175,6 +175,8 @@ function getTitle(
   if (pathname.startsWith("/hr")) return t("layout.hrManagement");
   if (pathname.startsWith("/manager/dashboard"))
     return t("layout.teamDashboard", "Team Dashboard");
+  if (pathname.startsWith("/manager/attendance"))
+    return t("attendance.managerTitle");
   if (pathname.startsWith("/manager/team-requests"))
     return t("layout.teamRequests", "Team Requests");
   if (pathname.startsWith("/manager/team"))
@@ -222,12 +224,6 @@ function getTitle(
     return t("layout.delegatedApprovals", "Delegated Approvals");
   if (pathname.startsWith("/employee/assets"))
     return t("layout.myAssets", "My Assets");
-  if (pathname.startsWith("/employee/attendance-corrections"))
-    return t("layout.attendanceCorrections", "Attendance Corrections");
-  if (pathname.startsWith("/manager/attendance-corrections"))
-    return t("layout.attendanceCorrections", "Attendance Corrections");
-  if (pathname.startsWith("/hr/attendance-correction-requests"))
-    return t("layout.attendanceCorrections", "Attendance Corrections");
   if (pathname.startsWith("/pending-inbox"))
     return t("layout.pendingInbox", "Pending Inbox");
   if (pathname.startsWith("/notifications"))
@@ -255,22 +251,12 @@ function getOpenKeysForPath(pathname: string): string[] {
     opens.push("hr-announcements-sub");
   if (isHrInboxPath) opens.push("hr-inbox-sub");
   if (isEmployeeRequestPath) opens.push("hr-emp-requests-sub");
-  if (
-    pathname.startsWith("/hr/attendance") ||
-    pathname.startsWith("/hr/attendance-correction-requests")
-  )
-    opens.push("hr-attendance-sub");
-  if (
-    pathname.startsWith("/employee/attendance") ||
-    pathname.startsWith("/employee/attendance-corrections")
-  )
+  if (pathname.startsWith("/hr/attendance")) opens.push("hr-attendance-sub");
+  if (pathname.startsWith("/employee/attendance"))
     opens.push("hr-emp-attendance-sub");
   // Employee sidebar sub-menus
   if (isEmployeeRequestPath) opens.push("emp-requests-sub");
-  if (
-    pathname.startsWith("/employee/attendance") ||
-    pathname.startsWith("/employee/attendance-corrections")
-  )
+  if (pathname.startsWith("/employee/attendance"))
     opens.push("emp-attendance-sub");
   // Manager sidebar sub-menus
   if (isEmployeeRequestPath) opens.push("mgr-requests-sub");
@@ -279,10 +265,7 @@ function getOpenKeysForPath(pathname: string): string[] {
     pathname.startsWith("/employee/announcements")
   )
     opens.push("mgr-announcements-sub");
-  if (
-    pathname.startsWith("/employee/attendance") ||
-    pathname.startsWith("/employee/attendance-corrections")
-  )
+  if (pathname.startsWith("/manager/attendance"))
     opens.push("mgr-attendance-sub");
   // CEO sidebar sub-menus (owned by ceoNav so the groups stay in one place)
   opens.push(...getCeoOpenKeysForPath(pathname));
@@ -738,6 +721,14 @@ export default function BaseLayout() {
               ),
             },
             {
+              key: "/hr/annual-leave-payments",
+              label: (
+                <Link to="/hr/annual-leave-payments">
+                  {t("layout.annualLeaveSettlements")}
+                </Link>
+              ),
+            },
+            {
               key: "/hr/loan-requests",
               label: (
                 <Link to="/hr/loan-requests">
@@ -765,14 +756,6 @@ export default function BaseLayout() {
               label: (
                 <Link to="/hr/attendance">
                   {t("layout.attendanceRecords", "Records")}
-                </Link>
-              ),
-            },
-            {
-              key: "/hr/attendance-correction-requests",
-              label: (
-                <Link to="/hr/attendance-correction-requests">
-                  {t("layout.attendanceCorrections", "Attendance Corrections")}
                 </Link>
               ),
             },
@@ -854,14 +837,6 @@ export default function BaseLayout() {
               label: (
                 <Link to="/employee/attendance">
                   {t("layout.attendanceRecords", "Records")}
-                </Link>
-              ),
-            },
-            {
-              key: "/employee/attendance-corrections",
-              label: (
-                <Link to="/employee/attendance-corrections">
-                  {t("layout.attendanceCorrections", "Attendance Corrections")}
                 </Link>
               ),
             },
@@ -1070,14 +1045,6 @@ export default function BaseLayout() {
               label: (
                 <Link to="/employee/attendance">
                   {t("layout.attendanceRecords", "Records")}
-                </Link>
-              ),
-            },
-            {
-              key: "/employee/attendance-corrections",
-              label: (
-                <Link to="/employee/attendance-corrections">
-                  {t("layout.attendanceCorrections", "Attendance Corrections")}
                 </Link>
               ),
             },
@@ -1315,18 +1282,10 @@ export default function BaseLayout() {
           label: t("layout.attendance"),
           children: [
             {
-              key: "/employee/attendance",
+              key: "/manager/attendance",
               label: (
-                <Link to="/employee/attendance">
+                <Link to="/manager/attendance">
                   {t("layout.attendanceRecords", "Records")}
-                </Link>
-              ),
-            },
-            {
-              key: "/employee/attendance-corrections",
-              label: (
-                <Link to="/employee/attendance-corrections">
-                  {t("layout.attendanceCorrections", "Attendance Corrections")}
                 </Link>
               ),
             },

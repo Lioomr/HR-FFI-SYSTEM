@@ -3,6 +3,7 @@ from pathlib import Path
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.files.base import ContentFile
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -13,9 +14,26 @@ from in_app_notifications.models import Notification
 
 from .models import ContractDecision, EmployeeDeletionRequest, EmployeeDocument, EmployeeImport, EmployeeProfile
 from .services.manager_relationships import validate_manager_assignment
+from .services.signature_image import SignatureImageError, normalize_signature
 
 EMPLOYEE_DOCUMENT_ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png"}
 EMPLOYEE_DOCUMENT_MAX_SIZE = int(getattr(settings, "MAX_EMPLOYEE_DOCUMENT_SIZE_BYTES", 5 * 1024 * 1024))
+
+# A signature is printed straight onto an official form, so only raster formats
+# the PDF renderer can safely decode are accepted. SVG is excluded deliberately:
+# it is executable markup, not an image.
+EMPLOYEE_SIGNATURE_ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg"}
+EMPLOYEE_SIGNATURE_CONTENT_TYPES = {
+    ".png": {"image/png"},
+    ".jpg": {"image/jpeg", "image/jpg"},
+    ".jpeg": {"image/jpeg", "image/jpg"},
+}
+EMPLOYEE_SIGNATURE_MAGIC_BYTES = {
+    ".png": (bytes([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),),
+    ".jpg": (bytes([0xFF, 0xD8, 0xFF]),),
+    ".jpeg": (bytes([0xFF, 0xD8, 0xFF]),),
+}
+EMPLOYEE_SIGNATURE_MAX_SIZE = int(getattr(settings, "MAX_EMPLOYEE_SIGNATURE_SIZE_BYTES", 2 * 1024 * 1024))
 
 User = get_user_model()
 
@@ -494,6 +512,20 @@ class EmployeeProfileWriteSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Full name is required.")
         return value
 
+    def validate_user_id(self, value):
+        """Prevent the database OneToOne constraint from becoming an HTTP 500."""
+        if value is not None:
+            linked_profile = (
+                EmployeeProfile.objects.filter(user=value)
+                .exclude(pk=getattr(self.instance, "pk", None))
+                .first()
+            )
+            if linked_profile is not None:
+                raise serializers.ValidationError(
+                    f"This account is already linked to employee {linked_profile.employee_id}."
+                )
+        return value
+
     def validate(self, attrs):
         full_name = attrs.get("full_name")
         full_name_en = attrs.get("full_name_en")
@@ -652,12 +684,26 @@ class EmployeeDeletionRequestCreateSerializer(serializers.ModelSerializer):
 
 
 class EmployeeDocumentSerializer(serializers.ModelSerializer):
+    """Read/write surface for archived employee documents.
+
+    Raw OCR text is deliberately absent from every representation: it is a
+    verbatim transcript of an identity document and stays in the private
+    `extraction_raw_text` column, server-side only.
+    """
+
+    # Legacy rows kept the OCR transcript inside extracted_fields. Strip any such
+    # key on the way out so an old row cannot leak it through the API.
+    RESERVED_EXTRACTED_KEYS = frozenset({"raw_text", "ocr_raw_text", "raw_ocr_text", "text"})
+
     employee_profile_id = serializers.IntegerField(read_only=True)
     company_id = serializers.IntegerField(read_only=True)
     document_type = serializers.ChoiceField(choices=EmployeeDocument.DocumentType.choices, required=True)
     uploaded_by_name = serializers.CharField(source="uploaded_by.full_name", read_only=True)
     display_name = serializers.SerializerMethodField()
+    extracted_fields = serializers.SerializerMethodField()
     extraction_warnings = serializers.ListField(child=serializers.CharField(), read_only=True, required=False)
+    extraction_metadata = serializers.SerializerMethodField()
+    is_system_generated = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = EmployeeDocument
@@ -680,6 +726,11 @@ class EmployeeDocumentSerializer(serializers.ModelSerializer):
             "extraction_status",
             "extraction_error",
             "extraction_warnings",
+            "extraction_confidence",
+            "extraction_metadata",
+            "extraction_attempts",
+            "extraction_completed_at",
+            "is_system_generated",
             "uploaded_by",
             "uploaded_by_name",
             "created_at",
@@ -690,9 +741,15 @@ class EmployeeDocumentSerializer(serializers.ModelSerializer):
             "company_id",
             "leave_request",
             "original_filename",
+            "extracted_fields",
             "extraction_status",
             "extraction_error",
             "extraction_warnings",
+            "extraction_confidence",
+            "extraction_metadata",
+            "extraction_attempts",
+            "extraction_completed_at",
+            "is_system_generated",
             "uploaded_by",
             "uploaded_by_name",
             "created_at",
@@ -702,6 +759,23 @@ class EmployeeDocumentSerializer(serializers.ModelSerializer):
 
     def get_display_name(self, obj):
         return obj.display_name
+
+    @classmethod
+    def _public_extracted_fields(cls, extracted_fields):
+        if not isinstance(extracted_fields, dict):
+            return {}
+        return {
+            key: value
+            for key, value in extracted_fields.items()
+            if key.lower() not in cls.RESERVED_EXTRACTED_KEYS and not str(key).startswith("_")
+        }
+
+    def get_extracted_fields(self, obj):
+        return self._public_extracted_fields(obj.extracted_fields)
+
+    def get_extraction_metadata(self, obj):
+        metadata = obj.extraction_metadata
+        return metadata if isinstance(metadata, dict) else {}
 
     def validate(self, attrs):
         document_type = attrs.get("document_type", getattr(self.instance, "document_type", None))
@@ -743,3 +817,89 @@ class EmployeeDocumentSerializer(serializers.ModelSerializer):
         if not valid_signature:
             raise serializers.ValidationError("File content does not match its extension.")
         return value
+
+
+class EmployeeSignatureUploadSerializer(serializers.Serializer):
+    """Validates a reusable signature image before it is stored privately.
+
+    Everything is checked server-side: the client's declared content type is
+    never trusted on its own, and the file's magic bytes must agree with both
+    the extension and that declared type.
+    """
+
+    signature = serializers.FileField(write_only=True)
+
+    def validate_signature(self, value):
+        if value is None:
+            raise serializers.ValidationError("A signature image is required.")
+        if not value.size:
+            raise serializers.ValidationError("The signature file is empty.")
+        if value.size > EMPLOYEE_SIGNATURE_MAX_SIZE:
+            limit_mb = EMPLOYEE_SIGNATURE_MAX_SIZE // (1024 * 1024)
+            raise serializers.ValidationError(f"Signature image is too large. Maximum {limit_mb} MB.")
+
+        extension = Path(value.name or "").suffix.lower()
+        if extension not in EMPLOYEE_SIGNATURE_ALLOWED_EXTENSIONS:
+            raise serializers.ValidationError("Unsupported file type. Upload a PNG or JPG image.")
+
+        claimed_content_type = (getattr(value, "content_type", "") or "").lower().split(";")[0].strip()
+        if claimed_content_type and claimed_content_type not in EMPLOYEE_SIGNATURE_CONTENT_TYPES[extension]:
+            raise serializers.ValidationError("File content type does not match its extension.")
+
+        position = value.tell()
+        header = value.read(8)
+        value.seek(position)
+        if not any(header.startswith(magic) for magic in EMPLOYEE_SIGNATURE_MAGIC_BYTES[extension]):
+            raise serializers.ValidationError("File content does not match its extension.")
+
+        # Only once the upload has passed every security check is it decoded.
+        # The stored artefact is the normalized transparent PNG, never the raw
+        # photograph, so generated forms carry strokes rather than paper.
+        value.seek(0)
+        raw = value.read()
+        value.seek(position)
+        try:
+            normalized = normalize_signature(raw, size_limit=EMPLOYEE_SIGNATURE_MAX_SIZE)
+        except SignatureImageError as exc:
+            raise serializers.ValidationError(str(exc)) from exc
+
+        cleaned = ContentFile(normalized.data, name=f"{Path(value.name).stem}.png")
+        cleaned.content_type = "image/png"
+        return cleaned
+
+
+class EmployeeSignatureStateSerializer(serializers.Serializer):
+    """Read-only signature state. Never exposes the private storage path."""
+
+    has_signature = serializers.SerializerMethodField()
+    uploaded_at = serializers.SerializerMethodField()
+    content_type = serializers.SerializerMethodField()
+    size_bytes = serializers.SerializerMethodField()
+    preview_url = serializers.SerializerMethodField()
+
+    def get_has_signature(self, profile) -> bool:
+        return bool(profile.signature and profile.signature.name)
+
+    def get_uploaded_at(self, profile):
+        return profile.signature_uploaded_at.isoformat() if profile.signature_uploaded_at else None
+
+    def get_content_type(self, profile):
+        if not self.get_has_signature(profile):
+            return None
+        return "image/png" if Path(profile.signature.name).suffix.lower() == ".png" else "image/jpeg"
+
+    def get_size_bytes(self, profile):
+        if not self.get_has_signature(profile):
+            return None
+        try:
+            return profile.signature.size
+        except (OSError, ValueError):
+            # The row points at a file that is gone; report the state, not a crash.
+            return None
+
+    def get_preview_url(self, profile):
+        """Authenticated API path, never a media or filesystem location."""
+
+        if not self.get_has_signature(profile):
+            return None
+        return f"/employees/{profile.pk}/signature/preview"

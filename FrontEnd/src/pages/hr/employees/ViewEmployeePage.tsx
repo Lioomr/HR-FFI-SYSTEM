@@ -180,6 +180,8 @@ export default function ViewEmployeePage() {
   );
   const role = useAuthStore((state) => state.user?.role);
   const canRestoreEmployee = role === "SystemAdmin" || role === "HRManager";
+  /** Mirrors the backend rule for document delete and OCR re-run. */
+  const canManageDocuments = role === "SystemAdmin" || role === "HRManager";
 
   // State
   const [loading, setLoading] = useState(true);
@@ -826,7 +828,10 @@ export default function ViewEmployeePage() {
                       </span>
                     ),
                     children: (
-                      <EmployeeDocumentArchive employeeId={Number(id)} />
+                      <EmployeeDocumentArchive
+                        employeeId={Number(id)}
+                        canManageDocuments={canManageDocuments}
+                      />
                     ),
                   },
                 ]}

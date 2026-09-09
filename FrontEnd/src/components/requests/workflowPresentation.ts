@@ -109,6 +109,21 @@ export function buildStagesFromWorkflow(
       key: stepKey,
       title: toTitle(stepKey, t),
       state: toState(stepKey, workflow),
+      detail:
+        latest?.actor?.full_name || latest?.actor?.email
+          ? t("workflow.handledBy", {
+              name: latest.actor.full_name || latest.actor.email || "",
+            })
+          : workflow.current_stage === stepKey &&
+              (workflow.current_actor?.full_name ||
+                workflow.current_actor?.email)
+            ? t("workflow.waitingFor", {
+                name:
+                  workflow.current_actor.full_name ||
+                  workflow.current_actor.email ||
+                  "",
+              })
+            : undefined,
       note:
         latest?.note ||
         (workflow.current_stage === stepKey

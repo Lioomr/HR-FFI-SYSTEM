@@ -32,6 +32,9 @@ line-ending = "auto"
 DJANGO_SETTINGS_MODULE = "config.settings"
 python_files = ["tests.py", "test_*.py", "*_tests.py", "tests_*.py"]
 addopts = "--reuse-db"
+markers = [
+    "ocr_integration: real PaddleOCR inference; skipped unless the runtime and provisioned models are present",
+]
 
 [tool.mypy]
 python_version = "3.10"

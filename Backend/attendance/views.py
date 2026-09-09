@@ -3,15 +3,12 @@ from datetime import date as date_type
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
-from django.db import IntegrityError, transaction
 from django.db.models import Count, Q
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.throttling import UserRateThrottle
 
 from audit.utils import audit
 from core.pagination import StandardPagination
@@ -24,36 +21,25 @@ from core.permissions import (
     is_hr_workflow_approver_user,
 )
 from core.responses import error, success
-from core.services import (
-    get_ceo_approver_users,
-    get_direct_manager_user,
-    get_hr_approver_users,
-    notify_profile_request_status_whatsapp,
-    notify_users_for_pending_status,
-    sync_workflow,
-)
 from employees.models import EmployeeProfile
-from employees.services.manager_relationships import (
-    get_valid_manager_user,
-    manager_approval_actor_source,
-    manager_scope_q,
-)
+from employees.services.manager_relationships import manager_scope_q
 from organization.services import (
     ensure_company_write_allowed,
     filter_queryset_by_company_scope,
     get_active_company_for_request,
 )
 
-from .geofence import GeofencePayloadError, validate_mobile_geofence
+from .biotime_policy import (
+    attendance_unavailable_unmapped,
+    has_active_biotime_mapping,
+    limit_to_mapped_employees,
+    manual_attendance_gone,
+)
 from .models import AttendanceCorrectionRequest, AttendanceRecord, WorkLocation
 from .permissions import IsAttendanceSelfServiceRole
-from .schedule import classify_check_in
 from .serializers import (
     AttendanceCorrectionRequestSerializer,
-    AttendanceOverrideSerializer,
     AttendanceRecordSerializer,
-    CheckInResponseSerializer,
-    CheckOutResponseSerializer,
     WorkLocationSerializer,
 )
 
@@ -82,70 +68,21 @@ def _apply_employee_search(queryset, search_param):
     )
 
 
-def _is_hr_manager_user(user):
-    return bool(user and user.is_authenticated and user.groups.filter(name="HRManager").exists())
-
-
-def _is_hr_manager_origin_record(instance: AttendanceRecord):
-    employee_user = getattr(getattr(instance, "employee_profile", None), "user", None)
-    return bool(employee_user and employee_user.groups.filter(name="HRManager").exists())
-
-
 def _manager_scope_filter(user):
     return manager_scope_q(
         user, employee_prefix="employee_profile__", cross_company_capability="attendance.approve"
     )
 
 
-def _can_manager_act_on_correction(user, correction: AttendanceCorrectionRequest):
-    return bool(
-        manager_approval_actor_source(
-            user,
-            correction.employee_profile,
-            capability="attendance.approve",
-            allow_admin=True,
-        )
-    )
-
-
 def _scope_attendance_queryset(queryset, request):
+    """Company-scope an attendance queryset and drop BioTime-ineligible employees.
+
+    Attendance eligibility is the active BioTime mapping, so every attendance
+    read path (employee, HR, manager, CEO) funnels through this helper.
+    """
     queryset = filter_queryset_by_company_scope(queryset, request, field_name="employee_profile__company_id")
-    return queryset.filter(employee_profile__company_id__isnull=False)
-
-
-def _profile_matches_active_company(request, profile):
-    if profile.company_id is None:
-        return False
-    active_company = get_active_company_for_request(request)
-    return bool(active_company and active_company.id == profile.company_id)
-
-
-def _validate_attendance_geofence(request, profile):
-    """Return a matching site when the global rollout toggle is enabled."""
-    from admin_portal.models import SystemSettings
-
-    if not SystemSettings.get_solo().geofence_attendance_enabled:
-        return None, None
-
-    try:
-        location = validate_mobile_geofence(payload=request.data, company=profile.company)
-    except GeofencePayloadError as exc:
-        if exc.kind == "poor_accuracy":
-            return None, error(
-                "GPS accuracy must be 100 metres or better.",
-                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            )
-        return None, error("Invalid GPS coordinates.", status=status.HTTP_422_UNPROCESSABLE_ENTITY)
-
-    if location is None:
-        return None, error(
-            "You are not within an approved work location.", status=status.HTTP_403_FORBIDDEN
-        )
-    return location, None
-
-
-class AttendanceThrottle(UserRateThrottle):
-    rate = "10/min"
+    queryset = queryset.filter(employee_profile__company_id__isnull=False)
+    return limit_to_mapped_employees(queryset)
 
 
 class WorkLocationViewSet(viewsets.ModelViewSet):
@@ -303,14 +240,12 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         if self.action in ["list", "retrieve"]:
             return [IsAuthenticated(), IsHRManagerOrAdmin()]
 
-        # Employee-only actions
-        if self.action in ["me_list", "me_check_in", "me_check_out"]:
+        # Read-only employee self-service.
+        if self.action == "me_list":
             return [IsAuthenticated(), IsAttendanceSelfServiceRole()]
 
-        # HR/Admin write actions
-        if self.action in ["create", "update", "partial_update", "destroy"]:
-            return [IsAuthenticated(), IsHRManagerOrAdmin()]
-
+        # Retired manual-attendance mutations answer 410 for any authenticated
+        # caller; gating them by role would mask the retirement behind a 403.
         return [IsAuthenticated()]
 
     def filter_queryset(self, queryset):
@@ -350,216 +285,40 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         return success(response.data)
 
     def destroy(self, request, *args, **kwargs):
-        return error("Attendance records cannot be deleted.", status=status.HTTP_405_METHOD_NOT_ALLOWED)
+        return manual_attendance_gone()
 
     def create(self, request, *args, **kwargs):
-        return error("Attendance records cannot be created directly.", status=status.HTTP_405_METHOD_NOT_ALLOWED)
+        return manual_attendance_gone()
 
     def partial_update(self, request, *args, **kwargs):
-        # HR Override logic (PATCH routes here)
-        instance = self.get_object()
-        if _is_hr_manager_origin_record(instance) and instance.status == AttendanceRecord.Status.PENDING_CEO:
-            return error(
-                "Validation error",
-                errors=["HR manager attendance requests must be approved by CEO."],
-                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            )
-        s = AttendanceOverrideSerializer(instance, data=request.data, partial=True)
-        s.is_valid(raise_exception=True)
-
-        # Set override metadata
-        instance.is_overridden = True
-        instance.source = AttendanceRecord.Source.HR
-        instance.updated_by = request.user
-
-        # Apply validated changes
-        for attr, value in s.validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
-        sync_workflow(instance, actor=request.user)
-
-        # Serialize metadata to ensure datetimes are strings
-        import json
-
-        from django.core.serializers.json import DjangoJSONEncoder
-
-        serialized_metadata = json.loads(json.dumps(s.validated_data, cls=DjangoJSONEncoder))
-
-        audit(
-            request,
-            "attendance.override",
-            entity="attendance_record",
-            entity_id=instance.id,
-            metadata=serialized_metadata,
-        )
-
-        return success(AttendanceRecordSerializer(instance).data)
+        # Retired HR override (PATCH routes here).
+        return manual_attendance_gone()
 
     def update(self, request, *args, **kwargs):
-        # Route PUT to same override logic as PATCH
-        return self.partial_update(request, *args, **kwargs)
+        # Retired HR override (PUT routes here).
+        return manual_attendance_gone()
 
-    @action(detail=False, methods=["post"], url_path="me/check-in", throttle_classes=[AttendanceThrottle])
+    @action(detail=False, methods=["post"], url_path="me/check-in")
     def me_check_in(self, request):
-        user = request.user
-        today = timezone.localdate()
+        """Retired: BioTime agent ingestion is the only writer of punch records."""
+        return manual_attendance_gone()
 
-        try:
-            profile = EmployeeProfile.objects.get(user=user)
-        except EmployeeProfile.DoesNotExist:
-            return error("Employee profile not found.", status=status.HTTP_404_NOT_FOUND)
-
-        if profile.is_archived:
-            return error("Archived employees cannot check in.", status=status.HTTP_403_FORBIDDEN)
-
-        if not _profile_matches_active_company(request, profile):
-            return error("Employee profile is not available in the active company.", status=status.HTTP_403_FORBIDDEN)
-
-        matched_location, geofence_error = _validate_attendance_geofence(request, profile)
-        if geofence_error:
-            return geofence_error
-
-        has_manager = bool(get_valid_manager_user(profile, cross_company_capability="attendance.approve"))
-
-        if _is_hr_manager_user(user):
-            status_value = AttendanceRecord.Status.PENDING_CEO
-        else:
-            status_value = (
-                AttendanceRecord.Status.PENDING_MANAGER if has_manager else AttendanceRecord.Status.PENDING_HR
-            )
-        # Fallback/Legacy note: PENDING_HR maps to old 'PENDING' concept effectively
-
-        check_in_at = timezone.now()
-        # Employee self check-ins keep the approval workflow; we only record
-        # whether the arrival was late so approvers can preserve a LATE outcome.
-        is_late_flagged = classify_check_in(check_in_at, today) == AttendanceRecord.Status.LATE
-
-        try:
-            with transaction.atomic():
-                record = AttendanceRecord.objects.create(
-                    employee_profile=profile,
-                    date=today,
-                    check_in_at=check_in_at,
-                    status=status_value,
-                    is_late_flagged=is_late_flagged,
-                    source=AttendanceRecord.Source.EMPLOYEE,
-                    created_by=user,
-                    updated_by=user,
-                )
-                sync_workflow(record, actor=user)
-                audit(
-                    request,
-                    "attendance.check_in",
-                    entity="attendance_record",
-                    entity_id=record.id,
-                    metadata={
-                        "date": str(record.date),
-                        "company_id": profile.company_id,
-                        **(
-                            {"work_location_id": matched_location.id, "work_location_name": matched_location.name}
-                            if matched_location
-                            else {}
-                        ),
-                    },
-                )
-        except IntegrityError:
-            return error("Check-in already exists for today.", status=status.HTTP_400_BAD_REQUEST)
-        try:
-            requester_name = profile.full_name or user.email
-            if record.status == AttendanceRecord.Status.PENDING_MANAGER:
-                manager = get_direct_manager_user(user)
-                if manager:
-                    notify_users_for_pending_status(
-                        users=[manager],
-                        request_type="Attendance Request",
-                        request_id=record.id,
-                        requester_name=requester_name,
-                        status_label=record.status,
-                        details=[f"Date: {record.date}", "Action: Check-in"],
-                        action_path="/manager/attendance",
-                    )
-            elif record.status == AttendanceRecord.Status.PENDING_HR:
-                notify_users_for_pending_status(
-                    users=get_hr_approver_users(),
-                    request_type="Attendance Request",
-                    request_id=record.id,
-                    requester_name=requester_name,
-                    status_label=record.status,
-                    details=[f"Date: {record.date}", "Action: Check-in"],
-                    action_path="/hr/attendance",
-                )
-            elif record.status == AttendanceRecord.Status.PENDING_CEO:
-                notify_users_for_pending_status(
-                    users=get_ceo_approver_users(),
-                    request_type="Attendance Request",
-                    request_id=record.id,
-                    requester_name=requester_name,
-                    status_label=record.status,
-                    details=[f"Date: {record.date}", "Action: Check-in"],
-                    action_path="/ceo/attendance",
-                )
-        except Exception:
-            _log_notification_failure(
-                "attendance_check_in_notification_failed",
-                entity_id=record.id,
-                notification_type="attendance_submitted",
-                actor_id=request.user.id,
-            )
-        return success(CheckInResponseSerializer(record).data, status=status.HTTP_201_CREATED)
-
-    @action(detail=False, methods=["post"], url_path="me/check-out", throttle_classes=[AttendanceThrottle])
+    @action(detail=False, methods=["post"], url_path="me/check-out")
     def me_check_out(self, request):
-        user = request.user
-        today = timezone.localdate()
-
-        try:
-            profile = EmployeeProfile.objects.get(user=user)
-        except EmployeeProfile.DoesNotExist:
-            return error("Employee profile not found.", status=status.HTTP_404_NOT_FOUND)
-
-        if profile.is_archived:
-            return error("Archived employees cannot check out.", status=status.HTTP_403_FORBIDDEN)
-
-        if not _profile_matches_active_company(request, profile):
-            return error("Employee profile is not available in the active company.", status=status.HTTP_403_FORBIDDEN)
-
-        matched_location, geofence_error = _validate_attendance_geofence(request, profile)
-        if geofence_error:
-            return geofence_error
-
-        with transaction.atomic():
-            try:
-                record = AttendanceRecord.objects.select_for_update().get(employee_profile=profile, date=today)
-            except AttendanceRecord.DoesNotExist:
-                return error("No check-in record found for today.", status=status.HTTP_400_BAD_REQUEST)
-
-            if record.check_out_at:
-                return error("Check-out already exists for today.", status=status.HTTP_400_BAD_REQUEST)
-
-            record.check_out_at = timezone.now()
-            record.updated_by = user
-            record.save(update_fields=["check_out_at", "updated_by", "updated_at"])
-            sync_workflow(record, actor=user)
-            audit(
-                request,
-                "attendance.check_out",
-                entity="attendance_record",
-                entity_id=record.id,
-                metadata={
-                    "date": str(record.date),
-                    "company_id": profile.company_id,
-                    **(
-                        {"work_location_id": matched_location.id, "work_location_name": matched_location.name}
-                        if matched_location
-                        else {}
-                    ),
-                },
-            )
-        return success(CheckOutResponseSerializer(record).data)
+        """Retired: BioTime agent ingestion is the only writer of punch records."""
+        return manual_attendance_gone()
 
     @action(detail=False, methods=["get"], url_path="me")
     def me_list(self, request):
-        # Employee-scoped list (get_queryset already filters to own records)
+        """Read-only own attendance history, for BioTime-mapped employees only."""
+        profile = getattr(request.user, "employee_profile", None)
+        if profile is None:
+            profile = EmployeeProfile.objects.filter(user=request.user).first()
+        if profile is None:
+            return error("Employee profile not found.", status=status.HTTP_404_NOT_FOUND)
+        if not has_active_biotime_mapping(profile):
+            return attendance_unavailable_unmapped()
+
         queryset = self.filter_queryset(self.get_queryset())
 
         page = self.paginate_queryset(queryset)
@@ -601,49 +360,6 @@ class AttendanceCorrectionRequestViewSet(viewsets.ModelViewSet):
             owner_match |= Q(employee_profile=employee_profile)
         return qs.filter(owner_match | manager_match)
 
-    def perform_create(self, serializer):
-        user = self.request.user
-        role = get_role(user)
-        profile = serializer.validated_data.get("employee_profile")
-
-        if role not in ["SystemAdmin", "HRManager"]:
-            profile = getattr(user, "employee_profile", None)
-            if not profile:
-                raise PermissionDenied("Employee profile not found.")
-        elif not profile:
-            raise ValidationError({"employee_profile": "This field is required."})
-
-        if not _profile_matches_active_company(self.request, profile):
-            raise PermissionDenied("Employee profile is not available in the active company.")
-
-        record = serializer.validated_data.get("attendance_record")
-        if record and record.employee_profile_id != profile.id:
-            raise ValidationError({"attendance_record": "Attendance record does not belong to this employee."})
-        if not record and profile and serializer.validated_data.get("date"):
-            record = AttendanceRecord.objects.filter(
-                employee_profile=profile,
-                date=serializer.validated_data["date"],
-            ).first()
-
-        serializer.save(
-            employee_profile=profile,
-            attendance_record=record,
-            created_by=user,
-            updated_by=user,
-        )
-
-    def perform_update(self, serializer):
-        user = self.request.user
-        role = get_role(user)
-        if role in ["SystemAdmin", "HRManager"]:
-            serializer.save(updated_by=user)
-            return
-
-        serializer.save(
-            employee_profile=serializer.instance.employee_profile,
-            updated_by=user,
-        )
-
     def list(self, request, *args, **kwargs):
         response = super().list(request, *args, **kwargs)
         if isinstance(response.data, dict) and response.data.get("status") == "success":
@@ -655,282 +371,32 @@ class AttendanceCorrectionRequestViewSet(viewsets.ModelViewSet):
         return success(response.data)
 
     def create(self, request, *args, **kwargs):
-        response = super().create(request, *args, **kwargs)
-        return success(response.data, status=status.HTTP_201_CREATED)
+        return manual_attendance_gone()
 
     def update(self, request, *args, **kwargs):
-        instance = self.get_object()
-        if instance.status != AttendanceCorrectionRequest.Status.DRAFT:
-            return error("Only draft correction requests can be edited.", status=status.HTTP_422_UNPROCESSABLE_ENTITY)
-        if instance.created_by_id != request.user.id and get_role(request.user) not in ["SystemAdmin", "HRManager"]:
-            return error("You cannot edit this correction request.", status=status.HTTP_403_FORBIDDEN)
-        response = super().update(request, *args, **kwargs)
-        return success(response.data)
+        return manual_attendance_gone()
 
     def partial_update(self, request, *args, **kwargs):
-        kwargs["partial"] = True
-        return self.update(request, *args, **kwargs)
+        return manual_attendance_gone()
 
     def destroy(self, request, *args, **kwargs):
-        return error("Attendance correction requests cannot be deleted.", status=status.HTTP_405_METHOD_NOT_ALLOWED)
-
-    def _serialize(self, instance):
-        return AttendanceCorrectionRequestSerializer(instance, context={"request": self.request}).data
-
-    def _notify_next_approver(self, instance):
-        requester_name = instance.employee_profile.full_name or getattr(instance.employee_profile.user, "email", "")
-        details = [f"Date: {instance.date}", "Request: Attendance correction"]
-        try:
-            if instance.status == AttendanceCorrectionRequest.Status.PENDING_MANAGER:
-                manager = get_direct_manager_user(instance.employee_profile.user)
-                if manager:
-                    notify_users_for_pending_status(
-                        users=[manager],
-                        request_type="Attendance Correction",
-                        request_id=instance.id,
-                        requester_name=requester_name,
-                        status_label=instance.status,
-                        details=details,
-                        action_path="/manager/team-requests?tab=attendance-corrections",
-                    )
-            elif instance.status == AttendanceCorrectionRequest.Status.PENDING_HR:
-                notify_users_for_pending_status(
-                    users=get_hr_approver_users(),
-                    request_type="Attendance Correction",
-                    request_id=instance.id,
-                    requester_name=requester_name,
-                    status_label=instance.status,
-                    details=details,
-                    action_path="/hr/attendance-correction-requests",
-                )
-        except Exception:
-            _log_notification_failure(
-                "attendance_correction_pending_notification_failed",
-                entity_id=instance.id,
-                notification_type="pending_status",
-            )
+        return manual_attendance_gone()
 
     @action(detail=True, methods=["post"])
     def submit(self, request, pk=None):
-        instance = self.get_object()
-        if instance.status != AttendanceCorrectionRequest.Status.DRAFT:
-            return error(
-                "Only draft correction requests can be submitted.", status=status.HTTP_422_UNPROCESSABLE_ENTITY
-            )
-        if instance.created_by_id != request.user.id and get_role(request.user) not in ["SystemAdmin", "HRManager"]:
-            return error("You cannot submit this correction request.", status=status.HTTP_403_FORBIDDEN)
-
-        has_manager = bool(
-            get_valid_manager_user(instance.employee_profile, cross_company_capability="attendance.approve")
-        )
-        instance.status = (
-            AttendanceCorrectionRequest.Status.PENDING_MANAGER
-            if has_manager
-            else AttendanceCorrectionRequest.Status.PENDING_HR
-        )
-        instance.submitted_at = timezone.now()
-        instance.updated_by = request.user
-        instance.save(update_fields=["status", "submitted_at", "updated_by", "updated_at"])
-        sync_workflow(instance, actor=request.user)
-        audit(request, "attendance_correction.submitted", entity="AttendanceCorrectionRequest", entity_id=instance.id)
-        self._notify_next_approver(instance)
-        return success(self._serialize(instance))
+        return manual_attendance_gone()
 
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
-        instance = self.get_object()
-        note = (request.data.get("notes") or request.data.get("comment") or "").strip()
-
-        if instance.status == AttendanceCorrectionRequest.Status.PENDING_MANAGER:
-            if not _can_manager_act_on_correction(request.user, instance):
-                return error("You cannot approve this correction request.", status=status.HTTP_403_FORBIDDEN)
-            actor_source = manager_approval_actor_source(
-                request.user,
-                instance.employee_profile,
-                capability="attendance.approve",
-                allow_admin=True,
-            )
-            instance.status = AttendanceCorrectionRequest.Status.PENDING_HR
-            instance.manager_decision_by = request.user
-            instance.manager_decision_at = timezone.now()
-            instance.manager_decision_note = note
-            instance.updated_by = request.user
-            instance.save(
-                update_fields=[
-                    "status",
-                    "manager_decision_by",
-                    "manager_decision_at",
-                    "manager_decision_note",
-                    "updated_by",
-                    "updated_at",
-                ]
-            )
-            sync_workflow(instance, actor=request.user)
-            audit(
-                request,
-                "attendance_correction.manager_approved",
-                entity="AttendanceCorrectionRequest",
-                entity_id=instance.id,
-                metadata={"actor_source": actor_source},
-            )
-            self._notify_next_approver(instance)
-            return success(self._serialize(instance))
-
-        if instance.status == AttendanceCorrectionRequest.Status.PENDING_HR:
-            if not is_hr_workflow_approver_user(request.user):
-                return error("You cannot approve this correction request.", status=status.HTTP_403_FORBIDDEN)
-            with transaction.atomic():
-                self._apply_correction(instance, request.user, note)
-                sync_workflow(instance, actor=request.user)
-            audit(
-                request,
-                "attendance_correction.hr_approved",
-                entity="AttendanceCorrectionRequest",
-                entity_id=instance.id,
-            )
-            try:
-                notify_profile_request_status_whatsapp(
-                    profile=instance.employee_profile,
-                    request_type="Attendance Correction",
-                    request_id=instance.id,
-                    status_label="Approved",
-                    details=[f"Date: {instance.date}"],
-                    action_path="/employee/attendance",
-                )
-            except Exception:
-                _log_notification_failure(
-                    "attendance_correction_approval_notification_failed",
-                    entity_id=instance.id,
-                    notification_type="attendance_correction_approved",
-                    actor_id=request.user.id,
-                )
-            return success(self._serialize(instance))
-
-        return error("Request is not in an approvable state.", status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        return manual_attendance_gone()
 
     @action(detail=True, methods=["post"])
     def reject(self, request, pk=None):
-        instance = self.get_object()
-        note = (request.data.get("notes") or request.data.get("comment") or "").strip()
-        approval_actor_source = "admin"
-        if not note:
-            return error("notes/comment is required for rejection.", status=status.HTTP_422_UNPROCESSABLE_ENTITY)
-
-        if instance.status == AttendanceCorrectionRequest.Status.PENDING_MANAGER:
-            if not _can_manager_act_on_correction(request.user, instance):
-                return error("You cannot reject this correction request.", status=status.HTTP_403_FORBIDDEN)
-            actor_source = manager_approval_actor_source(
-                request.user,
-                instance.employee_profile,
-                capability="attendance.approve",
-                allow_admin=True,
-            )
-            approval_actor_source = actor_source
-            instance.manager_decision_by = request.user
-            instance.manager_decision_at = timezone.now()
-            instance.manager_decision_note = note
-        elif instance.status == AttendanceCorrectionRequest.Status.PENDING_HR:
-            if not is_hr_workflow_approver_user(request.user):
-                return error("You cannot reject this correction request.", status=status.HTTP_403_FORBIDDEN)
-            instance.hr_decision_by = request.user
-            instance.hr_decision_at = timezone.now()
-            instance.hr_decision_note = note
-        else:
-            return error("Request is not in a rejectable state.", status=status.HTTP_422_UNPROCESSABLE_ENTITY)
-
-        instance.status = AttendanceCorrectionRequest.Status.REJECTED
-        instance.decided_at = timezone.now()
-        instance.updated_by = request.user
-        instance.save()
-        sync_workflow(instance, actor=request.user)
-        audit(
-            request,
-            "attendance_correction.rejected",
-            entity="AttendanceCorrectionRequest",
-            entity_id=instance.id,
-            metadata={"actor_source": approval_actor_source},
-        )
-        try:
-            notify_profile_request_status_whatsapp(
-                profile=instance.employee_profile,
-                request_type="Attendance Correction",
-                request_id=instance.id,
-                status_label="Rejected",
-                reason=note,
-                details=[f"Date: {instance.date}"],
-                action_path="/employee/attendance",
-            )
-        except Exception:
-            _log_notification_failure(
-                "attendance_correction_rejection_notification_failed",
-                entity_id=instance.id,
-                notification_type="attendance_correction_rejected",
-                actor_id=request.user.id,
-            )
-        return success(self._serialize(instance))
+        return manual_attendance_gone()
 
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):
-        instance = self.get_object()
-        if instance.status in {
-            AttendanceCorrectionRequest.Status.APPROVED,
-            AttendanceCorrectionRequest.Status.REJECTED,
-            AttendanceCorrectionRequest.Status.CANCELLED,
-        }:
-            return error("Request is already finalized.", status=status.HTTP_422_UNPROCESSABLE_ENTITY)
-        if instance.created_by_id != request.user.id and get_role(request.user) not in ["SystemAdmin", "HRManager"]:
-            return error("You cannot cancel this correction request.", status=status.HTTP_403_FORBIDDEN)
-
-        instance.status = AttendanceCorrectionRequest.Status.CANCELLED
-        instance.cancelled_at = timezone.now()
-        instance.updated_by = request.user
-        instance.save(update_fields=["status", "cancelled_at", "updated_by", "updated_at"])
-        sync_workflow(instance, actor=request.user)
-        audit(request, "attendance_correction.cancelled", entity="AttendanceCorrectionRequest", entity_id=instance.id)
-        return success(self._serialize(instance))
-
-    def _apply_correction(self, instance, actor, note):
-        record = instance.attendance_record
-        if record is None:
-            record, _ = AttendanceRecord.objects.get_or_create(
-                employee_profile=instance.employee_profile,
-                date=instance.date,
-                defaults={
-                    "status": instance.requested_status or AttendanceRecord.Status.PRESENT,
-                    "source": AttendanceRecord.Source.HR,
-                    "created_by": actor,
-                    "updated_by": actor,
-                },
-            )
-
-        if instance.requested_check_in_at is not None:
-            record.check_in_at = instance.requested_check_in_at
-        if instance.requested_check_out_at is not None:
-            record.check_out_at = instance.requested_check_out_at
-        if instance.requested_status:
-            record.status = instance.requested_status
-        elif record.status in {
-            AttendanceRecord.Status.PENDING,
-            AttendanceRecord.Status.PENDING_MANAGER,
-            AttendanceRecord.Status.PENDING_HR,
-            AttendanceRecord.Status.PENDING_CEO,
-        }:
-            record.status = AttendanceRecord.Status.PRESENT
-
-        record.source = AttendanceRecord.Source.HR
-        record.is_overridden = True
-        record.override_reason = f"Attendance correction request #{instance.id}: {instance.reason}"
-        record.updated_by = actor
-        record.save()
-
-        instance.attendance_record = record
-        instance.status = AttendanceCorrectionRequest.Status.APPROVED
-        instance.hr_decision_by = actor
-        instance.hr_decision_at = timezone.now()
-        instance.hr_decision_note = note
-        instance.decided_at = instance.hr_decision_at
-        instance.updated_by = actor
-        instance.save()
+        return manual_attendance_gone()
 
 
 class ManagerAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
@@ -971,131 +437,15 @@ class ManagerAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
         base_qs = _scope_attendance_queryset(base_qs, self.request)
         if role == "SystemAdmin":
             return base_qs
-        return qs.filter(_manager_scope_filter(self.request.user)).distinct()
-
-    def _locked_manager_record(self, request, pk):
-        """Scope-check unlocked, then re-fetch the row under a write lock.
-
-        Returns ``(instance, actor_source, None)`` on success or
-        ``(None, None, error_response)`` to short-circuit the caller.
-        """
-        if not self.get_queryset().filter(pk=pk).exists():
-            return None, None, error("Not found", errors=["Not found."], status=404)
-        # of=("self",) locks only the attendance row; select_related pulls the
-        # nullable user OneToOne via an outer join, which Postgres refuses to
-        # lock.
-        instance = (
-            AttendanceRecord.objects.select_for_update(of=("self",))
-            .select_related("employee_profile__user")
-            .get(pk=pk)
-        )
-        actor_source = manager_approval_actor_source(
-            request.user,
-            instance.employee_profile,
-            capability="attendance.approve",
-            allow_admin=True,
-        )
-        return instance, actor_source, None
+        return limit_to_mapped_employees(qs.filter(_manager_scope_filter(self.request.user))).distinct()
 
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
-        with transaction.atomic():
-            instance, actor_source, early = self._locked_manager_record(request, pk)
-            if early:
-                return early
-            if not actor_source:
-                return error("Forbidden", errors=["You cannot approve this attendance request."], status=403)
-            if instance.status != AttendanceRecord.Status.PENDING_MANAGER:
-                return error(
-                    "Validation error",
-                    errors=["Request is not in a state to be approved by manager."],
-                    status=422,
-                )
-
-            instance.status = AttendanceRecord.Status.PENDING_HR
-            instance.manager_decision_by = request.user
-            instance.manager_decision_at = timezone.now()
-            instance.manager_decision_note = request.data.get("notes", "")  # Simple note
-            instance.save()
-            sync_workflow(instance, actor=request.user)
-
-        audit(
-            request,
-            "approve",
-            entity="AttendanceRecord",
-            entity_id=instance.id,
-            metadata={"actor_source": actor_source},
-        )
-        try:
-            notify_users_for_pending_status(
-                users=get_hr_approver_users(),
-                request_type="Attendance Request",
-                request_id=instance.id,
-                requester_name=instance.employee_profile.full_name or instance.employee_profile.user.email,
-                status_label=instance.status,
-                details=[f"Date: {instance.date}", "Manager forwarded for HR approval"],
-                action_path="/hr/attendance",
-            )
-        except Exception:
-            _log_notification_failure(
-                "attendance_manager_approval_notification_failed",
-                entity_id=instance.id,
-                notification_type="pending_status",
-                actor_id=request.user.id,
-            )
-        return success(AttendanceRecordSerializer(instance).data)
+        return manual_attendance_gone()
 
     @action(detail=True, methods=["post"])
     def reject(self, request, pk=None):
-        note = request.data.get("notes", "")
-        if not note:
-            return error("Validation error", errors=["notes/comment is required for rejection."], status=422)
-
-        with transaction.atomic():
-            instance, actor_source, early = self._locked_manager_record(request, pk)
-            if early:
-                return early
-            if not actor_source:
-                return error("Forbidden", errors=["You cannot reject this attendance request."], status=403)
-            if instance.status != AttendanceRecord.Status.PENDING_MANAGER:
-                return error(
-                    "Validation error",
-                    errors=["Request is not in a state to be rejected by manager."],
-                    status=422,
-                )
-
-            instance.status = AttendanceRecord.Status.REJECTED
-            instance.manager_decision_by = request.user
-            instance.manager_decision_at = timezone.now()
-            instance.manager_decision_note = note
-            instance.save()
-            sync_workflow(instance, actor=request.user)
-
-        audit(
-            request,
-            "reject",
-            entity="AttendanceRecord",
-            entity_id=instance.id,
-            metadata={"actor_source": actor_source},
-        )
-        try:
-            notify_profile_request_status_whatsapp(
-                profile=instance.employee_profile,
-                request_type="Attendance Request",
-                request_id=instance.id,
-                status_label="Rejected",
-                reason=note,
-                details=[f"Date: {instance.date}", "Rejected by manager"],
-                action_path="/employee/attendance",
-            )
-        except Exception:
-            _log_notification_failure(
-                "attendance_manager_rejection_notification_failed",
-                entity_id=instance.id,
-                notification_type="attendance_rejected",
-                actor_id=request.user.id,
-            )
-        return success(AttendanceRecordSerializer(instance).data)
+        return manual_attendance_gone()
 
 
 class CEOAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
@@ -1143,99 +493,8 @@ class CEOAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
-        self.get_object()  # 404 + object-permission check
-        with transaction.atomic():
-            instance = AttendanceRecord.objects.select_for_update(of=("self",)).select_related(
-                "employee_profile__user"
-            ).get(pk=pk)
-            if instance.status != AttendanceRecord.Status.PENDING_CEO:
-                return error("Validation error", errors=["Request is not pending CEO approval."], status=422)
-            if _is_hr_manager_origin_record(instance) and instance.employee_profile.user_id == request.user.id:
-                return error("Validation error", errors=["Self approval is not allowed."], status=422)
-
-            instance.status = (
-                AttendanceRecord.Status.LATE
-                if instance.is_late_flagged
-                else AttendanceRecord.Status.PRESENT
-            )
-            instance.ceo_decision_by = request.user
-            instance.ceo_decision_at = timezone.now()
-            instance.ceo_decision_note = request.data.get("notes", "")
-            instance.save(
-                update_fields=[
-                    "status",
-                    "ceo_decision_by",
-                    "ceo_decision_at",
-                    "ceo_decision_note",
-                    "updated_at",
-                ]
-            )
-            sync_workflow(instance, actor=request.user)
-        audit(request, "approve_ceo", entity="AttendanceRecord", entity_id=instance.id)
-        try:
-            notify_profile_request_status_whatsapp(
-                profile=instance.employee_profile,
-                request_type="Attendance Request",
-                request_id=instance.id,
-                status_label="Approved",
-                details=[f"Date: {instance.date}", "Approved by CEO"],
-                action_path="/employee/attendance",
-            )
-        except Exception:
-            _log_notification_failure(
-                "attendance_ceo_approval_notification_failed",
-                entity_id=instance.id,
-                notification_type="attendance_approved",
-                actor_id=request.user.id,
-            )
-        return success(AttendanceRecordSerializer(instance).data)
+        return manual_attendance_gone()
 
     @action(detail=True, methods=["post"])
     def reject(self, request, pk=None):
-        note = (request.data.get("notes") or "").strip()
-        if not note:
-            return error("Validation error", errors=["notes/comment is required for rejection."], status=422)
-
-        self.get_object()  # 404 + object-permission check
-        with transaction.atomic():
-            instance = AttendanceRecord.objects.select_for_update(of=("self",)).select_related(
-                "employee_profile__user"
-            ).get(pk=pk)
-            if instance.status != AttendanceRecord.Status.PENDING_CEO:
-                return error("Validation error", errors=["Request is not pending CEO approval."], status=422)
-            if _is_hr_manager_origin_record(instance) and instance.employee_profile.user_id == request.user.id:
-                return error("Validation error", errors=["Self approval is not allowed."], status=422)
-
-            instance.status = AttendanceRecord.Status.REJECTED
-            instance.ceo_decision_by = request.user
-            instance.ceo_decision_at = timezone.now()
-            instance.ceo_decision_note = note
-            instance.save(
-                update_fields=[
-                    "status",
-                    "ceo_decision_by",
-                    "ceo_decision_at",
-                    "ceo_decision_note",
-                    "updated_at",
-                ]
-            )
-            sync_workflow(instance, actor=request.user)
-        audit(request, "reject_ceo", entity="AttendanceRecord", entity_id=instance.id)
-        try:
-            notify_profile_request_status_whatsapp(
-                profile=instance.employee_profile,
-                request_type="Attendance Request",
-                request_id=instance.id,
-                status_label="Rejected",
-                reason=note,
-                details=[f"Date: {instance.date}", "Rejected by CEO"],
-                action_path="/employee/attendance",
-            )
-        except Exception:
-            _log_notification_failure(
-                "attendance_ceo_rejection_notification_failed",
-                entity_id=instance.id,
-                notification_type="attendance_rejected",
-                actor_id=request.user.id,
-            )
-        return success(AttendanceRecordSerializer(instance).data)
+        return manual_attendance_gone()

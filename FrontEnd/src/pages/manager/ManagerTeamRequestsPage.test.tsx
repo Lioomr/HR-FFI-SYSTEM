@@ -20,18 +20,7 @@ vi.mock("../../services/api/managerApi", async (importOriginal) => ({
   rejectManagerAssetReturnRequest: vi.fn(),
 }));
 
-vi.mock(
-  "../../services/api/attendanceCorrectionsApi",
-  async (importOriginal) => ({
-    ...(await importOriginal<
-      typeof import("../../services/api/attendanceCorrectionsApi")
-    >()),
-    listAttendanceCorrectionRequests: vi.fn(),
-  }),
-);
-
 import ManagerTeamRequestsPage from "./ManagerTeamRequestsPage";
-import { listAttendanceCorrectionRequests } from "../../services/api/attendanceCorrectionsApi";
 import {
   approveLeaveRequestManager,
   getManagerAccess,
@@ -51,7 +40,6 @@ const mockedAssets = vi.mocked(getManagerAssetReturnRequests);
 const mockedTeam = vi.mocked(getManagerTeam);
 const mockedApprove = vi.mocked(approveLeaveRequestManager);
 const mockedReject = vi.mocked(rejectLeaveRequestManager);
-const mockedCorrections = vi.mocked(listAttendanceCorrectionRequests);
 
 const PENDING_LEAVE: ManagerLeaveRequest = {
   id: 42,
@@ -108,10 +96,6 @@ describe("ManagerTeamRequestsPage", () => {
     });
     mockedAssets.mockResolvedValue({ status: "success", data: [] });
     mockedTeam.mockResolvedValue({ status: "success", data: [] });
-    mockedCorrections.mockResolvedValue({
-      status: "success",
-      data: { count: 0, next: null, previous: null, results: [] },
-    });
     useAuthStore.setState({
       isAuthenticated: true,
       user: { id: "21", email: "lead@ffi.test", role: "Employee" },
@@ -123,22 +107,17 @@ describe("ManagerTeamRequestsPage", () => {
   });
 
   it("shows the outstanding count per tab and totals them in the header", async () => {
-    // One of the two leave rows is still awaiting the manager, plus two
-    // attendance corrections whose table owns its own status filter.
-    mockedCorrections.mockResolvedValue({
-      status: "success",
-      data: { count: 2, next: null, previous: null, results: [] },
-    });
+    // Only active request workflows contribute to the pending count.
 
     renderPage();
 
-    expect(await screen.findByText("3 awaiting you")).toBeInTheDocument();
+    expect(await screen.findByText("1 awaiting you")).toBeInTheDocument();
     expect(
       screen.getByRole("tab", { name: /Leave Requests/ }),
     ).toHaveTextContent("1");
     expect(
-      screen.getByRole("tab", { name: /Attendance Corrections/ }),
-    ).toHaveTextContent("2");
+      screen.queryByRole("tab", { name: /Attendance Corrections/ }),
+    ).not.toBeInTheDocument();
   });
 
   it("offers approve and reject only on rows still awaiting the manager", async () => {

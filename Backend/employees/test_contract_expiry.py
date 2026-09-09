@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -68,6 +68,27 @@ class ContractExpiryWorkflowTests(TestCase):
         decision = ContractDecision.objects.get(employee_profile=self.profile)
         self.assertEqual(notify.call_count, 1)
         self.assertIn("90_DAY", decision.notification_milestones)
+
+    @override_settings(FRONTEND_URL="https://app.example.test")
+    @patch("in_app_notifications.dispatcher.EmailService.send_html_email")
+    def test_contract_reminder_email_uses_the_public_contract_decision_link(self, send_email):
+        from in_app_notifications.dispatcher import _send_email
+
+        decision, _ = ensure_contract_decision(self.profile)
+        _send_email(
+            recipient=self.hr,
+            title="Contract expiry: Contract Employee",
+            message="Contract Employee's contract is due for review.",
+            action_url=f"/hr/contract-decisions/{decision.id}",
+            template="",
+            context={"employee_name": self.profile.full_name},
+            timeout=1,
+        )
+
+        self.assertIn(
+            f'https://app.example.test/hr/contract-decisions/{decision.id}',
+            send_email.call_args.kwargs["html_content"],
+        )
 
     @patch("employees.contract_expiry.notify_hr_milestone")
     def test_failed_milestone_persistence_is_retried(self, notify):

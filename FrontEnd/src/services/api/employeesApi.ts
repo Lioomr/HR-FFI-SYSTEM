@@ -600,6 +600,17 @@ export interface EmployeeDocument {
   extraction_status: ExtractionStatus;
   extraction_error?: string | null;
   extraction_warnings?: string[] | null;
+  /**
+   * OCR reliability signals from the extraction pilot. They describe how much a
+   * suggestion can be trusted; none of them is approved employee data, and the
+   * backend never exposes the raw OCR text through `extracted_fields`.
+   */
+  extraction_confidence?: number | null;
+  extraction_metadata?: Record<string, unknown> | null;
+  extraction_attempts?: number;
+  extraction_completed_at?: string | null;
+  /** Documents the system produced itself; they carry no OCR and cannot be deleted. */
+  is_system_generated?: boolean;
   uploaded_by?: number | null;
   uploaded_by_name?: string | null;
   created_at: string;
@@ -655,6 +666,35 @@ export async function extractEmployeeDocument(
 ): Promise<ApiResponse<EmployeeDocument>> {
   const { data } = await api.post<ApiResponse<EmployeeDocument>>(
     `/api/employees/${employeeId}/documents/${documentId}/extract/`,
+  );
+  return data;
+}
+
+/** Payload returned by a successful permanent deletion. */
+export interface DeleteEmployeeDocumentResult {
+  id: number;
+  employee_profile_id: number;
+  document_type: DocumentType | string;
+  original_filename: string;
+  deleted: boolean;
+}
+
+/**
+ * Permanently delete an archived document and its private file.
+ *
+ * Errors reject (the shared client turns non-2xx into a rejection): 403 for
+ * system-generated documents, 404 outside the active company scope, 409 when a
+ * deletion is already running or another record protects the row, and 500 for a
+ * storage failure. A 500 whose message reports the file as already removed means
+ * the record is hidden pending reconciliation - callers must re-fetch rather than
+ * keep the row.
+ */
+export async function deleteEmployeeDocument(
+  employeeId: number | string,
+  documentId: number | string,
+): Promise<ApiResponse<DeleteEmployeeDocumentResult>> {
+  const { data } = await api.delete<ApiResponse<DeleteEmployeeDocumentResult>>(
+    `/api/employees/${employeeId}/documents/${documentId}/`,
   );
   return data;
 }

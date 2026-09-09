@@ -5,6 +5,7 @@ import RequireManagerAccess from "./RequireManagerAccess";
 import RequireFinanceApprover from "./RequireFinanceApprover";
 import RequireCFOApprover from "./RequireCFOApprover";
 import RequireCEOApprover from "./RequireCEOApprover";
+import HomeRedirect from "./HomeRedirect";
 
 import LoginPage from "../pages/LoginPage";
 import RegisterInvitePage from "../pages/RegisterInvitePage";
@@ -107,11 +108,9 @@ import CEOJobOfferDetailPage from "../pages/ceo/CEOJobOfferDetailPage";
 import CFODashboardPage from "../pages/cfo/CFODashboardPage";
 import CFOLoanRequestsPage from "../pages/cfo/CFOLoanRequestsPage";
 import CFOLoanRequestDetailsPage from "../pages/cfo/CFOLoanRequestDetailsPage";
-import AttendanceMaintenancePage from "../pages/shared/AttendanceMaintenancePage";
+import EmployeeAttendancePage from "../pages/employee/AttendancePage";
+import ManagerAttendancePage from "../pages/manager/ManagerAttendancePage";
 import AttendancePreviewPage from "../pages/shared/AttendancePreviewPage";
-import EmployeeAttendanceCorrectionRequestsPage from "../pages/employee/attendance/AttendanceCorrectionRequestsPage";
-import ManagerAttendanceCorrectionRequestsPage from "../pages/manager/ManagerAttendanceCorrectionRequestsPage";
-import HRAttendanceCorrectionRequestsPage from "../pages/hr/attendance/AttendanceCorrectionRequestsPage";
 
 import RouteErrorBoundary from "./RouteErrorBoundary";
 import PendingInboxPage from "../pages/shared/PendingInboxPage";
@@ -162,6 +161,7 @@ export const routes = [
         element: <BaseLayout />,
         errorElement: <RouteErrorBoundary />,
         children: [
+          { index: true, element: <HomeRedirect /> },
           // System Admin (SystemAdmin)
           {
             element: <RequireRole roles={["SystemAdmin"]} />,
@@ -292,8 +292,14 @@ export const routes = [
                 path: "hr/loan-requests/:id",
                 element: <HrLoanRequestDetailsPage />,
               },
-              { path: "hr/contract-decisions", element: <ContractDecisionsPage /> },
-              { path: "hr/contract-decisions/:id", element: <ContractDecisionsPage /> },
+              {
+                path: "hr/contract-decisions",
+                element: <ContractDecisionsPage />,
+              },
+              {
+                path: "hr/contract-decisions/:id",
+                element: <ContractDecisionsPage />,
+              },
               {
                 path: "hr/workflow/delegations",
                 element: <DelegationRulesPage />,
@@ -320,7 +326,7 @@ export const routes = [
               },
               {
                 path: "hr/attendance-correction-requests",
-                element: <HRAttendanceCorrectionRequestsPage />,
+                element: <Navigate to="/hr/attendance" replace />,
               },
               { path: "hr/leave-balances", element: <HrLeaveBalancesPage /> },
             ],
@@ -346,16 +352,11 @@ export const routes = [
               { path: "employee/profile", element: <MyProfilePage /> },
               {
                 path: "employee/attendance",
-                element: (
-                  <AttendanceMaintenancePage
-                    titleKey="attendance.myAttendance"
-                    backPath="/employee/dashboard"
-                  />
-                ),
+                element: <EmployeeAttendancePage />,
               },
               {
                 path: "employee/attendance-corrections",
-                element: <EmployeeAttendanceCorrectionRequestsPage />,
+                element: <Navigate to="/employee/attendance" replace />,
               },
               { path: "employee/leaves", element: <EmployeeLeavesPage /> },
               {
@@ -424,8 +425,12 @@ export const routes = [
                 element: <ManagerTeamRequestsPage />,
               },
               {
+                path: "manager/attendance",
+                element: <ManagerAttendancePage />,
+              },
+              {
                 path: "manager/attendance-corrections",
-                element: <ManagerAttendanceCorrectionRequestsPage />,
+                element: <Navigate to="/manager/attendance" replace />,
               },
               { path: "manager/team", element: <ManagerTeamPage /> },
               {
@@ -523,8 +528,14 @@ export const routes = [
                 path: "ceo/employees/deletion-requests/:id",
                 element: <CEOEmployeeDeletionDetailPage />,
               },
-              { path: "ceo/contract-decisions", element: <ContractDecisionsPage /> },
-              { path: "ceo/contract-decisions/:id", element: <ContractDecisionsPage /> },
+              {
+                path: "ceo/contract-decisions",
+                element: <ContractDecisionsPage />,
+              },
+              {
+                path: "ceo/contract-decisions/:id",
+                element: <ContractDecisionsPage />,
+              },
               // Job Offers — the CEO approval gate before a candidate is told
               {
                 path: "ceo/job-offers",

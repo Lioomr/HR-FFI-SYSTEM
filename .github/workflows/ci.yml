@@ -41,6 +41,22 @@ jobs:
           pip install -r "$REQ_FILE"
           pip install ruff bandit pip-audit
 
+      - name: Validate Pinned Backend Dependencies
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          requirements = Path("Backend/requirements.txt")
+          unpinned = [
+              line
+              for line in requirements.read_text(encoding="utf-8").splitlines()
+              if line.strip() and not line.lstrip().startswith("#") and "==" not in line
+          ]
+          if unpinned:
+              raise SystemExit("Direct dependencies must use exact pins: " + ", ".join(unpinned))
+          PY
+          python -m pip check
+
       - name: Ruff Lint
         run: |
           cd Backend

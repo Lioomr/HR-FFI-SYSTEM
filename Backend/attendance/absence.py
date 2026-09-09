@@ -1,9 +1,14 @@
 """Automatic absence detection.
 
-For a given date, any *active* employee who has no attendance record and is not
-on approved leave gets an ``ABSENT`` record (``source=SYSTEM``). Runs daily via
-Celery and can be replayed over a date range with the ``backfill_absences``
-management command.
+For a given date, any *active, BioTime-mapped* employee who has no attendance
+record and is not on approved leave gets an ``ABSENT`` record
+(``source=SYSTEM``). Runs daily via Celery and can be replayed over a date range
+with the ``backfill_absences`` management command.
+
+Employees without an active ``BioTimeEmployeeMap`` (construction-site and
+visitor staff, for example) are never marked absent: BioTime is the only
+attendance system of record, so a missing punch for someone who was never
+registered on a device carries no information.
 
 Workflow / audit policy
 -----------------------
@@ -29,6 +34,7 @@ from audit.utils import audit
 from employees.models import EmployeeProfile
 from organization.models import OrganizationNode
 
+from .biotime_policy import mapped_employee_profile_ids
 from .models import AttendanceRecord
 from .schedule import get_work_schedule
 
@@ -38,11 +44,12 @@ logger = logging.getLogger(__name__)
 def _active_employee_profiles(target_date: date_type):
     """Profiles eligible for absence marking.
 
-    Eligibility = archived is False, owning company is an active COMPANY node,
-    employment status is ACTIVE, and (no linked user OR the user is enabled).
-    The hire date must be absent or on/before the target date. Prehire /
-    suspended / terminated / disabled-login profiles are excluded, including
-    backfills: historical eligibility cannot be reconstructed from current status.
+    Eligibility = an active ``BioTimeEmployeeMap``, archived is False, owning
+    company is an active COMPANY node, employment status is ACTIVE, and (no
+    linked user OR the user is enabled). The hire date must be absent or
+    on/before the target date. Prehire / suspended / terminated / disabled-login
+    and unmapped profiles are excluded, including backfills: historical
+    eligibility cannot be reconstructed from current status.
     """
     return (
         EmployeeProfile.objects.filter(
@@ -52,6 +59,7 @@ def _active_employee_profiles(target_date: date_type):
             company__is_active=True,
             employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
         )
+        .filter(id__in=mapped_employee_profile_ids())
         .filter(Q(user__isnull=True) | Q(user__is_active=True))
         .filter(Q(hire_date__isnull=True) | Q(hire_date__lte=target_date))
         .select_related("company", "user")

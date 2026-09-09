@@ -1,19 +1,28 @@
 {
   "reference_no": {
     "page": 1,
-    "x": 92,
+    "x": 89,
     "y": 737.89,
-    "width": 150,
+    "width": 78,
     "height": 18,
-    "font_size": 8.2
+    "font_size": 8
   },
   "request_date": {
     "page": 1,
-    "x": 390,
+    "x": 290,
     "y": 737.89,
-    "width": 132,
+    "width": 74,
     "height": 18,
-    "font_size": 8.2
+    "font_size": 7.4
+  },
+  "filed_date": {
+    "page": 1,
+    "x": 465,
+    "y": 737.89,
+    "width": 92,
+    "height": 18,
+    "font_size": 7.4,
+    "source": "leave_request.filed_at"
   },
   "employee_name": {
     "page": 1,
@@ -252,107 +261,84 @@
       ]
     }
   },
-  "manager_recommended": {
+  "employee_signature_image": {
     "page": 1,
-    "checkboxes": {
-      "yes": [
-        175.0,
-        147.8897637795277
-      ],
-      "no": [
-        226.0,
-        147.8897637795277
-      ]
-    }
-  },
-  "approval_date": {
-    "page": 1,
-    "x": 390,
-    "y": 137.89,
-    "width": 120,
-    "height": 19,
-    "font_size": 7.4
-  },
-  "approval_comments": {
-    "page": 1,
-    "x": 102,
-    "y": 101.89,
-    "width": 406,
-    "height": 30,
-    "font_size": 7.0,
-    "multiline": true,
-    "max_lines": 2
-  },
-  "employee_signature": {
-    "page": 1,
-    "x": 22.0,
-    "y": 28.89,
-    "width": 127.25,
-    "height": 23,
-    "font_size": 6.6,
-    "shrink": true
+    "x": 25,
+    "y": 61.89,
+    "width": 206,
+    "height": 68,
+    "kind": "image",
+    "padding": 3,
+    "source": "request.signers.employee.signature"
   },
   "employee_signature_date": {
     "page": 1,
-    "x": 57.0,
-    "y": 15.89,
-    "width": 92.25,
-    "height": 11,
-    "font_size": 6.0,
-    "shrink": true
+    "x": 69,
+    "y": 35.89,
+    "width": 162,
+    "height": 16,
+    "font_size": 6.2,
+    "shrink": true,
+    "source": "leave_request.workflow_timestamp"
   },
-  "line_manager_signature": {
+  "line_manager_signature_image": {
     "page": 1,
-    "x": 163.25,
-    "y": 28.89,
-    "width": 127.25,
-    "height": 23,
-    "font_size": 6.6,
-    "shrink": true
+    "x": 251,
+    "y": 61.89,
+    "width": 93,
+    "height": 68,
+    "kind": "image",
+    "padding": 3,
+    "source": "request.signers.line_manager.signature"
   },
   "line_manager_signature_date": {
     "page": 1,
-    "x": 198.25,
-    "y": 15.89,
-    "width": 92.25,
-    "height": 11,
-    "font_size": 6.0,
-    "shrink": true
+    "x": 295,
+    "y": 35.89,
+    "width": 49,
+    "height": 16,
+    "font_size": 6.2,
+    "shrink": true,
+    "source": "leave_request.workflow_timestamp"
   },
-  "department_head_signature": {
+  "department_head_signature_image": {
     "page": 1,
-    "x": 304.5,
-    "y": 28.89,
-    "width": 127.25,
-    "height": 23,
-    "font_size": 6.6,
-    "shrink": true
+    "x": 364,
+    "y": 61.89,
+    "width": 93,
+    "height": 68,
+    "kind": "image",
+    "padding": 3,
+    "source": "request.signers.department_head.signature"
   },
   "department_head_signature_date": {
     "page": 1,
-    "x": 339.5,
-    "y": 15.89,
-    "width": 92.25,
-    "height": 11,
-    "font_size": 6.0,
-    "shrink": true
+    "x": 408,
+    "y": 35.89,
+    "width": 49,
+    "height": 16,
+    "font_size": 6.2,
+    "shrink": true,
+    "source": "leave_request.workflow_timestamp"
   },
-  "hr_signature": {
+  "hr_signature_image": {
     "page": 1,
-    "x": 445.75,
-    "y": 28.89,
-    "width": 127.25,
-    "height": 23,
-    "font_size": 6.6,
-    "shrink": true
+    "x": 477,
+    "y": 61.89,
+    "width": 93,
+    "height": 68,
+    "kind": "image",
+    "padding": 3,
+    "source": "request.signers.hr.signature"
   },
   "hr_signature_date": {
     "page": 1,
-    "x": 480.75,
-    "y": 15.89,
-    "width": 92.25,
-    "height": 11,
-    "font_size": 6.0,
-    "shrink": true
+    "x": 521,
+    "y": 35.89,
+    "width": 49,
+    "height": 16,
+    "font_size": 6.2,
+    "shrink": true,
+    "source": "leave_request.workflow_timestamp"
   }
 }

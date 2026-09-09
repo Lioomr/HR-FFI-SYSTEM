@@ -1,8 +1,9 @@
+import logging
 from datetime import timedelta
+from html import escape
 
 from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
-from django.core.mail import send_mail
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
@@ -11,6 +12,7 @@ from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from assets.models import AssetReturnRequest
@@ -19,7 +21,7 @@ from audit.models import AuditLog
 from audit.utils import audit
 from audit.views import AuditPagination, apply_filters
 from core.permissions import IsDepartmentCEOApprover, IsHRManagerOrAdmin
-from core.responses import success
+from core.responses import error, success
 from core.serializers import (
     CrossCompanyManagerAssignmentSerializer,
     DelegationRuleSerializer,
@@ -34,6 +36,7 @@ from core.services import (
     sync_leave_obligations,
     sync_workflow,
 )
+from core.tasks import send_error_report_email
 from employees.models import EmployeeDeletionRequest, EmployeeProfile
 from leaves.models import LeaveRequest
 from loans.models import LoanRequest
@@ -48,6 +51,8 @@ from payroll.models import PayrollRun
 
 from .models import CrossCompanyManagerAssignment, DelegationRule, RequestObligation, UserPreference, WorkflowInstance
 from .permissions import get_role
+
+logger = logging.getLogger(__name__)
 
 
 def _display_datetime(value):
@@ -529,30 +534,61 @@ def _get_company_name_for_dashboard_object(obj):
     return None
 
 
+ERROR_REPORT_MAX_MESSAGE_CHARS = 1000
+ERROR_REPORT_MAX_STACK_CHARS = 8000
+ERROR_REPORT_MAX_URL_CHARS = 500
+
+
+def _clean_error_report_field(value, *, max_chars, fallback):
+    """Reports arrive unauthenticated, so coerce, trim and bound every field."""
+    if value is None:
+        return fallback
+    if not isinstance(value, str):
+        value = str(value)
+    value = value.strip()
+    if not value:
+        return fallback
+    if len(value) > max_chars:
+        return f"{value[:max_chars]}... [truncated]"
+    return value
+
+
 class ReportErrorAPIView(APIView):
-    """
-    Endpoint for frontend to report unhandled errors.
-    This will send an email to the system admin.
+    """Accept unhandled frontend errors and queue an admin notification email.
+
+    The endpoint stays public so crashes on unauthenticated screens still reach
+    us, which makes the scoped throttle and the field length caps the only things
+    between a caller and the admin mailbox. Delivery is handed to Celery so a slow
+    or failing provider cannot tie up a request worker, and provider errors are
+    logged server-side instead of being echoed back to the caller.
     """
 
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "error_report"
 
     def post(self, request):
-        message = request.data.get("message", "Unknown error")
-        stack = request.data.get("stack", "No stack trace provided")
-        url = request.data.get("url", "Unknown URL")
+        data = request.data if isinstance(request.data, dict) else {}
+        message = _clean_error_report_field(
+            data.get("message"), max_chars=ERROR_REPORT_MAX_MESSAGE_CHARS, fallback="Unknown error"
+        )
+        stack = _clean_error_report_field(
+            data.get("stack"), max_chars=ERROR_REPORT_MAX_STACK_CHARS, fallback="No stack trace provided"
+        )
+        url = _clean_error_report_field(data.get("url"), max_chars=ERROR_REPORT_MAX_URL_CHARS, fallback="Unknown URL")
 
         user_info = "Anonymous/Unauthenticated User"
         if request.user.is_authenticated:
-            user_info = f"User: {request.user.email} (Role: {request.user.role})"
+            user_info = f"User: {request.user.email} (Role: {get_role(request.user)})"
 
-        email_subject = f"[FFISYS Error Report] Error at {url}"
-        email_body = f"""
-An error was reported from the frontend application:
+        # Collapse whitespace so a newline in the URL cannot inject email headers.
+        email_subject = f"[FFISYS Error Report] Error at {' '.join(url.split())}"
+        reported_at = timezone.now().strftime("%Y-%m-%d %H:%M:%S UTC")
+        text_body = f"""An error was reported from the frontend application:
 
 URL: {url}
 Reported By: {user_info}
-Time: {timezone.now().strftime("%Y-%m-%d %H:%M:%S UTC")}
+Time: {reported_at}
 
 Message:
 {message}
@@ -560,24 +596,19 @@ Message:
 Stack Trace:
 {stack}
 """
+        # Caller-controlled text is escaped before it reaches an admin inbox.
+        html_body = f"<pre>{escape(text_body)}</pre>"
+
+        # Logged before dispatch so the report survives an email or broker outage.
+        logger.warning("frontend_error_report", extra={"report_url": url, "reported_by": user_info})
 
         try:
-            admin_email = getattr(settings, "ADMIN_EMAIL", "admin@ffisystem.com")
-            # If deploying, make sure you configure EMAIL_HOST_USER or DEFAULT_FROM_EMAIL
-            from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "noreply@ffisystem.com")
+            send_error_report_email.delay(email_subject, text_body, html_body)
+        except Exception:
+            logger.exception("error_report_email_enqueue_failed")
+            return error(message="Failed to send error report.", status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            send_mail(
-                subject=email_subject,
-                message=email_body,
-                from_email=from_email,
-                recipient_list=[admin_email],
-                fail_silently=False,
-            )
-            return success({"detail": "Error reported successfully."})
-        except Exception as e:
-            return Response(
-                {"detail": f"Failed to send error report: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+        return success({"detail": "Error reported successfully."})
 
 
 class DelegationRuleListCreateView(APIView):
@@ -727,9 +758,11 @@ class OrganizationScopeListCreateView(APIView):
                 node_type=OrganizationNode.NodeType.COMPANY,
                 is_active=True,
             ).exclude(pk__in=allowed_company_ids)
-            return queryset.filter(memberships__company_id__in=allowed_company_ids).exclude(
-                memberships__company_id__in=unavailable_company_ids
-            ).distinct()
+            return (
+                queryset.filter(memberships__company_id__in=allowed_company_ids)
+                .exclude(memberships__company_id__in=unavailable_company_ids)
+                .distinct()
+            )
 
         from core.delegation import get_current_scope_ids_for_user
 
@@ -873,7 +906,12 @@ class CrossCompanyManagerAssignmentDetailView(APIView):
         )
         serializer.is_valid(raise_exception=True)
         updated_assignment = serializer.save()
-        audit(request, "cross_company_manager_assignment_updated", entity="cross_company_manager_assignment", entity_id=updated_assignment.id)
+        audit(
+            request,
+            "cross_company_manager_assignment_updated",
+            entity="cross_company_manager_assignment",
+            entity_id=updated_assignment.id,
+        )
         return success(CrossCompanyManagerAssignmentSerializer(updated_assignment).data)
 
     def delete(self, request, pk):
@@ -884,7 +922,12 @@ class CrossCompanyManagerAssignmentDetailView(APIView):
         assignment.revoked_at = timezone.now()
         assignment.revoked_by = request.user
         assignment.save(update_fields=["is_active", "revoked_at", "revoked_by", "updated_at"])
-        audit(request, "cross_company_manager_assignment_revoked", entity="cross_company_manager_assignment", entity_id=assignment.id)
+        audit(
+            request,
+            "cross_company_manager_assignment_revoked",
+            entity="cross_company_manager_assignment",
+            entity_id=assignment.id,
+        )
         return success(message="Cross-company manager assignment revoked.")
 
 

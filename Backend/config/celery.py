@@ -10,6 +10,10 @@ app.config_from_object("django.conf:settings", namespace="CELERY")
 app.autodiscover_tasks()
 
 app.conf.beat_schedule = {
+    "healthchecks-celery-beat-heartbeat": {
+        "task": "core.tasks.ping_healthchecks",
+        "schedule": crontab(minute="*/5"),
+    },
     "process-contract-expiry-notifications-hourly": {
         "task": "employees.tasks.process_contract_expiry_notifications",
         "schedule": crontab(minute=0),
@@ -20,6 +24,12 @@ app.conf.beat_schedule = {
             hour=int(os.environ.get("WORK_LICENSE_REMINDER_HOUR", "8")),
             minute=int(os.environ.get("WORK_LICENSE_REMINDER_MINUTE", "0")),
         ),
+    },
+    # Interrupted document deletions leave a hidden row; this sweep either
+    # finishes the delete or restores the record if the file survived.
+    "reconcile-employee-document-deletions": {
+        "task": "employees.tasks.reconcile_employee_document_deletions",
+        "schedule": crontab(minute=int(os.environ.get("DOCUMENT_DELETION_RECONCILE_MINUTE", "20"))),
     },
     "cleanup-expired-notifications-daily": {
         "task": "in_app_notifications.tasks.cleanup_expired_notifications",

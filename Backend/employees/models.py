@@ -166,6 +166,18 @@ class EmployeeProfile(models.Model):
         help_text=_("Direct manager (EmployeeProfile)."),
     )
 
+    # One reusable signature per employee - the image printed into the employee
+    # slot of generated request forms. Private storage only: it is served through
+    # an authenticated view, never a media URL, and only its owner may set it.
+    signature = models.FileField(
+        storage=PrivateUploadStorage(),
+        upload_to="employee_signatures/",
+        blank=True,
+        null=True,
+        help_text=_("Reusable signature image (PNG/JPG) applied to generated request forms."),
+    )
+    signature_uploaded_at = models.DateTimeField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -445,18 +457,40 @@ class EmployeeDocument(models.Model):
     visa_duration = models.PositiveIntegerField(null=True, blank=True)
     visa_duration_raw = models.CharField(max_length=50, blank=True)
     extracted_fields = models.JSONField(default=dict, blank=True)
+    # Raw OCR output stays in its own column so it is never serialised: it is a
+    # verbatim copy of identity documents and belongs on the server only.
+    extraction_raw_text = models.TextField(blank=True)
     extraction_status = models.CharField(
         max_length=20,
         choices=ExtractionStatus.choices,
         default=ExtractionStatus.PENDING,
     )
     extraction_error = models.TextField(blank=True)
+    extraction_warnings = models.JSONField(default=list, blank=True)
+    extraction_confidence = models.FloatField(null=True, blank=True)
+    extraction_metadata = models.JSONField(default=dict, blank=True)
+    extraction_task_id = models.CharField(max_length=64, blank=True)
+    extraction_queued_at = models.DateTimeField(null=True, blank=True)
+    extraction_completed_at = models.DateTimeField(null=True, blank=True)
+    extraction_attempts = models.PositiveSmallIntegerField(default=0)
     uploaded_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name="uploaded_employee_documents",
+    )
+    # Permanent deletion is a two-phase operation: a filesystem delete cannot be
+    # rolled back by a database transaction, so the intent to destroy the source
+    # file is committed here FIRST. A row with deletion_started_at set is never
+    # shown to anyone and is finished (or reverted) by the reconciliation task.
+    deletion_started_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    deletion_requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="employee_documents_deletion_requested",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -468,6 +502,16 @@ class EmployeeDocument(models.Model):
             models.Index(fields=["company", "document_type"], name="emp_doc_company_type_idx"),
             models.Index(fields=["leave_request"], name="emp_doc_leave_request_idx"),
         ]
+
+    @property
+    def is_pending_deletion(self) -> bool:
+        return self.deletion_started_at is not None
+
+    @property
+    def is_system_generated(self) -> bool:
+        """System-generated archive copies are never HR-deletable."""
+        fields = self.extracted_fields
+        return bool(isinstance(fields, dict) and fields.get("generated_by_system"))
 
     @property
     def display_name(self):

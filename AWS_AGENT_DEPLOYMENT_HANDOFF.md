@@ -81,6 +81,7 @@ Used by the Django backend container for:
 - allowed hosts
 - CORS/CSRF
 - email and notification settings
+- optional Sentry error monitoring (`SENTRY_DSN`, sampling rates, environment, release)
 
 ### Frontend source env
 File:
@@ -310,6 +311,11 @@ docker compose --env-file .env.prod.compose -f docker-compose.prod.yml up -d --b
    - rendered compose config
    - built frontend bundle
 6. If changing deployment behavior, update this file and `DEPLOYMENT_DOCKER.md`.
+
+## 12) Optional Sentry Monitoring
+
+Sentry is disabled unless `/opt/hr-ffi/Backend/.env.production` supplies `SENTRY_DSN`.
+When enabling it, set `SENTRY_ENVIRONMENT=production`, keep trace and profile sampling at `0.0` initially, and do not place the DSN in Compose-time or frontend environment files.
 
 ## 11) Suggested Future Improvement
 

@@ -33,7 +33,12 @@ vi.mock("./components/EmployeeLeaveBalances", () => ({
 }));
 
 vi.mock("../../../components/employees/EmployeeDocumentArchive", () => ({
-  default: () => <div data-testid="document-archive" />,
+  default: (props: { canManageDocuments?: boolean }) => (
+    <div
+      data-testid="document-archive"
+      data-can-manage={String(props.canManageDocuments ?? false)}
+    />
+  ),
 }));
 
 import ViewEmployeePage from "./ViewEmployeePage";
@@ -219,5 +224,51 @@ describe("ViewEmployeePage archived employee", () => {
     expect(
       screen.queryByRole("button", { name: "Restore Employee" }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("ViewEmployeePage document archive capability", () => {
+  /** Opens the Document Archive tab so the mounted archive is rendered. */
+  async function openArchiveTab() {
+    fireEvent.click(await screen.findByText("Document Archive"));
+    return await screen.findByTestId("document-archive");
+  }
+
+  it("grants document management to an HR manager", async () => {
+    getEmployee.mockResolvedValue({
+      status: "success",
+      data: makeEmployee(),
+    });
+
+    render(<ViewEmployeePage />);
+    expect(await openArchiveTab()).toHaveAttribute("data-can-manage", "true");
+  });
+
+  it("grants document management to a system administrator", async () => {
+    useAuthStore.setState({
+      isAuthenticated: true,
+      user: { id: "3", email: "admin@ffi.test", role: "SystemAdmin" },
+    });
+    getEmployee.mockResolvedValue({
+      status: "success",
+      data: makeEmployee(),
+    });
+
+    render(<ViewEmployeePage />);
+    expect(await openArchiveTab()).toHaveAttribute("data-can-manage", "true");
+  });
+
+  it("withholds document management from a role the backend would refuse", async () => {
+    useAuthStore.setState({
+      isAuthenticated: true,
+      user: { id: "2", email: "manager@ffi.test", role: "Manager" },
+    });
+    getEmployee.mockResolvedValue({
+      status: "success",
+      data: makeEmployee(),
+    });
+
+    render(<ViewEmployeePage />);
+    expect(await openArchiveTab()).toHaveAttribute("data-can-manage", "false");
   });
 });

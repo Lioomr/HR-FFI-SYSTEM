@@ -146,6 +146,26 @@ class EmployeeProfileTests(TestCase):
         # Verify Audit Log
         self.assertTrue(AuditLog.objects.filter(action="employee_profile_updated", entity_id=profile.id).exists())
 
+    def test_linking_already_linked_account_returns_detail_instead_of_500(self):
+        linked_profile = EmployeeProfile.objects.create(
+            user=self.employee_user,
+            company=self.company,
+            employee_id="EMP-LINKED-01",
+        )
+        target_profile = EmployeeProfile.objects.create(
+            company=self.company,
+            employee_id="EMP-LINK-TARGET",
+        )
+
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.patch(f"/api/employees/{target_profile.pk}/", {"user_id": self.employee_user.id})
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertIn("user_id", response.data["errors"])
+        self.assertIn(linked_profile.employee_id, str(response.data["errors"]["user_id"]))
+        target_profile.refresh_from_db()
+        self.assertIsNone(target_profile.user_id)
+
     def test_employee_me_endpoint(self):
         EmployeeProfile.objects.create(
             user=self.employee_user,

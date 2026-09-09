@@ -83,6 +83,28 @@ export default function ApprovalFlowMap({
     return t(`leave.approvalMap.${state}`);
   };
 
+  const getStageLabel = (stage: ApprovalFlowStage) =>
+    t(`workflow.role.${stage.key}`, stage.title);
+
+  const activeStages = stages.filter((stage) => stage.state !== "skipped");
+  const completedStages = activeStages.filter(
+    (stage) => stage.state === "completed",
+  ).length;
+  const currentStage = stages.find((stage) => stage.state === "current");
+  const terminalStage = stages.find(
+    (stage) => stage.state === "rejected" || stage.state === "cancelled",
+  );
+  const progressPercent = activeStages.length
+    ? Math.round((completedStages / activeStages.length) * 100)
+    : 0;
+  const progressLabel = terminalStage
+    ? getStateLabel(terminalStage.state)
+    : currentStage
+      ? getStageLabel(currentStage)
+      : completedStages === activeStages.length
+        ? t("workflow.flowComplete")
+        : t("workflow.awaitingNextStep");
+
   return (
     <Card
       style={{
@@ -115,9 +137,92 @@ export default function ApprovalFlowMap({
       </Space>
 
       <div
+        aria-label={t("workflow.progressSummary", {
+          completed: completedStages,
+          total: activeStages.length,
+        })}
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+          gridTemplateColumns: "auto minmax(0, 1fr) auto",
+          alignItems: "center",
+          gap: 12,
+          padding: "12px 14px",
+          marginBottom: 18,
+          border: "1px solid #e7edf4",
+          borderRadius: 14,
+          background: "rgba(248, 250, 252, 0.8)",
+        }}
+      >
+        <div
+          style={{
+            minWidth: 42,
+            height: 42,
+            borderRadius: 12,
+            display: "grid",
+            placeItems: "center",
+            background: terminalStage ? "#fef2f2" : "#fff7ed",
+            color: terminalStage ? "#dc2626" : "#ea580c",
+            fontWeight: 800,
+            fontSize: 13,
+          }}
+        >
+          {completedStages}/{activeStages.length}
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <Text style={{ display: "block", fontWeight: 700, color: "#1e293b" }}>
+            {progressLabel}
+          </Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {t("workflow.progressSummary", {
+              completed: completedStages,
+              total: activeStages.length,
+            })}
+          </Text>
+          <div
+            aria-hidden="true"
+            style={{
+              height: 5,
+              marginTop: 7,
+              overflow: "hidden",
+              borderRadius: 999,
+              background: "#e2e8f0",
+            }}
+          >
+            <div
+              style={{
+                width: `${progressPercent}%`,
+                height: "100%",
+                borderRadius: 999,
+                background: terminalStage ? "#dc2626" : "#f97316",
+                transition: "width 180ms ease",
+              }}
+            />
+          </div>
+        </div>
+        <Tag
+          color={
+            terminalStage
+              ? terminalStage.state === "rejected"
+                ? "red"
+                : "default"
+              : currentStage
+                ? "orange"
+                : "green"
+          }
+          style={{ marginInlineEnd: 0, whiteSpace: "nowrap" }}
+        >
+          {terminalStage
+            ? getStateLabel(terminalStage.state)
+            : currentStage
+              ? getStateLabel("current")
+              : getStateLabel("completed")}
+        </Tag>
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
           gap: 14,
         }}
       >
@@ -133,7 +238,12 @@ export default function ApprovalFlowMap({
                 border: `1px solid ${colors.border}`,
                 background: colors.surface,
                 minHeight: 140,
+                boxShadow:
+                  stage.state === "current"
+                    ? "0 8px 18px rgba(249, 115, 22, 0.10)"
+                    : "none",
               }}
+              aria-current={stage.state === "current" ? "step" : undefined}
             >
               {index < stages.length - 1 ? (
                 <div
@@ -159,17 +269,36 @@ export default function ApprovalFlowMap({
                 >
                   <div
                     style={{
-                      width: 34,
-                      height: 34,
-                      borderRadius: 999,
-                      background: "#fff",
-                      border: `1px solid ${colors.border}`,
-                      display: "grid",
-                      placeItems: "center",
-                      color: colors.accent,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      minWidth: 0,
                     }}
                   >
-                    {getStageIcon(stage.state)}
+                    <div
+                      style={{
+                        width: 34,
+                        height: 34,
+                        borderRadius: 999,
+                        background: "#fff",
+                        border: `1px solid ${colors.border}`,
+                        display: "grid",
+                        placeItems: "center",
+                        color: colors.accent,
+                      }}
+                    >
+                      {getStageIcon(stage.state)}
+                    </div>
+                    <Text
+                      type="secondary"
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {t("workflow.step", { number: index + 1 })}
+                    </Text>
                   </div>
                   <Tag
                     color={
@@ -186,27 +315,51 @@ export default function ApprovalFlowMap({
                   </Tag>
                 </div>
                 <Text
-                  style={{ fontSize: 15, fontWeight: 700, color: "#0f172a" }}
+                  style={{
+                    fontSize: 15,
+                    fontWeight: 800,
+                    color: "#0f172a",
+                    letterSpacing: "0.02em",
+                    textTransform: "uppercase",
+                  }}
                 >
-                  {stage.title}
+                  {getStageLabel(stage)}
                 </Text>
                 {stage.detail ? (
                   <Text
-                    style={{ color: "#0f172a", fontSize: 13, fontWeight: 600 }}
+                    style={{
+                      color: "#0f172a",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      overflowWrap: "anywhere",
+                    }}
                   >
                     {stage.detail}
                   </Text>
                 ) : null}
                 <Paragraph
-                  style={{ marginBottom: 0, color: "#475569", minHeight: 44 }}
+                  style={{
+                    marginBottom: 0,
+                    color: "#475569",
+                    minHeight: 44,
+                    padding: "8px 10px",
+                    borderRadius: 10,
+                    background: "rgba(255, 255, 255, 0.56)",
+                    fontSize: 13,
+                  }}
                 >
                   {stage.note}
                 </Paragraph>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  {stage.at
-                    ? formatDateTime(stage.at)
-                    : t("leave.approvalMap.noDate")}
-                </Text>
+                <Space size={5}>
+                  <ClockCircleOutlined
+                    style={{ color: "#94a3b8", fontSize: 12 }}
+                  />
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    {stage.at
+                      ? `${t("workflow.updated")} ${formatDateTime(stage.at)}`
+                      : t("leave.approvalMap.noDate")}
+                  </Text>
+                </Space>
               </Space>
             </div>
           );

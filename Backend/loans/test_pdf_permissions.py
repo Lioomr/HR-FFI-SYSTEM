@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from rest_framework.test import APIClient
 
+from audit.models import AuditLog
 from employees.models import EmployeeProfile
 from loans.models import LoanRequest
 from organization.models import OrganizationNode, UserOrganizationAccess
@@ -59,3 +60,10 @@ def test_pdf_requires_owner_or_authorized_hr_admin_on_every_alias(prefix, traili
     if expected == 200:
         assert response["Cache-Control"] == "private, no-store"
         assert response["X-Content-Type-Options"] == "nosniff"
+        assert response["Content-Disposition"] == f'attachment; filename="loan_request_{loan.id}.pdf"'
+        assert AuditLog.objects.filter(
+            actor=users[identity],
+            action="loan_request_exported_pdf",
+            entity="LoanRequest",
+            entity_id=str(loan.id),
+        ).exists()

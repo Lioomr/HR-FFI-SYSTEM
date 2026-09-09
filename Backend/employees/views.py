@@ -52,7 +52,6 @@ from .contract_expiry import (
     reject_decision,
     submit_decision,
 )
-from .document_extraction import extract_document_fields
 from .models import ContractDecision, EmployeeDeletionRequest, EmployeeDocument, EmployeeImport, EmployeeProfile
 from .notifications import notify_document_expiry_in_app
 from .permissions import IsEmployeeOwner, IsHRManagerOnly, IsHRManagerOrAdmin
@@ -67,6 +66,8 @@ from .serializers import (
     EmployeeImportSerializer,
     EmployeeProfileReadSerializer,
     EmployeeProfileWriteSerializer,
+    EmployeeSignatureStateSerializer,
+    EmployeeSignatureUploadSerializer,
     ScopedEmployeeReadSerializer,
 )
 from .services import (
@@ -76,13 +77,19 @@ from .services import (
     managed_reports_queryset,
     manager_scope_q,
 )
+from .services.document_jobs import (
+    DocumentDeletionError,
+    delete_document_permanently,
+    document_snapshot,
+    queue_document_extraction,
+)
 from .services.manager_relationships import (
     active_cross_company_manager_assignments,
     log_manager_assignment_change,
     reroute_pending_manager_requests,
 )
+from .services.signature import clear_signature, store_signature
 from .storage import PrivateUploadStorage
-from .tasks import extract_employee_document
 from .throttles import EmployeeImportThrottle
 
 logger = logging.getLogger(__name__)
@@ -138,17 +145,9 @@ def _cross_company_employee_scope_for_request(request):
 
 
 def _queue_document_extraction(document: EmployeeDocument) -> list[str]:
-    if document.document_type == EmployeeDocument.DocumentType.OTHER:
-        return extract_document_fields(document)
-    try:
-        extract_employee_document.apply_async(args=[document.id], retry=False)
-        return []
-    except Exception:
-        logger.exception("employee_document_ocr_queue_failed", extra={"document_id": document.id})
-        document.extraction_status = EmployeeDocument.ExtractionStatus.FAILED
-        document.extraction_error = "OCR worker is unavailable."
-        document.save(update_fields=["extraction_status", "extraction_error", "updated_at"])
-        return ["Document was saved, but OCR could not be queued."]
+    """Queue OCR for a document, returning the warnings HR should see now."""
+
+    return queue_document_extraction(document).warnings
 
 
 def generate_employee_id(prefix="FFI"):
@@ -386,7 +385,12 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             permission_classes = [IsAuthenticated]
         elif self.action == "me":
             permission_classes = [IsAuthenticated, IsHRManagerOrAdmin | IsEmployeeOwner]
-        elif self.action in ["documents", "download_document", "update_document"]:
+        elif self.action in ["documents", "download_document", "document_detail"]:
+            permission_classes = [IsAuthenticated]
+        elif self.action in ["signature", "signature_preview"]:
+            # Ownership and company scope are enforced in
+            # _signature_profile_for_request; an employee never reaches
+            # another employee's row.
             permission_classes = [IsAuthenticated]
         elif self.action == "notify_document_expiry":
             permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
@@ -632,8 +636,10 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
 
     @staticmethod
     def _documents_for_profile(profile, *, include_hr_only=True):
+        # deletion_started_at is the visibility boundary: a row whose private file
+        # is being (or has been) destroyed is never shown to anyone.
         queryset = profile.documents.select_related("uploaded_by", "company", "leave_request").filter(
-            company_id=profile.company_id
+            company_id=profile.company_id, deletion_started_at__isnull=True
         )
         if not include_hr_only:
             queryset = queryset.exclude(starting_work_acknowledgment__isnull=False)
@@ -671,7 +677,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             original_filename=os.path.basename(getattr(serializer.validated_data.get("file"), "name", "")),
         )
         warnings = _queue_document_extraction(document)
-        document.extraction_warnings = warnings
+        document.refresh_from_db()
 
         audit(
             request,
@@ -688,6 +694,121 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         return success(
             EmployeeDocumentSerializer(document, context={"request": request}).data, status=status.HTTP_201_CREATED
         )
+
+    def _signature_profile_for_request(self, request, pk):
+        """Resolve whose signature is being acted on, or an error response.
+
+        Only the owner may upload or replace a signature: storing one for
+        somebody else would forge a mark that appears on official forms in that
+        person's name. HR and SystemAdmin may read the state, preview it, and
+        delete it as part of normal employee administration.
+        """
+
+        profiles = filter_queryset_by_company_scope(
+            EmployeeProfile.objects.select_related("user", "company"),
+            request,
+        )
+        role = get_role(request.user)
+        is_hr = role in {"SystemAdmin", "HRManager"}
+
+        if str(pk) == "me":
+            profile = profiles.filter(user=request.user).first()
+        elif is_hr:
+            profile = profiles.filter(pk=pk).first()
+        else:
+            profile = profiles.filter(pk=pk, user=request.user).first()
+
+        if profile is None:
+            return None, error("Not found", errors=["Not found."], status=404)
+
+        if request.method == "POST" and profile.user_id != request.user.id:
+            return None, error(
+                "Forbidden",
+                errors=["A signature can only be uploaded by its owner."],
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return profile, None
+
+    @action(detail=True, methods=["get", "post", "delete"], url_path="signature")
+    def signature(self, request, pk=None):
+        profile, error_response = self._signature_profile_for_request(request, pk)
+        if error_response:
+            return error_response
+
+        if request.method == "GET":
+            return success(EmployeeSignatureStateSerializer(profile).data)
+
+        if request.method == "DELETE":
+            if not (profile.signature and profile.signature.name):
+                return error("Not found", errors=["No signature is stored."], status=404)
+            ensure_company_write_allowed(request)
+            clear_signature(profile)
+            audit(
+                request,
+                "employee_signature_deleted",
+                entity="employee_profile",
+                entity_id=profile.id,
+                metadata={"employee_profile_id": profile.id, "company_id": profile.company_id},
+            )
+            return success(EmployeeSignatureStateSerializer(profile).data)
+
+        serializer = EmployeeSignatureUploadSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error("Validation error", errors=serializer.errors, status=422)
+
+        ensure_company_write_allowed(request)
+        upload = serializer.validated_data["signature"]
+
+        extension = os.path.splitext(upload.name or "")[1].lower() or ".png"
+        upload.name = f"employee_{profile.pk}_{secrets.token_hex(8)}{extension}"
+        # Signature storage writes only the signature columns. A full profile
+        # save would re-validate unrelated fields - a stale manager assignment
+        # used to turn a valid upload into a 500.
+        result = store_signature(profile, upload)
+        replaced = result.replaced
+
+        audit(
+            request,
+            "employee_signature_replaced" if replaced else "employee_signature_uploaded",
+            entity="employee_profile",
+            entity_id=profile.id,
+            metadata={
+                "employee_profile_id": profile.id,
+                "company_id": profile.company_id,
+                "replaced": replaced,
+                "size_bytes": upload.size,
+            },
+        )
+        return success(
+            EmployeeSignatureStateSerializer(profile).data,
+            status=status.HTTP_201_CREATED if not replaced else status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["get"], url_path="signature/preview")
+    def signature_preview(self, request, pk=None):
+        profile, error_response = self._signature_profile_for_request(request, pk)
+        if error_response:
+            return error_response
+        if not (profile.signature and profile.signature.name):
+            return error("Not found", errors=["No signature is stored."], status=404)
+
+        content_type = "image/png" if profile.signature.name.lower().endswith(".png") else "image/jpeg"
+        try:
+            response = FileResponse(profile.signature.open("rb"), content_type=content_type)
+        except FileNotFoundError:
+            return error("Not found", errors=["Signature file is missing from storage."], status=404)
+        # Inline so a client can render it, but never cached or sniffed.
+        response["Content-Disposition"] = f'inline; filename="signature-{profile.pk}{os.path.splitext(profile.signature.name)[1]}"'
+        response["X-Content-Type-Options"] = "nosniff"
+        response["Cache-Control"] = "private, no-store"
+        audit(
+            request,
+            "employee_signature_previewed",
+            entity="employee_profile",
+            entity_id=profile.id,
+            metadata={"employee_profile_id": profile.id, "company_id": profile.company_id},
+        )
+        return response
 
     @action(detail=True, methods=["get"], url_path=r"documents/(?P<document_id>[^/.]+)/download")
     def download_document(self, request, pk=None, document_id=None):
@@ -727,8 +848,15 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         except FileNotFoundError:
             return error("Not found", errors=["Document file is missing from storage."], status=404)
 
-    @action(detail=True, methods=["patch"], url_path=r"documents/(?P<document_id>[^/.]+)")
-    def update_document(self, request, pk=None, document_id=None):
+    @action(detail=True, methods=["patch", "delete"], url_path=r"documents/(?P<document_id>[^/.]+)")
+    def document_detail(self, request, pk=None, document_id=None):
+        """Update document metadata, or permanently delete the document.
+
+        Both methods are restricted to HRManager and SystemAdmin inside the
+        active company scope. Deletion removes the private file and the record
+        together - see `delete_document_permanently`.
+        """
+
         if get_requested_organization_scope(request) is not None and get_role(request.user) not in {"HRManager", "SystemAdmin"}:
             return error("Forbidden", errors=["Scoped employee access does not include documents."], status=status.HTTP_403_FORBIDDEN)
         profile, error_response = self._document_profile_for_request(request, pk)
@@ -743,6 +871,9 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         if document is None:
             return error("Not found", errors=["Not found."], status=404)
 
+        if request.method == "DELETE":
+            return self._delete_document(request, profile, document)
+
         serializer = EmployeeDocumentSerializer(document, data=request.data, partial=True, context={"request": request})
         if not serializer.is_valid():
             return error("Validation error", errors=serializer.errors, status=422)
@@ -755,6 +886,31 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             metadata={"employee_profile_id": profile.id, "document_type": document.document_type},
         )
         return success(EmployeeDocumentSerializer(document, context={"request": request}).data)
+
+    def _delete_document(self, request, profile, document):
+        ensure_company_write_allowed(request)
+        try:
+            snapshot = delete_document_permanently(document, actor=request.user)
+        except DocumentDeletionError as exc:
+            title = "Forbidden" if exc.status_code == status.HTTP_403_FORBIDDEN else "Delete failed"
+            if exc.file_removed:
+                # The file is gone and the hidden row will be swept by
+                # reconcile_pending_document_deletions. Record the destructive act
+                # now so the audit trail does not depend on that sweep succeeding.
+                self._audit_document_deleted(request, profile, document_snapshot(document), cleanup_pending=True)
+            return error(title, errors=[str(exc)], status=exc.status_code)
+
+        self._audit_document_deleted(request, profile, snapshot)
+        return success(
+            {
+                "id": snapshot["document_id"],
+                "employee_profile_id": profile.id,
+                "document_type": snapshot["document_type"],
+                "original_filename": snapshot["original_filename"],
+                "deleted": True,
+            },
+            message="Document deleted permanently.",
+        )
 
     @action(detail=True, methods=["post"], url_path=r"documents/(?P<document_id>[^/.]+)/extract")
     def extract_document(self, request, pk=None, document_id=None):
@@ -770,19 +926,51 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         if document is None:
             return error("Not found", errors=["Not found."], status=404)
 
-        document.extraction_status = EmployeeDocument.ExtractionStatus.PENDING
-        document.extraction_error = ""
-        document.save(update_fields=["extraction_status", "extraction_error", "updated_at"])
-        warnings = _queue_document_extraction(document)
-        document.extraction_warnings = warnings
+        # The queue claim owns the pending transition: pre-setting the status here
+        # would make a just-failed document look like a live job and block the retry.
+        outcome = queue_document_extraction(document)
         audit(
             request,
             "employee_document_extraction_queued",
             entity="employee_document",
             entity_id=document.id,
-            metadata={"employee_profile_id": profile.id, "document_type": document.document_type},
+            metadata={
+                "employee_profile_id": profile.id,
+                "document_type": document.document_type,
+                "queued": outcome.queued,
+                "reason": outcome.reason,
+            },
         )
-        return success(EmployeeDocumentSerializer(document, context={"request": request}).data)
+        document.refresh_from_db()
+        payload = EmployeeDocumentSerializer(document, context={"request": request}).data
+        if outcome.warnings:
+            payload["extraction_warnings"] = outcome.warnings
+        return success(payload)
+
+    @staticmethod
+    def _audit_document_deleted(request, profile, snapshot, *, cleanup_pending=False):
+        """Record who destroyed what.
+
+        File contents and OCR text are deliberately absent: the trail records the
+        act and the document's identity, never the removed personal data.
+        """
+
+        metadata = {
+            "employee_profile_id": profile.id,
+            "document_id": snapshot["document_id"],
+            "document_type": snapshot["document_type"],
+            "original_filename": snapshot["original_filename"],
+            "company_id": snapshot["company_id"],
+        }
+        if cleanup_pending:
+            metadata["cleanup_pending"] = True
+        audit(
+            request,
+            "employee_document_deleted",
+            entity="employee_document",
+            entity_id=snapshot["document_id"],
+            metadata=metadata,
+        )
 
     @staticmethod
     def _document_notification_label(document: EmployeeDocument) -> str:

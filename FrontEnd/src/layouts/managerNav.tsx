@@ -56,12 +56,10 @@ export function buildManagerNavGroup(t: Translate): MenuItemGroup {
         ),
       },
       {
-        key: "/manager/attendance-corrections",
+        key: "/manager/attendance",
         icon: <ClockCircleOutlined />,
         label: (
-          <Link to="/manager/attendance-corrections">
-            {t("layout.attendanceCorrections", "Attendance Corrections")}
-          </Link>
+          <Link to="/manager/attendance">{t("attendance.managerTitle")}</Link>
         ),
       },
       {

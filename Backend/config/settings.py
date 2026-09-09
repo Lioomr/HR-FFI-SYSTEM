@@ -40,6 +40,19 @@ def _env_int(name, default):
         raise ImproperlyConfigured(f"{name} must be an integer.") from exc
 
 
+def _env_sample_rate(name, default=0.0):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    try:
+        rate = float(value)
+    except ValueError as exc:
+        raise ImproperlyConfigured(f"{name} must be a number between 0 and 1.") from exc
+    if not 0.0 <= rate <= 1.0:
+        raise ImproperlyConfigured(f"{name} must be a number between 0 and 1.")
+    return rate
+
+
 def _is_weak_secret_key(value: str) -> bool:
     if not value:
         return True
@@ -84,6 +97,25 @@ if DEBUG:
     non_local_hosts = [host for host in ALLOWED_HOSTS if host not in local_hosts and not host.endswith(".localhost")]
     if non_local_hosts:
         raise ImproperlyConfigured("DJANGO_DEBUG=true is only allowed with local ALLOWED_HOSTS.")
+
+SENTRY_DSN = os.environ.get("SENTRY_DSN", "").strip()
+SENTRY_ENVIRONMENT = os.environ.get(
+    "SENTRY_ENVIRONMENT", DJANGO_ENV or ("development" if DEBUG else "production")
+).strip()
+SENTRY_TRACES_SAMPLE_RATE = _env_sample_rate("SENTRY_TRACES_SAMPLE_RATE")
+SENTRY_PROFILES_SAMPLE_RATE = _env_sample_rate("SENTRY_PROFILES_SAMPLE_RATE")
+SENTRY_RELEASE = os.environ.get("SENTRY_RELEASE", "").strip()
+
+if SENTRY_DSN:
+    from config.sentry import initialize_sentry
+
+    initialize_sentry(
+        dsn=SENTRY_DSN,
+        environment=SENTRY_ENVIRONMENT,
+        traces_sample_rate=SENTRY_TRACES_SAMPLE_RATE,
+        profiles_sample_rate=SENTRY_PROFILES_SAMPLE_RATE,
+        release=SENTRY_RELEASE,
+    )
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -235,9 +267,40 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = APP_TIME_ZONE
+# Employee document OCR (self-hosted PaddleOCR).
+# Models are provisioned into EMPLOYEE_DOCUMENT_OCR_MODEL_DIR at image build time
+# (or once into a mounted volume); the worker never downloads them at runtime.
 EMPLOYEE_DOCUMENT_OCR_TIMEOUT_SECONDS = float(os.environ.get("EMPLOYEE_DOCUMENT_OCR_TIMEOUT_SECONDS", "20"))
 EMPLOYEE_DOCUMENT_OCR_MAX_PAGES = int(os.environ.get("EMPLOYEE_DOCUMENT_OCR_MAX_PAGES", "3"))
 EMPLOYEE_DOCUMENT_OCR_MAX_IMAGE_DIMENSION = int(os.environ.get("EMPLOYEE_DOCUMENT_OCR_MAX_IMAGE_DIMENSION", "3000"))
+EMPLOYEE_DOCUMENT_OCR_MODEL_DIR = os.environ.get("EMPLOYEE_DOCUMENT_OCR_MODEL_DIR", "/opt/paddleocr")
+EMPLOYEE_DOCUMENT_OCR_ALLOW_MODEL_DOWNLOAD = _env_bool("EMPLOYEE_DOCUMENT_OCR_ALLOW_MODEL_DOWNLOAD", False)
+EMPLOYEE_DOCUMENT_OCR_MIN_CONFIDENCE = float(os.environ.get("EMPLOYEE_DOCUMENT_OCR_MIN_CONFIDENCE", "0.6"))
+# Characters a page must yield before the pipeline stops trying other rotations.
+EMPLOYEE_DOCUMENT_OCR_MIN_PAGE_CHARACTERS = int(os.environ.get("EMPLOYEE_DOCUMENT_OCR_MIN_PAGE_CHARACTERS", "24"))
+# Non-passport documents are bilingual: an English pass reads Latin names, ID
+# digits and dates, an Arabic pass reads Arabic script, and the two are merged
+# by bounding-box overlap. Passports use the English pass only (Latin MRZ).
+EMPLOYEE_DOCUMENT_OCR_BILINGUAL_LANGUAGES = tuple(
+    item.strip()
+    for item in os.environ.get("EMPLOYEE_DOCUMENT_OCR_BILINGUAL_LANGUAGES", "en,ar").split(",")
+    if item.strip()
+)
+EMPLOYEE_DOCUMENT_OCR_MERGE_OVERLAP = float(os.environ.get("EMPLOYEE_DOCUMENT_OCR_MERGE_OVERLAP", "0.6"))
+EMPLOYEE_DOCUMENT_OCR_CPU_THREADS = int(os.environ.get("EMPLOYEE_DOCUMENT_OCR_CPU_THREADS", "2"))
+EMPLOYEE_DOCUMENT_OCR_PDF_RENDER_SCALE = float(os.environ.get("EMPLOYEE_DOCUMENT_OCR_PDF_RENDER_SCALE", "2.5"))
+EMPLOYEE_DOCUMENT_OCR_SOFT_TIME_LIMIT_SECONDS = int(
+    os.environ.get("EMPLOYEE_DOCUMENT_OCR_SOFT_TIME_LIMIT_SECONDS", "240")
+)
+EMPLOYEE_DOCUMENT_OCR_TIME_LIMIT_SECONDS = int(os.environ.get("EMPLOYEE_DOCUMENT_OCR_TIME_LIMIT_SECONDS", "300"))
+EMPLOYEE_DOCUMENT_OCR_MAX_RETRIES = int(os.environ.get("EMPLOYEE_DOCUMENT_OCR_MAX_RETRIES", "3"))
+# How long a queued extraction claim stays valid before HR may re-run it.
+EMPLOYEE_DOCUMENT_OCR_QUEUE_LEASE_SECONDS = int(os.environ.get("EMPLOYEE_DOCUMENT_OCR_QUEUE_LEASE_SECONDS", "900"))
+# How long a half-finished deletion may sit before the reconciliation sweep
+# finishes it (file already gone) or restores the record (file still present).
+EMPLOYEE_DOCUMENT_DELETION_RECONCILE_GRACE_SECONDS = int(
+    os.environ.get("EMPLOYEE_DOCUMENT_DELETION_RECONCILE_GRACE_SECONDS", "300")
+)
 NOTIFICATION_DELIVERY_MAX_RETRIES = int(os.environ.get("NOTIFICATION_DELIVERY_MAX_RETRIES", "3"))
 NOTIFICATION_DELIVERY_RETRY_BACKOFF_SECONDS = int(os.environ.get("NOTIFICATION_DELIVERY_RETRY_BACKOFF_SECONDS", "2"))
 NOTIFICATION_WORKER_READINESS_TIMEOUT_SECONDS = int(
@@ -307,6 +370,9 @@ STATIC_URL = "static/"
 # Private uploads (not served publicly)
 PRIVATE_UPLOAD_ROOT = BASE_DIR / "private_uploads"
 MAX_JOB_OFFER_CV_SIZE_BYTES = _env_int("MAX_JOB_OFFER_CV_SIZE_BYTES", 5 * 1024 * 1024)
+# A signature is a small transparent PNG or a phone photo; 2 MB is generous and
+# matches the cap the PDF renderer is willing to decode.
+MAX_EMPLOYEE_SIGNATURE_SIZE_BYTES = _env_int("MAX_EMPLOYEE_SIGNATURE_SIZE_BYTES", 2 * 1024 * 1024)
 
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True
@@ -337,6 +403,22 @@ JOB_OFFER_RESPONSE_THROTTLE_RATE = "30/min"
 PAYROLL_FINALIZE_THROTTLE_RATE = "5/min"
 PAYROLL_GENERATE_PAYSLIPS_THROTTLE_RATE = "5/min"
 PAYROLL_EXPORT_THROTTLE_RATE = "10/min"
+ERROR_REPORT_THROTTLE_RATE = os.environ.get("ERROR_REPORT_THROTTLE_RATE", "5/min")
+
+# Frontend crash reports are emailed to this address. Unauthenticated callers can
+# reach the endpoint, so the throttle above is the primary abuse control.
+ADMIN_ERROR_REPORT_EMAIL = os.environ.get("ADMIN_ERROR_REPORT_EMAIL", "") or os.environ.get("ADMIN_EMAIL", "")
+
+# /healthz/ is public but only returns a liveness result. Dependency diagnostics
+# require an admin session or this shared probe token in the X-Health-Token
+# header; leave it empty to restrict diagnostics to admin users only.
+HEALTH_CHECK_TOKEN = os.environ.get("HEALTH_CHECK_TOKEN", "")
+# Dependency probes (DB, Redis, Celery ping, Evolution API) are expensive, so
+# results are reused for this many seconds instead of running on every request.
+HEALTH_CHECK_CACHE_SECONDS = int(os.environ.get("HEALTH_CHECK_CACHE_SECONDS", "15"))
+# Optional Healthchecks.io heartbeat for Celery Beat. Leave empty to disable.
+HEALTHCHECKS_PING_URL = os.environ.get("HEALTHCHECKS_PING_URL", "").strip()
+HEALTHCHECKS_PING_TIMEOUT_SECONDS = int(os.environ.get("HEALTHCHECKS_PING_TIMEOUT_SECONDS", "10"))
 # QR labels are signed, company-bound references rather than public asset URLs.
 # Reprint labels before this five-year validity window expires.
 ASSET_LABEL_QR_TOKEN_MAX_AGE_SECONDS = int(os.environ.get("ASSET_LABEL_QR_TOKEN_MAX_AGE_SECONDS", "157680000"))
@@ -354,6 +436,7 @@ REST_FRAMEWORK = {
         "payroll_finalize": PAYROLL_FINALIZE_THROTTLE_RATE,
         "payroll_generate_payslips": PAYROLL_GENERATE_PAYSLIPS_THROTTLE_RATE,
         "payroll_export": PAYROLL_EXPORT_THROTTLE_RATE,
+        "error_report": ERROR_REPORT_THROTTLE_RATE,
     },
     "EXCEPTION_HANDLER": "core.exceptions.custom_exception_handler",
 }

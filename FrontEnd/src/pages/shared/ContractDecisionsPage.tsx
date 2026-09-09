@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import dayjs, { type Dayjs } from "dayjs";
 import {
   Alert,
@@ -129,6 +129,8 @@ export default function ContractDecisionsPage() {
   const isCeo = isCeoRoute || user?.role === "CEO";
   const isHr =
     !isCeoRoute && (user?.role === "HRManager" || user?.role === "SystemAdmin");
+  const employeeProfilePath = (employeeId: number) =>
+    isCeo ? `/manager/team/${employeeId}` : `/hr/employees/${employeeId}`;
   const [records, setRecords] = useState<ContractDecision[]>([]);
   const [record, setRecord] = useState<ContractDecision | null>(null);
   const [statusFilter, setStatusFilter] = useState<
@@ -313,7 +315,12 @@ export default function ContractDecisionsPage() {
       title: t("contractDecisions.employee"),
       key: "employee",
       render: (_, item) => (
-        <Typography.Text strong>{item.employee.full_name}</Typography.Text>
+        <Link
+          to={employeeProfilePath(item.employee.id)}
+          style={{ color: "#f97316", fontWeight: 600, textDecoration: "none" }}
+        >
+          {item.employee.full_name}
+        </Link>
       ),
     },
     {
@@ -450,7 +457,16 @@ export default function ContractDecisionsPage() {
         <Card loading={loading}>
           <Descriptions bordered column={{ xs: 1, sm: 1, md: 2 }}>
             <Descriptions.Item label={t("contractDecisions.employee")}>
-              {item.employee.full_name}
+              <Link
+                to={employeeProfilePath(item.employee.id)}
+                style={{
+                  color: "#f97316",
+                  fontWeight: 600,
+                  textDecoration: "none",
+                }}
+              >
+                {item.employee.full_name}
+              </Link>
             </Descriptions.Item>
             <Descriptions.Item label={t("contractDecisions.employeeId")}>
               {item.employee.employee_id}

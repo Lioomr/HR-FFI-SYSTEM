@@ -89,19 +89,55 @@ biotime_manual.txt
 cols.json
 output/
 scripts/
+!Backend/loans/scripts/
+!Backend/loans/scripts/generate_loan_request_template.py
+!Backend/loans/scripts/verify_loan_pdf.py
 graphify-out/
 Backend/graphify-out/
 Backend/private_uploads/
+# Local working copies used to edit and compare PDF form templates.
+Backend/pdf_edit_bundle/
 recruiting_outputs/
 git_status.txt
 git_status_cmd.txt
 structure.txt
 exports/
 
-# Leave PDF generated templates
+# Request form templates.
+# Everything here is ignored by default, then each deployed asset is added back
+# explicitly. A blank PDF and its field map are ONE asset pair: never allow one
+# without the other, or a clean deployment ships a template the renderer cannot
+# fill and silently drops to the generic fallback.
 Backend/static/pdf_templates/
 !Backend/static/pdf_templates/
 Backend/static/pdf_templates/*
-!Backend/static/pdf_templates/generate_leave_request_final.py
+!Backend/static/pdf_templates/README.md
+!Backend/static/pdf_templates/generate_*.py
+
+# Leave request pair
+!Backend/static/pdf_templates/leave_request_blank.pdf
 !Backend/static/pdf_templates/leave_request_blank_field_map.json
+
+# Loan request pair
+!Backend/static/pdf_templates/loan_request_blank.pdf
+!Backend/static/pdf_templates/loan_request_blank_field_map.json
+
+# Annual entitlements disbursement pair
 !Backend/static/pdf_templates/annual_entitlements_disbursement_blank.pdf
+!Backend/static/pdf_templates/annual_entitlements_disbursement_blank_field_map.json
+
+# Job offer pair
+!Backend/static/pdf_templates/job_offer_blank.pdf
+!Backend/static/pdf_templates/job_offer_blank_field_map.json
+
+# Starting work acknowledgment pair
+!Backend/static/pdf_templates/starting_work_acknowledgment_blank.pdf
+!Backend/static/pdf_templates/starting_work_acknowledgment_blank_field_map.json
+
+# Blank forms served by the template library that have no field map yet
+!Backend/static/pdf_templates/asset_damage_report_blank.pdf
+!Backend/static/pdf_templates/asset_return_request_blank.pdf
+!Backend/static/pdf_templates/rent_agreement_blank.pdf
+!Backend/static/pdf_templates/employment_certificate_blank.pdf
+!Backend/static/pdf_templates/salary_certificate_blank.pdf
+!Backend/static/pdf_templates/termination_letter_blank.pdf

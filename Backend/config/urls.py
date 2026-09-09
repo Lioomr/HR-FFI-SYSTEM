@@ -30,6 +30,11 @@ urlpatterns = [
     path("", include("admin_portal.urls")),
     path("", include("invites.urls")),
     path("", include("job_offers.urls")),
+    # NOTE: audit and employees are mounted twice on purpose. "/api/<app>/..." is
+    # the canonical prefix for new frontend calls; the unprefixed mount is a legacy
+    # compatibility alias that existing screens still use. Both must stay in sync
+    # until the unprefixed routes are retired -- core/test_route_contract.py asserts
+    # that every route resolves to the same view under both prefixes.
     path("", include("audit.urls")),
     path("api/", include("audit.urls")),
     path("", include("employees.urls")),
