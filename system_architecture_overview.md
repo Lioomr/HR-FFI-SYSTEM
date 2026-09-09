@@ -399,13 +399,13 @@ FrontEnd/src/
 
 ### State Management
 
-**Zustand** store for authentication:
+**Zustand** store (`FrontEnd/src/auth/authStore.ts`) for auth state; tokens themselves live in `services/api/tokenStorage.ts` (`sessionStorage`), not in the store:
 
 - `user`: Current user object
-- `token`: JWT access token
-- `refreshToken`: JWT refresh token
-- `role`: User role for routing decisions
-- Actions: `login()`, `logout()`, `refreshAccessToken()`
+- `isAuthenticated`: Derived session flag
+- `role`: User role for routing decisions (from `user`)
+- Store actions: `login()`, `logout()`, `setActiveOrganization()`
+- Token refresh (`refreshAccessToken()`) is not a store action — it lives in `services/api/apiClient.ts` (see API Service Layer, next)
 
 ### API Service Layer
 
@@ -425,18 +425,23 @@ All API calls centralized in `services/api/`:
 
 ```
 POST /auth/login
-  Body: { email, password }
-  Returns: { access, refresh, user: { email, role } }
+  Body: { identifier, password }
+  Returns: { token, access, refresh, user, accessible_organizations, default_organization_id }
+
+POST /auth/refresh
+  Body: { refresh }
+  Returns: { token, access, refresh }   # refresh rotates; used/revoked/reused tokens return generic 401
 
 POST /auth/logout
-  Headers: Authorization: Bearer <token>
+  Headers: Authorization: Bearer <access token>
+  # global revocation: bumps token_version, blacklists all outstanding refresh tokens
 
 POST /auth/change-password
   Body: { current_password, new_password }
+  # same global revocation as logout
 
-POST /auth/token/refresh
-  Body: { refresh }
-  Returns: { access }
+GET /auth/me
+  Headers: Authorization: Bearer <access token>
 ```
 
 ### Employee Endpoints (HR)
@@ -591,8 +596,8 @@ The system defends against:
 - **Account Lockout**: 5 failed attempts → 15 min lockout
 - **JWT Tokens**:
   - Access token: 15 min lifetime
-  - Refresh token: 14 days, rotated on use
-  - Blacklisted on logout
+  - Refresh token: 14 days, rotated on use; the used token is blacklisted, so reuse/expiry/revocation all return a generic 401
+  - Carry a `token_version` claim (`accounts.authentication.VersionedJWTAuthentication`); logout and password change bump the account's version and blacklist every outstanding refresh token, immediately invalidating all prior access/refresh tokens (not just a logout-time blacklist)
 - **Rate Limiting**:
   - Login: 10/min per IP
   - Import: 5/min

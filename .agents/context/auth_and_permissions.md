@@ -10,7 +10,7 @@
 - **Revocation boundary**: JWTs carry `token_version`; `accounts.authentication.VersionedJWTAuthentication` compares it to `User.auth_token_version`. Tokens missing the claim are rejected.
 - **Logout/password change**: increment the account token version, blacklist every outstanding refresh token, emit audit events, and immediately invalidate all prior access/refresh tokens
 
-Frontend `FrontEnd/src/services/api/apiClient.ts` still clears authentication state after a non-login `401`; adding web automatic refresh is a separate client task. Mobile can use the approved refresh contract during Gate 2.
+Frontend `FrontEnd/src/services/api/apiClient.ts` retries a non-login, non-refresh `401` once via a single-flight `POST /auth/refresh` call, storing the rotated access/refresh tokens on success; a failed refresh (or a second `401`) clears authentication state and redirects to `/login`. `MobileApp` implements the same single-flight refresh/rotation pattern against Expo SecureStore (see `mobile_app.md`).
 
 ## Rate Limiting / Security
 
