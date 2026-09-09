@@ -266,7 +266,7 @@ describe("auto fit", () => {
 
     expect(harness.map.fitBounds).not.toHaveBeenCalled();
     expect(harness.map.setView).toHaveBeenCalledWith(
-      { lat: 24.7136, lng: 46.6753 },
+      expect.objectContaining({ lat: 24.7136, lng: 46.6753 }),
       16,
     );
   });

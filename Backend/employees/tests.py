@@ -161,8 +161,9 @@ class EmployeeProfileTests(TestCase):
         response = self.client.patch(f"/api/employees/{target_profile.pk}/", {"user_id": self.employee_user.id})
 
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
-        self.assertIn("user_id", response.data["errors"])
-        self.assertIn(linked_profile.employee_id, str(response.data["errors"]["user_id"]))
+        user_errors = [error for error in response.data["errors"] if error.get("field") == "user_id"]
+        self.assertTrue(user_errors)
+        self.assertIn(linked_profile.employee_id, user_errors[0]["message"])
         target_profile.refresh_from_db()
         self.assertIsNone(target_profile.user_id)
 

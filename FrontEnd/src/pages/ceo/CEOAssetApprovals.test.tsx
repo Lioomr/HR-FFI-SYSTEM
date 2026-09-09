@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { MemoryRouter } from "react-router-dom";
 
 vi.mock("../../services/api/assetsApi", () => ({
   getCEOAssetDamageReports: vi.fn(),
@@ -61,6 +63,10 @@ const ok = (items: unknown[]) => ({
   data: { items, count: items.length },
 });
 
+function renderPage(page: ReactNode) {
+  return render(<MemoryRouter>{page}</MemoryRouter>);
+}
+
 beforeEach(() => {
   [getDamage, approveDamage, rejectDamage, getReturns].forEach((fn) =>
     fn.mockReset(),
@@ -76,7 +82,7 @@ describe("CEO asset approval queues", () => {
   it("renders damage reports with a labelled status and decision pair", async () => {
     getDamage.mockResolvedValue(ok([damageRow]));
 
-    render(<CEOAssetDamageReportsPage />);
+    renderPage(<CEOAssetDamageReportsPage />);
 
     expect(await screen.findByText("LAP-004")).toBeInTheDocument();
     expect(screen.getByText("Sara Ahmed")).toBeInTheDocument();
@@ -93,7 +99,7 @@ describe("CEO asset approval queues", () => {
   it("shows the empty state when no damage report is awaiting approval", async () => {
     getDamage.mockResolvedValue(ok([]));
 
-    render(<CEOAssetDamageReportsPage />);
+    renderPage(<CEOAssetDamageReportsPage />);
 
     expect(
       await screen.findByText("No damage reports awaiting approval"),
@@ -106,7 +112,7 @@ describe("CEO asset approval queues", () => {
       message: "asset service down",
     });
 
-    render(<CEOAssetDamageReportsPage />);
+    renderPage(<CEOAssetDamageReportsPage />);
 
     expect(await screen.findByText("asset service down")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
@@ -119,7 +125,7 @@ describe("CEO asset approval queues", () => {
       data: damageRow,
     });
 
-    render(<CEOAssetDamageReportsPage />);
+    renderPage(<CEOAssetDamageReportsPage />);
 
     fireEvent.click(
       await screen.findByRole("button", { name: "Approve: Sara Ahmed" }),
@@ -141,7 +147,7 @@ describe("CEO asset approval queues", () => {
       data: damageRow,
     });
 
-    render(<CEOAssetDamageReportsPage />);
+    renderPage(<CEOAssetDamageReportsPage />);
 
     fireEvent.click(
       await screen.findByRole("button", { name: "Approve: Sara Ahmed" }),
@@ -164,7 +170,7 @@ describe("CEO asset approval queues", () => {
       data: damageRow,
     });
 
-    render(<CEOAssetDamageReportsPage />);
+    renderPage(<CEOAssetDamageReportsPage />);
 
     fireEvent.click(
       await screen.findByRole("button", { name: "Reject: Sara Ahmed" }),
@@ -190,7 +196,7 @@ describe("CEO asset approval queues", () => {
   it("keeps the approval map available on return requests", async () => {
     getReturns.mockResolvedValue(ok([returnRow]));
 
-    render(<CEOAssetReturnRequestsPage />);
+    renderPage(<CEOAssetReturnRequestsPage />);
 
     expect(await screen.findByText("PHN-011")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Expand row/i }));
@@ -203,7 +209,7 @@ describe("CEO asset approval queues", () => {
     useI18nStore.getState().setLanguage("ar");
     getDamage.mockResolvedValue(ok([damageRow]));
 
-    render(<CEOAssetDamageReportsPage />);
+    renderPage(<CEOAssetDamageReportsPage />);
 
     expect(
       await screen.findByRole("button", { name: "موافقة: Sara Ahmed" }),
