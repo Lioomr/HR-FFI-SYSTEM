@@ -124,9 +124,9 @@ def mark_absentees_for_date(target_date: date_type, *, force: bool = False) -> d
 
     profiles = list(_active_employee_profiles(target_date))
     existing_ids = set(
-        AttendanceRecord.objects.filter(
-            date=target_date, employee_profile__in=profiles
-        ).values_list("employee_profile_id", flat=True)
+        AttendanceRecord.objects.filter(date=target_date, employee_profile__in=profiles).values_list(
+            "employee_profile_id", flat=True
+        )
     )
     on_leave_ids = _profiles_on_leave(profiles, target_date)
 

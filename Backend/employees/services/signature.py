@@ -26,6 +26,7 @@ from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass(frozen=True)
 class SignatureWriteResult:
     stored_name: str

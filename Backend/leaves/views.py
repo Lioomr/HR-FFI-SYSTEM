@@ -147,6 +147,7 @@ def _leave_read_queryset(queryset):
         )
     )
 
+
 try:
     import arabic_reshaper
     from bidi.algorithm import get_display
@@ -1650,9 +1651,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         with transaction.atomic():
             instance = LeaveRequest.objects.select_for_update().get(pk=instance.pk)
             if instance.status not in allowed_statuses:
-                return error(
-                    "Validation error", errors=["Request is not in a state to be approved by HR."], status=422
-                )
+                return error("Validation error", errors=["Request is not in a state to be approved by HR."], status=422)
 
             instance.decided_by = request.user
             instance.decided_at = timezone.now()
@@ -1885,9 +1884,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         with transaction.atomic():
             instance = LeaveRequest.objects.select_for_update().get(pk=instance.pk)
             if instance.status not in allowed_statuses:
-                return error(
-                    "Validation error", errors=["Request cannot be sent to CEO in current state."], status=422
-                )
+                return error("Validation error", errors=["Request cannot be sent to CEO in current state."], status=422)
             note = (s.validated_data.get("comment") or "").strip()
             if note:
                 instance.hr_decision_note = note
@@ -2391,7 +2388,9 @@ class EmployeeLeaveBalanceView(APIView):
             except ValueError:
                 return error("Validation error", errors=["year must be a valid integer."], status=422)
 
-        profile = filter_queryset_by_company_scope(EmployeeProfile.objects.all(), request).filter(user=request.user).first()
+        profile = (
+            filter_queryset_by_company_scope(EmployeeProfile.objects.all(), request).filter(user=request.user).first()
+        )
         if profile is None:
             return error("Not found", errors=["Not found."], status=404)
         balances = calculate_leave_balance(request.user, year, profile=profile)
@@ -2682,9 +2681,7 @@ class AnnualLeavePaymentRequestViewSet(viewsets.ModelViewSet):
             if decision == "carry_forward"
             else AnnualLeavePaymentRequest.Resolution.PAY
         )
-        instance.carry_forward_days = (
-            instance.eligible_unused_days if decision == "carry_forward" else 0
-        )
+        instance.carry_forward_days = instance.eligible_unused_days if decision == "carry_forward" else 0
         instance.payment_amount = 0 if decision == "carry_forward" else instance.payment_amount
         instance.status = AnnualLeavePaymentRequest.Status.PENDING_CEO
         instance.hr_reviewed_by = request.user

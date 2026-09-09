@@ -121,9 +121,7 @@ class AbsenceDetectionTests(TestCase):
         # The archived employee stays unmapped: a database trigger refuses a
         # mapping for an archived profile, which is the same rule in the DB.
         for profile in [self.present_emp, self.absent_emp, self.leave_emp]:
-            BioTimeEmployeeMap.objects.create(
-                employee_profile=profile, biotime_emp_code=f"BT-{profile.employee_id}"
-            )
+            BioTimeEmployeeMap.objects.create(employee_profile=profile, biotime_emp_code=f"BT-{profile.employee_id}")
         self.unmapped_emp = EmployeeProfile.objects.create(
             full_name="No Device", company=self.company, employee_id="ABS005"
         )
@@ -179,25 +177,27 @@ class AbsenceDetectionTests(TestCase):
 
     def test_non_active_employees_are_not_marked_absent(self):
         suspended = EmployeeProfile.objects.create(
-            full_name="Suspended", company=self.company, employee_id="ABS010",
+            full_name="Suspended",
+            company=self.company,
+            employee_id="ABS010",
             employment_status=EmployeeProfile.EmploymentStatus.SUSPENDED,
         )
         terminated = EmployeeProfile.objects.create(
-            full_name="Terminated", company=self.company, employee_id="ABS011",
+            full_name="Terminated",
+            company=self.company,
+            employee_id="ABS011",
             employment_status=EmployeeProfile.EmploymentStatus.TERMINATED,
         )
-        disabled_user = User.objects.create_user(
-            email="disabled@ffi.com", password="pw", is_active=False
-        )
+        disabled_user = User.objects.create_user(email="disabled@ffi.com", password="pw", is_active=False)
         disabled_profile = EmployeeProfile.objects.create(
-            full_name="Disabled Login", company=self.company, employee_id="ABS012",
+            full_name="Disabled Login",
+            company=self.company,
+            employee_id="ABS012",
             user=disabled_user,
         )
 
         for profile in [suspended, terminated, disabled_profile]:
-            BioTimeEmployeeMap.objects.create(
-                employee_profile=profile, biotime_emp_code=f"BT-{profile.employee_id}"
-            )
+            BioTimeEmployeeMap.objects.create(employee_profile=profile, biotime_emp_code=f"BT-{profile.employee_id}")
 
         mark_absentees_for_date(self.workday)
 

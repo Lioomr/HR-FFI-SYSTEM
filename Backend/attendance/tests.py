@@ -431,6 +431,8 @@ class AttendanceTests(TestCase):
         self.assertEqual(approve_response.status_code, status.HTTP_403_FORBIDDEN)
         other_company_record.refresh_from_db()
         self.assertEqual(other_company_record.status, AttendanceRecord.Status.PENDING_MANAGER)
+
+
 class BioTimeSyncTests(TestCase):
     def setUp(self):
         self.client = APIClient()

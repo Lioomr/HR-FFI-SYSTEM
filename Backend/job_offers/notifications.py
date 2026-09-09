@@ -106,9 +106,7 @@ def notify_job_offer_submitted(offer: JobOffer) -> list[dict]:
             title_ar="عرض عمل يتطلب مراجعتك",
             employee_name=recipient_name,
             message=f"Job offer {offer.reference_number}, submitted by {requester_name}, is awaiting your review.",
-            message_ar=(
-                f"عرض العمل {offer.reference_number} المقدَّم من {requester_name} بانتظار مراجعتك."
-            ),
+            message_ar=(f"عرض العمل {offer.reference_number} المقدَّم من {requester_name} بانتظار مراجعتك."),
             status="Action required",
             status_ar="إجراء مطلوب",
             status_tone="action",
@@ -171,8 +169,12 @@ def notify_job_offer_decided(offer: JobOffer) -> list[dict]:
         rows = [
             {"label": "Reference", "label_ar": "الرقم المرجعي", "value": offer.reference_number},
             {"label": "Candidate", "label_ar": "المرشّح", "value": offer.candidate_full_name},
-            {"label": "Decision", "label_ar": "القرار", "value": decision,
-             "value_color": "#15803d" if approved else "#b42318" if rejected else None},
+            {
+                "label": "Decision",
+                "label_ar": "القرار",
+                "value": decision,
+                "value_color": "#15803d" if approved else "#b42318" if rejected else None,
+            },
         ]
         if offer.ceo_decision_reason:
             rows.append({"label": "Reason", "label_ar": "السبب", "value": offer.ceo_decision_reason})

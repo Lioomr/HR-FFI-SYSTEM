@@ -128,9 +128,7 @@ class ManualAttendanceRetiredTests(BioTimeOnlyAttendancePolicyBase):
         self.assertGone(check_in)
         self.assertGone(check_out)
         self.assertFalse(AttendanceRecord.objects.exists())
-        self.assertFalse(
-            AuditLog.objects.filter(action__in=["attendance.check_in", "attendance.check_out"]).exists()
-        )
+        self.assertFalse(AuditLog.objects.filter(action__in=["attendance.check_in", "attendance.check_out"]).exists())
 
     def test_check_in_is_gone_for_every_role_including_unmapped_employees(self):
         for user in [self.unmapped_user, self.manager_user, self.hr_user, self.ceo_user]:
@@ -203,9 +201,7 @@ class ManualAttendanceRetiredTests(BioTimeOnlyAttendancePolicyBase):
         self.client.force_authenticate(user=self.ceo_user)
         self.assertGone(self.client.post(f"/api/ceo/attendance/{record.id}/approve/", **self.headers))
         self.assertGone(
-            self.client.post(
-                f"/api/ceo/attendance/{record.id}/reject/", {"notes": "no"}, format="json", **self.headers
-            )
+            self.client.post(f"/api/ceo/attendance/{record.id}/reject/", {"notes": "no"}, format="json", **self.headers)
         )
 
         record.refresh_from_db()
@@ -458,9 +454,7 @@ class ManualAttendancePurgeMigrationTests(BioTimeOnlyAttendancePolicyBase):
         AuditLog.objects.create(
             action="attendance.check_in", entity="attendance_record", entity_id=str(employee_manual.id)
         )
-        AuditLog.objects.create(
-            action="attendance.override", entity="attendance_record", entity_id=str(hr_manual.id)
-        )
+        AuditLog.objects.create(action="attendance.override", entity="attendance_record", entity_id=str(hr_manual.id))
         AuditLog.objects.create(
             action="attendance_correction.submitted",
             entity="AttendanceCorrectionRequest",
@@ -526,9 +520,7 @@ class ManualAttendancePurgeMigrationTests(BioTimeOnlyAttendancePolicyBase):
         ack_workflow = self._workflow_for(acknowledgment, key="starting_work_acknowledgment")
         record_workflow = self._workflow_for(overridden)
         ack_audit = self._starting_work_audit(acknowledgment)
-        approved_audit = self._starting_work_audit(
-            acknowledgment, action="starting_work_acknowledgment_approved"
-        )
+        approved_audit = self._starting_work_audit(acknowledgment, action="starting_work_acknowledgment_approved")
         override_audit = AuditLog.objects.create(
             action="attendance.override", entity="attendance_record", entity_id=str(overridden.id)
         )
@@ -556,9 +548,7 @@ class ManualAttendancePurgeMigrationTests(BioTimeOnlyAttendancePolicyBase):
         # No replacement audit event is written for it: the purge removes manual
         # attendance data *and* its audit trail, and a stand-in row would carry
         # the same identifiers back in.
-        self.assertEqual(
-            list(AuditLog.objects.values_list("id", flat=True)), [unrelated_audit.id]
-        )
+        self.assertEqual(list(AuditLog.objects.values_list("id", flat=True)), [unrelated_audit.id])
 
         # The employee keeps their HR record.
         self.assertTrue(EmployeeProfile.objects.filter(id=profile.id).exists())
@@ -600,9 +590,7 @@ class ManualAttendancePurgeMigrationTests(BioTimeOnlyAttendancePolicyBase):
             source=AttendanceRecord.Source.SYSTEM,
             notes="Auto-marked absent: no attendance recorded.",
         )
-        acknowledgment, document = self._acknowledgment(
-            self.unmapped_profile, stranded_absence, "SWA-STRANDED-1"
-        )
+        acknowledgment, document = self._acknowledgment(self.unmapped_profile, stranded_absence, "SWA-STRANDED-1")
 
         with self.assertRaises(RuntimeError) as raised:
             purge_manual_attendance(django_apps, None)
@@ -617,7 +605,6 @@ class ManualAttendancePurgeMigrationTests(BioTimeOnlyAttendancePolicyBase):
         self.assertTrue(AttendanceRecord.objects.filter(id=stranded_absence.id).exists())
         self.assertTrue(StartingWorkAcknowledgment.objects.filter(id=acknowledgment.id).exists())
         self.assertTrue(EmployeeDocument.objects.filter(id=document.id).exists())
-
 
     # --- fail-closed inbound-reference guard --------------------------------
 
@@ -697,9 +684,7 @@ class ManualAttendancePurgeMigrationTests(BioTimeOnlyAttendancePolicyBase):
         )
 
         blocker = "fake.Model.acknowledgment still references 1 acknowledgment(s) with on_delete=DO_NOTHING"
-        with mock.patch.object(
-            migration_0012, "_acknowledgment_delete_blockers", return_value=[blocker]
-        ) as guard:
+        with mock.patch.object(migration_0012, "_acknowledgment_delete_blockers", return_value=[blocker]) as guard:
             with self.assertRaises(RuntimeError) as raised:
                 purge_manual_attendance(django_apps, None)
 
@@ -712,6 +697,7 @@ class ManualAttendancePurgeMigrationTests(BioTimeOnlyAttendancePolicyBase):
         self.assertTrue(AttendanceRecord.objects.filter(id=plain_manual.id).exists())
         self.assertTrue(StartingWorkAcknowledgment.objects.filter(id=acknowledgment.id).exists())
         self.assertTrue(EmployeeDocument.objects.filter(id=document.id).exists())
+
 
 @override_settings(BIOTIME_AGENT_TOKEN="policy-agent-token")
 class BioTimeAgentIngestStillWorksTests(BioTimeOnlyAttendancePolicyBase):

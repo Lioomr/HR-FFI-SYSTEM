@@ -59,14 +59,41 @@ class ContractDecisionReadSerializer(serializers.ModelSerializer):
     class Meta:
         model = ContractDecision
         fields = [
-            "id", "company", "employee", "decision_type", "decision_type_label", "status", "status_label",
-            "original_contract_date", "original_contract_expiry", "proposed_contract_date",
-            "proposed_contract_expiry", "original_terms", "proposed_terms", "requested_by", "ceo_decided_by",
-            "hr_comment", "ceo_comment", "failure_reason", "submitted_at", "ceo_deadline", "ceo_decided_at",
-            "last_ceo_reminder_at", "ceo_reminder_count", "finalized_at", "finalized_by", "finalized_by_system",
-            "automatic_renewal", "automatic_renewal_reason",
-            "final_notification_sent_at", "final_notification_attempts", "last_final_notification_attempt_at",
-            "workflow", "notification_status", "created_at", "updated_at",
+            "id",
+            "company",
+            "employee",
+            "decision_type",
+            "decision_type_label",
+            "status",
+            "status_label",
+            "original_contract_date",
+            "original_contract_expiry",
+            "proposed_contract_date",
+            "proposed_contract_expiry",
+            "original_terms",
+            "proposed_terms",
+            "requested_by",
+            "ceo_decided_by",
+            "hr_comment",
+            "ceo_comment",
+            "failure_reason",
+            "submitted_at",
+            "ceo_deadline",
+            "ceo_decided_at",
+            "last_ceo_reminder_at",
+            "ceo_reminder_count",
+            "finalized_at",
+            "finalized_by",
+            "finalized_by_system",
+            "automatic_renewal",
+            "automatic_renewal_reason",
+            "final_notification_sent_at",
+            "final_notification_attempts",
+            "last_final_notification_attempt_at",
+            "workflow",
+            "notification_status",
+            "created_at",
+            "updated_at",
         ]
 
     def get_employee(self, obj):
@@ -127,7 +154,9 @@ class ContractDecisionSubmitSerializer(serializers.Serializer):
             and attrs.get("proposed_contract_expiry")
             and attrs["proposed_contract_expiry"] < attrs["proposed_contract_date"]
         ):
-            raise serializers.ValidationError({"proposed_contract_expiry": "Expiry must be on or after the start date."})
+            raise serializers.ValidationError(
+                {"proposed_contract_expiry": "Expiry must be on or after the start date."}
+            )
         return attrs
 
 
@@ -340,9 +369,23 @@ class ScopedEmployeeReadSerializer(serializers.ModelSerializer):
     class Meta:
         model = EmployeeProfile
         fields = [
-            "id", "employee_id", "full_name", "full_name_en", "full_name_ar", "employee_number",
-            "department", "department_id", "position", "position_id", "task_group", "task_group_id",
-            "job_title", "company_id", "company_name", "employment_status", "manager_profile_id",
+            "id",
+            "employee_id",
+            "full_name",
+            "full_name_en",
+            "full_name_ar",
+            "employee_number",
+            "department",
+            "department_id",
+            "position",
+            "position_id",
+            "task_group",
+            "task_group_id",
+            "job_title",
+            "company_id",
+            "company_name",
+            "employment_status",
+            "manager_profile_id",
             "manager_profile_name",
         ]
 
@@ -516,9 +559,7 @@ class EmployeeProfileWriteSerializer(serializers.ModelSerializer):
         """Prevent the database OneToOne constraint from becoming an HTTP 500."""
         if value is not None:
             linked_profile = (
-                EmployeeProfile.objects.filter(user=value)
-                .exclude(pk=getattr(self.instance, "pk", None))
-                .first()
+                EmployeeProfile.objects.filter(user=value).exclude(pk=getattr(self.instance, "pk", None)).first()
             )
             if linked_profile is not None:
                 raise serializers.ValidationError(

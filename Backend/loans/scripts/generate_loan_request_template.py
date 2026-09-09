@@ -6,8 +6,8 @@ reads the map rather than duplicating its fill coordinates.
 
 from __future__ import annotations
 
-import json
 import argparse
+import json
 from pathlib import Path
 
 import arabic_reshaper

@@ -4,50 +4,49 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('employees', '0021_employeeprofile_signature'),
+        ("employees", "0021_employeeprofile_signature"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='employeedocument',
-            name='extraction_attempts',
+            model_name="employeedocument",
+            name="extraction_attempts",
             field=models.PositiveSmallIntegerField(default=0),
         ),
         migrations.AddField(
-            model_name='employeedocument',
-            name='extraction_completed_at',
+            model_name="employeedocument",
+            name="extraction_completed_at",
             field=models.DateTimeField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='employeedocument',
-            name='extraction_confidence',
+            model_name="employeedocument",
+            name="extraction_confidence",
             field=models.FloatField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='employeedocument',
-            name='extraction_metadata',
+            model_name="employeedocument",
+            name="extraction_metadata",
             field=models.JSONField(blank=True, default=dict),
         ),
         migrations.AddField(
-            model_name='employeedocument',
-            name='extraction_queued_at',
+            model_name="employeedocument",
+            name="extraction_queued_at",
             field=models.DateTimeField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='employeedocument',
-            name='extraction_raw_text',
+            model_name="employeedocument",
+            name="extraction_raw_text",
             field=models.TextField(blank=True),
         ),
         migrations.AddField(
-            model_name='employeedocument',
-            name='extraction_task_id',
+            model_name="employeedocument",
+            name="extraction_task_id",
             field=models.CharField(blank=True, max_length=64),
         ),
         migrations.AddField(
-            model_name='employeedocument',
-            name='extraction_warnings',
+            model_name="employeedocument",
+            name="extraction_warnings",
             field=models.JSONField(blank=True, default=list),
         ),
     ]

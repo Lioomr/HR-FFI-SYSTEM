@@ -78,6 +78,7 @@ def _configure_sensitive_download(response, filename):
     response["Cache-Control"] = "private, no-store"
     return response
 
+
 LEGACY_PENDING_HR_STATUSES = [
     LoanRequest.RequestStatus.PENDING_HR,
     LoanRequest.RequestStatus.PENDING_FINANCE,

@@ -54,6 +54,7 @@ def _log_notification_failure(event_name, *, entity_id, notification_type, actor
         extra["channel"] = channel
     logger.exception(event_name, extra=extra)
 
+
 User = get_user_model()
 
 
@@ -69,9 +70,7 @@ def _apply_employee_search(queryset, search_param):
 
 
 def _manager_scope_filter(user):
-    return manager_scope_q(
-        user, employee_prefix="employee_profile__", cross_company_capability="attendance.approve"
-    )
+    return manager_scope_q(user, employee_prefix="employee_profile__", cross_company_capability="attendance.approve")
 
 
 def _scope_attendance_queryset(queryset, request):

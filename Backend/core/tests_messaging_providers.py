@@ -368,9 +368,15 @@ class PendingApprovalWhatsAppTests(TestCase):
         company = OrganizationNode.objects.create(code="WA-APPROVAL", name="Approval", node_type="company")
         user = get_user_model().objects.create_user(email="approver@example.com", full_name="Approver")
         profile = EmployeeProfile.objects.create(
-            user=user, company=company, full_name="Approver", employee_id="WA-APPROVAL", mobile="+201013530963",
+            user=user,
+            company=company,
+            full_name="Approver",
+            employee_id="WA-APPROVAL",
+            mobile="+201013530963",
         )
-        loan = LoanRequest.objects.create(employee=user, employee_profile=profile, company=company, requested_amount=100)
+        loan = LoanRequest.objects.create(
+            employee=user, employee_profile=profile, company=company, requested_amount=100
+        )
 
         result = notify_users_for_pending_status(
             users=[user],
