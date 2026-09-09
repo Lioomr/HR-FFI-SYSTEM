@@ -188,7 +188,11 @@ describe("CEO Annual Leave settlements queue", () => {
     );
     expect(await screen.findByText("Reject settlement")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Reject Settlement" }));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Reject this Annual Leave settlement?",
+      }),
+    );
     expect(
       await screen.findByText("A rejection reason is required."),
     ).toBeInTheDocument();
@@ -197,7 +201,11 @@ describe("CEO Annual Leave settlements queue", () => {
     fireEvent.change(screen.getByLabelText("Reason for rejection"), {
       target: { value: "Rejected with reason." },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Reject Settlement" }));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Reject this Annual Leave settlement?",
+      }),
+    );
 
     await waitFor(() =>
       expect(rejectAnnualLeavePaymentRequest).toHaveBeenCalledWith(

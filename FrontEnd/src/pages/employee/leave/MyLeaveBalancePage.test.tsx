@@ -132,7 +132,7 @@ const eligibilityResponse = (eligibility: AnnualLeaveEligibility) => ({
 async function openPaymentModal() {
   const button = await screen.findByRole(
     "button",
-    { name: /Request Annual Leave Payment/ },
+    { name: /Request payment/i },
     FIND,
   );
   await waitFor(() => expect(button).not.toBeDisabled(), FIND);
@@ -227,7 +227,7 @@ describe("MyLeaveBalancePage — eligibility", () => {
     expect(
       await screen.findByText("2025-05-02 → 2026-05-01", {}, FIND),
     ).toBeInTheDocument();
-    expect(screen.getByText("Estimated Payment Amount")).toBeInTheDocument();
+    expect(screen.getByText("Estimated payment amount")).toBeInTheDocument();
     expect(screen.getByText("2450.00")).toBeInTheDocument(); // estimated_payment_amount
     expect(screen.getByText("3500.00")).toBeInTheDocument(); // salary_at_year_end
     expect(screen.getByText("21 Days")).toBeInTheDocument(); // eligible_unused_days
@@ -296,7 +296,7 @@ describe("MyLeaveBalancePage — eligibility", () => {
 
     expect(
       await screen.findByText(
-        "Annual Leave payment is not available for you right now.",
+        "Annual Leave payment is not available.",
         {},
         FIND,
       ),
@@ -314,7 +314,7 @@ describe("MyLeaveBalancePage — Annual Leave payment request", () => {
     render(<MyLeaveBalancePage />);
     expect(await openPaymentModal()).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("Note to HR"), {
+    fireEvent.change(screen.getByLabelText("Employee note"), {
       target: { value: "Please process my unused Annual Leave." },
     });
 
@@ -383,7 +383,7 @@ describe("MyLeaveBalancePage — Annual Leave payment request", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "You already have an Annual Leave settlement in progress. A new request can be submitted only after it is resolved.",
+        "An Annual Leave settlement already exists for this contract year.",
       ),
     ).toBeInTheDocument();
     expect(
