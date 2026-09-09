@@ -37,6 +37,7 @@ import { getMe } from "../../services/api/usersApi";
 import type { Employee } from "../../services/api/employeesApi";
 import LeaveBalanceTable from "../../components/leaves/LeaveBalanceTable";
 import EmployeeDocumentArchive from "../../components/employees/EmployeeDocumentArchive";
+import EmployeeSignatureCard from "../../components/employees/EmployeeSignatureCard";
 import type { UserDto } from "../../services/api/apiTypes";
 import { isApiError } from "../../services/api/apiTypes";
 import { formatNumber } from "../../utils/currency";
@@ -532,6 +533,10 @@ export default function UserProfilePage() {
                       </span>
                     ),
                     children: (
+                      // This profile is shown to ordinary employees, so it
+                      // grants no document-management capability: no permanent
+                      // delete and no OCR re-run, matching what the backend
+                      // allows them to do.
                       <EmployeeDocumentArchive
                         employeeId={employee.id}
                         readonly={false}
@@ -576,6 +581,17 @@ export default function UserProfilePage() {
                 />
               </Space>
             </Card>
+
+            {/*
+              Every role reaching this page is also an employee, so the personal
+              signature belongs here exactly as it does on the employee profile.
+              It is rendered only inside this branch: the `me` signature routes
+              resolve the caller's own EmployeeProfile, and the basic-user branch
+              below has none to manage.
+            */}
+            <div style={{ marginTop: 24 }}>
+              <EmployeeSignatureCard />
+            </div>
           </Col>
         </Row>
       </div>

@@ -23,6 +23,9 @@ export default function CEOAssetDamageReportsPage() {
       fetcher={getCEOAssetDamageReports}
       approve={approveCEOAssetDamageReport}
       reject={rejectCEOAssetDamageReport}
+      employeeProfilePath={(employeeProfileId) =>
+        `/manager/team/${employeeProfileId}`
+      }
     />
   );
 }

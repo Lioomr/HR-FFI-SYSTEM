@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 import BaseLayout from "./BaseLayout";
@@ -44,7 +50,7 @@ const MANAGER_NAV_LINKS = [
   "Team Dashboard",
   "My Team",
   "Team Requests",
-  "Attendance Corrections",
+  "Team Attendance",
   "Loan Requests",
 ];
 
@@ -72,12 +78,20 @@ function signIn(role: Role) {
   });
 }
 
-async function renderShell() {
+async function renderShell(path = "/employee/home") {
   render(
-    <MemoryRouter initialEntries={["/employee/home"]}>
+    <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route element={<BaseLayout />}>
           <Route path="/employee/home" element={<div>Home</div>} />
+          <Route
+            path="/manager/attendance"
+            element={<div>Direct-report attendance</div>}
+          />
+          <Route
+            path="/employee/attendance"
+            element={<div>Personal attendance</div>}
+          />
         </Route>
       </Routes>
     </MemoryRouter>,
@@ -85,6 +99,7 @@ async function renderShell() {
   // Wait for the sidebar itself, then let the capability request settle so
   // "nav is hidden" assertions cannot pass merely because it is still loading.
   await screen.findAllByRole("menu");
+  expect(screen.queryByText("Attendance Corrections")).not.toBeInTheDocument();
   await waitFor(() => expect(mockedGetManagerAccess).toHaveBeenCalled());
   await act(async () => {
     await Promise.resolve();
@@ -102,7 +117,7 @@ describe("buildManagerNavGroups", () => {
       "/manager/dashboard",
       "/manager/team",
       "/manager/team-requests",
-      "/manager/attendance-corrections",
+      "/manager/attendance",
       "/manager/loan-requests",
     ]);
   });
@@ -141,6 +156,45 @@ describe("BaseLayout manager navigation", () => {
     window.matchMedia = originalMatchMedia;
     useAuthStore.setState({ isAuthenticated: false, user: null });
   });
+
+  it.each([
+    ["Manager", "/manager/attendance", "Direct-report attendance"],
+    ["Employee", "/employee/attendance", "Personal attendance"],
+  ] as const)(
+    "%s attendance submenu navigates to %s",
+    async (role, target, content) => {
+      signIn(role);
+      setManagerAccess(role === "Manager");
+      await renderShell();
+      fireEvent.click(
+        screen.getByText("Attendance", { selector: ".ant-menu-title-content" }),
+      );
+      const records = await screen.findByRole("link", { name: "Records" });
+      expect(records).toHaveAttribute("href", target);
+      fireEvent.click(records);
+      expect(await screen.findByText(content)).toBeInTheDocument();
+    },
+  );
+
+  it.each([
+    ["Manager", "/manager/attendance"],
+    ["Employee", "/employee/attendance"],
+  ] as const)(
+    "opens the %s attendance submenu on direct navigation",
+    async (role, path) => {
+      signIn(role);
+      setManagerAccess(role === "Manager");
+      await renderShell(path);
+      const records = await screen.findByRole("link", { name: "Records" });
+      expect(records).toHaveAttribute("href", path);
+      expect(records.closest(".ant-menu-submenu")).toHaveClass(
+        "ant-menu-submenu-open",
+      );
+      expect(records.closest(".ant-menu-item")).toHaveClass(
+        "ant-menu-item-selected",
+      );
+    },
+  );
 
   it("shows manager navigation for an Employee with manager capability", async () => {
     signIn("Employee");

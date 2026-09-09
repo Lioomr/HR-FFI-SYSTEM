@@ -35,6 +35,16 @@ type RetriableRequestConfig = AxiosRequestConfig & {
 
 let refreshPromise: Promise<string> | null = null;
 
+export function getLoginRedirectPath(
+  pathname: string,
+  search = "",
+  hash = "",
+): string {
+  if (pathname === "/login") return "/login";
+  const next = `${pathname}${search}${hash}`;
+  return `/login?next=${encodeURIComponent(next)}`;
+}
+
 async function refreshAccessToken(): Promise<string> {
   const refresh = getRefreshToken();
   if (!refresh) throw new Error("No refresh token is available.");
@@ -63,7 +73,11 @@ async function refreshAccessToken(): Promise<string> {
 function clearAuthenticationAndRedirect() {
   clearToken();
   useAuthStore.getState().logout();
-  window.location.href = "/login";
+  window.location.href = getLoginRedirectPath(
+    window.location.pathname,
+    window.location.search,
+    window.location.hash,
+  );
 }
 
 function shouldRedirectOnUnauthorized(err: any): boolean {

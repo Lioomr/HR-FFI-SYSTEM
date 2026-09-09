@@ -141,7 +141,9 @@ def _leave_read_queryset(queryset):
     return queryset.select_related(*LEAVE_READ_SELECT_RELATED).prefetch_related(
         Prefetch(
             "employee_documents",
-            queryset=EmployeeDocument.objects.select_related("uploaded_by", "company", "leave_request"),
+            queryset=EmployeeDocument.objects.select_related("uploaded_by", "company", "leave_request").filter(
+                deletion_started_at__isnull=True
+            ),
         )
     )
 
@@ -485,7 +487,7 @@ def _build_leave_request_pdf_legacy(instance: LeaveRequest):
         return regular, bold
 
     def _template_path():
-        template = resolve_template_path("leave_request_blank.pdf", aliases=["leave-request-template.pdf"])
+        template = resolve_template_path("leave_request_blank.pdf")
         if template:
             return template
         hr_templates_dir = getattr(settings, "HR_TEMPLATES_DIR", os.environ.get("HR_TEMPLATES_DIR") or "")
@@ -496,7 +498,6 @@ def _build_leave_request_pdf_legacy(instance: LeaveRequest):
         explicit_names = [
             "طلب إجازة (AutoRecovered).pdf",
             "طلب إجازة.pdf",
-            "leave-request-template.pdf",
         ]
         for root in search_roots:
             for name in explicit_names:
@@ -1140,6 +1141,14 @@ def _build_leave_request_pdf(instance: LeaveRequest):
     from .pdf_leave_request import build_leave_request_pdf
 
     return build_leave_request_pdf(instance, fallback=_build_leave_request_pdf_fallback)
+
+
+def _build_annual_entitlements_pdf(instance) -> bytes:
+    """Render the annual entitlements disbursement form from its approved map."""
+
+    from .pdf_annual_entitlements import build_annual_entitlements_pdf
+
+    return build_annual_entitlements_pdf(instance)
 
 
 class LeaveTypeViewSet(viewsets.ModelViewSet):
@@ -2530,6 +2539,11 @@ class AnnualLeavePaymentRequestViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated(), IsHRManagerOrAdmin()]
         if self.action in {"approve", "reject"}:
             return [IsAuthenticated(), IsDepartmentCEOApprover()]
+        if self.action == "pdf":
+            # Ownership and company scope are enforced by get_queryset below:
+            # an employee only ever resolves their own settlement, and every
+            # role is confined to the active company.
+            return [IsAuthenticated()]
         return [IsAuthenticated()]
 
     def get_queryset(self):
@@ -2764,6 +2778,22 @@ class AnnualLeavePaymentRequestViewSet(viewsets.ModelViewSet):
             metadata={"comment": comment},
         )
         return success(AnnualLeavePaymentRequestSerializer(instance).data)
+
+    @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated])
+    def pdf(self, request, pk=None):
+        instance = self.get_object()
+        pdf_bytes = _build_annual_entitlements_pdf(instance)
+        audit(
+            request,
+            "annual_leave_payment_exported_pdf",
+            entity="AnnualLeavePaymentRequest",
+            entity_id=instance.id,
+            metadata={"company_id": instance.company_id, "status": instance.status},
+        )
+        return _configure_sensitive_download(
+            HttpResponse(pdf_bytes, content_type="application/octet-stream"),
+            f"annual_entitlements_{instance.id}.pdf",
+        )
 
 
 class CEOLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):

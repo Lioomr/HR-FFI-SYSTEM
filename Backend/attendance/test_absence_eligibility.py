@@ -8,7 +8,7 @@ from django.core.management import call_command
 
 from admin_portal.models import SystemSettings
 from attendance.absence import mark_absentees_for_date
-from attendance.models import AttendanceRecord
+from attendance.models import AttendanceRecord, BioTimeEmployeeMap
 from attendance.tasks import mark_daily_absentees
 from employees.models import EmployeeProfile
 from leaves.models import LeaveRequest, LeaveType
@@ -47,10 +47,17 @@ def test_hire_status_archive_company_and_leave_rules_apply_to_every_entrypoint(e
         "approved_leave": {},
         "legacy_leave": {"user": leave_user},
         "pending_leave": {},
+        "unmapped": {},
     }.items():
         profiles[name] = EmployeeProfile.objects.create(
             **{"company": company, "employee_id": f"ABS-{name}", "full_name": name, **overrides},
         )
+    # Attendance eligibility is the BioTime mapping. Everyone gets one except
+    # "unmapped" and the archived profiles, which the database refuses to map.
+    for name, profile in profiles.items():
+        if name in {"unmapped", "archived", "inactive_company"}:
+            continue
+        BioTimeEmployeeMap.objects.create(employee_profile=profile, biotime_emp_code=f"BT-ABS-{name}")
     leave_type = LeaveType.objects.create(company=company, code="ABS-LEAVE", name="Annual")
     for name, leave_status in [
         ("approved_leave", LeaveRequest.RequestStatus.APPROVED),
@@ -84,6 +91,7 @@ def test_backfill_crossing_hire_date_starts_on_hire_date_and_is_idempotent():
     profile = EmployeeProfile.objects.create(
         company=company, full_name="Range", employee_id="ABS-RANGE", hire_date=hire_date
     )
+    BioTimeEmployeeMap.objects.create(employee_profile=profile, biotime_emp_code="BT-ABS-RANGE")
     settings = SystemSettings.get_solo()
     settings.work_week_days = [0, 1, 2, 3, 4]
     settings.absence_detection_enabled = False  # Backfill bypasses only this flag.

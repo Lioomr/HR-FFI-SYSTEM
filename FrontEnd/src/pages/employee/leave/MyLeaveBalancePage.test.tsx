@@ -138,7 +138,7 @@ async function openPaymentModal() {
   await waitFor(() => expect(button).not.toBeDisabled(), FIND);
   fireEvent.click(button);
   return screen.findByText(
-    /only be requested during the final 5 days/,
+    /request window opens during the final five days/,
     {},
     FIND,
   );
@@ -282,7 +282,7 @@ describe("MyLeaveBalancePage — eligibility", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "You have Annual Leave requests still awaiting a decision. Annual Leave payment cannot be requested until they are resolved.",
+        "Payment cannot be requested while Annual Leave is pending.",
       ),
     ).toBeInTheDocument();
   });

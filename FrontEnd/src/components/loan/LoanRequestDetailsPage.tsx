@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   Alert,
   Button,
@@ -31,6 +31,10 @@ import LoanApprovalMap from "../loans/LoanApprovalMap";
 import LoanDecisionTimeline from "./LoanDecisionTimeline";
 import LoanPdfDownloadButton from "./LoanPdfDownloadButton";
 import { isApiError } from "../../services/api/apiTypes";
+import {
+  getHttpErrorMessage,
+  getHttpStatus,
+} from "../../services/api/httpErrors";
 import type { LoanRequest } from "../../services/api/loanApi";
 import { formatNumber } from "../../utils/currency";
 import { formatDateOnly } from "../../utils/dateTime";
@@ -152,8 +156,15 @@ export default function LoanRequestDetailsPage({
         return;
       }
       setItem(((res as any)?.data ?? res) as LoanRequest);
-    } catch (err: any) {
-      setError(err?.message || t("loans.myRequests.failedLoad"));
+    } catch (err: unknown) {
+      // Nginx can return an HTML 502/503 page while the backend restarts.
+      // Never render that technical response body in the operational UI.
+      const status = getHttpStatus(err);
+      setError(
+        status !== undefined && status >= 500
+          ? t("loans.details.serviceUnavailable")
+          : getHttpErrorMessage(err),
+      );
     } finally {
       setLoading(false);
     }
@@ -165,6 +176,9 @@ export default function LoanRequestDetailsPage({
 
   const employeeName =
     item?.employee?.full_name || item?.employee?.email || "—";
+  const employeeProfilePath = item?.employee?.employee_profile_id
+    ? `/hr/employees/${item.employee.employee_profile_id}`
+    : undefined;
 
   const canAct = Array.isArray(canActWhenStatus)
     ? Boolean(item?.status) && canActWhenStatus.includes(item!.status)
@@ -308,7 +322,22 @@ export default function LoanRequestDetailsPage({
 
       <PageHeader
         title={title}
-        subtitle={employeeName}
+        subtitle={
+          employeeProfilePath ? (
+            <Link
+              to={employeeProfilePath}
+              style={{
+                color: "#f97316",
+                fontWeight: 600,
+                textDecoration: "none",
+              }}
+            >
+              {employeeName}
+            </Link>
+          ) : (
+            employeeName
+          )
+        }
         secondarySubtitle={requestAgeLabel(t, item.created_at)}
         tags={
           <ApprovalStatusTag
@@ -348,6 +377,7 @@ export default function LoanRequestDetailsPage({
                 name={employeeName}
                 secondary={item.employee?.email}
                 size={44}
+                profilePath={employeeProfilePath}
               />
             </DashboardPanel>
 

@@ -71,7 +71,9 @@ export default function PendingInboxPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [filters, setFilters] = useState<Filters>({});
-  const [approvalNotifications, setApprovalNotifications] = useState<NotificationDto[]>([]);
+  const [approvalNotifications, setApprovalNotifications] = useState<
+    NotificationDto[]
+  >([]);
   const [form] = Form.useForm();
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -104,8 +106,13 @@ export default function PendingInboxPage() {
 
   const loadApprovalNotifications = useCallback(async () => {
     try {
-      const response = await listNotifications({ category: "approval", page: 1, page_size: 20 });
-      if (!isApiError(response)) setApprovalNotifications(response.data.items ?? []);
+      const response = await listNotifications({
+        category: "approval",
+        page: 1,
+        page_size: 20,
+      });
+      if (!isApiError(response))
+        setApprovalNotifications(response.data.items ?? []);
     } catch {
       // The workflow queue remains usable if notification history is unavailable.
     }
@@ -247,7 +254,9 @@ export default function PendingInboxPage() {
         subtitle={t("pendingInbox.subtitle")}
         tags={
           <Tag color={total ? "orange" : "green"}>
-            {total ? t("pendingInbox.needsAttention") : t("pendingInbox.allClear")}
+            {total
+              ? t("pendingInbox.needsAttention")
+              : t("pendingInbox.allClear")}
           </Tag>
         }
         actions={
@@ -264,19 +273,30 @@ export default function PendingInboxPage() {
       <Card
         title={
           <Space>
-            <Typography.Text strong>{t("pendingInbox.notificationsTitle")}</Typography.Text>
+            <Typography.Text strong>
+              {t("pendingInbox.notificationsTitle")}
+            </Typography.Text>
             <Badge
-              count={approvalNotifications.filter((item) => !item.is_read).length}
+              count={
+                approvalNotifications.filter((item) => !item.is_read).length
+              }
               showZero
               style={{ backgroundColor: "#f97316" }}
             />
           </Space>
         }
-        extra={<Button type="link" onClick={() => navigate("/notifications")}>{t("pendingInbox.viewAllNotifications")}</Button>}
+        extra={
+          <Button type="link" onClick={() => navigate("/notifications")}>
+            {t("pendingInbox.viewAllNotifications")}
+          </Button>
+        }
         style={{ marginBottom: 16, borderRadius: 16 }}
       >
         {approvalNotifications.length === 0 ? (
-          <Empty description={t("pendingInbox.noNotifications")} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+          <Empty
+            description={t("pendingInbox.noNotifications")}
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+          />
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {approvalNotifications.slice(0, 5).map((item) => (
@@ -324,7 +344,10 @@ export default function PendingInboxPage() {
           <Card size="small" bordered={false} style={{ borderRadius: 14 }}>
             <Statistic
               title={t("pendingInbox.stats.other")}
-              value={Math.max(total - (typeCounts.LEAVE || 0) - (typeCounts.LOAN || 0), 0)}
+              value={Math.max(
+                total - (typeCounts.LEAVE || 0) - (typeCounts.LOAN || 0),
+                0,
+              )}
               prefix={<CheckCircleOutlined style={{ color: "#722ed1" }} />}
             />
           </Card>
@@ -336,12 +359,22 @@ export default function PendingInboxPage() {
         title={
           <Space>
             <FilterOutlined />
-            <Typography.Text strong>{t("pendingInbox.filters")}</Typography.Text>
+            <Typography.Text strong>
+              {t("pendingInbox.filters")}
+            </Typography.Text>
           </Space>
         }
         extra={
           hasFilters ? (
-            <Button type="link" icon={<ClearOutlined />} onClick={() => { form.resetFields(); setFilters({}); setPage(1); }}>
+            <Button
+              type="link"
+              icon={<ClearOutlined />}
+              onClick={() => {
+                form.resetFields();
+                setFilters({});
+                setPage(1);
+              }}
+            >
               {t("pendingInbox.clearFilters")}
             </Button>
           ) : null

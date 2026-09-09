@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   Alert,
   Button,
@@ -213,9 +213,20 @@ export default function AnnualLeaveSettlementsPage() {
       key: "employee",
       render: (_, record) => (
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 600 }}>
-            {record.employee_name || `#${record.employee_id ?? "—"}`}
-          </div>
+          {record.employee_id ? (
+            <Link
+              to={`/hr/employees/${record.employee_id}`}
+              style={{
+                color: "#f97316",
+                fontWeight: 600,
+                textDecoration: "none",
+              }}
+            >
+              {record.employee_name || `#${record.employee_id}`}
+            </Link>
+          ) : (
+            <div style={{ fontWeight: 600 }}>{record.employee_name || "—"}</div>
+          )}
           <div style={{ fontSize: 12, color: "#64748b" }}>#{record.id}</div>
         </div>
       ),

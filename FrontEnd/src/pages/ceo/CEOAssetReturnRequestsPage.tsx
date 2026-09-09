@@ -24,6 +24,9 @@ export default function CEOAssetReturnRequestsPage() {
       fetcher={getCEOAssetReturnRequests}
       approve={approveCEOAssetReturnRequest}
       reject={rejectCEOAssetReturnRequest}
+      employeeProfilePath={(employeeProfileId) =>
+        `/manager/team/${employeeProfileId}`
+      }
       // The return flow passes through manager and HR before the CEO, so the
       // map is worth keeping: it shows what has already been decided.
       expandedRowRender={(record) => (

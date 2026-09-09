@@ -8,7 +8,7 @@ vi.mock("react-router-dom", () => ({
 
 vi.mock("../../services/api/managerSummaryApi", () => ({
   getManagerWorkSummary: vi.fn(),
-  MANAGER_QUEUE_KEYS: ["leave", "loan", "attendance", "assetReturn"],
+  MANAGER_QUEUE_KEYS: ["leave", "loan", "assetReturn"],
 }));
 
 vi.mock("../../services/api/managerApi", async (importOriginal) => ({
@@ -42,12 +42,7 @@ const mockedSummary = vi.mocked(getManagerWorkSummary);
 const mockedAccess = vi.mocked(getManagerAccess);
 const mockedTeam = vi.mocked(getManagerTeam);
 
-const QUEUE_KEYS: ManagerQueueKey[] = [
-  "leave",
-  "loan",
-  "attendance",
-  "assetReturn",
-];
+const QUEUE_KEYS: ManagerQueueKey[] = ["leave", "loan", "assetReturn"];
 const DAY = 86_400_000;
 
 function daysAgo(days: number) {
@@ -148,7 +143,7 @@ describe("ManagerDashboardPage", () => {
       makeSummary([
         makeItem({ queue: "leave", id: 1 }),
         makeItem({ queue: "loan", id: 2, detail: "5000" }),
-        makeItem({ queue: "attendance", id: 3, detail: "2026-08-01" }),
+        makeItem({ queue: "assetReturn", id: 3, detail: "Laptop" }),
       ]),
     );
 

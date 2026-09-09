@@ -6,29 +6,20 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import dayjs from "dayjs";
+import { message } from "antd";
 
 vi.mock("../../services/api/attendanceApi", () => ({
   getMyAttendance: vi.fn(),
-  checkIn: vi.fn(),
-  checkOut: vi.fn(),
   getGlobalAttendance: vi.fn(),
-  overrideAttendance: vi.fn(),
 }));
 
 import EmployeeAttendancePage from "./AttendancePage";
-import {
-  checkIn,
-  checkOut,
-  getMyAttendance,
-} from "../../services/api/attendanceApi";
+import { getMyAttendance } from "../../services/api/attendanceApi";
 import { useEmployeeAttendanceStore } from "../../stores/attendanceStore";
 import { useI18nStore } from "../../i18n/i18nStore";
 import type { AttendanceRecord } from "../../types/attendance";
 
 const getMock = getMyAttendance as unknown as ReturnType<typeof vi.fn>;
-const checkInMock = checkIn as unknown as ReturnType<typeof vi.fn>;
-const checkOutMock = checkOut as unknown as ReturnType<typeof vi.fn>;
 
 const record = (
   overrides: Partial<AttendanceRecord> = {},
@@ -39,7 +30,7 @@ const record = (
   check_in_at: "2026-08-11T05:00:00Z",
   check_out_at: "2026-08-11T13:30:00Z",
   status: "PRESENT",
-  source: "EMPLOYEE",
+  source: "SYSTEM",
   is_overridden: false,
   override_reason: null,
   notes: null,
@@ -73,13 +64,9 @@ function useDesktopViewport() {
 
 beforeEach(() => {
   getMock.mockReset();
-  checkInMock.mockReset();
-  checkOutMock.mockReset();
   useI18nStore.getState().setLanguage("en");
   useEmployeeAttendanceStore.getState().reset();
   getMock.mockResolvedValue(listPayload([record()]));
-  checkInMock.mockResolvedValue({ status: "success", data: record() });
-  checkOutMock.mockResolvedValue({ status: "success", data: record() });
 });
 
 describe("EmployeeAttendancePage status display", () => {
@@ -178,49 +165,33 @@ describe("EmployeeAttendancePage status display", () => {
   });
 });
 
-describe("EmployeeAttendancePage refresh after check-in", () => {
-  it("reloads with the range the page is showing, not the backend default", async () => {
-    // Today has no record yet, so the check-in control is enabled.
-    getMock.mockResolvedValue(listPayload([record({ date: "2026-08-11" })]));
-
+describe("BioTime-only attendance", () => {
+  it("has no punch controls and refreshes the read-only range", async () => {
     render(<EmployeeAttendancePage />);
-
     await waitFor(() => expect(getMock).toHaveBeenCalledTimes(1));
-    const initialParams = getMock.mock.calls[0][0];
-    expect(initialParams).toHaveProperty("date_from");
-    expect(initialParams).toHaveProperty("date_to");
-
-    fireEvent.click(screen.getByRole("button", { name: /Check In/i }));
-
-    await waitFor(() => expect(checkInMock).toHaveBeenCalledTimes(1));
+    expect(
+      screen.getByText("Attendance is recorded through BioTime."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /check in|check out/i }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /refresh/i }));
     await waitFor(() => expect(getMock).toHaveBeenCalledTimes(2));
-    // The reload keeps date_from/date_to, so the new row cannot fall outside
-    // the visible range.
-    expect(getMock.mock.calls[1][0]).toEqual(initialParams);
+    expect(getMock.mock.calls[1][0]).toEqual(getMock.mock.calls[0][0]);
   });
-
-  it("reloads with the same range after a check-out", async () => {
-    // The component matches today's row with `dayjs().format("YYYY-MM-DD")`,
-    // which is local. `toISOString()` is UTC, so east of Greenwich the two
-    // disagree either side of midnight and the row stops being "today".
-    const today = dayjs().format("YYYY-MM-DD");
-    getMock.mockResolvedValue(
-      listPayload([record({ date: today, check_out_at: null })]),
-    );
-
-    render(<EmployeeAttendancePage />);
-
-    await waitFor(() => expect(getMock).toHaveBeenCalledTimes(1));
-    const initialParams = getMock.mock.calls[0][0];
-
-    const checkOutButton = await screen.findByRole("button", {
-      name: /Check Out/i,
+  it("clears previous history and shows unmapped access as information without a toast", async () => {
+    const toast = vi.spyOn(message, "error");
+    const text =
+      "Attendance is unavailable until your BioTime mapping is completed. Contact HR to be registered on a BioTime device.";
+    useEmployeeAttendanceStore.setState({ records: [record()], total: 1 });
+    getMock.mockRejectedValue({
+      response: { status: 403, data: { message: text } },
     });
-    await waitFor(() => expect(checkOutButton).not.toBeDisabled());
-    fireEvent.click(checkOutButton);
-
-    await waitFor(() => expect(checkOutMock).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(getMock).toHaveBeenCalledTimes(2));
-    expect(getMock.mock.calls[1][0]).toEqual(initialParams);
+    render(<EmployeeAttendancePage />);
+    expect(await screen.findByText(text)).toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(toast).not.toHaveBeenCalled();
+    expect(useEmployeeAttendanceStore.getState().error).toBeNull();
+    toast.mockRestore();
   });
 });

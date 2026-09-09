@@ -1,3 +1,8 @@
+import type {
+  AttendanceRecord,
+  AttendanceFilters,
+} from "../../types/attendance";
+import type { AttendanceListResponse } from "./attendanceApi";
 import { api } from "./apiClient";
 import type { ApiResponse } from "./apiTypes";
 import type { AssetReturnRequest } from "./assetsApi";
@@ -113,23 +118,7 @@ export async function rejectLeaveRequestManager(id: number, comment: string) {
 
 // -- Attendance Requests --
 
-export type ManagerAttendanceRecord = {
-  id: number;
-  employee_profile: {
-    id: number;
-    user: {
-      id: number;
-      email: string;
-      full_name: string;
-    };
-  };
-  date: string;
-  check_in_at: string | null;
-  check_out_at: string | null;
-  status: string;
-  source: string;
-  created_at: string;
-};
+export type ManagerAttendanceRecord = AttendanceRecord;
 
 export type ManagerTeamMember = {
   id: number;
@@ -188,43 +177,12 @@ export function normalizeManagerAccess(raw: unknown): ManagerAccess {
   };
 }
 
-export async function getManagerAttendance(status?: string) {
-  const params = status ? { status } : {};
-  const { data } = await api.get<ApiResponse<any>>("/api/manager/attendance/", {
-    params,
-  });
-  if (data?.status === "success" && data?.data?.items) {
-    return {
-      ...data,
-      data: data.data.items as ManagerAttendanceRecord[],
-    } as ApiResponse<ManagerAttendanceRecord[]>;
-  }
-  if (Array.isArray((data as any)?.results)) {
-    return { status: "success", data: (data as any).results } as ApiResponse<
-      ManagerAttendanceRecord[]
-    >;
-  }
-  if (Array.isArray(data)) {
-    return {
-      status: "success",
-      data: data as ManagerAttendanceRecord[],
-    } as ApiResponse<ManagerAttendanceRecord[]>;
-  }
-  return data as ApiResponse<ManagerAttendanceRecord[]>;
-}
-
-export async function approveAttendanceManager(id: number, notes?: string) {
-  const { data } = await api.post<ApiResponse<any>>(
-    `/api/manager/attendance/${id}/approve/`,
-    { notes },
-  );
-  return data;
-}
-
-export async function rejectAttendanceManager(id: number, notes: string) {
-  const { data } = await api.post<ApiResponse<any>>(
-    `/api/manager/attendance/${id}/reject/`,
-    { notes },
+export async function getManagerAttendance(
+  params?: Pick<AttendanceFilters, "status" | "page" | "page_size">,
+) {
+  const { data } = await api.get<ApiResponse<AttendanceListResponse>>(
+    "/api/manager/attendance/",
+    { params },
   );
   return data;
 }

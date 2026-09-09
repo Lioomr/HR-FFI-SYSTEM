@@ -1,31 +1,75 @@
+"""Leave request PDF: values and signers for the approved leave form.
+
+Layout lives entirely in ``leave_request_blank_field_map.json`` next to the
+template; this module only decides *what* each mapped box should say and *who*
+signed each stage.  Rendering is delegated to :mod:`core.pdf_forms`.
+"""
+
 from __future__ import annotations
 
-import json
-import os
-from io import BytesIO
 from pathlib import Path
 from typing import Any, Callable
 
-from django.conf import settings
 from django.utils import timezone
-from pypdf import PdfReader, PdfWriter
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.pdfgen import canvas
 
+from core.pdf_forms import (
+    FormAssets,
+    SignatureAsset,
+    load_form_assets,
+    log_signature_diagnostics,
+    render_mapped_form,
+)
+from core.pdf_signers import signer_signatures
 from core.views_templates import resolve_template_path
 
 from .utils import calculate_leave_balance, get_leave_days
 
-try:
-    import arabic_reshaper
-    from bidi.algorithm import get_display
-except ImportError:  # pragma: no cover - optional dependency guard
-    arabic_reshaper = None
-    get_display = None
-
-
 FIELD_MAP_FILENAME = "leave_request_blank_field_map.json"
+TEMPLATE_FILENAME = "leave_request_blank.pdf"
+TEMPLATE_ALIASES = ["leave-request-template.pdf"]
+FORM_KEY = "leave_request"
+
+#: A map missing any of these cannot describe this form, so the caller falls
+#: back rather than filling a template with coordinates meant for another one.
+REQUIRED_FIELD_KEYS = frozenset(
+    {
+        "reference_no",
+        "request_date",
+        "employee_name",
+        "employee_id",
+        "department",
+        "job_title",
+        "line_manager",
+        "work_location",
+        "contact_no",
+        "email",
+        "leave_type",
+        "leave_balance_days",
+        "start_date",
+        "end_date",
+        "total_days_requested",
+        "will_travel",
+        "reason",
+        "address_during_leave",
+        "contact_no_during_leave",
+        "substitute_employee_id",
+        "substitute_employee_name",
+        "substitute_department",
+        "substitute_notes",
+        "destination",
+        "travel_date",
+        "return_date",
+        "ticket_required",
+        "employee_signature_image",
+        "employee_signature_date",
+        "line_manager_signature_image",
+        "line_manager_signature_date",
+        "department_head_signature_image",
+        "department_head_signature_date",
+        "hr_signature_image",
+        "hr_signature_date",
+    }
+)
 
 LEAVE_TYPE_ARABIC = {
     "ANNUAL": "إجازة سنوية",
@@ -41,47 +85,6 @@ LEAVE_TYPE_ARABIC = {
     "BIRTH": "إجازة مولود",
     "MATERNITY": "إجازة أمومة",
 }
-
-
-def _register_fonts() -> tuple[str, str]:
-    candidates = {
-        "LeavePDFRegular": [
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            r"C:\Windows\Fonts\arial.ttf",
-        ],
-        "LeavePDFBold": [
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-            r"C:\Windows\Fonts\arialbd.ttf",
-        ],
-    }
-    selected = {"LeavePDFRegular": "Helvetica", "LeavePDFBold": "Helvetica-Bold"}
-    registered = set(pdfmetrics.getRegisteredFontNames())
-    for name, paths in candidates.items():
-        if name in registered:
-            selected[name] = name
-            continue
-        for path in paths:
-            if os.path.exists(path):
-                pdfmetrics.registerFont(TTFont(name, path))
-                selected[name] = name
-                break
-    return selected["LeavePDFRegular"], selected["LeavePDFBold"]
-
-
-def _shape_arabic(value: Any) -> str:
-    text = str(value or "").strip()
-    if text and arabic_reshaper and get_display and any("\u0600" <= char <= "\u06ff" for char in text):
-        return get_display(arabic_reshaper.reshape(text))
-    return text
-
-
-def _is_arabic_heavy(value: Any) -> bool:
-    text = str(value or "")
-    letters = [char for char in text if char.isalpha()]
-    if not letters:
-        return False
-    arabic = sum("\u0600" <= char <= "\u06ff" for char in letters)
-    return arabic >= len(letters) / 2
 
 
 def _format_date(value: Any) -> str:
@@ -169,6 +172,33 @@ def _leave_type_value(leave_type) -> str:
     return name
 
 
+def build_leave_request_signers(instance) -> dict[str, Any]:
+    """Return ``{map_field: recorded_actor}`` for every signature box.
+
+    Each approver comes from the decision the workflow actually stored for that
+    stage.  A stage nobody has completed maps to ``None`` so the box stays blank
+    and the renderer reports it as missing - the downloading user is never
+    substituted in as a signer.
+    """
+
+    hr_user = (
+        getattr(instance, "hr_completed_by", None)
+        or getattr(instance, "decided_by", None)
+        or getattr(instance, "entered_by", None)
+    )
+    hr_signed = bool(getattr(instance, "hr_completed_at", None) or getattr(instance, "decided_at", None))
+    return {
+        "employee_signature_image": getattr(instance, "employee", None),
+        "line_manager_signature_image": (
+            getattr(instance, "manager_decision_by", None) if getattr(instance, "manager_decision_at", None) else None
+        ),
+        "department_head_signature_image": (
+            getattr(instance, "ceo_decision_by", None) if getattr(instance, "ceo_decision_at", None) else None
+        ),
+        "hr_signature_image": hr_user if hr_signed else None,
+    }
+
+
 def build_leave_request_values(instance) -> dict[str, Any]:
     profile = _profile_for(instance)
     employee = getattr(instance, "employee", None)
@@ -178,42 +208,15 @@ def build_leave_request_values(instance) -> dict[str, Any]:
     company = getattr(profile, "company", None) or getattr(instance, "company", None)
     task_group = getattr(profile, "task_group_ref", None) if profile else None
 
-    manager_decided_at = getattr(instance, "manager_decision_at", None)
-    manager_decided_by = getattr(instance, "manager_decision_by", None) or manager_user
-    later_stage_decision = bool(
-        getattr(instance, "ceo_decision_at", None)
-        or getattr(instance, "decided_at", None)
-        or getattr(instance, "hr_completed_at", None)
-    )
-    rejected_by_manager = bool(
-        manager_decided_at
-        and not later_stage_decision
-        and getattr(instance, "status", "") == getattr(instance.RequestStatus, "REJECTED", "rejected")
-    )
-    manager_recommended = None
-    if manager_decided_at:
-        manager_recommended = not rejected_by_manager
-
-    ceo_user = getattr(instance, "ceo_decision_by", None)
-    hr_user = (
-        getattr(instance, "hr_completed_by", None)
-        or getattr(instance, "decided_by", None)
-        or getattr(instance, "entered_by", None)
-    )
     hr_date = getattr(instance, "hr_completed_at", None) or getattr(instance, "decided_at", None)
-
     destination = str(
-        getattr(instance, "airplane_ticket_address", "")
-        or getattr(instance, "other_leave_description", "")
-        or ""
+        getattr(instance, "airplane_ticket_address", "") or getattr(instance, "other_leave_description", "") or ""
     )
     ticket_required = bool(
         getattr(instance, "airplane_ticket_payer", "") or getattr(instance, "airplane_ticket_address", "")
     )
     address_parts = [
-        str(value)
-        for value in (getattr(instance, "full_address", ""), getattr(instance, "po_box", ""))
-        if value
+        str(value) for value in (getattr(instance, "full_address", ""), getattr(instance, "po_box", "")) if value
     ]
     profile_mobile = str(getattr(profile, "mobile", "") or "")
     department = str(
@@ -228,16 +231,14 @@ def build_leave_request_values(instance) -> dict[str, Any]:
         or getattr(delegated_profile, "department_name_ar", "")
         or ""
     )
-    employee_name = _display_name(employee, profile)
     request_date = getattr(instance, "created_at", None)
 
     return {
         "reference_no": f"LR-{instance.id:05d}" if getattr(instance, "id", None) else "",
         "request_date": _format_date(request_date),
-        "employee_name": employee_name,
-        "employee_id": str(
-            getattr(profile, "employee_number", "") or getattr(profile, "employee_id", "") or ""
-        ),
+        "filed_date": _format_date(getattr(instance, "filed_at", None) or request_date),
+        "employee_name": _display_name(employee, profile),
+        "employee_id": str(getattr(profile, "employee_number", "") or getattr(profile, "employee_id", "") or ""),
         "department": department,
         "job_title": str(
             getattr(profile, "job_title_en", "")
@@ -261,153 +262,78 @@ def build_leave_request_values(instance) -> dict[str, Any]:
         "address_during_leave": " | ".join(address_parts),
         "contact_no_during_leave": profile_mobile,
         "substitute_employee_id": str(
-            getattr(delegated_profile, "employee_number", "")
-            or getattr(delegated_profile, "employee_id", "")
-            or ""
+            getattr(delegated_profile, "employee_number", "") or getattr(delegated_profile, "employee_id", "") or ""
         ),
         "substitute_employee_name": _display_name(delegated_user, delegated_profile),
         "substitute_department": delegated_department,
         "substitute_notes": str(getattr(instance, "delegation_note", "") or ""),
         "destination": destination,
         "travel_date": _format_date(getattr(instance, "start_date", None)),
-        "return_date": _format_date(
-            getattr(instance, "date_of_rejoin", None) or getattr(instance, "end_date", None)
-        ),
+        "return_date": _format_date(getattr(instance, "date_of_rejoin", None) or getattr(instance, "end_date", None)),
         "ticket_required": ticket_required,
-        "manager_recommended": manager_recommended,
-        "approval_date": _format_date(manager_decided_at),
-        "approval_comments": str(getattr(instance, "manager_decision_note", "") or ""),
-        "employee_signature": employee_name,
+        # Signature dates carry the workflow timestamp for their stage; the
+        # image itself is supplied separately from the recorded actor.
         "employee_signature_date": _format_date(request_date),
-        "line_manager_signature": _display_name(manager_decided_by) if manager_decided_at else "",
-        "line_manager_signature_date": _format_date(manager_decided_at),
-        "department_head_signature": _display_name(ceo_user) if getattr(instance, "ceo_decision_at", None) else "",
+        "line_manager_signature_date": _format_date(getattr(instance, "manager_decision_at", None)),
         "department_head_signature_date": _format_date(getattr(instance, "ceo_decision_at", None)),
-        "hr_signature": _display_name(hr_user) if hr_date else "",
         "hr_signature_date": _format_date(hr_date),
     }
 
 
+def load_leave_form_assets(template_path: str | Path | None = None) -> FormAssets | None:
+    """Resolve the template and the map deployed beside it.
+
+    ``template_path`` lets a caller render a specific template file while still
+    validating against the deployed map; the map itself is never taken from a
+    client-supplied location.
+    """
+
+    assets = load_form_assets(
+        TEMPLATE_FILENAME,
+        FIELD_MAP_FILENAME,
+        aliases=TEMPLATE_ALIASES,
+        required_keys=REQUIRED_FIELD_KEYS,
+    )
+    if assets is None or template_path is None:
+        return assets
+    return FormAssets(template_path=str(template_path), fields=assets.fields, meta=assets.meta)
+
+
 def load_field_map() -> dict[str, dict]:
-    path = Path(settings.BASE_DIR) / "static" / "pdf_templates" / FIELD_MAP_FILENAME
-    return json.loads(path.read_text(encoding="utf-8"))
+    """Return the leave field map, or ``{}`` when the paired asset is absent."""
+
+    assets = load_leave_form_assets()
+    return assets.fields if assets else {}
 
 
-def _fit_size(value: str, font_name: str, preferred: float, max_width: float, minimum: float = 5.1) -> float:
-    size = preferred
-    while size > minimum and pdfmetrics.stringWidth(value, font_name, size) > max_width:
-        size -= 0.2
-    return max(size, minimum)
-
-
-def _wrap_lines(value: str, font_name: str, size: float, max_width: float, max_lines: int) -> list[str]:
-    words = str(value or "").split()
-    if not words:
-        return []
-    lines: list[str] = []
-    current = ""
-    for word in words:
-        candidate = f"{current} {word}".strip()
-        if current and pdfmetrics.stringWidth(_shape_arabic(candidate), font_name, size) > max_width:
-            lines.append(current)
-            current = word
-            if len(lines) == max_lines:
-                break
-        else:
-            current = candidate
-    if current and len(lines) < max_lines:
-        lines.append(current)
-    return lines[:max_lines]
-
-
-def _draw_field(pdf: canvas.Canvas, spec: dict, value: Any, font_name: str) -> None:
-    text = str(value or "").strip()
-    if not text:
-        return
-    x = float(spec["x"])
-    y = float(spec["y"])
-    width = float(spec["width"])
-    height = float(spec["height"])
-    preferred_size = float(spec.get("font_size", 7.5))
-    padding = 4.0
-    max_width = width - padding * 2
-    is_rtl = _is_arabic_heavy(text)
-
-    if spec.get("multiline"):
-        size = preferred_size
-        max_lines = int(spec.get("max_lines", 2))
-        lines = _wrap_lines(text, font_name, size, max_width, max_lines)
-        line_height = size + 1.2
-        start_y = y + (height + len(lines) * line_height) / 2 - size
-        pdf.setFont(font_name, size)
-        pdf.setFillColorRGB(0.08, 0.08, 0.08)
-        for index, line in enumerate(lines):
-            shaped = _shape_arabic(line)
-            line_y = start_y - index * line_height
-            if _is_arabic_heavy(line):
-                pdf.drawRightString(x + width - padding, line_y, shaped)
-            else:
-                pdf.drawString(x + padding, line_y, shaped)
-        return
-
-    shaped = _shape_arabic(text)
-    size = _fit_size(shaped, font_name, preferred_size, max_width)
-    pdf.setFont(font_name, size)
-    pdf.setFillColorRGB(0.08, 0.08, 0.08)
-    baseline = y + (height - size) / 2 + 1.4
-    if is_rtl:
-        pdf.drawRightString(x + width - padding, baseline, shaped)
-    else:
-        pdf.drawString(x + padding, baseline, shaped)
-
-
-def _draw_checkbox(pdf: canvas.Canvas, spec: dict, selected: Any, font_name: str) -> None:
-    if selected is None:
-        return
-    key = "yes" if bool(selected) else "no"
-    center = spec.get("checkboxes", {}).get(key)
-    if not center:
-        return
-    pdf.setFont(font_name, 8.5)
-    pdf.setFillColorRGB(0, 0, 0)
-    pdf.drawCentredString(float(center[0]), float(center[1]) - 3.1, "X")
-
-
-def render_leave_request_pdf(template_path: str | Path, values: dict[str, Any]) -> bytes:
-    field_map = load_field_map()
-    reader = PdfReader(str(template_path))
-    if not reader.pages:
-        raise ValueError("Leave request template has no pages.")
-    base_page = reader.pages[0]
-    width = float(base_page.mediabox.width)
-    height = float(base_page.mediabox.height)
-    regular_font, bold_font = _register_fonts()
-
-    overlay_buffer = BytesIO()
-    pdf = canvas.Canvas(overlay_buffer, pagesize=(width, height), pageCompression=1)
-    for key, value in values.items():
-        spec = field_map.get(key)
-        if not spec:
-            continue
-        if "checkboxes" in spec:
-            _draw_checkbox(pdf, spec, value, bold_font)
-        else:
-            _draw_field(pdf, spec, value, regular_font)
-    pdf.save()
-    overlay_buffer.seek(0)
-    base_page.merge_page(PdfReader(overlay_buffer).pages[0])
-
-    output = BytesIO()
-    writer = PdfWriter()
-    writer.add_page(base_page)
-    writer.write(output)
-    return output.getvalue()
+def render_leave_request_pdf(
+    template_path: str | Path,
+    values: dict[str, Any],
+    signatures: dict[str, SignatureAsset | None] | None = None,
+) -> bytes:
+    assets = load_leave_form_assets(template_path)
+    if assets is None:
+        raise FileNotFoundError(f"{FIELD_MAP_FILENAME} is not deployed beside {TEMPLATE_FILENAME}")
+    pdf_bytes, diagnostics = render_mapped_form(assets, values, signatures=signatures)
+    log_signature_diagnostics(FORM_KEY, values.get("reference_no", ""), diagnostics)
+    return pdf_bytes
 
 
 def build_leave_request_pdf(instance, fallback: Callable[[Any], bytes] | None = None) -> bytes:
-    template_path = resolve_template_path("leave_request_blank.pdf", aliases=["leave-request-template.pdf"])
-    if not template_path:
+    """Render the mapped leave form, falling back only when its pair is absent."""
+
+    assets = load_leave_form_assets()
+    if assets is None:
         if fallback:
             return fallback(instance)
-        raise FileNotFoundError("leave_request_blank.pdf could not be resolved")
-    return render_leave_request_pdf(template_path, build_leave_request_values(instance))
+        raise FileNotFoundError(f"{TEMPLATE_FILENAME} and {FIELD_MAP_FILENAME} could not be resolved together")
+    signatures = signer_signatures(build_leave_request_signers(instance))
+    pdf_bytes, diagnostics = render_mapped_form(assets, build_leave_request_values(instance), signatures=signatures)
+    log_signature_diagnostics(FORM_KEY, getattr(instance, "id", None), diagnostics)
+    return pdf_bytes
+
+
+def resolve_leave_template_path() -> str:
+    """Template location only, for callers that do not render."""
+
+    return resolve_template_path(TEMPLATE_FILENAME, aliases=TEMPLATE_ALIASES)

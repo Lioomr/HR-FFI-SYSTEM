@@ -1,14 +1,51 @@
 from io import BytesIO
 
-from pypdf import PdfReader, PdfWriter
+from django.core.exceptions import ObjectDoesNotExist
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
 from core.pdf import font_pair, shape_ar
-from core.views_templates import resolve_template_path
+from core.pdf_forms import FormAssets, load_form_assets, log_signature_diagnostics, render_mapped_form
+from core.pdf_signers import signer_signatures
 
-from .document_pdf import draw_checkbox, draw_mapped_value, load_document_field_map
 from .models import JobOffer
+
+FIELD_MAP_FILENAME = "job_offer_blank_field_map.json"
+TEMPLATE_FILENAME = "job_offer_blank.pdf"
+TEMPLATE_ALIASES = ["job-offer-template.pdf", "job_offer.pdf"]
+FORM_KEY = "job_offer"
+
+#: Without these the map cannot be describing the approved job offer form.
+REQUIRED_FIELD_KEYS = frozenset(
+    {
+        "reference_no",
+        "offer_date",
+        "applicant_name",
+        "nationality",
+        "id_no",
+        "position",
+        "classification",
+        "department",
+        "work_location",
+        "basic_salary",
+        "housing_allowance",
+        "transportation_allowance",
+        "other_allowance",
+        "total_paid_salary",
+        "vacation_days",
+        "tickets",
+        "contract_status",
+        "contract_type",
+        "medical_insurance",
+        "contract_duration",
+        "hr_name",
+        "hr_position",
+        "applicant_decision",
+        "rejection_reason",
+        "applicant_name_acceptance",
+        "applicant_decision_date",
+    }
+)
 
 
 def _money(value) -> str:
@@ -41,35 +78,61 @@ def _field_values(offer: JobOffer) -> dict[str, str]:
         "contract_duration": offer.contract_duration,
         "hr_name": offer.hr_signer_name,
         "hr_position": offer.hr_signer_title,
-        "hr_signature": "",
         "rejection_reason": offer.rejection_reason if offer.status == JobOffer.Status.REJECTED else "",
         "applicant_name_acceptance": (
             offer.candidate_full_name if offer.status in {JobOffer.Status.ACCEPTED, JobOffer.Status.REJECTED} else ""
         ),
-        "applicant_signature": "",
+        "applicant_decision": _decision_checkbox(offer),
         "applicant_decision_date": decision_date.date().isoformat() if decision_date else "",
     }
 
 
-def _load_field_map() -> dict:
-    return load_document_field_map("job_offer", "job_offer_blank_field_map.json")
+def _decision_checkbox(offer: JobOffer) -> str | None:
+    """Return the map's own checkbox key for the candidate's recorded answer."""
 
-
-def _draw_offer_overlay_from_map(pdf: canvas.Canvas, offer: JobOffer, field_map: dict) -> None:
-    regular, _ = font_pair()
-    for key, value in _field_values(offer).items():
-        field = field_map.get(key)
-        if not field or "x" not in field:
-            continue
-        draw_mapped_value(pdf, field, value, font=regular)
-
-    decision = field_map.get("applicant_decision", {}).get("checkboxes", {})
-    checkbox = None
     if offer.status == JobOffer.Status.ACCEPTED:
-        checkbox = decision.get("agree")
-    elif offer.status == JobOffer.Status.REJECTED:
-        checkbox = decision.get("reject")
-    draw_checkbox(pdf, checkbox, font=regular)
+        return "agree"
+    if offer.status == JobOffer.Status.REJECTED:
+        return "reject"
+    return None
+
+
+def build_job_offer_signers(offer: JobOffer) -> dict[str, object]:
+    """Return ``{map_field: recorded signer}`` for the offer's signature boxes.
+
+    The applicant signs by accepting the offer, so their box is filled only once
+    ``accepted_at`` is recorded and only from the employee profile linked to the
+    offer. A candidate with no profile yet has no stored signature and the box
+    stays blank rather than being filled with a stand-in.
+    """
+
+    try:
+        hr_signer = offer.hr_signer_user
+    except ObjectDoesNotExist:
+        # An offer drafted without an HR signer has nobody to sign for it.
+        hr_signer = None
+    try:
+        applicant = offer.employee_profile if offer.accepted_at else None
+    except ObjectDoesNotExist:
+        applicant = None
+    return {
+        "hr_signature_image": hr_signer,
+        "applicant_signature": applicant,
+    }
+
+
+def _load_field_map() -> dict:
+    assets = _load_form_assets()
+    return assets.fields if assets else {}
+
+
+def _load_form_assets() -> FormAssets | None:
+    return load_form_assets(
+        TEMPLATE_FILENAME,
+        FIELD_MAP_FILENAME,
+        aliases=TEMPLATE_ALIASES,
+        required_keys=REQUIRED_FIELD_KEYS,
+    )
 
 
 def _fallback_rows(offer: JobOffer) -> list[tuple[str, str]]:
@@ -126,29 +189,15 @@ def _fallback_pdf(offer: JobOffer) -> bytes:
 
 
 def build_job_offer_pdf(offer: JobOffer) -> bytes:
-    template_path = resolve_template_path("job_offer_blank.pdf", aliases=["job-offer-template.pdf", "job_offer.pdf"])
-    field_map = _load_field_map()
-    if not template_path or not field_map:
-        return _fallback_pdf(offer)
+    """Render the mapped offer, falling back only when its paired asset is absent."""
 
-    template = PdfReader(template_path)
-    if not template.pages:
+    assets = _load_form_assets()
+    if assets is None:
         return _fallback_pdf(offer)
-    writer = PdfWriter()
-    writer.add_page(template.pages[0])
-    page = writer.pages[0]
-    width = float(page.mediabox.width)
-    height = float(page.mediabox.height)
-    overlay = BytesIO()
-    pdf = canvas.Canvas(overlay, pagesize=(width, height))
-    _draw_offer_overlay_from_map(pdf, offer, field_map)
-    pdf.save()
-    overlay.seek(0)
-    # Start from the original page, then layer the data onto it. Constructing a
-    # writer with clone_from can lose the template's artwork for this form,
-    # leaving only the values visible in some PDF viewers.
-    page.merge_page(PdfReader(overlay).pages[0])
-
-    output = BytesIO()
-    writer.write(output)
-    return output.getvalue()
+    signatures = signer_signatures(build_job_offer_signers(offer))
+    try:
+        pdf_bytes, diagnostics = render_mapped_form(assets, _field_values(offer), signatures=signatures)
+    except ValueError:
+        return _fallback_pdf(offer)
+    log_signature_diagnostics(FORM_KEY, offer.id, diagnostics)
+    return pdf_bytes

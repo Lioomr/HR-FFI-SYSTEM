@@ -1,5 +1,6 @@
 import { Avatar } from "antd";
 import { UserOutlined } from "@ant-design/icons";
+import { Link } from "react-router-dom";
 
 /** First letter of the name, or an icon when there is nothing to show. */
 function initial(name?: string) {
@@ -17,11 +18,14 @@ export default function TeamMemberCell({
   name,
   secondary,
   size = 34,
+  profilePath,
 }: {
   name?: string;
   /** Email, employee number or any single supporting detail. */
   secondary?: string;
   size?: number;
+  /** Optional HR profile destination for roles allowed to view employee records. */
+  profilePath?: string;
 }) {
   const letter = initial(name);
 
@@ -43,18 +47,36 @@ export default function TeamMemberCell({
         {letter}
       </Avatar>
       <div style={{ minWidth: 0 }}>
-        <div
-          style={{
-            fontWeight: 600,
-            color: "#0f172a",
-            lineHeight: 1.3,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {name || "—"}
-        </div>
+        {profilePath ? (
+          <Link
+            to={profilePath}
+            style={{
+              display: "block",
+              fontWeight: 600,
+              color: "#f97316",
+              lineHeight: 1.3,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              textDecoration: "none",
+            }}
+          >
+            {name || "—"}
+          </Link>
+        ) : (
+          <div
+            style={{
+              fontWeight: 600,
+              color: "#0f172a",
+              lineHeight: 1.3,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {name || "—"}
+          </div>
+        )}
         {secondary && (
           <div
             style={{

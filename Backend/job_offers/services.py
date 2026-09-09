@@ -3,17 +3,19 @@ import logging
 import secrets
 import string
 from datetime import timedelta
-from html import escape
 from typing import Any
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
+from django.template.loader import render_to_string
 from django.utils import timezone
 
 from admin_portal.models import SystemSettings
 from attendance.models import BioTimeEmployeeMap
 from core.services import EmailService, WhatsAppService, send_user_invite_email, send_user_invite_whatsapp
+from core.services.bird_email_service import _resolve_logo_source
+from core.services.email_html import email_action_url
 from core.services.whatsapp_notifications import get_user_whatsapp_number
 from employees.models import EmployeeProfile
 from invites.models import Invite
@@ -68,15 +70,37 @@ def _send_offer_email(
     if not to_email:
         return _skipped_delivery(provider="bird", reason="Recipient email is missing.")
     try:
+        message = f"Please find the job offer for {offer.candidate_full_name} ({offer.position_title}) attached."
+        html_content = render_to_string(
+            "emails/generic_notification.html",
+            {
+                "logo_url": _resolve_logo_source(),
+                "title": "Job Offer",
+                "title_ar": "عرض عمل",
+                "employee_name": recipient_name,
+                "message": message,
+                "message_ar": "يرجى الاطلاع على عرض العمل المرفق والرد عليه من خلال الرابط أدناه.",
+                "preheader": f"Job offer {offer.reference_number} is ready for your response.",
+                "preheader_ar": f"عرض العمل رقم {offer.reference_number} جاهز للرد.",
+                "status_label": "Action required",
+                "status_label_ar": "إجراء مطلوب",
+                "status_color": "#C2410C",
+                "details_title": "Offer details",
+                "details_title_ar": "تفاصيل العرض",
+                "rows": [
+                    {"label": "Reference", "label_ar": "الرقم المرجعي", "value": offer.reference_number},
+                    {"label": "Candidate", "label_ar": "المرشّح", "value": offer.candidate_full_name},
+                    {"label": "Position", "label_ar": "المسمى الوظيفي", "value": offer.position_title},
+                ],
+                "action_url": email_action_url(response_link),
+                "action_text": "Open job offer",
+                "action_text_ar": "فتح عرض العمل",
+            },
+        )
         result = email_service.send_html_email(
             to_email=to_email,
             subject=f"Job Offer {offer.reference_number}",
-            html_content=(
-                f"<p>Dear {escape(recipient_name)},</p>"
-                f"<p>Please find the job offer for {escape(offer.candidate_full_name)} "
-                f"({escape(offer.position_title)}) attached.</p>"
-                f'<p><a href="{escape(response_link)}">Open job offer response page</a></p>'
-            ),
+            html_content=html_content,
             fallback_text=(
                 f"Job offer {offer.reference_number} for {offer.candidate_full_name}. Response page: {response_link}"
             ),

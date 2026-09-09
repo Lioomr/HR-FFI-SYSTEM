@@ -108,6 +108,10 @@ const sentOfferWithWarning = makeJobOffer({
   },
 });
 
+async function findCandidateName() {
+  return screen.findAllByText("Nora Khalid");
+}
+
 beforeEach(() => {
   navigateMock.mockClear();
   getJobOffer.mockReset();
@@ -136,7 +140,7 @@ describe("JobOfferDetailPage", () => {
 
     render(<JobOfferDetailPage />);
 
-    expect(await screen.findByText("Nora Khalid")).toBeInTheDocument();
+    expect((await findCandidateName()).length).toBeGreaterThan(0);
     expect(screen.getByText("13,500")).toBeInTheDocument();
     expect(
       screen.getByText("This offer has not been sent yet."),
@@ -154,7 +158,7 @@ describe("JobOfferDetailPage", () => {
     });
 
     render(<JobOfferDetailPage />);
-    await screen.findByText("Nora Khalid");
+    await findCandidateName();
 
     fireEvent.click(screen.getByRole("button", { name: /Send Offer/i }));
 
@@ -183,7 +187,7 @@ describe("JobOfferDetailPage", () => {
     });
 
     render(<JobOfferDetailPage />);
-    await screen.findByText("Nora Khalid");
+    await findCandidateName();
 
     expect(document.body.textContent).not.toMatch(/bird/i);
     expect(document.body.textContent).not.toMatch(/evolution/i);
@@ -195,7 +199,7 @@ describe("JobOfferDetailPage", () => {
     downloadJobOfferPdf.mockResolvedValue(blob);
 
     render(<JobOfferDetailPage />);
-    await screen.findByText("Nora Khalid");
+    await findCandidateName();
 
     fireEvent.click(screen.getByRole("button", { name: /Download PDF/i }));
 
@@ -275,7 +279,7 @@ describe("JobOfferDetailPage", () => {
     });
 
     render(<JobOfferDetailPage />);
-    await screen.findByText("Nora Khalid");
+    await findCandidateName();
 
     expect(
       screen.queryByRole("button", { name: /Send Offer/i }),
@@ -346,7 +350,7 @@ describe("JobOfferDetailPage delivery breakdown", () => {
     });
 
     render(<JobOfferDetailPage />);
-    await screen.findByText("Nora Khalid");
+    await findCandidateName();
 
     expect(screen.getByText("Candidate")).toBeInTheDocument();
     expect(screen.getByText("WhatsApp message")).toBeInTheDocument();
@@ -363,7 +367,7 @@ describe("JobOfferDetailPage delivery breakdown", () => {
     });
 
     render(<JobOfferDetailPage />);
-    await screen.findByText("Nora Khalid");
+    await findCandidateName();
 
     // Candidate WhatsApp PDF was never attempted; the CEO email PDF failed.
     expect(screen.getByText("Not attempted")).toBeInTheDocument();
@@ -380,7 +384,7 @@ describe("JobOfferDetailPage delivery breakdown", () => {
     });
 
     render(<JobOfferDetailPage />);
-    await screen.findByText("Nora Khalid");
+    await findCandidateName();
 
     expect(document.body.textContent).not.toMatch(/bird/i);
     expect(document.body.textContent).not.toMatch(/evolution/i);
@@ -394,7 +398,7 @@ describe("JobOfferDetailPage delivery breakdown", () => {
     });
 
     render(<JobOfferDetailPage />);
-    await screen.findByText("Nora Khalid");
+    await findCandidateName();
 
     expect(screen.getByText("WhatsApp message")).toBeInTheDocument();
     expect(screen.getByText("Email PDF")).toBeInTheDocument();
@@ -436,7 +440,7 @@ describe("JobOfferDetailPage starting work acknowledgment", () => {
     });
 
     render(<JobOfferDetailPage />);
-    await screen.findByText("Nora Khalid");
+    await findCandidateName();
 
     await waitFor(() => expect(getEmployeeDocuments).toHaveBeenCalledWith(21));
     expect(await screen.findByText("Generated")).toBeInTheDocument();
@@ -507,7 +511,7 @@ describe("JobOfferDetailPage starting work acknowledgment", () => {
     });
 
     render(<JobOfferDetailPage />);
-    await screen.findByText("Nora Khalid");
+    await findCandidateName();
 
     expect(
       await screen.findByText("Pending BioTime attendance"),
@@ -529,7 +533,7 @@ describe("JobOfferDetailPage starting work acknowledgment", () => {
     });
 
     render(<JobOfferDetailPage />);
-    await screen.findByText("Nora Khalid");
+    await findCandidateName();
 
     expect(screen.getByText("Pending BioTime attendance")).toBeInTheDocument();
     expect(getEmployeeDocuments).not.toHaveBeenCalled();
@@ -540,7 +544,7 @@ describe("JobOfferDetailPage starting work acknowledgment", () => {
     getEmployeeDocuments.mockRejectedValue(new Error("network"));
 
     render(<JobOfferDetailPage />);
-    await screen.findByText("Nora Khalid");
+    await findCandidateName();
 
     // A failed lookup must not take the rest of the offer down with it.
     expect(
@@ -574,7 +578,7 @@ describe("JobOfferDetailPage onboarding and BioTime status", () => {
     });
 
     render(<JobOfferDetailPage />);
-    await screen.findByText("Nora Khalid");
+    await findCandidateName();
 
     expect(screen.getByText("Projects")).toBeInTheDocument();
     // Header subtitle and the job details row both read from the response.
@@ -585,7 +589,7 @@ describe("JobOfferDetailPage onboarding and BioTime status", () => {
     getJobOffer.mockResolvedValue({ status: "success", data: linkedOffer });
 
     render(<JobOfferDetailPage />);
-    await screen.findByText("Nora Khalid");
+    await findCandidateName();
 
     expect(screen.getByText("Pre-hire profile created")).toBeInTheDocument();
     expect(screen.getByText("Profile #205")).toBeInTheDocument();
@@ -606,7 +610,7 @@ describe("JobOfferDetailPage onboarding and BioTime status", () => {
     });
 
     render(<JobOfferDetailPage />);
-    await screen.findByText("Nora Khalid");
+    await findCandidateName();
 
     expect(screen.getByText("BioTime connected")).toBeInTheDocument();
     expect(screen.getByText("Device employee code 100001")).toBeInTheDocument();
@@ -619,7 +623,7 @@ describe("JobOfferDetailPage onboarding and BioTime status", () => {
     getJobOffer.mockResolvedValue({ status: "success", data: linkedOffer });
 
     render(<JobOfferDetailPage />);
-    await screen.findByText("Nora Khalid");
+    await findCandidateName();
 
     expect(
       screen.getByText("BioTime mapping not connected yet"),
@@ -639,7 +643,7 @@ describe("JobOfferDetailPage onboarding and BioTime status", () => {
     getJobOffer.mockResolvedValue({ status: "success", data: withoutBioTime });
 
     render(<JobOfferDetailPage />);
-    await screen.findByText("Nora Khalid");
+    await findCandidateName();
 
     expect(
       screen.getByText("BioTime mapping not connected yet"),
@@ -650,7 +654,7 @@ describe("JobOfferDetailPage onboarding and BioTime status", () => {
     getJobOffer.mockResolvedValue({ status: "success", data: draftOffer });
 
     render(<JobOfferDetailPage />);
-    await screen.findByText("Nora Khalid");
+    await findCandidateName();
 
     expect(
       screen.getByText("No employee profile is linked to this offer."),
@@ -669,7 +673,7 @@ describe("JobOfferDetailPage CEO approval gate", () => {
     getJobOffer.mockResolvedValue({ status: "success", data: draftOffer });
 
     render(<JobOfferDetailPage />);
-    await screen.findByText("Nora Khalid");
+    await findCandidateName();
 
     expect(
       screen.getByRole("button", { name: /Submit to CEO/i }),
@@ -700,7 +704,7 @@ describe("JobOfferDetailPage CEO approval gate", () => {
     });
 
     render(<JobOfferDetailPage />);
-    await screen.findByText("Nora Khalid");
+    await findCandidateName();
 
     fireEvent.click(screen.getByRole("button", { name: /Submit to CEO/i }));
 
@@ -729,7 +733,7 @@ describe("JobOfferDetailPage CEO approval gate", () => {
     });
 
     render(<JobOfferDetailPage />);
-    await screen.findByText("Nora Khalid");
+    await findCandidateName();
 
     expect(
       screen.getByRole("button", { name: /Resubmit to CEO/i }),
@@ -747,7 +751,7 @@ describe("JobOfferDetailPage CEO approval gate", () => {
     getJobOffer.mockResolvedValue({ status: "success", data: sendableOffer });
 
     render(<JobOfferDetailPage />);
-    await screen.findByText("Nora Khalid");
+    await findCandidateName();
 
     expect(
       screen.getByRole("button", { name: /Send Offer/i }),
@@ -804,7 +808,7 @@ describe("JobOfferDetailPage workflow history and CV", () => {
     getJobOffer.mockResolvedValue({ status: "success", data: reviewedOffer });
 
     render(<JobOfferDetailPage />);
-    await screen.findByText("Nora Khalid");
+    await findCandidateName();
 
     expect(screen.getByText("Submitted for CEO approval")).toBeInTheDocument();
     expect(screen.getAllByText("Approved").length).toBeGreaterThan(0);
@@ -817,7 +821,7 @@ describe("JobOfferDetailPage workflow history and CV", () => {
     downloadJobOfferCv.mockResolvedValue(blob);
 
     render(<JobOfferDetailPage />);
-    await screen.findByText("Nora Khalid");
+    await findCandidateName();
 
     fireEvent.click(screen.getByRole("button", { name: /Download CV/i }));
 
@@ -836,7 +840,7 @@ describe("JobOfferDetailPage workflow history and CV", () => {
     });
 
     render(<JobOfferDetailPage />);
-    await screen.findByText("Nora Khalid");
+    await findCandidateName();
     getJobOffer.mockClear();
 
     fireEvent.click(screen.getByRole("button", { name: /Submit to CEO/i }));

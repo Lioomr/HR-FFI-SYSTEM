@@ -118,7 +118,7 @@ beforeEach(() => {
 });
 
 describe("AttendancePreviewPage BioTime fields", () => {
-  it("renders the device code, terminal serial, duration, source and override state", async () => {
+  it("renders the device code, terminal serial, duration and source", async () => {
     render(<AttendancePreviewPage role="hr" />);
 
     expect(await screen.findByText("Sara Ali")).toBeInTheDocument();
@@ -129,10 +129,9 @@ describe("AttendancePreviewPage BioTime fields", () => {
 
     const table = screen.getByRole("table");
     expect(within(table).getByText("System")).toBeInTheDocument();
-    expect(within(table).getByText("Original")).toBeInTheDocument();
   });
 
-  it("marks overridden records and falls back to a dash without BioTime data", async () => {
+  it("falls back to a dash when device metadata is absent", async () => {
     getGlobal.mockResolvedValue(
       listResponse([
         record({
@@ -148,7 +147,7 @@ describe("AttendancePreviewPage BioTime fields", () => {
 
     render(<AttendancePreviewPage role="hr" />);
 
-    expect(await screen.findByText("Overridden")).toBeInTheDocument();
+    expect(await screen.findByText("Sara Ali")).toBeInTheDocument();
     const table = screen.getByRole("table");
     // Device code, terminal S/N, check-out and duration all render as "-".
     expect(within(table).getAllByText("-")).toHaveLength(4);
@@ -168,8 +167,8 @@ describe("AttendancePreviewPage BioTime fields", () => {
       screen.getByRole("columnheader", { name: "Duration" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("columnheader", { name: "Override" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("columnheader", { name: "Override" }),
+    ).not.toBeInTheDocument();
   });
 });
 
