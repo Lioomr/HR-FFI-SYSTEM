@@ -6,21 +6,26 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('employees', '0023_move_ocr_raw_text_out_of_extracted_fields'),
+        ("employees", "0023_move_ocr_raw_text_out_of_extracted_fields"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='employeedocument',
-            name='deletion_requested_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='employee_documents_deletion_requested', to=settings.AUTH_USER_MODEL),
+            model_name="employeedocument",
+            name="deletion_requested_by",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="employee_documents_deletion_requested",
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
         migrations.AddField(
-            model_name='employeedocument',
-            name='deletion_started_at',
+            model_name="employeedocument",
+            name="deletion_started_at",
             field=models.DateTimeField(blank=True, db_index=True, null=True),
         ),
     ]

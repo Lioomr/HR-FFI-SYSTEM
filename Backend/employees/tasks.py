@@ -17,9 +17,7 @@ logger = logging.getLogger(__name__)
 OCR_SOFT_TIME_LIMIT = int(getattr(settings, "EMPLOYEE_DOCUMENT_OCR_SOFT_TIME_LIMIT_SECONDS", 240))
 OCR_TIME_LIMIT = int(getattr(settings, "EMPLOYEE_DOCUMENT_OCR_TIME_LIMIT_SECONDS", 300))
 OCR_MAX_RETRIES = int(getattr(settings, "EMPLOYEE_DOCUMENT_OCR_MAX_RETRIES", 3))
-OCR_TIMEOUT_MESSAGE = (
-    "OCR timed out for this document. Upload a smaller or clearer scan, then re-run extraction."
-)
+OCR_TIMEOUT_MESSAGE = "OCR timed out for this document. Upload a smaller or clearer scan, then re-run extraction."
 
 
 @shared_task
@@ -98,9 +96,7 @@ def audit_system_document_deletion(snapshot: dict) -> None:
             },
         )
     except Exception:
-        logger.exception(
-            "employee_document_deletion_audit_failed", extra={"document_id": snapshot["document_id"]}
-        )
+        logger.exception("employee_document_deletion_audit_failed", extra={"document_id": snapshot["document_id"]})
 
 
 def _record_permanent_failure(document: EmployeeDocument, message: str) -> None:

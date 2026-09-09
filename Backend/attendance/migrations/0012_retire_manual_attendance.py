@@ -159,9 +159,7 @@ def _delete_workflow_instances(apps, model_label, object_ids):
     content_type = ContentType.objects.filter(app_label=app_label, model=model).first()
     if content_type is None:
         return 0
-    deleted, _ = WorkflowInstance.objects.filter(
-        content_type_id=content_type.id, object_id__in=object_ids
-    ).delete()
+    deleted, _ = WorkflowInstance.objects.filter(content_type_id=content_type.id, object_id__in=object_ids).delete()
     return deleted
 
 
@@ -196,9 +194,7 @@ def _acknowledgment_delete_blockers(apps, acknowledgment_ids):
         if getattr(field.remote_field, "on_delete", None) in SAFE_ON_DELETE:
             continue
         related_model = relation.related_model
-        count = (
-            related_model._default_manager.filter(**{f"{field.name}__in": acknowledgment_ids}).count()
-        )
+        count = related_model._default_manager.filter(**{f"{field.name}__in": acknowledgment_ids}).count()
         if count:
             blockers.append(
                 f"{related_model._meta.label}.{field.name} still references "
@@ -217,9 +213,7 @@ def purge_manual_attendance(apps, schema_editor):
     # ---- Collect targets (no deletes yet) --------------------------------
     # 1. Manual punch records: employee self-service and HR overrides. Every
     #    one of them, including any that a StartingWorkAcknowledgment protects.
-    manual_ids = list(
-        AttendanceRecord.objects.filter(source__in=["EMPLOYEE", "HR"]).values_list("id", flat=True)
-    )
+    manual_ids = list(AttendanceRecord.objects.filter(source__in=["EMPLOYEE", "HR"]).values_list("id", flat=True))
 
     # 2. Every correction request, whatever its status.
     correction_ids = list(AttendanceCorrectionRequest.objects.values_list("id", flat=True))
@@ -254,8 +248,7 @@ def purge_manual_attendance(apps, schema_editor):
         raise RuntimeError(
             "attendance.0012 aborted before deleting anything: a Starting Work "
             "acknowledgment attached to manual attendance is referenced by rows this "
-            "migration is not allowed to remove. Resolve these by hand, then re-run:\n  - "
-            + "\n  - ".join(blockers)
+            "migration is not allowed to remove. Resolve these by hand, then re-run:\n  - " + "\n  - ".join(blockers)
         )
 
     absence_acknowledgments = list(
@@ -265,8 +258,7 @@ def purge_manual_attendance(apps, schema_editor):
     )
     if absence_acknowledgments:
         details = ", ".join(
-            f"attendance_record={record_id} (reference {reference})"
-            for record_id, reference in absence_acknowledgments
+            f"attendance_record={record_id} (reference {reference})" for record_id, reference in absence_acknowledgments
         )
         raise RuntimeError(
             "attendance.0012 aborted before deleting anything: auto-absence rows for unmapped "
@@ -284,9 +276,7 @@ def purge_manual_attendance(apps, schema_editor):
     _delete_workflow_instances(apps, "attendance.attendancecorrectionrequest", correction_ids)
 
     # 5. Audit events, matched on action name *and* a deleted row's id.
-    _delete_audit_logs(
-        apps, STARTING_WORK_AUDIT_ACTIONS, STARTING_WORK_AUDIT_ENTITIES, acknowledgment_ids
-    )
+    _delete_audit_logs(apps, STARTING_WORK_AUDIT_ACTIONS, STARTING_WORK_AUDIT_ENTITIES, acknowledgment_ids)
     _delete_audit_logs(apps, MANUAL_RECORD_AUDIT_ACTIONS, MANUAL_RECORD_AUDIT_ENTITIES, record_ids)
     _delete_audit_logs(apps, CORRECTION_AUDIT_ACTIONS, CORRECTION_AUDIT_ENTITIES, correction_ids)
 

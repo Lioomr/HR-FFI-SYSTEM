@@ -86,7 +86,7 @@ class ContractExpiryWorkflowTests(TestCase):
         )
 
         self.assertIn(
-            f'https://app.example.test/hr/contract-decisions/{decision.id}',
+            f"https://app.example.test/hr/contract-decisions/{decision.id}",
             send_email.call_args.kwargs["html_content"],
         )
 

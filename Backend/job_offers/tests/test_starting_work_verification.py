@@ -93,9 +93,7 @@ class StartingWorkVerificationTests(TestCase):
     @patch("job_offers.notifications._safe_email", return_value={"success": True})
     @patch("job_offers.notifications.dispatch_notification_channels")
     @patch("job_offers.starting_work_service.build_starting_work_acknowledgment_pdf", return_value=b"%PDF-1.4\n%%EOF")
-    def test_first_biotime_present_creates_one_pending_ack_and_notifies_only_company_hr(
-        self, _pdf, dispatch, _email
-    ):
+    def test_first_biotime_present_creates_one_pending_ack_and_notifies_only_company_hr(self, _pdf, dispatch, _email):
         dispatch.side_effect = lambda **kwargs: {
             "notification": Notification.objects.create(
                 recipient=kwargs["recipient"],

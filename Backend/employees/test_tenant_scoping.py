@@ -245,12 +245,8 @@ class TenantScopeRegressionTests(APITestCase):
     def test_attendance_assets_documents_dashboard_and_notifications_are_scoped(self):
         # Attendance reads are gated on an active BioTime mapping, so both
         # tenants' employees need one for this to test company scoping.
-        BioTimeEmployeeMap.objects.create(
-            employee_profile=self.athroya_employee, biotime_emp_code="ATH-SCOPE-BT"
-        )
-        BioTimeEmployeeMap.objects.create(
-            employee_profile=self.aseco_employee, biotime_emp_code="ASE-SCOPE-BT"
-        )
+        BioTimeEmployeeMap.objects.create(employee_profile=self.athroya_employee, biotime_emp_code="ATH-SCOPE-BT")
+        BioTimeEmployeeMap.objects.create(employee_profile=self.aseco_employee, biotime_emp_code="ASE-SCOPE-BT")
         AttendanceRecord.objects.create(
             employee_profile=self.athroya_employee,
             date=date.today(),

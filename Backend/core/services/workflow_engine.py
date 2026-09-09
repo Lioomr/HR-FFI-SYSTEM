@@ -1205,8 +1205,11 @@ def _legacy_status_snapshot_for_contract_decision(instance):
     from employees.models import ContractDecision
 
     terminal_at = None
-    if instance.status in {ContractDecision.Status.APPROVED, ContractDecision.Status.AUTO_APPROVED,
-                            ContractDecision.Status.AUTO_RENEWED}:
+    if instance.status in {
+        ContractDecision.Status.APPROVED,
+        ContractDecision.Status.AUTO_APPROVED,
+        ContractDecision.Status.AUTO_RENEWED,
+    }:
         status = WorkflowInstance.Status.APPROVED
         terminal_at = instance.finalized_at or instance.updated_at
         current_stage = current_role = ""
@@ -1227,7 +1230,9 @@ def _legacy_status_snapshot_for_contract_decision(instance):
         "current_actor_user": None,
         "submitted_by": instance.requested_by,
         "submitted_at": instance.submitted_at or instance.created_at,
-        "decided_at": terminal_at if status in {WorkflowInstance.Status.APPROVED, WorkflowInstance.Status.REJECTED} else None,
+        "decided_at": terminal_at
+        if status in {WorkflowInstance.Status.APPROVED, WorkflowInstance.Status.REJECTED}
+        else None,
         "cancelled_at": None,
     }
 

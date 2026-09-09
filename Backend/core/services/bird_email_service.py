@@ -34,9 +34,7 @@ def _load_logo_base64() -> str:
     ]
     # An EMAIL_LOGO_PATH is only usable if it actually exists (the Docker path
     # is meaningless on a local checkout); otherwise fall through to the defaults.
-    candidate_paths = (
-        [configured_logo_path, *default_candidates] if configured_logo_path else default_candidates
-    )
+    candidate_paths = [configured_logo_path, *default_candidates] if configured_logo_path else default_candidates
     logo_path = next((path for path in candidate_paths if path and os.path.exists(path)), "")
     try:
         with open(logo_path, "rb") as fh:
@@ -662,8 +660,11 @@ def send_meeting_notification_email(
         message=meeting_message,
         message_ar=meeting_message,
         action_url=next(
-            (safe_email_url(url) for url in (action_url, google_meet_url, microsoft_teams_url, zoom_url)
-             if safe_email_url(url)),
+            (
+                safe_email_url(url)
+                for url in (action_url, google_meet_url, microsoft_teams_url, zoom_url)
+                if safe_email_url(url)
+            ),
             "",
         ),
         action_text="Open Meeting",
@@ -681,9 +682,7 @@ def send_meeting_notification_email(
     if agenda:
         from django.utils.html import escape as _esc
 
-        rows.append(
-            _row("Agenda", "جدول الأعمال", agenda, value_html=_esc(str(agenda)).replace("\n", "<br>"))
-        )
+        rows.append(_row("Agenda", "جدول الأعمال", agenda, value_html=_esc(str(agenda)).replace("\n", "<br>")))
 
     def _join_links() -> str:
         links = []
@@ -771,7 +770,12 @@ def send_user_invite_email(
     if inviter_name:
         rows.append(_row("Invited by", "بدعوة من", inviter_name))
     rows.append(
-        _row("Invitation expires in", "تنتهي الدعوة خلال", f"{expires_in_hours} hours", value_ar=f"{expires_in_hours} ساعة")
+        _row(
+            "Invitation expires in",
+            "تنتهي الدعوة خلال",
+            f"{expires_in_hours} hours",
+            value_ar=f"{expires_in_hours} ساعة",
+        )
     )
     context.update(
         _details(

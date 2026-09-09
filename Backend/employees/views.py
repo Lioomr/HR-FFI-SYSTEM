@@ -110,6 +110,7 @@ def _log_audit_failure(event_name, *, entity_id, actor_id=None):
         extra["actor_id"] = actor_id
     logger.exception(event_name, extra=extra)
 
+
 try:
     from openpyxl import load_workbook
 except Exception:  # pragma: no cover - fallback for missing dependency
@@ -123,6 +124,7 @@ def _cross_company_employee_scope_for_request(request):
         return None, set(), set()
 
     from core.delegation import get_active_employee_read_scope_ids
+
     read_scope_ids = get_active_employee_read_scope_ids(request.user)
     from core.models import CrossCompanyManagerAssignment
 
@@ -130,7 +132,9 @@ def _cross_company_employee_scope_for_request(request):
         active_cross_company_manager_assignments(
             request.user,
             capability=CrossCompanyManagerAssignment.Capability.EMPLOYEE_VIEW,
-        ).filter(scope=scope).values_list("employee_id", flat=True)
+        )
+        .filter(scope=scope)
+        .values_list("employee_id", flat=True)
     )
     if scope.id not in read_scope_ids and not manager_assignment_ids:
         from rest_framework.exceptions import PermissionDenied
@@ -440,9 +444,11 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             ).distinct()
 
         if self.action == "retrieve":
-            return filter_queryset_by_company_scope(base_qs, self.request).filter(
-                Q(user=user) | manager_scope_q(user)
-            ).distinct()
+            return (
+                filter_queryset_by_company_scope(base_qs, self.request)
+                .filter(Q(user=user) | manager_scope_q(user))
+                .distinct()
+            )
 
         return filter_queryset_by_company_scope(base_qs, self.request).filter(user=user)
 
@@ -647,8 +653,15 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get", "post"], url_path="documents")
     def documents(self, request, pk=None):
-        if get_requested_organization_scope(request) is not None and get_role(request.user) not in {"HRManager", "SystemAdmin"}:
-            return error("Forbidden", errors=["Scoped employee access does not include documents."], status=status.HTTP_403_FORBIDDEN)
+        if get_requested_organization_scope(request) is not None and get_role(request.user) not in {
+            "HRManager",
+            "SystemAdmin",
+        }:
+            return error(
+                "Forbidden",
+                errors=["Scoped employee access does not include documents."],
+                status=status.HTTP_403_FORBIDDEN,
+            )
         profile, error_response = self._document_profile_for_request(request, pk)
         if error_response:
             return error_response
@@ -798,7 +811,9 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         except FileNotFoundError:
             return error("Not found", errors=["Signature file is missing from storage."], status=404)
         # Inline so a client can render it, but never cached or sniffed.
-        response["Content-Disposition"] = f'inline; filename="signature-{profile.pk}{os.path.splitext(profile.signature.name)[1]}"'
+        response["Content-Disposition"] = (
+            f'inline; filename="signature-{profile.pk}{os.path.splitext(profile.signature.name)[1]}"'
+        )
         response["X-Content-Type-Options"] = "nosniff"
         response["Cache-Control"] = "private, no-store"
         audit(
@@ -812,16 +827,27 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get"], url_path=r"documents/(?P<document_id>[^/.]+)/download")
     def download_document(self, request, pk=None, document_id=None):
-        if get_requested_organization_scope(request) is not None and get_role(request.user) not in {"HRManager", "SystemAdmin"}:
-            return error("Forbidden", errors=["Scoped employee access does not include documents."], status=status.HTTP_403_FORBIDDEN)
+        if get_requested_organization_scope(request) is not None and get_role(request.user) not in {
+            "HRManager",
+            "SystemAdmin",
+        }:
+            return error(
+                "Forbidden",
+                errors=["Scoped employee access does not include documents."],
+                status=status.HTTP_403_FORBIDDEN,
+            )
         profile, error_response = self._document_profile_for_request(request, pk)
         if error_response:
             return error_response
 
-        document = self._documents_for_profile(
-            profile,
-            include_hr_only=get_role(request.user) in {"SystemAdmin", "HRManager"},
-        ).filter(pk=document_id).first()
+        document = (
+            self._documents_for_profile(
+                profile,
+                include_hr_only=get_role(request.user) in {"SystemAdmin", "HRManager"},
+            )
+            .filter(pk=document_id)
+            .first()
+        )
         if document is None:
             return error("Not found", errors=["Not found."], status=404)
 
@@ -857,8 +883,15 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         together - see `delete_document_permanently`.
         """
 
-        if get_requested_organization_scope(request) is not None and get_role(request.user) not in {"HRManager", "SystemAdmin"}:
-            return error("Forbidden", errors=["Scoped employee access does not include documents."], status=status.HTTP_403_FORBIDDEN)
+        if get_requested_organization_scope(request) is not None and get_role(request.user) not in {
+            "HRManager",
+            "SystemAdmin",
+        }:
+            return error(
+                "Forbidden",
+                errors=["Scoped employee access does not include documents."],
+                status=status.HTTP_403_FORBIDDEN,
+            )
         profile, error_response = self._document_profile_for_request(request, pk)
         if error_response:
             return error_response
@@ -1721,7 +1754,9 @@ class ContractDecisionViewSet(viewsets.ReadOnlyModelViewSet):
         if not can_user_act_on_instance(request.user, decision, workflow):
             return error("You cannot act on this contract decision.", status=status.HTTP_403_FORBIDDEN)
         try:
-            decision = finalize_decision(decision.id, actor=request.user, comment=serializer.validated_data.get("comment", ""))
+            decision = finalize_decision(
+                decision.id, actor=request.user, comment=serializer.validated_data.get("comment", "")
+            )
         except ValueError as exc:
             return error("Validation error", errors=[str(exc)], status=status.HTTP_422_UNPROCESSABLE_ENTITY)
         try:

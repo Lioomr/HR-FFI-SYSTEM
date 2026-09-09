@@ -25,9 +25,7 @@ from core.responses import error
 from .models import BioTimeEmployeeMap
 
 #: Single response message used by every retired manual-attendance endpoint.
-MANUAL_ATTENDANCE_RETIRED_MESSAGE = (
-    "Manual attendance is no longer available. Attendance is recorded through BioTime."
-)
+MANUAL_ATTENDANCE_RETIRED_MESSAGE = "Manual attendance is no longer available. Attendance is recorded through BioTime."
 
 #: Response message for a signed-in employee who has no BioTime mapping yet.
 ATTENDANCE_UNAVAILABLE_UNMAPPED_MESSAGE = (
