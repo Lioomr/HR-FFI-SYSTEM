@@ -11,11 +11,27 @@ jobs:
   backend:
     name: Backend Checks
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: ffi_ci
+          POSTGRES_USER: ffi_ci
+          POSTGRES_PASSWORD: ffi_ci
+        options: >-
+          --health-cmd "pg_isready -U ffi_ci -d ffi_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       DJANGO_DEBUG: "true"
       DJANGO_SECRET_KEY: "ci-dev-secret-key"
-      DB_ENGINE: "django.db.backends.sqlite3"
-      DB_NAME: "db.sqlite3"
+      DB_ENGINE: "django.db.backends.postgresql"
+      DB_NAME: "ffi_ci"
+      DB_USER: "ffi_ci"
+      DB_PASSWORD: "ffi_ci"
+      DB_HOST: "127.0.0.1"
+      DB_PORT: "5432"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
