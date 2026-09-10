@@ -16,6 +16,7 @@ from in_app_notifications.dispatcher import dispatch_notification_channels
 from in_app_notifications.models import Notification
 
 from .models import Announcement
+from .whatsapp import build_announcement_message
 
 User = get_user_model()
 ANNOUNCEMENT_ATTACHMENT_SALT = "announcement-email-attachment"
@@ -108,6 +109,7 @@ def send_announcement_in_app(announcement):
                 "microsoft_teams_url": announcement.microsoft_teams_url or "",
                 "zoom_url": announcement.zoom_url or "",
             }
+            whatsapp_document = None
         else:
             email_template = send_announcement_notification_email
             email_context = {
@@ -120,12 +122,13 @@ def send_announcement_in_app(announcement):
                 "attachment_name": attachment_name,
                 "attachment_url": attachment_url,
             }
-            whatsapp_template = "new_announcement_notification"
+            whatsapp_template = "announcement_notification_v2"
             whatsapp_variables = {
                 "employee_name": recipient_name,
                 "announcement_title": announcement.title,
-                "attachment_url": attachment_url or "",
+                "announcement_message": announcement.content,
             }
+            whatsapp_document = {"announcement_id": announcement.id} if announcement.attachment else None
         dispatches.append(
             dispatch_notification_channels(
                 recipient=user,
@@ -139,6 +142,7 @@ def send_announcement_in_app(announcement):
                 deduplication_key=dedup_key,
                 whatsapp_template=whatsapp_template,
                 whatsapp_variables=whatsapp_variables,
+                whatsapp_document=whatsapp_document,
                 email_template=email_template,
                 email_context=email_context,
                 whatsapp_enabled=bool(announcement.publish_to_whatsapp),
@@ -318,7 +322,6 @@ def send_announcement_whatsapp(announcement):
     document_sent_count = 0
     organizer_name = announcement.created_by.full_name or announcement.created_by.email
     meeting_date, meeting_time = _meeting_datetime_parts(announcement)
-    attachment_url = _announcement_attachment_url(announcement)
     attachment_name = announcement.attachment.name.rsplit("/", 1)[-1] if announcement.attachment else None
 
     for user in users:
@@ -344,22 +347,25 @@ def send_announcement_whatsapp(announcement):
                 language="en",
             )
         else:
-            result = service.send_template_message(
+            result = service.send_text_message(
                 phone_number=phone,
-                template_name="new_announcement_notification",
-                template_variables={
-                    "employee_name": employee_name,
-                    "announcement_title": announcement.title,
-                    "attachment_url": attachment_url or "",
-                },
-                language="en",
+                text=build_announcement_message(
+                    employee_name=employee_name,
+                    title=announcement.title,
+                    content=announcement.content,
+                    has_attachment=bool(announcement.attachment),
+                ),
+                event="announcement_created",
             )
         if result.get("success"):
             sent_count += 1
-            if attachment_url and attachment_name:
+            if announcement.attachment and attachment_name:
+                from .whatsapp import load_announcement_attachment
+
+                attachment = load_announcement_attachment(announcement)
                 document_result = service.send_document_message(
                     phone_number=phone,
-                    document_url=attachment_url,
+                    document_base64=attachment["document_base64"] if attachment else "",
                     file_name=attachment_name,
                     caption=f"{announcement.title} - PDF attachment",
                 )

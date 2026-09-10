@@ -46,6 +46,7 @@ class MessagingProviderTests(SimpleTestCase):
         self.assertEqual(kwargs["json"]["number"], "201013530963")
         self.assertLess(kwargs["json"]["text"].find("مرحباً"), kwargs["json"]["text"].find("Hello"))
         self.assertIn("Policy Update", kwargs["json"]["text"])
+        self.assertNotIn("attachment-public", kwargs["json"]["text"])
         self.assertIn("/message/sendText/ffi-staging", post.call_args.args[0])
 
     @override_settings(EVOLUTION_API_BASE_URL="", EVOLUTION_API_KEY="")
@@ -154,7 +155,7 @@ class EvolutionTemplateRenderingTests(SimpleTestCase):
         self.assertIn("Hello Sara", message)
         self.assertIn("FFI HR announcement", message)
         self.assertIn("Policy Update", message)
-        self.assertIn("https://api.example.com/attachment.pdf", message)
+        self.assertNotIn("https://api.example.com/attachment.pdf", message)
 
     @override_settings(
         EVOLUTION_API_BASE_URL="http://evolution-api:8080",

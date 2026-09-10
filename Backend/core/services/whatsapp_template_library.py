@@ -76,28 +76,46 @@ Invited by: {{ inviter_name }}""",
     "new_announcement_notification": WhatsAppTemplateDefinition(
         key="new_announcement_notification",
         title="Announcement",
-        description="General announcement notification, including optional attachment link.",
-        variables=("employee_name", "announcement_title", "attachment_url"),
+        description="Legacy announcement key retained for compatibility; attachments are sent directly as WhatsApp documents.",
+        variables=("employee_name", "announcement_title", "announcement_message"),
         sample_variables={
             "employee_name": "Sara",
             "announcement_title": "Policy Update",
-            "attachment_url": "https://api.asecopro.com/api/announcements/1/attachment-public?token=sample",
+            "announcement_message": "Please review the updated policy.",
         },
         default_body="""مرحباً {{ employee_name }},
-
 إعلان من نظام الموارد البشرية FFI
 العنوان: {{ announcement_title }}
-رابط المرفق: {{ attachment_url }}
 
-يرجى فتح نظام الموارد البشرية للاطلاع على التفاصيل الكاملة.
+{{ announcement_message }}
 
 Hello {{ employee_name }},
-
 FFI HR announcement
 Title: {{ announcement_title }}
-Attachment: {{ attachment_url }}
 
-Please open the HR system for the full announcement details.""",
+{{ announcement_message }}""",
+    ),
+    "announcement_notification_v2": WhatsAppTemplateDefinition(
+        key="announcement_notification_v2",
+        title="Announcement (direct attachment)",
+        description="Bilingual announcement text; PDF files are delivered directly as WhatsApp documents.",
+        variables=("employee_name", "announcement_title", "announcement_message"),
+        sample_variables={
+            "employee_name": "Sara",
+            "announcement_title": "Policy Update",
+            "announcement_message": "Please review the updated policy.",
+        },
+        default_body="""مرحباً {{ employee_name }}،
+إعلان من نظام الموارد البشرية FFI
+العنوان: {{ announcement_title }}
+
+{{ announcement_message }}
+
+Hello {{ employee_name }},
+FFI HR announcement
+Title: {{ announcement_title }}
+
+{{ announcement_message }}""",
     ),
     "meeting_notification_v1": WhatsAppTemplateDefinition(
         key="meeting_notification_v1",
@@ -403,6 +421,7 @@ def list_template_definitions() -> list[WhatsAppTemplateDefinition]:
         "job_offer",
         "employee_invitation",
         "new_announcement_notification",
+        "announcement_notification_v2",
         "meeting_notification_v1",
         "pending_approval",
         "request_status_update",

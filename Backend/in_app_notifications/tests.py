@@ -6,6 +6,7 @@ from celery.exceptions import Retry
 from channels.testing import WebsocketCommunicator
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.db import connection
 from django.test import SimpleTestCase, TestCase, override_settings
@@ -274,6 +275,27 @@ class NotificationDispatcherTests(TestCase):
         self.assertEqual(delay.call_count, 2)
         self.assertTrue(Notification.objects.filter(event_key="announcement.created").exists())
         self.assertTrue(Notification.objects.filter(event_key="document.expiring").exists())
+
+    @patch("in_app_notifications.tasks.deliver_whatsapp_notification.delay")
+    def test_announcement_pdf_payload_requests_direct_document_delivery(self, delay):
+        announcement = Announcement.objects.create(
+            company=self.company,
+            title="Policy",
+            content="Updated policy",
+            target_user=self.user,
+            target_roles=[],
+            publish_to_dashboard=True,
+            publish_to_whatsapp=True,
+            created_by=self.user,
+            attachment=SimpleUploadedFile("policy.pdf", b"%PDF-1.4 test", content_type="application/pdf"),
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            send_announcement_in_app(announcement)
+
+        payload = delay.call_args.kwargs
+        self.assertEqual(payload["whatsapp_template"], "announcement_notification_v2")
+        self.assertEqual(payload["whatsapp_document"], {"announcement_id": announcement.id})
+        self.assertEqual(payload["whatsapp_variables"]["announcement_message"], "Updated policy")
 
 
 @override_settings(CHANNEL_LAYERS=IN_MEMORY_CHANNELS, NOTIFICATION_DELIVERY_MAX_RETRIES=3)

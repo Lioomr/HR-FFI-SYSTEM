@@ -6,6 +6,7 @@ from celery import shared_task
 from django.db import transaction
 
 from .models import AnnouncementWhatsAppGroupDelivery
+from .whatsapp import load_announcement_attachment
 from .whatsapp_groups import AnnouncementGroupProvider
 
 logger = logging.getLogger(__name__)
@@ -28,9 +29,22 @@ def send_announcement_group(delivery_id):
         status, reason = "SKIPPED", "announcement_changed"
     else:
         try:
-            status, reason = AnnouncementGroupProvider().send_group(
-                company=announcement.company, group_id=delivery.group_id, text=delivery.message
-            )
+            provider = AnnouncementGroupProvider()
+            attachment = load_announcement_attachment(announcement)
+            if announcement.attachment and not attachment:
+                status, reason = "FAILED", "attachment_unavailable"
+            elif attachment:
+                status, reason = provider.send_group_document(
+                    company=announcement.company,
+                    group_id=delivery.group_id,
+                    document_base64=attachment["document_base64"],
+                    file_name=attachment["file_name"],
+                    caption=delivery.message,
+                )
+            else:
+                status, reason = provider.send_group(
+                    company=announcement.company, group_id=delivery.group_id, text=delivery.message
+                )
         except Exception:
             status, reason = "UNKNOWN", "provider_outcome_unknown"
     delivery.status, delivery.reason = status, reason
@@ -50,8 +64,14 @@ def enqueue_announcement_group(announcement):
     if not announcement.publish_to_whatsapp or not announcement.whatsapp_group_id:
         return
     from .utils import _meeting_datetime_parts
+    from .whatsapp import build_announcement_message
 
-    message = f"إعلان / Announcement\n{announcement.title}\n\n{announcement.content}"
+    message = build_announcement_message(
+        employee_name="فريق الشركة / Company team",
+        title=announcement.title,
+        content=announcement.content,
+        has_attachment=bool(announcement.attachment),
+    )
     if announcement.announcement_type == "MEETING":
         date, time = _meeting_datetime_parts(announcement)
         message += f"\n\nاجتماع / Meeting: {date} {time}"

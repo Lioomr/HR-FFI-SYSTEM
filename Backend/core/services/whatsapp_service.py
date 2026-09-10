@@ -30,6 +30,10 @@ WHATSAPP_TEMPLATE_REGISTRY: dict[str, WhatsAppTemplateSpec] = {
         template_name="new_announcement_notification",
         variable_order=("employee_name", "announcement_title"),
     ),
+    "announcement_notification_v2": WhatsAppTemplateSpec(
+        template_name="announcement_notification_v2",
+        variable_order=("employee_name", "announcement_title", "announcement_message"),
+    ),
     "leave_request_rejected": WhatsAppTemplateSpec(
         template_name="leave_request_rejected",
         variable_order=("employee_name", "leave_type", "start_date", "end_date", "rejection_reason"),
@@ -121,6 +125,15 @@ class WhatsAppService:
     ) -> dict[str, Any]:
         _ = language
         resolved_template = resolve_template_key(template_name=template_name, template_variables=template_variables)
+        # The previous announcement template exposed a private attachment URL.
+        # Route legacy queued payloads through the safe renderer while keeping
+        # the old key available for compatibility.
+        if resolved_template == "new_announcement_notification":
+            resolved_template = "announcement_notification_v2"
+            template_variables = {
+                **template_variables,
+                "announcement_message": template_variables.get("announcement_message", ""),
+            }
         spec = WHATSAPP_TEMPLATE_REGISTRY.get(resolved_template or "")
         if not spec:
             return {
@@ -143,6 +156,21 @@ class WhatsAppService:
             phone_number=phone_number,
             text=render_configured_template_message(resolved_template, template_variables),
             event=template_name,
+        )
+        return {
+            "success": result["success"],
+            "provider": result["provider"],
+            "status_code": result["status_code"],
+            "message_id": result["message_id"],
+            "provider_status": result.get("provider_status"),
+            "error": result["error"],
+        }
+
+    def send_text_message(self, *, phone_number: str, text: str, event: str = "") -> dict[str, Any]:
+        result = EvolutionWhatsAppProvider(timeout_seconds=self.timeout_seconds).send_text(
+            phone_number=phone_number,
+            text=text,
+            event=event,
         )
         return {
             "success": result["success"],
