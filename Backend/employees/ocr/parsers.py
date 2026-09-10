@@ -34,6 +34,53 @@ DATE_FORMATS = (
     "%d/%m/%y",
 )
 
+# A document field must never be populated with one of the labels printed next
+# to it.  This matters particularly for passport layouts whose header row has
+# adjacent cells, for example ``Date of Issue | Date of Expiry``.  OCR can join
+# those cells into one line; a permissive capture would otherwise save "Date of
+# Expiry" as the issue date.
+DATE_FIELD_NAMES = frozenset(
+    {
+        "date_of_birth",
+        "issue_date",
+        "expiry_date",
+        "iqama_expiry_date",
+        "exit_before_raw",
+    }
+)
+_DATE_VALUE_PATTERN = (
+    r"(?:[0-9٠-٩۰-۹]{1,4}[/-][0-9٠-٩۰-۹]{1,2}[/-][0-9٠-٩۰-۹]{1,4}"
+    r"|[0-9٠-٩۰-۹]{1,2}\s+[A-Za-z]{3,9}\s+[0-9٠-٩۰-۹]{4}"
+    r"|[A-Za-z]{3,9}\s+[0-9٠-٩۰-۹]{1,2}\s*,?\s+[0-9٠-٩۰-۹]{4})"
+)
+_KNOWN_FIELD_LABELS = (
+    r"Full\s*Name|Name|Nationality|Date\s*of\s*Birth|Birth\s*Date|DOB|"
+    r"Date\s*of\s*Issue|Issue\s*Date|Date\s*of\s*Expiry|Expiry\s*Date|Expires|"
+    r"Profession|Occupation|Employer|Sponsor|Passport\s*(?:Number|No\.?|#)|"
+    r"Iqama\s*Expiry|ID\s*Expiry|Iqama\s*(?:Number|No\.?|#)|"
+    r"(?:National\s*)?ID\s*(?:Number|No\.?|#)?|Visa\s*(?:Number|No\.?|#)|"
+    r"Exit\s*Before|Visa\s*Duration|"
+    r"الاسم|اﻻسم|الجنسية|تاريخ\s*الميلاد|تاريخ\s*الإصدار|تاريخ\s*الاصدار|"
+    r"تاريخ\s*الانتهاء|تاريخ\s*الإنتهاء|المهنة|الوظيفة|صاحب\s*العمل|الكفيل|"
+    r"رقم\s*(?:الجواز|الهوية|الإقامة|الاقامة|التأشيرة|التاشيرة)"
+)
+_PLACEHOLDER_OR_HEADING_VALUES = frozenset(
+    {
+        "-",
+        "n/a",
+        "na",
+        "none",
+        "nil",
+        "unknown",
+        "not available",
+        "passport",
+        "identity card",
+        "national identity",
+        "kingdom of saudi arabia",
+        "المملكة العربية السعودية",
+    }
+)
+
 # A Hijri year on a Saudi card - readable, but not a Gregorian expiry we can act on.
 _HIJRI_YEAR = re.compile(r"\b1[34]\d{2}\b")
 
@@ -109,10 +156,73 @@ def label_value(text: str, labels: str, value_pattern: str = r"[^\n|]+") -> str:
             rf"(?:{labels})[ \t]*[:|]?[ \t]*({value_pattern})", text, flags=re.IGNORECASE | re.MULTILINE
         )
     ]
-    candidates = [candidate for candidate in candidates if candidate]
+    candidates = [candidate for candidate in candidates if candidate and not is_field_label_or_boilerplate(candidate)]
     if not candidates:
         return ""
     return max(candidates, key=_value_quality)
+
+
+def label_date_value(text: str, labels: str) -> str:
+    """Read a date only when an actual date immediately follows its own label.
+
+    Unlike :func:`label_value`, this deliberately does not capture arbitrary
+    text after a date label.  It prevents adjacent column headings from being
+    mistaken for values and lets ``parse_date`` be the final plausibility gate.
+    """
+
+    candidates = [
+        match.group(1).strip(" :|\t-")
+        for match in re.finditer(
+            rf"(?:{labels})[ \t]*[:|]?[ \t]*({_DATE_VALUE_PATTERN})",
+            text,
+            flags=re.IGNORECASE | re.MULTILINE,
+        )
+    ]
+    candidates = [candidate for candidate in candidates if parse_date(candidate)]
+    if not candidates:
+        return ""
+    return max(candidates, key=_value_quality)
+
+
+def is_field_label_or_boilerplate(value: str) -> bool:
+    """Whether OCR text is a label, heading, or placeholder rather than data."""
+
+    cleaned = (value or "").strip(" :|\t-")
+    if not cleaned:
+        return True
+    if cleaned.casefold() in _PLACEHOLDER_OR_HEADING_VALUES:
+        return True
+    # Reject both a bare label ("Date of Expiry") and an unstripped nested
+    # label ("Date of Expiry: 01 Jan 2030").  The latter must never migrate
+    # into a different field merely because two OCR cells were merged.
+    return bool(re.match(rf"^(?:{_KNOWN_FIELD_LABELS})(?:[ \t]*[:|\-]|$)", cleaned, flags=re.IGNORECASE))
+
+
+def sanitize_extracted_fields(document_type: str, fields: dict[str, str] | object) -> dict[str, str]:
+    """Return the UI-safe subset of OCR suggestions.
+
+    The parser invokes this before persistence.  Serializers invoke it again
+    for historic rows created before these guards existed, so an old bad OCR
+    value is never offered to HR as a suggestion.  The document type parameter
+    is intentionally part of the public helper: field rules can remain type
+    aware as formats are added without moving validation into presentation code.
+    """
+
+    del document_type  # Reserved for document-specific field rules.
+    if not isinstance(fields, dict):
+        return {}
+
+    cleaned: dict[str, str] = {}
+    for raw_key, raw_value in fields.items():
+        if not isinstance(raw_key, str) or raw_key.startswith("_"):
+            continue
+        value = str(raw_value or "").strip()
+        if is_field_label_or_boilerplate(value):
+            continue
+        if raw_key in DATE_FIELD_NAMES and not parse_date(value):
+            continue
+        cleaned[raw_key] = value
+    return cleaned
 
 
 def _strip_leading_label(value: str, labels: str) -> str:
@@ -192,11 +302,14 @@ def _common_identity_labels(text: str) -> dict[str, str]:
         "profession": r"Profession|Occupation|المهنة|الوظيفة",
         "employer": r"Employer|Sponsor|صاحب\s*العمل|الكفيل",
     }
-    values = {key: label_value(text, labels) for key, labels in patterns.items()}
+    values = {
+        key: label_date_value(text, labels) if key in DATE_FIELD_NAMES else label_value(text, labels)
+        for key, labels in patterns.items()
+    }
     for key in ("full_name", "nationality", "profession", "employer"):
         if values.get(key):
             values[key] = strip_trailing_noise(values[key])
-    return _clean(values)
+    return sanitize_extracted_fields("identity", _clean(values))
 
 
 def _fallback_latin_name(text: str) -> str:
@@ -228,11 +341,37 @@ def parse_passport(text: str) -> ParseResult:
         if fallback:
             fields["full_name"] = fallback
 
-    for key in ("date_of_birth", "expiry_date"):
+    for key in ("date_of_birth", "issue_date", "expiry_date"):
         value = fields.get(key)
         if value and not parse_date(value):
             warnings.append(f"Passport {key.replace('_', ' ')} could not be read as a valid date.")
             fields.pop(key, None)
+
+    # Do not swap or infer these values.  A passport issue date cannot be after
+    # its expiry, and birth/issue dates cannot be in the future.  Removing a
+    # conflicting OCR suggestion is safer than presenting a plausible-looking
+    # but semantically wrong value to HR.
+    today = date.today()
+    birth = parse_date(fields.get("date_of_birth", ""))
+    issue = parse_date(fields.get("issue_date", ""))
+    expiry = parse_date(fields.get("expiry_date", ""))
+    if birth and birth > today:
+        warnings.append("Passport date of birth is in the future and was omitted.")
+        fields.pop("date_of_birth", None)
+        birth = None
+    if issue and issue > today:
+        warnings.append("Passport issue date is in the future and was omitted.")
+        fields.pop("issue_date", None)
+        issue = None
+    if issue and expiry and issue > expiry:
+        warnings.append("Passport issue date is after the expiry date and was omitted.")
+        fields.pop("issue_date", None)
+        issue = None
+    if birth and issue and birth > issue:
+        warnings.append("Passport date of birth is after the issue date and was omitted.")
+        fields.pop("date_of_birth", None)
+
+    fields = sanitize_extracted_fields(EmployeeDocument.DocumentType.PASSPORT, fields)
 
     required = ("passport_number", "full_name", "nationality", "date_of_birth", "expiry_date")
     missing = [name for name in required if not fields.get(name)]
@@ -250,7 +389,7 @@ def parse_passport(text: str) -> ParseResult:
     if expiry and expiry < date.today():
         warnings.append("The passport expiry date is in the past.")
 
-    return ParseResult(fields=_clean(fields), warnings=warnings, checks=checks, valid=valid)
+    return ParseResult(fields=fields, warnings=warnings, checks=checks, valid=valid)
 
 
 def parse_national_identity(document_type: str, text: str) -> ParseResult:
@@ -337,8 +476,10 @@ def parse_national_identity(document_type: str, text: str) -> ParseResult:
     if missing:
         warnings.append(f"Could not extract: {_humanize(missing)}.")
 
+    fields = sanitize_extracted_fields(document_type, fields)
+    missing = [name for name in required if not fields.get(name)]
     valid = not missing and checks["id_format"] and checks["id_checksum"] and checks["expiry_parsed"]
-    return ParseResult(fields=_clean(fields), warnings=warnings, checks=checks, valid=valid)
+    return ParseResult(fields=fields, warnings=warnings, checks=checks, valid=valid)
 
 
 def parse_visa(text: str) -> ParseResult:
@@ -360,12 +501,13 @@ def parse_visa(text: str) -> ParseResult:
     if not duration_raw:
         duration_raw = first_match(r"مدة\s*(?:التأشيرة|التاشيرة)\s*[:|]?\s*([0-9٠-٩۰-۹]{1,4})", text)
 
-    fields = _clean(
+    fields = sanitize_extracted_fields(
+        EmployeeDocument.DocumentType.VISA,
         {
             "visa_number": visa_number,
             "exit_before_raw": normalize_digits(exit_before_raw),
             "visa_duration_raw": normalize_digits(duration_raw),
-        }
+        },
     )
 
     number_ok = bool(re.fullmatch(r"[A-Za-z0-9-]{4,20}", fields.get("visa_number", "")))

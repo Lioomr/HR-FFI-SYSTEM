@@ -609,6 +609,9 @@ export interface EmployeeDocument {
   extraction_metadata?: Record<string, unknown> | null;
   extraction_attempts?: number;
   extraction_completed_at?: string | null;
+  /** Audit marker set when an authorised HR user reviews OCR suggestions. */
+  ocr_reviewed_at?: string | null;
+  ocr_reviewed_by?: number | null;
   /** Documents the system produced itself; they carry no OCR and cannot be deleted. */
   is_system_generated?: boolean;
   uploaded_by?: number | null;
@@ -670,6 +673,21 @@ export async function extractEmployeeDocument(
   return data;
 }
 
+/**
+ * Record that HR checked the OCR suggestions against the original document.
+ * This is an audit action only: it never writes the suggestions into employee
+ * master data.
+ */
+export async function reviewEmployeeDocument(
+  employeeId: number | string,
+  documentId: number | string,
+): Promise<ApiResponse<EmployeeDocument>> {
+  const { data } = await api.post<ApiResponse<EmployeeDocument>>(
+    `/api/employees/${employeeId}/documents/${documentId}/review/`,
+  );
+  return data;
+}
+
 /** Payload returned by a successful permanent deletion. */
 export interface DeleteEmployeeDocumentResult {
   id: number;
@@ -705,6 +723,22 @@ export async function downloadEmployeeDocument(
 ): Promise<Blob> {
   const { data } = await api.get(
     `/api/employees/${employeeId}/documents/${documentId}/download/`,
+    { responseType: "blob" },
+  );
+  return data;
+}
+
+/**
+ * Fetch the server-generated document thumbnail for an expanded archive row.
+ * The endpoint is deliberately separate from download: callers never need the
+ * original private file merely to paint a compact review thumbnail.
+ */
+export async function getEmployeeDocumentThumbnail(
+  employeeId: number | string,
+  documentId: number | string,
+): Promise<Blob> {
+  const { data } = await api.get(
+    `/api/employees/${employeeId}/documents/${documentId}/thumbnail/`,
     { responseType: "blob" },
   );
   return data;

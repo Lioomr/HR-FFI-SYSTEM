@@ -255,6 +255,22 @@ class EmployeeDocumentSecurityTests(TestCase):
                 document.refresh_from_db()
                 self.assertEqual(document.extracted_fields, extracted_fields)
 
+    def test_serializer_hides_historical_label_and_invalid_date_suggestions(self):
+        document = self._document()
+        document.extracted_fields = {
+            "passport_number": "P1234567",
+            "issue_date": "Date of Expiry",
+            "expiry_date": "Expiry Date",
+            "date_of_birth": "31/02/1990",
+            "profession": "Profession",
+            "nationality": "Unknown",
+        }
+        document.save(update_fields=["extracted_fields"])
+
+        payload = EmployeeDocumentSerializer(document).data
+
+        self.assertEqual(payload["extracted_fields"], {"passport_number": "P1234567"})
+
     @patch("employees.tasks.extract_employee_document.apply_async")
     def test_hr_can_retry_ocr_for_an_existing_document(self, apply_async):
         document = self._document()
