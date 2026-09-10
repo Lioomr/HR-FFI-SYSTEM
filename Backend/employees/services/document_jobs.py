@@ -66,6 +66,8 @@ def claim_document_for_extraction(document: EmployeeDocument) -> bool:
             extraction_warnings=[],
             extraction_queued_at=now,
             extraction_task_id="",
+            ocr_reviewed_at=None,
+            ocr_reviewed_by=None,
             updated_at=now,
         )
     )
@@ -75,6 +77,8 @@ def claim_document_for_extraction(document: EmployeeDocument) -> bool:
         document.extraction_warnings = []
         document.extraction_queued_at = now
         document.extraction_task_id = ""
+        document.ocr_reviewed_at = None
+        document.ocr_reviewed_by = None
     return bool(claimed)
 
 

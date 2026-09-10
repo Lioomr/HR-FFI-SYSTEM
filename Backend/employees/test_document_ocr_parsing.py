@@ -10,7 +10,7 @@ they stay fast.
 from django.test import TestCase
 
 from .models import EmployeeDocument
-from .ocr.parsers import label_value, parse_document, strip_trailing_noise
+from .ocr.parsers import label_date_value, label_value, parse_document, strip_trailing_noise
 
 NAME_LABELS = r"Full\s*Name|Name|الاسم"
 NATIONALITY_LABELS = r"Nationality|الجنسية"
@@ -40,6 +40,31 @@ class LabelValueTests(TestCase):
 
     def test_an_empty_value_is_not_returned(self):
         self.assertEqual(label_value("Nationality:\n", NATIONALITY_LABELS), "")
+
+    def test_adjacent_date_labels_are_not_treated_as_a_value(self):
+        text = "Date of Issue Date of Expiry\n"
+
+        self.assertEqual(label_date_value(text, r"Date\s*of\s*Issue|Issue\s*Date"), "")
+        result = parse_document(EmployeeDocument.DocumentType.PASSPORT, text)
+        self.assertNotIn("issue_date", result.fields)
+        self.assertNotIn("expiry_date", result.fields)
+
+    def test_passport_issue_and_expiry_dates_keep_their_own_meaning(self):
+        text = "Date of Issue: 14 May 2020\nDate of Expiry: 13 May 2030\n"
+
+        result = parse_document(EmployeeDocument.DocumentType.PASSPORT, text)
+
+        self.assertEqual(result.fields["issue_date"], "14 May 2020")
+        self.assertEqual(result.fields["expiry_date"], "13 May 2030")
+
+    def test_inverted_passport_dates_are_omitted_not_swapped(self):
+        text = "Date of Issue: 14 May 2031\nDate of Expiry: 13 May 2030\n"
+
+        result = parse_document(EmployeeDocument.DocumentType.PASSPORT, text)
+
+        self.assertNotIn("issue_date", result.fields)
+        self.assertEqual(result.fields["expiry_date"], "13 May 2030")
+        self.assertTrue(any("issue date is" in warning for warning in result.warnings))
 
 
 class TrailingNoiseTests(TestCase):
