@@ -94,6 +94,21 @@ from .throttles import EmployeeImportThrottle
 
 logger = logging.getLogger(__name__)
 
+LEAVE_RELATIONSHIP_CONFLICT = "Changing this employee user would orphan leave relationships."
+
+
+def _employee_update_integrity_error_response(exc):
+    """Convert protected employee relationship failures into an actionable API error."""
+
+    if LEAVE_RELATIONSHIP_CONFLICT not in str(exc):
+        return None
+
+    return error(
+        "This account cannot be unlinked because leave records reference it.",
+        errors=["Reassign or preserve the leave relationships before changing the linked account."],
+        status=status.HTTP_409_CONFLICT,
+    )
+
 
 def _log_notification_failure(event_name, *, entity_id, notification_type, actor_id=None, channel=None):
     extra = {"entity_id": entity_id, "notification_type": notification_type}
@@ -1332,7 +1347,13 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         serializer = self.get_serializer(instance, data=request.data)
         serializer.is_valid(raise_exception=True)
-        self.perform_update(serializer)
+        try:
+            self.perform_update(serializer)
+        except IntegrityError as exc:
+            conflict_response = _employee_update_integrity_error_response(exc)
+            if conflict_response is not None:
+                return conflict_response
+            raise
         read_serializer = EmployeeProfileReadSerializer(serializer.instance)
         return success(read_serializer.data)
 
@@ -1364,7 +1385,13 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         serializer = self.get_serializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        self.perform_update(serializer)
+        try:
+            self.perform_update(serializer)
+        except IntegrityError as exc:
+            conflict_response = _employee_update_integrity_error_response(exc)
+            if conflict_response is not None:
+                return conflict_response
+            raise
         read_serializer = EmployeeProfileReadSerializer(serializer.instance)
         return success(read_serializer.data)
 

@@ -167,6 +167,28 @@ class EmployeeProfileTests(TestCase):
         target_profile.refresh_from_db()
         self.assertIsNone(target_profile.user_id)
 
+    def test_unlinking_user_with_leave_relationship_returns_conflict(self):
+        profile = EmployeeProfile.objects.create(
+            user=self.employee_user,
+            company=self.company,
+            employee_id="EMP-LEAVE-UNLINK",
+        )
+
+        self.client.force_authenticate(user=self.hr_user)
+        with patch.object(
+            EmployeeProfile,
+            "save",
+            side_effect=IntegrityError("Changing this employee user would orphan leave relationships."),
+        ):
+            response = self.client.patch(f"/api/employees/{profile.pk}/", {"user_id": None})
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(
+            response.data["message"],
+            "This account cannot be unlinked because leave records reference it.",
+        )
+        self.assertIn("Reassign or preserve", response.data["errors"][0])
+
     def test_employee_me_endpoint(self):
         EmployeeProfile.objects.create(
             user=self.employee_user,
