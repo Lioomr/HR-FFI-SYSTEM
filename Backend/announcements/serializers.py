@@ -4,13 +4,31 @@ import os
 from django.conf import settings
 from rest_framework import serializers
 
+from core.permissions import get_role
 from employees.models import EmployeeProfile
-from organization.services import filter_queryset_by_company_scope
+from organization.services import filter_queryset_by_company_scope, get_active_company_for_request
 
 from .models import Announcement
+from .whatsapp_groups import configured_groups
 
 
-class AnnouncementSerializer(serializers.ModelSerializer):
+class AnnouncementGroupReadMixin:
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        if not request or get_role(request.user) not in {"HRManager", "SystemAdmin"}:
+            data.pop("whatsapp_group_id", None)
+        else:
+            group = configured_groups(instance.company).get(instance.whatsapp_group_id)
+            data["whatsapp_group_name"] = group["name"] if group else ""
+            delivery = getattr(instance, "whatsapp_group_delivery", None)
+            data["whatsapp_group_status"] = (
+                delivery.status if delivery and delivery.group_id == instance.whatsapp_group_id else ""
+            )
+        return data
+
+
+class AnnouncementSerializer(AnnouncementGroupReadMixin, serializers.ModelSerializer):
     created_by_name = serializers.SerializerMethodField()
     target_user_email = serializers.SerializerMethodField()
     attachment_name = serializers.SerializerMethodField()
@@ -27,6 +45,8 @@ class AnnouncementSerializer(serializers.ModelSerializer):
             "title",
             "content",
             "announcement_type",
+            "whole_company",
+            "whatsapp_group_id",
             "target_roles",
             "target_user",
             "target_user_email",
@@ -82,7 +102,7 @@ class AnnouncementSerializer(serializers.ModelSerializer):
         return bool(obj.attachment)
 
 
-class AnnouncementListSerializer(serializers.ModelSerializer):
+class AnnouncementListSerializer(AnnouncementGroupReadMixin, serializers.ModelSerializer):
     created_by_name = serializers.SerializerMethodField()
     content_preview = serializers.SerializerMethodField()
     target_user_email = serializers.SerializerMethodField()
@@ -99,6 +119,8 @@ class AnnouncementListSerializer(serializers.ModelSerializer):
             "title",
             "content_preview",
             "announcement_type",
+            "whole_company",
+            "whatsapp_group_id",
             "target_roles",
             "target_user",
             "target_user_email",
@@ -164,6 +186,8 @@ class AnnouncementCreateSerializer(serializers.ModelSerializer):
             "title",
             "content",
             "announcement_type",
+            "whole_company",
+            "whatsapp_group_id",
             "target_roles",
             "target_user",
             "target_user_ids",
@@ -199,9 +223,20 @@ class AnnouncementCreateSerializer(serializers.ModelSerializer):
         del mutable_data["publish_to_whatsapp"]
         return super().to_internal_value(mutable_data)
 
+    def validate_whatsapp_group_id(self, value):
+        if not value:
+            return ""
+        request = self.context.get("request")
+        if not request or get_role(request.user) not in {"HRManager", "SystemAdmin"}:
+            raise serializers.ValidationError("Only HR administrators can select announcement groups.")
+        company = get_active_company_for_request(request)
+        if value not in configured_groups(company):
+            raise serializers.ValidationError("Select an approved WhatsApp group for the active company.")
+        return value
+
     def validate_target_roles(self, value):
         """Validate that target_roles contains valid role names"""
-        valid_roles = ["ADMIN", "HR_MANAGER", "MANAGER", "EMPLOYEE"]
+        valid_roles = ["CEO"]
         if isinstance(value, str):
             try:
                 value = json.loads(value)
@@ -217,6 +252,20 @@ class AnnouncementCreateSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        group_id = attrs.get("whatsapp_group_id", getattr(self.instance, "whatsapp_group_id", ""))
+        whatsapp_enabled = attrs.get("publish_to_sms", getattr(self.instance, "publish_to_sms", False))
+        if group_id and not whatsapp_enabled:
+            if "whatsapp_group_id" in attrs:
+                raise serializers.ValidationError(
+                    {"whatsapp_group_id": "Enable WhatsApp publishing to select a group."}
+                )
+            attrs["whatsapp_group_id"] = ""
+        whole_company = attrs.get("whole_company", getattr(self.instance, "whole_company", False))
+        # An explicit audience replaces the previous private/role audience on edit.
+        if "whole_company" in attrs or "target_user_ids" in attrs:
+            attrs.setdefault("target_roles", [])
+            attrs.setdefault("target_user", None)
+        attrs.setdefault("target_roles", getattr(self.instance, "target_roles", []))
         target_roles = attrs.get("target_roles", getattr(self.instance, "target_roles", None))
         target_user = attrs.get("target_user", getattr(self.instance, "target_user", None))
         target_user_ids = attrs.get("target_user_ids") or []
@@ -229,18 +278,32 @@ class AnnouncementCreateSerializer(serializers.ModelSerializer):
 
         allow_empty_targets_for_manager = bool(self.context.get("allow_empty_targets_for_manager"))
 
+        if any(role != "CEO" for role in (target_roles or [])):
+            raise serializers.ValidationError(
+                {"target_roles": "Only CEO is a supported target role. Choose an audience."}
+            )
+        if whole_company and (target_roles or target_user or target_user_ids):
+            raise serializers.ValidationError("Whole company cannot be combined with private or role targets.")
+        if target_user and target_roles:
+            raise serializers.ValidationError("Single-user and role targets cannot be combined.")
         if target_user_ids and (target_user or target_roles):
             raise serializers.ValidationError("Selected employees cannot be combined with role or single-user targets")
 
         if announcement_type == Announcement.AnnouncementType.MEETING:
-            if not target_user_ids and not target_user:
+            if not target_user_ids and not target_user and not whole_company and not target_roles:
                 raise serializers.ValidationError(
                     {"target_user_ids": "Select at least one employee for a meeting notification."}
                 )
             if not meeting_starts_at:
                 raise serializers.ValidationError({"meeting_starts_at": "Meeting date and time is required."})
 
-        if not target_user and not target_roles and not target_user_ids and not allow_empty_targets_for_manager:
+        if (
+            not target_user
+            and not target_roles
+            and not target_user_ids
+            and not whole_company
+            and not allow_empty_targets_for_manager
+        ):
             raise serializers.ValidationError("At least one target role or a target user is required")
 
         return attrs
@@ -255,6 +318,7 @@ class AnnouncementCreateSerializer(serializers.ModelSerializer):
             EmployeeProfile.objects.filter(
                 user=value,
                 user__is_active=True,
+                is_archived=False,
                 employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
             ),
             request,
@@ -272,6 +336,7 @@ class AnnouncementCreateSerializer(serializers.ModelSerializer):
         qs = EmployeeProfile.objects.select_related("user").filter(
             user_id__in=unique_ids,
             user__is_active=True,
+            is_archived=False,
             employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
         )
         qs = filter_queryset_by_company_scope(qs, request)

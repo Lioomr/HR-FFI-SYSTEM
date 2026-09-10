@@ -72,13 +72,6 @@ export default function AnnouncementsManagementPage() {
     loadData(newPagination.current, newPagination.pageSize);
   };
 
-  const roleColors: Record<string, string> = {
-    ADMIN: "red",
-    HR_MANAGER: "blue",
-    MANAGER: "purple",
-    EMPLOYEE: "green",
-  };
-
   const columns = [
     {
       title: t("hr.announcements.tableTitle"),
@@ -103,28 +96,26 @@ export default function AnnouncementsManagementPage() {
           {record.target_user_email && (
             <Tag color="cyan">{record.target_user_email}</Tag>
           )}
-          {roles.map((role) => {
-            let displayRole = role.replace("_", " ");
-            switch (role) {
-              case "ADMIN":
-                displayRole = t("auth.role.admin");
-                break;
-              case "HR_MANAGER":
-                displayRole = t("auth.role.hr_manager");
-                break;
-              case "MANAGER":
-                displayRole = t("auth.role.manager");
-                break;
-              case "EMPLOYEE":
-                displayRole = t("auth.role.employee");
-                break;
-            }
-            return (
-              <Tag color={roleColors[role] || "default"} key={role}>
-                {displayRole}
-              </Tag>
-            );
-          })}
+          {record.whole_company && (
+            <Tag color="green">
+              {t("hr.announcements.wholeCompany", "Whole company")}
+            </Tag>
+          )}
+          {record.whatsapp_group_id && (
+            <Tag color="cyan">
+              {t("hr.announcements.groupLabel")}:{" "}
+              {record.whatsapp_group_name ||
+                t("hr.announcements.groupUnavailableSelection")}
+            </Tag>
+          )}
+          {record.whatsapp_group_status && (
+            <Tag>
+              {t(
+                `hr.announcements.groupStatus.${record.whatsapp_group_status}`,
+              )}
+            </Tag>
+          )}
+          {roles.includes("CEO") && <Tag color="purple">CEO</Tag>}
         </>
       ),
     },

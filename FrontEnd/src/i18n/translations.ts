@@ -752,6 +752,28 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.announcements.typeMeeting": "Meeting",
     "hr.announcements.meetingTitleLabel": "Meeting Title",
     "hr.announcements.meetingMessageLabel": "Meeting Message",
+    "hr.announcements.wholeCompany": "Whole company",
+    "hr.announcements.groupLabel": "Additional WhatsApp group (optional)",
+    "hr.announcements.groupSemantics":
+      "The group receives the announcement text in addition to individual WhatsApp messages for your selected audience. Group membership may differ from that audience; dashboard and email access stay unchanged. PDFs and private attachment links are not sent to the group.",
+    "hr.announcements.groupUnavailable":
+      "No connected approved groups are available. You can still publish the announcement. Ask an administrator to approve a group for this company or reconnect WhatsApp.",
+    "hr.announcements.groupUnavailableSelection":
+      "Previously selected group (currently unavailable)",
+    "hr.announcements.groupNone": "No additional group",
+    "hr.announcements.groupRefresh": "Refresh groups",
+    "hr.announcements.groupCreateHelp":
+      "One group message is queued when you create the announcement, even when multiple employees are selected.",
+    "hr.announcements.groupEditHelp":
+      "Saving changes does not resend a group message. Create a new announcement to send again.",
+    "hr.announcements.groupStatus.PENDING": "Group: queued",
+    "hr.announcements.groupStatus.PROCESSING": "Group: processing",
+    "hr.announcements.groupStatus.SUBMITTED":
+      "Group: submitted (not delivery confirmation)",
+    "hr.announcements.groupStatus.FAILED": "Group: failed",
+    "hr.announcements.groupStatus.SKIPPED": "Group: skipped",
+    "hr.announcements.groupStatus.UNKNOWN":
+      "Group: outcome unknown - do not resend automatically",
     "hr.announcements.selectedEmployeesLabel": "Selected Employees",
     "hr.announcements.selectedEmployeesRequired":
       "Please select at least one employee",
@@ -4367,6 +4389,28 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.announcements.typeMeeting": "اجتماع",
     "hr.announcements.meetingTitleLabel": "عنوان الاجتماع",
     "hr.announcements.meetingMessageLabel": "رسالة الاجتماع",
+    "hr.announcements.wholeCompany": "الشركة بأكملها",
+    "hr.announcements.groupLabel": "مجموعة واتساب إضافية (اختياري)",
+    "hr.announcements.groupSemantics":
+      "تتلقى المجموعة نص الإعلان بالإضافة إلى رسائل واتساب الفردية للجمهور المحدد. قد تختلف عضوية المجموعة عن الجمهور المحدد؛ ولا يتغير الوصول عبر لوحة التحكم والبريد الإلكتروني. لا تُرسل ملفات PDF أو روابط المرفقات الخاصة إلى المجموعة.",
+    "hr.announcements.groupUnavailable":
+      "لا توجد مجموعات معتمدة ومتصلة متاحة. يمكنك نشر الإعلان. اطلب من المسؤول اعتماد مجموعة لهذه الشركة أو إعادة ربط واتساب.",
+    "hr.announcements.groupUnavailableSelection":
+      "المجموعة المحددة سابقاً (غير متاحة حالياً)",
+    "hr.announcements.groupNone": "بدون مجموعة إضافية",
+    "hr.announcements.groupRefresh": "تحديث المجموعات",
+    "hr.announcements.groupCreateHelp":
+      "تُدرج رسالة واحدة للمجموعة عند إنشاء الإعلان حتى عند تحديد عدة موظفين.",
+    "hr.announcements.groupEditHelp":
+      "حفظ التغييرات لا يعيد إرسال رسالة المجموعة. أنشئ إعلاناً جديداً للإرسال مجدداً.",
+    "hr.announcements.groupStatus.PENDING": "المجموعة: قيد الانتظار",
+    "hr.announcements.groupStatus.PROCESSING": "المجموعة: قيد المعالجة",
+    "hr.announcements.groupStatus.SUBMITTED":
+      "المجموعة: تم التقديم (ليس تأكيد تسليم)",
+    "hr.announcements.groupStatus.FAILED": "المجموعة: فشل",
+    "hr.announcements.groupStatus.SKIPPED": "المجموعة: تم التجاوز",
+    "hr.announcements.groupStatus.UNKNOWN":
+      "المجموعة: النتيجة غير معروفة - لا تُعد الإرسال تلقائياً",
     "hr.announcements.selectedEmployeesLabel": "الموظفون المحددون",
     "hr.announcements.selectedEmployeesRequired":
       "يرجى اختيار موظف واحد على الأقل",

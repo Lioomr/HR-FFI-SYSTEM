@@ -1,9 +1,10 @@
+import AnnouncementWhatsAppGroupField from "./AnnouncementWhatsAppGroupField";
+import AnnouncementAudienceFields from "./AnnouncementAudienceFields";
 import { useEffect, useState } from "react";
 import {
   Form,
   Input,
   Button,
-  Select,
   Switch,
   Card,
   message,
@@ -23,10 +24,7 @@ import {
   createAnnouncement,
   type CreateAnnouncementData,
 } from "../../../services/api/announcementApi";
-import {
-  listDelegationCandidates,
-  type DelegationCandidate,
-} from "../../../services/api/employeesApi";
+
 import { useI18n } from "../../../i18n/useI18n";
 import {
   UploadOutlined,
@@ -37,7 +35,6 @@ import { useAuthStore } from "../../../auth/authStore";
 import { isHeadOfficeOrganization } from "../../../utils/organizationContext";
 
 const { Title, Text } = Typography;
-const { Option } = Select;
 
 export default function CreateAnnouncementPage() {
   const navigate = useNavigate();
@@ -48,7 +45,6 @@ export default function CreateAnnouncementPage() {
   const [loading, setLoading] = useState(false);
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [attachmentList, setAttachmentList] = useState<UploadFile[]>([]);
-  const [employees, setEmployees] = useState<DelegationCandidate[]>([]);
   const announcementType =
     Form.useWatch("announcement_type", form) || "GENERAL";
   const isMeeting = announcementType === "MEETING";
@@ -59,16 +55,6 @@ export default function CreateAnnouncementPage() {
     }
   }, [isHeadOffice, t]);
 
-  useEffect(() => {
-    listDelegationCandidates()
-      .then((response) => {
-        if (response.status === "success") {
-          setEmployees(response.data || []);
-        }
-      })
-      .catch(() => message.error(t("hr.announcements.errorLoadEmployees")));
-  }, [t]);
-
   const onFinish = async (values: any) => {
     if (isHeadOffice) return;
     setLoading(true);
@@ -77,11 +63,16 @@ export default function CreateAnnouncementPage() {
         title: values.title,
         content: values.content,
         announcement_type: values.announcement_type || "GENERAL",
-        target_roles: isMeeting ? [] : values.target_roles,
-        target_user_ids: isMeeting ? values.target_user_ids : undefined,
+        whole_company: values.audience === "COMPANY",
+        target_roles: values.audience === "CEO" ? ["CEO"] : [],
+        target_user_ids:
+          values.audience === "SELECTED" ? values.target_user_ids : undefined,
         publish_to_dashboard: values.publish_to_dashboard,
         publish_to_email: values.publish_to_email,
         publish_to_whatsapp: values.publish_to_whatsapp,
+        whatsapp_group_id: values.publish_to_whatsapp
+          ? values.whatsapp_group_id || ""
+          : "",
         meeting_starts_at: values.meeting_starts_at?.toISOString?.() || null,
         meeting_duration_minutes: values.meeting_duration_minutes ?? null,
         meeting_location: values.meeting_location || "",
@@ -144,6 +135,7 @@ export default function CreateAnnouncementPage() {
           layout="vertical"
           onFinish={onFinish}
           initialValues={{
+            audience: "COMPANY",
             announcement_type: "GENERAL",
             publish_to_dashboard: true,
             publish_to_email: false,
@@ -202,33 +194,10 @@ export default function CreateAnnouncementPage() {
             />
           </Form.Item>
 
+          <AnnouncementAudienceFields />
+
           {isMeeting ? (
             <>
-              <Form.Item
-                name="target_user_ids"
-                label={t("hr.announcements.selectedEmployeesLabel")}
-                rules={[
-                  {
-                    required: true,
-                    message: t("hr.announcements.selectedEmployeesRequired"),
-                  },
-                ]}
-              >
-                <Select
-                  mode="multiple"
-                  showSearch
-                  optionFilterProp="label"
-                  placeholder={t(
-                    "hr.announcements.selectedEmployeesPlaceholder",
-                  )}
-                  size="large"
-                  options={employees.map((employee) => ({
-                    value: employee.id,
-                    label: `${employee.full_name_en || employee.full_name || employee.employee_id} (${employee.employee_id})`,
-                  }))}
-                />
-              </Form.Item>
-
               <Row gutter={16}>
                 <Col xs={24} md={12}>
                   <Form.Item
@@ -313,30 +282,7 @@ export default function CreateAnnouncementPage() {
                 </Col>
               </Row>
             </>
-          ) : (
-            <Form.Item
-              name="target_roles"
-              label={t("hr.announcements.targetAudienceLabel")}
-              rules={[
-                {
-                  required: true,
-                  message: t("hr.announcements.targetAudienceRequired"),
-                },
-              ]}
-            >
-              <Select
-                mode="multiple"
-                placeholder={t("hr.announcements.placeholderSelectRoles")}
-                style={{ width: "100%" }}
-                size="large"
-              >
-                <Option value="ADMIN">{t("auth.role.admin")}</Option>
-                <Option value="HR_MANAGER">{t("auth.role.hr_manager")}</Option>
-                <Option value="MANAGER">{t("auth.role.manager")}</Option>
-                <Option value="EMPLOYEE">{t("auth.role.employee")}</Option>
-              </Select>
-            </Form.Item>
-          )}
+          ) : null}
 
           <Form.Item
             label={t(
@@ -452,6 +398,8 @@ export default function CreateAnnouncementPage() {
               </Col>
             </Row>
           </div>
+
+          <AnnouncementWhatsAppGroupField />
 
           <Form.Item>
             <Button
