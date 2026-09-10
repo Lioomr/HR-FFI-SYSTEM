@@ -101,10 +101,13 @@ function getExpiryStatus(
 }
 
 function ExpiryTag({ status }: { status: ReturnType<typeof getExpiryStatus> }) {
-  if (status === "expired") return <Tag color="error">Expired</Tag>;
-  if (status === "warning") return <Tag color="warning">Expiring Soon</Tag>;
-  if (status === "ok") return <Tag color="success">Valid</Tag>;
-  return <Tag>Unknown</Tag>;
+  const { t } = useI18n();
+  if (status === "expired") return <Tag color="error">{t("status.expired", "Expired")}</Tag>;
+  if (status === "warning") {
+    return <Tag color="warning">{t("status.expiringSoon", "Expiring Soon")}</Tag>;
+  }
+  if (status === "ok") return <Tag color="success">{t("status.valid", "Valid")}</Tag>;
+  return <Tag>{t("status.unknown", "Unknown")}</Tag>;
 }
 
 function DocCard({
@@ -122,6 +125,7 @@ function DocCard({
   expiry: string | undefined;
   testId?: string;
 }) {
+  const { t } = useI18n();
   const status = getExpiryStatus(expiry);
   const borderColor =
     status === "expired"
@@ -160,7 +164,7 @@ function DocCard({
         </div>
       )}
       <div style={{ fontSize: 12, color: "#8c8c8c" }}>
-        Expires: {formatDate(expiry)}
+        {t("hr.employees.expires", "Expires")}: {formatDate(expiry)}
       </div>
     </div>
   );
@@ -425,7 +429,9 @@ export default function ViewEmployeePage() {
         breadcrumb={t("layout.hrManagement")}
         subtitle={employee.full_name}
         secondarySubtitle={
-          employee.mobile ? `Mobile: ${employee.mobile}` : undefined
+          employee.mobile
+            ? `${t("employees.form.mobile", "Mobile Number")}: ${employee.mobile}`
+            : undefined
         }
         actions={
           <Space>
@@ -433,7 +439,11 @@ export default function ViewEmployeePage() {
               {t("hr.employees.back")}
             </Button>
             {employee.user_id ? (
-              <Tooltip title={`Linked to: ${employee.email}`}>
+              <Tooltip
+                title={t("employees.view.linkedTo", {
+                  email: employee.email,
+                })}
+              >
                 <Button
                   icon={<DisconnectOutlined />}
                   onClick={handleUnlinkUser}
@@ -562,7 +572,10 @@ export default function ViewEmployeePage() {
                     : "default"
                 }
               >
-                {employee.employment_status || "ACTIVE"}
+                {t(
+                  `employees.status.${(employee.employment_status || "ACTIVE").toLowerCase()}`,
+                  employee.employment_status || "ACTIVE",
+                )}
               </Tag>
               <Tag
                 style={{
@@ -857,7 +870,7 @@ export default function ViewEmployeePage() {
               <Space direction="vertical" style={{ width: "100%" }} size={12}>
                 <DocCard
                   label={t("employees.form.passport")}
-                  tagLabel="Passport"
+                  tagLabel={t("employees.form.passport")}
                   tagColor="cyan"
                   number={formatValue(
                     employee.passport || (employee as any).passport_no,
@@ -866,14 +879,14 @@ export default function ViewEmployeePage() {
                 />
                 <DocCard
                   label={t("employees.form.nationalId")}
-                  tagLabel="ID"
+                  tagLabel={t("employees.view.idTag")}
                   tagColor="blue"
                   number={formatValue((employee as any).national_id)}
                   expiry={(employee as any).id_expiry}
                 />
                 <DocCard
                   label={t("employees.form.healthCard")}
-                  tagLabel="Health"
+                  tagLabel={t("employees.view.healthTag")}
                   tagColor="green"
                   number={formatValue((employee as any).health_card)}
                   expiry={(employee as any).health_card_expiry}
