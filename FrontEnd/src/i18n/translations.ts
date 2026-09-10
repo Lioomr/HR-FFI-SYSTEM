@@ -1385,6 +1385,34 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "archive.previewUnavailable":
       "This document type cannot be previewed. Download the file to view it.",
     "archive.previewFailed": "Could not load the document preview.",
+    "archive.previewInvalid": "The downloaded file could not be previewed.",
+    "archive.previewPopupBlocked":
+      "Your browser blocked the PDF preview. Allow pop-ups for this site and try again.",
+    "archive.markReviewComplete": "Mark review complete",
+    "archive.reviewTitle": "Mark OCR review complete?",
+    "archive.reviewConfirmation":
+      "This records that HR reviewed the OCR suggestions against the original document. It does not change employee master data.",
+    "archive.reviewed": "Reviewed",
+    "archive.reviewStatus": "Review status",
+    "archive.reviewComplete": "Review complete",
+    "archive.reviewCompleteNotice":
+      "HR has reviewed the OCR suggestions against the original document.",
+    "archive.reviewSuccess": "OCR review recorded.",
+    "archive.reviewFailed": "Could not record the OCR review.",
+    "archive.passportReviewTitle": "Passport details",
+    "archive.passportReviewHint":
+      "OCR suggestions - compare with the original document.",
+    "archive.passportIdentity": "Identity",
+    "archive.passportDetails": "Passport",
+    "archive.passportDates": "Dates",
+    "archive.notDetected": "Not detected",
+    "archive.notAvailable": "Not available",
+    "archive.previewOriginal": "Preview original",
+    "archive.thumbnailLoading": "Loading document thumbnail",
+    "archive.thumbnailUnavailable": "Thumbnail unavailable",
+    "archive.thumbnailAlt": "Passport document thumbnail",
+    "archive.passportNoValues":
+      "No usable values were detected from this document.",
     "archive.extractionAttempts": "Attempts",
     "archive.extractionCompletedAt": "Completed",
     "archive.extractionEngine": "Engine",
@@ -5015,6 +5043,33 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "archive.previewUnavailable":
       "لا يمكن معاينة هذا النوع من المستندات. نزّل الملف لعرضه.",
     "archive.previewFailed": "تعذر تحميل معاينة المستند.",
+    "archive.previewInvalid": "تعذر عرض الملف الذي تم تنزيله كمعاينة.",
+    "archive.previewPopupBlocked":
+      "حظر المتصفح معاينة PDF. اسمح بالنوافذ المنبثقة لهذا الموقع ثم حاول مرة أخرى.",
+    "archive.markReviewComplete": "تأكيد اكتمال المراجعة",
+    "archive.reviewTitle": "تأكيد اكتمال مراجعة OCR؟",
+    "archive.reviewConfirmation":
+      "يسجّل هذا أن الموارد البشرية راجعت اقتراحات OCR مقابل المستند الأصلي. ولا يغيّر بيانات الموظف الأساسية.",
+    "archive.reviewed": "تمت المراجعة",
+    "archive.reviewStatus": "حالة المراجعة",
+    "archive.reviewComplete": "اكتملت المراجعة",
+    "archive.reviewCompleteNotice":
+      "راجعت الموارد البشرية اقتراحات OCR مقابل المستند الأصلي.",
+    "archive.reviewSuccess": "تم تسجيل مراجعة OCR.",
+    "archive.reviewFailed": "تعذر تسجيل مراجعة OCR.",
+    "archive.passportReviewTitle": "تفاصيل جواز السفر",
+    "archive.passportReviewHint": "اقتراحات OCR - قارنها بالمستند الأصلي.",
+    "archive.passportIdentity": "الهوية",
+    "archive.passportDetails": "جواز السفر",
+    "archive.passportDates": "التواريخ",
+    "archive.notDetected": "لم يتم التعرّف عليه",
+    "archive.notAvailable": "غير متاح",
+    "archive.previewOriginal": "معاينة المستند الأصلي",
+    "archive.thumbnailLoading": "جارٍ تحميل صورة المستند المصغّرة",
+    "archive.thumbnailUnavailable": "الصورة المصغّرة غير متاحة",
+    "archive.thumbnailAlt": "صورة مصغّرة لمستند جواز السفر",
+    "archive.passportNoValues":
+      "لم يتم التعرّف على قيم قابلة للاستخدام من هذا المستند.",
     "archive.extractionAttempts": "عدد المحاولات",
     "archive.extractionCompletedAt": "اكتمل في",
     "archive.extractionEngine": "المحرك",

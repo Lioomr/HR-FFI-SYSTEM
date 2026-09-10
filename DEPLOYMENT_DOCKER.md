@@ -88,6 +88,12 @@ docker compose --env-file .env.prod.compose -f docker-compose.prod.yml down
 - Start with `SENTRY_TRACES_SAMPLE_RATE=0.0` and `SENTRY_PROFILES_SAMPLE_RATE=0.0`; enable sampling only after the production data policy is reviewed.
 - Set `SENTRY_ENVIRONMENT=production` and optionally set `SENTRY_RELEASE` to the deployed revision.
 
+### Optional Healthchecks monitoring
+
+- Set `HEALTHCHECKS_PING_URL` only in the backend runtime environment.
+- Celery Beat pings this private URL every five minutes. Keep a distinct check URL for production.
+- Do not commit the URL; verify a successful ping after deployment.
+
 ## 5) Deployment Notes
 
 - On cloud or VPS, run the production compose file only.
@@ -102,3 +108,10 @@ docker compose --env-file .env.prod.compose -f docker-compose.prod.yml down
 - Production must run the worker with the same backend image, Redis broker settings, database settings, and private-upload volume as the backend service.
 - After deployment, verify the worker reports `employees.tasks.extract_employee_document` in its registered task list.
 - Existing Pending/Failed documents can be retried from the Document Archive UI or with `POST /api/employees/{employee_id}/documents/{document_id}/extract/`.
+
+## 6) Release Safety Rules
+
+- Merge only after GitHub Actions backend and frontend checks pass.
+- Do not replace PostgreSQL CI with SQLite: migrations use PostgreSQL-specific SQL.
+- Do not use `npm audit fix --force`; review and commit ordinary lockfile-only audit updates, then rerun CI.
+- Keep Sentry and Healthchecks credentials out of Git, frontend configuration, and Compose-time environment files.

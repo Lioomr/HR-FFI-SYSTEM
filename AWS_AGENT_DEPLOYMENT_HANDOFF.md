@@ -317,6 +317,23 @@ docker compose --env-file .env.prod.compose -f docker-compose.prod.yml up -d --b
 Sentry is disabled unless `/opt/hr-ffi/Backend/.env.production` supplies `SENTRY_DSN`.
 When enabling it, set `SENTRY_ENVIRONMENT=production`, keep trace and profile sampling at `0.0` initially, and do not place the DSN in Compose-time or frontend environment files.
 
+## 13) Release Guardrails and Monitoring
+
+Preserve these controls unless an approved replacement provides equivalent coverage:
+
+- GitHub Actions is the release gate. Do not merge or deploy a red PR. Backend CI uses PostgreSQL because migrations include PostgreSQL-specific SQL; the service port must remain published to the runner. Frontend CI runs lint, type-check, tests, build, and a high-severity dependency audit.
+- Keep direct backend dependencies pinned. The CI requirement-pin check and `pip check` prevent unreviewed resolver drift.
+- Keep the Celery worker and Celery Beat as separate services. Beat sends a Healthchecks heartbeat every five minutes when `HEALTHCHECKS_PING_URL` is configured.
+- Sentry is opt-in through the backend runtime env only. Keep production and local DSNs separate; never put a DSN in source, Compose-time env, or frontend env.
+
+Before a production rollout, record the merged commit, render the production Compose config, rebuild only affected services, and verify container health plus the backend health endpoint. After rollout, confirm one successful Healthchecks ping and inspect Sentry for new production issues.
+
+### Sentry triage rules
+
+- Treat the local integration verification event as expected test noise; resolve it after confirming delivery.
+- Investigate repeated operational events first. Current examples include BioTime connection/authentication failures and contract-expiry validation failures.
+- Do not silence an issue by disabling Sentry or broadening exception handling. Fix the source cause, validate it, deploy it, and then resolve the issue.
+
 ## 11) Suggested Future Improvement
 
 To reduce production mistakes, consider one of these changes:

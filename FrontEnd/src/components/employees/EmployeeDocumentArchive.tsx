@@ -25,6 +25,7 @@ import {
   DeleteOutlined,
   ExclamationCircleFilled,
   EyeOutlined,
+  CheckCircleOutlined,
 } from "@ant-design/icons";
 import type { ColumnsType, TableProps } from "antd/es/table";
 import type { UploadFile } from "antd/es/upload/interface";
@@ -32,15 +33,17 @@ import {
   getEmployeeDocuments,
   uploadEmployeeDocument,
   downloadEmployeeDocument,
+  getEmployeeDocumentThumbnail,
   notifyEmployeeDocumentExpiry,
   extractEmployeeDocument,
+  reviewEmployeeDocument,
   deleteEmployeeDocument,
   type EmployeeDocument,
   type DocumentType,
 } from "../../services/api/employeesApi";
 import { isApiError } from "../../services/api/apiTypes";
 import { useI18n } from "../../i18n/useI18n";
-import { downloadBlob } from "../../utils/download";
+import { downloadBlob, sniffInlineType } from "../../utils/download";
 import { formatDateTime } from "../../utils/dateTime";
 
 const { Text } = Typography;
@@ -307,6 +310,299 @@ function dateValue(value: unknown): string {
   return text ? text.split("T")[0] : "";
 }
 
+/**
+ * OCR occasionally mistakes a printed field label for its value (for example,
+ * returning "Date of Expiry"). These are never useful suggestions and must not
+ * look like employee data while the parser is being improved.
+ */
+const PASSPORT_FIELD_LABEL_VALUES = new Set([
+  "passportnumber",
+  "passportno",
+  "fullname",
+  "nationality",
+  "dateofbirth",
+  "dateofissue",
+  "issuedate",
+  "dateofexpiry",
+  "expirydate",
+  "profession",
+  "employer",
+  "sponsor",
+]);
+
+function passportSuggestedValue(
+  doc: EmployeeDocument,
+  keys: string[],
+  dateOnly = false,
+): string | null {
+  for (const key of keys) {
+    const value = doc.extracted_fields?.[key];
+    if (typeof value !== "string" && typeof value !== "number") continue;
+    const text = String(value).trim();
+    const normalized = text.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (!text || PASSPORT_FIELD_LABEL_VALUES.has(normalized)) continue;
+    return dateOnly ? text.split("T")[0] : text;
+  }
+  return null;
+}
+
+interface PassportReviewCardProps {
+  employeeId: number | string;
+  document: EmployeeDocument;
+  t: Translate;
+  onPreview: () => void;
+  canMarkReviewComplete: boolean;
+  onMarkReviewComplete: () => void;
+}
+
+/** A dedicated, OCR-safe review surface for passport records only. */
+function PassportReviewCard({
+  employeeId,
+  document,
+  t,
+  onPreview,
+  canMarkReviewComplete,
+  onMarkReviewComplete,
+}: PassportReviewCardProps) {
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
+  const [thumbnailState, setThumbnailState] = useState<
+    "loading" | "ready" | "unavailable"
+  >("loading");
+
+  // The request occurs only while this Passport row is expanded. The endpoint
+  // returns a server-produced image thumbnail, never the original document.
+  useEffect(() => {
+    let active = true;
+    let objectUrl: string | null = null;
+    setThumbnailState("loading");
+    setThumbnailUrl(null);
+
+    void getEmployeeDocumentThumbnail(employeeId, document.id)
+      .then(async (blob) => {
+        const mimeType = await sniffInlineType(blob);
+        if (!active) return;
+        if (!mimeType?.startsWith("image/")) {
+          setThumbnailState("unavailable");
+          return;
+        }
+        objectUrl = URL.createObjectURL(new Blob([blob], { type: mimeType }));
+        setThumbnailUrl(objectUrl);
+        setThumbnailState("ready");
+      })
+      .catch(() => {
+        if (active) setThumbnailState("unavailable");
+      });
+
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [document.id, employeeId]);
+
+  const fields = [
+    {
+      label: t("archive.extractedField.full_name", "Full Name"),
+      value: passportSuggestedValue(document, ["full_name"]),
+    },
+    {
+      label: t("archive.extractedField.nationality", "Nationality"),
+      value: passportSuggestedValue(document, ["nationality"]),
+    },
+    {
+      label: t("archive.extractedField.date_of_birth", "Date of Birth"),
+      value: passportSuggestedValue(document, ["date_of_birth"], true),
+    },
+    {
+      label: t("archive.extractedField.passport_number", "Passport Number"),
+      value: passportSuggestedValue(document, ["passport_number"]),
+    },
+    {
+      label: t("archive.extractedField.profession", "Profession"),
+      value: passportSuggestedValue(document, ["profession"]),
+    },
+    {
+      label: t("archive.extractedField.employer", "Employer"),
+      value: passportSuggestedValue(document, [
+        "employer",
+        "employer_name",
+        "sponsor",
+        "sponsor_name",
+      ]),
+    },
+    {
+      label: t("archive.extractedField.issue_date", "Issue Date"),
+      value: passportSuggestedValue(document, ["issue_date"], true),
+    },
+    {
+      label: t("archive.extractedField.expiry_date", "Expiry Date"),
+      value: passportSuggestedValue(
+        document,
+        ["expiry_date", "passport_expiry_date"],
+        true,
+      ),
+    },
+  ];
+  const sections = [
+    {
+      title: t("archive.passportIdentity", "Identity"),
+      fields: fields.slice(0, 3).filter((field) => field.value),
+    },
+    {
+      title: t("archive.passportDetails", "Passport"),
+      fields: fields.slice(3, 6).filter((field) => field.value),
+    },
+    {
+      title: t("archive.passportDates", "Dates"),
+      fields: fields.slice(6).filter((field) => field.value),
+    },
+  ].filter((section) => section.fields.length > 0);
+
+  return (
+    <div
+      data-testid={`passport-review-card-${document.id}`}
+      style={{
+        border: "1px solid #d5e3f0",
+        borderRadius: 10,
+        background: "#fbfdff",
+        padding: 12,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          gap: 12,
+          alignItems: "center",
+          marginBottom: 10,
+        }}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Text strong style={{ display: "block" }}>
+            {t("archive.passportReviewTitle", "Passport details")}
+          </Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {t(
+              "archive.passportReviewHint",
+              "OCR suggestions - compare with the original document.",
+            )}
+          </Text>
+        </div>
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(130px, 180px) minmax(0, 1fr)",
+          gap: 14,
+          alignItems: "start",
+        }}
+      >
+        <div
+          data-testid={`passport-thumbnail-${document.id}`}
+          style={{
+            minHeight: 112,
+            display: "grid",
+            placeItems: "center",
+            background: "#f0f4f8",
+            borderRadius: 8,
+            overflow: "hidden",
+          }}
+        >
+          {thumbnailState === "loading" ? (
+            <Spin
+              size="small"
+              aria-label={t(
+                "archive.thumbnailLoading",
+                "Loading document thumbnail",
+              )}
+            />
+          ) : thumbnailUrl ? (
+            <img
+              src={thumbnailUrl}
+              alt={t("archive.thumbnailAlt", "Passport document thumbnail")}
+              // Keep the entire first page visible. `cover` cropped passport
+              // pages and made the compact review image look like random boxes.
+              style={{
+                display: "block",
+                width: "100%",
+                height: 112,
+                objectFit: "contain",
+                background: "#fff",
+              }}
+            />
+          ) : (
+            <Text
+              type="secondary"
+              style={{ fontSize: 12, padding: 8, textAlign: "center" }}
+            >
+              {t("archive.thumbnailUnavailable", "Thumbnail unavailable")}
+            </Text>
+          )}
+        </div>
+        <div style={{ minWidth: 0 }}>
+          {sections.length > 0 ? (
+            <div style={{ display: "grid", gap: 8 }}>
+              {sections.map((section) => (
+                <div key={section.title}>
+                  <Text
+                    strong
+                    style={{ display: "block", marginBottom: 2, fontSize: 12 }}
+                  >
+                    {section.title}
+                  </Text>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: "2px 14px",
+                    }}
+                  >
+                    {section.fields.map((field) => (
+                      <span
+                        key={field.label}
+                        style={{ overflowWrap: "anywhere" }}
+                      >
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          {field.label}:
+                        </Text>
+                        <Text>{field.value}</Text>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <Text type="secondary">
+              {t(
+                "archive.passportNoValues",
+                "No usable values were detected from this document.",
+              )}
+            </Text>
+          )}
+          <Space size={8} wrap style={{ marginTop: 10 }}>
+            <Button
+              size="small"
+              icon={<EyeOutlined />}
+              onClick={onPreview}
+              aria-label={t("archive.previewOriginal", "Preview original")}
+            >
+              {t("archive.previewOriginal", "Preview original")}
+            </Button>
+            {canMarkReviewComplete && (
+              <Button
+                type="primary"
+                size="small"
+                onClick={onMarkReviewComplete}
+              >
+                {t("archive.markReviewComplete", "Mark review complete")}
+              </Button>
+            )}
+          </Space>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const extractedText =
   (...keys: string[]) =>
   (doc: EmployeeDocument) =>
@@ -537,12 +833,6 @@ function documentPreviewKind(filename: string): DocumentPreviewKind | null {
   return extension && IMAGE_PREVIEW_TYPES[extension] ? "image" : null;
 }
 
-function previewMimeType(filename: string, kind: DocumentPreviewKind): string {
-  if (kind === "pdf") return "application/pdf";
-  const extension = filename.trim().split(".").pop()?.toLowerCase() ?? "";
-  return IMAGE_PREVIEW_TYPES[extension] ?? "image/*";
-}
-
 function extractionStatusLabel(t: Translate, status: string): string {
   switch (status) {
     case "success":
@@ -636,6 +926,10 @@ export default function EmployeeDocumentArchive({
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [notifyingId, setNotifyingId] = useState<number | null>(null);
   const [extractingId, setExtractingId] = useState<number | null>(null);
+  const [reviewingId, setReviewingId] = useState<number | null>(null);
+  const [reviewTarget, setReviewTarget] = useState<EmployeeDocument | null>(
+    null,
+  );
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<EmployeeDocument | null>(
     null,
@@ -721,6 +1015,11 @@ export default function EmployeeDocumentArchive({
   const handlePreview = async (doc: EmployeeDocument) => {
     clearPreview();
     const kind = documentPreviewKind(doc.original_filename);
+    // A blob PDF inherits this app's `frame-ancestors 'none'` CSP, so Chromium
+    // blocks it inside an iframe. Open a blank native tab synchronously while
+    // the click gesture is active, then navigate it only after validation.
+    const nativePdfWindow =
+      kind === "pdf" ? window.open("about:blank", "_blank") : null;
     setPreviewTarget(doc);
     setPreviewKind(kind);
     setPreviewError(null);
@@ -740,12 +1039,44 @@ export default function EmployeeDocumentArchive({
     try {
       const blob = await downloadEmployeeDocument(employeeId, doc.id);
       if (previewRequestRef.current !== requestId) return;
-      // The selected extension is the allowlist decision. Normalising a generic
-      // attachment MIME type lets the browser render a valid private PDF/image
-      // without exposing its storage URL or accepting arbitrary content types.
+      const detectedType = await sniffInlineType(blob);
+      if (previewRequestRef.current !== requestId) return;
+      const isExpectedType =
+        (kind === "pdf" && detectedType === "application/pdf") ||
+        (kind === "image" && !!detectedType?.startsWith("image/"));
+      if (!isExpectedType || !detectedType) {
+        nativePdfWindow?.close();
+        setPreviewError(
+          t(
+            "archive.previewInvalid",
+            "The downloaded file could not be previewed.",
+          ),
+        );
+        return;
+      }
+      if (kind === "pdf") {
+        if (!nativePdfWindow || nativePdfWindow.closed) {
+          setPreviewError(
+            t(
+              "archive.previewPopupBlocked",
+              "Your browser blocked the PDF preview. Allow pop-ups for this site and try again.",
+            ),
+          );
+          return;
+        }
+        const url = URL.createObjectURL(
+          new Blob([blob], { type: detectedType }),
+        );
+        nativePdfWindow.location.href = url;
+        window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+        closePreview();
+        return;
+      }
+      // Use the detected MIME rather than trusting an attachment header or
+      // filename. The Blob URL remains private to this browser session.
       const url = URL.createObjectURL(
         new Blob([blob], {
-          type: previewMimeType(doc.original_filename, kind),
+          type: detectedType,
         }),
       );
       previewUrlRef.current = url;
@@ -834,6 +1165,40 @@ export default function EmployeeDocumentArchive({
       });
     } finally {
       setExtractingId(null);
+    }
+  };
+
+  const handleReviewComplete = async (doc: EmployeeDocument) => {
+    setReviewingId(doc.id);
+    try {
+      const res = await reviewEmployeeDocument(employeeId, doc.id);
+      if (isApiError(res)) {
+        notification.error({
+          message: t(
+            "archive.reviewFailed",
+            "Could not record the OCR review.",
+          ),
+          description: res.message,
+        });
+        return;
+      }
+      setDocs((current) =>
+        current.map((item) => (item.id === doc.id ? res.data : item)),
+      );
+      setReviewTarget(null);
+      notification.success({
+        message: t("archive.reviewSuccess", "OCR review recorded."),
+      });
+    } catch (e: any) {
+      notification.error({
+        message: t("archive.reviewFailed", "Could not record the OCR review."),
+        description:
+          extractApiErrorMessage(e?.response?.data) ||
+          e?.message ||
+          t("common.tryAgain"),
+      });
+    } finally {
+      setReviewingId(null);
     }
   };
 
@@ -1032,6 +1397,10 @@ export default function EmployeeDocumentArchive({
       render: (v: string, r: EmployeeDocument) =>
         isSystemGenerated(r) ? (
           <Tag color="blue">{t("archive.systemGenerated", "Generated")}</Tag>
+        ) : r.ocr_reviewed_at ? (
+          <Tag color="green">
+            {t("archive.reviewComplete", "Review complete")}
+          </Tag>
         ) : (
           <Tag color={extractionStatusColor[v] ?? "default"}>
             {extractionStatusLabel(t, v)}
@@ -1146,6 +1515,18 @@ export default function EmployeeDocumentArchive({
       const extractionFailed =
         !systemGenerated && record.extraction_status === "failed";
       const extractionPending = !systemGenerated && isExtractionPending(record);
+      const reviewedAt = record.ocr_reviewed_at
+        ? formatDateTime(record.ocr_reviewed_at, "")
+        : null;
+      const reviewComplete = !!reviewedAt;
+      const reviewPending = needsVerification && !reviewComplete;
+      const canMarkReviewComplete =
+        !readonly &&
+        canManageDocuments &&
+        !systemGenerated &&
+        (record.extraction_status === "success" ||
+          record.extraction_status === "partial") &&
+        !record.ocr_reviewed_at;
       return (
         <Space
           direction="vertical"
@@ -1160,15 +1541,21 @@ export default function EmployeeDocumentArchive({
               <Space size={[16, 4]} wrap>
                 <span>
                   <Text type="secondary">
-                    {t("archive.extractionStatus", "Extraction")}:
+                    {reviewComplete
+                      ? t("archive.reviewStatus", "Review status")
+                      : t("archive.extractionStatus", "Extraction")}
                   </Text>{" "}
                   <Tag
                     color={
-                      extractionStatusColor[record.extraction_status] ??
-                      "default"
+                      reviewComplete
+                        ? "green"
+                        : (extractionStatusColor[record.extraction_status] ??
+                          "default")
                     }
                   >
-                    {extractionStatusLabel(t, record.extraction_status)}
+                    {reviewComplete
+                      ? t("archive.reviewComplete", "Review complete")
+                      : extractionStatusLabel(t, record.extraction_status)}
                   </Tag>
                 </span>
                 {confidence && (
@@ -1187,6 +1574,14 @@ export default function EmployeeDocumentArchive({
                     <Text>{completedAt}</Text>
                   </span>
                 )}
+                {reviewedAt && (
+                  <span data-testid={`ocr-reviewed-${record.id}`}>
+                    <Text type="secondary">
+                      {t("archive.reviewed", "Reviewed")}:
+                    </Text>{" "}
+                    <Text>{reviewedAt}</Text>
+                  </span>
+                )}
               </Space>
             </div>
           )}
@@ -1198,7 +1593,7 @@ export default function EmployeeDocumentArchive({
               )}
             </Text>
           )}
-          {needsVerification && (
+          {reviewPending && (
             <Alert
               type="warning"
               showIcon
@@ -1210,6 +1605,18 @@ export default function EmployeeDocumentArchive({
               description={t(
                 "archive.partialNotice",
                 "The scan produced only partial results. HR must verify every suggested value against the original document before relying on it.",
+              )}
+            />
+          )}
+          {reviewComplete && (
+            <Alert
+              type="success"
+              showIcon
+              data-testid={`review-complete-${record.id}`}
+              message={t("archive.reviewComplete", "Review complete")}
+              description={t(
+                "archive.reviewCompleteNotice",
+                "HR has reviewed the OCR suggestions against the original document.",
               )}
             />
           )}
@@ -1235,7 +1642,27 @@ export default function EmployeeDocumentArchive({
               )}
             />
           )}
-          {visibleEntries.length > 0 && (
+          {!systemGenerated && record.document_type === "PASSPORT" && (
+            <PassportReviewCard
+              employeeId={employeeId}
+              document={record}
+              t={t}
+              onPreview={() => handlePreview(record)}
+              canMarkReviewComplete={canMarkReviewComplete}
+              onMarkReviewComplete={() => setReviewTarget(record)}
+            />
+          )}
+          {canMarkReviewComplete && record.document_type !== "PASSPORT" && (
+            <Button
+              type="primary"
+              icon={<CheckCircleOutlined />}
+              style={{ alignSelf: "flex-start", marginTop: 2 }}
+              onClick={() => setReviewTarget(record)}
+            >
+              {t("archive.markReviewComplete", "Mark review complete")}
+            </Button>
+          )}
+          {record.document_type !== "PASSPORT" && visibleEntries.length > 0 && (
             <div
               style={{ fontSize: 13 }}
               data-testid={`extracted-fields-${record.id}`}
@@ -1274,7 +1701,8 @@ export default function EmployeeDocumentArchive({
               </div>
             </div>
           )}
-          {visibleEntries.length === 0 &&
+          {record.document_type !== "PASSPORT" &&
+            visibleEntries.length === 0 &&
             !needsVerification &&
             !extractionFailed &&
             !extractionPending && (
@@ -1288,7 +1716,8 @@ export default function EmployeeDocumentArchive({
     rowExpandable: (r) =>
       // Reliability signals make a row worth expanding even when the extractor
       // returned no usable field; a bare record with nothing to say stays flat.
-      (!isSystemGenerated(r) && hasExtractionSignals(r)) ||
+      (!isSystemGenerated(r) &&
+        (r.document_type === "PASSPORT" || hasExtractionSignals(r))) ||
       getVisibleExtractedFields(r.extracted_fields, isSystemGenerated(r))
         .length > 0,
   };
@@ -1382,13 +1811,6 @@ export default function EmployeeDocumentArchive({
           </div>
         ) : previewError ? (
           <Alert type="warning" showIcon message={previewError} />
-        ) : previewUrl && previewKind === "pdf" ? (
-          <iframe
-            title={t("archive.preview", "Preview document")}
-            data-testid="document-preview-pdf"
-            src={previewUrl}
-            style={{ width: "100%", height: "70vh", border: 0 }}
-          />
         ) : previewUrl && previewKind === "image" ? (
           <img
             src={previewUrl}
@@ -1486,6 +1908,24 @@ export default function EmployeeDocumentArchive({
             </Text>
           </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal
+        title={t("archive.reviewTitle", "Mark OCR review complete?")}
+        open={reviewTarget !== null}
+        onOk={() => reviewTarget && handleReviewComplete(reviewTarget)}
+        onCancel={() => setReviewTarget(null)}
+        okText={t("archive.markReviewComplete", "Mark review complete")}
+        cancelText={t("common.cancel", "Cancel")}
+        confirmLoading={reviewingId !== null}
+        destroyOnClose
+      >
+        <Text>
+          {t(
+            "archive.reviewConfirmation",
+            "This records that HR reviewed the OCR suggestions against the original document. It does not change employee master data.",
+          )}
+        </Text>
       </Modal>
 
       <Modal
