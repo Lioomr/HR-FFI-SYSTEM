@@ -2,16 +2,19 @@ from __future__ import annotations
 
 import logging
 from datetime import date, timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 
 from django.contrib.auth import get_user_model
-from django.db import InterfaceError, OperationalError, transaction
+from django.db import IntegrityError, InterfaceError, OperationalError, transaction
 from django.db.models import Q
 from django.utils import timezone
+from rest_framework.exceptions import ValidationError
+from rest_framework.fields import DecimalField
 
 from audit.utils import audit
 from core.services import get_ceo_approver_users
 from core.services.workflow_engine import sync_workflow
+from employees.services.archiving import retire_biotime_mapping_and_archive_profile
 from in_app_notifications.dispatcher import dispatch_notification_channels
 from in_app_notifications.models import Notification
 
@@ -44,7 +47,9 @@ FINAL_NOTIFICATION_STATUSES = {
 
 
 def contract_terms_snapshot(profile: EmployeeProfile) -> dict:
-    return {field: str(getattr(profile, field)) if getattr(profile, field) is not None else None for field in TERM_FIELDS}
+    return {
+        field: str(getattr(profile, field)) if getattr(profile, field) is not None else None for field in TERM_FIELDS
+    }
 
 
 @transaction.atomic
@@ -73,9 +78,11 @@ def _company_hr_recipients(company_id: int):
 
 
 def _company_ceo_recipients(company_id: int):
-    return get_ceo_approver_users().filter(
-        Q(employee_profile__company_id=company_id) | Q(organization_access_entries__organization_id=company_id)
-    ).distinct()
+    return (
+        get_ceo_approver_users()
+        .filter(Q(employee_profile__company_id=company_id) | Q(organization_access_entries__organization_id=company_id))
+        .distinct()
+    )
 
 
 def _dispatch(*, recipient, decision, title, message, action_url, category, deduplication_key, metadata):
@@ -176,7 +183,9 @@ def notify_ceo_pending(
 
 @transaction.atomic
 def _claim_final_notification_attempt(decision_id: int, now):
-    decision = ContractDecision.objects.select_for_update().select_related("employee_profile", "company").get(pk=decision_id)
+    decision = (
+        ContractDecision.objects.select_for_update().select_related("employee_profile", "company").get(pk=decision_id)
+    )
     if decision.final_notification_sent_at:
         return None
     if (
@@ -288,6 +297,8 @@ def notify_auto_renewal_failure(decision: ContractDecision) -> int | None:
 
 
 def _parse_term_values(values: dict) -> dict:
+    if not isinstance(values, dict):
+        raise ValueError("Proposed contract terms must be an object.")
     parsed = {}
     for field, value in values.items():
         if field not in TERM_FIELDS:
@@ -296,10 +307,25 @@ def _parse_term_values(values: dict) -> dict:
             parsed[field] = None
             continue
         try:
-            parsed[field] = str(Decimal(str(value)))
-        except (InvalidOperation, ValueError):
-            raise ValueError(f"Invalid numeric value for {field}") from None
+            parsed[field] = str(
+                DecimalField(max_digits=12, decimal_places=2, min_value=Decimal("0")).run_validation(value)
+            )
+        except ValidationError as exc:
+            raise ValueError(f"Invalid {field}: {' '.join(str(item) for item in exc.detail)}") from None
     return parsed
+
+
+def _resolved_renewal_terms(profile: EmployeeProfile, proposed_terms: dict) -> dict:
+    """Derive total from six components, rejecting a contradictory explicit total."""
+    proposed = _parse_term_values(proposed_terms)
+    components = _parse_term_values(
+        {field: proposed.get(field, getattr(profile, field)) for field in TERM_FIELDS if field != "total_salary"}
+    )
+    total = sum((Decimal(value) for value in components.values() if value is not None), Decimal("0"))
+    derived_total = _parse_term_values({"total_salary": total})["total_salary"]
+    if proposed.get("total_salary") is not None and Decimal(proposed["total_salary"]) != total:
+        raise ValueError("total_salary must equal the sum of the salary components.")
+    return {**proposed, "total_salary": derived_total}
 
 
 def _renewal_dates(decision: ContractDecision) -> tuple[date, date]:
@@ -335,9 +361,19 @@ def _snapshot_mismatch_reason(decision: ContractDecision, profile: EmployeeProfi
 
 
 @transaction.atomic
-def submit_decision(decision_id: int, *, actor, decision_type: str, proposed_contract_date=None,
-                    proposed_contract_expiry=None, proposed_terms=None, hr_comment: str = ""):
-    decision = ContractDecision.objects.select_for_update().select_related("employee_profile", "company").get(pk=decision_id)
+def submit_decision(
+    decision_id: int,
+    *,
+    actor,
+    decision_type: str,
+    proposed_contract_date=None,
+    proposed_contract_expiry=None,
+    proposed_terms=None,
+    hr_comment: str = "",
+):
+    decision = (
+        ContractDecision.objects.select_for_update().select_related("employee_profile", "company").get(pk=decision_id)
+    )
     if decision.status not in {ContractDecision.Status.PENDING_HR, ContractDecision.Status.MANUAL_RESOLUTION_REQUIRED}:
         raise ValueError("This contract decision is no longer awaiting HR action.")
     profile = EmployeeProfile.objects.select_for_update().get(pk=decision.employee_profile_id)
@@ -355,7 +391,7 @@ def submit_decision(decision_id: int, *, actor, decision_type: str, proposed_con
     else:
         if proposed_contract_date and proposed_contract_expiry and proposed_contract_expiry < proposed_contract_date:
             raise ValueError("Proposed contract expiry must be on or after the proposed contract date.")
-        proposed_terms = _parse_term_values(proposed_terms or {})
+        proposed_terms = _resolved_renewal_terms(profile, proposed_terms if proposed_terms is not None else {})
         decision.proposed_contract_date = proposed_contract_date
         decision.proposed_contract_expiry = proposed_contract_expiry
         _renewal_dates(decision)
@@ -397,11 +433,18 @@ def submit_decision(decision_id: int, *, actor, decision_type: str, proposed_con
 
 @transaction.atomic
 def finalize_decision(decision_id: int, *, actor=None, automatic: bool = False, comment: str = ""):
-    decision = ContractDecision.objects.select_for_update().select_related("employee_profile", "company").get(pk=decision_id)
+    decision = (
+        ContractDecision.objects.select_for_update().select_related("employee_profile", "company").get(pk=decision_id)
+    )
     if decision.status != ContractDecision.Status.PENDING_CEO:
         raise ValueError("This contract decision is no longer pending CEO approval.")
-    profile = EmployeeProfile.objects.select_for_update(of=("self",)).select_related("user").get(pk=decision.employee_profile_id)
+    profile = (
+        EmployeeProfile.objects.select_for_update(of=("self",))
+        .select_related("user")
+        .get(pk=decision.employee_profile_id)
+    )
     now = timezone.now()
+    execution_snapshot = {}
     mismatch_reason = _snapshot_mismatch_reason(decision, profile)
     if mismatch_reason:
         decision.status = ContractDecision.Status.MANUAL_RESOLUTION_REQUIRED
@@ -428,21 +471,33 @@ def finalize_decision(decision_id: int, *, actor=None, automatic: bool = False, 
             actor=actor,
         )
         return decision
-    if decision.decision_type in {ContractDecision.DecisionType.RENEW, ContractDecision.DecisionType.RENEW_WITH_CHANGES}:
+    if decision.decision_type in {
+        ContractDecision.DecisionType.RENEW,
+        ContractDecision.DecisionType.RENEW_WITH_CHANGES,
+    }:
         start, expiry = _renewal_dates(decision)
+        terms = _resolved_renewal_terms(profile, decision.proposed_terms)
         update_fields = ["contract_date", "contract_expiry", "updated_at"]
         profile.contract_date = start
         profile.contract_expiry = expiry
-        for field, value in decision.proposed_terms.items():
+        for field, value in terms.items():
             setattr(profile, field, Decimal(value) if value is not None else None)
             update_fields.append(field)
         profile.save(update_fields=list(dict.fromkeys(update_fields)))
     elif decision.decision_type == ContractDecision.DecisionType.TERMINATE:
-        profile.is_archived = True
-        profile.archived_at = now
-        profile.archived_by = actor if not automatic else None
-        profile.archive_reason = EmployeeProfile.ArchiveReason.END_OF_CONTRACT
-        profile.save(update_fields=["is_archived", "archived_at", "archived_by", "archive_reason", "updated_at"])
+        try:
+            retire_biotime_mapping_and_archive_profile(
+                profile,
+                execution_snapshot,
+                actor if not automatic else None,
+                EmployeeProfile.ArchiveReason.END_OF_CONTRACT,
+                now,
+            )
+        except IntegrityError as exc:
+            raise ValueError(
+                "Termination cannot be completed because an active record blocks archiving. "
+                "No attendance history or BioTime mapping was changed."
+            ) from exc
         if profile.user_id:
             profile.user.is_active = False
             profile.user.auth_token_version += 1
@@ -469,7 +524,12 @@ def finalize_decision(decision_id: int, *, actor=None, automatic: bool = False, 
         "contract_decision_auto_approved" if automatic else "contract_decision_approved",
         entity="ContractDecision",
         entity_id=decision.id,
-        metadata={"decision_type": decision.decision_type, "employee_profile_id": profile.id, "automatic": automatic},
+        metadata={
+            "decision_type": decision.decision_type,
+            "employee_profile_id": profile.id,
+            "automatic": automatic,
+            **execution_snapshot,
+        },
         actor=actor,
     )
     return decision
@@ -508,7 +568,9 @@ def reject_decision(decision_id: int, *, actor, comment: str = ""):
 
 @transaction.atomic
 def auto_renew_decision(decision_id: int):
-    decision = ContractDecision.objects.select_for_update().select_related("employee_profile", "company").get(pk=decision_id)
+    decision = (
+        ContractDecision.objects.select_for_update().select_related("employee_profile", "company").get(pk=decision_id)
+    )
     if decision.status != ContractDecision.Status.PENDING_HR:
         return decision, False
     profile = EmployeeProfile.objects.select_for_update().get(pk=decision.employee_profile_id)
@@ -528,13 +590,16 @@ def auto_renew_decision(decision_id: int):
         return decision, False
     try:
         start, expiry = _renewal_dates(decision)
+        terms = _resolved_renewal_terms(profile, {})
     except ValueError as exc:
         decision.status = ContractDecision.Status.AUTO_RENEWAL_FAILED
         decision.failure_reason = str(exc)
         decision.finalized_at = timezone.now()
         decision.finalized_by_system = True
         decision.automatic_renewal = True
-        decision.automatic_renewal_reason = "HR took no action before contract expiry, but the original duration was invalid."
+        decision.automatic_renewal_reason = (
+            "HR took no action before contract expiry, but the original contract was invalid."
+        )
         decision.final_notification_sent_at = None
         decision.final_notification_attempts = 0
         decision.last_final_notification_attempt_at = None
@@ -543,7 +608,8 @@ def auto_renew_decision(decision_id: int):
         return decision, False
     profile.contract_date = start
     profile.contract_expiry = expiry
-    profile.save(update_fields=["contract_date", "contract_expiry", "updated_at"])
+    profile.total_salary = Decimal(terms["total_salary"])
+    profile.save(update_fields=["contract_date", "contract_expiry", "total_salary", "updated_at"])
     decision.status = ContractDecision.Status.AUTO_RENEWED
     decision.proposed_contract_date = start
     decision.proposed_contract_expiry = expiry
@@ -561,7 +627,11 @@ def auto_renew_decision(decision_id: int):
         "contract_decision_auto_renewed",
         entity="ContractDecision",
         entity_id=decision.id,
-        metadata={"employee_profile_id": profile.id, "new_contract_expiry": expiry.isoformat(), "reason": "hr_no_action"},
+        metadata={
+            "employee_profile_id": profile.id,
+            "new_contract_expiry": expiry.isoformat(),
+            "reason": "hr_no_action",
+        },
     )
     return decision, True
 
@@ -608,7 +678,9 @@ def process_contract_expiry(*, today=None, now=None) -> dict:
             summary["profile_failures"] = summary.get("profile_failures", 0) + 1
             logger.exception("contract_expiry_profile_processing_failed", extra={"profile_id": profile.id})
 
-    pending_ceo = ContractDecision.objects.filter(status=ContractDecision.Status.PENDING_CEO, ceo_deadline__isnull=False)
+    pending_ceo = ContractDecision.objects.filter(
+        status=ContractDecision.Status.PENDING_CEO, ceo_deadline__isnull=False
+    )
     for decision in pending_ceo.select_related("employee_profile", "company").iterator():
         if decision.ceo_deadline <= now:
             try:
@@ -688,7 +760,8 @@ def process_contract_expiry(*, today=None, now=None) -> dict:
             else:
                 notification_result = notify_hr_final(
                     decision,
-                    automatic=decision.status in {
+                    automatic=decision.status
+                    in {
                         ContractDecision.Status.AUTO_APPROVED,
                         ContractDecision.Status.AUTO_RENEWED,
                     },

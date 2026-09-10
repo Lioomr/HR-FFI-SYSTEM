@@ -26,6 +26,8 @@ type Props = {
   title: string;
   subtitle: string;
   detailsBasePath: string;
+  /** A role-safe destination for the employee profile shown in this inbox. */
+  employeeProfilePath?: (employeeProfileId: number) => string;
   defaultStatus?: LoanStatus;
   fetcher: (params?: {
     status?: LoanStatus;
@@ -60,6 +62,7 @@ export default function LoanRequestsTablePage({
   title,
   subtitle,
   detailsBasePath,
+  employeeProfilePath,
   defaultStatus,
   fetcher,
 }: Props) {
@@ -125,6 +128,11 @@ export default function LoanRequestsTablePage({
         <TeamMemberCell
           name={employeeName(record)}
           secondary={record.employee?.email}
+          profilePath={
+            record.employee?.employee_profile_id && employeeProfilePath
+              ? employeeProfilePath(record.employee.employee_profile_id)
+              : undefined
+          }
         />
       ),
     },

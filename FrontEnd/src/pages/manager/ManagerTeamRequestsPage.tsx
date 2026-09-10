@@ -24,9 +24,6 @@ import { approvalStatusLabel } from "../../components/ceo/approvalStatusLabel";
 import TeamMemberCell from "../../components/manager/TeamMemberCell";
 import LeaveApprovalMap from "../../components/leaves/LeaveApprovalMap";
 import AssetReturnApprovalMap from "../../components/assets/AssetReturnApprovalMap";
-import AttendanceMaintenanceNotice from "../../components/attendance/AttendanceMaintenanceNotice";
-import AttendanceCorrectionsApproverTable from "../../components/attendance/AttendanceCorrectionsApproverTable";
-import AttendanceMaintenanceBanner from "../../components/attendance/AttendanceMaintenanceBanner";
 import {
   getManagerLeaveRequests,
   approveLeaveRequestManager,
@@ -39,7 +36,6 @@ import {
   type ManagerTeamMember,
 } from "../../services/api/managerApi";
 import type { AssetReturnRequest } from "../../services/api/assetsApi";
-import { listAttendanceCorrectionRequests } from "../../services/api/attendanceCorrectionsApi";
 import { isApiError } from "../../services/api/apiTypes";
 import { useManagerAccess } from "../../hooks/useManagerAccess";
 import { managedCountLabel } from "../../utils/managerCapability";
@@ -47,20 +43,9 @@ import { formatDateTime } from "../../utils/dateTime";
 import { isStaleRequest, requestAgeLabel } from "../../utils/requestAge";
 import { useI18n } from "../../i18n/useI18n";
 
-type TabKey =
-  | "leave"
-  | "attendance"
-  | "attendance-corrections"
-  | "asset-returns"
-  | "team";
+type TabKey = "leave" | "asset-returns" | "team";
 
-const TAB_KEYS: TabKey[] = [
-  "leave",
-  "attendance",
-  "attendance-corrections",
-  "asset-returns",
-  "team",
-];
+const TAB_KEYS: TabKey[] = ["leave", "asset-returns", "team"];
 
 /** Leave statuses a manager is still the deciding approver for. */
 const LEAVE_ACTIONABLE = new Set(["pending_manager", "submitted"]);
@@ -94,29 +79,7 @@ export default function ManagerTeamRequestsPage() {
     );
   }, []);
 
-  // The corrections table owns its own status filter, so its outstanding count
-  // is probed here instead of derived from whatever the table is showing.
-  useEffect(() => {
-    let cancelled = false;
-    listAttendanceCorrectionRequests({
-      status: "pending_manager",
-      page: 1,
-      page_size: 1,
-    })
-      .then((res) => {
-        if (cancelled || isApiError(res)) return;
-        reportCount("attendance-corrections", res.data?.count ?? 0);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [reportCount, refreshToken]);
-
-  const totalPending =
-    (counts.leave ?? 0) +
-    (counts["asset-returns"] ?? 0) +
-    (counts["attendance-corrections"] ?? 0);
+  const totalPending = (counts.leave ?? 0) + (counts["asset-returns"] ?? 0);
 
   const tabLabel = (key: TabKey, label: string) => {
     const count = counts[key];
@@ -184,19 +147,6 @@ export default function ManagerTeamRequestsPage() {
                 onCount={reportCount}
               />
             ),
-          },
-          {
-            key: "attendance",
-            label: t("manager.requests.attendanceTab"),
-            children: <AttendanceMaintenanceTab />,
-          },
-          {
-            key: "attendance-corrections",
-            label: tabLabel(
-              "attendance-corrections",
-              t("manager.requests.correctionsTab"),
-            ),
-            children: <AttendanceCorrectionsTab />,
           },
           {
             key: "asset-returns",
@@ -573,49 +523,6 @@ function LeaveRequestsTab({
   );
 }
 
-function AttendanceMaintenanceTab() {
-  const { t } = useI18n();
-  return (
-    <AttendanceMaintenanceNotice
-      title={t(
-        "attendance.maintenance.title",
-        "Attendance is temporarily unavailable",
-      )}
-      description={t(
-        "attendance.maintenance.managerDescription",
-        "We are fixing this part right now for all users. Attendance requests and approvals will be back soon.",
-      )}
-    />
-  );
-}
-
-function AttendanceCorrectionsTab() {
-  const { t } = useI18n();
-  return (
-    <div>
-      <AttendanceMaintenanceBanner
-        description={t(
-          "attendanceCorrections.maintenance.managerDescription",
-          "The attendance module is under maintenance. You can still approve correction requests here so the records are updated once it is back.",
-        )}
-      />
-      <ApprovalSurface padding={16}>
-        <AttendanceCorrectionsApproverTable
-          approverRole="manager"
-          defaultStatus="pending_manager"
-          statusOptions={[
-            "pending_manager",
-            "pending_hr",
-            "approved",
-            "rejected",
-            "cancelled",
-          ]}
-        />
-      </ApprovalSurface>
-    </div>
-  );
-}
-
 function AssetReturnRequestsTab({
   refreshToken,
   onCount,
@@ -756,6 +663,9 @@ function AssetReturnRequestsTab({
         <TeamMemberCell
           name={employeeName(record)}
           secondary={record.employee_email}
+          profilePath={
+            record.employee ? `/manager/team/${record.employee}` : undefined
+          }
         />
       ),
     },
@@ -960,6 +870,7 @@ function TeamTab({ refreshToken }: { refreshToken: number }) {
         <TeamMemberCell
           name={memberName(record)}
           secondary={record.email || undefined}
+          profilePath={`/manager/team/${record.id}`}
         />
       ),
     },

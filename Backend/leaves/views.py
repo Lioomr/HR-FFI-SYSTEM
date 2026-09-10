@@ -141,9 +141,12 @@ def _leave_read_queryset(queryset):
     return queryset.select_related(*LEAVE_READ_SELECT_RELATED).prefetch_related(
         Prefetch(
             "employee_documents",
-            queryset=EmployeeDocument.objects.select_related("uploaded_by", "company", "leave_request"),
+            queryset=EmployeeDocument.objects.select_related("uploaded_by", "company", "leave_request").filter(
+                deletion_started_at__isnull=True
+            ),
         )
     )
+
 
 try:
     import arabic_reshaper
@@ -485,7 +488,7 @@ def _build_leave_request_pdf_legacy(instance: LeaveRequest):
         return regular, bold
 
     def _template_path():
-        template = resolve_template_path("leave_request_blank.pdf", aliases=["leave-request-template.pdf"])
+        template = resolve_template_path("leave_request_blank.pdf")
         if template:
             return template
         hr_templates_dir = getattr(settings, "HR_TEMPLATES_DIR", os.environ.get("HR_TEMPLATES_DIR") or "")
@@ -496,7 +499,6 @@ def _build_leave_request_pdf_legacy(instance: LeaveRequest):
         explicit_names = [
             "طلب إجازة (AutoRecovered).pdf",
             "طلب إجازة.pdf",
-            "leave-request-template.pdf",
         ]
         for root in search_roots:
             for name in explicit_names:
@@ -1142,6 +1144,14 @@ def _build_leave_request_pdf(instance: LeaveRequest):
     return build_leave_request_pdf(instance, fallback=_build_leave_request_pdf_fallback)
 
 
+def _build_annual_entitlements_pdf(instance) -> bytes:
+    """Render the annual entitlements disbursement form from its approved map."""
+
+    from .pdf_annual_entitlements import build_annual_entitlements_pdf
+
+    return build_annual_entitlements_pdf(instance)
+
+
 class LeaveTypeViewSet(viewsets.ModelViewSet):
     queryset = LeaveType.objects.all()
     serializer_class = LeaveTypeSerializer
@@ -1641,9 +1651,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         with transaction.atomic():
             instance = LeaveRequest.objects.select_for_update().get(pk=instance.pk)
             if instance.status not in allowed_statuses:
-                return error(
-                    "Validation error", errors=["Request is not in a state to be approved by HR."], status=422
-                )
+                return error("Validation error", errors=["Request is not in a state to be approved by HR."], status=422)
 
             instance.decided_by = request.user
             instance.decided_at = timezone.now()
@@ -1876,9 +1884,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         with transaction.atomic():
             instance = LeaveRequest.objects.select_for_update().get(pk=instance.pk)
             if instance.status not in allowed_statuses:
-                return error(
-                    "Validation error", errors=["Request cannot be sent to CEO in current state."], status=422
-                )
+                return error("Validation error", errors=["Request cannot be sent to CEO in current state."], status=422)
             note = (s.validated_data.get("comment") or "").strip()
             if note:
                 instance.hr_decision_note = note
@@ -2382,7 +2388,9 @@ class EmployeeLeaveBalanceView(APIView):
             except ValueError:
                 return error("Validation error", errors=["year must be a valid integer."], status=422)
 
-        profile = filter_queryset_by_company_scope(EmployeeProfile.objects.all(), request).filter(user=request.user).first()
+        profile = (
+            filter_queryset_by_company_scope(EmployeeProfile.objects.all(), request).filter(user=request.user).first()
+        )
         if profile is None:
             return error("Not found", errors=["Not found."], status=404)
         balances = calculate_leave_balance(request.user, year, profile=profile)
@@ -2530,6 +2538,11 @@ class AnnualLeavePaymentRequestViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated(), IsHRManagerOrAdmin()]
         if self.action in {"approve", "reject"}:
             return [IsAuthenticated(), IsDepartmentCEOApprover()]
+        if self.action == "pdf":
+            # Ownership and company scope are enforced by get_queryset below:
+            # an employee only ever resolves their own settlement, and every
+            # role is confined to the active company.
+            return [IsAuthenticated()]
         return [IsAuthenticated()]
 
     def get_queryset(self):
@@ -2668,9 +2681,7 @@ class AnnualLeavePaymentRequestViewSet(viewsets.ModelViewSet):
             if decision == "carry_forward"
             else AnnualLeavePaymentRequest.Resolution.PAY
         )
-        instance.carry_forward_days = (
-            instance.eligible_unused_days if decision == "carry_forward" else 0
-        )
+        instance.carry_forward_days = instance.eligible_unused_days if decision == "carry_forward" else 0
         instance.payment_amount = 0 if decision == "carry_forward" else instance.payment_amount
         instance.status = AnnualLeavePaymentRequest.Status.PENDING_CEO
         instance.hr_reviewed_by = request.user
@@ -2764,6 +2775,22 @@ class AnnualLeavePaymentRequestViewSet(viewsets.ModelViewSet):
             metadata={"comment": comment},
         )
         return success(AnnualLeavePaymentRequestSerializer(instance).data)
+
+    @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated])
+    def pdf(self, request, pk=None):
+        instance = self.get_object()
+        pdf_bytes = _build_annual_entitlements_pdf(instance)
+        audit(
+            request,
+            "annual_leave_payment_exported_pdf",
+            entity="AnnualLeavePaymentRequest",
+            entity_id=instance.id,
+            metadata={"company_id": instance.company_id, "status": instance.status},
+        )
+        return _configure_sensitive_download(
+            HttpResponse(pdf_bytes, content_type="application/octet-stream"),
+            f"annual_entitlements_{instance.id}.pdf",
+        )
 
 
 class CEOLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):

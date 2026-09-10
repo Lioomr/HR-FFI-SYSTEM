@@ -1,38 +1,76 @@
 from dataclasses import dataclass
 from datetime import date
 from io import BytesIO
+from typing import Any
 
 from django.utils import timezone
-from pypdf import PdfReader, PdfWriter
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
 from core.pdf import font_pair, shape_ar
-from core.views_templates import resolve_template_path
+from core.pdf_forms import FormAssets, load_form_assets, log_signature_diagnostics, render_mapped_form
+from core.pdf_signers import signer_signatures
 from employees.models import EmployeeProfile
 
-from .document_pdf import draw_checkbox, draw_mapped_value, load_document_field_map
+FIELD_MAP_FILENAME = "starting_work_acknowledgment_blank_field_map.json"
+TEMPLATE_FILENAME = "starting_work_acknowledgment_blank.pdf"
+TEMPLATE_ALIASES = ["starting-work-acknowledgment-template.pdf", "starting_work_acknowledgment.pdf"]
+FORM_KEY = "starting_work_acknowledgment"
+
+#: Without these the map cannot be describing the approved acknowledgment form.
+REQUIRED_FIELD_KEYS = frozenset(
+    {
+        "reference_no",
+        "document_date",
+        "addressed_to",
+        "employee_name",
+        "employee_no",
+        "job_title",
+        "id_no",
+        "department",
+        "direct_superior",
+        "direct_superior_signature",
+        "work_start_status",
+        "start_department",
+        "start_day",
+        "start_month",
+        "start_year",
+        "general_manager_name",
+        "general_manager_date",
+        "general_manager_signature_image",
+        "details_approver_name",
+        "details_approver_date",
+        "details_approver_signature_image",
+        "not_started_reason",
+        "not_started_name",
+        "not_started_signature",
+        "not_started_date",
+    }
+)
 
 
 @dataclass(frozen=True)
 class StartingWorkAcknowledgmentData:
+    """Form inputs. The ``*_user`` fields are the recorded workflow actors whose
+    stored signature (when they have one) may be placed in the mapped box."""
+
     reference_no: str = ""
     document_date: date | None = None
     addressed_to: str = "Human Resources Department"
     direct_superior: str = ""
-    direct_superior_signature: str = ""
+    direct_superior_user: Any = None
     work_start_status: str = "started"
     start_department: str = ""
     start_date: date | None = None
     general_manager_name: str = ""
     general_manager_date: date | None = None
-    general_manager_signature: str = ""
+    general_manager_user: Any = None
     details_approver_name: str = ""
     details_approver_date: date | None = None
-    details_approver_signature: str = ""
+    details_approver_user: Any = None
     not_started_reason: str = ""
     not_started_name: str = ""
-    not_started_signature: str = ""
+    not_started_user: Any = None
     not_started_date: date | None = None
 
 
@@ -66,6 +104,7 @@ def starting_work_field_values(profile: EmployeeProfile, data: StartingWorkAckno
     reference_no = data.reference_no or f"SWA-{profile.employee_id}-{document_date:%Y%m%d}"
     return {
         "reference_no": reference_no,
+        "work_start_status": status,
         "document_date": _date_text(document_date),
         "addressed_to": data.addressed_to,
         "employee_name": _profile_name(profile),
@@ -74,7 +113,6 @@ def starting_work_field_values(profile: EmployeeProfile, data: StartingWorkAckno
         "id_no": profile.national_id or profile.passport_no or "",
         "department": profile.department_name_en or profile.department or profile.department_name_ar or "",
         "direct_superior": data.direct_superior or _direct_superior_name(profile),
-        "direct_superior_signature": data.direct_superior_signature,
         "start_department": (data.start_department or profile.department_name_en or profile.department or "")
         if started
         else "",
@@ -83,31 +121,37 @@ def starting_work_field_values(profile: EmployeeProfile, data: StartingWorkAckno
         "start_year": str(start_date.year) if started and start_date else "",
         "general_manager_name": data.general_manager_name,
         "general_manager_date": _date_text(data.general_manager_date),
-        "general_manager_signature": data.general_manager_signature,
         "details_approver_name": data.details_approver_name,
         "details_approver_date": _date_text(data.details_approver_date),
-        "details_approver_signature": data.details_approver_signature,
         "not_started_reason": data.not_started_reason if not_started else "",
         "not_started_name": data.not_started_name if not_started else "",
-        "not_started_signature": data.not_started_signature if not_started else "",
         "not_started_date": _date_text(data.not_started_date) if not_started else "",
     }
 
 
-def _draw_overlay(
-    pdf: canvas.Canvas,
-    profile: EmployeeProfile,
-    data: StartingWorkAcknowledgmentData,
-    field_map: dict,
-) -> None:
-    regular, _ = font_pair()
-    for key, value in starting_work_field_values(profile, data).items():
-        field = field_map.get(key)
-        if field and "x" in field:
-            draw_mapped_value(pdf, field, value, font=regular)
+def build_starting_work_signers(data: StartingWorkAcknowledgmentData) -> dict[str, Any]:
+    """Return ``{map_field: recorded_actor}`` for the acknowledgment's signatures.
 
-    checkboxes = field_map.get("work_start_status", {}).get("checkboxes", {})
-    draw_checkbox(pdf, checkboxes.get(data.work_start_status.lower().strip()), font=regular)
+    Only the "not started" branch signs the bottom block, so the other slot is
+    left empty for that state and vice versa.
+    """
+
+    not_started = data.work_start_status.lower().strip() == "not_started"
+    return {
+        "direct_superior_signature": data.direct_superior_user,
+        "general_manager_signature_image": data.general_manager_user,
+        "details_approver_signature_image": data.details_approver_user,
+        "not_started_signature": data.not_started_user if not_started else None,
+    }
+
+
+def load_starting_work_form_assets() -> FormAssets | None:
+    return load_form_assets(
+        TEMPLATE_FILENAME,
+        FIELD_MAP_FILENAME,
+        aliases=TEMPLATE_ALIASES,
+        required_keys=REQUIRED_FIELD_KEYS,
+    )
 
 
 def _fallback_pdf(profile: EmployeeProfile, data: StartingWorkAcknowledgmentData) -> bytes:
@@ -144,30 +188,17 @@ def build_starting_work_acknowledgment_pdf(
     profile: EmployeeProfile,
     data: StartingWorkAcknowledgmentData | None = None,
 ) -> bytes:
+    """Render the mapped acknowledgment, falling back when its pair is absent."""
+
     data = data or StartingWorkAcknowledgmentData(start_date=profile.hire_date)
-    template_path = resolve_template_path(
-        "starting_work_acknowledgment_blank.pdf",
-        aliases=["starting-work-acknowledgment-template.pdf", "starting_work_acknowledgment.pdf"],
-    )
-    field_map = load_document_field_map(
-        "starting_work_acknowledgment", "starting_work_acknowledgment_blank_field_map.json"
-    )
-    if not template_path or not field_map:
+    values = starting_work_field_values(profile, data)
+    assets = load_starting_work_form_assets()
+    if assets is None:
         return _fallback_pdf(profile, data)
-
-    writer = PdfWriter(clone_from=template_path)
-    if not writer.pages:
+    signatures = signer_signatures(build_starting_work_signers(data))
+    try:
+        pdf_bytes, diagnostics = render_mapped_form(assets, values, signatures=signatures)
+    except ValueError:
         return _fallback_pdf(profile, data)
-    page = writer.pages[0]
-    width = float(page.mediabox.width)
-    height = float(page.mediabox.height)
-    overlay = BytesIO()
-    pdf = canvas.Canvas(overlay, pagesize=(width, height))
-    _draw_overlay(pdf, profile, data, field_map)
-    pdf.save()
-    overlay.seek(0)
-    page.merge_page(PdfReader(overlay).pages[0])
-
-    output = BytesIO()
-    writer.write(output)
-    return output.getvalue()
+    log_signature_diagnostics(FORM_KEY, values["reference_no"], diagnostics)
+    return pdf_bytes

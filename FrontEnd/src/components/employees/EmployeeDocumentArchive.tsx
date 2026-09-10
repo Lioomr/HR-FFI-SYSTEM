@@ -22,6 +22,9 @@ import {
   PlusOutlined,
   BellOutlined,
   SyncOutlined,
+  DeleteOutlined,
+  ExclamationCircleFilled,
+  EyeOutlined,
 } from "@ant-design/icons";
 import type { ColumnsType, TableProps } from "antd/es/table";
 import type { UploadFile } from "antd/es/upload/interface";
@@ -31,6 +34,7 @@ import {
   downloadEmployeeDocument,
   notifyEmployeeDocumentExpiry,
   extractEmployeeDocument,
+  deleteEmployeeDocument,
   type EmployeeDocument,
   type DocumentType,
 } from "../../services/api/employeesApi";
@@ -115,7 +119,24 @@ const EXTRACTED_FIELD_LABEL_KEYS: Record<string, string> = {
   visa_number: "archive.extractedField.visa_number",
   exit_before: "archive.extractedField.exit_before",
   visa_duration: "archive.extractedField.visa_duration",
+  national_id: "archive.extractedField.id_number",
+  sponsor: "archive.extractedField.employer",
+  employer_name: "archive.extractedField.employer",
+  sponsor_name: "archive.extractedField.employer",
+  passport_expiry_date: "archive.extractedField.expiry_date",
+  visa_expiry_date: "archive.extractedField.expiry_date",
+  approved_at: "archive.extractedField.approved_at",
 };
+
+/**
+ * The archive is an HR review surface, not an OCR diagnostic console. Only
+ * fields with a defined, employee-record meaning may leave the API payload and
+ * reach the screen. This also makes an unexpected extractor key safe by default.
+ */
+const BUSINESS_EXTRACTED_KEYS = new Set(
+  Object.keys(EXTRACTED_FIELD_LABEL_KEYS),
+);
+const SYSTEM_GENERATED_BUSINESS_KEYS = new Set(["approved_at"]);
 
 /** Bulk OCR payloads are noise in the UI, so they never reach the metadata grid. */
 const HIDDEN_EXTRACTED_KEYS = new Set([
@@ -135,9 +156,39 @@ const HIDDEN_EXTRACTED_KEYS = new Set([
  * OCR affordance is meaningless for them.
  */
 function isSystemGenerated(doc: EmployeeDocument): boolean {
+  // The serializer field is authoritative; the extracted-field markers remain the
+  // fallback for rows written before it existed.
+  if (doc.is_system_generated === true) return true;
   const fields = doc.extracted_fields;
   if (!fields) return false;
   return fields.generated_by_system === true || fields.ocr === "skipped";
+}
+
+/**
+ * Statuses the extraction pipeline never leaves. Anything else (today only
+ * `pending`) means a job is still in flight and the archive keeps polling.
+ */
+const TERMINAL_EXTRACTION_STATUSES = new Set(["success", "partial", "failed"]);
+
+/** True when the pilot reported something about the extraction worth showing. */
+function hasExtractionSignals(doc: EmployeeDocument): boolean {
+  return (
+    doc.extraction_status !== "success" ||
+    typeof doc.extraction_confidence === "number" ||
+    !!doc.extraction_completed_at ||
+    !!(doc.extraction_warnings && doc.extraction_warnings.length > 0)
+  );
+}
+
+function isExtractionPending(doc: EmployeeDocument): boolean {
+  return !TERMINAL_EXTRACTION_STATUSES.has(doc.extraction_status);
+}
+
+/** Confidence arrives as a 0-1 ratio; HR reads percentages. */
+function formatConfidence(value: number | null | undefined): string | null {
+  if (typeof value !== "number" || Number.isNaN(value)) return null;
+  const ratio = value > 1 ? value / 100 : value;
+  return `${Math.round(ratio * 100)}%`;
 }
 
 function documentTypeLabel(
@@ -185,6 +236,7 @@ function formatFieldValue(value: unknown): string {
 /** Known metadata first (contract order), then anything else, with empties dropped. */
 function getVisibleExtractedFields(
   fields: Record<string, unknown> | null | undefined,
+  systemGenerated = false,
 ): [string, unknown][] {
   if (!fields) return [];
   const rank = (key: string) => {
@@ -195,6 +247,8 @@ function getVisibleExtractedFields(
     .filter(
       ([key, value]) =>
         !HIDDEN_EXTRACTED_KEYS.has(key) &&
+        (BUSINESS_EXTRACTED_KEYS.has(key) ||
+          (systemGenerated && SYSTEM_GENERATED_BUSINESS_KEYS.has(key))) &&
         !key.endsWith("_raw") &&
         !isEmptyFieldValue(value),
     )
@@ -406,7 +460,10 @@ const METADATA_FIELDS: Record<DocumentType, MetadataField[]> = {
 function genericMetadataFields(items: EmployeeDocument[]): MetadataField[] {
   const keys: string[] = [];
   for (const doc of items) {
-    for (const [key] of getVisibleExtractedFields(doc.extracted_fields)) {
+    for (const [key] of getVisibleExtractedFields(
+      doc.extracted_fields,
+      isSystemGenerated(doc),
+    )) {
       if (!keys.includes(key)) keys.push(key);
     }
   }
@@ -459,6 +516,46 @@ const extractionStatusColor: Record<string, string> = {
   failed: "error",
 };
 
+type DocumentPreviewKind = "pdf" | "image";
+
+const IMAGE_PREVIEW_TYPES: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+};
+
+/**
+ * The filename is available before any download, so it safely determines whether
+ * a Preview click may request the private file. This deliberately excludes Office
+ * documents and unknown extensions rather than embedding a browser plug-in.
+ */
+function documentPreviewKind(filename: string): DocumentPreviewKind | null {
+  const extension = filename.trim().split(".").pop()?.toLowerCase();
+  if (extension === "pdf") return "pdf";
+  return extension && IMAGE_PREVIEW_TYPES[extension] ? "image" : null;
+}
+
+function previewMimeType(filename: string, kind: DocumentPreviewKind): string {
+  if (kind === "pdf") return "application/pdf";
+  const extension = filename.trim().split(".").pop()?.toLowerCase() ?? "";
+  return IMAGE_PREVIEW_TYPES[extension] ?? "image/*";
+}
+
+function extractionStatusLabel(t: Translate, status: string): string {
+  switch (status) {
+    case "success":
+      return t("archive.extractionStatusCompleted", "Completed");
+    case "partial":
+      return t("archive.extractionStatusNeedsReview", "Needs review");
+    case "failed":
+      return t("archive.extractionStatusFailed", "Failed");
+    default:
+      return t("archive.extractionStatusProcessing", "Processing");
+  }
+}
+
 /**
  * Days until a document's expiry date (`exit_before`). Negative when expired.
  * Returns null when there is no valid expiry date.
@@ -499,14 +596,37 @@ function extractApiErrorMessage(data: any): string | null {
   return typeof data.message === "string" ? data.message : null;
 }
 
+/**
+ * A 500 carries no machine-readable discriminator, so the cleanup-pending case is
+ * recognised by the backend's own wording (`CLEANUP_PENDING_ERROR`). It only
+ * changes the message shown - both 500 shapes re-fetch and trust the server list.
+ */
+function isCleanupPending(message: unknown): boolean {
+  if (typeof message !== "string") return false;
+  const text = message.toLowerCase();
+  return (
+    text.includes("permanently removed") &&
+    text.includes("could not be cleared")
+  );
+}
+
 interface Props {
   employeeId: number | string;
   readonly?: boolean;
+  /**
+   * Whether the viewer may manage documents rather than just read them -
+   * permanent deletion and re-running OCR. Only HRManager and SystemAdmin hold
+   * this on the backend, so it defaults to false: a mount that says nothing gets
+   * no destructive or extraction-management controls. Upload and download are
+   * governed by `readonly` as before.
+   */
+  canManageDocuments?: boolean;
 }
 
 export default function EmployeeDocumentArchive({
   employeeId,
   readonly = false,
+  canManageDocuments = false,
 }: Props) {
   const { t } = useI18n();
   const [docs, setDocs] = useState<EmployeeDocument[]>([]);
@@ -516,13 +636,26 @@ export default function EmployeeDocumentArchive({
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [notifyingId, setNotifyingId] = useState<number | null>(null);
   const [extractingId, setExtractingId] = useState<number | null>(null);
-  const pollingAttempts = useRef(0);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<EmployeeDocument | null>(
+    null,
+  );
+  const [previewTarget, setPreviewTarget] = useState<EmployeeDocument | null>(
+    null,
+  );
+  const [previewKind, setPreviewKind] = useState<DocumentPreviewKind | null>(
+    null,
+  );
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewLoadingId, setPreviewLoadingId] = useState<number | null>(null);
+  const previewUrlRef = useRef<string | null>(null);
+  const previewRequestRef = useRef(0);
 
   const [form] = Form.useForm();
   const [docType, setDocType] = useState<DocumentType | null>(null);
   const [fileList, setFileList] = useState<UploadFile[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [uploadWarnings, setUploadWarnings] = useState<string[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -538,16 +671,30 @@ export default function EmployeeDocumentArchive({
     load();
   }, [load]);
 
+  const clearPreview = useCallback(() => {
+    previewRequestRef.current += 1;
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    previewUrlRef.current = null;
+    setPreviewUrl(null);
+  }, []);
+
+  useEffect(
+    () => () => {
+      previewRequestRef.current += 1;
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    },
+    [],
+  );
+
+  /**
+   * Keep polling while any extraction is still running. There is no attempt cap:
+   * the previous 24-tick (60 s) limit stopped silently and left a pending row
+   * looking stuck forever, so polling now ends only on a terminal status.
+   */
   useEffect(() => {
-    if (!docs.some((document) => document.extraction_status === "pending")) {
-      pollingAttempts.current = 0;
-      return;
-    }
-    if (pollingAttempts.current >= 24) return;
-    const timer = window.setTimeout(() => {
-      pollingAttempts.current += 1;
-      load();
-    }, 2500);
+    if (!docs.some(isExtractionPending)) return;
+    const timer = window.setTimeout(load, 2500);
     return () => window.clearTimeout(timer);
   }, [docs, load]);
 
@@ -564,6 +711,62 @@ export default function EmployeeDocumentArchive({
     } finally {
       setDownloadingId(null);
     }
+  };
+
+  /**
+   * Preview never opens or fetches a document until the user asks for it. The
+   * same authenticated download endpoint supplies a Blob, which becomes a
+   * short-lived local object URL only while the modal is open.
+   */
+  const handlePreview = async (doc: EmployeeDocument) => {
+    clearPreview();
+    const kind = documentPreviewKind(doc.original_filename);
+    setPreviewTarget(doc);
+    setPreviewKind(kind);
+    setPreviewError(null);
+    if (!kind) {
+      setPreviewError(
+        t(
+          "archive.previewUnavailable",
+          "This document type cannot be previewed. Download the file to view it.",
+        ),
+      );
+      return;
+    }
+
+    const requestId = previewRequestRef.current + 1;
+    previewRequestRef.current = requestId;
+    setPreviewLoadingId(doc.id);
+    try {
+      const blob = await downloadEmployeeDocument(employeeId, doc.id);
+      if (previewRequestRef.current !== requestId) return;
+      // The selected extension is the allowlist decision. Normalising a generic
+      // attachment MIME type lets the browser render a valid private PDF/image
+      // without exposing its storage URL or accepting arbitrary content types.
+      const url = URL.createObjectURL(
+        new Blob([blob], {
+          type: previewMimeType(doc.original_filename, kind),
+        }),
+      );
+      previewUrlRef.current = url;
+      setPreviewUrl(url);
+    } catch {
+      if (previewRequestRef.current === requestId) {
+        setPreviewError(
+          t("archive.previewFailed", "Could not load the document preview."),
+        );
+      }
+    } finally {
+      if (previewRequestRef.current === requestId) setPreviewLoadingId(null);
+    }
+  };
+
+  const closePreview = () => {
+    clearPreview();
+    setPreviewTarget(null);
+    setPreviewKind(null);
+    setPreviewError(null);
+    setPreviewLoadingId(null);
   };
 
   const handleNotify = async (doc: EmployeeDocument) => {
@@ -609,7 +812,6 @@ export default function EmployeeDocumentArchive({
 
   const handleExtract = async (doc: EmployeeDocument) => {
     setExtractingId(doc.id);
-    pollingAttempts.current = 0;
     try {
       const res = await extractEmployeeDocument(employeeId, doc.id);
       if (isApiError(res)) {
@@ -632,6 +834,83 @@ export default function EmployeeDocumentArchive({
       });
     } finally {
       setExtractingId(null);
+    }
+  };
+
+  /**
+   * Permanently delete a document.
+   *
+   * Every failure path ends by trusting the server list rather than local state.
+   * That matters most for the `cleanup_pending` 500: the file is already gone and
+   * the row is hidden for reconciliation, so it must never be restored here.
+   */
+  const handleDelete = async (doc: EmployeeDocument) => {
+    setDeletingId(doc.id);
+    try {
+      const res = await deleteEmployeeDocument(employeeId, doc.id);
+      if (isApiError(res)) {
+        notification.error({
+          message: t("archive.deleteFailed", "Delete failed"),
+          description: res.message,
+        });
+        await load();
+        return;
+      }
+      setDocs((current) => current.filter((item) => item.id !== doc.id));
+      setDeleteTarget(null);
+      notification.success({
+        message: t("archive.deleteSuccess", "Document deleted permanently."),
+        description: doc.original_filename,
+      });
+    } catch (e: any) {
+      const status = e?.response?.status;
+      const serverMessage =
+        extractApiErrorMessage(e?.response?.data) || e?.message;
+      let description: string;
+      if (status === 403) {
+        // A 403 is not necessarily the system-generated refusal: the backend
+        // returns it for role and company-scope failures too. Prefer whatever the
+        // backend said, and fall back to a permission message rather than to a
+        // claim about the document that may be false.
+        description =
+          serverMessage ||
+          t(
+            "archive.deleteNotPermitted",
+            "You do not have permission to delete this document.",
+          );
+      } else if (status === 404) {
+        description = t(
+          "archive.deleteNotFound",
+          "This document is no longer available in the active company.",
+        );
+      } else if (status === 409) {
+        description = t(
+          "archive.deleteConflict",
+          "This document is already being deleted, or another record still protects it.",
+        );
+      } else if (isCleanupPending(serverMessage)) {
+        description = t(
+          "archive.deleteCleanupPending",
+          "The file was permanently removed, but the archive entry could not be cleared. It is hidden and will be cleaned up automatically.",
+        );
+      } else {
+        description =
+          serverMessage ||
+          t(
+            "archive.deleteStorageFailed",
+            "The document file could not be deleted from storage. Nothing was removed; try again.",
+          );
+      }
+      notification.error({
+        message: t("archive.deleteFailed", "Delete failed"),
+        description,
+      });
+      // The server decides what still exists - including for cleanup_pending,
+      // where the hidden row simply does not come back.
+      await load();
+      setDeleteTarget(null);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -664,7 +943,6 @@ export default function EmployeeDocumentArchive({
       return;
     }
     setUploading(true);
-    setUploadWarnings([]);
     try {
       const res = await uploadEmployeeDocument(employeeId, {
         document_type: documentType,
@@ -681,16 +959,16 @@ export default function EmployeeDocumentArchive({
         });
       } else {
         const warnings: string[] = (res as any).data?.extraction_warnings ?? [];
-        if (warnings.length > 0) {
-          setUploadWarnings(warnings);
-        } else {
-          setUploadModalOpen(false);
-          resetForm();
-        }
-        notification.success({
+        setUploadModalOpen(false);
+        resetForm();
+        notification[warnings.length > 0 ? "warning" : "success"]({
           message: t(
-            "archive.uploadSuccess",
-            "Document uploaded successfully.",
+            warnings.length > 0
+              ? "archive.uploadNeedsReview"
+              : "archive.uploadSuccess",
+            warnings.length > 0
+              ? "Document uploaded. OCR results need review."
+              : "Document uploaded successfully.",
           ),
         });
         load();
@@ -710,7 +988,6 @@ export default function EmployeeDocumentArchive({
     setDocType(null);
     setFileList([]);
     setSelectedFile(null);
-    setUploadWarnings([]);
   };
 
   /**
@@ -757,7 +1034,7 @@ export default function EmployeeDocumentArchive({
           <Tag color="blue">{t("archive.systemGenerated", "Generated")}</Tag>
         ) : (
           <Tag color={extractionStatusColor[v] ?? "default"}>
-            {v.charAt(0).toUpperCase() + v.slice(1)}
+            {extractionStatusLabel(t, v)}
           </Tag>
         ),
     },
@@ -778,9 +1055,18 @@ export default function EmployeeDocumentArchive({
     {
       title: t("common.actions"),
       key: "actions",
-      width: 150,
+      width: 190,
       render: (_, r) => (
         <Space size={4}>
+          <Tooltip title={t("archive.preview", "Preview document")}>
+            <Button
+              size="small"
+              icon={<EyeOutlined />}
+              aria-label={t("archive.preview", "Preview document")}
+              loading={previewLoadingId === r.id}
+              onClick={() => handlePreview(r)}
+            />
+          </Tooltip>
           <Tooltip title={t("common.download")}>
             <Button
               size="small"
@@ -792,7 +1078,8 @@ export default function EmployeeDocumentArchive({
           {(r.extraction_status === "pending" ||
             r.extraction_status === "failed") &&
             !isSystemGenerated(r) &&
-            !readonly && (
+            !readonly &&
+            canManageDocuments && (
               <Tooltip title={t("archive.runExtraction", "Run OCR extraction")}>
                 <Button
                   size="small"
@@ -817,6 +1104,19 @@ export default function EmployeeDocumentArchive({
               </Button>
             </Tooltip>
           )}
+          {!readonly && canManageDocuments && !isSystemGenerated(r) && (
+            <Tooltip title={t("archive.delete", "Delete")}>
+              <Button
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                aria-label={t("archive.delete", "Delete")}
+                loading={deletingId === r.id}
+                disabled={deletingId !== null}
+                onClick={() => setDeleteTarget(r)}
+              />
+            </Tooltip>
+          )}
         </Space>
       ),
     },
@@ -827,39 +1127,135 @@ export default function EmployeeDocumentArchive({
   /** Shared by every group's table so the detail panel stays identical across types. */
   const expandable: TableProps<EmployeeDocument>["expandable"] = {
     expandedRowRender: (record) => {
-      const visibleEntries = getVisibleExtractedFields(record.extracted_fields);
+      const visibleEntries = getVisibleExtractedFields(
+        record.extracted_fields,
+        isSystemGenerated(record),
+      );
       const warnings = record.extraction_warnings ?? [];
+      const systemGenerated = isSystemGenerated(record);
+      const confidence =
+        record.extraction_status === "partial"
+          ? formatConfidence(record.extraction_confidence)
+          : null;
+      const completedAt = record.extraction_completed_at
+        ? formatDateTime(record.extraction_completed_at, "")
+        : null;
+      const needsVerification =
+        !systemGenerated &&
+        (record.extraction_status === "partial" || warnings.length > 0);
+      const extractionFailed =
+        !systemGenerated && record.extraction_status === "failed";
+      const extractionPending = !systemGenerated && isExtractionPending(record);
       return (
         <Space
           direction="vertical"
           style={{ width: "100%", padding: "8px 0" }}
           size={8}
         >
-          {warnings.length > 0 && (
+          {!systemGenerated && (
+            <div
+              style={{ fontSize: 12 }}
+              data-testid={`extraction-status-${record.id}`}
+            >
+              <Space size={[16, 4]} wrap>
+                <span>
+                  <Text type="secondary">
+                    {t("archive.extractionStatus", "Extraction")}:
+                  </Text>{" "}
+                  <Tag
+                    color={
+                      extractionStatusColor[record.extraction_status] ??
+                      "default"
+                    }
+                  >
+                    {extractionStatusLabel(t, record.extraction_status)}
+                  </Tag>
+                </span>
+                {confidence && (
+                  <span>
+                    <Text type="secondary">
+                      {t("archive.extractionConfidence", "Confidence")}:
+                    </Text>{" "}
+                    <Text>{confidence}</Text>
+                  </span>
+                )}
+                {completedAt && (
+                  <span>
+                    <Text type="secondary">
+                      {t("archive.extractionCompletedAt", "Completed")}:
+                    </Text>{" "}
+                    <Text>{completedAt}</Text>
+                  </span>
+                )}
+              </Space>
+            </div>
+          )}
+          {systemGenerated && (
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {t(
+                "archive.systemGeneratedNotice",
+                "Generated by the system. No OCR ran on this document and it cannot be deleted.",
+              )}
+            </Text>
+          )}
+          {needsVerification && (
             <Alert
               type="warning"
               showIcon
-              message={t("archive.extractionWarnings", "Extraction Warnings")}
-              description={
-                <ul style={{ margin: 0, paddingLeft: 16 }}>
-                  {warnings.map((w, i) => (
-                    <li key={i}>{w}</li>
-                  ))}
-                </ul>
-              }
+              data-testid={`verification-required-${record.id}`}
+              message={t(
+                "archive.verificationRequired",
+                "Verification required",
+              )}
+              description={t(
+                "archive.partialNotice",
+                "The scan produced only partial results. HR must verify every suggested value against the original document before relying on it.",
+              )}
             />
           )}
-          {record.extraction_error && (
-            <Alert type="error" showIcon message={record.extraction_error} />
+          {extractionFailed && (
+            <Alert
+              type="error"
+              showIcon
+              message={t("archive.extractionStatusFailed", "Failed")}
+              description={t(
+                "archive.failedNotice",
+                "OCR could not read this document. Review the original document or run OCR again.",
+              )}
+            />
+          )}
+          {extractionPending && (
+            <Alert
+              type="info"
+              showIcon
+              message={t("archive.extractionStatusProcessing", "Processing")}
+              description={t(
+                "archive.pendingNotice",
+                "OCR is still processing this document. Refresh shortly to see the result.",
+              )}
+            />
           )}
           {visibleEntries.length > 0 && (
             <div
               style={{ fontSize: 13 }}
               data-testid={`extracted-fields-${record.id}`}
             >
-              <Text strong style={{ display: "block", marginBottom: 8 }}>
-                {t("archive.extractedFields", "Extracted Fields")}
+              <Text strong style={{ display: "block" }}>
+                {systemGenerated
+                  ? t("archive.extractedFields", "Extracted Fields")
+                  : t("archive.suggestedMetadata", "Suggested metadata (OCR)")}
               </Text>
+              {!systemGenerated && (
+                <Text
+                  type="secondary"
+                  style={{ display: "block", marginBottom: 8, fontSize: 12 }}
+                >
+                  {t(
+                    "archive.suggestedMetadataHint",
+                    "Read from the document automatically. Nothing here is approved employee data - verify it against the original before use.",
+                  )}
+                </Text>
+              )}
               <div
                 style={{
                   display: "grid",
@@ -879,8 +1275,9 @@ export default function EmployeeDocumentArchive({
             </div>
           )}
           {visibleEntries.length === 0 &&
-            warnings.length === 0 &&
-            !record.extraction_error && (
+            !needsVerification &&
+            !extractionFailed &&
+            !extractionPending && (
               <Text type="secondary" style={{ fontSize: 12 }}>
                 {t("archive.noExtractedData", "No extracted data.")}
               </Text>
@@ -889,9 +1286,11 @@ export default function EmployeeDocumentArchive({
       );
     },
     rowExpandable: (r) =>
-      getVisibleExtractedFields(r.extracted_fields).length > 0 ||
-      !!(r.extraction_warnings && r.extraction_warnings.length > 0) ||
-      !!r.extraction_error,
+      // Reliability signals make a row worth expanding even when the extractor
+      // returned no usable field; a bare record with nothing to say stays flat.
+      (!isSystemGenerated(r) && hasExtractionSignals(r)) ||
+      getVisibleExtractedFields(r.extracted_fields, isSystemGenerated(r))
+        .length > 0,
   };
 
   return (
@@ -966,6 +1365,46 @@ export default function EmployeeDocumentArchive({
       )}
 
       <Modal
+        title={
+          previewTarget
+            ? `${t("archive.preview", "Preview document")}: ${previewTarget.original_filename}`
+            : t("archive.preview", "Preview document")
+        }
+        open={previewTarget !== null}
+        onCancel={closePreview}
+        footer={null}
+        width={900}
+        destroyOnClose
+      >
+        {previewLoadingId !== null ? (
+          <div style={{ padding: "48px 0", textAlign: "center" }}>
+            <Spin />
+          </div>
+        ) : previewError ? (
+          <Alert type="warning" showIcon message={previewError} />
+        ) : previewUrl && previewKind === "pdf" ? (
+          <iframe
+            title={t("archive.preview", "Preview document")}
+            data-testid="document-preview-pdf"
+            src={previewUrl}
+            style={{ width: "100%", height: "70vh", border: 0 }}
+          />
+        ) : previewUrl && previewKind === "image" ? (
+          <img
+            src={previewUrl}
+            alt={previewTarget?.original_filename || t("archive.preview")}
+            data-testid="document-preview-image"
+            style={{
+              display: "block",
+              maxWidth: "100%",
+              maxHeight: "70vh",
+              margin: "0 auto",
+            }}
+          />
+        ) : null}
+      </Modal>
+
+      <Modal
         title={t("archive.uploadTitle", "Upload Document")}
         open={uploadModalOpen}
         onOk={handleUpload}
@@ -978,21 +1417,6 @@ export default function EmployeeDocumentArchive({
         width={480}
         destroyOnClose
       >
-        {uploadWarnings.length > 0 && (
-          <Alert
-            type="warning"
-            showIcon
-            message={t("archive.extractionWarnings", "Extraction Warnings")}
-            description={
-              <ul style={{ margin: 0, paddingLeft: 16 }}>
-                {uploadWarnings.map((w, i) => (
-                  <li key={i}>{w}</li>
-                ))}
-              </ul>
-            }
-            style={{ marginBottom: 16 }}
-          />
-        )}
         <Form form={form} layout="vertical">
           <Form.Item
             name="document_type"
@@ -1062,6 +1486,40 @@ export default function EmployeeDocumentArchive({
             </Text>
           </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal
+        title={
+          <span>
+            <ExclamationCircleFilled
+              style={{ color: "#ff4d4f", marginInlineEnd: 8 }}
+            />
+            {t("archive.deleteTitle", "Delete document permanently?")}
+          </span>
+        }
+        open={deleteTarget !== null}
+        onOk={() => deleteTarget && handleDelete(deleteTarget)}
+        // Cancel closes the dialog and does nothing else.
+        onCancel={() => setDeleteTarget(null)}
+        okText={t("archive.deleteConfirm", "Delete permanently")}
+        cancelText={t("common.cancel", "Cancel")}
+        okButtonProps={{ danger: true }}
+        confirmLoading={deletingId !== null}
+        destroyOnClose
+      >
+        {deleteTarget && (
+          <Space direction="vertical" size={8}>
+            <Text strong data-testid="delete-target-filename">
+              {deleteTarget.original_filename}
+            </Text>
+            <Text>
+              {t(
+                "archive.deleteWarning",
+                "This permanently removes the file and its archive entry. This cannot be undone.",
+              )}
+            </Text>
+          </Space>
+        )}
       </Modal>
     </div>
   );

@@ -23,6 +23,11 @@ export default function LoanInboxPage() {
       detailsBasePath={
         isFinancePath ? "/finance/loan-requests" : "/hr/loan-requests"
       }
+      employeeProfilePath={
+        isFinancePath
+          ? undefined
+          : (employeeProfileId) => `/hr/employees/${employeeProfileId}`
+      }
       defaultStatus={isFinancePath ? "pending_disbursement" : "pending_hr"}
       fetcher={isFinancePath ? getDisbursementLoanRequests : getHRLoanRequests}
     />

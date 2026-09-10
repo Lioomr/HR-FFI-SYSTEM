@@ -1,0 +1,168 @@
+{
+  "reference_no": {
+    "page": 1,
+    "x": 89,
+    "y": 732.89,
+    "width": 78,
+    "height": 18,
+    "font_size": 8
+  },
+  "request_date": {
+    "page": 1,
+    "x": 290,
+    "y": 732.89,
+    "width": 74,
+    "height": 18,
+    "font_size": 7.4
+  },
+  "filed_date": {
+    "page": 1,
+    "x": 465,
+    "y": 732.89,
+    "width": 92,
+    "height": 18,
+    "font_size": 7.4,
+    "source": "annual_entitlements.filed_at"
+  },
+  "purpose": {
+    "page": 1,
+    "x": 102,
+    "y": 662.89,
+    "width": 406,
+    "height": 26,
+    "font_size": 8,
+    "multiline": true,
+    "max_lines": 2,
+    "shrink": true
+  },
+  "employee_name": {
+    "page": 1,
+    "x": 102,
+    "y": 637.89,
+    "width": 406,
+    "height": 19,
+    "font_size": 8,
+    "shrink": true,
+    "source": "employee.full_name"
+  },
+  "employee_id": {
+    "page": 1,
+    "x": 102,
+    "y": 612.89,
+    "width": 406,
+    "height": 19,
+    "font_size": 8,
+    "shrink": true,
+    "source": "employee.employee_id"
+  },
+  "department": {
+    "page": 1,
+    "x": 102,
+    "y": 587.89,
+    "width": 406,
+    "height": 19,
+    "font_size": 8,
+    "shrink": true,
+    "source": "employee.department"
+  },
+  "letter_body": {
+    "page": 1,
+    "x": 28,
+    "y": 393.89,
+    "width": 539.28,
+    "height": 141,
+    "font_size": 8.2,
+    "multiline": true,
+    "max_lines": 7
+  },
+  "applicant_name": {
+    "page": 1,
+    "x": 102,
+    "y": 346.89,
+    "width": 406,
+    "height": 19,
+    "font_size": 8,
+    "shrink": true,
+    "source": "employee.full_name"
+  },
+  "applicant_signature_image": {
+    "page": 1,
+    "x": 25,
+    "y": 203.89,
+    "width": 165,
+    "height": 62,
+    "kind": "image",
+    "padding": 3,
+    "source": "request.signers.applicant.signature"
+  },
+  "applicant_signature_date": {
+    "page": 1,
+    "x": 60,
+    "y": 178.89,
+    "width": 130,
+    "height": 16,
+    "font_size": 6.2,
+    "shrink": true,
+    "source": "annual_entitlements.workflow_timestamp"
+  },
+  "financial_management_signature_image": {
+    "page": 1,
+    "x": 210.0,
+    "y": 95.89,
+    "width": 106.76,
+    "height": 56,
+    "kind": "image",
+    "padding": 3,
+    "source": "request.signers.financial_management.signature"
+  },
+  "financial_management_signature_date": {
+    "page": 1,
+    "x": 245.0,
+    "y": 69.89,
+    "width": 71.76,
+    "height": 16,
+    "font_size": 6.2,
+    "shrink": true,
+    "source": "annual_entitlements.workflow_timestamp"
+  },
+  "hr_department_signature_image": {
+    "page": 1,
+    "x": 336.76,
+    "y": 95.89,
+    "width": 106.76,
+    "height": 56,
+    "kind": "image",
+    "padding": 3,
+    "source": "request.signers.hr_department.signature"
+  },
+  "hr_department_signature_date": {
+    "page": 1,
+    "x": 371.76,
+    "y": 69.89,
+    "width": 71.76,
+    "height": 16,
+    "font_size": 6.2,
+    "shrink": true,
+    "source": "annual_entitlements.workflow_timestamp"
+  },
+  "accounts_officer_signature_image": {
+    "page": 1,
+    "x": 463.52,
+    "y": 95.89,
+    "width": 106.76,
+    "height": 56,
+    "kind": "image",
+    "padding": 3,
+    "source": "request.signers.accounts_officer.signature"
+  },
+  "accounts_officer_signature_date": {
+    "page": 1,
+    "x": 498.52,
+    "y": 69.89,
+    "width": 71.76,
+    "height": 16,
+    "font_size": 6.2,
+    "shrink": true,
+    "source": "annual_entitlements.workflow_timestamp"
+  }
+}

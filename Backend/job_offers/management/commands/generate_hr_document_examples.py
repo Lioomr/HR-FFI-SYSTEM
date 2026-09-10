@@ -81,7 +81,6 @@ class Command(BaseCommand):
             document_date=date(2026, 8, 20),
             addressed_to="Human Resources Department / إدارة الموارد البشرية",
             direct_superior="Ahmed Mostafa",
-            direct_superior_signature="Approved electronically",
             work_start_status="started",
             start_date=date(2026, 8, 23),
             general_manager_name="Omar Khaled",

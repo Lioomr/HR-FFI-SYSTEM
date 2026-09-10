@@ -26,6 +26,7 @@ import {
   MailOutlined,
 } from "@ant-design/icons";
 import { getCountryFlag } from "../../utils/countries";
+import EmployeeSignatureCard from "../../components/employees/EmployeeSignatureCard";
 import LoadingState from "../../components/ui/LoadingState";
 import EmptyState from "../../components/ui/EmptyState";
 import ErrorState from "../../components/ui/ErrorState";
@@ -466,7 +467,7 @@ export default function MyProfilePage() {
           </Card>
         </Col>
 
-        {/* Right Column: Documents only */}
+        {/* Right Column: Documents and signature */}
         <Col xs={24} lg={7}>
           <Card
             title={
@@ -507,6 +508,10 @@ export default function MyProfilePage() {
               />
             </Space>
           </Card>
+
+          <div style={{ marginTop: 24 }}>
+            <EmployeeSignatureCard />
+          </div>
         </Col>
       </Row>
     </div>

@@ -4,6 +4,10 @@ type TranslationMap = Record<string, string>;
 
 export const translations: Record<AppLanguage, TranslationMap> = {
   en: {
+    "attendance.biotimeNotice": "Attendance is recorded through BioTime.",
+    "attendance.unmapped":
+      "Attendance is unavailable until your BioTime mapping is completed. Contact HR to be registered on a BioTime device.",
+    "attendance.managerTitle": "Team Attendance",
     // App
     "app.title": "FFI HR System",
 
@@ -40,7 +44,7 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "annualPayment.status.rejected": "Rejected",
     "annualPayment.status.carriedForward": "Carried Forward",
     "annualPayment.employee": "Employee",
-    "annualPayment.requestNumber": "Request #",
+    "annualPayment.requestNumber": "Request #{id}",
     "annualPayment.contractYear": "Contract year",
     "annualPayment.eligibleDays": "Eligible days",
     "annualPayment.eligibleWholeDays": "Eligible whole days",
@@ -49,6 +53,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "annualPayment.paymentAmount": "Payment amount",
     "annualPayment.estimatedPaymentAmount": "Estimated payment amount",
     "annualPayment.resolution": "Resolution",
+    "annualPayment.resolution.pay": "Pay",
+    "annualPayment.resolution.carryForward": "Carry Forward",
     "annualPayment.pendingAnnualLeave": "Pending Annual Leave",
     "annualPayment.employeeNote": "Employee note",
     "annualPayment.ceoComment": "CEO comment",
@@ -77,6 +83,19 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "annualPayment.requestTitle": "Request Annual Leave Payment",
     "annualPayment.submitSuccess": "Annual Leave payment request submitted.",
     "annualPayment.notAvailable": "Annual Leave payment is not available.",
+    "annualPayment.reason.profileRequired": "Employee profile is required.",
+    "annualPayment.reason.companyMismatch":
+      "Employee does not belong to the active company.",
+    "annualPayment.reason.contractDateRequired":
+      "Employee contract date is required for Annual Leave payment.",
+    "annualPayment.reason.minimumService":
+      "Annual Leave payment is available after completing 6 months of service.",
+    "annualPayment.reason.windowClosed":
+      "The Annual Leave payment window opens only during the final 5 days of the contract year.",
+    "annualPayment.reason.pendingLeave":
+      "Annual Leave payment cannot be requested while Annual Leave requests are pending.",
+    "annualPayment.reason.noEligibleDays":
+      "There are no eligible whole Annual Leave days available for payment.",
     "annualPayment.windowNotice":
       "The request window opens during the final five days of the contract year.",
     "annualPayment.activeRequestNotice":
@@ -199,6 +218,7 @@ export const translations: Record<AppLanguage, TranslationMap> = {
       "Run generate_blank_templates to populate the library.",
     "layout.myAssets": "My Assets",
     "layout.leaveInbox": "Leave Inbox",
+    "layout.annualLeaveSettlements": "Annual Leave Settlements",
     "layout.attendance": "Attendance",
     "layout.home": "Home",
     "layout.leaveBalance": "Leave Balance",
@@ -287,6 +307,7 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "common.error.genericDetailed":
       "We could not complete your request. Please try again.",
     "common.retry": "Retry",
+    "common.forbidden": "Access denied",
     "common.tryAgain": "Please try again later",
     "common.success": "Success",
     "common.noData": "No data",
@@ -1343,6 +1364,49 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "archive.extractedField.visa_number": "Visa Number",
     "archive.extractedField.exit_before": "Exit Before",
     "archive.extractedField.visa_duration": "Visa Duration",
+    "archive.extractedField.approved_at": "Approved At",
+    "archive.suggestedMetadata": "Suggested metadata (OCR)",
+    "archive.suggestedMetadataHint":
+      "Read from the document automatically. Nothing here is approved employee data - verify it against the original before use.",
+    "archive.verificationRequired": "Verification required",
+    "archive.partialNotice":
+      "The scan found only some information. Compare every suggested value with the original document before approving it.",
+    "archive.extractionConfidence": "Confidence",
+    "archive.extractionStatusCompleted": "Completed",
+    "archive.extractionStatusNeedsReview": "Needs review",
+    "archive.extractionStatusFailed": "Failed",
+    "archive.extractionStatusProcessing": "Processing",
+    "archive.failedNotice":
+      "OCR could not read this document. Review the original document or run OCR again.",
+    "archive.pendingNotice":
+      "OCR is still processing this document. Refresh shortly to see the result.",
+    "archive.uploadNeedsReview": "Document uploaded. OCR results need review.",
+    "archive.preview": "Preview document",
+    "archive.previewUnavailable":
+      "This document type cannot be previewed. Download the file to view it.",
+    "archive.previewFailed": "Could not load the document preview.",
+    "archive.extractionAttempts": "Attempts",
+    "archive.extractionCompletedAt": "Completed",
+    "archive.extractionEngine": "Engine",
+    "archive.systemGeneratedNotice":
+      "Generated by the system. No OCR ran on this document and it cannot be deleted.",
+    "archive.delete": "Delete",
+    "archive.deleteTitle": "Delete document permanently?",
+    "archive.deleteConfirm": "Delete permanently",
+    "archive.deleteWarning":
+      "This permanently removes the file and its archive entry. This cannot be undone.",
+    "archive.deleteSuccess": "Document deleted permanently.",
+    "archive.deleteFailed": "Delete failed",
+    "archive.deleteNotPermitted":
+      "You do not have permission to delete this document.",
+    "archive.deleteNotFound":
+      "This document is no longer available in the active company.",
+    "archive.deleteConflict":
+      "This document is already being deleted, or another record still protects it.",
+    "archive.deleteStorageFailed":
+      "The document file could not be deleted from storage. Nothing was removed; try again.",
+    "archive.deleteCleanupPending":
+      "The file was permanently removed, but the archive entry could not be cleared. It is hidden and will be cleaned up automatically.",
 
     // Leave request extra fields
     "leave.otherLeaveDescription": "Other Leave",
@@ -2314,6 +2378,37 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "profile.expires": "Expires",
     "profile.nationalId": "National ID",
     "profile.healthCard": "Health Card",
+
+    // Employee signature (printed on official HR forms)
+    "signature.title": "Signature",
+    "signature.usedOn":
+      "Printed on the forms you submit: leave request, loan request, job offer, starting-work acknowledgment, and annual entitlements disbursement.",
+    "signature.none": "No signature saved",
+    "signature.noneHint":
+      "Upload your signature so it appears on the forms you submit. Until then, they are issued unsigned.",
+    "signature.upload": "Upload signature",
+    "signature.replace": "Replace",
+    "signature.remove": "Remove",
+    "signature.removeConfirm": "Remove your saved signature?",
+    "signature.removeConfirmHint":
+      "Forms you submit afterwards will be issued without your signature.",
+    "signature.uploaded": "Signature saved.",
+    "signature.removed": "Signature removed.",
+    "signature.savedAt": "Saved",
+    "signature.size": "Size",
+    "signature.previewAlt": "Your saved signature",
+    "signature.fileRules": "PNG or JPG image, up to {max} MB.",
+    "signature.invalidType":
+      "Unsupported file type. Upload a PNG or JPG image.",
+    "signature.invalidSize": "Signature image is too large. Maximum 2 MB.",
+    "signature.invalidEmpty": "The selected file is empty.",
+    "signature.loadError": "Failed to load your signature.",
+    "signature.uploadFailed": "Could not save the signature.",
+    "signature.removeFailed": "Could not remove the signature.",
+    "signature.previewFailed": "Could not load the signature preview.",
+    "signature.unauthorized": "Your session expired. Sign in and try again.",
+    "signature.forbidden": "Only you can upload your own signature.",
+
     "profile.loadingProfile": "Loading your profile...",
     "profile.loadError": "Failed to load profile",
     "profile.jobOffer": "Job Offer",
@@ -2641,6 +2736,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "loans.details.decisionClosed":
       "This request is no longer waiting for your decision.",
     "loans.details.approvalTrail": "Approval trail",
+    "loans.details.serviceUnavailable":
+      "The service is temporarily unavailable. Please try again.",
     "loans.details.targetDeductionPeriod": "Target Deduction Period",
     "loans.details.approvedAmount": "Approved Amount",
     "loans.approvalMap.eyebrow": "Approval Flow",
@@ -2662,6 +2759,25 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "loans.approvalMap.notRequired":
       "This stage was not required for this request.",
     "loans.approvalMap.deducted": "Deducted from payroll successfully.",
+    "workflow.flowComplete": "Approval flow complete",
+    "workflow.awaitingNextStep": "Awaiting the next step",
+    "workflow.progressSummary": "{completed} of {total} stages completed",
+    "workflow.step": "Step {number}",
+    "workflow.handledBy": "Handled by {name}",
+    "workflow.waitingFor": "Waiting for {name}",
+    "workflow.updated": "Updated",
+    "workflow.role.submitted": "SUBMITTED",
+    "workflow.role.delegate": "ALTERNATIVE EMPLOYEE",
+    "workflow.role.manager": "MANAGER",
+    "workflow.role.hr": "HR",
+    "workflow.role.cfo": "CFO",
+    "workflow.role.ceo": "CEO",
+    "workflow.role.disbursement": "DISBURSEMENT",
+    "workflow.role.hr_completion": "HR COMPLETION",
+    "workflow.role.processed": "PROCESSED",
+    "workflow.role.manual_entry": "MANUAL ENTRY",
+    "workflow.role.manual_approval": "HR APPROVAL",
+    "workflow.role.cancelled": "CANCELLED",
     "loans.inbox.allStatuses": "All statuses",
     "loans.inbox.emptyTitle": "No loan requests to show",
     "loans.inbox.emptyDescription":
@@ -2846,9 +2962,56 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "contractDecisions.autoApproved": "CEO auto-approved",
     "contractDecisions.autoRenewedShort": "Automatically renewed",
     "contractDecisions.rejected": "Rejected",
-    "contractDecisions.renewalFailed": "Manual resolution required",
+    "contractDecisions.renewalFailed": "Automatic renewal failed",
     "contractDecisions.manualResolution": "Manual resolution required",
     "contractDecisions.automaticReason": "Automatic processing reason",
+    "contractDecisions.subtitleCeo": "Review HR contract decisions.",
+    "contractDecisions.ceoComment": "CEO comment",
+    "contractDecisions.automaticRenewal": "Automatic renewal",
+    "contractDecisions.proposedTerms": "Proposed terms",
+    "contractDecisions.history": "Workflow history",
+    "contractDecisions.historyEmpty":
+      "No workflow steps have been recorded yet.",
+    "contractDecisions.loading": "Loading the contract decision…",
+    "contractDecisions.notFound": "This contract decision is not available.",
+    "contractDecisions.forbidden":
+      "You do not have access to contract decisions for this company.",
+    "contractDecisions.empty": "No contract decisions match this filter.",
+    "contractDecisions.resolve": "Resolve manually",
+    "contractDecisions.resultStatus": "Backend status: {status}",
+    "contractDecisions.staleAction":
+      "This decision moved on before your action was saved. The latest state has been reloaded.",
+    "contractDecisions.validationTitle": "The backend rejected this request",
+    "contractDecisions.invalidAmount":
+      "Enter a non-negative amount with at most ten digits and two decimal places.",
+    "contractDecisions.derivedTotal": "Total salary (derived by the backend)",
+    "contractDecisions.derivedTotalInvalid": "Not calculable",
+    "contractDecisions.deliveryInAppOnly": "in-app only",
+    "contractDecisions.finalNotificationSent": "Sent",
+    "contractDecisions.finalNotificationPending": "Pending retry",
+    "contractDecisions.autoApprovedNotice":
+      "The CEO deadline passed, so this decision was approved automatically.",
+    "contractDecisions.renewalFailedNotice":
+      "Automatic renewal failed. HR cannot resubmit this record; review it with the system administrator.",
+    "contractDecisions.manualResolutionNotice":
+      "This decision needs manual HR resolution. Submit a new decision to continue.",
+    "contractDecisions.terms.basic_salary": "Basic salary",
+    "contractDecisions.terms.transportation_allowance":
+      "Transportation allowance",
+    "contractDecisions.terms.accommodation_allowance":
+      "Accommodation allowance",
+    "contractDecisions.terms.telephone_allowance": "Telephone allowance",
+    "contractDecisions.terms.petrol_allowance": "Petrol allowance",
+    "contractDecisions.terms.other_allowance": "Other allowance",
+    "contractDecisions.terms.total_salary": "Total salary",
+
+    // Loan request PDF
+    "loans.pdf.download": "Download PDF",
+    "loans.pdf.unauthorized": "Your session expired. Sign in and try again.",
+    "loans.pdf.forbidden":
+      "You are not allowed to download this loan request PDF.",
+    "loans.pdf.notFound": "This loan request PDF is not available.",
+    "loans.pdf.failed": "The loan request PDF could not be downloaded.",
 
     // Attendance Corrections
     "layout.attendanceCorrections": "Attendance Corrections",
@@ -3360,6 +3523,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "jobOffers.detail.section.workflow": "Approval History",
     "jobOffers.detail.noCv": "No CV attached.",
     "jobOffers.workflow.empty": "No approval activity yet.",
+    "jobOffers.workflow.eyebrow": "Approval Flow",
+    "jobOffers.workflow.title": "Job Offer Progress",
     "jobOffers.workflow.action.submit": "Submitted for CEO approval",
     "jobOffers.workflow.action.approve": "Approved",
     "jobOffers.workflow.action.request_changes": "Changes requested",
@@ -3472,6 +3637,10 @@ export const translations: Record<AppLanguage, TranslationMap> = {
   },
 
   ar: {
+    "attendance.biotimeNotice": "يتم تسجيل الحضور من خلال BioTime.",
+    "attendance.unmapped":
+      "الحضور غير متاح حتى يكتمل ربطك بنظام BioTime. تواصل مع الموارد البشرية لتسجيلك على جهاز BioTime.",
+    "attendance.managerTitle": "حضور الفريق",
     // تسوية الإجازة السنوية
     "annualPayment.hrTitle": "تسويات الإجازة السنوية",
     "annualPayment.hrSubtitle": "مراجعة طلبات تسوية الإجازة السنوية للموظفين.",
@@ -3502,7 +3671,7 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "annualPayment.status.rejected": "مرفوض",
     "annualPayment.status.carriedForward": "تم الترحيل",
     "annualPayment.employee": "الموظف",
-    "annualPayment.requestNumber": "رقم الطلب",
+    "annualPayment.requestNumber": "رقم الطلب #{id}",
     "annualPayment.contractYear": "سنة العقد",
     "annualPayment.eligibleDays": "الأيام المستحقة",
     "annualPayment.eligibleWholeDays": "الأيام الكاملة المستحقة",
@@ -3511,6 +3680,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "annualPayment.paymentAmount": "مبلغ الدفع",
     "annualPayment.estimatedPaymentAmount": "مبلغ الدفع التقديري",
     "annualPayment.resolution": "القرار",
+    "annualPayment.resolution.pay": "دفع",
+    "annualPayment.resolution.carryForward": "ترحيل",
     "annualPayment.pendingAnnualLeave": "إجازة سنوية معلقة",
     "annualPayment.employeeNote": "ملاحظة الموظف",
     "annualPayment.ceoComment": "ملاحظة الرئيس التنفيذي",
@@ -3536,6 +3707,19 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "annualPayment.requestTitle": "طلب دفع الإجازة السنوية",
     "annualPayment.submitSuccess": "تم إرسال طلب دفع الإجازة السنوية.",
     "annualPayment.notAvailable": "دفع الإجازة السنوية غير متاح.",
+    "annualPayment.reason.profileRequired": "ملف الموظف مطلوب.",
+    "annualPayment.reason.companyMismatch":
+      "الموظف لا ينتمي إلى الشركة النشطة.",
+    "annualPayment.reason.contractDateRequired":
+      "تاريخ عقد الموظف مطلوب لدفع الإجازة السنوية.",
+    "annualPayment.reason.minimumService":
+      "يتاح دفع الإجازة السنوية بعد إكمال 6 أشهر من الخدمة.",
+    "annualPayment.reason.windowClosed":
+      "تفتح فترة دفع الإجازة السنوية خلال آخر 5 أيام فقط من سنة العقد.",
+    "annualPayment.reason.pendingLeave":
+      "لا يمكن طلب دفع الإجازة السنوية أثناء وجود طلبات إجازة سنوية معلقة.",
+    "annualPayment.reason.noEligibleDays":
+      "لا توجد أيام إجازة سنوية كاملة مستحقة للدفع.",
     "annualPayment.windowNotice":
       "تفتح نافذة الطلب في آخر خمسة أيام من سنة العقد.",
     "annualPayment.activeRequestNotice":
@@ -3657,6 +3841,7 @@ export const translations: Record<AppLanguage, TranslationMap> = {
       "قم بتشغيل الأمر generate_blank_templates لتعبئة المكتبة.",
     "layout.myAssets": "عهدي",
     "layout.leaveInbox": "صندوق الإجازات",
+    "layout.annualLeaveSettlements": "تسويات الإجازة السنوية",
     "layout.attendance": "الحضور",
     "layout.home": "الرئيسية",
     "layout.leaveBalance": "رصيد الإجازات",
@@ -3743,6 +3928,7 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "common.error.forbiddenDetailed": "ليس لديك صلاحية لتنفيذ هذا الإجراء.",
     "common.error.genericDetailed": "تعذر إكمال طلبك. يرجى المحاولة مرة أخرى.",
     "common.retry": "إعادة المحاولة",
+    "common.forbidden": "الوصول مرفوض",
     "common.tryAgain": "يرجى المحاولة مرة أخرى لاحقاً",
     "common.success": "نجاح",
     "common.noData": "لا توجد بيانات",
@@ -4808,6 +4994,47 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "archive.extractedField.visa_number": "رقم التأشيرة",
     "archive.extractedField.exit_before": "الخروج قبل",
     "archive.extractedField.visa_duration": "مدة التأشيرة",
+    "archive.extractedField.approved_at": "تمت الموافقة في",
+    "archive.suggestedMetadata": "بيانات مقترحة (OCR)",
+    "archive.suggestedMetadataHint":
+      "تمت قراءتها من المستند تلقائياً. لا تعد بيانات معتمدة للموظف - يجب التحقق منها مقابل المستند الأصلي.",
+    "archive.verificationRequired": "يلزم التحقق",
+    "archive.partialNotice":
+      "عثر المسح على بعض المعلومات فقط. قارن كل قيمة مقترحة مع المستند الأصلي قبل اعتمادها.",
+    "archive.extractionConfidence": "مستوى الثقة",
+    "archive.extractionStatusCompleted": "مكتمل",
+    "archive.extractionStatusNeedsReview": "يتطلب المراجعة",
+    "archive.extractionStatusFailed": "فشل",
+    "archive.extractionStatusProcessing": "قيد المعالجة",
+    "archive.failedNotice":
+      "تعذر على OCR قراءة هذا المستند. راجع المستند الأصلي أو شغّل OCR مرة أخرى.",
+    "archive.pendingNotice":
+      "لا يزال OCR يعالج هذا المستند. حدّث الصفحة قريباً لرؤية النتيجة.",
+    "archive.uploadNeedsReview": "تم رفع المستند. نتائج OCR تحتاج إلى مراجعة.",
+    "archive.preview": "معاينة المستند",
+    "archive.previewUnavailable":
+      "لا يمكن معاينة هذا النوع من المستندات. نزّل الملف لعرضه.",
+    "archive.previewFailed": "تعذر تحميل معاينة المستند.",
+    "archive.extractionAttempts": "عدد المحاولات",
+    "archive.extractionCompletedAt": "اكتمل في",
+    "archive.extractionEngine": "المحرك",
+    "archive.systemGeneratedNotice":
+      "مُنشأ من النظام. لم يتم تشغيل OCR على هذا المستند ولا يمكن حذفه.",
+    "archive.delete": "حذف",
+    "archive.deleteTitle": "حذف المستند نهائياً؟",
+    "archive.deleteConfirm": "حذف نهائي",
+    "archive.deleteWarning":
+      "سيتم حذف الملف وسجل الأرشيف نهائياً. لا يمكن التراجع عن هذا الإجراء.",
+    "archive.deleteSuccess": "تم حذف المستند نهائياً.",
+    "archive.deleteFailed": "فشل الحذف",
+    "archive.deleteNotPermitted": "ليس لديك صلاحية لحذف هذا المستند.",
+    "archive.deleteNotFound": "لم يعد هذا المستند متاحاً في الشركة النشطة.",
+    "archive.deleteConflict":
+      "يجري حذف هذا المستند بالفعل، أو أن سجلاً آخر مرتبط به.",
+    "archive.deleteStorageFailed":
+      "تعذر حذف ملف المستند من التخزين. لم يتم حذف أي شيء؛ حاول مجدداً.",
+    "archive.deleteCleanupPending":
+      "تم حذف الملف نهائياً، لكن تعذر مسح سجل الأرشيف. تم إخفاؤه وسيتم تنظيفه تلقائياً.",
 
     // Leave request extra fields
     "leave.otherLeaveDescription": "إجازة أخرى",
@@ -5696,6 +5923,37 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "profile.expires": "تنتهي في",
     "profile.nationalId": "الهوية الوطنية",
     "profile.healthCard": "البطاقة الصحية",
+
+    // Employee signature (printed on official HR forms)
+    "signature.title": "التوقيع",
+    "signature.usedOn":
+      "يُطبع على النماذج التي تقدمها: طلب الإجازة، وطلب السلفة، وعرض العمل، وإقرار مباشرة العمل، وصرف الاستحقاقات السنوية.",
+    "signature.none": "لا يوجد توقيع محفوظ",
+    "signature.noneHint":
+      "ارفع توقيعك ليظهر على النماذج التي تقدمها. حتى ذلك الحين تصدر النماذج بدون توقيع.",
+    "signature.upload": "رفع التوقيع",
+    "signature.replace": "استبدال",
+    "signature.remove": "حذف",
+    "signature.removeConfirm": "هل تريد حذف توقيعك المحفوظ؟",
+    "signature.removeConfirmHint":
+      "ستصدر النماذج التي تقدمها بعد ذلك بدون توقيعك.",
+    "signature.uploaded": "تم حفظ التوقيع.",
+    "signature.removed": "تم حذف التوقيع.",
+    "signature.savedAt": "تم الحفظ",
+    "signature.size": "الحجم",
+    "signature.previewAlt": "توقيعك المحفوظ",
+    "signature.fileRules": "صورة PNG أو JPG بحجم أقصاه {max} ميجابايت.",
+    "signature.invalidType": "نوع الملف غير مدعوم. ارفع صورة PNG أو JPG.",
+    "signature.invalidSize":
+      "حجم صورة التوقيع كبير جدًا. الحد الأقصى 2 ميجابايت.",
+    "signature.invalidEmpty": "الملف المحدد فارغ.",
+    "signature.loadError": "تعذر تحميل توقيعك.",
+    "signature.uploadFailed": "تعذر حفظ التوقيع.",
+    "signature.removeFailed": "تعذر حذف التوقيع.",
+    "signature.previewFailed": "تعذر تحميل معاينة التوقيع.",
+    "signature.unauthorized": "انتهت الجلسة. سجّل الدخول ثم أعد المحاولة.",
+    "signature.forbidden": "لا يمكن رفع التوقيع إلا من صاحبه.",
+
     "profile.loadingProfile": "جاري تحميل ملفك الشخصي...",
     "profile.loadError": "فشل تحميل الملف الشخصي",
     "profile.jobOffer": "عرض العمل",
@@ -6028,6 +6286,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "loans.details.decisionSection": "قرارك",
     "loans.details.decisionClosed": "لم يعد هذا الطلب بانتظار قرارك.",
     "loans.details.approvalTrail": "مسار الاعتماد",
+    "loans.details.serviceUnavailable":
+      "الخدمة غير متاحة مؤقتًا. يرجى إعادة المحاولة.",
     "loans.details.targetDeductionPeriod": "فترة الاستقطاع المستهدفة",
     "loans.details.approvedAmount": "المبلغ المعتمد",
     "loans.approvalMap.eyebrow": "مسار الموافقة",
@@ -6047,6 +6307,25 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "loans.approvalMap.skipped": "غير مطلوب",
     "loans.approvalMap.notRequired": "هذه المرحلة غير مطلوبة لهذا الطلب.",
     "loans.approvalMap.deducted": "تم الاستقطاع من الرواتب بنجاح.",
+    "workflow.flowComplete": "اكتمل مسار الموافقة",
+    "workflow.awaitingNextStep": "بانتظار الخطوة التالية",
+    "workflow.progressSummary": "اكتملت {completed} من {total} مراحل",
+    "workflow.step": "الخطوة {number}",
+    "workflow.handledBy": "تمت المعالجة بواسطة {name}",
+    "workflow.waitingFor": "بانتظار {name}",
+    "workflow.updated": "آخر تحديث",
+    "workflow.role.submitted": "تم التقديم",
+    "workflow.role.delegate": "الموظف البديل",
+    "workflow.role.manager": "المدير المباشر",
+    "workflow.role.hr": "الموارد البشرية",
+    "workflow.role.cfo": "المدير المالي",
+    "workflow.role.ceo": "الرئيس التنفيذي",
+    "workflow.role.disbursement": "الصرف",
+    "workflow.role.hr_completion": "إتمام الموارد البشرية",
+    "workflow.role.processed": "تمت المعالجة",
+    "workflow.role.manual_entry": "إدخال يدوي",
+    "workflow.role.manual_approval": "اعتماد الموارد البشرية",
+    "workflow.role.cancelled": "ملغى",
     "loans.inbox.allStatuses": "كل الحالات",
     "loans.inbox.emptyTitle": "لا توجد طلبات سلف لعرضها",
     "loans.inbox.emptyDescription": "تظهر الطلبات هنا فور وصولها إلى مرحلتك.",
@@ -6223,9 +6502,55 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "contractDecisions.autoApproved": "اعتماد تلقائي من الرئيس التنفيذي",
     "contractDecisions.autoRenewedShort": "تم التجديد تلقائياً",
     "contractDecisions.rejected": "مرفوض",
-    "contractDecisions.renewalFailed": "يتطلب معالجة يدوية",
+    "contractDecisions.renewalFailed": "تعذّر التجديد التلقائي",
     "contractDecisions.manualResolution": "يتطلب معالجة يدوية",
     "contractDecisions.automaticReason": "سبب المعالجة التلقائية",
+    "contractDecisions.subtitleCeo":
+      "مراجعة قرارات العقود المرفوعة من الموارد البشرية.",
+    "contractDecisions.ceoComment": "ملاحظة الرئيس التنفيذي",
+    "contractDecisions.automaticRenewal": "تجديد تلقائي",
+    "contractDecisions.proposedTerms": "الشروط المقترحة",
+    "contractDecisions.history": "سجل سير العمل",
+    "contractDecisions.historyEmpty": "لم تُسجَّل أي خطوات في سير العمل بعد.",
+    "contractDecisions.loading": "جارٍ تحميل قرار العقد…",
+    "contractDecisions.notFound": "قرار العقد هذا غير متاح.",
+    "contractDecisions.forbidden":
+      "لا تملك صلاحية الوصول إلى قرارات العقود لهذه الشركة.",
+    "contractDecisions.empty": "لا توجد قرارات عقود مطابقة لهذا الفلتر.",
+    "contractDecisions.resolve": "معالجة يدوية",
+    "contractDecisions.resultStatus": "حالة الخادم: {status}",
+    "contractDecisions.staleAction":
+      "تغيّر هذا القرار قبل حفظ إجرائك. تم تحديث الحالة الأخيرة.",
+    "contractDecisions.validationTitle": "رفض الخادم هذا الطلب",
+    "contractDecisions.invalidAmount":
+      "أدخل مبلغًا غير سالب بعشرة أرقام صحيحة كحد أقصى وخانتين عشريتين.",
+    "contractDecisions.derivedTotal": "إجمالي الراتب (يحتسبه الخادم)",
+    "contractDecisions.derivedTotalInvalid": "غير قابل للاحتساب",
+    "contractDecisions.deliveryInAppOnly": "داخل التطبيق فقط",
+    "contractDecisions.finalNotificationSent": "أُرسل",
+    "contractDecisions.finalNotificationPending": "بانتظار إعادة المحاولة",
+    "contractDecisions.autoApprovedNotice":
+      "انقضى الموعد النهائي للرئيس التنفيذي، لذلك تمت الموافقة على هذا القرار تلقائيًا.",
+    "contractDecisions.renewalFailedNotice":
+      "تعذّر التجديد التلقائي. لا يمكن للموارد البشرية إعادة إرسال هذا السجل؛ راجعه مع مسؤول النظام.",
+    "contractDecisions.manualResolutionNotice":
+      "يتطلب هذا القرار معالجة يدوية من الموارد البشرية. أرسل قرارًا جديدًا للمتابعة.",
+    "contractDecisions.terms.basic_salary": "الراتب الأساسي",
+    "contractDecisions.terms.transportation_allowance": "بدل النقل",
+    "contractDecisions.terms.accommodation_allowance": "بدل السكن",
+    "contractDecisions.terms.telephone_allowance": "بدل الهاتف",
+    "contractDecisions.terms.petrol_allowance": "بدل الوقود",
+    "contractDecisions.terms.other_allowance": "بدلات أخرى",
+    "contractDecisions.terms.total_salary": "إجمالي الراتب",
+
+    // Loan request PDF
+    "loans.pdf.download": "تنزيل PDF",
+    "loans.pdf.unauthorized":
+      "انتهت صلاحية جلستك. سجّل الدخول ثم أعد المحاولة.",
+    "loans.pdf.forbidden": "لا تملك صلاحية تنزيل ملف طلب السلفة هذا.",
+    "loans.pdf.notFound": "ملف طلب السلفة هذا غير متاح.",
+    "loans.pdf.failed": "تعذّر تنزيل ملف طلب السلفة.",
+
     "pendingInbox.col.employee": "الموظف",
     "pendingInbox.col.requestType": "نوع الطلب",
     "pendingInbox.col.action": "الإجراء المطلوب",
@@ -6733,6 +7058,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "jobOffers.detail.section.workflow": "سجل الاعتماد",
     "jobOffers.detail.noCv": "لا توجد سيرة ذاتية مرفقة.",
     "jobOffers.workflow.empty": "لا يوجد نشاط اعتماد بعد.",
+    "jobOffers.workflow.eyebrow": "مسار الموافقة",
+    "jobOffers.workflow.title": "تقدم عرض العمل",
     "jobOffers.workflow.action.submit": "أُرسل لاعتماد الرئيس التنفيذي",
     "jobOffers.workflow.action.approve": "تم الاعتماد",
     "jobOffers.workflow.action.request_changes": "طُلبت تعديلات",

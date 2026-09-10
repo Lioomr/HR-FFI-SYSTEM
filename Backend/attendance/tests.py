@@ -10,7 +10,6 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from audit.models import AuditLog
-from core.models import DelegationRule
 from employees.models import EmployeeProfile
 from hr_reference.models import Department, Position
 from organization.models import OrganizationNode, UserOrganizationAccess
@@ -207,130 +206,49 @@ class AttendanceTests(TestCase):
             hire_date=date.today(),
         )
 
-    def test_employee_check_in_success(self):
-        self.client.force_authenticate(user=self.emp1)
-        response = self.client.post("/api/attendance/me/check-in/")
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data["data"]["status"], "PENDING_HR")
-        self.assertTrue(
-            AttendanceRecord.objects.filter(employee_profile=self.profile1, date=timezone.localdate()).exists()
-        )
-        # Audit
-        self.assertTrue(AuditLog.objects.filter(action="attendance.check_in").exists())
-
-    def test_employee_check_in_with_inactive_manager_falls_back_to_hr(self):
-        self.profile1.manager_profile = self.manager_profile
-        self.profile1.save(update_fields=["manager_profile", "updated_at"])
-        self.manager_profile.employment_status = EmployeeProfile.EmploymentStatus.SUSPENDED
-        self.manager_profile.save(update_fields=["employment_status", "updated_at"])
-
-        self.client.force_authenticate(user=self.emp1)
-        response = self.client.post("/api/attendance/me/check-in/")
-
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data["data"]["status"], AttendanceRecord.Status.PENDING_HR)
-
-    def test_employee_check_in_duplicate_fail(self):
-        self.client.force_authenticate(user=self.emp1)
-        self.client.post("/api/attendance/me/check-in/")  # First
-        response = self.client.post("/api/attendance/me/check-in/")  # Duplicate
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(
-            AttendanceRecord.objects.filter(employee_profile=self.profile1, date=timezone.localdate()).count(),
-            1,
-        )
-
     def test_employee_without_profile_gets_safe_not_found_errors(self):
         user = User.objects.create_user(email="attendance-no-profile@ffi.com", password="password")
         user.groups.add(self.employee_group)
         self.client.force_authenticate(user=user)
 
-        check_in_response = self.client.post("/api/attendance/me/check-in/")
-        check_out_response = self.client.post("/api/attendance/me/check-out/")
+        me_response = self.client.get("/api/attendance/me/")
 
-        self.assertEqual(check_in_response.status_code, status.HTTP_404_NOT_FOUND)
-        self.assertEqual(check_out_response.status_code, status.HTTP_404_NOT_FOUND)
-        self.assertEqual(check_in_response.data["message"], "Employee profile not found.")
-
-    def test_employee_without_company_cannot_create_attendance(self):
-        user = User.objects.create_user(email="attendance-no-company@ffi.com", password="password")
-        user.groups.add(self.employee_group)
-        profile = EmployeeProfile.objects.create(
-            user=user,
-            employee_id="EMP-NO-COMPANY",
-            hire_date=date.today(),
-            is_archived=True,
-        )
-        self.client.force_authenticate(user=user)
-
-        response = self.client.post("/api/attendance/me/check-in/")
-
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertFalse(AttendanceRecord.objects.filter(employee_profile=profile).exists())
+        self.assertEqual(me_response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(me_response.data["message"], "Employee profile not found.")
 
     def test_unauthenticated_employee_endpoints_are_rejected(self):
         self.assertEqual(self.client.get("/api/attendance/me/").status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(self.client.post("/api/attendance/me/check-in/").status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(self.client.post("/api/attendance/me/check-out/").status_code, status.HTTP_401_UNAUTHORIZED)
 
-    def test_cfo_cannot_use_employee_self_service(self):
+    def test_cfo_cannot_read_employee_attendance_history(self):
         self.client.force_authenticate(user=self.cfo_user)
 
         self.assertEqual(self.client.get("/api/attendance/me/").status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(self.client.post("/api/attendance/me/check-in/").status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(self.client.post("/api/attendance/me/check-out/").status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_ceo_cannot_use_employee_self_service(self):
+    def test_ceo_cannot_read_employee_attendance_history(self):
         self.client.force_authenticate(user=self.ceo_approver)
 
         self.assertEqual(self.client.get("/api/attendance/me/").status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(self.client.post("/api/attendance/me/check-in/").status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(self.client.post("/api/attendance/me/check-out/").status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_manager_can_use_attendance_self_service(self):
+    def test_mapped_manager_can_read_own_biotime_attendance(self):
+        BioTimeEmployeeMap.objects.create(employee_profile=self.manager_profile, biotime_emp_code="MGR-BT")
+        AttendanceRecord.objects.create(
+            employee_profile=self.manager_profile,
+            date=timezone.localdate(),
+            check_in_at=timezone.now(),
+            status=AttendanceRecord.Status.PRESENT,
+            source=AttendanceRecord.Source.SYSTEM,
+            biotime_emp_code="MGR-BT",
+        )
         self.client.force_authenticate(user=self.manager_user)
-        create_response = self.client.post("/api/attendance/me/check-in/")
-        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
 
         list_response = self.client.get("/api/attendance/me/")
+
         self.assertEqual(list_response.status_code, status.HTTP_200_OK)
-        data = list_response.data["data"]
-        if isinstance(data, dict) and "data" in data:
-            data = data["data"]
-        items = (
-            data["results"]
-            if isinstance(data, dict) and "results" in data
-            else data["items"]
-            if isinstance(data, dict) and "items" in data
-            else data
-        )
+        items = list_response.data["data"]["items"]
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0]["employee_profile"], self.manager_profile.id)
-
-    def test_employee_check_out_fail_no_check_in(self):
-        self.client.force_authenticate(user=self.emp1)
-        response = self.client.post("/api/attendance/me/check-out/")
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-
-    def test_employee_check_out_success(self):
-        self.client.force_authenticate(user=self.emp1)
-        self.client.post("/api/attendance/me/check-in/")
-        response = self.client.post("/api/attendance/me/check-out/")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        record = AttendanceRecord.objects.get(employee_profile=self.profile1, date=timezone.localdate())
-        self.assertIsNotNone(record.check_out_at)
-        # Audit
-        self.assertTrue(AuditLog.objects.filter(action="attendance.check_out").exists())
-
-    def test_employee_check_out_duplicate_fail(self):
-        self.client.force_authenticate(user=self.emp1)
-        self.client.post("/api/attendance/me/check-in/")
-        first_response = self.client.post("/api/attendance/me/check-out/")
-        duplicate_response = self.client.post("/api/attendance/me/check-out/")
-
-        self.assertEqual(first_response.status_code, status.HTTP_200_OK)
-        self.assertEqual(duplicate_response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(AuditLog.objects.filter(action="attendance.check_out").count(), 1)
 
     def test_employee_cannot_list_all(self):
         self.client.force_authenticate(user=self.emp1)
@@ -339,40 +257,26 @@ class AttendanceTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_employee_limit_scope(self):
-        # Create records for emp1 and emp2
+        BioTimeEmployeeMap.objects.create(employee_profile=self.profile1, biotime_emp_code="SCOPE-1")
+        BioTimeEmployeeMap.objects.create(employee_profile=self.profile2, biotime_emp_code="SCOPE-2")
         date1 = timezone.localdate() - timedelta(days=1)
         AttendanceRecord.objects.create(employee_profile=self.profile1, date=date1, status="PRESENT")
         AttendanceRecord.objects.create(employee_profile=self.profile2, date=date1, status="PRESENT")
 
         self.client.force_authenticate(user=self.emp1)
 
-        # Explicit date range
         date_from = (timezone.localdate() - timedelta(days=2)).isoformat()
         date_to = timezone.localdate().isoformat()
         response = self.client.get(f"/api/attendance/me/?date_from={date_from}&date_to={date_to}")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        # Normalized extraction
-        # Normalized extraction with handling for double-wrapping and 'items' key
-        data = response.data["data"]
-        if isinstance(data, dict) and "data" in data:
-            data = data["data"]  # Unwrap second layer
-
-        results = (
-            data["results"]
-            if isinstance(data, dict) and "results" in data
-            else data["items"]
-            if isinstance(data, dict) and "items" in data
-            else data
-        )
-
-        self.assertEqual(len(results), 1)
+        self.assertEqual(len(response.data["data"]["items"]), 1)
 
     def test_hr_list_filter(self):
+        BioTimeEmployeeMap.objects.create(employee_profile=self.profile1, biotime_emp_code="FILTER-1")
         AttendanceRecord.objects.create(employee_profile=self.profile1, date=timezone.localdate(), status="PRESENT")
         self.client.force_authenticate(user=self.hr)
 
-        # Filter by ID and Date
         date_from = (timezone.localdate() - timedelta(days=2)).isoformat()
         date_to = timezone.localdate().isoformat()
         response = self.client.get(
@@ -380,23 +284,11 @@ class AttendanceTests(TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        # Normalized extraction
-        # Normalized extraction with handling for double-wrapping and 'items' key
-        data = response.data["data"]
-        if isinstance(data, dict) and "data" in data:
-            data = data["data"]  # Unwrap second layer
-
-        results = (
-            data["results"]
-            if isinstance(data, dict) and "results" in data
-            else data["items"]
-            if isinstance(data, dict) and "items" in data
-            else data
-        )
-
-        self.assertEqual(len(results), 1)
+        self.assertEqual(len(response.data["data"]["items"]), 1)
 
     def test_hr_list_is_limited_to_active_company(self):
+        BioTimeEmployeeMap.objects.create(employee_profile=self.profile1, biotime_emp_code="COMPANY-1")
+        BioTimeEmployeeMap.objects.create(employee_profile=self.profile2, biotime_emp_code="COMPANY-2")
         own_company_record = AttendanceRecord.objects.create(
             employee_profile=self.profile1,
             date=timezone.localdate(),
@@ -419,7 +311,8 @@ class AttendanceTests(TestCase):
         self.assertEqual([item["id"] for item in items], [own_company_record.id])
         self.assertNotIn(other_company_record.id, [item["id"] for item in items])
 
-    def test_hr_cannot_retrieve_or_override_other_active_company_record(self):
+    def test_hr_cannot_retrieve_other_active_company_record_and_override_is_gone(self):
+        BioTimeEmployeeMap.objects.create(employee_profile=self.profile2, biotime_emp_code="OTHER-1")
         other_company_record = AttendanceRecord.objects.create(
             employee_profile=self.profile2,
             date=timezone.localdate(),
@@ -439,22 +332,11 @@ class AttendanceTests(TestCase):
         )
 
         self.assertEqual(retrieve_response.status_code, status.HTTP_404_NOT_FOUND)
-        self.assertEqual(update_response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(update_response.status_code, status.HTTP_410_GONE)
         other_company_record.refresh_from_db()
         self.assertEqual(other_company_record.status, AttendanceRecord.Status.ABSENT)
 
-    def test_hr_self_service_rejects_active_company_mismatch(self):
-        self.client.force_authenticate(user=self.hr)
-
-        response = self.client.post(
-            "/api/attendance/me/check-in/",
-            HTTP_X_ACTIVE_COMPANY_ID=str(self.other_company.id),
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertFalse(AttendanceRecord.objects.filter(employee_profile=self.hr_profile).exists())
-
-    def test_direct_attendance_create_is_not_supported(self):
+    def test_direct_attendance_create_is_gone(self):
         self.client.force_authenticate(user=self.hr)
 
         response = self.client.post(
@@ -464,30 +346,28 @@ class AttendanceTests(TestCase):
             HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
         )
 
-        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+        self.assertEqual(response.status_code, status.HTTP_410_GONE)
 
-    def test_hr_override(self):
+    def test_hr_override_is_gone(self):
+        BioTimeEmployeeMap.objects.create(employee_profile=self.profile1, biotime_emp_code="OVERRIDE-1")
         record = AttendanceRecord.objects.create(
             employee_profile=self.profile1, date=timezone.localdate(), status="ABSENT"
         )
         self.client.force_authenticate(user=self.hr)
 
-        data = {
-            "status": "PRESENT",
-            "notes": "Fixed",
-            "override_reason": "Forgot to check in",  # Required for core field change
-        }
-        response = self.client.patch(f"/api/attendance/{record.id}/", data)
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response = self.client.patch(
+            f"/api/attendance/{record.id}/",
+            {"status": "PRESENT", "notes": "Fixed", "override_reason": "Forgot to check in"},
+        )
 
+        self.assertEqual(response.status_code, status.HTTP_410_GONE)
         record.refresh_from_db()
-        self.assertTrue(record.is_overridden)
-        self.assertEqual(record.source, "HR")
-        self.assertEqual(record.updated_by, self.hr)
-        # Audit
-        self.assertTrue(AuditLog.objects.filter(action="attendance.override").exists())
+        self.assertEqual(record.status, "ABSENT")
+        self.assertFalse(record.is_overridden)
+        self.assertFalse(AuditLog.objects.filter(action="attendance.override").exists())
 
     def test_employee_view_other_forbidden(self):
+        BioTimeEmployeeMap.objects.create(employee_profile=self.profile2, biotime_emp_code="VIEW-OTHER")
         record = AttendanceRecord.objects.create(
             employee_profile=self.profile2, date=timezone.localdate(), status="PRESENT"
         )
@@ -497,55 +377,9 @@ class AttendanceTests(TestCase):
         response = self.client.get(f"/api/attendance/{record.id}/")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_audit_logging_check(self):
-        # Already covered in individual tests, but explicit check
-        self.client.force_authenticate(user=self.emp1)
-        self.client.post("/api/attendance/me/check-in/")
-        self.assertTrue(AuditLog.objects.filter(action="attendance.check_in").exists())
-
-    def test_hr_manager_check_in_goes_to_pending_ceo_and_ceo_can_approve(self):
-        # Keep this routing test independent of the wall clock vs. the company
-        # late cutoff: a huge grace window guarantees an on-time classification.
-        from admin_portal.models import SystemSettings
-
-        settings_obj = SystemSettings.get_solo()
-        settings_obj.late_grace_minutes = 24 * 60
-        settings_obj.save(update_fields=["late_grace_minutes", "updated_at"])
-
-        self.client.force_authenticate(user=self.hr)
-        create_response = self.client.post("/api/attendance/me/check-in/")
-        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
-        record_id = create_response.data["data"]["id"]
-        self.assertEqual(create_response.data["data"]["status"], "PENDING_CEO")
-
-        self.client.force_authenticate(user=self.ceo_approver)
-        approve_response = self.client.post(f"/api/ceo/attendance/{record_id}/approve/", {"notes": "Approved"})
-        self.assertEqual(approve_response.status_code, status.HTTP_200_OK)
-        self.assertEqual(approve_response.data["data"]["status"], "PRESENT")
-
-    def test_delegated_ceo_can_approve_attendance(self):
-        DelegationRule.objects.create(
-            from_user=self.ceo_approver,
-            to_user=self.delegate_user,
-            start_at=timezone.now(),
-            created_by=self.ceo_approver,
-        )
-        record = AttendanceRecord.objects.create(
-            employee_profile=self.profile1,
-            date=timezone.localdate(),
-            status=AttendanceRecord.Status.PENDING_CEO,
-        )
-
-        self.client.force_authenticate(user=self.delegate_user)
-        response = self.client.post(
-            f"/api/ceo/attendance/{record.id}/approve/",
-            {"notes": "Delegated CEO approval"},
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["data"]["status"], AttendanceRecord.Status.PRESENT)
-
     def test_ceo_manager_attendance_scope_is_direct_reports_only(self):
+        BioTimeEmployeeMap.objects.create(employee_profile=self.ceo_direct_profile, biotime_emp_code="CEO-DIRECT")
+        BioTimeEmployeeMap.objects.create(employee_profile=self.profile1, biotime_emp_code="CEO-SCOPE-1")
         own_record = AttendanceRecord.objects.create(
             employee_profile=self.ceo_direct_profile,
             date=timezone.localdate(),
@@ -571,6 +405,7 @@ class AttendanceTests(TestCase):
                 manager_id=self.manager_user.id,
                 manager_profile_id=self.manager_profile.id,
             )
+        BioTimeEmployeeMap.objects.create(employee_profile=self.profile2, biotime_emp_code="CROSS-COMPANY")
         other_company_record = AttendanceRecord.objects.create(
             employee_profile=self.profile2,
             date=timezone.localdate(),
@@ -589,49 +424,13 @@ class AttendanceTests(TestCase):
             HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
         )
 
+        # The manager gate runs before the retired action body, so a caller with
+        # no manager access at all still gets 403 rather than the 410 that a
+        # real manager sees (covered in test_biotime_only_policy.py).
         self.assertEqual(list_response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(approve_response.status_code, status.HTTP_403_FORBIDDEN)
         other_company_record.refresh_from_db()
         self.assertEqual(other_company_record.status, AttendanceRecord.Status.PENDING_MANAGER)
-
-    def test_ceo_can_approve_direct_report_attendance(self):
-        record = AttendanceRecord.objects.create(
-            employee_profile=self.ceo_direct_profile,
-            date=timezone.localdate(),
-            status=AttendanceRecord.Status.PENDING_MANAGER,
-        )
-
-        self.client.force_authenticate(user=self.ceo_approver)
-        response = self.client.post(f"/api/manager/attendance/{record.id}/approve/", {"notes": "Approved"})
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["data"]["status"], AttendanceRecord.Status.PENDING_HR)
-
-    def test_cfo_can_approve_direct_report_attendance(self):
-        record = AttendanceRecord.objects.create(
-            employee_profile=self.cfo_direct_profile,
-            date=timezone.localdate(),
-            status=AttendanceRecord.Status.PENDING_MANAGER,
-        )
-
-        self.client.force_authenticate(user=self.cfo_user)
-        response = self.client.post(f"/api/manager/attendance/{record.id}/approve/", {"notes": "Approved"})
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["data"]["status"], AttendanceRecord.Status.PENDING_HR)
-
-    def test_employee_role_direct_manager_can_approve_attendance(self):
-        record = AttendanceRecord.objects.create(
-            employee_profile=self.employee_manager_direct_profile,
-            date=timezone.localdate(),
-            status=AttendanceRecord.Status.PENDING_MANAGER,
-        )
-
-        self.client.force_authenticate(user=self.employee_manager_user)
-        response = self.client.post(f"/api/manager/attendance/{record.id}/approve/", {"notes": "Approved"})
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["data"]["status"], AttendanceRecord.Status.PENDING_HR)
 
 
 class BioTimeSyncTests(TestCase):

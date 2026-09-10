@@ -1,3 +1,5 @@
+import type { WorkflowSnapshot } from "./workflow";
+
 export type AttendanceStatus =
   | "PRESENT"
   | "ABSENT"
@@ -11,6 +13,8 @@ export type AttendanceSource = "EMPLOYEE" | "HR" | "SYSTEM";
 
 export interface AttendanceRecord {
   id: string | number;
+  /** Approval snapshot for records that go through the correction workflow. */
+  workflow?: WorkflowSnapshot;
   employee_profile?: number;
   employee_name?: string;
   employee_name_en?: string | null;

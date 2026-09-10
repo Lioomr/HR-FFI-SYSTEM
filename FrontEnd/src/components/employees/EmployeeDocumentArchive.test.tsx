@@ -13,6 +13,7 @@ vi.mock("../../services/api/employeesApi", () => ({
   downloadEmployeeDocument: vi.fn(),
   notifyEmployeeDocumentExpiry: vi.fn(),
   extractEmployeeDocument: vi.fn(),
+  deleteEmployeeDocument: vi.fn(),
 }));
 
 import EmployeeDocumentArchive from "./EmployeeDocumentArchive";
@@ -31,6 +32,22 @@ const extractEmployeeDocument =
   employeesApi.extractEmployeeDocument as unknown as ReturnType<typeof vi.fn>;
 const downloadEmployeeDocument =
   employeesApi.downloadEmployeeDocument as unknown as ReturnType<typeof vi.fn>;
+const deleteEmployeeDocument =
+  employeesApi.deleteEmployeeDocument as unknown as ReturnType<typeof vi.fn>;
+
+/** An axios-shaped rejection, matching what the shared API client re-throws. */
+function apiRejection(status: number, message: string) {
+  return Object.assign(new Error(message), {
+    message,
+    response: { status, data: { status: "error", message, errors: [message] } },
+  });
+}
+
+/** Opens the danger confirmation for the single rendered row. */
+async function openDeleteConfirmation() {
+  fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+  return await screen.findByRole("button", { name: "Delete permanently" });
+}
 
 let nextId = 1;
 
@@ -66,6 +83,7 @@ beforeEach(() => {
   uploadEmployeeDocument.mockReset();
   extractEmployeeDocument.mockReset();
   downloadEmployeeDocument.mockReset();
+  deleteEmployeeDocument.mockReset();
   getEmployeeDocuments.mockResolvedValue(documentsResponse([]));
   useI18nStore.getState().setLanguage("en");
 });
@@ -82,7 +100,7 @@ describe("EmployeeDocumentArchive OCR", () => {
       data: { ...failed, extraction_status: "pending", extraction_error: "" },
     });
 
-    render(<EmployeeDocumentArchive employeeId={7} />);
+    render(<EmployeeDocumentArchive employeeId={7} canManageDocuments />);
     fireEvent.click(
       await screen.findByRole("button", { name: "Run OCR extraction" }),
     );
@@ -90,6 +108,87 @@ describe("EmployeeDocumentArchive OCR", () => {
     await waitFor(() =>
       expect(extractEmployeeDocument).toHaveBeenCalledWith(7, failed.id),
     );
+  });
+});
+
+describe("EmployeeDocumentArchive document preview", () => {
+  beforeEach(() => {
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: vi.fn(() => "blob:employee-document-preview"),
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: vi.fn(),
+    });
+  });
+
+  it("does not fetch a document until Preview is explicitly clicked", async () => {
+    const doc = makeDocument({ original_filename: "passport.pdf" });
+    getEmployeeDocuments.mockResolvedValue(documentsResponse([doc]));
+    downloadEmployeeDocument.mockResolvedValue(
+      new Blob(["pdf"], { type: "application/pdf" }),
+    );
+
+    render(<EmployeeDocumentArchive employeeId={7} />);
+    await screen.findByTestId("document-type-1");
+
+    expect(downloadEmployeeDocument).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Preview document" }));
+
+    await waitFor(() =>
+      expect(downloadEmployeeDocument).toHaveBeenCalledWith(7, doc.id),
+    );
+    expect(await screen.findByTestId("document-preview-pdf")).toHaveAttribute(
+      "src",
+      "blob:employee-document-preview",
+    );
+  });
+
+  it("renders a fetched common image in the preview dialog", async () => {
+    const doc = makeDocument({ original_filename: "iqama.jpeg" });
+    getEmployeeDocuments.mockResolvedValue(documentsResponse([doc]));
+    downloadEmployeeDocument.mockResolvedValue(
+      new Blob(["image"], { type: "image/jpeg" }),
+    );
+
+    render(<EmployeeDocumentArchive employeeId={7} />);
+    await screen.findByTestId("document-type-1");
+    fireEvent.click(screen.getByRole("button", { name: "Preview document" }));
+
+    expect(await screen.findByTestId("document-preview-image")).toHaveAttribute(
+      "src",
+      "blob:employee-document-preview",
+    );
+  });
+
+  it("does not fetch unsupported file types and explains that preview is unavailable", async () => {
+    const doc = makeDocument({ original_filename: "passport.docx" });
+    getEmployeeDocuments.mockResolvedValue(documentsResponse([doc]));
+
+    render(<EmployeeDocumentArchive employeeId={7} />);
+    await screen.findByTestId("document-type-1");
+    fireEvent.click(screen.getByRole("button", { name: "Preview document" }));
+
+    expect(downloadEmployeeDocument).not.toHaveBeenCalled();
+    expect(
+      await screen.findByText(/This document type cannot be previewed/i),
+    ).toBeInTheDocument();
+  });
+
+  it("shows a localized preview failure without affecting download", async () => {
+    const doc = makeDocument({ original_filename: "passport.pdf" });
+    getEmployeeDocuments.mockResolvedValue(documentsResponse([doc]));
+    downloadEmployeeDocument.mockRejectedValue(new Error("network error"));
+
+    render(<EmployeeDocumentArchive employeeId={7} />);
+    await screen.findByTestId("document-type-1");
+    fireEvent.click(screen.getByRole("button", { name: "Preview document" }));
+
+    expect(
+      await screen.findByText("Could not load the document preview."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "download" })).toBeEnabled();
   });
 });
 
@@ -579,7 +678,7 @@ describe("EmployeeDocumentArchive metadata columns", () => {
     expect(headers(group("VISA"))).not.toContain("Passport Number");
   });
 
-  it("builds OTHER columns from its own extracted fields", async () => {
+  it("limits OTHER columns to approved business fields", async () => {
     getEmployeeDocuments.mockResolvedValue(
       documentsResponse([
         makeDocument({
@@ -589,6 +688,7 @@ describe("EmployeeDocumentArchive metadata columns", () => {
           extracted_fields: {
             full_name: "Example Employee",
             clinic_name: "City Clinic",
+            parser_debug: "internal OCR diagnostic",
             raw_text: "SCANNED PAGE",
           },
         }),
@@ -599,13 +699,16 @@ describe("EmployeeDocumentArchive metadata columns", () => {
     await screen.findByTestId("document-type-1");
 
     const other = group("OTHER");
-    expect(headers(other)).toEqual(
-      expect.arrayContaining(["Full Name", "Clinic Name"]),
-    );
+    expect(headers(other)).toContain("Full Name");
+    expect(headers(other)).not.toContain("Clinic Name");
+    expect(headers(other)).not.toContain("Parser Debug");
     for (const column of VISA_COLUMNS) {
       expect(headers(other)).not.toContain(column);
     }
-    expect(within(other).getByText("City Clinic")).toBeInTheDocument();
+    expect(within(other).queryByText("City Clinic")).not.toBeInTheDocument();
+    expect(
+      within(other).queryByText("internal OCR diagnostic"),
+    ).not.toBeInTheDocument();
     expect(within(other).queryByText("SCANNED PAGE")).not.toBeInTheDocument();
   });
 
@@ -778,7 +881,7 @@ describe("EmployeeDocumentArchive starting work acknowledgment", () => {
       documentsResponse([acknowledgment()]),
     );
 
-    render(<EmployeeDocumentArchive employeeId={7} />);
+    render(<EmployeeDocumentArchive employeeId={7} canManageDocuments />);
 
     expect(await screen.findByTestId("document-type-1")).toHaveTextContent(
       "Starting Work Acknowledgment",
@@ -793,7 +896,7 @@ describe("EmployeeDocumentArchive starting work acknowledgment", () => {
       new Blob(["pdf"], { type: "application/pdf" }),
     );
 
-    render(<EmployeeDocumentArchive employeeId={7} />);
+    render(<EmployeeDocumentArchive employeeId={7} canManageDocuments />);
     await screen.findByTestId("document-type-1");
 
     fireEvent.click(await screen.findByRole("button", { name: /download/i }));
@@ -808,7 +911,7 @@ describe("EmployeeDocumentArchive starting work acknowledgment", () => {
       documentsResponse([acknowledgment()]),
     );
 
-    render(<EmployeeDocumentArchive employeeId={7} />);
+    render(<EmployeeDocumentArchive employeeId={7} canManageDocuments />);
     await screen.findByTestId("document-type-1");
 
     expect(
@@ -822,7 +925,7 @@ describe("EmployeeDocumentArchive starting work acknowledgment", () => {
       documentsResponse([{ ...acknowledgment(), extraction_status: "failed" }]),
     );
 
-    render(<EmployeeDocumentArchive employeeId={7} />);
+    render(<EmployeeDocumentArchive employeeId={7} canManageDocuments />);
     await screen.findByTestId("document-type-1");
 
     expect(
@@ -835,7 +938,7 @@ describe("EmployeeDocumentArchive starting work acknowledgment", () => {
       documentsResponse([acknowledgment()]),
     );
 
-    render(<EmployeeDocumentArchive employeeId={7} />);
+    render(<EmployeeDocumentArchive employeeId={7} canManageDocuments />);
     await screen.findByTestId("document-type-1");
 
     expect(screen.getByText("Generated")).toBeInTheDocument();
@@ -847,7 +950,7 @@ describe("EmployeeDocumentArchive starting work acknowledgment", () => {
       documentsResponse([acknowledgment()]),
     );
 
-    render(<EmployeeDocumentArchive employeeId={7} />);
+    render(<EmployeeDocumentArchive employeeId={7} canManageDocuments />);
     await screen.findByTestId("document-type-1");
 
     // With the markers filtered out there is no metadata left, so the row is
@@ -873,9 +976,483 @@ describe("EmployeeDocumentArchive starting work acknowledgment", () => {
       ]),
     );
 
-    render(<EmployeeDocumentArchive employeeId={7} />);
+    render(<EmployeeDocumentArchive employeeId={7} canManageDocuments />);
 
     expect(await screen.findByText("2026-09-01 02:57")).toBeInTheDocument();
     expect(screen.queryByText(/2026-08-31T23:57/)).not.toBeInTheDocument();
+  });
+});
+
+describe("EmployeeDocumentArchive delete", () => {
+  const deletable = () =>
+    makeDocument({ original_filename: "passport-scan.pdf" });
+
+  const deleteSuccess = (doc: EmployeeDocument) => ({
+    status: "success" as const,
+    data: {
+      id: doc.id,
+      employee_profile_id: 7,
+      document_type: doc.document_type,
+      original_filename: doc.original_filename,
+      deleted: true,
+    },
+  });
+
+  it("names the file in a danger confirmation before deleting anything", async () => {
+    getEmployeeDocuments.mockResolvedValue(documentsResponse([deletable()]));
+
+    render(<EmployeeDocumentArchive employeeId={7} canManageDocuments />);
+    await screen.findByTestId("document-type-1");
+    await openDeleteConfirmation();
+
+    expect(
+      await screen.findByTestId("delete-target-filename"),
+    ).toHaveTextContent("passport-scan.pdf");
+    expect(deleteEmployeeDocument).not.toHaveBeenCalled();
+  });
+
+  it("does nothing when the confirmation is cancelled", async () => {
+    getEmployeeDocuments.mockResolvedValue(documentsResponse([deletable()]));
+
+    render(<EmployeeDocumentArchive employeeId={7} canManageDocuments />);
+    await screen.findByTestId("document-type-1");
+    await openDeleteConfirmation();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() =>
+      expect(
+        screen.queryByTestId("delete-target-filename"),
+      ).not.toBeInTheDocument(),
+    );
+    expect(deleteEmployeeDocument).not.toHaveBeenCalled();
+    expect(screen.getByTestId("document-type-1")).toBeInTheDocument();
+  });
+
+  it("removes the row and reports success on a 200", async () => {
+    const doc = deletable();
+    getEmployeeDocuments.mockResolvedValue(documentsResponse([doc]));
+    deleteEmployeeDocument.mockResolvedValue(deleteSuccess(doc));
+
+    render(<EmployeeDocumentArchive employeeId={7} canManageDocuments />);
+    await screen.findByTestId("document-type-1");
+    fireEvent.click(await openDeleteConfirmation());
+
+    await waitFor(() =>
+      expect(deleteEmployeeDocument).toHaveBeenCalledWith(7, doc.id),
+    );
+    await waitFor(() =>
+      expect(screen.queryByTestId("document-type-1")).not.toBeInTheDocument(),
+    );
+    expect(
+      await screen.findByText("Document deleted permanently."),
+    ).toBeInTheDocument();
+  });
+
+  it("disables the delete action while a deletion is in progress", async () => {
+    const doc = deletable();
+    getEmployeeDocuments.mockResolvedValue(documentsResponse([doc]));
+    let release: (value: unknown) => void = () => {};
+    deleteEmployeeDocument.mockReturnValue(
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+    );
+
+    render(<EmployeeDocumentArchive employeeId={7} canManageDocuments />);
+    await screen.findByTestId("document-type-1");
+    fireEvent.click(await openDeleteConfirmation());
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Delete" })).toBeDisabled(),
+    );
+
+    release(deleteSuccess(doc));
+    await waitFor(() =>
+      expect(screen.queryByTestId("document-type-1")).not.toBeInTheDocument(),
+    );
+  });
+
+  // 403 is covered by the capability suite: it is a permission refusal, not a
+  // statement about the document, so it does not belong in this fixed-message set.
+  it.each([
+    [404, "This document is no longer available in the active company."],
+    [
+      409,
+      "This document is already being deleted, or another record still protects it.",
+    ],
+  ])("keeps the row and explains a %s refusal", async (status, expected) => {
+    const doc = deletable();
+    getEmployeeDocuments.mockResolvedValue(documentsResponse([doc]));
+    deleteEmployeeDocument.mockRejectedValue(
+      apiRejection(status as number, "backend detail"),
+    );
+
+    render(<EmployeeDocumentArchive employeeId={7} canManageDocuments />);
+    await screen.findByTestId("document-type-1");
+    fireEvent.click(await openDeleteConfirmation());
+
+    expect(await screen.findByText(expected as string)).toBeInTheDocument();
+    expect(screen.getByTestId("document-type-1")).toBeInTheDocument();
+  });
+
+  it("re-fetches after a storage-failure 500, where the document may still exist", async () => {
+    const doc = deletable();
+    getEmployeeDocuments.mockResolvedValue(documentsResponse([doc]));
+    deleteEmployeeDocument.mockRejectedValue(
+      apiRejection(
+        500,
+        "The document file could not be deleted from storage. Nothing was removed; try again.",
+      ),
+    );
+
+    render(<EmployeeDocumentArchive employeeId={7} canManageDocuments />);
+    await screen.findByTestId("document-type-1");
+    const listCalls = getEmployeeDocuments.mock.calls.length;
+    fireEvent.click(await openDeleteConfirmation());
+
+    await waitFor(() =>
+      expect(getEmployeeDocuments.mock.calls.length).toBeGreaterThan(listCalls),
+    );
+    expect(
+      await screen.findByText(/could not be deleted from storage/i),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("document-type-1")).toBeInTheDocument();
+  });
+
+  it("re-fetches on a cleanup_pending 500 and never restores the hidden row", async () => {
+    const doc = deletable();
+    getEmployeeDocuments.mockResolvedValueOnce(documentsResponse([doc]));
+    // The record is hidden for reconciliation, so the refreshed list omits it.
+    getEmployeeDocuments.mockResolvedValue(documentsResponse([]));
+    deleteEmployeeDocument.mockRejectedValue(
+      apiRejection(
+        500,
+        "The document file was permanently removed, but the archive entry could not be cleared. It is hidden and will be cleaned up automatically.",
+      ),
+    );
+
+    render(<EmployeeDocumentArchive employeeId={7} canManageDocuments />);
+    await screen.findByTestId("document-type-1");
+    fireEvent.click(await openDeleteConfirmation());
+
+    await waitFor(() =>
+      expect(screen.queryByTestId("document-type-1")).not.toBeInTheDocument(),
+    );
+    expect(
+      await screen.findByText(/hidden and will be cleaned up automatically/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText("No documents uploaded yet.")).toBeInTheDocument();
+  });
+
+  it("offers no delete action for a system-generated document", async () => {
+    getEmployeeDocuments.mockResolvedValue(
+      documentsResponse([
+        makeDocument({
+          is_system_generated: true,
+          original_filename: "starting-work-acknowledgment.pdf",
+        }),
+      ]),
+    );
+
+    render(<EmployeeDocumentArchive employeeId={7} canManageDocuments />);
+    await screen.findByTestId("document-type-1");
+
+    expect(
+      screen.queryByRole("button", { name: "Delete" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Run OCR extraction" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers no delete action in readonly mode", async () => {
+    getEmployeeDocuments.mockResolvedValue(documentsResponse([deletable()]));
+
+    render(
+      <EmployeeDocumentArchive employeeId={7} readonly canManageDocuments />,
+    );
+    await screen.findByTestId("document-type-1");
+
+    expect(
+      screen.queryByRole("button", { name: "Delete" }),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe("EmployeeDocumentArchive OCR reliability signals", () => {
+  it("presents a partial result as concise HR guidance without technical diagnostics", async () => {
+    getEmployeeDocuments.mockResolvedValue(
+      documentsResponse([
+        makeDocument({
+          extraction_status: "partial",
+          extraction_confidence: 0.62,
+          extraction_attempts: 2,
+          extraction_completed_at: "2026-08-31T23:57:11.810314+00:00",
+          extraction_warnings: [
+            "No passport machine readable zone was detected.",
+            "Could not extract: Passport Number, Full Name.",
+          ],
+          extraction_error: "PaddleOCR MRZ parser returned no matches.",
+          extraction_metadata: {
+            engine: "paddleocr",
+            engine_version: "2.10.0",
+            languages: ["en", "ar"],
+            min_confidence: 0.6,
+            line_count: 18,
+            duration_ms: 18284,
+            field_confidence: { passport_number: 0.4 },
+          },
+          extracted_fields: {
+            passport_number: "P1234567",
+            parser_debug: "INTERNAL ONLY",
+          },
+        }),
+      ]),
+    );
+
+    render(<EmployeeDocumentArchive employeeId={7} canManageDocuments />);
+    await screen.findByTestId("document-type-1");
+    await expandFirstRow();
+
+    expect(
+      await screen.findByTestId("verification-required-1"),
+    ).toHaveTextContent(/Compare every suggested value/i);
+    expect(screen.getByText("Suggested metadata (OCR)")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Nothing here is approved employee data/i),
+    ).toBeInTheDocument();
+    const fields = screen.getByTestId("extracted-fields-1");
+    expect(within(fields).getByText("Passport Number:")).toBeInTheDocument();
+    expect(within(fields).getByText("P1234567")).toBeInTheDocument();
+
+    const status = screen.getByTestId("extraction-status-1");
+    expect(within(status).getByText("Needs review")).toBeInTheDocument();
+    expect(within(status).getByText("62%")).toBeInTheDocument();
+    expect(within(status).getByText("2026-09-01 02:57")).toBeInTheDocument();
+    for (const technicalText of [
+      "2",
+      "paddleocr",
+      "2.10.0",
+      "en, ar",
+      "0.6",
+      "18",
+      "18284",
+      "No passport machine readable zone was detected.",
+      "Could not extract: Passport Number, Full Name.",
+      "PaddleOCR MRZ parser returned no matches.",
+      "INTERNAL ONLY",
+    ]) {
+      expect(screen.queryByText(technicalText)).not.toBeInTheDocument();
+    }
+  });
+
+  it("uses localized decision labels and guidance for a failed extraction", async () => {
+    useI18nStore.getState().setLanguage("ar");
+    getEmployeeDocuments.mockResolvedValue(
+      documentsResponse([
+        makeDocument({
+          extraction_status: "failed",
+          extraction_error: "PaddleOCR internal failure",
+          extraction_warnings: ["MRZ parser did not find a line."],
+        }),
+      ]),
+    );
+
+    render(<EmployeeDocumentArchive employeeId={7} canManageDocuments />);
+    await screen.findByTestId("document-type-1");
+    await expandFirstRow();
+
+    const status = screen.getByTestId("extraction-status-1");
+    expect(within(status).getByText("فشل")).toBeInTheDocument();
+    expect(
+      screen.getByText(/تعذر على OCR قراءة هذا المستند/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("PaddleOCR internal failure"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("MRZ parser did not find a line."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("never renders raw OCR text, whatever key carries it", async () => {
+    getEmployeeDocuments.mockResolvedValue(
+      documentsResponse([
+        makeDocument({
+          extraction_status: "partial",
+          extraction_confidence: 0.5,
+          extracted_fields: {
+            passport_number: "P1234567",
+            raw_text: "SECRET RAW SCAN LINE",
+            ocr_text: "SECRET RAW SCAN LINE",
+            passport_number_raw: "SECRET RAW SCAN LINE",
+          },
+          extraction_metadata: {
+            engine: "paddleocr",
+            raw_text: "SECRET RAW SCAN LINE",
+            field_confidence: { passport_number: 0.5 },
+          },
+        }),
+      ]),
+    );
+
+    render(<EmployeeDocumentArchive employeeId={7} canManageDocuments />);
+    await screen.findByTestId("document-type-1");
+    await expandFirstRow();
+
+    const panel = await screen.findByTestId("extracted-fields-1");
+    expect(within(panel).getByText("P1234567")).toBeInTheDocument();
+    expect(screen.queryByText(/SECRET RAW SCAN LINE/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/field_confidence/i)).not.toBeInTheDocument();
+  });
+
+  it("keeps polling a pending extraction past the former 60-second stop", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      // A fresh array per call, as the real client returns: the archive keeps a
+      // new list in state each poll, which is what re-arms the next tick.
+      const pending = makeDocument({
+        extraction_status: "pending",
+        extraction_attempts: 1,
+      });
+      getEmployeeDocuments.mockImplementation(async () =>
+        documentsResponse([{ ...pending }]),
+      );
+
+      render(<EmployeeDocumentArchive employeeId={7} canManageDocuments />);
+      await screen.findByTestId("document-type-1");
+
+      // Well past the old 24-attempt / 60-second cap, which stopped silently.
+      for (let i = 0; i < 60; i += 1) {
+        await vi.advanceTimersByTimeAsync(2500);
+      }
+
+      expect(getEmployeeDocuments.mock.calls.length).toBeGreaterThan(25);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("stops polling once the extraction reaches a terminal status", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      getEmployeeDocuments.mockResolvedValue(
+        documentsResponse([makeDocument({ extraction_status: "success" })]),
+      );
+
+      render(<EmployeeDocumentArchive employeeId={7} canManageDocuments />);
+      await screen.findByTestId("document-type-1");
+      const settled = getEmployeeDocuments.mock.calls.length;
+
+      for (let i = 0; i < 5; i += 1) {
+        await vi.advanceTimersByTimeAsync(2500);
+      }
+
+      expect(getEmployeeDocuments.mock.calls.length).toBe(settled);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("EmployeeDocumentArchive document management capability", () => {
+  const userUploaded = () =>
+    makeDocument({
+      extraction_status: "failed",
+      original_filename: "passport-scan.pdf",
+    });
+
+  it("offers no delete and no OCR retry when the capability is absent", async () => {
+    // What an ordinary employee sees on their own profile: the archive is
+    // writable for uploads, but carries no management controls.
+    getEmployeeDocuments.mockResolvedValue(documentsResponse([userUploaded()]));
+
+    render(<EmployeeDocumentArchive employeeId={7} readonly={false} />);
+    await screen.findByTestId("document-type-1");
+
+    expect(
+      screen.queryByRole("button", { name: "Delete" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Run OCR extraction" }),
+    ).not.toBeInTheDocument();
+    // Reading the archive is still allowed.
+    expect(
+      screen.getByRole("button", { name: /download/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("offers delete and OCR retry for a user-uploaded document when the capability is granted", async () => {
+    getEmployeeDocuments.mockResolvedValue(documentsResponse([userUploaded()]));
+
+    render(<EmployeeDocumentArchive employeeId={7} canManageDocuments />);
+    await screen.findByTestId("document-type-1");
+
+    expect(
+      await screen.findByRole("button", { name: "Delete" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Run OCR extraction" }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps a system-generated document undeletable even with the capability", async () => {
+    getEmployeeDocuments.mockResolvedValue(
+      documentsResponse([
+        makeDocument({
+          is_system_generated: true,
+          extraction_status: "failed",
+          original_filename: "starting-work-acknowledgment.pdf",
+        }),
+      ]),
+    );
+
+    render(<EmployeeDocumentArchive employeeId={7} canManageDocuments />);
+    await screen.findByTestId("document-type-1");
+
+    expect(
+      screen.queryByRole("button", { name: "Delete" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Run OCR extraction" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("reports a generic 403 as a permission problem, not as a system-generated document", async () => {
+    const doc = userUploaded();
+    getEmployeeDocuments.mockResolvedValue(documentsResponse([doc]));
+    // The backend returns a bare "Forbidden." for a role or company-scope refusal.
+    deleteEmployeeDocument.mockRejectedValue(apiRejection(403, "Forbidden."));
+
+    render(<EmployeeDocumentArchive employeeId={7} canManageDocuments />);
+    await screen.findByTestId("document-type-1");
+    fireEvent.click(await openDeleteConfirmation());
+
+    expect(await screen.findByText("Forbidden.")).toBeInTheDocument();
+    expect(
+      screen.queryByText(/System-generated documents cannot be deleted/i),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("document-type-1")).toBeInTheDocument();
+  });
+
+  it("falls back to a permission message when a 403 carries no detail", async () => {
+    const doc = userUploaded();
+    getEmployeeDocuments.mockResolvedValue(documentsResponse([doc]));
+    const bare = Object.assign(new Error(""), {
+      message: "",
+      response: { status: 403, data: {} },
+    });
+    deleteEmployeeDocument.mockRejectedValue(bare);
+
+    render(<EmployeeDocumentArchive employeeId={7} canManageDocuments />);
+    await screen.findByTestId("document-type-1");
+    fireEvent.click(await openDeleteConfirmation());
+
+    expect(
+      await screen.findByText(
+        "You do not have permission to delete this document.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("document-type-1")).toBeInTheDocument();
   });
 });

@@ -1,27 +1,227 @@
 {
-  "reference_no": { "x": 92, "y": 737, "width": 151, "height": 19, "font_size": 8 },
-  "document_date": { "x": 390, "y": 737, "width": 132, "height": 19, "font_size": 8 },
-  "addressed_to": { "x": 110, "y": 616, "width": 370, "height": 19, "font_size": 8 },
-  "employee_name": { "x": 110, "y": 593, "width": 370, "height": 19, "font_size": 8 },
-  "employee_no": { "x": 110, "y": 570, "width": 370, "height": 19, "font_size": 8 },
-  "job_title": { "x": 110, "y": 547, "width": 370, "height": 19, "font_size": 8 },
-  "id_no": { "x": 110, "y": 524, "width": 370, "height": 19, "font_size": 8 },
-  "department": { "x": 110, "y": 501, "width": 370, "height": 19, "font_size": 8 },
-  "direct_superior": { "x": 110, "y": 478, "width": 370, "height": 19, "font_size": 8 },
-  "direct_superior_signature": { "x": 189, "y": 445, "width": 216, "height": 19, "font_size": 8 },
-  "work_start_status": { "checkboxes": { "started": [265, 317], "not_started": [385, 317] } },
-  "start_department": { "x": 107, "y": 266, "width": 111, "height": 19, "font_size": 8 },
-  "start_day": { "x": 326, "y": 269, "width": 42, "height": 14, "font_size": 8 },
-  "start_month": { "x": 419, "y": 269, "width": 42, "height": 14, "font_size": 8 },
-  "start_year": { "x": 511, "y": 269, "width": 47, "height": 14, "font_size": 8 },
-  "general_manager_name": { "x": 23, "y": 188, "width": 128, "height": 16, "font_size": 7 },
-  "general_manager_date": { "x": 157, "y": 188, "width": 116, "height": 16, "font_size": 7 },
-  "general_manager_signature": { "x": 23, "y": 154, "width": 251, "height": 19, "font_size": 7 },
-  "details_approver_name": { "x": 312, "y": 188, "width": 128, "height": 16, "font_size": 7 },
-  "details_approver_date": { "x": 446, "y": 188, "width": 116, "height": 16, "font_size": 7 },
-  "details_approver_signature": { "x": 312, "y": 154, "width": 251, "height": 19, "font_size": 7 },
-  "not_started_reason": { "x": 23, "y": 63, "width": 539, "height": 19, "font_size": 7, "multiline": true, "max_lines": 2 },
-  "not_started_name": { "x": 23, "y": 36, "width": 160, "height": 16, "font_size": 7 },
-  "not_started_signature": { "x": 202, "y": 36, "width": 160, "height": 16, "font_size": 7 },
-  "not_started_date": { "x": 381, "y": 36, "width": 160, "height": 16, "font_size": 7 }
+  "reference_no": {
+    "page": 1,
+    "x": 89,
+    "y": 737.89,
+    "width": 78,
+    "height": 18,
+    "font_size": 8
+  },
+  "document_date": {
+    "page": 1,
+    "x": 390,
+    "y": 737.89,
+    "width": 120,
+    "height": 18,
+    "font_size": 7.4
+  },
+  "addressed_to": {
+    "page": 1,
+    "x": 113,
+    "y": 622.89,
+    "width": 397,
+    "height": 17,
+    "font_size": 7.5,
+    "shrink": true
+  },
+  "employee_name": {
+    "page": 1,
+    "x": 113,
+    "y": 599.89,
+    "width": 397,
+    "height": 17,
+    "font_size": 7.5,
+    "shrink": true
+  },
+  "employee_no": {
+    "page": 1,
+    "x": 113,
+    "y": 576.89,
+    "width": 397,
+    "height": 17,
+    "font_size": 7.5,
+    "shrink": true
+  },
+  "job_title": {
+    "page": 1,
+    "x": 113,
+    "y": 553.89,
+    "width": 397,
+    "height": 17,
+    "font_size": 7.5,
+    "shrink": true
+  },
+  "id_no": {
+    "page": 1,
+    "x": 113,
+    "y": 530.89,
+    "width": 397,
+    "height": 17,
+    "font_size": 7.5,
+    "shrink": true
+  },
+  "department": {
+    "page": 1,
+    "x": 113,
+    "y": 507.89,
+    "width": 397,
+    "height": 17,
+    "font_size": 7.5,
+    "shrink": true
+  },
+  "direct_superior": {
+    "page": 1,
+    "x": 113,
+    "y": 484.89,
+    "width": 397,
+    "height": 17,
+    "font_size": 7.5,
+    "shrink": true
+  },
+  "direct_superior_signature": {
+    "page": 1,
+    "x": 25,
+    "y": 405.89,
+    "width": 539,
+    "height": 35,
+    "kind": "image",
+    "padding": 3,
+    "source": "starting_work.signers.direct_superior.signature"
+  },
+  "work_start_status": {
+    "page": 1,
+    "checkboxes": {
+      "started": [
+        267,
+        285.8897637795277
+      ],
+      "not_started": [
+        389,
+        285.8897637795277
+      ]
+    }
+  },
+  "start_department": {
+    "page": 1,
+    "x": 110,
+    "y": 240.89,
+    "width": 108,
+    "height": 19,
+    "font_size": 7.2,
+    "shrink": true
+  },
+  "start_day": {
+    "page": 1,
+    "x": 339,
+    "y": 243.89,
+    "width": 38,
+    "height": 13,
+    "font_size": 7
+  },
+  "start_month": {
+    "page": 1,
+    "x": 436,
+    "y": 243.89,
+    "width": 38,
+    "height": 13,
+    "font_size": 7
+  },
+  "start_year": {
+    "page": 1,
+    "x": 533,
+    "y": 243.89,
+    "width": 39,
+    "height": 13,
+    "font_size": 7
+  },
+  "general_manager_signature_image": {
+    "page": 1,
+    "x": 25,
+    "y": 139.89,
+    "width": 254,
+    "height": 38,
+    "kind": "image",
+    "padding": 3,
+    "source": "starting_work.signers.general_manager.signature"
+  },
+  "details_approver_signature_image": {
+    "page": 1,
+    "x": 316,
+    "y": 139.89,
+    "width": 254,
+    "height": 38,
+    "kind": "image",
+    "padding": 3,
+    "source": "starting_work.signers.details_approver.signature"
+  },
+  "general_manager_name": {
+    "page": 1,
+    "x": 25,
+    "y": 157.89,
+    "width": 120,
+    "height": 18,
+    "font_size": 7,
+    "shrink": true
+  },
+  "general_manager_date": {
+    "page": 1,
+    "x": 160,
+    "y": 157.89,
+    "width": 110,
+    "height": 18,
+    "font_size": 7
+  },
+  "details_approver_name": {
+    "page": 1,
+    "x": 316,
+    "y": 157.89,
+    "width": 120,
+    "height": 18,
+    "font_size": 7,
+    "shrink": true
+  },
+  "details_approver_date": {
+    "page": 1,
+    "x": 451,
+    "y": 157.89,
+    "width": 110,
+    "height": 18,
+    "font_size": 7
+  },
+  "not_started_reason": {
+    "page": 1,
+    "x": 25,
+    "y": 40.89,
+    "width": 539,
+    "height": 19,
+    "font_size": 6.8,
+    "multiline": true,
+    "max_lines": 2
+  },
+  "not_started_name": {
+    "page": 1,
+    "x": 25,
+    "y": 8.89,
+    "width": 160,
+    "height": 14,
+    "font_size": 7
+  },
+  "not_started_signature": {
+    "page": 1,
+    "x": 205,
+    "y": 8.89,
+    "width": 160,
+    "height": 14,
+    "kind": "image",
+    "padding": 2,
+    "source": "starting_work.not_started.signature"
+  },
+  "not_started_date": {
+    "page": 1,
+    "x": 385,
+    "y": 8.89,
+    "width": 160,
+    "height": 14,
+    "font_size": 7
+  }
 }

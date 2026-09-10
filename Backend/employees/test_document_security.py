@@ -255,7 +255,7 @@ class EmployeeDocumentSecurityTests(TestCase):
                 document.refresh_from_db()
                 self.assertEqual(document.extracted_fields, extracted_fields)
 
-    @patch("employees.views.extract_employee_document.apply_async")
+    @patch("employees.tasks.extract_employee_document.apply_async")
     def test_hr_can_retry_ocr_for_an_existing_document(self, apply_async):
         document = self._document()
         document.extraction_status = EmployeeDocument.ExtractionStatus.FAILED

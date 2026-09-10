@@ -102,15 +102,28 @@ class TenantScopeContractTests(APITestCase):
 
         listing = self.client.get("/api/employees/?page_size=1&search=SCOPE-EMP-A", **self._scope_headers())
         detail = self.client.get(f"/api/employees/{profile.id}/", **self._scope_headers())
-        out_of_scope = self.client.get(f"/api/employees/{self.employee_c.employee_profile.id}/", **self._scope_headers())
+        out_of_scope = self.client.get(
+            f"/api/employees/{self.employee_c.employee_profile.id}/", **self._scope_headers()
+        )
 
         self.assertEqual(listing.status_code, status.HTTP_200_OK, listing.data)
         self.assertEqual(listing.data["data"]["count"], 1)
         self.assertEqual(detail.status_code, status.HTTP_200_OK, detail.data)
         self.assertEqual(out_of_scope.status_code, status.HTTP_404_NOT_FOUND)
         forbidden_fields = {
-            "email", "mobile", "passport", "passport_no", "national_id", "health_card", "basic_salary",
-            "total_salary", "leave_balances", "leave_balance_year", "created_at", "updated_at", "archived_at",
+            "email",
+            "mobile",
+            "passport",
+            "passport_no",
+            "national_id",
+            "health_card",
+            "basic_salary",
+            "total_salary",
+            "leave_balances",
+            "leave_balance_year",
+            "created_at",
+            "updated_at",
+            "archived_at",
         }
         returned = detail.data["data"]
         self.assertFalse(forbidden_fields & set(returned), returned)
@@ -284,9 +297,7 @@ class TenantScopeContractTests(APITestCase):
                 scope=self.other_scope
             )
 
-        self.assertTrue(
-            OrganizationScopeMembership.objects.filter(scope=self.scope, company=self.company_b).exists()
-        )
+        self.assertTrue(OrganizationScopeMembership.objects.filter(scope=self.scope, company=self.company_b).exists())
         self.assertFalse(
             OrganizationScopeMembership.objects.filter(scope=self.other_scope, company=self.company_b).exists()
         )
@@ -340,7 +351,9 @@ class TenantScopeContractTests(APITestCase):
         # The trigger revokes it today. Mocking the pre-filter models an old row
         # that existed before lifecycle triggers were deployed; the resolver must
         # still reject that row itself.
-        with patch("core.delegation._active_delegation_queryset", return_value=DelegationRule.objects.filter(pk=grant.pk)):
+        with patch(
+            "core.delegation._active_delegation_queryset", return_value=DelegationRule.objects.filter(pk=grant.pk)
+        ):
             self.assertEqual(get_active_employee_read_scope_ids(self.delegate), set())
 
     def test_delegation_lifecycle_revokes_archived_disabled_moved_and_unlinked_profiles(self):
@@ -395,7 +408,9 @@ class TenantScopeContractTests(APITestCase):
             end_at=timezone.now() + timedelta(hours=1),
             created_by=self.hr,
         )
-        leave_type = LeaveType.objects.create(company=self.company_a, code="SCOPE-LV", name="Scope leave", annual_quota=21)
+        leave_type = LeaveType.objects.create(
+            company=self.company_a, code="SCOPE-LV", name="Scope leave", annual_quota=21
+        )
         leave = LeaveRequest.objects.create(
             employee=self.employee_a,
             employee_profile=self.employee_a.employee_profile,
@@ -416,12 +431,34 @@ class TenantScopeContractTests(APITestCase):
         detail_response = self.client.get(
             f"/api/employees/{self.employee_a.employee_profile.id}/", **self._scope_headers()
         )
-        expired_approval = self.client.post(f"/api/leaves/manager/leave-requests/{leave.id}/approve/", {}, format="json")
+        expired_approval = self.client.post(
+            f"/api/leaves/manager/leave-requests/{leave.id}/approve/", {}, format="json"
+        )
         self.assertEqual(list_response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(detail_response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(expired_approval.status_code, status.HTTP_404_NOT_FOUND)
 
+    def test_hr_cannot_assign_a_manager_from_a_company_outside_their_access(self):
+        self.client.force_authenticate(user=self.hr)
+        response = self.client.post(
+            "/api/core/cross-company-manager-assignments/",
+            {
+                "employee_id": self.employee_a.employee_profile.id,
+                "manager_profile_id": self.employee_b.employee_profile.id,
+                "scope_id": self.scope.id,
+                "start_at": (timezone.now() - timedelta(minutes=1)).isoformat(),
+                "end_at": (timezone.now() + timedelta(hours=1)).isoformat(),
+            },
+            format="json",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company_a.id),
+        )
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(CrossCompanyManagerAssignment.objects.count(), 0)
+
     def test_hr_can_create_cross_company_manager_assignment_without_changing_direct_manager(self):
+        # Grant authority over both companies in the requested scope; scope
+        # membership alone must never confer HR access to another tenant.
+        UserOrganizationAccess.objects.create(user=self.hr, organization=self.company_b)
         self.client.force_authenticate(user=self.hr)
         create = self.client.post(
             "/api/core/cross-company-manager-assignments/",

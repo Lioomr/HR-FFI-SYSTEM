@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { assertCompanySelectorsMatchActive } from "./apiClient";
+import {
+  assertCompanySelectorsMatchActive,
+  getLoginRedirectPath,
+} from "./apiClient";
 
 describe("assertCompanySelectorsMatchActive", () => {
   it("allows an omitted selector or a selector matching the active header", () => {
@@ -46,5 +49,17 @@ describe("assertCompanySelectorsMatchActive", () => {
         4,
       ),
     ).toThrow();
+  });
+});
+
+describe("getLoginRedirectPath", () => {
+  it("preserves an internal destination when authentication expires", () => {
+    expect(
+      getLoginRedirectPath("/hr/employees", "?status=active", "#table"),
+    ).toBe("/login?next=%2Fhr%2Femployees%3Fstatus%3Dactive%23table");
+  });
+
+  it("does not create a login-to-login redirect loop", () => {
+    expect(getLoginRedirectPath("/login", "?next=%2Fhr", "")).toBe("/login");
   });
 });

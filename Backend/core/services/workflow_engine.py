@@ -1205,8 +1205,11 @@ def _legacy_status_snapshot_for_contract_decision(instance):
     from employees.models import ContractDecision
 
     terminal_at = None
-    if instance.status in {ContractDecision.Status.APPROVED, ContractDecision.Status.AUTO_APPROVED,
-                            ContractDecision.Status.AUTO_RENEWED}:
+    if instance.status in {
+        ContractDecision.Status.APPROVED,
+        ContractDecision.Status.AUTO_APPROVED,
+        ContractDecision.Status.AUTO_RENEWED,
+    }:
         status = WorkflowInstance.Status.APPROVED
         terminal_at = instance.finalized_at or instance.updated_at
         current_stage = current_role = ""
@@ -1227,7 +1230,9 @@ def _legacy_status_snapshot_for_contract_decision(instance):
         "current_actor_user": None,
         "submitted_by": instance.requested_by,
         "submitted_at": instance.submitted_at or instance.created_at,
-        "decided_at": terminal_at if status in {WorkflowInstance.Status.APPROVED, WorkflowInstance.Status.REJECTED} else None,
+        "decided_at": terminal_at
+        if status in {WorkflowInstance.Status.APPROVED, WorkflowInstance.Status.REJECTED}
+        else None,
         "cancelled_at": None,
     }
 
@@ -1309,6 +1314,12 @@ def _legacy_events_for_contract_decision(instance) -> list[WorkflowEvent]:
                 metadata={"legacy_signature": "auto-renewed", "workflow_key": "contract_decision"},
             )
         )
+    # Each submission/decision is an immutable attempt, even after HR resubmits
+    # the same domain record. Preserve the kind for compatibility with rows
+    # written by the old fixed-signature adapter.
+    for event in events:
+        event.metadata["legacy_kind"] = event.metadata["legacy_signature"]
+        event.metadata["legacy_signature"] = event.signature
     return events
 
 
@@ -1466,6 +1477,12 @@ def sync_workflow(instance, *, actor=None, workflow_key: str | None = None) -> W
         signature_key = (event.metadata or {}).get("legacy_signature")
         if signature_key in existing_signatures:
             continue
+        if workflow_key == "contract_decision":
+            legacy_action = existing_signatures.get((event.metadata or {}).get("legacy_kind"))
+            if legacy_action and legacy_action.created_at == event.at:
+                # Recognize an already recorded legacy event without rewriting
+                # its history or suppressing a later attempt of the same kind.
+                continue
         created = WorkflowAction.objects.create(
             workflow=workflow,
             action=event.action,

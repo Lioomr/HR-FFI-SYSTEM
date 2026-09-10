@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useCallback, useEffect, useMemo } from "react";
 import {
   Table,
   Button,
@@ -7,17 +7,18 @@ import {
   Row,
   Col,
   Typography,
+  Space,
   Tag,
   message,
+  Alert,
 } from "antd";
-import {
-  CheckCircleOutlined,
-  ClockCircleOutlined,
-  ReloadOutlined,
-} from "@ant-design/icons";
+import { ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useEmployeeAttendanceStore } from "../../stores/attendanceStore";
-import type { AttendanceStatus } from "../../types/attendance";
+import type {
+  AttendanceRecord,
+  AttendanceStatus,
+} from "../../types/attendance";
 import { useI18n } from "../../i18n/useI18n";
 import { formatDateOnly, formatTimeOnly12 } from "../../utils/dateTime";
 
@@ -47,15 +48,8 @@ const getStatusColor = (status: AttendanceStatus) => {
 
 const EmployeeAttendancePage: React.FC = () => {
   const { t } = useI18n();
-  const {
-    records,
-    total,
-    loading,
-    error,
-    fetchMyRecords,
-    performCheckIn,
-    performCheckOut,
-  } = useEmployeeAttendanceStore();
+  const { records, total, loading, error, fetchMyRecords, accessUnavailable } =
+    useEmployeeAttendanceStore();
 
   const [dateRange, setDateRange] = React.useState<[dayjs.Dayjs, dayjs.Dayjs]>([
     dayjs().subtract(30, "day"),
@@ -67,52 +61,29 @@ const EmployeeAttendancePage: React.FC = () => {
     pageSize: 25,
   });
 
-  const fetchData = () => {
-    fetchMyRecords({
+  const currentFilters = useMemo(
+    () => ({
       date_from: dateRange[0].format("YYYY-MM-DD"),
       date_to: dateRange[1].format("YYYY-MM-DD"),
       page: pagination.current,
       page_size: pagination.pageSize,
-    });
-  };
+    }),
+    [dateRange, pagination],
+  );
+
+  const fetchData = useCallback(() => {
+    fetchMyRecords(currentFilters);
+  }, [fetchMyRecords, currentFilters]);
 
   useEffect(() => {
     fetchData();
-  }, [dateRange, pagination]);
+  }, [fetchData]);
 
   useEffect(() => {
     if (error) {
       message.error(error);
     }
   }, [error]);
-
-  const handleCheckIn = async () => {
-    try {
-      await performCheckIn();
-      message.success(t("attendance.checkedIn"));
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    } catch (_e) {
-      // Store handles error state
-    }
-  };
-
-  const handleCheckOut = async () => {
-    try {
-      await performCheckOut();
-      message.success(t("attendance.checkedOut"));
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    } catch (_e) {
-      // Handled
-    }
-  };
-
-  // Determine today's status for button states
-  const todayStr = dayjs().format("YYYY-MM-DD");
-  const todayRecord = records.find((r) => r.date === todayStr);
-
-  const isCheckInDisabled = !!todayRecord?.check_in_at;
-  const isCheckOutDisabled =
-    !todayRecord || !todayRecord.check_in_at || !!todayRecord.check_out_at;
 
   const columns = [
     {
@@ -126,9 +97,20 @@ const EmployeeAttendancePage: React.FC = () => {
       title: t("common.status"),
       dataIndex: "status",
       key: "status",
-      width: 110,
-      render: (status: AttendanceStatus) => (
-        <Tag color={getStatusColor(status)}>{status}</Tag>
+      width: 160,
+      render: (status: AttendanceStatus, record: AttendanceRecord) => (
+        <Space size={4} wrap>
+          <Tag color={getStatusColor(status)} style={{ marginInlineEnd: 0 }}>
+            {status}
+          </Tag>
+          {/* `is_late_flagged` is the stable "was late" signal for a row still
+              awaiting approval, where `status` only says PENDING_*. */}
+          {record.is_late_flagged && status.startsWith("PENDING") ? (
+            <Tag color="gold" style={{ marginInlineEnd: 0 }}>
+              {t("attendancePreview.lateArrivalTag")}
+            </Tag>
+          ) : null}
+        </Space>
       ),
     },
     {
@@ -189,72 +171,50 @@ const EmployeeAttendancePage: React.FC = () => {
         </Col>
       </Row>
 
-      <Card style={{ marginBottom: 16 }}>
-        <Row justify="space-between" align="middle" gutter={[16, 16]}>
-          <Col xs={24} md={12}>
-            <RangePicker
-              style={{ width: "100%" }}
-              value={dateRange}
-              onChange={(dates) => {
-                if (dates && dates[0] && dates[1]) {
-                  setDateRange([dates[0], dates[1]]);
-                }
-              }}
-            />
-          </Col>
-          <Col
-            xs={24}
-            md={12}
-            style={{
-              textAlign: "right",
-              display: "flex",
-              justifyContent: "flex-end",
-              gap: 8,
-            }}
-          >
-            <Button
-              type="primary"
-              icon={<ClockCircleOutlined />}
-              style={{
-                backgroundColor: isCheckInDisabled ? undefined : "#52c41a",
-                flex: 1,
-              }}
-              disabled={isCheckInDisabled}
-              loading={loading}
-              onClick={handleCheckIn}
-            >
-              {t("attendance.checkIn")}
-            </Button>
-            <Button
-              danger
-              type="primary"
-              icon={<CheckCircleOutlined />}
-              style={{ flex: 1 }}
-              disabled={isCheckOutDisabled}
-              loading={loading}
-              onClick={handleCheckOut}
-            >
-              {t("attendance.checkOut")}
-            </Button>
-          </Col>
-        </Row>
-      </Card>
-
-      <Table
-        dataSource={records}
-        columns={columns}
-        rowKey="id"
-        loading={loading}
-        size="small"
-        scroll={{ x: "max-content" }}
-        pagination={{
-          current: pagination.current,
-          pageSize: pagination.pageSize,
-          total: total,
-          onChange: (page, pageSize) =>
-            setPagination({ current: page, pageSize }),
-        }}
+      <Alert
+        type="info"
+        showIcon
+        title={t("attendance.biotimeNotice")}
+        style={{ marginBottom: 16 }}
       />
+      {accessUnavailable ? (
+        <Alert type="info" showIcon title={t("attendance.unmapped")} />
+      ) : (
+        <>
+          <Card style={{ marginBottom: 16 }}>
+            <Row justify="space-between" align="middle" gutter={[16, 16]}>
+              <Col xs={24} md={12}>
+                <RangePicker
+                  style={{ width: "100%" }}
+                  value={dateRange}
+                  onChange={(dates) => {
+                    if (dates && dates[0] && dates[1]) {
+                      setDateRange([dates[0], dates[1]]);
+                      setPagination((current) => ({ ...current, current: 1 }));
+                    }
+                  }}
+                />
+              </Col>
+            </Row>
+          </Card>
+
+          <Table
+            dataSource={records}
+            columns={columns}
+            rowKey="id"
+            loading={loading}
+            size="small"
+            scroll={{ x: "max-content" }}
+            pagination={{
+              current: pagination.current,
+              pageSize: pagination.pageSize,
+              total: total,
+              onChange: (page, pageSize) =>
+                setPagination({ current: page, pageSize }),
+            }}
+          />
+        </>
+      )}
     </div>
   );
 };

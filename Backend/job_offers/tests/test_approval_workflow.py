@@ -80,7 +80,7 @@ class JobOfferApprovalWorkflowTests(APITestCase):
         )
         self.headers = {"HTTP_X_ACTIVE_COMPANY_ID": str(self.company.id)}
         self.email_patcher = patch(
-            "job_offers.notifications.EmailService.send_html_email",
+            "job_offers.notifications.send_generic_notification_email",
             return_value={"success": True, "provider": "bird", "status_code": 202},
         )
         self.email_patcher.start()

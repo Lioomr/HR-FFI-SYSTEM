@@ -14,6 +14,7 @@ import {
 } from "antd";
 import { DownloadOutlined, EyeOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
+import { Link } from "react-router-dom";
 
 import ApprovalActions from "../../components/ceo/ApprovalActions";
 import ApprovalQueuePage from "../../components/ceo/ApprovalQueuePage";
@@ -221,9 +222,22 @@ export default function CEOLeaveInboxPage() {
       key: "employee",
       render: (_, record) => (
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 600, color: "#0f172a" }}>
-            {employeeName(record)}
-          </div>
+          {record.employee_profile ? (
+            <Link
+              to={`/manager/team/${record.employee_profile}`}
+              style={{
+                color: "#f97316",
+                fontWeight: 600,
+                textDecoration: "none",
+              }}
+            >
+              {employeeName(record)}
+            </Link>
+          ) : (
+            <div style={{ fontWeight: 600, color: "#0f172a" }}>
+              {employeeName(record)}
+            </div>
+          )}
           <div style={{ fontSize: 12, color: "#64748b" }}>#{record.id}</div>
         </div>
       ),

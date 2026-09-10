@@ -2,10 +2,13 @@ import { useI18n } from "../i18n/useI18n";
 import { Button } from "antd";
 import { ApartmentOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
+import { useAuthStore } from "../auth/authStore";
+import { getHomePath } from "../routes/homeRoute";
 
 export default function NotFound404Page() {
   const { t, direction } = useI18n();
   const navigate = useNavigate();
+  const user = useAuthStore((state) => state.user);
 
   return (
     <div
@@ -130,7 +133,7 @@ export default function NotFound404Page() {
         <Button
           type="primary"
           size="large"
-          onClick={() => navigate("/")}
+          onClick={() => navigate(getHomePath(user?.role))}
           style={{
             height: 48,
             borderRadius: 12,

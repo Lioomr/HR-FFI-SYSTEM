@@ -179,7 +179,11 @@ class AccountTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         token = AccessToken(response.data["data"]["token"])
         lifetime_seconds = int(token["exp"] - token["iat"])
-        self.assertEqual(lifetime_seconds, 15 * 60)
+        # JWT timestamps have one-second precision. Token construction can
+        # straddle a second boundary, but the configured 15-minute cap must
+        # never be exceeded or drift toward the 45-minute session timeout.
+        self.assertGreaterEqual(lifetime_seconds, 15 * 60 - 1)
+        self.assertLessEqual(lifetime_seconds, 15 * 60)
 
     def test_login_lockout_uses_configured_max_attempts(self):
         self.settings_obj.max_login_attempts = 2

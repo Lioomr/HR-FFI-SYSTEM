@@ -123,13 +123,9 @@ describe("CEO Annual Leave settlements queue", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: "Approve: Sara Ahmed" }),
     );
+    expect(await screen.findByText("Approve settlement")).toBeInTheDocument();
     expect(
-      await screen.findByText("Approve Annual Leave Settlement"),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "Approving marks this settlement as approved for payment.",
-      ),
+      screen.getByText("This will approve payment for the eligible days."),
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
@@ -169,7 +165,7 @@ describe("CEO Annual Leave settlements queue", () => {
 
     expect(
       await screen.findByText(
-        "Approving carries the days into the next contract year. Nothing is paid.",
+        "This will carry the eligible days into the next contract year.",
       ),
     ).toBeInTheDocument();
 
@@ -190,11 +186,13 @@ describe("CEO Annual Leave settlements queue", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: "Reject: Sara Ahmed" }),
     );
-    expect(
-      await screen.findByText("Reject Annual Leave Settlement"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Reject settlement")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Reject Settlement" }));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Reject this Annual Leave settlement?",
+      }),
+    );
     expect(
       await screen.findByText("A rejection reason is required."),
     ).toBeInTheDocument();
@@ -203,7 +201,11 @@ describe("CEO Annual Leave settlements queue", () => {
     fireEvent.change(screen.getByLabelText("Reason for rejection"), {
       target: { value: "Rejected with reason." },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Reject Settlement" }));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Reject this Annual Leave settlement?",
+      }),
+    );
 
     await waitFor(() =>
       expect(rejectAnnualLeavePaymentRequest).toHaveBeenCalledWith(
@@ -291,9 +293,7 @@ describe("CEO Annual Leave settlements queue", () => {
     render(<CEOAnnualLeaveSettlementsPage />);
 
     expect(
-      await screen.findByText(
-        "No Annual Leave settlements are awaiting your decision.",
-      ),
+      await screen.findByText("No settlements are awaiting CEO approval."),
     ).toBeInTheDocument();
   });
 
