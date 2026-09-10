@@ -1,3 +1,5 @@
+import AnnouncementWhatsAppGroupField from "./AnnouncementWhatsAppGroupField";
+import AnnouncementAudienceFields from "./AnnouncementAudienceFields";
 import { useEffect, useState } from "react";
 import {
   Alert,
@@ -9,7 +11,6 @@ import {
   Input,
   InputNumber,
   Row,
-  Select,
   Space,
   Switch,
   Typography,
@@ -34,7 +35,6 @@ import {
 import { useI18n } from "../../../i18n/useI18n";
 
 const { Title, Text } = Typography;
-const { Option } = Select;
 
 export default function EditAnnouncementPage() {
   const { id } = useParams();
@@ -59,8 +59,16 @@ export default function EditAnnouncementPage() {
         setAnnouncement(item);
         form.setFieldsValue({
           title: item.title,
+          whatsapp_group_id: item.whatsapp_group_id || "",
           content: item.content,
-          target_roles: item.target_roles || [],
+          audience: item.whole_company
+            ? "COMPANY"
+            : item.target_user
+              ? "SELECTED"
+              : item.target_roles.includes("CEO")
+                ? "CEO"
+                : undefined,
+          target_user_ids: item.target_user ? [item.target_user] : [],
           publish_to_dashboard: item.publish_to_dashboard,
           publish_to_email: item.publish_to_email,
           // Prefer the new WhatsApp flag, fall back to the deprecated SMS alias.
@@ -94,14 +102,20 @@ export default function EditAnnouncementPage() {
         title: values.title,
         content: values.content,
         announcement_type: announcement.announcement_type,
+        whole_company: values.audience === "COMPANY",
+        target_roles: values.audience === "CEO" ? ["CEO"] : [],
+        target_user_ids:
+          values.audience === "SELECTED" ? values.target_user_ids : undefined,
         publish_to_dashboard: values.publish_to_dashboard,
         publish_to_email: values.publish_to_email,
         publish_to_whatsapp: values.publish_to_whatsapp,
+        whatsapp_group_id: values.publish_to_whatsapp
+          ? values.whatsapp_group_id || ""
+          : "",
         attachment: attachmentFile,
       };
 
       if (announcement.announcement_type === "MEETING") {
-        payload.target_user = announcement.target_user || undefined;
         payload.meeting_starts_at =
           values.meeting_starts_at?.toISOString?.() || null;
         payload.meeting_duration_minutes =
@@ -111,8 +125,6 @@ export default function EditAnnouncementPage() {
         payload.google_meet_url = values.google_meet_url || "";
         payload.microsoft_teams_url = values.microsoft_teams_url || "";
         payload.zoom_url = values.zoom_url || "";
-      } else {
-        payload.target_roles = values.target_roles || [];
       }
 
       await updateAnnouncement(Number(id), payload);
@@ -201,6 +213,8 @@ export default function EditAnnouncementPage() {
             />
           </Form.Item>
 
+          <AnnouncementAudienceFields />
+
           {isMeeting ? (
             <>
               <Row gutter={16}>
@@ -287,29 +301,7 @@ export default function EditAnnouncementPage() {
                 </Col>
               </Row>
             </>
-          ) : (
-            <Form.Item
-              name="target_roles"
-              label={t("hr.announcements.targetAudienceLabel")}
-              rules={[
-                {
-                  required: true,
-                  message: t("hr.announcements.targetAudienceRequired"),
-                },
-              ]}
-            >
-              <Select
-                mode="multiple"
-                placeholder={t("hr.announcements.placeholderSelectRoles")}
-                size="large"
-              >
-                <Option value="ADMIN">{t("auth.role.admin")}</Option>
-                <Option value="HR_MANAGER">{t("auth.role.hr_manager")}</Option>
-                <Option value="MANAGER">{t("auth.role.manager")}</Option>
-                <Option value="EMPLOYEE">{t("auth.role.employee")}</Option>
-              </Select>
-            </Form.Item>
-          )}
+          ) : null}
 
           <Form.Item
             label={t(
@@ -395,6 +387,8 @@ export default function EditAnnouncementPage() {
               </Space>
             </Space>
           </div>
+
+          <AnnouncementWhatsAppGroupField editing />
 
           <Button
             type="primary"
