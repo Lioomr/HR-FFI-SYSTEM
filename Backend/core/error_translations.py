@@ -46,4 +46,6 @@ ARABIC_ERRORS = {
     "Server error": "خطأ في الخادم",
     "Not found": "غير موجود",
     "Validation error": "خطأ في التحقق من صحة البيانات",
+    "This account cannot be unlinked because leave records reference it.": "لا يمكن إلغاء ربط هذا الحساب لأن سجلات الإجازات مرتبطة به.",
+    "Reassign or preserve the leave relationships before changing the linked account.": "أعد تعيين علاقات الإجازات أو حافظ عليها قبل تغيير الحساب المرتبط.",
 }
