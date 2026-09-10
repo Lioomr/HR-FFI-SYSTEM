@@ -68,20 +68,20 @@ def _compact_lines(*lines: str | None) -> str:
 def _render_announcement(variables: dict[str, Any]) -> str:
     return _compact_lines(
         f"مرحباً {_value(variables, 'employee_name', 'there')},",
-        "",
         "إعلان من نظام الموارد البشرية FFI",
         f"العنوان: {_value(variables, 'announcement_title')}",
-        _optional_line("رابط المرفق", variables.get("attachment_url")),
         "",
-        "يرجى فتح نظام الموارد البشرية للاطلاع على التفاصيل الكاملة.",
+        _optional_line("المحتوى", variables.get("announcement_message")),
+        "",
+        "📎 تم إرفاق ملف PDF بهذه الرسالة." if variables.get("has_attachment") else None,
         "",
         f"Hello {_value(variables, 'employee_name', 'there')},",
-        "",
         "FFI HR announcement",
         f"Title: {_value(variables, 'announcement_title')}",
-        _optional_line("Attachment", variables.get("attachment_url")),
         "",
-        "Please open the HR system for the full announcement details.",
+        _optional_line("Content", variables.get("announcement_message")),
+        "",
+        "📎 The PDF file is attached to this message." if variables.get("has_attachment") else None,
     )
 
 

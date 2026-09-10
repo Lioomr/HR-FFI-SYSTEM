@@ -69,6 +69,25 @@ class GroupProviderTests(SimpleTestCase):
         self.assertEqual(request.call_args.kwargs["json"], {"number": "120000000000001@g.us", "text": "Announcement"})
 
     @patch("announcements.whatsapp_groups.requests.request")
+    def test_group_pdf_uses_direct_media_payload(self, request):
+        request.side_effect = [
+            response({"instance": {"state": "open"}}),
+            response([{"id": "120000000000001@g.us"}]),
+            response({}, 201),
+        ]
+        result = AnnouncementGroupProvider().send_group_document(
+            company=self.company,
+            group_id=self.key,
+            document_base64="JVBERi0xLjQK",
+            file_name="notice.pdf",
+            caption="Announcement",
+        )
+        self.assertEqual(result, ("SUBMITTED", ""))
+        self.assertEqual(request.call_args.args[1], "https://evolution.example.test/message/sendMedia/test-instance")
+        self.assertEqual(request.call_args.kwargs["json"]["media"], "JVBERi0xLjQK")
+        self.assertEqual(request.call_args.kwargs["json"]["fileName"], "notice.pdf")
+
+    @patch("announcements.whatsapp_groups.requests.request")
     def test_missing_disconnected_and_provider_errors_are_safe(self, request):
         cases = [
             ([response({"instance": {"state": "close"}})], ("SKIPPED", "disconnected")),

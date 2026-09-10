@@ -92,7 +92,7 @@ def _generic_whatsapp_text(title: str, message: str, action_url: str) -> str:
     return f"إشعار الموارد البشرية\n{title}\n{message}{action}\n\nHR Notification\n{title}\n{message}{action}"
 
 
-def _send_whatsapp(*, recipient, title, message, action_url, template, variables, timeout):
+def _send_whatsapp(*, recipient, title, message, action_url, template, variables, timeout, document=None):
     try:
         profile = recipient.employee_profile
     except (AttributeError, ObjectDoesNotExist):
@@ -105,6 +105,37 @@ def _send_whatsapp(*, recipient, title, message, action_url, template, variables
             "provider": "evolution_whatsapp",
             "error": "No valid E.164 WhatsApp number.",
         }
+    if document and document.get("announcement_id"):
+        from announcements.models import Announcement
+        from announcements.whatsapp import build_announcement_message, load_announcement_attachment
+
+        try:
+            announcement = Announcement.objects.get(pk=document["announcement_id"])
+        except (Announcement.DoesNotExist, TypeError, ValueError):
+            return {
+                "success": False,
+                "provider": "evolution_whatsapp",
+                "error": "Announcement attachment is unavailable.",
+            }
+        attachment = load_announcement_attachment(announcement)
+        if not attachment:
+            return {
+                "success": False,
+                "provider": "evolution_whatsapp",
+                "error": "Announcement attachment is unavailable.",
+            }
+        caption = build_announcement_message(
+            employee_name=str((variables or {}).get("employee_name") or "there"),
+            title=str((variables or {}).get("announcement_title") or title),
+            content=str((variables or {}).get("announcement_message") or message),
+            has_attachment=True,
+        )
+        return WhatsAppService(timeout_seconds=timeout).send_document_message(
+            phone_number=phone,
+            document_base64=attachment["document_base64"],
+            file_name=attachment["file_name"],
+            caption=caption,
+        )
     if template:
         return WhatsAppService(timeout_seconds=timeout).send_template_message(
             phone_number=phone,
@@ -184,6 +215,7 @@ def dispatch_notification_channels(
     metadata: dict | None = None,
     whatsapp_template: str | None = None,
     whatsapp_variables: dict | None = None,
+    whatsapp_document: dict | None = None,
     email_template: str | Callable | None = None,
     email_context: dict | None = None,
     deduplication_key: str = "",
@@ -227,6 +259,7 @@ def dispatch_notification_channels(
         task_payload = {
             "whatsapp_template": str(whatsapp_template or ""),
             "whatsapp_variables": _json_safe(whatsapp_variables),
+            "whatsapp_document": _json_safe(whatsapp_document),
             "email_payload": _email_payload(email_template, email_context),
             "whatsapp_enabled": bool(whatsapp_enabled),
             "email_enabled": bool(email_enabled),

@@ -93,6 +93,7 @@ def deliver_whatsapp_notification(
     notification_id: int,
     whatsapp_template: str = "",
     whatsapp_variables: dict | None = None,
+    whatsapp_document: dict | None = None,
     email_payload: dict | None = None,
     whatsapp_enabled: bool = True,
     email_enabled: bool = True,
@@ -135,6 +136,7 @@ def deliver_whatsapp_notification(
                         template=whatsapp_template,
                         variables=whatsapp_variables or {},
                         timeout=int(getattr(settings, "NOTIFICATION_DELIVERY_TIMEOUT_SECONDS", 10)),
+                        document=whatsapp_document or {},
                     )
                 except Exception as exc:
                     logger.exception(

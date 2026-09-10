@@ -109,6 +109,34 @@ class AnnouncementGroupProvider:
             return "SUBMITTED", ""
         return "FAILED", "provider_rejected"
 
+    def send_group_document(self, *, company, group_id, document_base64, file_name, caption):
+        group = configured_groups(company).get(group_id)
+        if not group:
+            return "SKIPPED", "group_not_allowed"
+        state, jids = self.connected_group_jids()
+        if state != "connected":
+            return "SKIPPED", state
+        if group["jid"] not in jids:
+            return "SKIPPED", "group_missing"
+        try:
+            response = self._request(
+                "POST",
+                "message/sendMedia",
+                json={
+                    "number": group["jid"],
+                    "mediatype": "document",
+                    "mimetype": "application/pdf",
+                    "caption": caption,
+                    "media": document_base64,
+                    "fileName": file_name or "announcement.pdf",
+                },
+            )
+        except requests.RequestException:
+            return "UNKNOWN", "provider_outcome_unknown"
+        if 200 <= response.status_code < 300:
+            return "SUBMITTED", ""
+        return "FAILED", "provider_rejected"
+
 
 def available_groups(company):
     configured = configured_groups(company)
