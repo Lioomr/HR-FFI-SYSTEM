@@ -25,14 +25,7 @@ EMAIL_TIME_ZONE_FALLBACKS = {
     "Asia/Riyadh": datetime_timezone(timedelta(hours=3), "+03"),
 }
 
-ANNOUNCEMENT_ROLE_TO_GROUP = {
-    "ADMIN": "SystemAdmin",
-    "HR_MANAGER": "HRManager",
-    "MANAGER": "Manager",
-    "CEO": "CEO",
-    "CFO": "CFO",
-    "EMPLOYEE": "Employee",
-}
+ANNOUNCEMENT_ROLE_TO_GROUP = {"CEO": "CEO"}
 
 
 def _announcement_users(announcement):
@@ -45,14 +38,16 @@ def _announcement_users(announcement):
             Q(
                 employee_profile__company_id=announcement.company_id,
                 employee_profile__is_archived=False,
+                employee_profile__employment_status="ACTIVE",
             )
             | Q(organization_access_entries__organization_id=announcement.company_id)
-            | Q(groups__name="SystemAdmin")
         )
         .distinct()
     )
     if getattr(announcement, "target_user_id", None):
         return company_users.filter(id=announcement.target_user_id)
+    if announcement.whole_company:
+        return company_users
     expected_roles = {
         ANNOUNCEMENT_ROLE_TO_GROUP[role]
         for role in (announcement.target_roles or [])

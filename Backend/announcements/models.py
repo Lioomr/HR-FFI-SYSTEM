@@ -29,6 +29,8 @@ class Announcement(models.Model):
         null=True,
         blank=True,
     )
+    whatsapp_group_id = models.CharField(max_length=64, blank=True, default="")
+    whole_company = models.BooleanField(default=False)
     target_roles = models.JSONField(help_text="List of role names that should see this announcement")
     target_user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -86,3 +88,23 @@ class Announcement(models.Model):
     @publish_to_whatsapp.setter
     def publish_to_whatsapp(self, value):
         self.publish_to_sms = value
+
+
+class AnnouncementWhatsAppGroupDelivery(models.Model):
+    """One group submission per create operation, separate from user notification delivery."""
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        PROCESSING = "PROCESSING", "Processing"
+        SUBMITTED = "SUBMITTED", "Submitted"
+        FAILED = "FAILED", "Failed"
+        SKIPPED = "SKIPPED", "Skipped"
+        UNKNOWN = "UNKNOWN", "Outcome unknown"
+
+    announcement = models.OneToOneField(Announcement, on_delete=models.CASCADE, related_name="whatsapp_group_delivery")
+    group_id = models.CharField(max_length=64)
+    message = models.TextField()
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    reason = models.CharField(max_length=40, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)

@@ -28,10 +28,12 @@ from organization.services import (
 
 from .models import Announcement
 from .serializers import AnnouncementCreateSerializer, AnnouncementListSerializer, AnnouncementSerializer
+from .tasks import enqueue_announcement_group
 from .utils import (
     ANNOUNCEMENT_ATTACHMENT_SALT,
     send_announcement_in_app,
 )
+from .whatsapp_groups import available_groups
 
 logger = logging.getLogger(__name__)
 
@@ -58,9 +60,23 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated()]
         if self.action == "create":
             return [IsAuthenticated()]
-        if self.action in ["update", "partial_update", "destroy"]:
+        if self.action in ["update", "partial_update", "destroy", "whatsapp_groups"]:
             return [IsAuthenticated(), IsHRManagerOrAdmin()]
         return [IsAuthenticated()]
+
+    @action(detail=False, methods=["get"], url_path="whatsapp-groups")
+    def whatsapp_groups(self, request):
+        ensure_company_write_allowed(request)
+        company = get_active_company_for_request(request)
+        payload = available_groups(company)
+        audit(
+            request,
+            "announcement_whatsapp_groups_listed",
+            entity="OrganizationNode",
+            entity_id=company.pk,
+            metadata={"state": payload["state"], "group_count": len(payload["groups"])},
+        )
+        return success(payload)
 
     def _manager_team_user_ids(self, user):
         reports_qs = EmployeeProfile.objects.filter(
@@ -120,52 +136,25 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         scoped_announcements = filter_queryset_by_company_scope(
-            Announcement.objects.filter(is_active=True),
+            Announcement.objects.filter(is_active=True).select_related("company", "whatsapp_group_delivery"),
             self.request,
         )
 
         # Determine user role from groups using core permissions logic
         user_group_role = get_role(user)
 
-        # Map group roles to Announcement model constants
-        # SystemAdmin -> ADMIN
-        # HRManager -> HR_MANAGER
-        # Manager -> MANAGER
-        # Employee -> EMPLOYEE
-        role_map = {
-            "SystemAdmin": "ADMIN",
-            "HRManager": "HR_MANAGER",
-            "Manager": "MANAGER",
-            "CEO": "CEO",
-            "Employee": "EMPLOYEE",
-        }
-
-        user_role = role_map.get(user_group_role, "EMPLOYEE")
-
-        # HR Managers and Admins can see all announcements
-        if user_role in ["ADMIN", "HR_MANAGER"]:
-            return self._collapse_broadcast_duplicates(scoped_announcements)
-
-        # Managers can also see what they created for their team.
-        if user_role == "MANAGER" or (
-            user_role not in {"ADMIN", "HR_MANAGER", "CEO"}
-            and has_manager_access(user, cross_company_capability="announcements.manage")
+        if user_group_role in {"SystemAdmin", "HRManager"}:
+            # Each private record is independently editable; never hide recipients.
+            return scoped_announcements
+        audience = Q(target_user=user) | Q(whole_company=True)
+        if user_group_role == "CEO":
+            audience |= self._role_target_filter("CEO")
+        visible = Q(publish_to_dashboard=True) & audience
+        if user_group_role in {"Manager", "CEO"} or has_manager_access(
+            user, cross_company_capability="announcements.manage"
         ):
-            base_qs = scoped_announcements.filter(
-                Q(created_by=user) | Q(target_user=user) | self._role_target_filter("MANAGER")
-            )
-            return self._collapse_broadcast_duplicates(base_qs)
-
-        if user_role == "CEO":
-            base_qs = scoped_announcements.filter(Q(created_by=user) | Q(target_user=user))
-            return self._collapse_broadcast_duplicates(base_qs)
-
-        # Other users only see announcements targeted to their role
-        return self._collapse_broadcast_duplicates(
-            scoped_announcements.filter(publish_to_dashboard=True).filter(
-                Q(target_user=user) | self._role_target_filter(user_role)
-            )
-        )
+            visible |= Q(created_by=user)
+        return self._collapse_broadcast_duplicates(scoped_announcements.filter(visible))
 
     @staticmethod
     def _attachment_response(announcement, *, deprecated=False):
@@ -274,7 +263,7 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
                     created_announcements.append(announcement)
         # Manager can only target own team (direct reports), never global roles.
         elif user_role in ["Manager", "CEO"] or manager_capability:
-            if validated.get("target_roles"):
+            if validated.get("target_roles") or validated.get("whole_company"):
                 return error(
                     "Validation error",
                     errors=["Role-based targets are not allowed. Target a team member or all team."],
@@ -352,18 +341,30 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
                     extra={"announcement_id": announcement.id},
                 )
 
+        # One group post per creation batch, regardless of selected-employee fanout.
+        try:
+            if created_announcements:
+                enqueue_announcement_group(created_announcements[0])
+        except Exception:
+            logger.warning("announcement_group_schedule_failed", extra={"announcement_id": created_announcements[0].pk})
+
         # Audit log
         audit(
             request,
             "announcement_created",
             entity="Announcement",
             entity_id=created_announcements[0].id if created_announcements else None,
-            metadata={"created_count": len(created_announcements)},
+            metadata={
+                "created_count": len(created_announcements),
+                "whatsapp_group_selected": bool(validated.get("whatsapp_group_id")),
+            },
         )
 
         # Return full announcement data (single for HR/Admin, list/count for team broadcast)
         if len(created_announcements) == 1:
-            response_serializer = AnnouncementSerializer(created_announcements[0])
+            response_serializer = AnnouncementSerializer(
+                created_announcements[0], context=self.get_serializer_context()
+            )
             payload = {"announcement": response_serializer.data, "message": "Announcement created successfully"}
         else:
             payload = {
@@ -418,6 +419,7 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         return response
 
     def update(self, request, *args, **kwargs):
+        ensure_company_write_allowed(request)
         partial = kwargs.pop("partial", False)
         instance = self.get_object()
         serializer = AnnouncementCreateSerializer(
@@ -430,12 +432,24 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         if not serializer.is_valid():
             return error("Validation error", errors=serializer.errors, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
-        serializer.save()
+        target_user_ids = serializer.validated_data.pop("target_user_ids", [])
+        with transaction.atomic():
+            if target_user_ids:
+                serializer.save(target_user_id=target_user_ids[0])
+                for user_id in target_user_ids[1:]:
+                    values = {
+                        field.attname: getattr(instance, field.attname)
+                        for field in Announcement._meta.concrete_fields
+                        if field.name not in {"id", "created_at", "updated_at", "target_user"}
+                    }
+                    Announcement.objects.create(**values, target_user_id=user_id)
+            else:
+                serializer.save()
 
         # Audit log
         audit(request, "announcement_updated", entity="Announcement", entity_id=instance.id)
 
-        response_serializer = AnnouncementSerializer(instance)
+        response_serializer = AnnouncementSerializer(instance, context=self.get_serializer_context())
         return success({"announcement": response_serializer.data, "message": "Announcement updated successfully"})
 
     def destroy(self, request, *args, **kwargs):

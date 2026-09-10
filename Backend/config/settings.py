@@ -192,6 +192,8 @@ BIRD_API_BASE_URL = os.environ.get("BIRD_API_BASE_URL", "https://api.bird.com/wo
 EVOLUTION_API_BASE_URL = os.environ.get("EVOLUTION_API_BASE_URL", "")
 EVOLUTION_API_KEY = os.environ.get("EVOLUTION_API_KEY", "")
 EVOLUTION_INSTANCE_NAME = os.environ.get("EVOLUTION_INSTANCE_NAME", "")
+# Company-code keyed allowlist for announcement-only group delivery; no wildcard scope.
+ANNOUNCEMENT_WHATSAPP_GROUP_ALLOWLIST = os.environ.get("ANNOUNCEMENT_WHATSAPP_GROUP_ALLOWLIST", "{}")
 TEXTBEE_API_BASE_URL = os.environ.get("TEXTBEE_API_BASE_URL", "https://api.textbee.dev")
 TEXTBEE_API_KEY = os.environ.get("TEXTBEE_API_KEY", "")
 BIOTIME_AGENT_TOKEN = os.environ.get("BIOTIME_AGENT_TOKEN", "")

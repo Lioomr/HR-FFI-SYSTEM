@@ -7,6 +7,10 @@ export interface Announcement {
   title: string;
   content: string;
   announcement_type: "GENERAL" | "MEETING";
+  whole_company?: boolean;
+  whatsapp_group_id?: string;
+  whatsapp_group_name?: string;
+  whatsapp_group_status?: string;
   target_roles: string[];
   target_user?: number | null;
   target_user_email?: string | null;
@@ -41,6 +45,10 @@ export interface AnnouncementListItem {
   title: string;
   content_preview: string;
   announcement_type: "GENERAL" | "MEETING";
+  whole_company?: boolean;
+  whatsapp_group_id?: string;
+  whatsapp_group_name?: string;
+  whatsapp_group_status?: string;
   target_roles: string[];
   target_user?: number | null;
   target_user_email?: string | null;
@@ -62,7 +70,9 @@ export interface CreateAnnouncementData {
   title: string;
   content: string;
   announcement_type?: "GENERAL" | "MEETING";
-  target_roles?: string[];
+  whole_company?: boolean;
+  whatsapp_group_id?: string;
+  target_roles?: "CEO"[];
   target_user?: number;
   target_user_ids?: number[];
   publish_to_dashboard: boolean;
@@ -87,6 +97,10 @@ function toAnnouncementFormData(data: Partial<CreateAnnouncementData>) {
   if (data.content !== undefined) formData.append("content", data.content);
   if (data.announcement_type !== undefined)
     formData.append("announcement_type", data.announcement_type);
+  if (data.whatsapp_group_id !== undefined)
+    formData.append("whatsapp_group_id", data.whatsapp_group_id);
+  if (data.whole_company !== undefined)
+    formData.append("whole_company", String(data.whole_company));
   if (data.target_roles !== undefined)
     formData.append("target_roles", JSON.stringify(data.target_roles));
   if (data.target_user !== undefined)
@@ -216,4 +230,17 @@ export async function getAnnouncementAttachment(
 export async function deleteAnnouncement(id: number) {
   const response = await api.delete(`/api/announcements/${id}`);
   return response.data;
+}
+
+export interface AnnouncementWhatsAppGroup {
+  id: string;
+  name: string;
+}
+
+export async function getAnnouncementWhatsAppGroups(): Promise<{
+  state: string;
+  groups: AnnouncementWhatsAppGroup[];
+}> {
+  const response = await api.get("/api/announcements/whatsapp-groups");
+  return response.data.data;
 }
