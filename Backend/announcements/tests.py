@@ -161,7 +161,8 @@ class MeetingAnnouncementTests(APITestCase):
         payload = {
             "title": "Policy Update",
             "content": "Please review the policy update.",
-            "target_roles": ["EMPLOYEE"],
+            "target_roles": [],
+            "whole_company": True,
             "publish_to_dashboard": True,
             "publish_to_email": False,
             "publish_to_whatsapp": True,
@@ -187,7 +188,8 @@ class MeetingAnnouncementTests(APITestCase):
         payload = {
             "title": "Policy Update",
             "content": "Please review the policy update.",
-            "target_roles": ["EMPLOYEE"],
+            "target_roles": [],
+            "whole_company": True,
             "publish_to_sms": False,
             "publish_to_whatsapp": True,
         }
@@ -241,7 +243,8 @@ class MeetingAnnouncementTests(APITestCase):
             company=self.company,
             title="Policy Notice",
             content="Please download the attached notice.",
-            target_roles=["EMPLOYEE"],
+            target_roles=[],
+            whole_company=True,
             publish_to_dashboard=True,
             publish_to_email=True,
             created_by=self.hr,
@@ -280,7 +283,8 @@ class MeetingAnnouncementTests(APITestCase):
             company=self.company,
             title="Own company notice",
             content="Visible",
-            target_roles=["EMPLOYEE"],
+            target_roles=[],
+            whole_company=True,
             publish_to_dashboard=True,
             created_by=self.hr,
             attachment=SimpleUploadedFile("own.pdf", b"%PDF-1.4 own", content_type="application/pdf"),
@@ -289,7 +293,8 @@ class MeetingAnnouncementTests(APITestCase):
             company=self.other_company,
             title="Other company notice",
             content="Hidden",
-            target_roles=["EMPLOYEE"],
+            target_roles=[],
+            whole_company=True,
             publish_to_dashboard=True,
             created_by=self.hr,
             attachment=SimpleUploadedFile("foreign.pdf", b"%PDF-1.4 foreign", content_type="application/pdf"),
@@ -316,7 +321,8 @@ class MeetingAnnouncementTests(APITestCase):
             company=self.company,
             title="Attachment",
             content="Visible",
-            target_roles=["EMPLOYEE"],
+            target_roles=[],
+            whole_company=True,
             publish_to_dashboard=True,
             created_by=self.hr,
             attachment=SimpleUploadedFile("notice.pdf", b"%PDF-1.4 test", content_type="application/pdf"),
@@ -342,7 +348,8 @@ class MeetingAnnouncementTests(APITestCase):
             {
                 "title": "Invalid PDF",
                 "content": "Invalid",
-                "target_roles": ["EMPLOYEE"],
+                "target_roles": [],
+                "whole_company": True,
                 "attachment": SimpleUploadedFile("notice.pdf", b"not a pdf", content_type="application/pdf"),
             },
             format="multipart",
@@ -358,7 +365,8 @@ class MeetingAnnouncementTests(APITestCase):
             company=self.company,
             title="Policy Notice",
             content="Please download the attached notice.",
-            target_roles=["EMPLOYEE"],
+            target_roles=[],
+            whole_company=True,
             publish_to_dashboard=True,
             publish_to_email=True,
             created_by=self.hr,
@@ -378,7 +386,8 @@ class MeetingAnnouncementTests(APITestCase):
             company=self.company,
             title="Policy Notice",
             content="Please download the attached notice.",
-            target_roles=["EMPLOYEE"],
+            target_roles=[],
+            whole_company=True,
             publish_to_dashboard=True,
             publish_to_email=True,
             created_by=self.hr,
@@ -439,7 +448,8 @@ class MeetingAnnouncementTests(APITestCase):
             company=self.company,
             title="Company Policy Notice",
             content="This notice belongs to one company.",
-            target_roles=["EMPLOYEE"],
+            target_roles=[],
+            whole_company=True,
             publish_to_dashboard=True,
             publish_to_email=True,
             created_by=self.hr,
@@ -449,9 +459,9 @@ class MeetingAnnouncementTests(APITestCase):
             send_email.return_value = {"success": True, "status_code": 202}
             result = send_announcement_email(announcement)
 
-        self.assertEqual(result["sent"], 2)
+        self.assertEqual(result["sent"], 3)
         delivered_to = {call.kwargs["to_email"] for call in send_email.call_args_list}
-        self.assertEqual(delivered_to, {"employee-one@ffi.test", "employee-two@ffi.test"})
+        self.assertEqual(delivered_to, {"employee-one@ffi.test", "employee-two@ffi.test", self.hr.email})
         self.assertNotIn("outsider@ffi.test", delivered_to)
 
     def test_send_announcement_email_reports_no_recipients(self):
@@ -459,12 +469,13 @@ class MeetingAnnouncementTests(APITestCase):
             company=self.company,
             title="Policy Notice",
             content="Please review the policy notice.",
-            target_roles=["EMPLOYEE"],
+            target_roles=[],
+            whole_company=True,
             publish_to_dashboard=True,
             publish_to_email=True,
             created_by=self.hr,
         )
-        User.objects.filter(groups=self.employee_group).update(is_active=False)
+        User.objects.filter(id__in=[self.employee_one.id, self.employee_two.id, self.hr.id]).update(is_active=False)
 
         with self.assertLogs("announcements.utils", level="WARNING") as logs:
             result = send_announcement_email(announcement)
@@ -499,3 +510,149 @@ class MeetingAnnouncementTests(APITestCase):
         formatted = _format_announcement_published_at(published_at)
 
         self.assertEqual(formatted, "2026-05-01 02:54 PM +03")
+
+
+@override_settings(ALLOWED_HOSTS=["testserver", "localhost"])
+class AnnouncementAudienceTests(APITestCase):
+    setUp = MeetingAnnouncementTests.setUp
+
+    def post_audience(self, **audience):
+        self.client.force_authenticate(self.hr)
+        with patch("announcements.views.send_announcement_in_app"):
+            return self.client.post(
+                self.url,
+                {"title": "Audience", "content": "Notice", **audience},
+                format="json",
+                HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+            )
+
+    def test_whole_company_includes_cfo_and_excludes_outsiders(self):
+        from .utils import _announcement_users
+
+        self.employee_two.groups.add(Group.objects.get_or_create(name="CFO")[0])
+        response = self.post_audience(whole_company=True)
+        self.assertEqual(response.status_code, 201, response.content)
+        announcement = Announcement.objects.get(title="Audience")
+        self.assertEqual(
+            set(u.id for u in _announcement_users(announcement)),
+            {self.hr.id, self.employee_one.id, self.employee_two.id},
+        )
+        self.client.force_authenticate(self.employee_two)
+        response = self.client.get(f"{self.url}/{announcement.id}", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id))
+        self.assertEqual(response.status_code, 200)
+
+    def test_selected_general_and_edit_audiences(self):
+        response = self.post_audience(target_user_ids=[self.employee_one.id, self.employee_two.id])
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(
+            set(Announcement.objects.values_list("target_user_id", flat=True)),
+            {self.employee_one.id, self.employee_two.id},
+        )
+        item = Announcement.objects.first()
+        response = self.client.patch(
+            f"{self.url}/{item.id}",
+            {"whole_company": True},
+            format="json",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        item.refresh_from_db()
+        self.assertTrue(item.whole_company)
+        self.assertIsNone(item.target_user_id)
+        response = self.client.patch(
+            f"{self.url}/{item.id}",
+            {"whole_company": False, "target_user_ids": [self.employee_one.id]},
+            format="json",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        item.refresh_from_db()
+        self.assertFalse(item.whole_company)
+        self.assertEqual(item.target_user_id, self.employee_one.id)
+
+    def test_ceo_delivery_and_visibility(self):
+        from .utils import _announcement_users
+
+        self.employee_two.groups.add(Group.objects.get_or_create(name="CEO")[0])
+        response = self.post_audience(target_roles=["CEO"])
+        self.assertEqual(response.status_code, 201, response.content)
+        item = Announcement.objects.get(title="Audience")
+        self.assertEqual([u.id for u in _announcement_users(item)], [self.employee_two.id])
+        for user, expected in [(self.employee_two, 200), (self.employee_one, 404)]:
+            self.client.force_authenticate(user)
+            response = self.client.get(f"{self.url}/{item.id}", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id))
+            self.assertEqual(response.status_code, expected)
+
+    def test_retired_roles_and_ambiguous_audiences_rejected(self):
+        from .utils import _announcement_users
+
+        for role in ["ADMIN", "MANAGER", "HR_MANAGER", "CFO", "EMPLOYEE"]:
+            with self.subTest(role=role):
+                self.assertEqual(self.post_audience(target_roles=[role]).status_code, 422)
+                item = Announcement(company=self.company, target_roles=[role])
+                self.assertEqual(list(_announcement_users(item)), [])
+        self.assertEqual(self.post_audience(target_roles=[]).status_code, 422)
+        self.assertEqual(self.post_audience(whole_company=True, target_roles=["CEO"]).status_code, 422)
+
+    def test_selected_general_rejects_other_active_company_even_with_access(self):
+        UserOrganizationAccess.objects.create(user=self.hr, organization=self.other_company)
+        self.assertEqual(self.post_audience(target_user_ids=[self.outsider.id]).status_code, 422)
+        response = self.post_audience(whole_company=True)
+        item_id = response.data["data"]["announcement"]["id"]
+        response = self.client.patch(
+            f"{self.url}/{item_id}",
+            {"content": "Wrong company"},
+            format="json",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.other_company.id),
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_edit_multiple_selected_recipients_and_reject_foreign_recipient(self):
+        self.post_audience(whole_company=True)
+        item = Announcement.objects.get(title="Audience")
+        response = self.client.patch(
+            f"{self.url}/{item.id}",
+            {"whole_company": False, "target_user_ids": [self.employee_one.id, self.employee_two.id]},
+            format="json",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(
+            set(Announcement.objects.values_list("target_user_id", flat=True)),
+            {self.employee_one.id, self.employee_two.id},
+        )
+        self.assertFalse(Announcement.objects.filter(whole_company=True).exists())
+        response = self.client.patch(
+            f"{self.url}/{item.id}",
+            {"whole_company": False, "target_user_ids": [self.outsider.id]},
+            format="json",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(Announcement.objects.count(), 2)
+
+    def test_meeting_company_audience_and_manager_cannot_broadcast_company(self):
+        response = self.post_audience(
+            whole_company=True,
+            announcement_type="MEETING",
+            meeting_starts_at=(timezone.now() + timedelta(days=1)).isoformat(),
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        self.employee_one.groups.add(Group.objects.get_or_create(name="Manager")[0])
+        self.client.force_authenticate(self.employee_one)
+        response = self.client.post(
+            self.url,
+            {"title": "Forbidden", "content": "Company", "whole_company": True},
+            format="json",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_retired_role_legacy_records_are_not_visible_to_employees(self):
+        item = Announcement.objects.create(
+            company=self.company, title="Legacy", content="Private", target_roles=["CFO"], created_by=self.hr
+        )
+        self.employee_one.groups.add(Group.objects.get_or_create(name="CFO")[0])
+        self.client.force_authenticate(self.employee_one)
+        response = self.client.get(f"{self.url}/{item.id}", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id))
+        self.assertEqual(response.status_code, 404)
