@@ -9,6 +9,9 @@ export default function ManagerLoanRequestsPage() {
       title={t("loans.inbox.managerRequestsTitle")}
       subtitle={t("loans.inbox.managerRequestsSubtitle")}
       detailsBasePath="/manager/loan-requests"
+      employeeProfilePath={(employeeProfileId) =>
+        `/manager/team/${employeeProfileId}`
+      }
       fetcher={getManagerLoanRequests}
     />
   );

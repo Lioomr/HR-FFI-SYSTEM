@@ -667,6 +667,21 @@ export default function HRAssetsPage() {
       dataIndex: "employee_name",
       key: "employee_name",
       width: 220,
+      render: (value: string | undefined, record) =>
+        record.employee ? (
+          <Link
+            to={`/hr/employees/${record.employee}`}
+            style={{
+              color: "#f97316",
+              fontWeight: 600,
+              textDecoration: "none",
+            }}
+          >
+            {value || record.employee_email || "—"}
+          </Link>
+        ) : (
+          value || record.employee_email || "—"
+        ),
     },
     {
       title: t("common.details"),

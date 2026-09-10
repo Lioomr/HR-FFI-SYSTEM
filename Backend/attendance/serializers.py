@@ -94,25 +94,6 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
         return get_workflow_snapshot(obj, actor=actor)
 
 
-class AttendanceOverrideSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = AttendanceRecord
-        fields = ["check_in_at", "check_out_at", "status", "notes", "override_reason"]
-
-    def validate(self, attrs):
-        # Core fields that require override_reason
-        core_fields = {"check_in_at", "check_out_at", "status"}
-
-        # Check if any core field is being changed
-        if any(field in attrs for field in core_fields):
-            if not attrs.get("override_reason"):
-                raise serializers.ValidationError(
-                    {"override_reason": "Override reason is required when modifying check-in, check-out, or status."}
-                )
-
-        return attrs
-
-
 class AttendanceCorrectionRequestSerializer(serializers.ModelSerializer):
     employee_name = serializers.CharField(source="employee_profile.full_name", read_only=True)
     employee_email = serializers.EmailField(source="employee_profile.user.email", read_only=True)
@@ -217,18 +198,6 @@ class AttendanceCorrectionRequestSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         actor = getattr(request, "user", None) if request else None
         return get_workflow_snapshot(obj, actor=actor)
-
-
-class CheckInResponseSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = AttendanceRecord
-        fields = ["id", "date", "check_in_at", "status"]
-
-
-class CheckOutResponseSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = AttendanceRecord
-        fields = ["id", "date", "check_in_at", "check_out_at", "status"]
 
 
 class WorkLocationSerializer(serializers.ModelSerializer):

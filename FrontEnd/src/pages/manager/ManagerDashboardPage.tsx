@@ -5,7 +5,6 @@ import {
   AppstoreOutlined,
   CalendarOutlined,
   CheckCircleOutlined,
-  ClockCircleOutlined,
   DollarOutlined,
   InboxOutlined,
   ReloadOutlined,
@@ -55,7 +54,6 @@ const QUEUE_ACCENTS: Record<
 > = {
   leave: { color: "#0ea5e9", icon: <CalendarOutlined aria-hidden /> },
   loan: { color: "#10b981", icon: <DollarOutlined aria-hidden /> },
-  attendance: { color: "#6366f1", icon: <ClockCircleOutlined aria-hidden /> },
   assetReturn: { color: "#8b5cf6", icon: <AppstoreOutlined aria-hidden /> },
 };
 
@@ -301,20 +299,7 @@ export default function ManagerDashboardPage() {
             animDelay={120}
           />
         </Col>
-        <Col xs={24} sm={12} lg={8} role="listitem">
-          <StatCard
-            title={t("manager.dashboard.queue.attendance")}
-            value={statValue(queues?.attendance)}
-            caption={t("manager.dashboard.queue.attendanceCaption")}
-            icon={<ClockCircleOutlined aria-hidden />}
-            color={QUEUE_ACCENTS.attendance.color}
-            compact={isMobile}
-            note={unavailableNote(queues?.attendance.available)}
-            onClick={() => navigate("/manager/attendance-corrections")}
-            ariaLabel={`${t("manager.dashboard.queue.attendance")}: ${statValue(queues?.attendance)}`}
-            animDelay={180}
-          />
-        </Col>
+
         <Col xs={24} sm={12} lg={8} role="listitem">
           <StatCard
             title={t("manager.dashboard.queue.assetReturn")}

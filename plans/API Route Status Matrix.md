@@ -1,6 +1,6 @@
 # API Route Status Matrix
 
-**Last reviewed:** 2026-08-29
+**Last reviewed:** 2026-09-02
 **Gate 1 status:** **Pass**; API/security blockers remediated and verified with Docker/PostgreSQL.  
 **Gate 3 status:** **Pass**; the employee mobile client now consumes these routes. No route, permission, or response contract was changed — the 2026-07-28 edits record verification only.  
 **Purpose:** reconciled mobile endpoint index. Django URL resolution, views, serializers, permissions, and tests are authoritative.
@@ -15,7 +15,7 @@
 | Logout | `POST /auth/logout` | Current; Gate 1 verified | Global account logout: emits `logout`, increments the server token version, blacklists all outstanding refresh tokens, and immediately rejects all prior access/refresh tokens. Realtime accepts no connections, so no authenticated socket can survive logout. |
 | Current user | `GET /auth/me` | Current | Returns identity, role, accessible organizations, and default organization in the success envelope. |
 | Self profile/status | `GET /api/employees/me/` | Current; contract review required | Owner-fixed lookup. Returns a wide serializer containing identity, salary, employment status, and leave balances. Define least-data/on-demand mobile types and active-company behavior. |
-| Employee documents | `GET/POST /api/employees/{id}/documents/`, `POST .../{document_id}/extract/`, and `GET .../{document_id}/download/` | Current; Gate 1 verified | Owner/HR permission and active-company scope return generic 404s for IDOR/cross-company attempts. Uploads validate extension, claimed MIME, size, and PDF/JPEG/PNG signatures. Passport, Iqama/Saudi ID, and Visa OCR is queued to the Celery worker; HR/SystemAdmin can retry Pending/Failed extraction. Downloads are audited `application/octet-stream` attachments with `nosniff` and private no-store headers. |
+| Employee documents | `GET/POST /api/employees/{id}/documents/`, `PATCH/DELETE .../{document_id}/`, `POST .../{document_id}/extract/`, and `GET .../{document_id}/download/` | Current; Gate 1 verified | Owner/HR permission and active-company scope return generic 404s for IDOR/cross-company attempts. Uploads validate extension, claimed MIME, size, and PDF/JPEG/PNG signatures. Passport, Iqama/Saudi ID, and Visa OCR runs on self-hosted PaddleOCR queued to the Celery worker, with a queue claim that prevents duplicate jobs; HR/SystemAdmin can re-run extraction. Raw OCR text is stored server-side only and never serialised. `DELETE` is HRManager/SystemAdmin only, permanently removes the private file and the record together (record preserved if storage deletion fails), refuses system-generated documents, and audits `employee_document_deleted`. Downloads are audited `application/octet-stream` attachments with `nosniff` and private no-store headers. |
 | Employee documents (`me` alias) | `GET /api/employees/me/documents/` | Current; Gate 3 verified | `EmployeeProfileViewSet._document_profile_for_request` resolves `pk == "me"` to the caller's own active-company profile, so a client never holds or transmits a profile identifier. Same permission, scope, and audit behavior as the numeric form. Mobile uses this alias. The list serializer keeps `file` write-only, so no download URL or storage path is emitted. |
 | Leave types | `GET /api/leaves/leave-types/` | Current; Gate 3 verified | `LeaveTypeViewSet.list` allows any authenticated user, applies `filter_queryset_by_company_scope`, and restricts the `Employee` role to `is_active=True`. Write actions remain HR/SystemAdmin only. Mobile uses this to populate the leave-request form. |
 | Cancel own leave request | `POST /api/leaves/leave-requests/{id}/cancel/` | Current; Gate 3 verified | `IsLeaveRequestOwner` plus a re-filter on `employee=request.user, is_active=True`; non-owned returns 404. Only `submitted`, `pending_hr`, and `pending_manager` are cancellable; anything else returns 422. Emits a `cancel` audit and a `leave.cancelled` notification. |
@@ -81,3 +81,38 @@ and 5; hiring-request approvals are implemented in phase 6. Loan approvals remai
   suite: 339 passed plus 12 subtests. See the Gate 1 remediation report for commands and complete evidence.
 
 This matrix records Gate 1’s reconciled contract; continue inspecting the implementation before every future change.
+
+## Backend corrective delivery: BACKEND-FIXES-2026-09-02
+
+Existing paths and optional trailing slashes are preserved. These corrections require no schema migration.
+
+| Area | Exact methods and routes | Contract correction |
+|---|---|---|
+| Loan PDF | `GET /api/loans/loan-requests/{id}/pdf/`, compatibility `GET /api/loans/hr/loan-requests/{id}/pdf/` | Authentication plus owner, HRManager or SystemAdmin permission is enforced by the view's effective permission override. Company filtering runs before object authorization. Same-company non-owners receive 403; inaccessible-company objects receive 404 (an unauthorized company selector can itself return 403). Use the normal authorization and `X-Active-Company-Id` headers. Successful responses remain binary attachments with `application/octet-stream`, `nosniff`, and `Cache-Control: private, no-store`. |
+| Contract submission | `POST /api/employees/{id}/contract-decisions/`, compatibility `POST /employees/{id}/contract-decisions/` | Existing HR/Admin and active-company permissions remain. For renewal, salary terms must be finite, nonnegative decimals with at most two decimal places and at most ten integer digits. Null/empty components are allowed and count as zero in the total. Invalid amounts return the standard 422 error envelope. |
+| Contract finalization | `POST /api/employees/contract-decisions/{id}/approve/`, compatibility `POST /employees/contract-decisions/{id}/approve/` | Existing CEO-approver and workflow authorization remains. Persisted salary terms are validated again before mutation, including automatic finalization. BioTime-mapped termination retires live mapping before archiving inside the same transaction, preserves attendance, and disables the linked account. Archive integrity failures return 422 without changing mapping/profile/decision. |
+| Contract read/history | `GET /api/employees/contract-decisions/`, `GET /api/employees/contract-decisions/{id}/` and corresponding `/employees/...` aliases | Response shape is unchanged. HR-submitted `proposed_terms.total_salary` includes the derived total. Workflow history retains each HR submission and CEO action through manual-resolution resubmissions; metadata signatures identify individual attempts. Clients must treat metadata signatures as opaque. |
+
+**Salary total policy:** `total_salary` is derived from `basic_salary`, `transportation_allowance`,
+`accommodation_allowance`, `telephone_allowance`, `petrol_allowance`, and `other_allowance`.
+Omitted components retain their current values; explicit null/empty components are cleared and contribute zero.
+An omitted/null/empty total is calculated. A non-null supplied total must equal the component sum or the
+request receives 422. The sum must also fit `Decimal(12,2)` (maximum `9999999999.99`).
+The backend persists the recalculated total for both renewal types and no-action automatic renewal.
+Frontend should preferably omit `total_salary` and display the returned derived value. Send decimal strings.
+
+Example submission payload:
+`{"decision_type":"RENEW_WITH_CHANGES","proposed_terms":{"basic_salary":"1500.00"},"hr_comment":"Reviewed"}`.
+With existing transportation `100.00` and accommodation `200.00` and other components zero/null,
+the returned decision contains `"proposed_terms":{"basic_salary":"1500.00","total_salary":"1800.00"}`.
+An inconsistent total returns HTTP 422 with
+`{"status":"error","message":"total_salary must equal the sum of the salary components.","errors":["total_salary must equal the sum of the salary components."]}`.
+Field serializer failures retain the existing `errors: [{"field":"...","message":"..."}]` form.
+
+**Absence eligibility:** service, daily scheduler and backfill share the same eligibility filter: active,
+unarchived employee, active COMPANY, enabled linked account (or no account), and hire date absent or on/before
+the target day. Approved leave covering the target day suppresses absence, including legacy user-linked
+leave records. Existing attendance is preserved. Backfill bypasses only the enable flag, never eligibility
+or workday rules. Current inactive/archived employees are excluded from historical backfills because lifecycle
+dates are insufficient to reconstruct their prior eligibility. Previously generated incorrect absence rows
+are not removed automatically by this corrective delivery.

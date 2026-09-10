@@ -16,7 +16,6 @@ import {
   Spin,
   Table,
   Tag,
-  Tooltip,
   Typography,
   message,
 } from "antd";
@@ -31,16 +30,11 @@ import dayjs from "dayjs";
 import PageHeader from "../../components/ui/PageHeader";
 import EmptyState from "../../components/ui/EmptyState";
 import ErrorState from "../../components/ui/ErrorState";
-import ApprovalActions from "../../components/ceo/ApprovalActions";
-import RejectReasonModal from "../../components/ceo/RejectReasonModal";
 import {
-  approveCEOAttendance,
   getCEOAttendance,
   getGlobalAttendance,
-  rejectCEOAttendance,
 } from "../../services/api/attendanceApi";
 import type { AttendanceListResponse } from "../../services/api/attendanceApi";
-import { isApiError } from "../../services/api/apiTypes";
 import { listEmployees } from "../../services/api/employeesApi";
 import type { Employee } from "../../services/api/employeesApi";
 import type {
@@ -143,13 +137,6 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
   const [search, setSearch] = useState("");
   const [employeeId, setEmployeeId] = useState<number | undefined>(undefined);
   const [pagination, setPagination] = useState({ current: 1, pageSize: 20 });
-
-  const isCeoApprover = role === "ceo";
-  const [approvingRecord, setApprovingRecord] =
-    useState<AttendanceRecord | null>(null);
-  const [rejectingRecord, setRejectingRecord] =
-    useState<AttendanceRecord | null>(null);
-  const [deciding, setDeciding] = useState(false);
 
   const [employeeOptionsSource, setEmployeeOptionsSource] = useState<
     Employee[]
@@ -371,50 +358,6 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
       record.employee_name ||
       `${t("common.employee")} #${record.employee_profile}`
     );
-  };
-
-  const handleApprove = async (record: AttendanceRecord) => {
-    setApprovingRecord(record);
-    setDeciding(true);
-    try {
-      const response = await approveCEOAttendance(record.id, {});
-      if (isApiError(response)) {
-        message.error(
-          response.message || t("attendancePreview.decision.failed"),
-        );
-        return;
-      }
-      message.success(t("attendancePreview.decision.approved"));
-      await fetchRecords();
-    } catch (error: any) {
-      message.error(error?.message || t("attendancePreview.decision.failed"));
-    } finally {
-      setDeciding(false);
-      setApprovingRecord(null);
-    }
-  };
-
-  const handleReject = async (reason: string) => {
-    if (!rejectingRecord) return;
-    setDeciding(true);
-    try {
-      const response = await rejectCEOAttendance(rejectingRecord.id, {
-        notes: reason,
-      });
-      if (isApiError(response)) {
-        message.error(
-          response.message || t("attendancePreview.decision.failed"),
-        );
-        return;
-      }
-      message.success(t("attendancePreview.decision.rejected"));
-      setRejectingRecord(null);
-      await fetchRecords();
-    } catch (error: any) {
-      message.error(error?.message || t("attendancePreview.decision.failed"));
-    } finally {
-      setDeciding(false);
-    }
   };
 
   const handleExport = async () => {
@@ -690,57 +633,17 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
           "-"
         ),
     },
-    {
-      title: t("attendancePreview.columns.override"),
-      key: "is_overridden",
-      width: 130,
-      render: (_: unknown, record: AttendanceRecord) =>
-        record.is_overridden ? (
-          <Tooltip title={record.override_reason || undefined}>
-            <Tag color="orange">{t("attendancePreview.overridden")}</Tag>
-          </Tooltip>
-        ) : (
-          <Text type="secondary">{t("attendancePreview.notOverridden")}</Text>
-        ),
-    },
-    ...(isCeoApprover
-      ? ([
-          {
-            title: t("common.actions"),
-            key: "actions",
-            width: 210,
-            render: (_: unknown, record: AttendanceRecord) =>
-              record.status === "PENDING_CEO" ? (
-                <ApprovalActions
-                  subjectLabel={getEmployeeName(record)}
-                  approveLoading={deciding && approvingRecord?.id === record.id}
-                  disabled={deciding}
-                  onApprove={() => void handleApprove(record)}
-                  onReject={() => setRejectingRecord(record)}
-                />
-              ) : (
-                <Text type="secondary">
-                  {t("attendancePreview.decision.noActionNeeded")}
-                </Text>
-              ),
-          },
-        ] as ColumnsType<AttendanceRecord>)
-      : []),
   ];
 
   return (
     <div>
       <PageHeader
         title={
-          isCeoApprover
+          role === "ceo"
             ? t("ceo.attendance.title")
             : t("hr.attendance.recordsTitle")
         }
-        subtitle={
-          isCeoApprover
-            ? t("ceo.attendance.subtitle")
-            : t("attendancePreview.subtitle")
-        }
+        subtitle={t("attendance.biotimeNotice")}
         actions={
           <Space>
             <Button
@@ -933,19 +836,6 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
             }}
           />
         </Card>
-      )}
-
-      {isCeoApprover && (
-        <RejectReasonModal
-          open={Boolean(rejectingRecord)}
-          title={t("attendancePreview.decision.rejectTitle")}
-          subject={
-            rejectingRecord ? getEmployeeName(rejectingRecord) : undefined
-          }
-          loading={deciding}
-          onCancel={() => setRejectingRecord(null)}
-          onSubmit={handleReject}
-        />
       )}
     </div>
   );

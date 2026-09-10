@@ -1,7 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import type { OrganizationNodeDto } from "../services/api/apiTypes";
-import { resolveAuthorizedActiveOrganizationId } from "./authStore";
+import { getToken, setToken } from "../services/api/tokenStorage";
+import {
+  resolveAuthorizedActiveOrganizationId,
+  useAuthStore,
+} from "./authStore";
 
 const company = (id: number, code: string): OrganizationNodeDto => ({
   id,
@@ -43,5 +47,22 @@ describe("resolveAuthorizedActiveOrganizationId", () => {
         default_organization_id: null,
       }),
     ).toBeNull();
+  });
+});
+
+describe("auth storage hydration", () => {
+  afterEach(() => {
+    sessionStorage.clear();
+    useAuthStore.setState({ isAuthenticated: false, user: null });
+  });
+
+  it("fails closed when a token exists without a matching user record", () => {
+    setToken("orphaned-access-token");
+
+    useAuthStore.getState().hydrateFromStorage();
+
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+    expect(useAuthStore.getState().user).toBeNull();
+    expect(getToken()).toBeNull();
   });
 });

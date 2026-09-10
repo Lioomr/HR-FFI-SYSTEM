@@ -8,6 +8,7 @@ from django.db.models import Q
 
 from core.permissions import CEO_APPROVER_DEPARTMENT_ID
 from core.services.bird_email_service import send_generic_notification_email
+from core.services.email_html import email_button
 from employees.models import EmployeeProfile
 from in_app_notifications.dispatcher import dispatch_notification_channels
 from in_app_notifications.models import Notification
@@ -54,11 +55,7 @@ def _safe_email(**kwargs) -> dict:
 
 
 def _link(url: str, label: str) -> str:
-    return (
-        f'<a href="{url}" style="display:inline-block;margin:6px 8px 0 0;padding:9px 16px;'
-        f'border-radius:4px;background-color:#1c1f24;color:#ffffff;text-decoration:none;'
-        f'font-weight:600;font-size:13px;">{label}</a>'
-    )
+    return email_button(url, label)
 
 
 def _approval_event_key(offer: JobOffer) -> str:
@@ -109,9 +106,7 @@ def notify_job_offer_submitted(offer: JobOffer) -> list[dict]:
             title_ar="عرض عمل يتطلب مراجعتك",
             employee_name=recipient_name,
             message=f"Job offer {offer.reference_number}, submitted by {requester_name}, is awaiting your review.",
-            message_ar=(
-                f"عرض العمل {offer.reference_number} المقدَّم من {requester_name} بانتظار مراجعتك."
-            ),
+            message_ar=(f"عرض العمل {offer.reference_number} المقدَّم من {requester_name} بانتظار مراجعتك."),
             status="Action required",
             status_ar="إجراء مطلوب",
             status_tone="action",
@@ -174,8 +169,12 @@ def notify_job_offer_decided(offer: JobOffer) -> list[dict]:
         rows = [
             {"label": "Reference", "label_ar": "الرقم المرجعي", "value": offer.reference_number},
             {"label": "Candidate", "label_ar": "المرشّح", "value": offer.candidate_full_name},
-            {"label": "Decision", "label_ar": "القرار", "value": decision,
-             "value_color": "#15803d" if approved else "#b42318" if rejected else None},
+            {
+                "label": "Decision",
+                "label_ar": "القرار",
+                "value": decision,
+                "value_color": "#15803d" if approved else "#b42318" if rejected else None,
+            },
         ]
         if offer.ceo_decision_reason:
             rows.append({"label": "Reason", "label_ar": "السبب", "value": offer.ceo_decision_reason})

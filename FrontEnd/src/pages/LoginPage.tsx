@@ -1,15 +1,15 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { Alert, Button, Card, Checkbox, Form, Input, Select } from "antd";
 import { LockOutlined, ApartmentOutlined } from "@ant-design/icons";
 import { useLocation, useNavigate } from "react-router-dom";
 import { UserOutlined } from "@ant-design/icons";
 import { useAuthStore } from "../auth/authStore";
-import type { Role } from "../auth/authStore";
 import { loginApi } from "../services/api/authApi";
 import { isApiError } from "../services/api/apiTypes";
 import { getFirstApiErrorMessage } from "../utils/formErrors";
 import { useI18n } from "../i18n/useI18n";
 import type { AppLanguage } from "../i18n/types";
+import { getPostLoginDestination } from "../routes/homeRoute";
 
 type LoginFormValues = {
   /** Email address or phone number — the backend resolves either. */
@@ -17,30 +17,6 @@ type LoginFormValues = {
   password: string;
   remember: boolean;
 };
-
-function defaultDestinationForRole(role?: string) {
-  if (role === "SystemAdmin") return "/admin/dashboard";
-  if (role === "HRManager") return "/hr/dashboard";
-  if (role === "Manager") return "/employee/dashboard";
-  if (role === "CEO") return "/ceo/leave/requests";
-  return "/employee/home";
-}
-
-function canRoleOpenPath(role: Role | string | undefined, path: string) {
-  if (!role) return false;
-  if (role === "SystemAdmin") return true;
-  if (path === "/unauthorized") return false;
-  if (path === "/login") return false;
-  if (path.startsWith("/admin")) return role === "SystemAdmin";
-  if (path.startsWith("/hr")) return role === "HRManager";
-  if (path.startsWith("/ceo")) return role === "CEO";
-  if (path.startsWith("/cfo")) return role === "CFO";
-  if (path.startsWith("/manager"))
-    return ["CEO", "CFO", "Manager"].includes(role);
-  if (path.startsWith("/employee"))
-    return ["Employee", "HRManager", "Manager"].includes(role);
-  return true;
-}
 
 export default function LoginPage() {
   const [form] = Form.useForm<LoginFormValues>();
@@ -51,29 +27,12 @@ export default function LoginPage() {
   } | null>(null);
 
   const login = useAuthStore((s) => s.login);
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
   const location = useLocation();
 
-  const getPostLoginDestination = useCallback(
-    (role?: string) => {
-      const requestedPath =
-        new URLSearchParams(location.search).get("next") ||
-        (location.state as { from?: unknown } | null)?.from;
-      if (
-        typeof requestedPath === "string" &&
-        requestedPath.startsWith("/") &&
-        !requestedPath.startsWith("//") &&
-        !requestedPath.includes("\\") &&
-        canRoleOpenPath(role, requestedPath)
-      ) {
-        return requestedPath;
-      }
-      return defaultDestinationForRole(role);
-    },
-    [location.search, location.state],
-  );
+  const requestedPath =
+    new URLSearchParams(location.search).get("next") ||
+    (location.state as { from?: unknown } | null)?.from;
   const { t, language, setLanguage, direction } = useI18n();
 
   function buildLoginError(message?: string | null) {
@@ -112,12 +71,6 @@ export default function LoginPage() {
     };
   }
 
-  useEffect(() => {
-    if (isAuthenticated && user?.role) {
-      navigate(getPostLoginDestination(user.role), { replace: true });
-    }
-  }, [isAuthenticated, user, navigate, getPostLoginDestination]);
-
   async function onFinish(values: LoginFormValues) {
     setError(null);
     setSubmitting(true);
@@ -134,7 +87,13 @@ export default function LoginPage() {
       }
       login(res.data.user, res.data.access || res.data.token, res.data.refresh);
       const role = res.data.user.role;
-      navigate(getPostLoginDestination(role), { replace: true });
+      navigate(
+        getPostLoginDestination(
+          role,
+          typeof requestedPath === "string" ? requestedPath : null,
+        ),
+        { replace: true },
+      );
     } catch (e: unknown) {
       if (typeof e === "object" && e !== null && "response" in e) {
         setError(

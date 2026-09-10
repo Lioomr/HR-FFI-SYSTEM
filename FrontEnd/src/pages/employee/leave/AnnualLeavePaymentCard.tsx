@@ -62,6 +62,40 @@ export default function AnnualLeavePaymentCard({
   refreshToken?: number;
 }) {
   const { t } = useI18n();
+
+  const translateEligibilityReason = (reason?: string | null) => {
+    if (!reason) return "";
+    const reasons: Record<string, string> = {
+      "Employee profile is required.": t(
+        "annualPayment.reason.profileRequired",
+      ),
+      "Employee does not belong to the active company.": t(
+        "annualPayment.reason.companyMismatch",
+      ),
+      "Employee contract date is required for Annual Leave payment.": t(
+        "annualPayment.reason.contractDateRequired",
+      ),
+      "Annual Leave payment is available after completing 6 months of service.":
+        t("annualPayment.reason.minimumService"),
+      "The Annual Leave payment window opens only during the final 5 days of the contract year.":
+        t("annualPayment.reason.windowClosed"),
+      "Annual Leave payment cannot be requested while Annual Leave requests are pending.":
+        t("annualPayment.reason.pendingLeave"),
+      "An annual leave settlement already exists for this contract year.": t(
+        "annualPayment.activeRequestNotice",
+      ),
+      "There are no eligible whole Annual Leave days available for payment.": t(
+        "annualPayment.reason.noEligibleDays",
+      ),
+    };
+    return Object.entries(reasons)
+      .sort(([left], [right]) => right.length - left.length)
+      .reduce(
+        (translated, [english, arabic]) =>
+          translated.replaceAll(english, arabic),
+        reason,
+      );
+  };
   const [form] = Form.useForm<{ employee_note?: string }>();
 
   const [loading, setLoading] = useState(true);
@@ -243,7 +277,8 @@ export default function AnnualLeavePaymentCard({
                   // The backend owns this wording; blank `reason` should not
                   // leave the employee without an explanation.
                   message={
-                    eligibility.reason || t("annualPayment.notAvailable")
+                    translateEligibilityReason(eligibility.reason) ||
+                    t("annualPayment.notAvailable")
                   }
                 />
               )}
@@ -320,7 +355,10 @@ export default function AnnualLeavePaymentCard({
           <Alert
             type="warning"
             showIcon
-            message={eligibility?.reason || t("annualPayment.notAvailable")}
+            message={
+              translateEligibilityReason(eligibility?.reason) ||
+              t("annualPayment.notAvailable")
+            }
             style={{ marginBottom: 16, borderRadius: 10 }}
           />
         )}

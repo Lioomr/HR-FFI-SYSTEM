@@ -28,6 +28,7 @@ import {
 import AmountWithSAR from "../../../components/ui/AmountWithSAR";
 import { useI18n } from "../../../i18n/useI18n";
 import LoanApprovalMap from "../../../components/loans/LoanApprovalMap";
+import LoanPdfDownloadButton from "../../../components/loan/LoanPdfDownloadButton";
 import ApprovalTimeline from "../../../components/requests/ApprovalTimeline";
 import PendingActionBanner from "../../../components/requests/PendingActionBanner";
 import { formatDateTime, formatDateTimeShort } from "../../../utils/dateTime";
@@ -142,6 +143,7 @@ export default function EmployeeLoanRequestDetailsPage() {
       <PageHeader
         title={t("loans.details.titlePrefix") + " #" + id}
         breadcrumb={t("loans.details.subtitle")}
+        actions={item ? <LoanPdfDownloadButton loanId={item.id} /> : undefined}
       />
       <Card loading={loading} style={{ borderRadius: 16 }}>
         {!item ? null : (

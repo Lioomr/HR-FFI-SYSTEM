@@ -1,0 +1,110 @@
+diff --git a/FrontEnd/src/layouts/BaseLayout.tsx b/FrontEnd/src/layouts/BaseLayout.tsx
+--- a/FrontEnd/src/layouts/BaseLayout.tsx
++++ b/FrontEnd/src/layouts/BaseLayout.tsx
+@@ -265,7 +265,7 @@
+     pathname.startsWith("/employee/announcements")
+   )
+     opens.push("mgr-announcements-sub");
+-  if (pathname.startsWith("/employee/attendance"))
++  if (pathname.startsWith("/manager/attendance"))
+     opens.push("mgr-attendance-sub");
+   // CEO sidebar sub-menus (owned by ceoNav so the groups stay in one place)
+   opens.push(...getCeoOpenKeysForPath(pathname));
+@@ -1282,9 +1282,9 @@
+           label: t("layout.attendance"),
+           children: [
+             {
+-              key: "/employee/attendance",
+-              label: (
+-                <Link to="/employee/attendance">
++              key: "/manager/attendance",
++              label: (
++                <Link to="/manager/attendance">
+                   {t("layout.attendanceRecords", "Records")}
+                 </Link>
+               ),
+diff --git a/FrontEnd/src/layouts/managerNav.test.tsx b/FrontEnd/src/layouts/managerNav.test.tsx
+--- a/FrontEnd/src/layouts/managerNav.test.tsx
++++ b/FrontEnd/src/layouts/managerNav.test.tsx
+@@ -1,5 +1,11 @@
+ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+-import { act, render, screen, waitFor } from "@testing-library/react";
++import {
++  act,
++  fireEvent,
++  render,
++  screen,
++  waitFor,
++} from "@testing-library/react";
+ import { MemoryRouter, Route, Routes } from "react-router-dom";
+ 
+ import BaseLayout from "./BaseLayout";
+@@ -72,12 +78,20 @@
+   });
+ }
+ 
+-async function renderShell() {
++async function renderShell(path = "/employee/home") {
+   render(
+-    <MemoryRouter initialEntries={["/employee/home"]}>
++    <MemoryRouter initialEntries={[path]}>
+       <Routes>
+         <Route element={<BaseLayout />}>
+           <Route path="/employee/home" element={<div>Home</div>} />
++          <Route
++            path="/manager/attendance"
++            element={<div>Direct-report attendance</div>}
++          />
++          <Route
++            path="/employee/attendance"
++            element={<div>Personal attendance</div>}
++          />
+         </Route>
+       </Routes>
+     </MemoryRouter>,
+@@ -142,6 +156,45 @@
+     window.matchMedia = originalMatchMedia;
+     useAuthStore.setState({ isAuthenticated: false, user: null });
+   });
++
++  it.each([
++    ["Manager", "/manager/attendance", "Direct-report attendance"],
++    ["Employee", "/employee/attendance", "Personal attendance"],
++  ] as const)(
++    "%s attendance submenu navigates to %s",
++    async (role, target, content) => {
++      signIn(role);
++      setManagerAccess(role === "Manager");
++      await renderShell();
++      fireEvent.click(
++        screen.getByText("Attendance", { selector: ".ant-menu-title-content" }),
++      );
++      const records = await screen.findByRole("link", { name: "Records" });
++      expect(records).toHaveAttribute("href", target);
++      fireEvent.click(records);
++      expect(await screen.findByText(content)).toBeInTheDocument();
++    },
++  );
++
++  it.each([
++    ["Manager", "/manager/attendance"],
++    ["Employee", "/employee/attendance"],
++  ] as const)(
++    "opens the %s attendance submenu on direct navigation",
++    async (role, path) => {
++      signIn(role);
++      setManagerAccess(role === "Manager");
++      await renderShell(path);
++      const records = await screen.findByRole("link", { name: "Records" });
++      expect(records).toHaveAttribute("href", path);
++      expect(records.closest(".ant-menu-submenu")).toHaveClass(
++        "ant-menu-submenu-open",
++      );
++      expect(records.closest(".ant-menu-item")).toHaveClass(
++        "ant-menu-item-selected",
++      );
++    },
++  );
+ 
+   it("shows manager navigation for an Employee with manager capability", async () => {
+     signIn("Employee");

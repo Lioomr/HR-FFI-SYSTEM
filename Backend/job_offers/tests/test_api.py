@@ -34,8 +34,8 @@ class JobOfferApiTests(APITestCase):
     def setUp(self):
         hr_group, _ = Group.objects.get_or_create(name="HRManager")
         employee_group, _ = Group.objects.get_or_create(name="Employee")
-        self.company = OrganizationNode.objects.create(
-            code="FFI", name="Job Offer Company", node_type=OrganizationNode.NodeType.COMPANY
+        self.company, _ = OrganizationNode.objects.get_or_create(
+            code="FFI", defaults={"name": "Job Offer Company", "node_type": OrganizationNode.NodeType.COMPANY}
         )
         self.other_company = OrganizationNode.objects.create(
             code="JO-OTHER", name="Other Company", node_type=OrganizationNode.NodeType.COMPANY
@@ -375,7 +375,7 @@ class JobOfferApiTests(APITestCase):
         self.assertIn("Nour Hassan", extracted)
         self.assertIn("HR Business Partner", extracted)
 
-    @patch("job_offers.pdf.resolve_template_path", return_value="")
+    @patch("core.pdf_forms.resolve_template_path", return_value="")
     def test_pdf_renderer_has_missing_template_fallback(self, _resolve_template):
         pdf_bytes = build_job_offer_pdf(self.create_offer())
         self.assertTrue(pdf_bytes.startswith(b"%PDF"))

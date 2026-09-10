@@ -242,6 +242,9 @@ def approve_starting_work_acknowledgment(
                 start_date=acknowledgment.attendance_record.date,
                 details_approver_name=approver_name,
                 details_approver_date=timezone.localdate(approved_at),
+                # The approver recorded on the acknowledgment is the only actor
+                # allowed to sign the "approval of details" box.
+                details_approver_user=approver,
             ),
         )
         document = acknowledgment.document

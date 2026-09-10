@@ -1,25 +1,30 @@
-import json
 from datetime import date
 from decimal import Decimal
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 from unittest.mock import patch
 
+from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.core.management import call_command
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 from django.utils import timezone
 from pypdf import PdfReader
 
+from core.pdf_forms import SIGNATURE_MISSING, SIGNATURE_PLACED, SignatureAsset, render_mapped_form
+from core.tests_pdf_forms import image_boxes, make_png
 from employees.models import EmployeeProfile
 
-from ..document_pdf import load_document_field_map
 from ..models import JobOffer
-from ..pdf import build_job_offer_pdf
+from ..pdf import _load_form_assets, build_job_offer_pdf, build_job_offer_signers
 from ..services import generate_starting_work_acknowledgment_for_employee
 from ..starting_work_pdf import (
     StartingWorkAcknowledgmentData,
     build_starting_work_acknowledgment_pdf,
+    build_starting_work_signers,
+    load_starting_work_form_assets,
     starting_work_field_values,
 )
 
@@ -68,30 +73,99 @@ class HrDocumentPdfTests(SimpleTestCase):
             rejected_at=timezone.now(),
         )
 
-    def test_combined_map_is_the_authoritative_source_for_both_documents(self):
-        offer_map = {f"offer_field_{index}": {} for index in range(28)}
-        offer_map["rejection_reason"] = {"multiline": True}
-        starting_map = {f"starting_field_{index}": {} for index in range(24)}
-        starting_map["not_started_reason"] = {"multiline": True}
-        combined = {
-            "documents": {
-                "job_offer": {"fields": offer_map},
-                "starting_work_acknowledgment": {"fields": starting_map},
-            }
-        }
-        with TemporaryDirectory() as template_dir:
-            combined_path = Path(template_dir) / "hr_documents_combined_field_map.json"
-            combined_path.write_text(json.dumps(combined), encoding="utf-8")
-            with patch("job_offers.document_pdf.resolve_template_path", return_value=str(combined_path)):
-                offer_fields = load_document_field_map("job_offer", "job_offer_blank_field_map.json")
-                starting_fields = load_document_field_map(
-                    "starting_work_acknowledgment", "starting_work_acknowledgment_blank_field_map.json"
-                )
+    def test_each_template_is_paired_with_the_map_beside_it(self):
+        """Template and map must resolve together from one directory."""
 
-        self.assertEqual(len(offer_fields), 29)
-        self.assertEqual(len(starting_fields), 25)
-        self.assertTrue(offer_fields["rejection_reason"]["multiline"])
-        self.assertTrue(starting_fields["not_started_reason"]["multiline"])
+        offer_assets = _load_form_assets()
+        starting_assets = load_starting_work_form_assets()
+
+        for assets, map_name in (
+            (offer_assets, "job_offer_blank_field_map.json"),
+            (starting_assets, "starting_work_acknowledgment_blank_field_map.json"),
+        ):
+            self.assertIsNotNone(assets)
+            self.assertTrue((Path(assets.template_path).parent / map_name).exists())
+
+    def test_template_without_its_map_falls_back_instead_of_guessing(self):
+        source = Path(settings.BASE_DIR) / "static" / "pdf_templates" / "job_offer_blank.pdf"
+        with TemporaryDirectory() as template_dir:
+            Path(template_dir, "job_offer_blank.pdf").write_bytes(source.read_bytes())
+            with override_settings(HR_TEMPLATES_DIR=template_dir):
+                self.assertIsNone(_load_form_assets())
+
+    def test_job_offer_signers_use_the_recorded_hr_signer_only(self):
+        offer = self.offer()
+        hr_user = get_user_model()(full_name="Nour Hassan", email="nour@ffi.test")
+        offer.hr_signer_user = hr_user
+
+        signers = build_job_offer_signers(offer)
+
+        self.assertIs(signers["hr_signature_image"], hr_user)
+        # A candidate is external and has no stored signature to place.
+        self.assertIsNone(signers["applicant_signature"])
+
+    def test_offer_without_a_recorded_hr_signer_has_no_signer(self):
+        signers = build_job_offer_signers(self.offer())
+
+        self.assertIsNone(signers["hr_signature_image"])
+        self.assertIsNone(signers["applicant_signature"])
+
+    def test_candidate_signature_box_stays_empty(self):
+        assets = _load_form_assets()
+        pdf_bytes, diagnostics = render_mapped_form(
+            assets,
+            {"reference_no": "JO-2026-014"},
+            signatures=build_job_offer_signers(self.offer()) | {"hr_signature_image": None},
+        )
+
+        self.assertEqual(image_boxes(pdf_bytes), [])
+        states = {row["field"]: row["state"] for row in diagnostics}
+        self.assertEqual(states["applicant_signature"], SIGNATURE_MISSING)
+
+    def test_starting_work_signature_lands_only_in_its_mapped_box(self):
+        assets = load_starting_work_form_assets()
+        spec = assets.fields["details_approver_signature_image"]
+
+        pdf_bytes, diagnostics = render_mapped_form(
+            assets,
+            starting_work_field_values(
+                self.employee(),
+                StartingWorkAcknowledgmentData(reference_no="SWA-SIG-001", start_date=date(2026, 8, 23)),
+            ),
+            signatures={
+                "details_approver_signature_image": SignatureAsset(data=make_png(), signer_label="Nour Hassan"),
+                "general_manager_signature_image": None,
+            },
+        )
+
+        boxes = image_boxes(pdf_bytes)
+        self.assertEqual(len(boxes), 1)
+        x0, y0, x1, y1 = boxes[0]
+        self.assertGreaterEqual(x0, spec["x"])
+        self.assertLessEqual(x1, spec["x"] + spec["width"])
+        self.assertGreaterEqual(y0, spec["y"])
+        self.assertLessEqual(y1, spec["y"] + spec["height"])
+        states = {row["field"]: row["state"] for row in diagnostics}
+        self.assertEqual(states["details_approver_signature_image"], SIGNATURE_PLACED)
+        self.assertEqual(states["general_manager_signature_image"], SIGNATURE_MISSING)
+
+    def test_starting_work_signers_come_from_the_recorded_actors(self):
+        approver = SimpleNamespace(full_name="Nour Hassan", email="nour@ffi.test")
+        data = StartingWorkAcknowledgmentData(details_approver_user=approver, not_started_user=approver)
+
+        signers = build_starting_work_signers(data)
+
+        self.assertIs(signers["details_approver_signature_image"], approver)
+        # The "not started" block is not in play while the employee has started.
+        self.assertIsNone(signers["not_started_signature"])
+
+    def test_generated_acknowledgment_has_no_signature_when_none_is_stored(self):
+        pdf_bytes = generate_starting_work_acknowledgment_for_employee(
+            self.employee(),
+            data=StartingWorkAcknowledgmentData(reference_no="SWA-NOSIG-001", start_date=date(2026, 8, 23)),
+        )
+
+        self.assertEqual(image_boxes(pdf_bytes), [])
 
     def test_job_offer_pdf_is_single_page_and_contains_overlay_values(self):
         pdf_bytes = build_job_offer_pdf(self.offer())
@@ -163,7 +237,7 @@ class HrDocumentPdfTests(SimpleTestCase):
         with self.assertRaisesMessage(ValueError, "work_start_status"):
             starting_work_field_values(self.employee(), StartingWorkAcknowledgmentData(work_start_status="pending"))
 
-    @patch("job_offers.starting_work_pdf.resolve_template_path", return_value=None)
+    @patch("core.pdf_forms.resolve_template_path", return_value="")
     def test_starting_work_pdf_fallback_remains_available(self, _resolve_template_path):
         pdf_bytes = build_starting_work_acknowledgment_pdf(
             self.employee(),

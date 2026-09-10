@@ -1,0 +1,4866 @@
+diff --git a/FrontEnd/src/components/attendance/AttendanceCorrectionDetails.tsx b/FrontEnd/src/components/attendance/AttendanceCorrectionDetails.tsx
+deleted file mode 100644
+--- a/FrontEnd/src/components/attendance/AttendanceCorrectionDetails.tsx
++++ /dev/null
+@@ -1,194 +0,0 @@
+-import { Card, Col, Descriptions, Row, Space, Typography } from "antd";
+-
+-import { useI18n } from "../../i18n/useI18n";
+-import type { AttendanceCorrectionRequest } from "../../services/api/attendanceCorrectionsApi";
+-import {
+-  formatDateTime as formatAppDateTime,
+-  formatTimeOnly,
+-} from "../../utils/dateTime";
+-import AttendanceCorrectionStatusTag from "./AttendanceCorrectionStatusTag";
+-import AttendanceCorrectionTimeline from "./AttendanceCorrectionTimeline";
+-
+-const { Text } = Typography;
+-
+-function formatDateTime(value: string | null): string {
+-  if (!value) return "—";
+-  return formatAppDateTime(value, "â€”");
+-}
+-
+-function formatTime(value: string | null): string {
+-  if (!value) return "—";
+-  return formatTimeOnly(value, "â€”");
+-}
+-
+-function translateStatusValue(
+-  value: string | null | undefined,
+-  t: (k: string, f?: string) => string,
+-): string {
+-  if (!value) return "—";
+-  const upper = String(value).toUpperCase();
+-  const key = `attendanceCorrections.statusValue.${upper}`;
+-  const translated = t(key, upper);
+-  return translated;
+-}
+-
+-export default function AttendanceCorrectionDetails({
+-  request,
+-}: {
+-  request: AttendanceCorrectionRequest;
+-}) {
+-  const { t } = useI18n();
+-
+-  return (
+-    <div style={{ background: "#f8fafc", padding: 16, borderRadius: 12 }}>
+-      <Row gutter={[16, 16]}>
+-        <Col xs={24} md={12}>
+-          <Card
+-            size="small"
+-            title={t(
+-              "attendanceCorrections.details.currentTitle",
+-              "Current attendance",
+-            )}
+-            style={{ borderRadius: 12, height: "100%" }}
+-          >
+-            <Descriptions size="small" column={1} colon>
+-              <Descriptions.Item
+-                label={t(
+-                  "attendanceCorrections.fields.currentCheckIn",
+-                  "Current check-in",
+-                )}
+-              >
+-                {formatTime(request.current_check_in_at)}
+-              </Descriptions.Item>
+-              <Descriptions.Item
+-                label={t(
+-                  "attendanceCorrections.fields.currentCheckOut",
+-                  "Current check-out",
+-                )}
+-              >
+-                {formatTime(request.current_check_out_at)}
+-              </Descriptions.Item>
+-              <Descriptions.Item
+-                label={t(
+-                  "attendanceCorrections.fields.currentStatus",
+-                  "Current status",
+-                )}
+-              >
+-                {translateStatusValue(request.current_status, t)}
+-              </Descriptions.Item>
+-              <Descriptions.Item
+-                label={t(
+-                  "attendanceCorrections.fields.attendanceRecord",
+-                  "Linked record",
+-                )}
+-              >
+-                {request.attendance_record ?? (
+-                  <Text type="secondary">
+-                    {t(
+-                      "attendanceCorrections.fields.missingRecord",
+-                      "No record exists for this date.",
+-                    )}
+-                  </Text>
+-                )}
+-              </Descriptions.Item>
+-            </Descriptions>
+-          </Card>
+-        </Col>
+-
+-        <Col xs={24} md={12}>
+-          <Card
+-            size="small"
+-            title={t(
+-              "attendanceCorrections.details.requestedTitle",
+-              "Requested changes",
+-            )}
+-            style={{ borderRadius: 12, height: "100%" }}
+-          >
+-            <Descriptions size="small" column={1} colon>
+-              <Descriptions.Item
+-                label={t(
+-                  "attendanceCorrections.fields.requestedCheckIn",
+-                  "Requested check-in",
+-                )}
+-              >
+-                {formatTime(request.requested_check_in_at)}
+-              </Descriptions.Item>
+-              <Descriptions.Item
+-                label={t(
+-                  "attendanceCorrections.fields.requestedCheckOut",
+-                  "Requested check-out",
+-                )}
+-              >
+-                {formatTime(request.requested_check_out_at)}
+-              </Descriptions.Item>
+-              <Descriptions.Item
+-                label={t(
+-                  "attendanceCorrections.fields.requestedStatus",
+-                  "Requested status",
+-                )}
+-              >
+-                {translateStatusValue(request.requested_status, t)}
+-              </Descriptions.Item>
+-              <Descriptions.Item label={t("common.status", "Status")}>
+-                <AttendanceCorrectionStatusTag status={request.status} />
+-              </Descriptions.Item>
+-            </Descriptions>
+-          </Card>
+-        </Col>
+-
+-        <Col span={24}>
+-          <Card
+-            size="small"
+-            title={t("common.reason", "Reason")}
+-            style={{ borderRadius: 12 }}
+-          >
+-            <Text>{request.reason || "—"}</Text>
+-            {(request.manager_decision_note || request.hr_decision_note) && (
+-              <Space
+-                direction="vertical"
+-                size={6}
+-                style={{ marginTop: 12, width: "100%" }}
+-              >
+-                {request.manager_decision_note ? (
+-                  <div>
+-                    <Text strong>
+-                      {t(
+-                        "attendanceCorrections.fields.managerNote",
+-                        "Manager note",
+-                      )}
+-                      :{" "}
+-                    </Text>
+-                    <Text>{request.manager_decision_note}</Text>
+-                    {request.manager_decision_at ? (
+-                      <Text type="secondary" style={{ marginInlineStart: 6 }}>
+-                        ({formatDateTime(request.manager_decision_at)})
+-                      </Text>
+-                    ) : null}
+-                  </div>
+-                ) : null}
+-                {request.hr_decision_note ? (
+-                  <div>
+-                    <Text strong>
+-                      {t("attendanceCorrections.fields.hrNote", "HR note")}
+-                      :{" "}
+-                    </Text>
+-                    <Text>{request.hr_decision_note}</Text>
+-                    {request.hr_decision_at ? (
+-                      <Text type="secondary" style={{ marginInlineStart: 6 }}>
+-                        ({formatDateTime(request.hr_decision_at)})
+-                      </Text>
+-                    ) : null}
+-                  </div>
+-                ) : null}
+-              </Space>
+-            )}
+-          </Card>
+-        </Col>
+-
+-        <Col span={24}>
+-          <AttendanceCorrectionTimeline request={request} />
+-        </Col>
+-      </Row>
+-    </div>
+-  );
+-}
+diff --git a/FrontEnd/src/components/attendance/AttendanceCorrectionFormModal.tsx b/FrontEnd/src/components/attendance/AttendanceCorrectionFormModal.tsx
+deleted file mode 100644
+--- a/FrontEnd/src/components/attendance/AttendanceCorrectionFormModal.tsx
++++ /dev/null
+@@ -1,292 +0,0 @@
+-import { useEffect, useState } from "react";
+-import {
+-  DatePicker,
+-  Form,
+-  Input,
+-  Modal,
+-  Select,
+-  TimePicker,
+-  notification,
+-} from "antd";
+-import dayjs from "dayjs";
+-
+-import { useI18n } from "../../i18n/useI18n";
+-import {
+-  createAttendanceCorrectionRequest,
+-  submitAttendanceCorrectionRequest,
+-  type AttendanceCorrectionRequest,
+-  type AttendanceRecordStatus,
+-  type CreateAttendanceCorrectionPayload,
+-} from "../../services/api/attendanceCorrectionsApi";
+-import { isApiError } from "../../services/api/apiTypes";
+-import {
+-  getDetailedApiMessage,
+-  getDetailedHttpErrorMessage,
+-} from "../../services/api/userErrorMessages";
+-
+-const { TextArea } = Input;
+-
+-type FormValues = {
+-  date: dayjs.Dayjs;
+-  requested_check_in_at?: dayjs.Dayjs | null;
+-  requested_check_out_at?: dayjs.Dayjs | null;
+-  requested_status?: AttendanceRecordStatus | "";
+-  reason: string;
+-};
+-
+-type Props = {
+-  open: boolean;
+-  onClose: () => void;
+-  onCreated?: (request: AttendanceCorrectionRequest) => void;
+-  submitImmediately?: boolean;
+-};
+-
+-export default function AttendanceCorrectionFormModal({
+-  open,
+-  onClose,
+-  onCreated,
+-  submitImmediately = true,
+-}: Props) {
+-  const { t } = useI18n();
+-  const [form] = Form.useForm<FormValues>();
+-  const [submitting, setSubmitting] = useState(false);
+-
+-  useEffect(() => {
+-    if (open) {
+-      form.resetFields();
+-    }
+-  }, [open, form]);
+-
+-  const handleSubmit = async () => {
+-    try {
+-      const values = await form.validateFields();
+-      const datePart = values.date.format("YYYY-MM-DD");
+-
+-      const checkIn = values.requested_check_in_at;
+-      const checkOut = values.requested_check_out_at;
+-
+-      if (!checkIn && !checkOut && !values.requested_status) {
+-        notification.error({
+-          message: t(
+-            "attendanceCorrections.errors.atLeastOne",
+-            "Provide at least one of: check-in, check-out, or status.",
+-          ),
+-        });
+-        return;
+-      }
+-
+-      if (checkIn && checkOut && checkOut.isBefore(checkIn)) {
+-        notification.error({
+-          message: t(
+-            "attendanceCorrections.errors.checkOutBeforeCheckIn",
+-            "Requested check-out cannot be before requested check-in.",
+-          ),
+-        });
+-        return;
+-      }
+-
+-      const payload: CreateAttendanceCorrectionPayload = {
+-        date: datePart,
+-        reason: values.reason.trim(),
+-        requested_check_in_at: checkIn
+-          ? `${datePart}T${checkIn.format("HH:mm:00")}`
+-          : null,
+-        requested_check_out_at: checkOut
+-          ? `${datePart}T${checkOut.format("HH:mm:00")}`
+-          : null,
+-        requested_status: values.requested_status || "",
+-      };
+-
+-      setSubmitting(true);
+-      const res = await createAttendanceCorrectionRequest(payload);
+-      if (isApiError(res)) {
+-        notification.error({
+-          message: t(
+-            "attendanceCorrections.errors.createFailed",
+-            "Failed to create correction request",
+-          ),
+-          description: getDetailedApiMessage(t, res.message),
+-        });
+-        return;
+-      }
+-
+-      let finalRequest = res.data;
+-
+-      if (submitImmediately) {
+-        try {
+-          const submitRes = await submitAttendanceCorrectionRequest(
+-            res.data.id,
+-          );
+-          if (!isApiError(submitRes)) {
+-            finalRequest = submitRes.data;
+-          }
+-        } catch {
+-          notification.warning({
+-            message: t(
+-              "attendanceCorrections.notice.savedAsDraft",
+-              "Saved as draft. You can submit it later.",
+-            ),
+-          });
+-        }
+-      }
+-
+-      notification.success({
+-        message: submitImmediately
+-          ? t(
+-              "attendanceCorrections.success.submitted",
+-              "Correction request submitted.",
+-            )
+-          : t(
+-              "attendanceCorrections.success.created",
+-              "Correction request created.",
+-            ),
+-      });
+-      onCreated?.(finalRequest);
+-      onClose();
+-    } catch (err: unknown) {
+-      if ((err as { errorFields?: unknown })?.errorFields) {
+-        return;
+-      }
+-      notification.error({
+-        message: t(
+-          "attendanceCorrections.errors.createFailed",
+-          "Failed to create correction request",
+-        ),
+-        description: getDetailedHttpErrorMessage(t, err),
+-      });
+-    } finally {
+-      setSubmitting(false);
+-    }
+-  };
+-
+-  return (
+-    <Modal
+-      open={open}
+-      title={t("attendanceCorrections.form.title", "New correction request")}
+-      onCancel={() => {
+-        if (!submitting) onClose();
+-      }}
+-      onOk={handleSubmit}
+-      okText={
+-        submitImmediately
+-          ? t("attendanceCorrections.form.submit", "Submit request")
+-          : t("common.save", "Save")
+-      }
+-      cancelText={t("common.cancel", "Cancel")}
+-      confirmLoading={submitting}
+-      destroyOnClose
+-      maskClosable={false}
+-    >
+-      <Form<FormValues>
+-        form={form}
+-        layout="vertical"
+-        initialValues={{ date: dayjs(), requested_status: "" }}
+-        preserve={false}
+-      >
+-        <Form.Item
+-          name="date"
+-          label={t("attendanceCorrections.form.date", "Date")}
+-          rules={[
+-            {
+-              required: true,
+-              message: t(
+-                "attendanceCorrections.form.dateRequired",
+-                "Date is required",
+-              ),
+-            },
+-          ]}
+-        >
+-          <DatePicker
+-            style={{ width: "100%" }}
+-            format="YYYY-MM-DD"
+-            disabledDate={(d) => d && d.isAfter(dayjs().endOf("day"))}
+-          />
+-        </Form.Item>
+-
+-        <Form.Item
+-          name="requested_check_in_at"
+-          label={t(
+-            "attendanceCorrections.form.requestedCheckIn",
+-            "Requested check-in",
+-          )}
+-        >
+-          <TimePicker style={{ width: "100%" }} format="HH:mm" minuteStep={5} />
+-        </Form.Item>
+-
+-        <Form.Item
+-          name="requested_check_out_at"
+-          label={t(
+-            "attendanceCorrections.form.requestedCheckOut",
+-            "Requested check-out",
+-          )}
+-        >
+-          <TimePicker style={{ width: "100%" }} format="HH:mm" minuteStep={5} />
+-        </Form.Item>
+-
+-        <Form.Item
+-          name="requested_status"
+-          label={t(
+-            "attendanceCorrections.form.requestedStatus",
+-            "Requested status",
+-          )}
+-        >
+-          <Select
+-            allowClear
+-            placeholder={t(
+-              "attendanceCorrections.form.requestedStatusPlaceholder",
+-              "Optional",
+-            )}
+-            options={[
+-              {
+-                value: "PRESENT",
+-                label: t(
+-                  "attendanceCorrections.statusValue.PRESENT",
+-                  "Present",
+-                ),
+-              },
+-              {
+-                value: "ABSENT",
+-                label: t("attendanceCorrections.statusValue.ABSENT", "Absent"),
+-              },
+-              {
+-                value: "LATE",
+-                label: t("attendanceCorrections.statusValue.LATE", "Late"),
+-              },
+-              {
+-                value: "REJECTED",
+-                label: t(
+-                  "attendanceCorrections.statusValue.REJECTED",
+-                  "Rejected",
+-                ),
+-              },
+-            ]}
+-          />
+-        </Form.Item>
+-
+-        <Form.Item
+-          name="reason"
+-          label={t("attendanceCorrections.form.reason", "Reason")}
+-          rules={[
+-            {
+-              required: true,
+-              message: t(
+-                "attendanceCorrections.errors.reasonRequired",
+-                "Reason is required",
+-              ),
+-            },
+-          ]}
+-        >
+-          <TextArea
+-            rows={4}
+-            maxLength={1000}
+-            showCount
+-            placeholder={t(
+-              "attendanceCorrections.form.reasonPlaceholder",
+-              "Explain why this correction is needed (missing check-in, wrong time, etc.).",
+-            )}
+-          />
+-        </Form.Item>
+-      </Form>
+-    </Modal>
+-  );
+-}
+diff --git a/FrontEnd/src/components/attendance/AttendanceCorrectionRejectModal.tsx b/FrontEnd/src/components/attendance/AttendanceCorrectionRejectModal.tsx
+deleted file mode 100644
+--- a/FrontEnd/src/components/attendance/AttendanceCorrectionRejectModal.tsx
++++ /dev/null
+@@ -1,92 +0,0 @@
+-import { useEffect, useState } from "react";
+-import { Input, Modal } from "antd";
+-import { useI18n } from "../../i18n/useI18n";
+-
+-const { TextArea } = Input;
+-
+-type Props = {
+-  open: boolean;
+-  onCancel: () => void;
+-  onConfirm: (notes: string) => Promise<void> | void;
+-  loading?: boolean;
+-  title?: string;
+-};
+-
+-export default function AttendanceCorrectionRejectModal({
+-  open,
+-  onCancel,
+-  onConfirm,
+-  loading,
+-  title,
+-}: Props) {
+-  const { t } = useI18n();
+-  const [notes, setNotes] = useState("");
+-  const [error, setError] = useState<string | null>(null);
+-
+-  useEffect(() => {
+-    if (open) {
+-      setNotes("");
+-      setError(null);
+-    }
+-  }, [open]);
+-
+-  const handleOk = async () => {
+-    const trimmed = notes.trim();
+-    if (!trimmed) {
+-      setError(
+-        t(
+-          "attendanceCorrections.errors.rejectNoteRequired",
+-          "Rejection note is required",
+-        ),
+-      );
+-      return;
+-    }
+-    await onConfirm(trimmed);
+-  };
+-
+-  return (
+-    <Modal
+-      open={open}
+-      onCancel={onCancel}
+-      onOk={handleOk}
+-      confirmLoading={loading}
+-      title={
+-        title ||
+-        t(
+-          "attendanceCorrections.actions.rejectTitle",
+-          "Reject correction request",
+-        )
+-      }
+-      okText={t("common.reject", "Reject")}
+-      okButtonProps={{ danger: true }}
+-      cancelText={t("common.cancel", "Cancel")}
+-      destroyOnClose
+-    >
+-      <p style={{ marginTop: 0, color: "#475569" }}>
+-        {t(
+-          "attendanceCorrections.actions.rejectPrompt",
+-          "Provide a reason for the rejection. The employee will see this note.",
+-        )}
+-      </p>
+-      <TextArea
+-        rows={4}
+-        value={notes}
+-        onChange={(e) => {
+-          setNotes(e.target.value);
+-          if (error && e.target.value.trim()) setError(null);
+-        }}
+-        placeholder={t(
+-          "attendanceCorrections.actions.rejectPlaceholder",
+-          "e.g. The requested time does not match our records.",
+-        )}
+-        maxLength={1000}
+-        showCount
+-      />
+-      {error ? (
+-        <div style={{ color: "#dc2626", marginTop: 6, fontSize: 12 }}>
+-          {error}
+-        </div>
+-      ) : null}
+-    </Modal>
+-  );
+-}
+diff --git a/FrontEnd/src/components/attendance/AttendanceCorrectionsApproverTable.tsx b/FrontEnd/src/components/attendance/AttendanceCorrectionsApproverTable.tsx
+deleted file mode 100644
+--- a/FrontEnd/src/components/attendance/AttendanceCorrectionsApproverTable.tsx
++++ /dev/null
+@@ -1,441 +0,0 @@
+-import { useCallback, useEffect, useMemo, useState } from "react";
+-import {
+-  Avatar,
+-  Button,
+-  Select,
+-  Space,
+-  Table,
+-  Tooltip,
+-  notification,
+-} from "antd";
+-import type { ColumnsType } from "antd/es/table";
+-import { CheckOutlined, CloseOutlined, UserOutlined } from "@ant-design/icons";
+-
+-import LoadingState from "../ui/LoadingState";
+-import ErrorState from "../ui/ErrorState";
+-import EmptyState from "../ui/EmptyState";
+-import AttendanceCorrectionStatusTag from "./AttendanceCorrectionStatusTag";
+-import AttendanceCorrectionDetails from "./AttendanceCorrectionDetails";
+-import AttendanceCorrectionRejectModal from "./AttendanceCorrectionRejectModal";
+-import {
+-  approveAttendanceCorrectionRequest,
+-  listAttendanceCorrectionRequests,
+-  rejectAttendanceCorrectionRequest,
+-  type AttendanceCorrectionRequest,
+-  type AttendanceCorrectionStatus,
+-  type ListAttendanceCorrectionsParams,
+-} from "../../services/api/attendanceCorrectionsApi";
+-import { isApiError } from "../../services/api/apiTypes";
+-import { useI18n } from "../../i18n/useI18n";
+-import { formatDateOnly, formatTimeOnly } from "../../utils/dateTime";
+-import {
+-  getDetailedApiMessage,
+-  getDetailedHttpErrorMessage,
+-} from "../../services/api/userErrorMessages";
+-
+-type Props = {
+-  defaultStatus?: AttendanceCorrectionStatus;
+-  approverRole: "manager" | "hr";
+-  statusOptions?: AttendanceCorrectionStatus[];
+-  successMessage?: string;
+-};
+-
+-const ALL_STATUSES: AttendanceCorrectionStatus[] = [
+-  "draft",
+-  "pending_manager",
+-  "pending_hr",
+-  "approved",
+-  "rejected",
+-  "cancelled",
+-];
+-
+-export default function AttendanceCorrectionsApproverTable({
+-  defaultStatus,
+-  approverRole,
+-  statusOptions = ALL_STATUSES,
+-  successMessage,
+-}: Props) {
+-  const { t } = useI18n();
+-  const [items, setItems] = useState<AttendanceCorrectionRequest[]>([]);
+-  const [total, setTotal] = useState(0);
+-  const [page, setPage] = useState(1);
+-  const [pageSize, setPageSize] = useState(10);
+-  const [statusFilter, setStatusFilter] = useState<
+-    AttendanceCorrectionStatus | undefined
+-  >(defaultStatus);
+-  const [loading, setLoading] = useState(false);
+-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+-  const [actionId, setActionId] = useState<number | null>(null);
+-  const [rejectTarget, setRejectTarget] =
+-    useState<AttendanceCorrectionRequest | null>(null);
+-  const [rejecting, setRejecting] = useState(false);
+-
+-  const load = useCallback(async () => {
+-    setLoading(true);
+-    setErrorMessage(null);
+-    try {
+-      const params: ListAttendanceCorrectionsParams = {
+-        page,
+-        page_size: pageSize,
+-        status: statusFilter,
+-      };
+-      const res = await listAttendanceCorrectionRequests(params);
+-      if (isApiError(res)) {
+-        setErrorMessage(getDetailedApiMessage(t, res.message));
+-        return;
+-      }
+-      setItems(res.data.results || []);
+-      setTotal(res.data.count || 0);
+-    } catch (err: unknown) {
+-      setErrorMessage(getDetailedHttpErrorMessage(t, err));
+-    } finally {
+-      setLoading(false);
+-    }
+-  }, [page, pageSize, statusFilter, t]);
+-
+-  useEffect(() => {
+-    load();
+-  }, [load]);
+-
+-  const handleApprove = useCallback(
+-    async (record: AttendanceCorrectionRequest) => {
+-      setActionId(record.id);
+-      // Optimistic: drop the row immediately; restore it if the request fails.
+-      setItems((current) => current.filter((item) => item.id !== record.id));
+-      setTotal((current) => Math.max(0, current - 1));
+-      try {
+-        const res = await approveAttendanceCorrectionRequest(record.id);
+-        if (isApiError(res)) {
+-          setItems((current) =>
+-            current.some((item) => item.id === record.id)
+-              ? current
+-              : [record, ...current],
+-          );
+-          setTotal((current) => current + 1);
+-          notification.error({
+-            message: t("common.error", "Error"),
+-            description: getDetailedApiMessage(t, res.message),
+-          });
+-          return;
+-        }
+-        notification.success({
+-          message:
+-            successMessage ||
+-            (approverRole === "hr"
+-              ? t(
+-                  "attendanceCorrections.success.applied",
+-                  "Correction applied.",
+-                )
+-              : t(
+-                  "attendanceCorrections.success.approved",
+-                  "Correction approved.",
+-                )),
+-        });
+-      } catch (err: unknown) {
+-        setItems((current) =>
+-          current.some((item) => item.id === record.id)
+-            ? current
+-            : [record, ...current],
+-        );
+-        setTotal((current) => current + 1);
+-        notification.error({
+-          message: t("common.error", "Error"),
+-          description: getDetailedHttpErrorMessage(t, err),
+-        });
+-      } finally {
+-        setActionId(null);
+-      }
+-    },
+-    [approverRole, successMessage, t],
+-  );
+-
+-  const handleReject = async (notes: string) => {
+-    if (!rejectTarget) return;
+-    const record = rejectTarget;
+-    setRejecting(true);
+-    setRejectTarget(null);
+-    // Optimistic: drop the row immediately; restore it if the rejection fails.
+-    setItems((current) => current.filter((item) => item.id !== record.id));
+-    setTotal((current) => Math.max(0, current - 1));
+-    try {
+-      const res = await rejectAttendanceCorrectionRequest(record.id, { notes });
+-      if (isApiError(res)) {
+-        setItems((current) =>
+-          current.some((item) => item.id === record.id)
+-            ? current
+-            : [record, ...current],
+-        );
+-        setTotal((current) => current + 1);
+-        notification.error({
+-          message: t("common.error", "Error"),
+-          description: getDetailedApiMessage(t, res.message),
+-        });
+-        return;
+-      }
+-      notification.success({
+-        message: t(
+-          "attendanceCorrections.success.rejected",
+-          "Correction request rejected.",
+-        ),
+-      });
+-    } catch (err: unknown) {
+-      setItems((current) =>
+-        current.some((item) => item.id === record.id)
+-          ? current
+-          : [record, ...current],
+-      );
+-      setTotal((current) => current + 1);
+-      notification.error({
+-        message: t("common.error", "Error"),
+-        description: getDetailedHttpErrorMessage(t, err),
+-      });
+-    } finally {
+-      setRejecting(false);
+-    }
+-  };
+-
+-  const columns: ColumnsType<AttendanceCorrectionRequest> = useMemo(
+-    () => [
+-      {
+-        title: t("hr.dashboard.employee", "Employee"),
+-        key: "employee",
+-        render: (_: unknown, record) => {
+-          const name = record.employee_name || record.employee_email || "—";
+-          return (
+-            <Space size={10}>
+-              <Avatar
+-                size={32}
+-                icon={<UserOutlined />}
+-                style={{ backgroundColor: "#fff2e8", color: "#fa8c16" }}
+-              />
+-              <div>
+-                <div style={{ fontWeight: 600, lineHeight: 1.2 }}>{name}</div>
+-                <div
+-                  style={{ fontSize: 12, color: "#8c8c8c", lineHeight: 1.2 }}
+-                >
+-                  {record.employee_email || "—"}
+-                </div>
+-              </div>
+-            </Space>
+-          );
+-        },
+-      },
+-      {
+-        title: t("common.date", "Date"),
+-        key: "date",
+-        dataIndex: "date",
+-        width: 130,
+-        render: (value: string) => formatDateOnly(value, "—"),
+-      },
+-      {
+-        title: t("attendanceCorrections.fields.requested", "Requested"),
+-        key: "requested",
+-        render: (_: unknown, record) => {
+-          const inAt = formatTimeOnly(record.requested_check_in_at, "—");
+-          const outAt = formatTimeOnly(record.requested_check_out_at, "—");
+-          const statusValue = record.requested_status
+-            ? t(
+-                `attendanceCorrections.statusValue.${record.requested_status}`,
+-                record.requested_status,
+-              )
+-            : "—";
+-          return (
+-            <div style={{ fontSize: 13, color: "#0f172a" }}>
+-              <div>
+-                <span style={{ color: "#64748b" }}>
+-                  {t("attendanceCorrections.fields.checkInShort", "In")}:
+-                </span>{" "}
+-                {inAt} ·{" "}
+-                <span style={{ color: "#64748b" }}>
+-                  {t("attendanceCorrections.fields.checkOutShort", "Out")}:
+-                </span>{" "}
+-                {outAt}
+-              </div>
+-              <div style={{ color: "#64748b", fontSize: 12 }}>
+-                {statusValue}
+-              </div>
+-            </div>
+-          );
+-        },
+-      },
+-      {
+-        title: t("attendanceCorrections.fields.current", "Current"),
+-        key: "current",
+-        render: (_: unknown, record) => {
+-          const inAt = formatTimeOnly(record.current_check_in_at, "—");
+-          const outAt = formatTimeOnly(record.current_check_out_at, "—");
+-          const statusValue = record.current_status
+-            ? t(
+-                `attendanceCorrections.statusValue.${String(record.current_status).toUpperCase()}`,
+-                String(record.current_status),
+-              )
+-            : "—";
+-          return (
+-            <div style={{ fontSize: 13, color: "#0f172a" }}>
+-              <div>
+-                <span style={{ color: "#64748b" }}>
+-                  {t("attendanceCorrections.fields.checkInShort", "In")}:
+-                </span>{" "}
+-                {inAt} ·{" "}
+-                <span style={{ color: "#64748b" }}>
+-                  {t("attendanceCorrections.fields.checkOutShort", "Out")}:
+-                </span>{" "}
+-                {outAt}
+-              </div>
+-              <div style={{ color: "#64748b", fontSize: 12 }}>
+-                {statusValue}
+-              </div>
+-            </div>
+-          );
+-        },
+-      },
+-      {
+-        title: t("common.reason", "Reason"),
+-        key: "reason",
+-        dataIndex: "reason",
+-        ellipsis: { showTitle: false },
+-        render: (value: string) => (
+-          <Tooltip title={value || "—"}>
+-            <span>{value || "—"}</span>
+-          </Tooltip>
+-        ),
+-      },
+-      {
+-        title: t("common.status", "Status"),
+-        key: "status",
+-        width: 150,
+-        render: (_: unknown, record) => (
+-          <AttendanceCorrectionStatusTag status={record.status} />
+-        ),
+-      },
+-      {
+-        title: t("common.actions", "Actions"),
+-        key: "actions",
+-        width: 220,
+-        fixed: "right",
+-        render: (_: unknown, record) => {
+-          const canApprove = Boolean(record.workflow?.can_approve);
+-          const canReject = Boolean(record.workflow?.can_reject);
+-          if (!canApprove && !canReject) {
+-            return <span style={{ color: "#94a3b8" }}>—</span>;
+-          }
+-          return (
+-            <Space size={6}>
+-              {canApprove && (
+-                <Button
+-                  type="primary"
+-                  size="small"
+-                  icon={<CheckOutlined />}
+-                  loading={actionId === record.id}
+-                  onClick={() => handleApprove(record)}
+-                  style={{ borderRadius: 8 }}
+-                >
+-                  {t("common.approve", "Approve")}
+-                </Button>
+-              )}
+-              {canReject && (
+-                <Button
+-                  size="small"
+-                  danger
+-                  icon={<CloseOutlined />}
+-                  onClick={() => setRejectTarget(record)}
+-                  style={{ borderRadius: 8 }}
+-                >
+-                  {t("common.reject", "Reject")}
+-                </Button>
+-              )}
+-            </Space>
+-          );
+-        },
+-      },
+-    ],
+-    [t, actionId, handleApprove],
+-  );
+-
+-  const statusSelectOptions = statusOptions.map((s) => ({
+-    value: s,
+-    label: t(`attendanceCorrections.status.${toCamel(s)}`, s),
+-  }));
+-
+-  return (
+-    <div>
+-      <Space style={{ marginBottom: 12 }} wrap>
+-        <Select
+-          allowClear
+-          placeholder={t("common.status", "Status")}
+-          value={statusFilter}
+-          onChange={(value) => {
+-            setStatusFilter(value);
+-            setPage(1);
+-          }}
+-          options={statusSelectOptions}
+-          style={{ minWidth: 200 }}
+-        />
+-      </Space>
+-
+-      {loading && !items.length ? (
+-        <LoadingState lines={5} />
+-      ) : errorMessage ? (
+-        <ErrorState
+-          title={t("common.error", "Error")}
+-          description={errorMessage}
+-          onRetry={load}
+-        />
+-      ) : items.length === 0 ? (
+-        <EmptyState
+-          title={t(
+-            "attendanceCorrections.empty.title",
+-            "No correction requests yet",
+-          )}
+-          description={t(
+-            "attendanceCorrections.empty.approverDescription",
+-            "No attendance correction requests match the current filter.",
+-          )}
+-        />
+-      ) : (
+-        <div
+-          style={{
+-            background: "white",
+-            borderRadius: 14,
+-            boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+-            overflow: "hidden",
+-          }}
+-        >
+-          <Table<AttendanceCorrectionRequest>
+-            dataSource={items}
+-            columns={columns}
+-            rowKey="id"
+-            loading={loading}
+-            expandable={{
+-              expandedRowRender: (record) => (
+-                <AttendanceCorrectionDetails request={record} />
+-              ),
+-            }}
+-            scroll={{ x: 1200 }}
+-            pagination={{
+-              current: page,
+-              pageSize,
+-              total,
+-              showSizeChanger: true,
+-              onChange: (next, size) => {
+-                setPage(next);
+-                if (size && size !== pageSize) setPageSize(size);
+-              },
+-            }}
+-          />
+-        </div>
+-      )}
+-
+-      <AttendanceCorrectionRejectModal
+-        open={Boolean(rejectTarget)}
+-        onCancel={() => setRejectTarget(null)}
+-        onConfirm={handleReject}
+-        loading={rejecting}
+-      />
+-    </div>
+-  );
+-}
+-
+-function toCamel(value: string): string {
+-  return value.replace(/_([a-z])/g, (_, char) => char.toUpperCase());
+-}
+diff --git a/FrontEnd/src/components/attendance/AttendanceCorrectionStatusTag.tsx b/FrontEnd/src/components/attendance/AttendanceCorrectionStatusTag.tsx
+deleted file mode 100644
+--- a/FrontEnd/src/components/attendance/AttendanceCorrectionStatusTag.tsx
++++ /dev/null
+@@ -1,40 +0,0 @@
+-import { Tag } from "antd";
+-import type { AttendanceCorrectionStatus } from "../../services/api/attendanceCorrectionsApi";
+-import { useI18n } from "../../i18n/useI18n";
+-
+-const STATUS_COLOR: Record<AttendanceCorrectionStatus, string> = {
+-  draft: "default",
+-  pending_manager: "orange",
+-  pending_hr: "gold",
+-  approved: "green",
+-  rejected: "red",
+-  cancelled: "default",
+-};
+-
+-const STATUS_LABEL_KEY: Record<AttendanceCorrectionStatus, string> = {
+-  draft: "attendanceCorrections.status.draft",
+-  pending_manager: "attendanceCorrections.status.pendingManager",
+-  pending_hr: "attendanceCorrections.status.pendingHr",
+-  approved: "attendanceCorrections.status.approved",
+-  rejected: "attendanceCorrections.status.rejected",
+-  cancelled: "attendanceCorrections.status.cancelled",
+-};
+-
+-export default function AttendanceCorrectionStatusTag({
+-  status,
+-}: {
+-  status: AttendanceCorrectionStatus;
+-}) {
+-  const { t } = useI18n();
+-  const color = STATUS_COLOR[status] || "default";
+-  const labelKey = STATUS_LABEL_KEY[status];
+-  const label = labelKey ? t(labelKey) : status;
+-  return (
+-    <Tag
+-      color={color}
+-      style={{ borderRadius: 999, paddingInline: 10, fontWeight: 600 }}
+-    >
+-      {label}
+-    </Tag>
+-  );
+-}
+diff --git a/FrontEnd/src/components/attendance/AttendanceCorrectionTimeline.tsx b/FrontEnd/src/components/attendance/AttendanceCorrectionTimeline.tsx
+deleted file mode 100644
+--- a/FrontEnd/src/components/attendance/AttendanceCorrectionTimeline.tsx
++++ /dev/null
+@@ -1,97 +0,0 @@
+-import { Card, Timeline, Typography } from "antd";
+-import type {
+-  AttendanceCorrectionRequest,
+-  AttendanceCorrectionWorkflowHistoryEntry,
+-} from "../../services/api/attendanceCorrectionsApi";
+-import { useI18n } from "../../i18n/useI18n";
+-import { formatDateTime } from "../../utils/dateTime";
+-
+-const { Text } = Typography;
+-
+-function formatActor(entry: AttendanceCorrectionWorkflowHistoryEntry) {
+-  const actor = entry.actor;
+-  if (!actor) return "";
+-  return actor.full_name || actor.email || "";
+-}
+-
+-function actionColor(action: string): string {
+-  const value = (action || "").toLowerCase();
+-  if (value.includes("reject")) return "red";
+-  if (value.includes("approve")) return "green";
+-  if (value.includes("cancel")) return "gray";
+-  if (value.includes("submit")) return "blue";
+-  return "orange";
+-}
+-
+-export default function AttendanceCorrectionTimeline({
+-  request,
+-}: {
+-  request: AttendanceCorrectionRequest;
+-}) {
+-  const { t } = useI18n();
+-  const history = request.workflow?.history || [];
+-
+-  if (!history.length) {
+-    return (
+-      <Card
+-        size="small"
+-        style={{
+-          background: "#f8fafc",
+-          borderRadius: 12,
+-          border: "1px dashed #cbd5e1",
+-        }}
+-      >
+-        <Text type="secondary">
+-          {t(
+-            "attendanceCorrections.timeline.empty",
+-            "No workflow history yet.",
+-          )}
+-        </Text>
+-      </Card>
+-    );
+-  }
+-
+-  return (
+-    <Card
+-      size="small"
+-      title={t("attendanceCorrections.timeline.title", "Workflow history")}
+-      style={{ borderRadius: 12 }}
+-    >
+-      <Timeline
+-        items={history.map((entry) => {
+-          const actor = formatActor(entry);
+-          const at = entry.at ? formatDateTime(entry.at) : "";
+-          const stageLabel = entry.approver_role || entry.stage || "";
+-          return {
+-            color: actionColor(entry.action),
+-            children: (
+-              <div>
+-                <div style={{ fontWeight: 600, color: "#0f172a" }}>
+-                  {entry.action.replace(/_/g, " ")}
+-                  {stageLabel ? (
+-                    <Text
+-                      type="secondary"
+-                      style={{ marginInlineStart: 8, fontWeight: 400 }}
+-                    >
+-                      ({stageLabel})
+-                    </Text>
+-                  ) : null}
+-                </div>
+-                {actor || at ? (
+-                  <div style={{ color: "#64748b", fontSize: 12, marginTop: 2 }}>
+-                    {actor} {at ? `· ${at}` : ""}
+-                  </div>
+-                ) : null}
+-                {entry.note ? (
+-                  <div style={{ marginTop: 4, color: "#334155", fontSize: 13 }}>
+-                    {entry.note}
+-                  </div>
+-                ) : null}
+-              </div>
+-            ),
+-          };
+-        })}
+-      />
+-    </Card>
+-  );
+-}
+diff --git a/FrontEnd/src/components/attendance/AttendanceMaintenanceBanner.tsx b/FrontEnd/src/components/attendance/AttendanceMaintenanceBanner.tsx
+deleted file mode 100644
+--- a/FrontEnd/src/components/attendance/AttendanceMaintenanceBanner.tsx
++++ /dev/null
+@@ -1,30 +0,0 @@
+-import { Alert } from "antd";
+-import { ToolOutlined } from "@ant-design/icons";
+-import { useI18n } from "../../i18n/useI18n";
+-
+-export default function AttendanceMaintenanceBanner({
+-  description,
+-}: {
+-  description?: string;
+-}) {
+-  const { t } = useI18n();
+-  return (
+-    <Alert
+-      type="warning"
+-      showIcon
+-      icon={<ToolOutlined />}
+-      message={t(
+-        "attendanceCorrections.maintenance.title",
+-        "Attendance is under maintenance",
+-      )}
+-      description={
+-        description ||
+-        t(
+-          "attendanceCorrections.maintenance.description",
+-          "Attendance records are temporarily under maintenance. You can still submit correction requests for missing or incorrect records.",
+-        )
+-      }
+-      style={{ borderRadius: 12, marginBottom: 16 }}
+-    />
+-  );
+-}
+diff --git a/FrontEnd/src/components/attendance/AttendanceMaintenanceNotice.tsx b/FrontEnd/src/components/attendance/AttendanceMaintenanceNotice.tsx
+deleted file mode 100644
+--- a/FrontEnd/src/components/attendance/AttendanceMaintenanceNotice.tsx
++++ /dev/null
+@@ -1,98 +0,0 @@
+-import { Button, Card, Space, Typography } from "antd";
+-import { ToolOutlined } from "@ant-design/icons";
+-import { useNavigate } from "react-router-dom";
+-import { useI18n } from "../../i18n/useI18n";
+-
+-const { Paragraph, Text, Title } = Typography;
+-
+-export default function AttendanceMaintenanceNotice({
+-  title,
+-  description,
+-  backPath,
+-  backLabel,
+-}: {
+-  title?: string;
+-  description?: string;
+-  backPath?: string;
+-  backLabel?: string;
+-}) {
+-  const navigate = useNavigate();
+-  const { t } = useI18n();
+-  const resolvedTitle =
+-    title ||
+-    t("attendance.maintenance.title", "Attendance is temporarily unavailable");
+-  const resolvedDescription =
+-    description ||
+-    t(
+-      "attendance.maintenance.description",
+-      "We are fixing this part right now. Please check back soon.",
+-    );
+-  const resolvedBackLabel =
+-    backLabel || t("attendance.maintenance.back", "Go back");
+-
+-  return (
+-    <Card
+-      style={{
+-        borderRadius: 20,
+-        border: "1px solid #fde7d3",
+-        background: "linear-gradient(180deg, #fffaf5 0%, #ffffff 100%)",
+-        boxShadow: "0 18px 40px rgba(15, 23, 42, 0.06)",
+-      }}
+-      bodyStyle={{ padding: 32 }}
+-    >
+-      <Space
+-        direction="vertical"
+-        size={16}
+-        style={{ width: "100%", textAlign: "center" }}
+-      >
+-        <div
+-          style={{
+-            width: 72,
+-            height: 72,
+-            borderRadius: 20,
+-            margin: "0 auto",
+-            background: "linear-gradient(135deg, #fff4e6, #ffedd5)",
+-            display: "grid",
+-            placeItems: "center",
+-            color: "#f97316",
+-            fontSize: 30,
+-          }}
+-        >
+-          <ToolOutlined />
+-        </div>
+-        <div>
+-          <Text
+-            style={{
+-              fontSize: 12,
+-              fontWeight: 700,
+-              letterSpacing: "0.14em",
+-              textTransform: "uppercase",
+-              color: "#f97316",
+-            }}
+-          >
+-            {t("attendance.maintenance.eyebrow", "Maintenance")}
+-          </Text>
+-          <Title level={3} style={{ marginTop: 8, marginBottom: 8 }}>
+-            {resolvedTitle}
+-          </Title>
+-          <Paragraph
+-            style={{ marginBottom: 0, color: "#64748b", fontSize: 15 }}
+-          >
+-            {resolvedDescription}
+-          </Paragraph>
+-        </div>
+-        {backPath ? (
+-          <div>
+-            <Button
+-              type="primary"
+-              onClick={() => navigate(backPath)}
+-              style={{ borderRadius: 10 }}
+-            >
+-              {resolvedBackLabel}
+-            </Button>
+-          </div>
+-        ) : null}
+-      </Space>
+-    </Card>
+-  );
+-}
+diff --git a/FrontEnd/src/components/hr/AttendanceOverrideModal.tsx b/FrontEnd/src/components/hr/AttendanceOverrideModal.tsx
+deleted file mode 100644
+--- a/FrontEnd/src/components/hr/AttendanceOverrideModal.tsx
++++ /dev/null
+@@ -1,155 +0,0 @@
+-import React, { useEffect } from "react";
+-import { Modal, Form, Select, DatePicker, Input, Alert } from "antd";
+-import dayjs from "dayjs";
+-import type { AttendanceRecord } from "../../types/attendance";
+-import { useI18n } from "../../i18n/useI18n";
+-
+-interface AttendanceOverrideModalProps {
+-  visible: boolean;
+-  record: AttendanceRecord | null;
+-  loading: boolean;
+-  onCancel: () => void;
+-  onSubmit: (id: string | number, values: any) => void;
+-}
+-
+-const { Option } = Select;
+-const { TextArea } = Input;
+-
+-const AttendanceOverrideModal: React.FC<AttendanceOverrideModalProps> = ({
+-  visible,
+-  record,
+-  loading,
+-  onCancel,
+-  onSubmit,
+-}) => {
+-  const { t } = useI18n();
+-  const [form] = Form.useForm();
+-  const [requireReason, setRequireReason] = React.useState(false);
+-
+-  useEffect(() => {
+-    if (visible && record) {
+-      form.setFieldsValue({
+-        status: record.status,
+-        check_in_at: record.check_in_at ? dayjs(record.check_in_at) : null,
+-        check_out_at: record.check_out_at ? dayjs(record.check_out_at) : null,
+-        notes: record.notes,
+-        override_reason: "",
+-      });
+-      setRequireReason(false);
+-    } else {
+-      form.resetFields();
+-    }
+-  }, [visible, record, form]);
+-
+-  const handleValuesChange = (_changedValues: any, allValues: any) => {
+-    if (!record) return;
+-
+-    // Check if core fields changed
+-    const statusChanged =
+-      allValues.status !== undefined && allValues.status !== record.status;
+-
+-    // Date comparison logic
+-    const origCheckIn = record.check_in_at ? dayjs(record.check_in_at) : null;
+-    const newCheckIn = allValues.check_in_at;
+-    const checkInChanged =
+-      (origCheckIn && !newCheckIn) ||
+-      (!origCheckIn && newCheckIn) ||
+-      (origCheckIn && newCheckIn && !origCheckIn.isSame(newCheckIn));
+-
+-    const origCheckOut = record.check_out_at
+-      ? dayjs(record.check_out_at)
+-      : null;
+-    const newCheckOut = allValues.check_out_at;
+-    const checkOutChanged =
+-      (origCheckOut && !newCheckOut) ||
+-      (!origCheckOut && newCheckOut) ||
+-      (origCheckOut && newCheckOut && !origCheckOut.isSame(newCheckOut));
+-
+-    if (statusChanged || checkInChanged || checkOutChanged) {
+-      setRequireReason(true);
+-    } else {
+-      setRequireReason(false);
+-    }
+-  };
+-
+-  const handleOk = () => {
+-    form.validateFields().then((values) => {
+-      const payload = {
+-        ...values,
+-        check_in_at: values.check_in_at
+-          ? values.check_in_at.toISOString()
+-          : null,
+-        check_out_at: values.check_out_at
+-          ? values.check_out_at.toISOString()
+-          : null,
+-      };
+-      if (record) {
+-        onSubmit(record.id, payload);
+-      }
+-    });
+-  };
+-
+-  return (
+-    <Modal
+-      title={t("hr.attendance.overrideTitle")}
+-      open={visible}
+-      onOk={handleOk}
+-      onCancel={onCancel}
+-      confirmLoading={loading}
+-      destroyOnClose
+-      style={{ borderRadius: 16 }}
+-    >
+-      <Alert
+-        message={t("hr.attendance.auditedAction")}
+-        description={t("hr.attendance.auditedDesc")}
+-        type="info"
+-        showIcon
+-        style={{ marginBottom: 24, borderRadius: 12 }}
+-      />
+-
+-      <Form form={form} layout="vertical" onValuesChange={handleValuesChange}>
+-        <Form.Item
+-          name="status"
+-          label={t("common.status")}
+-          rules={[{ required: true }]}
+-        >
+-          <Select size="large">
+-            <Option value="PRESENT">{t("status.active")}</Option>
+-            <Option value="ABSENT">{t("status.absent")}</Option>
+-            <Option value="LATE">{t("hr.attendance.late")}</Option>
+-          </Select>
+-        </Form.Item>
+-
+-        <Form.Item name="check_in_at" label={t("hr.attendance.checkInTime")}>
+-          <DatePicker showTime style={{ width: "100%" }} size="large" />
+-        </Form.Item>
+-
+-        <Form.Item name="check_out_at" label={t("hr.attendance.checkOutTime")}>
+-          <DatePicker showTime style={{ width: "100%" }} size="large" />
+-        </Form.Item>
+-
+-        <Form.Item name="notes" label={t("common.notes")}>
+-          <TextArea rows={2} placeholder={t("common.notes")} />
+-        </Form.Item>
+-
+-        <Form.Item
+-          name="override_reason"
+-          label={t("hr.attendance.overrideReasonLabel")}
+-          rules={[
+-            {
+-              required: requireReason,
+-              message: t("hr.attendance.reasonRequired"),
+-            },
+-          ]}
+-        >
+-          <TextArea
+-            rows={3}
+-            placeholder={t("hr.attendance.reasonPlaceholder")}
+-          />
+-        </Form.Item>
+-      </Form>
+-    </Modal>
+-  );
+-};
+-
+-export default AttendanceOverrideModal;
+diff --git a/FrontEnd/src/i18n/translations.ts b/FrontEnd/src/i18n/translations.ts
+--- a/FrontEnd/src/i18n/translations.ts
++++ b/FrontEnd/src/i18n/translations.ts
+@@ -4,6 +4,10 @@
+ 
+ export const translations: Record<AppLanguage, TranslationMap> = {
+   en: {
++    "attendance.biotimeNotice": "Attendance is recorded through BioTime.",
++    "attendance.unmapped":
++      "Attendance is unavailable until your BioTime mapping is completed. Contact HR to be registered on a BioTime device.",
++    "attendance.managerTitle": "Team Attendance",
+     // App
+     "app.title": "FFI HR System",
+ 
+@@ -3588,6 +3592,10 @@
+   },
+ 
+   ar: {
++    "attendance.biotimeNotice": "يتم تسجيل الحضور من خلال BioTime.",
++    "attendance.unmapped":
++      "الحضور غير متاح حتى يكتمل ربطك بنظام BioTime. تواصل مع الموارد البشرية لتسجيلك على جهاز BioTime.",
++    "attendance.managerTitle": "حضور الفريق",
+     // تسوية الإجازة السنوية
+     "annualPayment.hrTitle": "تسويات الإجازة السنوية",
+     "annualPayment.hrSubtitle": "مراجعة طلبات تسوية الإجازة السنوية للموظفين.",
+diff --git a/FrontEnd/src/layouts/BaseLayout.tsx b/FrontEnd/src/layouts/BaseLayout.tsx
+--- a/FrontEnd/src/layouts/BaseLayout.tsx
++++ b/FrontEnd/src/layouts/BaseLayout.tsx
+@@ -175,6 +175,8 @@
+   if (pathname.startsWith("/hr")) return t("layout.hrManagement");
+   if (pathname.startsWith("/manager/dashboard"))
+     return t("layout.teamDashboard", "Team Dashboard");
++  if (pathname.startsWith("/manager/attendance"))
++    return t("attendance.managerTitle");
+   if (pathname.startsWith("/manager/team-requests"))
+     return t("layout.teamRequests", "Team Requests");
+   if (pathname.startsWith("/manager/team"))
+@@ -222,12 +224,6 @@
+     return t("layout.delegatedApprovals", "Delegated Approvals");
+   if (pathname.startsWith("/employee/assets"))
+     return t("layout.myAssets", "My Assets");
+-  if (pathname.startsWith("/employee/attendance-corrections"))
+-    return t("layout.attendanceCorrections", "Attendance Corrections");
+-  if (pathname.startsWith("/manager/attendance-corrections"))
+-    return t("layout.attendanceCorrections", "Attendance Corrections");
+-  if (pathname.startsWith("/hr/attendance-correction-requests"))
+-    return t("layout.attendanceCorrections", "Attendance Corrections");
+   if (pathname.startsWith("/pending-inbox"))
+     return t("layout.pendingInbox", "Pending Inbox");
+   if (pathname.startsWith("/notifications"))
+@@ -255,22 +251,12 @@
+     opens.push("hr-announcements-sub");
+   if (isHrInboxPath) opens.push("hr-inbox-sub");
+   if (isEmployeeRequestPath) opens.push("hr-emp-requests-sub");
+-  if (
+-    pathname.startsWith("/hr/attendance") ||
+-    pathname.startsWith("/hr/attendance-correction-requests")
+-  )
+-    opens.push("hr-attendance-sub");
+-  if (
+-    pathname.startsWith("/employee/attendance") ||
+-    pathname.startsWith("/employee/attendance-corrections")
+-  )
++  if (pathname.startsWith("/hr/attendance")) opens.push("hr-attendance-sub");
++  if (pathname.startsWith("/employee/attendance"))
+     opens.push("hr-emp-attendance-sub");
+   // Employee sidebar sub-menus
+   if (isEmployeeRequestPath) opens.push("emp-requests-sub");
+-  if (
+-    pathname.startsWith("/employee/attendance") ||
+-    pathname.startsWith("/employee/attendance-corrections")
+-  )
++  if (pathname.startsWith("/employee/attendance"))
+     opens.push("emp-attendance-sub");
+   // Manager sidebar sub-menus
+   if (isEmployeeRequestPath) opens.push("mgr-requests-sub");
+@@ -279,10 +265,7 @@
+     pathname.startsWith("/employee/announcements")
+   )
+     opens.push("mgr-announcements-sub");
+-  if (
+-    pathname.startsWith("/employee/attendance") ||
+-    pathname.startsWith("/employee/attendance-corrections")
+-  )
++  if (pathname.startsWith("/employee/attendance"))
+     opens.push("mgr-attendance-sub");
+   // CEO sidebar sub-menus (owned by ceoNav so the groups stay in one place)
+   opens.push(...getCeoOpenKeysForPath(pathname));
+@@ -776,14 +759,6 @@
+                 </Link>
+               ),
+             },
+-            {
+-              key: "/hr/attendance-correction-requests",
+-              label: (
+-                <Link to="/hr/attendance-correction-requests">
+-                  {t("layout.attendanceCorrections", "Attendance Corrections")}
+-                </Link>
+-              ),
+-            },
+           ],
+         },
+         {
+@@ -865,14 +840,6 @@
+                 </Link>
+               ),
+             },
+-            {
+-              key: "/employee/attendance-corrections",
+-              label: (
+-                <Link to="/employee/attendance-corrections">
+-                  {t("layout.attendanceCorrections", "Attendance Corrections")}
+-                </Link>
+-              ),
+-            },
+           ],
+         },
+         {
+@@ -1078,14 +1045,6 @@
+               label: (
+                 <Link to="/employee/attendance">
+                   {t("layout.attendanceRecords", "Records")}
+-                </Link>
+-              ),
+-            },
+-            {
+-              key: "/employee/attendance-corrections",
+-              label: (
+-                <Link to="/employee/attendance-corrections">
+-                  {t("layout.attendanceCorrections", "Attendance Corrections")}
+                 </Link>
+               ),
+             },
+@@ -1330,14 +1289,6 @@
+                 </Link>
+               ),
+             },
+-            {
+-              key: "/employee/attendance-corrections",
+-              label: (
+-                <Link to="/employee/attendance-corrections">
+-                  {t("layout.attendanceCorrections", "Attendance Corrections")}
+-                </Link>
+-              ),
+-            },
+           ],
+         },
+         {
+diff --git a/FrontEnd/src/layouts/managerNav.test.tsx b/FrontEnd/src/layouts/managerNav.test.tsx
+--- a/FrontEnd/src/layouts/managerNav.test.tsx
++++ b/FrontEnd/src/layouts/managerNav.test.tsx
+@@ -44,7 +44,7 @@
+   "Team Dashboard",
+   "My Team",
+   "Team Requests",
+-  "Attendance Corrections",
++  "Team Attendance",
+   "Loan Requests",
+ ];
+ 
+@@ -85,6 +85,7 @@
+   // Wait for the sidebar itself, then let the capability request settle so
+   // "nav is hidden" assertions cannot pass merely because it is still loading.
+   await screen.findAllByRole("menu");
++  expect(screen.queryByText("Attendance Corrections")).not.toBeInTheDocument();
+   await waitFor(() => expect(mockedGetManagerAccess).toHaveBeenCalled());
+   await act(async () => {
+     await Promise.resolve();
+@@ -102,7 +103,7 @@
+       "/manager/dashboard",
+       "/manager/team",
+       "/manager/team-requests",
+-      "/manager/attendance-corrections",
++      "/manager/attendance",
+       "/manager/loan-requests",
+     ]);
+   });
+diff --git a/FrontEnd/src/layouts/managerNav.tsx b/FrontEnd/src/layouts/managerNav.tsx
+--- a/FrontEnd/src/layouts/managerNav.tsx
++++ b/FrontEnd/src/layouts/managerNav.tsx
+@@ -56,12 +56,10 @@
+         ),
+       },
+       {
+-        key: "/manager/attendance-corrections",
++        key: "/manager/attendance",
+         icon: <ClockCircleOutlined />,
+         label: (
+-          <Link to="/manager/attendance-corrections">
+-            {t("layout.attendanceCorrections", "Attendance Corrections")}
+-          </Link>
++          <Link to="/manager/attendance">{t("attendance.managerTitle")}</Link>
+         ),
+       },
+       {
+diff --git a/FrontEnd/src/pages/employee/attendance/AttendanceCorrectionRequestsPage.tsx b/FrontEnd/src/pages/employee/attendance/AttendanceCorrectionRequestsPage.tsx
+deleted file mode 100644
+--- a/FrontEnd/src/pages/employee/attendance/AttendanceCorrectionRequestsPage.tsx
++++ /dev/null
+@@ -1,361 +0,0 @@
+-import { useCallback, useEffect, useMemo, useState } from "react";
+-import { Button, Modal, Space, Table, Tooltip, notification } from "antd";
+-import type { ColumnsType } from "antd/es/table";
+-import {
+-  CloseCircleOutlined,
+-  PlusOutlined,
+-  SendOutlined,
+-} from "@ant-design/icons";
+-
+-import PageHeader from "../../../components/ui/PageHeader";
+-import LoadingState from "../../../components/ui/LoadingState";
+-import ErrorState from "../../../components/ui/ErrorState";
+-import EmptyState from "../../../components/ui/EmptyState";
+-import AttendanceMaintenanceBanner from "../../../components/attendance/AttendanceMaintenanceBanner";
+-import AttendanceCorrectionStatusTag from "../../../components/attendance/AttendanceCorrectionStatusTag";
+-import AttendanceCorrectionFormModal from "../../../components/attendance/AttendanceCorrectionFormModal";
+-import AttendanceCorrectionDetails from "../../../components/attendance/AttendanceCorrectionDetails";
+-import {
+-  cancelAttendanceCorrectionRequest,
+-  listAttendanceCorrectionRequests,
+-  submitAttendanceCorrectionRequest,
+-  type AttendanceCorrectionRequest,
+-} from "../../../services/api/attendanceCorrectionsApi";
+-import { isApiError } from "../../../services/api/apiTypes";
+-import { useI18n } from "../../../i18n/useI18n";
+-import { formatDateOnly, formatTimeOnly } from "../../../utils/dateTime";
+-import {
+-  getDetailedApiMessage,
+-  getDetailedHttpErrorMessage,
+-} from "../../../services/api/userErrorMessages";
+-
+-const { confirm } = Modal;
+-
+-export default function AttendanceCorrectionRequestsPage() {
+-  const { t } = useI18n();
+-  const [items, setItems] = useState<AttendanceCorrectionRequest[]>([]);
+-  const [total, setTotal] = useState(0);
+-  const [page, setPage] = useState(1);
+-  const [pageSize, setPageSize] = useState(10);
+-  const [loading, setLoading] = useState(false);
+-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+-  const [createOpen, setCreateOpen] = useState(false);
+-  const [actionId, setActionId] = useState<number | null>(null);
+-
+-  const load = useCallback(async () => {
+-    setLoading(true);
+-    setErrorMessage(null);
+-    try {
+-      const res = await listAttendanceCorrectionRequests({
+-        page,
+-        page_size: pageSize,
+-      });
+-      if (isApiError(res)) {
+-        setErrorMessage(getDetailedApiMessage(t, res.message));
+-        return;
+-      }
+-      setItems(res.data.results || []);
+-      setTotal(res.data.count || 0);
+-    } catch (err: unknown) {
+-      setErrorMessage(getDetailedHttpErrorMessage(t, err));
+-    } finally {
+-      setLoading(false);
+-    }
+-  }, [page, pageSize, t]);
+-
+-  useEffect(() => {
+-    load();
+-  }, [load]);
+-
+-  const onSubmitDraft = useCallback(
+-    (id: number) => {
+-      confirm({
+-        title: t(
+-          "attendanceCorrections.actions.submitTitle",
+-          "Submit correction request",
+-        ),
+-        content: t(
+-          "attendanceCorrections.actions.submitConfirm",
+-          "This will send the request for approval. Continue?",
+-        ),
+-        okText: t("attendanceCorrections.form.submit", "Submit request"),
+-        cancelText: t("common.cancel", "Cancel"),
+-        onOk: async () => {
+-          setActionId(id);
+-          try {
+-            const res = await submitAttendanceCorrectionRequest(id);
+-            if (isApiError(res)) {
+-              notification.error({
+-                message: t("common.error", "Error"),
+-                description: getDetailedApiMessage(t, res.message),
+-              });
+-            } else {
+-              notification.success({
+-                message: t(
+-                  "attendanceCorrections.success.submitted",
+-                  "Correction request submitted.",
+-                ),
+-              });
+-              load();
+-            }
+-          } catch (err: unknown) {
+-            notification.error({
+-              message: t("common.error", "Error"),
+-              description: getDetailedHttpErrorMessage(t, err),
+-            });
+-          } finally {
+-            setActionId(null);
+-          }
+-        },
+-      });
+-    },
+-    [load, t],
+-  );
+-
+-  const onCancel = useCallback(
+-    (id: number) => {
+-      confirm({
+-        title: t(
+-          "attendanceCorrections.actions.cancelTitle",
+-          "Cancel correction request",
+-        ),
+-        content: t(
+-          "attendanceCorrections.actions.cancelConfirm",
+-          "Are you sure you want to cancel this request?",
+-        ),
+-        okText: t("common.confirm", "Confirm"),
+-        okType: "danger",
+-        cancelText: t("common.close", "Close"),
+-        onOk: async () => {
+-          setActionId(id);
+-          try {
+-            const res = await cancelAttendanceCorrectionRequest(id);
+-            if (isApiError(res)) {
+-              notification.error({
+-                message: t("common.error", "Error"),
+-                description: getDetailedApiMessage(t, res.message),
+-              });
+-            } else {
+-              notification.success({
+-                message: t(
+-                  "attendanceCorrections.success.cancelled",
+-                  "Correction request cancelled.",
+-                ),
+-              });
+-              load();
+-            }
+-          } catch (err: unknown) {
+-            notification.error({
+-              message: t("common.error", "Error"),
+-              description: getDetailedHttpErrorMessage(t, err),
+-            });
+-          } finally {
+-            setActionId(null);
+-          }
+-        },
+-      });
+-    },
+-    [load, t],
+-  );
+-
+-  const columns: ColumnsType<AttendanceCorrectionRequest> = useMemo(
+-    () => [
+-      {
+-        title: t("common.date", "Date"),
+-        key: "date",
+-        dataIndex: "date",
+-        width: 130,
+-        render: (value: string) => formatDateOnly(value, "—"),
+-      },
+-      {
+-        title: t(
+-          "attendanceCorrections.fields.requestedCheckIn",
+-          "Requested check-in",
+-        ),
+-        key: "in",
+-        dataIndex: "requested_check_in_at",
+-        width: 150,
+-        render: (value: string | null) => formatTimeOnly(value, "—"),
+-      },
+-      {
+-        title: t(
+-          "attendanceCorrections.fields.requestedCheckOut",
+-          "Requested check-out",
+-        ),
+-        key: "out",
+-        dataIndex: "requested_check_out_at",
+-        width: 160,
+-        render: (value: string | null) => formatTimeOnly(value, "—"),
+-      },
+-      {
+-        title: t(
+-          "attendanceCorrections.fields.requestedStatus",
+-          "Requested status",
+-        ),
+-        key: "rstatus",
+-        dataIndex: "requested_status",
+-        width: 140,
+-        render: (value: string) =>
+-          value ? t(`attendanceCorrections.statusValue.${value}`, value) : "—",
+-      },
+-      {
+-        title: t("common.reason", "Reason"),
+-        key: "reason",
+-        dataIndex: "reason",
+-        ellipsis: { showTitle: false },
+-        render: (value: string) => (
+-          <Tooltip title={value || "—"}>
+-            <span>{value || "—"}</span>
+-          </Tooltip>
+-        ),
+-      },
+-      {
+-        title: t("common.status", "Status"),
+-        key: "status",
+-        width: 150,
+-        render: (_: unknown, record) => (
+-          <AttendanceCorrectionStatusTag status={record.status} />
+-        ),
+-      },
+-      {
+-        title: t("common.actions", "Actions"),
+-        key: "actions",
+-        width: 240,
+-        fixed: "right",
+-        render: (_: unknown, record) => {
+-          const isDraft = record.status === "draft";
+-          const canCancel = record.workflow?.can_cancel || isDraft;
+-          return (
+-            <Space size={6}>
+-              {isDraft && (
+-                <Button
+-                  type="primary"
+-                  size="small"
+-                  icon={<SendOutlined />}
+-                  loading={actionId === record.id}
+-                  onClick={() => onSubmitDraft(record.id)}
+-                  style={{ borderRadius: 8 }}
+-                >
+-                  {t("attendanceCorrections.form.submit", "Submit")}
+-                </Button>
+-              )}
+-              {canCancel && (
+-                <Button
+-                  size="small"
+-                  danger
+-                  icon={<CloseCircleOutlined />}
+-                  loading={actionId === record.id}
+-                  onClick={() => onCancel(record.id)}
+-                  style={{ borderRadius: 8 }}
+-                >
+-                  {t("common.cancel", "Cancel")}
+-                </Button>
+-              )}
+-            </Space>
+-          );
+-        },
+-      },
+-    ],
+-    [t, actionId, onCancel, onSubmitDraft],
+-  );
+-
+-  return (
+-    <div>
+-      <PageHeader
+-        title={t(
+-          "attendanceCorrections.page.employeeTitle",
+-          "Attendance Corrections",
+-        )}
+-        subtitle={t(
+-          "attendanceCorrections.page.employeeSubtitle",
+-          "Submit corrections for missing or incorrect attendance entries.",
+-        )}
+-        actions={
+-          <Button
+-            type="primary"
+-            icon={<PlusOutlined />}
+-            onClick={() => setCreateOpen(true)}
+-            style={{ borderRadius: 10 }}
+-          >
+-            {t(
+-              "attendanceCorrections.actions.create",
+-              "New correction request",
+-            )}
+-          </Button>
+-        }
+-      />
+-
+-      <AttendanceMaintenanceBanner />
+-
+-      {loading && !items.length ? (
+-        <LoadingState lines={5} />
+-      ) : errorMessage ? (
+-        <ErrorState
+-          title={t("common.error", "Error")}
+-          description={errorMessage}
+-          onRetry={load}
+-        />
+-      ) : items.length === 0 ? (
+-        <EmptyState
+-          title={t(
+-            "attendanceCorrections.empty.title",
+-            "No correction requests yet",
+-          )}
+-          description={t(
+-            "attendanceCorrections.empty.employeeDescription",
+-            "Submit a correction request if your attendance for a day is missing or wrong.",
+-          )}
+-          actionText={t(
+-            "attendanceCorrections.actions.create",
+-            "New correction request",
+-          )}
+-          onAction={() => setCreateOpen(true)}
+-        />
+-      ) : (
+-        <div
+-          style={{
+-            background: "white",
+-            borderRadius: 14,
+-            boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+-            overflow: "hidden",
+-          }}
+-        >
+-          <Table<AttendanceCorrectionRequest>
+-            dataSource={items}
+-            columns={columns}
+-            rowKey="id"
+-            loading={loading}
+-            expandable={{
+-              expandedRowRender: (record) => (
+-                <AttendanceCorrectionDetails request={record} />
+-              ),
+-            }}
+-            scroll={{ x: 1100 }}
+-            pagination={{
+-              current: page,
+-              pageSize,
+-              total,
+-              showSizeChanger: true,
+-              showTotal: (totalCount) =>
+-                t(
+-                  "common.totalItems",
+-                  { count: totalCount },
+-                  `${totalCount} items`,
+-                ),
+-              onChange: (next, size) => {
+-                setPage(next);
+-                if (size && size !== pageSize) setPageSize(size);
+-              },
+-            }}
+-          />
+-        </div>
+-      )}
+-
+-      <AttendanceCorrectionFormModal
+-        open={createOpen}
+-        onClose={() => setCreateOpen(false)}
+-        onCreated={() => load()}
+-      />
+-    </div>
+-  );
+-}
+diff --git a/FrontEnd/src/pages/employee/AttendancePage.test.tsx b/FrontEnd/src/pages/employee/AttendancePage.test.tsx
+--- a/FrontEnd/src/pages/employee/AttendancePage.test.tsx
++++ b/FrontEnd/src/pages/employee/AttendancePage.test.tsx
+@@ -6,29 +6,20 @@
+   waitFor,
+   within,
+ } from "@testing-library/react";
+-import dayjs from "dayjs";
++import { message } from "antd";
+ 
+ vi.mock("../../services/api/attendanceApi", () => ({
+   getMyAttendance: vi.fn(),
+-  checkIn: vi.fn(),
+-  checkOut: vi.fn(),
+   getGlobalAttendance: vi.fn(),
+-  overrideAttendance: vi.fn(),
+ }));
+ 
+ import EmployeeAttendancePage from "./AttendancePage";
+-import {
+-  checkIn,
+-  checkOut,
+-  getMyAttendance,
+-} from "../../services/api/attendanceApi";
++import { getMyAttendance } from "../../services/api/attendanceApi";
+ import { useEmployeeAttendanceStore } from "../../stores/attendanceStore";
+ import { useI18nStore } from "../../i18n/i18nStore";
+ import type { AttendanceRecord } from "../../types/attendance";
+ 
+ const getMock = getMyAttendance as unknown as ReturnType<typeof vi.fn>;
+-const checkInMock = checkIn as unknown as ReturnType<typeof vi.fn>;
+-const checkOutMock = checkOut as unknown as ReturnType<typeof vi.fn>;
+ 
+ const record = (
+   overrides: Partial<AttendanceRecord> = {},
+@@ -39,7 +30,7 @@
+   check_in_at: "2026-08-11T05:00:00Z",
+   check_out_at: "2026-08-11T13:30:00Z",
+   status: "PRESENT",
+-  source: "EMPLOYEE",
++  source: "SYSTEM",
+   is_overridden: false,
+   override_reason: null,
+   notes: null,
+@@ -73,13 +64,9 @@
+ 
+ beforeEach(() => {
+   getMock.mockReset();
+-  checkInMock.mockReset();
+-  checkOutMock.mockReset();
+   useI18nStore.getState().setLanguage("en");
+   useEmployeeAttendanceStore.getState().reset();
+   getMock.mockResolvedValue(listPayload([record()]));
+-  checkInMock.mockResolvedValue({ status: "success", data: record() });
+-  checkOutMock.mockResolvedValue({ status: "success", data: record() });
+ });
+ 
+ describe("EmployeeAttendancePage status display", () => {
+@@ -178,49 +165,33 @@
+   });
+ });
+ 
+-describe("EmployeeAttendancePage refresh after check-in", () => {
+-  it("reloads with the range the page is showing, not the backend default", async () => {
+-    // Today has no record yet, so the check-in control is enabled.
+-    getMock.mockResolvedValue(listPayload([record({ date: "2026-08-11" })]));
+-
++describe("BioTime-only attendance", () => {
++  it("has no punch controls and refreshes the read-only range", async () => {
+     render(<EmployeeAttendancePage />);
+-
+     await waitFor(() => expect(getMock).toHaveBeenCalledTimes(1));
+-    const initialParams = getMock.mock.calls[0][0];
+-    expect(initialParams).toHaveProperty("date_from");
+-    expect(initialParams).toHaveProperty("date_to");
+-
+-    fireEvent.click(screen.getByRole("button", { name: /Check In/i }));
+-
+-    await waitFor(() => expect(checkInMock).toHaveBeenCalledTimes(1));
++    expect(
++      screen.getByText("Attendance is recorded through BioTime."),
++    ).toBeInTheDocument();
++    expect(
++      screen.queryByRole("button", { name: /check in|check out/i }),
++    ).not.toBeInTheDocument();
++    fireEvent.click(screen.getByRole("button", { name: /refresh/i }));
+     await waitFor(() => expect(getMock).toHaveBeenCalledTimes(2));
+-    // The reload keeps date_from/date_to, so the new row cannot fall outside
+-    // the visible range.
+-    expect(getMock.mock.calls[1][0]).toEqual(initialParams);
++    expect(getMock.mock.calls[1][0]).toEqual(getMock.mock.calls[0][0]);
+   });
+-
+-  it("reloads with the same range after a check-out", async () => {
+-    // The component matches today's row with `dayjs().format("YYYY-MM-DD")`,
+-    // which is local. `toISOString()` is UTC, so east of Greenwich the two
+-    // disagree either side of midnight and the row stops being "today".
+-    const today = dayjs().format("YYYY-MM-DD");
+-    getMock.mockResolvedValue(
+-      listPayload([record({ date: today, check_out_at: null })]),
+-    );
+-
++  it("clears previous history and shows unmapped access as information without a toast", async () => {
++    const toast = vi.spyOn(message, "error");
++    const text =
++      "Attendance is unavailable until your BioTime mapping is completed. Contact HR to be registered on a BioTime device.";
++    useEmployeeAttendanceStore.setState({ records: [record()], total: 1 });
++    getMock.mockRejectedValue({
++      response: { status: 403, data: { message: text } },
++    });
+     render(<EmployeeAttendancePage />);
+-
+-    await waitFor(() => expect(getMock).toHaveBeenCalledTimes(1));
+-    const initialParams = getMock.mock.calls[0][0];
+-
+-    const checkOutButton = await screen.findByRole("button", {
+-      name: /Check Out/i,
+-    });
+-    await waitFor(() => expect(checkOutButton).not.toBeDisabled());
+-    fireEvent.click(checkOutButton);
+-
+-    await waitFor(() => expect(checkOutMock).toHaveBeenCalledTimes(1));
+-    await waitFor(() => expect(getMock).toHaveBeenCalledTimes(2));
+-    expect(getMock.mock.calls[1][0]).toEqual(initialParams);
++    expect(await screen.findByText(text)).toBeInTheDocument();
++    expect(screen.queryByRole("table")).not.toBeInTheDocument();
++    expect(toast).not.toHaveBeenCalled();
++    expect(useEmployeeAttendanceStore.getState().error).toBeNull();
++    toast.mockRestore();
+   });
+ });
+diff --git a/FrontEnd/src/pages/employee/AttendancePage.tsx b/FrontEnd/src/pages/employee/AttendancePage.tsx
+--- a/FrontEnd/src/pages/employee/AttendancePage.tsx
++++ b/FrontEnd/src/pages/employee/AttendancePage.tsx
+@@ -10,12 +10,9 @@
+   Space,
+   Tag,
+   message,
++  Alert,
+ } from "antd";
+-import {
+-  CheckCircleOutlined,
+-  ClockCircleOutlined,
+-  ReloadOutlined,
+-} from "@ant-design/icons";
++import { ReloadOutlined } from "@ant-design/icons";
+ import dayjs from "dayjs";
+ import { useEmployeeAttendanceStore } from "../../stores/attendanceStore";
+ import type {
+@@ -51,15 +48,8 @@
+ 
+ const EmployeeAttendancePage: React.FC = () => {
+   const { t } = useI18n();
+-  const {
+-    records,
+-    total,
+-    loading,
+-    error,
+-    fetchMyRecords,
+-    performCheckIn,
+-    performCheckOut,
+-  } = useEmployeeAttendanceStore();
++  const { records, total, loading, error, fetchMyRecords, accessUnavailable } =
++    useEmployeeAttendanceStore();
+ 
+   const [dateRange, setDateRange] = React.useState<[dayjs.Dayjs, dayjs.Dayjs]>([
+     dayjs().subtract(30, "day"),
+@@ -71,10 +61,6 @@
+     pageSize: 25,
+   });
+ 
+-  /**
+-   * The filter the table is showing. Check-in and check-out reload with this
+-   * same object, so a new record cannot land outside the visible range.
+-   */
+   const currentFilters = useMemo(
+     () => ({
+       date_from: dateRange[0].format("YYYY-MM-DD"),
+@@ -98,34 +84,6 @@
+       message.error(error);
+     }
+   }, [error]);
+-
+-  const handleCheckIn = async () => {
+-    try {
+-      await performCheckIn(currentFilters);
+-      message.success(t("attendance.checkedIn"));
+-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+-    } catch (_e) {
+-      // Store handles error state
+-    }
+-  };
+-
+-  const handleCheckOut = async () => {
+-    try {
+-      await performCheckOut(currentFilters);
+-      message.success(t("attendance.checkedOut"));
+-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+-    } catch (_e) {
+-      // Handled
+-    }
+-  };
+-
+-  // Determine today's status for button states
+-  const todayStr = dayjs().format("YYYY-MM-DD");
+-  const todayRecord = records.find((r) => r.date === todayStr);
+-
+-  const isCheckInDisabled = !!todayRecord?.check_in_at;
+-  const isCheckOutDisabled =
+-    !todayRecord || !todayRecord.check_in_at || !!todayRecord.check_out_at;
+ 
+   const columns = [
+     {
+@@ -213,72 +171,50 @@
+         </Col>
+       </Row>
+ 
+-      <Card style={{ marginBottom: 16 }}>
+-        <Row justify="space-between" align="middle" gutter={[16, 16]}>
+-          <Col xs={24} md={12}>
+-            <RangePicker
+-              style={{ width: "100%" }}
+-              value={dateRange}
+-              onChange={(dates) => {
+-                if (dates && dates[0] && dates[1]) {
+-                  setDateRange([dates[0], dates[1]]);
+-                }
+-              }}
+-            />
+-          </Col>
+-          <Col
+-            xs={24}
+-            md={12}
+-            style={{
+-              textAlign: "right",
+-              display: "flex",
+-              justifyContent: "flex-end",
+-              gap: 8,
++      <Alert
++        type="info"
++        showIcon
++        title={t("attendance.biotimeNotice")}
++        style={{ marginBottom: 16 }}
++      />
++      {accessUnavailable ? (
++        <Alert type="info" showIcon title={t("attendance.unmapped")} />
++      ) : (
++        <>
++          <Card style={{ marginBottom: 16 }}>
++            <Row justify="space-between" align="middle" gutter={[16, 16]}>
++              <Col xs={24} md={12}>
++                <RangePicker
++                  style={{ width: "100%" }}
++                  value={dateRange}
++                  onChange={(dates) => {
++                    if (dates && dates[0] && dates[1]) {
++                      setDateRange([dates[0], dates[1]]);
++                      setPagination((current) => ({ ...current, current: 1 }));
++                    }
++                  }}
++                />
++              </Col>
++            </Row>
++          </Card>
++
++          <Table
++            dataSource={records}
++            columns={columns}
++            rowKey="id"
++            loading={loading}
++            size="small"
++            scroll={{ x: "max-content" }}
++            pagination={{
++              current: pagination.current,
++              pageSize: pagination.pageSize,
++              total: total,
++              onChange: (page, pageSize) =>
++                setPagination({ current: page, pageSize }),
+             }}
+-          >
+-            <Button
+-              type="primary"
+-              icon={<ClockCircleOutlined />}
+-              style={{
+-                backgroundColor: isCheckInDisabled ? undefined : "#52c41a",
+-                flex: 1,
+-              }}
+-              disabled={isCheckInDisabled}
+-              loading={loading}
+-              onClick={handleCheckIn}
+-            >
+-              {t("attendance.checkIn")}
+-            </Button>
+-            <Button
+-              danger
+-              type="primary"
+-              icon={<CheckCircleOutlined />}
+-              style={{ flex: 1 }}
+-              disabled={isCheckOutDisabled}
+-              loading={loading}
+-              onClick={handleCheckOut}
+-            >
+-              {t("attendance.checkOut")}
+-            </Button>
+-          </Col>
+-        </Row>
+-      </Card>
+-
+-      <Table
+-        dataSource={records}
+-        columns={columns}
+-        rowKey="id"
+-        loading={loading}
+-        size="small"
+-        scroll={{ x: "max-content" }}
+-        pagination={{
+-          current: pagination.current,
+-          pageSize: pagination.pageSize,
+-          total: total,
+-          onChange: (page, pageSize) =>
+-            setPagination({ current: page, pageSize }),
+-        }}
+-      />
++          />
++        </>
++      )}
+     </div>
+   );
+ };
+diff --git a/FrontEnd/src/pages/hr/attendance/AttendanceCorrectionRequestsPage.tsx b/FrontEnd/src/pages/hr/attendance/AttendanceCorrectionRequestsPage.tsx
+deleted file mode 100644
+--- a/FrontEnd/src/pages/hr/attendance/AttendanceCorrectionRequestsPage.tsx
++++ /dev/null
+@@ -1,44 +0,0 @@
+-import PageHeader from "../../../components/ui/PageHeader";
+-import AttendanceMaintenanceBanner from "../../../components/attendance/AttendanceMaintenanceBanner";
+-import AttendanceCorrectionsApproverTable from "../../../components/attendance/AttendanceCorrectionsApproverTable";
+-import { useI18n } from "../../../i18n/useI18n";
+-
+-export default function HRAttendanceCorrectionRequestsPage() {
+-  const { t } = useI18n();
+-  return (
+-    <div>
+-      <PageHeader
+-        title={t(
+-          "attendanceCorrections.page.hrTitle",
+-          "Attendance Correction Requests",
+-        )}
+-        subtitle={t(
+-          "attendanceCorrections.page.hrSubtitle",
+-          "Review and apply attendance corrections approved by managers.",
+-        )}
+-      />
+-      <AttendanceMaintenanceBanner
+-        description={t(
+-          "attendanceCorrections.maintenance.hrDescription",
+-          "The attendance module is under maintenance. HR approvals here will still apply the change to the attendance record once it is back.",
+-        )}
+-      />
+-      <AttendanceCorrectionsApproverTable
+-        approverRole="hr"
+-        defaultStatus="pending_hr"
+-        statusOptions={[
+-          "pending_hr",
+-          "pending_manager",
+-          "approved",
+-          "rejected",
+-          "cancelled",
+-          "draft",
+-        ]}
+-        successMessage={t(
+-          "attendanceCorrections.success.applied",
+-          "Correction applied.",
+-        )}
+-      />
+-    </div>
+-  );
+-}
+diff --git a/FrontEnd/src/pages/hr/attendance/HRAttendancePage.tsx b/FrontEnd/src/pages/hr/attendance/HRAttendancePage.tsx
+--- a/FrontEnd/src/pages/hr/attendance/HRAttendancePage.tsx
++++ b/FrontEnd/src/pages/hr/attendance/HRAttendancePage.tsx
+@@ -1,316 +1,4 @@
+-import React, { useEffect, useState } from "react";
+-import {
+-  Table,
+-  Button,
+-  Card,
+-  Tag,
+-  message,
+-  Typography,
+-  Tabs,
+-  Space,
+-  Tooltip,
+-  Modal,
+-  Input,
+-} from "antd";
+-import {
+-  CheckCircleOutlined,
+-  CloseCircleOutlined,
+-  ReloadOutlined,
+-} from "@ant-design/icons";
+-import { useHrAttendanceStore } from "../../../stores/attendanceStore";
+-import type {
+-  AttendanceRecord,
+-  AttendanceStatus,
+-} from "../../../types/attendance";
+-import { useI18n } from "../../../i18n/useI18n";
+-import { formatDateOnly, formatTimeOnly } from "../../../utils/dateTime";
+-
+-const { Title } = Typography;
+-const { TextArea } = Input;
+-
+-// Helper to get status color
+-const getStatusColor = (status: AttendanceStatus) => {
+-  switch (status) {
+-    case "PENDING":
+-      return "orange";
+-    case "PENDING_HR":
+-      return "orange";
+-    case "PENDING_MGR":
+-      return "gold";
+-    case "PENDING_CEO":
+-      return "purple";
+-    case "PRESENT":
+-      return "green";
+-    case "LATE":
+-      return "gold";
+-    case "ABSENT":
+-      return "red";
+-    case "REJECTED":
+-      return "magenta";
+-    default:
+-      return "default";
+-  }
+-};
+-
+-const HRAttendancePage: React.FC = () => {
+-  const { t } = useI18n();
+-  const { records, total, loading, fetchGlobalRecords, performOverride } =
+-    useHrAttendanceStore();
+-
+-  const [activeTab, setActiveTab] = useState<string>("PENDING");
+-  const [pagination, setPagination] = useState({ current: 1, pageSize: 20 });
+-
+-  // For Reject Modal
+-  const [rejectModalVisible, setRejectModalVisible] = useState(false);
+-  const [selectedRecordId, setSelectedRecordId] = useState<
+-    number | string | null
+-  >(null);
+-  const [rejectReason, setRejectReason] = useState("");
+-
+-  const fetchData = () => {
+-    const params: any = {
+-      page: pagination.current,
+-      page_size: pagination.pageSize,
+-    };
+-
+-    if (activeTab !== "ALL") {
+-      params.status = activeTab;
+-    }
+-
+-    fetchGlobalRecords(params);
+-  };
+-
+-  useEffect(() => {
+-    fetchData();
+-  }, [activeTab, pagination]);
+-
+-  const handleApprove = async (record: AttendanceRecord) => {
+-    try {
+-      await performOverride(record.id, {
+-        status: "PRESENT",
+-        override_reason: "Approved by HR",
+-      });
+-      message.success(
+-        t("hr.attendance.approvedSuccess", { name: record.employee_name }),
+-      );
+-      fetchData();
+-    } catch {
+-      // Error handled by store
+-    }
+-  };
+-
+-  const handleRejectClick = (record: AttendanceRecord) => {
+-    setSelectedRecordId(record.id);
+-    setRejectReason("");
+-    setRejectModalVisible(true);
+-  };
+-
+-  const handleConfirmReject = async () => {
+-    if (!selectedRecordId) return;
+-    try {
+-      await performOverride(selectedRecordId, {
+-        status: "REJECTED",
+-        override_reason: rejectReason || "Rejected by HR",
+-      });
+-      message.success(t("hr.attendance.rejectedSuccess"));
+-      setRejectModalVisible(false);
+-      fetchData();
+-    } catch {
+-      // Handled
+-    }
+-  };
+-
+-  const columns = [
+-    {
+-      title: t("hr.dashboard.employee"),
+-      dataIndex: "employee_name",
+-      key: "employee_name",
+-      render: (text: string, record: AttendanceRecord) => (
+-        <div>
+-          <div style={{ fontWeight: 500 }}>{text}</div>
+-          <div style={{ fontSize: 12, color: "#8c8c8c" }}>
+-            {record.employee_email}
+-          </div>
+-        </div>
+-      ),
+-    },
+-    {
+-      title: t("common.date"),
+-      dataIndex: "date",
+-      key: "date",
+-      render: (val: string) => formatDateOnly(val),
+-    },
+-    {
+-      title: t("attendance.checkIn"),
+-      dataIndex: "check_in_at",
+-      key: "check_in_at",
+-      render: (val: string) => formatTimeOnly(val, "—"),
+-    },
+-    {
+-      title: t("attendance.checkOut"),
+-      dataIndex: "check_out_at",
+-      key: "check_out_at",
+-      render: (val: string) => formatTimeOnly(val, "—"),
+-    },
+-    {
+-      title: t("common.status"),
+-      dataIndex: "status",
+-      key: "status",
+-      render: (status: AttendanceStatus) => {
+-        // Determine display text for status tag
+-        let displayStatus = status;
+-        switch (status) {
+-          case "PENDING":
+-            displayStatus = t("status.pending") as any;
+-            break;
+-          case "PRESENT":
+-            displayStatus = t("status.active") as any;
+-            break;
+-          case "ABSENT":
+-            displayStatus = t("status.absent") as any;
+-            break;
+-          case "LATE":
+-            displayStatus = t("hr.attendance.late") as any;
+-            break;
+-          case "REJECTED":
+-            displayStatus = t("status.rejected") as any;
+-            break;
+-          case "PENDING_HR":
+-            displayStatus = t("status.pendingHr") as any;
+-            break;
+-          case "PENDING_MGR":
+-            displayStatus = t("status.pendingManager") as any;
+-            break;
+-          case "PENDING_CEO":
+-            displayStatus = t("status.pendingCeo") as any;
+-            break;
+-        }
+-        return <Tag color={getStatusColor(status)}>{displayStatus}</Tag>;
+-      },
+-    },
+-    {
+-      title: t("common.actions"),
+-      key: "actions",
+-      render: (_: any, record: AttendanceRecord) => (
+-        <Space>
+-          {["PENDING", "PENDING_HR", "PENDING_MGR"].includes(record.status) && (
+-            <>
+-              <Tooltip title={t("common.approve")}>
+-                <Button
+-                  type="primary"
+-                  shape="circle"
+-                  icon={<CheckCircleOutlined />}
+-                  size="small"
+-                  style={{ backgroundColor: "#52c41a" }}
+-                  onClick={() => handleApprove(record)}
+-                />
+-              </Tooltip>
+-              <Tooltip title={t("common.reject")}>
+-                <Button
+-                  type="primary"
+-                  danger
+-                  shape="circle"
+-                  icon={<CloseCircleOutlined />}
+-                  size="small"
+-                  onClick={() => handleRejectClick(record)}
+-                />
+-              </Tooltip>
+-            </>
+-          )}
+-        </Space>
+-      ),
+-    },
+-  ];
+-
+-  const tabItems = [
+-    { label: t("hr.attendance.pendingApproval"), key: "PENDING" },
+-    { label: t("hr.attendance.present"), key: "PRESENT" },
+-    { label: t("hr.attendance.absent"), key: "ABSENT" },
+-    { label: t("hr.attendance.late"), key: "LATE" },
+-    { label: t("hr.attendance.rejected"), key: "REJECTED" },
+-    { label: t("hr.attendance.allRecords"), key: "ALL" },
+-  ];
+-
+-  return (
+-    <div>
+-      <div
+-        style={{
+-          marginBottom: 16,
+-          display: "flex",
+-          justifyContent: "space-between",
+-          alignItems: "center",
+-        }}
+-      >
+-        <Title level={4} style={{ margin: 0 }}>
+-          {t("hr.attendance.title")}
+-        </Title>
+-        <Button icon={<ReloadOutlined />} onClick={fetchData}>
+-          {t("common.refresh")}
+-        </Button>
+-      </div>
+-
+-      <Card
+-        bordered={false}
+-        style={{
+-          borderRadius: 16,
+-          border: "none",
+-          boxShadow: "0 4px 12px rgba(0,0,0,0.03)",
+-        }}
+-      >
+-        <Tabs
+-          activeKey={activeTab}
+-          onChange={(key) => {
+-            setActiveTab(key);
+-            setPagination({ ...pagination, current: 1 });
+-          }}
+-          items={tabItems.map((item) => ({
+-            key: item.key,
+-            label: item.label,
+-          }))}
+-        />
+-
+-        <Table
+-          dataSource={records}
+-          columns={columns}
+-          rowKey="id"
+-          loading={loading}
+-          size="small"
+-          scroll={{ x: "max-content" }}
+-          pagination={{
+-            current: pagination.current,
+-            pageSize: pagination.pageSize,
+-            total: total,
+-            onChange: (page, size) =>
+-              setPagination({ current: page, pageSize: size }),
+-            showSizeChanger: true,
+-          }}
+-        />
+-      </Card>
+-
+-      <Modal
+-        title={t("hr.attendance.rejectTitle")}
+-        open={rejectModalVisible}
+-        onOk={handleConfirmReject}
+-        onCancel={() => setRejectModalVisible(false)}
+-        okText={t("common.reject")}
+-        okButtonProps={{ danger: true }}
+-        cancelText={t("common.cancel")}
+-        width="min(520px, 96vw)"
+-        style={{ top: 16 }}
+-      >
+-        <Typography.Text>
+-          {t("hr.attendance.rejectReasonLabel")}
+-        </Typography.Text>
+-        <TextArea
+-          rows={4}
+-          style={{ marginTop: 8 }}
+-          value={rejectReason}
+-          onChange={(e) => setRejectReason(e.target.value)}
+-          placeholder={t("hr.attendance.rejectPlaceholder")}
+-        />
+-      </Modal>
+-    </div>
+-  );
+-};
+-
+-export default HRAttendancePage;
++import AttendancePreviewPage from "../../shared/AttendancePreviewPage";
++export default function HRAttendancePage() {
++  return <AttendancePreviewPage role="hr" />;
++}
+diff --git a/FrontEnd/src/pages/hr/AttendancePage.tsx b/FrontEnd/src/pages/hr/AttendancePage.tsx
+--- a/FrontEnd/src/pages/hr/AttendancePage.tsx
++++ b/FrontEnd/src/pages/hr/AttendancePage.tsx
+@@ -1,343 +1,4 @@
+-import React, { useEffect, useState } from "react";
+-import {
+-  Table,
+-  Button,
+-  Card,
+-  DatePicker,
+-  Row,
+-  Col,
+-  Typography,
+-  Tag,
+-  message,
+-  Input,
+-  Select,
+-  Space,
+-} from "antd";
+-import {
+-  ReloadOutlined,
+-  EditOutlined,
+-  SearchOutlined,
+-} from "@ant-design/icons";
+-import dayjs from "dayjs";
+-import { useHrAttendanceStore } from "../../stores/attendanceStore";
+-import type {
+-  AttendanceRecord,
+-  AttendanceStatus,
+-} from "../../types/attendance";
+-import AttendanceOverrideModal from "../../components/hr/AttendanceOverrideModal";
+-import { useI18n } from "../../i18n/useI18n";
+-import { formatDateOnly, formatTimeOnly } from "../../utils/dateTime";
+-
+-const { Title } = Typography;
+-const { RangePicker } = DatePicker;
+-const { Option } = Select;
+-
+-const getStatusColor = (status: AttendanceStatus) => {
+-  switch (status) {
+-    case "PRESENT":
+-      return "green";
+-    case "ABSENT":
+-      return "red";
+-    case "LATE":
+-      return "orange";
+-    case "REJECTED":
+-      return "magenta";
+-    default:
+-      return "default";
+-  }
+-};
+-
+-const HrAttendancePage: React.FC = () => {
+-  const { t } = useI18n();
+-  const {
+-    records,
+-    total,
+-    loading,
+-    error,
+-    fetchGlobalRecords,
+-    performOverride,
+-  } = useHrAttendanceStore();
+-
+-  const [filters, setFilters] = useState<{
+-    dateRange: [dayjs.Dayjs, dayjs.Dayjs] | null;
+-    status: AttendanceStatus | undefined;
+-    employeeId: string;
+-  }>({
+-    dateRange: [dayjs().subtract(7, "day"), dayjs()],
+-    status: undefined,
+-    employeeId: "",
+-  });
+-
+-  const [pagination, setPagination] = useState({
+-    current: 1,
+-    pageSize: 25,
+-  });
+-
+-  const [modalVisible, setModalVisible] = useState(false);
+-  const [selectedRecord, setSelectedRecord] = useState<AttendanceRecord | null>(
+-    null,
+-  );
+-
+-  const fetchData = () => {
+-    const params: any = {
+-      page: pagination.current,
+-      page_size: pagination.pageSize,
+-    };
+-
+-    if (filters.dateRange) {
+-      params.date_from = filters.dateRange[0].format("YYYY-MM-DD");
+-      params.date_to = filters.dateRange[1].format("YYYY-MM-DD");
+-    }
+-    if (filters.status) params.status = filters.status;
+-    if (filters.employeeId) params.employee_id = filters.employeeId;
+-
+-    fetchGlobalRecords(params);
+-  };
+-
+-  useEffect(() => {
+-    fetchData();
+-  }, [pagination]);
+-
+-  useEffect(() => {
+-    if (error) {
+-      message.error(error);
+-    }
+-  }, [error]);
+-
+-  const handleOverrideClick = (record: AttendanceRecord) => {
+-    setSelectedRecord(record);
+-    setModalVisible(true);
+-  };
+-
+-  const handleOverrideSubmit = async (id: string | number, values: any) => {
+-    try {
+-      await performOverride(id, values);
+-      message.success(t("hr.attendance.recordUpdated"));
+-      setModalVisible(false);
+-      fetchData(); // Refresh list
+-    } catch {
+-      // Error handled by store
+-    }
+-  };
+-
+-  const columns = [
+-    {
+-      title: t("hr.dashboard.employee"),
+-      key: "employee",
+-      render: (_: any, record: AttendanceRecord) => (
+-        <div>
+-          <div>{record.employee_name || `ID: ${record.employee_profile}`}</div>
+-          <div style={{ fontSize: 12, color: "#888" }}>
+-            {record.employee_email}
+-          </div>
+-        </div>
+-      ),
+-    },
+-    {
+-      title: t("common.date"),
+-      dataIndex: "date",
+-      key: "date",
+-      render: (val: string) => formatDateOnly(val),
+-    },
+-    {
+-      title: t("common.status"),
+-      dataIndex: "status",
+-      key: "status",
+-      render: (status: AttendanceStatus) => {
+-        let displayStatus = status;
+-        switch (status) {
+-          case "PENDING":
+-            displayStatus = t("status.pending") as any;
+-            break;
+-          case "PRESENT":
+-            displayStatus = t("status.active") as any;
+-            break;
+-          case "ABSENT":
+-            displayStatus = t("status.absent") as any;
+-            break;
+-          case "LATE":
+-            displayStatus = t("hr.attendance.late") as any;
+-            break;
+-          case "REJECTED":
+-            displayStatus = t("status.rejected") as any;
+-            break;
+-        }
+-        return <Tag color={getStatusColor(status)}>{displayStatus}</Tag>;
+-      },
+-    },
+-    {
+-      title: t("attendance.checkIn"),
+-      dataIndex: "check_in_at",
+-      key: "check_in_at",
+-      render: (val: string | null) => formatTimeOnly(val),
+-    },
+-    {
+-      title: t("attendance.checkOut"),
+-      dataIndex: "check_out_at",
+-      key: "check_out_at",
+-      render: (val: string | null) => formatTimeOnly(val),
+-    },
+-    {
+-      title: t("hr.attendance.source"),
+-      dataIndex: "source",
+-      key: "source",
+-      render: (src: string) => <Tag>{src}</Tag>,
+-    },
+-    {
+-      title: t("hr.attendance.isOverridden"),
+-      dataIndex: "is_overridden",
+-      key: "is_overridden",
+-      render: (isOvr: boolean) =>
+-        isOvr ? (
+-          <span style={{ color: "orange" }}>{t("common.yes")}</span>
+-        ) : (
+-          t("common.no")
+-        ),
+-    },
+-    {
+-      title: t("common.actions"),
+-      key: "action",
+-      render: (_: any, record: AttendanceRecord) => (
+-        <Button
+-          size="small"
+-          icon={<EditOutlined />}
+-          onClick={() => handleOverrideClick(record)}
+-        >
+-          {t("hr.attendance.overrideButton")}
+-        </Button>
+-      ),
+-    },
+-  ];
+-
+-  return (
+-    <div style={{ padding: 24 }}>
+-      <Row justify="space-between" align="middle" style={{ marginBottom: 24 }}>
+-        <Col>
+-          <Title level={2} style={{ margin: 0 }}>
+-            {t("hr.attendance.recordsTitle")}
+-          </Title>
+-        </Col>
+-        <Col>
+-          <Button icon={<ReloadOutlined />} onClick={fetchData} size="large">
+-            {t("common.refresh")}
+-          </Button>
+-        </Col>
+-      </Row>
+-
+-      <Card
+-        style={{
+-          marginBottom: 24,
+-          borderRadius: 16,
+-          border: "none",
+-          boxShadow: "0 4px 12px rgba(0,0,0,0.03)",
+-        }}
+-      >
+-        <Row gutter={[16, 16]} align="middle">
+-          <Col xs={24} md={6}>
+-            <Input
+-              placeholder={t("hr.attendance.employeeIdPlaceholder")}
+-              value={filters.employeeId}
+-              onChange={(e) =>
+-                setFilters((prev) => ({ ...prev, employeeId: e.target.value }))
+-              }
+-              size="large"
+-            />
+-          </Col>
+-          <Col xs={24} md={6}>
+-            <Select
+-              style={{ width: "100%" }}
+-              placeholder={t("hr.attendance.selectStatusPlaceholder")}
+-              allowClear
+-              value={filters.status}
+-              onChange={(val) =>
+-                setFilters((prev) => ({ ...prev, status: val }))
+-              }
+-              size="large"
+-            >
+-              <Option value="PRESENT">{t("status.active")}</Option>
+-              <Option value="ABSENT">{t("status.absent")}</Option>
+-              <Option value="LATE">{t("hr.attendance.late")}</Option>
+-            </Select>
+-          </Col>
+-          <Col xs={24} md={8}>
+-            <RangePicker
+-              style={{ width: "100%" }}
+-              value={filters.dateRange}
+-              onChange={(dates) => {
+-                if (dates && dates[0] && dates[1]) {
+-                  setFilters((prev) => ({
+-                    ...prev,
+-                    dateRange: [dates[0]!, dates[1]!],
+-                  }));
+-                } else {
+-                  setFilters((prev) => ({ ...prev, dateRange: null }));
+-                }
+-              }}
+-              size="large"
+-            />
+-          </Col>
+-          <Col xs={24} md={4}>
+-            <Space>
+-              <Button
+-                type="primary"
+-                icon={<SearchOutlined />}
+-                onClick={() => {
+-                  setPagination((p) => ({ ...p, current: 1 }));
+-                  fetchData();
+-                }}
+-                size="large"
+-              >
+-                {t("common.search")}
+-              </Button>
+-              <Button
+-                onClick={() => {
+-                  setFilters({
+-                    dateRange: null,
+-                    status: undefined,
+-                    employeeId: "",
+-                  });
+-                  setPagination((p) => ({ ...p, current: 1 }));
+-                  setTimeout(fetchData, 0);
+-                }}
+-                size="large"
+-              >
+-                {t("common.reset")}
+-              </Button>
+-            </Space>
+-          </Col>
+-        </Row>
+-      </Card>
+-
+-      <Table
+-        dataSource={records}
+-        columns={columns}
+-        rowKey="id"
+-        loading={loading}
+-        size="small"
+-        scroll={{ x: "max-content" }}
+-        pagination={{
+-          current: pagination.current,
+-          pageSize: pagination.pageSize,
+-          total: total,
+-          onChange: (page, pageSize) =>
+-            setPagination({ current: page, pageSize }),
+-        }}
+-        style={{
+-          borderRadius: 16,
+-          overflow: "hidden",
+-          boxShadow: "0 4px 12px rgba(0,0,0,0.03)",
+-        }}
+-      />
+-
+-      <AttendanceOverrideModal
+-        visible={modalVisible}
+-        record={selectedRecord}
+-        loading={loading}
+-        onCancel={() => setModalVisible(false)}
+-        onSubmit={handleOverrideSubmit}
+-      />
+-    </div>
+-  );
+-};
+-
+-export default HrAttendancePage;
++import AttendancePreviewPage from "../shared/AttendancePreviewPage";
++export default function HRAttendancePage() {
++  return <AttendancePreviewPage role="hr" />;
++}
+diff --git a/FrontEnd/src/pages/manager/ManagerAttendanceCorrectionRequestsPage.tsx b/FrontEnd/src/pages/manager/ManagerAttendanceCorrectionRequestsPage.tsx
+deleted file mode 100644
+--- a/FrontEnd/src/pages/manager/ManagerAttendanceCorrectionRequestsPage.tsx
++++ /dev/null
+@@ -1,38 +0,0 @@
+-import PageHeader from "../../components/ui/PageHeader";
+-import ApprovalSurface from "../../components/ceo/ApprovalSurface";
+-import AttendanceMaintenanceBanner from "../../components/attendance/AttendanceMaintenanceBanner";
+-import AttendanceCorrectionsApproverTable from "../../components/attendance/AttendanceCorrectionsApproverTable";
+-import { useManagerAccess } from "../../hooks/useManagerAccess";
+-import { managedCountLabel } from "../../utils/managerCapability";
+-import { useI18n } from "../../i18n/useI18n";
+-
+-export default function ManagerAttendanceCorrectionRequestsPage() {
+-  const { t } = useI18n();
+-  const { access } = useManagerAccess();
+-
+-  return (
+-    <div style={{ maxWidth: 1600, margin: "0 auto", paddingBottom: 24 }}>
+-      <PageHeader
+-        title={t("attendanceCorrections.page.managerTitle")}
+-        subtitle={t("attendanceCorrections.page.managerSubtitle")}
+-        secondarySubtitle={managedCountLabel(t, access.managed_employee_count)}
+-      />
+-      <AttendanceMaintenanceBanner
+-        description={t("attendanceCorrections.maintenance.managerDescription")}
+-      />
+-      <ApprovalSurface padding={16}>
+-        <AttendanceCorrectionsApproverTable
+-          approverRole="manager"
+-          defaultStatus="pending_manager"
+-          statusOptions={[
+-            "pending_manager",
+-            "pending_hr",
+-            "approved",
+-            "rejected",
+-            "cancelled",
+-          ]}
+-        />
+-      </ApprovalSurface>
+-    </div>
+-  );
+-}
+diff --git a/FrontEnd/src/pages/manager/ManagerAttendancePage.test.tsx b/FrontEnd/src/pages/manager/ManagerAttendancePage.test.tsx
+new file mode 100644
+--- /dev/null
++++ b/FrontEnd/src/pages/manager/ManagerAttendancePage.test.tsx
+@@ -0,0 +1,64 @@
++import { beforeEach, describe, expect, it, vi } from "vitest";
++import { render, screen, fireEvent, waitFor } from "@testing-library/react";
++vi.mock("../../services/api/managerApi", () => ({
++  getManagerAttendance: vi.fn(),
++}));
++import { getManagerAttendance } from "../../services/api/managerApi";
++import ManagerAttendancePage from "./ManagerAttendancePage";
++import { useI18nStore } from "../../i18n/i18nStore";
++beforeEach(() => {
++  vi.clearAllMocks();
++  useI18nStore.getState().setLanguage("en");
++});
++describe("Manager BioTime attendance", () => {
++  it("renders the scoped records without mutations and preserves server pagination", async () => {
++    vi.mocked(getManagerAttendance).mockResolvedValue({
++      status: "success",
++      data: {
++        results: [
++          {
++            id: 1,
++            employee_name: "Mapped Direct Report",
++            date: "2026-09-01",
++            status: "PRESENT",
++            check_in_at: "2026-09-01T08:00:00Z",
++            check_out_at: "2026-09-01T16:00:00Z",
++          },
++        ],
++        count: 26,
++      },
++    } as never);
++    render(<ManagerAttendancePage />);
++    expect(await screen.findByText("Mapped Direct Report")).toBeInTheDocument();
++    expect(
++      screen.getByText("Attendance is recorded through BioTime."),
++    ).toBeInTheDocument();
++    expect(
++      screen.queryByRole("button", {
++        name: /approve|reject|edit|override|correct/i,
++      }),
++    ).not.toBeInTheDocument();
++    expect(getManagerAttendance).toHaveBeenCalledWith({
++      status: undefined,
++      page: 1,
++      page_size: 25,
++    });
++    fireEvent.click(screen.getByTitle("2"));
++    await waitFor(() =>
++      expect(getManagerAttendance).toHaveBeenLastCalledWith({
++        status: undefined,
++        page: 2,
++        page_size: 25,
++      }),
++    );
++  });
++  it("renders no employee rows when the scoped API returns none", async () => {
++    vi.mocked(getManagerAttendance).mockResolvedValue({
++      status: "success",
++      data: { results: [], count: 0 },
++    });
++    render(<ManagerAttendancePage />);
++    await waitFor(() => expect(getManagerAttendance).toHaveBeenCalled());
++    expect(screen.queryByText("Mapped Direct Report")).not.toBeInTheDocument();
++  });
++});
+diff --git a/FrontEnd/src/pages/manager/ManagerAttendancePage.tsx b/FrontEnd/src/pages/manager/ManagerAttendancePage.tsx
+new file mode 100644
+--- /dev/null
++++ b/FrontEnd/src/pages/manager/ManagerAttendancePage.tsx
+@@ -0,0 +1,131 @@
++import { useCallback, useEffect, useState } from "react";
++import { Alert, Button, Select, Space, Table, Tag } from "antd";
++import { ReloadOutlined } from "@ant-design/icons";
++import PageHeader from "../../components/ui/PageHeader";
++import { getManagerAttendance } from "../../services/api/managerApi";
++import type {
++  AttendanceRecord,
++  AttendanceStatus,
++} from "../../types/attendance";
++import { normalizeListData, unwrapEnvelope } from "../../utils/dataUtils";
++import { formatDateOnly, formatTimeOnly12 } from "../../utils/dateTime";
++import { useI18n } from "../../i18n/useI18n";
++
++export default function ManagerAttendancePage() {
++  const { t, language } = useI18n();
++  const [records, setRecords] = useState<AttendanceRecord[]>([]);
++  const [total, setTotal] = useState(0);
++  const [loading, setLoading] = useState(false);
++  const [failed, setFailed] = useState(false);
++  const [status, setStatus] = useState<AttendanceStatus>();
++  const [pagination, setPagination] = useState({ current: 1, pageSize: 25 });
++  const load = useCallback(async () => {
++    setLoading(true);
++    setFailed(false);
++    setRecords([]);
++    try {
++      // This endpoint owns mapped direct-report visibility; never use the HR list.
++      const response = await getManagerAttendance({
++        status,
++        page: pagination.current,
++        page_size: pagination.pageSize,
++      });
++      const data = normalizeListData<AttendanceRecord>(
++        unwrapEnvelope(response),
++      );
++      setRecords(data.items);
++      setTotal(data.total);
++    } catch {
++      setFailed(true);
++      setTotal(0);
++    } finally {
++      setLoading(false);
++    }
++  }, [status, pagination]);
++  useEffect(() => {
++    void load();
++  }, [load]);
++  return (
++    <div>
++      <PageHeader
++        title={t("attendance.managerTitle")}
++        subtitle={t("attendance.biotimeNotice")}
++        actions={
++          <Button icon={<ReloadOutlined />} loading={loading} onClick={load}>
++            {t("common.refresh")}
++          </Button>
++        }
++      />
++      <Space style={{ marginBottom: 16 }}>
++        <Select
++          aria-label={t("common.status")}
++          placeholder={t("common.status")}
++          allowClear
++          value={status}
++          style={{ width: 180 }}
++          onChange={(value) => {
++            setStatus(value);
++            setPagination((p) => ({ ...p, current: 1 }));
++          }}
++          options={["PRESENT", "ABSENT", "LATE"].map((value) => ({
++            value,
++            label: t(`attendancePreview.status.${value.toLowerCase()}`),
++          }))}
++        />
++      </Space>
++      {failed ? (
++        <Alert type="error" title={t("attendancePreview.loadFailed")} />
++      ) : (
++        <Table<AttendanceRecord>
++          rowKey="id"
++          loading={loading}
++          dataSource={records}
++          scroll={{ x: "max-content" }}
++          pagination={{
++            ...pagination,
++            total,
++            onChange: (current, pageSize) =>
++              setPagination({ current, pageSize }),
++          }}
++          columns={[
++            {
++              title: t("common.employee"),
++              key: "employee",
++              render: (_, record) =>
++                (language === "ar"
++                  ? record.employee_name_ar
++                  : record.employee_name_en) ||
++                record.employee_name ||
++                record.employee_email ||
++                "—",
++            },
++            {
++              title: t("attendance.date"),
++              dataIndex: "date",
++              render: (value: string) => formatDateOnly(value),
++            },
++            {
++              title: t("attendance.checkInTime"),
++              dataIndex: "check_in_at",
++              render: (value: string | null) => formatTimeOnly12(value),
++            },
++            {
++              title: t("attendance.checkOutTime"),
++              dataIndex: "check_out_at",
++              render: (value: string | null) => formatTimeOnly12(value),
++            },
++            {
++              title: t("common.status"),
++              dataIndex: "status",
++              render: (value: string) => (
++                <Tag>
++                  {t(`attendancePreview.status.${value.toLowerCase()}`, value)}
++                </Tag>
++              ),
++            },
++          ]}
++        />
++      )}
++    </div>
++  );
++}
+diff --git a/FrontEnd/src/pages/manager/ManagerDashboardPage.test.tsx b/FrontEnd/src/pages/manager/ManagerDashboardPage.test.tsx
+--- a/FrontEnd/src/pages/manager/ManagerDashboardPage.test.tsx
++++ b/FrontEnd/src/pages/manager/ManagerDashboardPage.test.tsx
+@@ -8,7 +8,7 @@
+ 
+ vi.mock("../../services/api/managerSummaryApi", () => ({
+   getManagerWorkSummary: vi.fn(),
+-  MANAGER_QUEUE_KEYS: ["leave", "loan", "attendance", "assetReturn"],
++  MANAGER_QUEUE_KEYS: ["leave", "loan", "assetReturn"],
+ }));
+ 
+ vi.mock("../../services/api/managerApi", async (importOriginal) => ({
+@@ -42,12 +42,7 @@
+ const mockedAccess = vi.mocked(getManagerAccess);
+ const mockedTeam = vi.mocked(getManagerTeam);
+ 
+-const QUEUE_KEYS: ManagerQueueKey[] = [
+-  "leave",
+-  "loan",
+-  "attendance",
+-  "assetReturn",
+-];
++const QUEUE_KEYS: ManagerQueueKey[] = ["leave", "loan", "assetReturn"];
+ const DAY = 86_400_000;
+ 
+ function daysAgo(days: number) {
+@@ -148,7 +143,7 @@
+       makeSummary([
+         makeItem({ queue: "leave", id: 1 }),
+         makeItem({ queue: "loan", id: 2, detail: "5000" }),
+-        makeItem({ queue: "attendance", id: 3, detail: "2026-08-01" }),
++        makeItem({ queue: "assetReturn", id: 3, detail: "Laptop" }),
+       ]),
+     );
+ 
+diff --git a/FrontEnd/src/pages/manager/ManagerDashboardPage.tsx b/FrontEnd/src/pages/manager/ManagerDashboardPage.tsx
+--- a/FrontEnd/src/pages/manager/ManagerDashboardPage.tsx
++++ b/FrontEnd/src/pages/manager/ManagerDashboardPage.tsx
+@@ -5,7 +5,6 @@
+   AppstoreOutlined,
+   CalendarOutlined,
+   CheckCircleOutlined,
+-  ClockCircleOutlined,
+   DollarOutlined,
+   InboxOutlined,
+   ReloadOutlined,
+@@ -55,7 +54,6 @@
+ > = {
+   leave: { color: "#0ea5e9", icon: <CalendarOutlined aria-hidden /> },
+   loan: { color: "#10b981", icon: <DollarOutlined aria-hidden /> },
+-  attendance: { color: "#6366f1", icon: <ClockCircleOutlined aria-hidden /> },
+   assetReturn: { color: "#8b5cf6", icon: <AppstoreOutlined aria-hidden /> },
+ };
+ 
+@@ -301,20 +299,7 @@
+             animDelay={120}
+           />
+         </Col>
+-        <Col xs={24} sm={12} lg={8} role="listitem">
+-          <StatCard
+-            title={t("manager.dashboard.queue.attendance")}
+-            value={statValue(queues?.attendance)}
+-            caption={t("manager.dashboard.queue.attendanceCaption")}
+-            icon={<ClockCircleOutlined aria-hidden />}
+-            color={QUEUE_ACCENTS.attendance.color}
+-            compact={isMobile}
+-            note={unavailableNote(queues?.attendance.available)}
+-            onClick={() => navigate("/manager/attendance-corrections")}
+-            ariaLabel={`${t("manager.dashboard.queue.attendance")}: ${statValue(queues?.attendance)}`}
+-            animDelay={180}
+-          />
+-        </Col>
++
+         <Col xs={24} sm={12} lg={8} role="listitem">
+           <StatCard
+             title={t("manager.dashboard.queue.assetReturn")}
+diff --git a/FrontEnd/src/pages/manager/ManagerEmployeeProfilePage.test.tsx b/FrontEnd/src/pages/manager/ManagerEmployeeProfilePage.test.tsx
+--- a/FrontEnd/src/pages/manager/ManagerEmployeeProfilePage.test.tsx
++++ b/FrontEnd/src/pages/manager/ManagerEmployeeProfilePage.test.tsx
+@@ -72,7 +72,6 @@
+   queues: {
+     leave: { key: "leave", count: 0, available: true, items: [] },
+     loan: { key: "loan", count: 0, available: true, items: [] },
+-    attendance: { key: "attendance", count: 0, available: true, items: [] },
+     assetReturn: { key: "assetReturn", count: 0, available: true, items: [] },
+   },
+   items: [],
+diff --git a/FrontEnd/src/pages/manager/ManagerTeamRequestsPage.test.tsx b/FrontEnd/src/pages/manager/ManagerTeamRequestsPage.test.tsx
+--- a/FrontEnd/src/pages/manager/ManagerTeamRequestsPage.test.tsx
++++ b/FrontEnd/src/pages/manager/ManagerTeamRequestsPage.test.tsx
+@@ -20,18 +20,7 @@
+   rejectManagerAssetReturnRequest: vi.fn(),
+ }));
+ 
+-vi.mock(
+-  "../../services/api/attendanceCorrectionsApi",
+-  async (importOriginal) => ({
+-    ...(await importOriginal<
+-      typeof import("../../services/api/attendanceCorrectionsApi")
+-    >()),
+-    listAttendanceCorrectionRequests: vi.fn(),
+-  }),
+-);
+-
+ import ManagerTeamRequestsPage from "./ManagerTeamRequestsPage";
+-import { listAttendanceCorrectionRequests } from "../../services/api/attendanceCorrectionsApi";
+ import {
+   approveLeaveRequestManager,
+   getManagerAccess,
+@@ -51,7 +40,6 @@
+ const mockedTeam = vi.mocked(getManagerTeam);
+ const mockedApprove = vi.mocked(approveLeaveRequestManager);
+ const mockedReject = vi.mocked(rejectLeaveRequestManager);
+-const mockedCorrections = vi.mocked(listAttendanceCorrectionRequests);
+ 
+ const PENDING_LEAVE: ManagerLeaveRequest = {
+   id: 42,
+@@ -108,10 +96,6 @@
+     });
+     mockedAssets.mockResolvedValue({ status: "success", data: [] });
+     mockedTeam.mockResolvedValue({ status: "success", data: [] });
+-    mockedCorrections.mockResolvedValue({
+-      status: "success",
+-      data: { count: 0, next: null, previous: null, results: [] },
+-    });
+     useAuthStore.setState({
+       isAuthenticated: true,
+       user: { id: "21", email: "lead@ffi.test", role: "Employee" },
+@@ -123,22 +107,17 @@
+   });
+ 
+   it("shows the outstanding count per tab and totals them in the header", async () => {
+-    // One of the two leave rows is still awaiting the manager, plus two
+-    // attendance corrections whose table owns its own status filter.
+-    mockedCorrections.mockResolvedValue({
+-      status: "success",
+-      data: { count: 2, next: null, previous: null, results: [] },
+-    });
+-
+-    renderPage();
+-
+-    expect(await screen.findByText("3 awaiting you")).toBeInTheDocument();
++    // Only active request workflows contribute to the pending count.
++
++    renderPage();
++
++    expect(await screen.findByText("1 awaiting you")).toBeInTheDocument();
+     expect(
+       screen.getByRole("tab", { name: /Leave Requests/ }),
+     ).toHaveTextContent("1");
+     expect(
+-      screen.getByRole("tab", { name: /Attendance Corrections/ }),
+-    ).toHaveTextContent("2");
++      screen.queryByRole("tab", { name: /Attendance Corrections/ }),
++    ).not.toBeInTheDocument();
+   });
+ 
+   it("offers approve and reject only on rows still awaiting the manager", async () => {
+diff --git a/FrontEnd/src/pages/manager/ManagerTeamRequestsPage.tsx b/FrontEnd/src/pages/manager/ManagerTeamRequestsPage.tsx
+--- a/FrontEnd/src/pages/manager/ManagerTeamRequestsPage.tsx
++++ b/FrontEnd/src/pages/manager/ManagerTeamRequestsPage.tsx
+@@ -24,9 +24,6 @@
+ import TeamMemberCell from "../../components/manager/TeamMemberCell";
+ import LeaveApprovalMap from "../../components/leaves/LeaveApprovalMap";
+ import AssetReturnApprovalMap from "../../components/assets/AssetReturnApprovalMap";
+-import AttendanceMaintenanceNotice from "../../components/attendance/AttendanceMaintenanceNotice";
+-import AttendanceCorrectionsApproverTable from "../../components/attendance/AttendanceCorrectionsApproverTable";
+-import AttendanceMaintenanceBanner from "../../components/attendance/AttendanceMaintenanceBanner";
+ import {
+   getManagerLeaveRequests,
+   approveLeaveRequestManager,
+@@ -39,7 +36,6 @@
+   type ManagerTeamMember,
+ } from "../../services/api/managerApi";
+ import type { AssetReturnRequest } from "../../services/api/assetsApi";
+-import { listAttendanceCorrectionRequests } from "../../services/api/attendanceCorrectionsApi";
+ import { isApiError } from "../../services/api/apiTypes";
+ import { useManagerAccess } from "../../hooks/useManagerAccess";
+ import { managedCountLabel } from "../../utils/managerCapability";
+@@ -47,20 +43,9 @@
+ import { isStaleRequest, requestAgeLabel } from "../../utils/requestAge";
+ import { useI18n } from "../../i18n/useI18n";
+ 
+-type TabKey =
+-  | "leave"
+-  | "attendance"
+-  | "attendance-corrections"
+-  | "asset-returns"
+-  | "team";
+-
+-const TAB_KEYS: TabKey[] = [
+-  "leave",
+-  "attendance",
+-  "attendance-corrections",
+-  "asset-returns",
+-  "team",
+-];
++type TabKey = "leave" | "asset-returns" | "team";
++
++const TAB_KEYS: TabKey[] = ["leave", "asset-returns", "team"];
+ 
+ /** Leave statuses a manager is still the deciding approver for. */
+ const LEAVE_ACTIONABLE = new Set(["pending_manager", "submitted"]);
+@@ -94,29 +79,7 @@
+     );
+   }, []);
+ 
+-  // The corrections table owns its own status filter, so its outstanding count
+-  // is probed here instead of derived from whatever the table is showing.
+-  useEffect(() => {
+-    let cancelled = false;
+-    listAttendanceCorrectionRequests({
+-      status: "pending_manager",
+-      page: 1,
+-      page_size: 1,
+-    })
+-      .then((res) => {
+-        if (cancelled || isApiError(res)) return;
+-        reportCount("attendance-corrections", res.data?.count ?? 0);
+-      })
+-      .catch(() => undefined);
+-    return () => {
+-      cancelled = true;
+-    };
+-  }, [reportCount, refreshToken]);
+-
+-  const totalPending =
+-    (counts.leave ?? 0) +
+-    (counts["asset-returns"] ?? 0) +
+-    (counts["attendance-corrections"] ?? 0);
++  const totalPending = (counts.leave ?? 0) + (counts["asset-returns"] ?? 0);
+ 
+   const tabLabel = (key: TabKey, label: string) => {
+     const count = counts[key];
+@@ -184,19 +147,6 @@
+                 onCount={reportCount}
+               />
+             ),
+-          },
+-          {
+-            key: "attendance",
+-            label: t("manager.requests.attendanceTab"),
+-            children: <AttendanceMaintenanceTab />,
+-          },
+-          {
+-            key: "attendance-corrections",
+-            label: tabLabel(
+-              "attendance-corrections",
+-              t("manager.requests.correctionsTab"),
+-            ),
+-            children: <AttendanceCorrectionsTab />,
+           },
+           {
+             key: "asset-returns",
+@@ -573,49 +523,6 @@
+   );
+ }
+ 
+-function AttendanceMaintenanceTab() {
+-  const { t } = useI18n();
+-  return (
+-    <AttendanceMaintenanceNotice
+-      title={t(
+-        "attendance.maintenance.title",
+-        "Attendance is temporarily unavailable",
+-      )}
+-      description={t(
+-        "attendance.maintenance.managerDescription",
+-        "We are fixing this part right now for all users. Attendance requests and approvals will be back soon.",
+-      )}
+-    />
+-  );
+-}
+-
+-function AttendanceCorrectionsTab() {
+-  const { t } = useI18n();
+-  return (
+-    <div>
+-      <AttendanceMaintenanceBanner
+-        description={t(
+-          "attendanceCorrections.maintenance.managerDescription",
+-          "The attendance module is under maintenance. You can still approve correction requests here so the records are updated once it is back.",
+-        )}
+-      />
+-      <ApprovalSurface padding={16}>
+-        <AttendanceCorrectionsApproverTable
+-          approverRole="manager"
+-          defaultStatus="pending_manager"
+-          statusOptions={[
+-            "pending_manager",
+-            "pending_hr",
+-            "approved",
+-            "rejected",
+-            "cancelled",
+-          ]}
+-        />
+-      </ApprovalSurface>
+-    </div>
+-  );
+-}
+-
+ function AssetReturnRequestsTab({
+   refreshToken,
+   onCount,
+diff --git a/FrontEnd/src/pages/shared/AttendanceMaintenancePage.tsx b/FrontEnd/src/pages/shared/AttendanceMaintenancePage.tsx
+deleted file mode 100644
+--- a/FrontEnd/src/pages/shared/AttendanceMaintenancePage.tsx
++++ /dev/null
+@@ -1,36 +0,0 @@
+-import PageHeader from "../../components/ui/PageHeader";
+-import AttendanceMaintenanceNotice from "../../components/attendance/AttendanceMaintenanceNotice";
+-import { useI18n } from "../../i18n/useI18n";
+-
+-export default function AttendanceMaintenancePage({
+-  title,
+-  subtitle,
+-  titleKey,
+-  subtitleKey,
+-  backPath,
+-}: {
+-  title?: string;
+-  subtitle?: string;
+-  titleKey?: string;
+-  subtitleKey?: string;
+-  backPath?: string;
+-}) {
+-  const { t } = useI18n();
+-  const resolvedTitle =
+-    title || (titleKey ? t(titleKey) : t("attendance.title", "Attendance"));
+-  const resolvedSubtitle =
+-    subtitle ||
+-    (subtitleKey
+-      ? t(subtitleKey)
+-      : t(
+-          "attendance.maintenance.pageSubtitle",
+-          "This section is temporarily unavailable while we fix it.",
+-        ));
+-
+-  return (
+-    <div>
+-      <PageHeader title={resolvedTitle} subtitle={resolvedSubtitle} />
+-      <AttendanceMaintenanceNotice backPath={backPath} />
+-    </div>
+-  );
+-}
+diff --git a/FrontEnd/src/pages/shared/AttendancePreviewPage.ceo.test.tsx b/FrontEnd/src/pages/shared/AttendancePreviewPage.ceo.test.tsx
+--- a/FrontEnd/src/pages/shared/AttendancePreviewPage.ceo.test.tsx
++++ b/FrontEnd/src/pages/shared/AttendancePreviewPage.ceo.test.tsx
+@@ -1,142 +1,57 @@
+ import { describe, it, expect, beforeEach, vi } from "vitest";
+-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+-
++import { render, screen } from "@testing-library/react";
+ vi.mock("../../services/api/attendanceApi", () => ({
+   getCEOAttendance: vi.fn(),
+   getGlobalAttendance: vi.fn(),
+-  approveCEOAttendance: vi.fn(),
+-  rejectCEOAttendance: vi.fn(),
+ }));
+-
++vi.mock("../../services/api/employeesApi", () => ({
++  listEmployees: vi
++    .fn()
++    .mockResolvedValue({ status: "success", data: { results: [] } }),
++}));
+ import AttendancePreviewPage from "./AttendancePreviewPage";
+-import * as attendanceApi from "../../services/api/attendanceApi";
++import {
++  getCEOAttendance,
++  getGlobalAttendance,
++} from "../../services/api/attendanceApi";
+ import { useI18nStore } from "../../i18n/i18nStore";
+-import { useAuthStore } from "../../auth/authStore";
+-
+-const getCEOAttendance =
+-  attendanceApi.getCEOAttendance as unknown as ReturnType<typeof vi.fn>;
+-const getGlobalAttendance =
+-  attendanceApi.getGlobalAttendance as unknown as ReturnType<typeof vi.fn>;
+-const approveCEOAttendance =
+-  attendanceApi.approveCEOAttendance as unknown as ReturnType<typeof vi.fn>;
+-const rejectCEOAttendance =
+-  attendanceApi.rejectCEOAttendance as unknown as ReturnType<typeof vi.fn>;
+-
+-const pendingRow = {
+-  id: 21,
+-  employee_profile: 7,
+-  employee_name_en: "Sara Ahmed",
+-  employee_name: "Sara Ahmed",
+-  employee_email: "sara@ffi.test",
+-  date: "2026-08-01",
+-  check_in_at: null,
+-  check_out_at: null,
+-  status: "PENDING_CEO",
+-  source: "EMPLOYEE",
+-};
+-
+-const settledRow = { ...pendingRow, id: 22, status: "PRESENT" };
+-
+-const listing = (rows: unknown[]) => ({
+-  status: "success" as const,
+-  data: { results: rows, count: rows.length, summary: {} },
++beforeEach(() => {
++  vi.clearAllMocks();
++  useI18nStore.getState().setLanguage("en");
+ });
+-
+-beforeEach(() => {
+-  [
+-    getCEOAttendance,
+-    getGlobalAttendance,
+-    approveCEOAttendance,
+-    rejectCEOAttendance,
+-  ].forEach((fn) => fn.mockReset());
+-  useI18nStore.getState().setLanguage("en");
+-  useAuthStore.setState({
+-    isAuthenticated: true,
+-    user: { id: "1", email: "ceo@ffi.test", role: "CEO" },
+-  });
++describe("BioTime attendance read-only views", () => {
++  it.each(["hr", "ceo"] as const)(
++    "%s never offers mutations, including legacy pending records",
++    async (role) => {
++      const read = role === "hr" ? getGlobalAttendance : getCEOAttendance;
++      vi.mocked(read).mockResolvedValue({
++        status: "success",
++        data: {
++          results: [
++            {
++              id: 1,
++              employee_name: "Sara Ahmed",
++              date: "2026-09-01",
++              status: "PENDING_CEO",
++              source: "SYSTEM",
++            },
++          ],
++          count: 1,
++        },
++      } as never);
++      render(<AttendancePreviewPage role={role} />);
++      expect(await screen.findByText("Sara Ahmed")).toBeInTheDocument();
++      expect(
++        screen.getByText("Attendance is recorded through BioTime."),
++      ).toBeInTheDocument();
++      expect(
++        screen.queryByRole("button", {
++          name: /approve|reject|edit|override|correct/i,
++        }),
++      ).not.toBeInTheDocument();
++      expect(
++        role === "hr" ? getCEOAttendance : getGlobalAttendance,
++      ).not.toHaveBeenCalled();
++    },
++  );
+ });
+-
+-describe("AttendancePreviewPage (CEO)", () => {
+-  it("offers a decision only on rows waiting on the CEO", async () => {
+-    getCEOAttendance.mockResolvedValue(listing([pendingRow, settledRow]));
+-
+-    render(<AttendancePreviewPage role="ceo" />);
+-
+-    expect(
+-      await screen.findByRole("button", { name: "Approve: Sara Ahmed" }),
+-    ).toBeInTheDocument();
+-    expect(
+-      screen.getByRole("button", { name: "Reject: Sara Ahmed" }),
+-    ).toBeInTheDocument();
+-    // The settled row states in words that nothing is required of the CEO.
+-    expect(screen.getByText("No action needed")).toBeInTheDocument();
+-  });
+-
+-  it("approves a pending record and reloads", async () => {
+-    getCEOAttendance.mockResolvedValue(listing([pendingRow]));
+-    approveCEOAttendance.mockResolvedValue({
+-      status: "success" as const,
+-      data: pendingRow,
+-    });
+-
+-    render(<AttendancePreviewPage role="ceo" />);
+-
+-    fireEvent.click(
+-      await screen.findByRole("button", { name: "Approve: Sara Ahmed" }),
+-    );
+-
+-    await waitFor(() =>
+-      expect(approveCEOAttendance).toHaveBeenCalledWith(21, {}),
+-    );
+-    await waitFor(() => expect(getCEOAttendance).toHaveBeenCalledTimes(2));
+-  });
+-
+-  it("requires a reason before rejecting", async () => {
+-    getCEOAttendance.mockResolvedValue(listing([pendingRow]));
+-    rejectCEOAttendance.mockResolvedValue({
+-      status: "success" as const,
+-      data: pendingRow,
+-    });
+-
+-    render(<AttendancePreviewPage role="ceo" />);
+-
+-    fireEvent.click(
+-      await screen.findByRole("button", { name: "Reject: Sara Ahmed" }),
+-    );
+-    expect(
+-      await screen.findByText("Reject attendance record"),
+-    ).toBeInTheDocument();
+-
+-    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+-    expect(
+-      await screen.findByText("A rejection reason is required."),
+-    ).toBeInTheDocument();
+-    expect(rejectCEOAttendance).not.toHaveBeenCalled();
+-
+-    fireEvent.change(screen.getByLabelText("Reason for rejection"), {
+-      target: { value: "Not supported by the log" },
+-    });
+-    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+-
+-    await waitFor(() =>
+-      expect(rejectCEOAttendance).toHaveBeenCalledWith(21, {
+-        notes: "Not supported by the log",
+-      }),
+-    );
+-  });
+-
+-  it("leaves the HR view read-only", async () => {
+-    getGlobalAttendance.mockResolvedValue(listing([pendingRow]));
+-
+-    render(<AttendancePreviewPage role="hr" />);
+-
+-    expect(await screen.findByText("Sara Ahmed")).toBeInTheDocument();
+-    expect(
+-      screen.queryByRole("button", { name: /^Approve/ }),
+-    ).not.toBeInTheDocument();
+-    expect(
+-      screen.queryByRole("button", { name: /^Reject/ }),
+-    ).not.toBeInTheDocument();
+-    expect(getCEOAttendance).not.toHaveBeenCalled();
+-  });
+-});
+diff --git a/FrontEnd/src/pages/shared/AttendancePreviewPage.test.tsx b/FrontEnd/src/pages/shared/AttendancePreviewPage.test.tsx
+--- a/FrontEnd/src/pages/shared/AttendancePreviewPage.test.tsx
++++ b/FrontEnd/src/pages/shared/AttendancePreviewPage.test.tsx
+@@ -118,7 +118,7 @@
+ });
+ 
+ describe("AttendancePreviewPage BioTime fields", () => {
+-  it("renders the device code, terminal serial, duration, source and override state", async () => {
++  it("renders the device code, terminal serial, duration and source", async () => {
+     render(<AttendancePreviewPage role="hr" />);
+ 
+     expect(await screen.findByText("Sara Ali")).toBeInTheDocument();
+@@ -129,10 +129,9 @@
+ 
+     const table = screen.getByRole("table");
+     expect(within(table).getByText("System")).toBeInTheDocument();
+-    expect(within(table).getByText("Original")).toBeInTheDocument();
+-  });
+-
+-  it("marks overridden records and falls back to a dash without BioTime data", async () => {
++  });
++
++  it("falls back to a dash when device metadata is absent", async () => {
+     getGlobal.mockResolvedValue(
+       listResponse([
+         record({
+@@ -148,7 +147,7 @@
+ 
+     render(<AttendancePreviewPage role="hr" />);
+ 
+-    expect(await screen.findByText("Overridden")).toBeInTheDocument();
++    expect(await screen.findByText("Sara Ali")).toBeInTheDocument();
+     const table = screen.getByRole("table");
+     // Device code, terminal S/N, check-out and duration all render as "-".
+     expect(within(table).getAllByText("-")).toHaveLength(4);
+@@ -168,8 +167,8 @@
+       screen.getByRole("columnheader", { name: "Duration" }),
+     ).toBeInTheDocument();
+     expect(
+-      screen.getByRole("columnheader", { name: "Override" }),
+-    ).toBeInTheDocument();
++      screen.queryByRole("columnheader", { name: "Override" }),
++    ).not.toBeInTheDocument();
+   });
+ });
+ 
+diff --git a/FrontEnd/src/pages/shared/AttendancePreviewPage.tsx b/FrontEnd/src/pages/shared/AttendancePreviewPage.tsx
+--- a/FrontEnd/src/pages/shared/AttendancePreviewPage.tsx
++++ b/FrontEnd/src/pages/shared/AttendancePreviewPage.tsx
+@@ -16,7 +16,6 @@
+   Spin,
+   Table,
+   Tag,
+-  Tooltip,
+   Typography,
+   message,
+ } from "antd";
+@@ -31,16 +30,11 @@
+ import PageHeader from "../../components/ui/PageHeader";
+ import EmptyState from "../../components/ui/EmptyState";
+ import ErrorState from "../../components/ui/ErrorState";
+-import ApprovalActions from "../../components/ceo/ApprovalActions";
+-import RejectReasonModal from "../../components/ceo/RejectReasonModal";
+ import {
+-  approveCEOAttendance,
+   getCEOAttendance,
+   getGlobalAttendance,
+-  rejectCEOAttendance,
+ } from "../../services/api/attendanceApi";
+ import type { AttendanceListResponse } from "../../services/api/attendanceApi";
+-import { isApiError } from "../../services/api/apiTypes";
+ import { listEmployees } from "../../services/api/employeesApi";
+ import type { Employee } from "../../services/api/employeesApi";
+ import type {
+@@ -143,13 +137,6 @@
+   const [search, setSearch] = useState("");
+   const [employeeId, setEmployeeId] = useState<number | undefined>(undefined);
+   const [pagination, setPagination] = useState({ current: 1, pageSize: 20 });
+-
+-  const isCeoApprover = role === "ceo";
+-  const [approvingRecord, setApprovingRecord] =
+-    useState<AttendanceRecord | null>(null);
+-  const [rejectingRecord, setRejectingRecord] =
+-    useState<AttendanceRecord | null>(null);
+-  const [deciding, setDeciding] = useState(false);
+ 
+   const [employeeOptionsSource, setEmployeeOptionsSource] = useState<
+     Employee[]
+@@ -373,50 +360,6 @@
+     );
+   };
+ 
+-  const handleApprove = async (record: AttendanceRecord) => {
+-    setApprovingRecord(record);
+-    setDeciding(true);
+-    try {
+-      const response = await approveCEOAttendance(record.id, {});
+-      if (isApiError(response)) {
+-        message.error(
+-          response.message || t("attendancePreview.decision.failed"),
+-        );
+-        return;
+-      }
+-      message.success(t("attendancePreview.decision.approved"));
+-      await fetchRecords();
+-    } catch (error: any) {
+-      message.error(error?.message || t("attendancePreview.decision.failed"));
+-    } finally {
+-      setDeciding(false);
+-      setApprovingRecord(null);
+-    }
+-  };
+-
+-  const handleReject = async (reason: string) => {
+-    if (!rejectingRecord) return;
+-    setDeciding(true);
+-    try {
+-      const response = await rejectCEOAttendance(rejectingRecord.id, {
+-        notes: reason,
+-      });
+-      if (isApiError(response)) {
+-        message.error(
+-          response.message || t("attendancePreview.decision.failed"),
+-        );
+-        return;
+-      }
+-      message.success(t("attendancePreview.decision.rejected"));
+-      setRejectingRecord(null);
+-      await fetchRecords();
+-    } catch (error: any) {
+-      message.error(error?.message || t("attendancePreview.decision.failed"));
+-    } finally {
+-      setDeciding(false);
+-    }
+-  };
+-
+   const handleExport = async () => {
+     setExporting(true);
+     try {
+@@ -690,57 +633,17 @@
+           "-"
+         ),
+     },
+-    {
+-      title: t("attendancePreview.columns.override"),
+-      key: "is_overridden",
+-      width: 130,
+-      render: (_: unknown, record: AttendanceRecord) =>
+-        record.is_overridden ? (
+-          <Tooltip title={record.override_reason || undefined}>
+-            <Tag color="orange">{t("attendancePreview.overridden")}</Tag>
+-          </Tooltip>
+-        ) : (
+-          <Text type="secondary">{t("attendancePreview.notOverridden")}</Text>
+-        ),
+-    },
+-    ...(isCeoApprover
+-      ? ([
+-          {
+-            title: t("common.actions"),
+-            key: "actions",
+-            width: 210,
+-            render: (_: unknown, record: AttendanceRecord) =>
+-              record.status === "PENDING_CEO" ? (
+-                <ApprovalActions
+-                  subjectLabel={getEmployeeName(record)}
+-                  approveLoading={deciding && approvingRecord?.id === record.id}
+-                  disabled={deciding}
+-                  onApprove={() => void handleApprove(record)}
+-                  onReject={() => setRejectingRecord(record)}
+-                />
+-              ) : (
+-                <Text type="secondary">
+-                  {t("attendancePreview.decision.noActionNeeded")}
+-                </Text>
+-              ),
+-          },
+-        ] as ColumnsType<AttendanceRecord>)
+-      : []),
+   ];
+ 
+   return (
+     <div>
+       <PageHeader
+         title={
+-          isCeoApprover
++          role === "ceo"
+             ? t("ceo.attendance.title")
+             : t("hr.attendance.recordsTitle")
+         }
+-        subtitle={
+-          isCeoApprover
+-            ? t("ceo.attendance.subtitle")
+-            : t("attendancePreview.subtitle")
+-        }
++        subtitle={t("attendance.biotimeNotice")}
+         actions={
+           <Space>
+             <Button
+@@ -934,19 +837,6 @@
+           />
+         </Card>
+       )}
+-
+-      {isCeoApprover && (
+-        <RejectReasonModal
+-          open={Boolean(rejectingRecord)}
+-          title={t("attendancePreview.decision.rejectTitle")}
+-          subject={
+-            rejectingRecord ? getEmployeeName(rejectingRecord) : undefined
+-          }
+-          loading={deciding}
+-          onCancel={() => setRejectingRecord(null)}
+-          onSubmit={handleReject}
+-        />
+-      )}
+     </div>
+   );
+ };
+diff --git a/FrontEnd/src/routes/attendanceRoutes.test.tsx b/FrontEnd/src/routes/attendanceRoutes.test.tsx
+new file mode 100644
+--- /dev/null
++++ b/FrontEnd/src/routes/attendanceRoutes.test.tsx
+@@ -0,0 +1,47 @@
++import { describe, expect, it } from "vitest";
++import type { ReactElement } from "react";
++import { Navigate, type RouteObject } from "react-router-dom";
++import { routes } from "./routes";
++import EmployeeAttendancePage from "../pages/employee/AttendancePage";
++import ManagerAttendancePage from "../pages/manager/ManagerAttendancePage";
++import AttendancePreviewPage from "../pages/shared/AttendancePreviewPage";
++function collect(
++  nodes: RouteObject[],
++  found = new Map<
++    string,
++    ReactElement<{ to?: string; replace?: boolean; role?: string }>
++  >(),
++) {
++  for (const node of nodes) {
++    if (node.path && node.element)
++      found.set(
++        node.path,
++        node.element as ReactElement<{
++          to?: string;
++          replace?: boolean;
++          role?: string;
++        }>,
++      );
++    if (node.children) collect(node.children, found);
++  }
++  return found;
++}
++const paths = collect(routes);
++describe("BioTime attendance routes", () => {
++  it.each([
++    ["employee/attendance-corrections", "/employee/attendance"],
++    ["hr/attendance-correction-requests", "/hr/attendance"],
++    ["manager/attendance-corrections", "/manager/attendance"],
++  ])("%s redirects to %s", (path, to) => {
++    expect(paths.get(path)?.type).toBe(Navigate);
++    expect(paths.get(path)?.props).toMatchObject({ to, replace: true });
++  });
++  it("mounts the read-only employee and manager pages", () => {
++    expect(paths.get("employee/attendance")?.type).toBe(EmployeeAttendancePage);
++    expect(paths.get("manager/attendance")?.type).toBe(ManagerAttendancePage);
++  });
++  it.each(["hr", "ceo"])("%s keeps its scoped read-only preview", (role) => {
++    expect(paths.get(`${role}/attendance`)?.type).toBe(AttendancePreviewPage);
++    expect(paths.get(`${role}/attendance`)?.props.role).toBe(role);
++  });
++});
+diff --git a/FrontEnd/src/routes/routes.tsx b/FrontEnd/src/routes/routes.tsx
+--- a/FrontEnd/src/routes/routes.tsx
++++ b/FrontEnd/src/routes/routes.tsx
+@@ -108,11 +108,9 @@
+ import CFODashboardPage from "../pages/cfo/CFODashboardPage";
+ import CFOLoanRequestsPage from "../pages/cfo/CFOLoanRequestsPage";
+ import CFOLoanRequestDetailsPage from "../pages/cfo/CFOLoanRequestDetailsPage";
+-import AttendanceMaintenancePage from "../pages/shared/AttendanceMaintenancePage";
++import EmployeeAttendancePage from "../pages/employee/AttendancePage";
++import ManagerAttendancePage from "../pages/manager/ManagerAttendancePage";
+ import AttendancePreviewPage from "../pages/shared/AttendancePreviewPage";
+-import EmployeeAttendanceCorrectionRequestsPage from "../pages/employee/attendance/AttendanceCorrectionRequestsPage";
+-import ManagerAttendanceCorrectionRequestsPage from "../pages/manager/ManagerAttendanceCorrectionRequestsPage";
+-import HRAttendanceCorrectionRequestsPage from "../pages/hr/attendance/AttendanceCorrectionRequestsPage";
+ 
+ import RouteErrorBoundary from "./RouteErrorBoundary";
+ import PendingInboxPage from "../pages/shared/PendingInboxPage";
+@@ -328,7 +326,7 @@
+               },
+               {
+                 path: "hr/attendance-correction-requests",
+-                element: <HRAttendanceCorrectionRequestsPage />,
++                element: <Navigate to="/hr/attendance" replace />,
+               },
+               { path: "hr/leave-balances", element: <HrLeaveBalancesPage /> },
+             ],
+@@ -354,16 +352,11 @@
+               { path: "employee/profile", element: <MyProfilePage /> },
+               {
+                 path: "employee/attendance",
+-                element: (
+-                  <AttendanceMaintenancePage
+-                    titleKey="attendance.myAttendance"
+-                    backPath="/employee/dashboard"
+-                  />
+-                ),
++                element: <EmployeeAttendancePage />,
+               },
+               {
+                 path: "employee/attendance-corrections",
+-                element: <EmployeeAttendanceCorrectionRequestsPage />,
++                element: <Navigate to="/employee/attendance" replace />,
+               },
+               { path: "employee/leaves", element: <EmployeeLeavesPage /> },
+               {
+@@ -432,8 +425,12 @@
+                 element: <ManagerTeamRequestsPage />,
+               },
+               {
++                path: "manager/attendance",
++                element: <ManagerAttendancePage />,
++              },
++              {
+                 path: "manager/attendance-corrections",
+-                element: <ManagerAttendanceCorrectionRequestsPage />,
++                element: <Navigate to="/manager/attendance" replace />,
+               },
+               { path: "manager/team", element: <ManagerTeamPage /> },
+               {
+diff --git a/FrontEnd/src/services/api/attendanceApi.test.ts b/FrontEnd/src/services/api/attendanceApi.test.ts
+new file mode 100644
+--- /dev/null
++++ b/FrontEnd/src/services/api/attendanceApi.test.ts
+@@ -0,0 +1,35 @@
++import { beforeEach, describe, expect, it, vi } from "vitest";
++vi.mock("./apiClient", () => ({
++  api: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
++}));
++import { api } from "./apiClient";
++import * as attendance from "./attendanceApi";
++import { getManagerAttendance } from "./managerApi";
++beforeEach(() => {
++  vi.clearAllMocks();
++  vi.mocked(api.get).mockResolvedValue({
++    data: { status: "success", data: { results: [], count: 0 } },
++  });
++});
++describe("attendance read contract", () => {
++  it("uses only the role-specific GET endpoints", async () => {
++    await attendance.getMyAttendance();
++    await attendance.getGlobalAttendance();
++    await attendance.getCEOAttendance();
++    await getManagerAttendance({ page: 2, page_size: 25 });
++    expect(vi.mocked(api.get).mock.calls.map(([path]) => path)).toEqual([
++      "/api/attendance/me/",
++      "/api/attendance/",
++      "/api/ceo/attendance/",
++      "/api/manager/attendance/",
++    ]);
++    expect(api.post).not.toHaveBeenCalled();
++    expect(api.patch).not.toHaveBeenCalled();
++    expect(api.delete).not.toHaveBeenCalled();
++    expect(Object.keys(attendance).sort()).toEqual([
++      "getCEOAttendance",
++      "getGlobalAttendance",
++      "getMyAttendance",
++    ]);
++  });
++});
+diff --git a/FrontEnd/src/services/api/attendanceApi.ts b/FrontEnd/src/services/api/attendanceApi.ts
+--- a/FrontEnd/src/services/api/attendanceApi.ts
++++ b/FrontEnd/src/services/api/attendanceApi.ts
+@@ -19,18 +19,6 @@
+   summary?: Partial<Record<AttendanceRecord["status"], number>>;
+ }
+ 
+-export interface OverrideAttendanceDto {
+-  status?: "PRESENT" | "ABSENT" | "LATE" | "REJECTED";
+-  check_in_at?: string | null;
+-  check_out_at?: string | null;
+-  notes?: string;
+-  override_reason?: string;
+-}
+-
+-export interface AttendanceDecisionDto {
+-  notes?: string;
+-}
+-
+ // Employee Endpoints
+ export async function getMyAttendance(
+   params?: AttendanceFilters,
+@@ -38,20 +26,6 @@
+   const { data } = await api.get<ApiResponse<AttendanceListResponse>>(
+     "/api/attendance/me/",
+     { params },
+-  );
+-  return data;
+-}
+-
+-export async function checkIn(): Promise<ApiResponse<AttendanceRecord>> {
+-  const { data } = await api.post<ApiResponse<AttendanceRecord>>(
+-    "/api/attendance/me/check-in/",
+-  );
+-  return data;
+-}
+-
+-export async function checkOut(): Promise<ApiResponse<AttendanceRecord>> {
+-  const { data } = await api.post<ApiResponse<AttendanceRecord>>(
+-    "/api/attendance/me/check-out/",
+   );
+   return data;
+ }
+@@ -67,17 +41,6 @@
+   return data;
+ }
+ 
+-export async function overrideAttendance(
+-  id: string | number,
+-  payload: OverrideAttendanceDto,
+-): Promise<ApiResponse<AttendanceRecord>> {
+-  const { data } = await api.patch<ApiResponse<AttendanceRecord>>(
+-    `/api/attendance/${id}/`,
+-    payload,
+-  );
+-  return data;
+-}
+-
+ export async function getCEOAttendance(
+   params?: AttendanceFilters,
+ ): Promise<ApiResponse<AttendanceListResponse>> {
+@@ -87,25 +50,3 @@
+   );
+   return data;
+ }
+-
+-export async function approveCEOAttendance(
+-  id: string | number,
+-  payload?: AttendanceDecisionDto,
+-): Promise<ApiResponse<AttendanceRecord>> {
+-  const { data } = await api.post<ApiResponse<AttendanceRecord>>(
+-    `/api/ceo/attendance/${id}/approve/`,
+-    payload || {},
+-  );
+-  return data;
+-}
+-
+-export async function rejectCEOAttendance(
+-  id: string | number,
+-  payload: AttendanceDecisionDto,
+-): Promise<ApiResponse<AttendanceRecord>> {
+-  const { data } = await api.post<ApiResponse<AttendanceRecord>>(
+-    `/api/ceo/attendance/${id}/reject/`,
+-    payload,
+-  );
+-  return data;
+-}
+diff --git a/FrontEnd/src/services/api/attendanceCorrectionsApi.ts b/FrontEnd/src/services/api/attendanceCorrectionsApi.ts
+deleted file mode 100644
+--- a/FrontEnd/src/services/api/attendanceCorrectionsApi.ts
++++ /dev/null
+@@ -1,198 +0,0 @@
+-import { api } from "./apiClient";
+-import type { ApiResponse } from "./apiTypes";
+-
+-export type AttendanceCorrectionStatus =
+-  | "draft"
+-  | "pending_manager"
+-  | "pending_hr"
+-  | "approved"
+-  | "rejected"
+-  | "cancelled";
+-
+-export type AttendanceRecordStatus = "PRESENT" | "ABSENT" | "LATE" | "REJECTED";
+-
+-export type AttendanceCorrectionWorkflowActor = {
+-  id: number;
+-  email: string;
+-  full_name: string;
+-};
+-
+-export type AttendanceCorrectionWorkflowHistoryEntry = {
+-  id: number;
+-  action: string;
+-  stage: string;
+-  approver_role: string;
+-  actor: AttendanceCorrectionWorkflowActor | null;
+-  at: string;
+-  note: string;
+-  from_status: string;
+-  to_status: string;
+-  from_stage: string;
+-  to_stage: string;
+-  metadata: Record<string, unknown>;
+-};
+-
+-export type AttendanceCorrectionWorkflow = {
+-  status: string;
+-  current_stage: string;
+-  current_actor: AttendanceCorrectionWorkflowActor | null;
+-  current_approver_role: string;
+-  can_approve: boolean;
+-  can_reject: boolean;
+-  can_cancel: boolean;
+-  history: AttendanceCorrectionWorkflowHistoryEntry[];
+-};
+-
+-export type AttendanceCorrectionRequest = {
+-  id: number;
+-  employee_profile: number;
+-  employee_name: string;
+-  employee_email: string;
+-  attendance_record: number | null;
+-  date: string;
+-
+-  current_check_in_at: string | null;
+-  current_check_out_at: string | null;
+-  current_status: string | null;
+-
+-  requested_check_in_at: string | null;
+-  requested_check_out_at: string | null;
+-  requested_status: AttendanceRecordStatus | "";
+-
+-  reason: string;
+-  status: AttendanceCorrectionStatus;
+-
+-  manager_decision_at: string | null;
+-  manager_decision_by: number | null;
+-  manager_decision_note: string;
+-
+-  hr_decision_at: string | null;
+-  hr_decision_by: number | null;
+-  hr_decision_note: string;
+-
+-  submitted_at: string | null;
+-  decided_at: string | null;
+-  cancelled_at: string | null;
+-
+-  workflow: AttendanceCorrectionWorkflow;
+-
+-  created_at: string;
+-  updated_at: string;
+-};
+-
+-export type AttendanceCorrectionListResponse = {
+-  count: number;
+-  next: string | null;
+-  previous: string | null;
+-  results: AttendanceCorrectionRequest[];
+-};
+-
+-export type ListAttendanceCorrectionsParams = {
+-  status?: AttendanceCorrectionStatus;
+-  date_from?: string;
+-  date_to?: string;
+-  employee_profile?: number | string;
+-  search?: string;
+-  page?: number;
+-  page_size?: number;
+-};
+-
+-export type CreateAttendanceCorrectionPayload = {
+-  attendance_record?: number | null;
+-  date: string;
+-  requested_check_in_at?: string | null;
+-  requested_check_out_at?: string | null;
+-  requested_status?: AttendanceRecordStatus | "";
+-  reason: string;
+-  employee_profile?: number;
+-};
+-
+-export type UpdateAttendanceCorrectionPayload =
+-  Partial<CreateAttendanceCorrectionPayload>;
+-
+-export type AttendanceCorrectionDecisionPayload = {
+-  notes?: string;
+-  comment?: string;
+-};
+-
+-const BASE_URL = "/api/attendance-correction-requests/";
+-
+-export async function listAttendanceCorrectionRequests(
+-  params?: ListAttendanceCorrectionsParams,
+-): Promise<ApiResponse<AttendanceCorrectionListResponse>> {
+-  const { data } = await api.get<ApiResponse<AttendanceCorrectionListResponse>>(
+-    BASE_URL,
+-    { params },
+-  );
+-  return data;
+-}
+-
+-export async function getAttendanceCorrectionRequest(
+-  id: number | string,
+-): Promise<ApiResponse<AttendanceCorrectionRequest>> {
+-  const { data } = await api.get<ApiResponse<AttendanceCorrectionRequest>>(
+-    `${BASE_URL}${id}/`,
+-  );
+-  return data;
+-}
+-
+-export async function createAttendanceCorrectionRequest(
+-  payload: CreateAttendanceCorrectionPayload,
+-): Promise<ApiResponse<AttendanceCorrectionRequest>> {
+-  const { data } = await api.post<ApiResponse<AttendanceCorrectionRequest>>(
+-    BASE_URL,
+-    payload,
+-  );
+-  return data;
+-}
+-
+-export async function updateAttendanceCorrectionRequest(
+-  id: number | string,
+-  payload: UpdateAttendanceCorrectionPayload,
+-): Promise<ApiResponse<AttendanceCorrectionRequest>> {
+-  const { data } = await api.patch<ApiResponse<AttendanceCorrectionRequest>>(
+-    `${BASE_URL}${id}/`,
+-    payload,
+-  );
+-  return data;
+-}
+-
+-export async function submitAttendanceCorrectionRequest(
+-  id: number | string,
+-): Promise<ApiResponse<AttendanceCorrectionRequest>> {
+-  const { data } = await api.post<ApiResponse<AttendanceCorrectionRequest>>(
+-    `${BASE_URL}${id}/submit/`,
+-  );
+-  return data;
+-}
+-
+-export async function approveAttendanceCorrectionRequest(
+-  id: number | string,
+-  payload?: AttendanceCorrectionDecisionPayload,
+-): Promise<ApiResponse<AttendanceCorrectionRequest>> {
+-  const { data } = await api.post<ApiResponse<AttendanceCorrectionRequest>>(
+-    `${BASE_URL}${id}/approve/`,
+-    payload || {},
+-  );
+-  return data;
+-}
+-
+-export async function rejectAttendanceCorrectionRequest(
+-  id: number | string,
+-  payload: AttendanceCorrectionDecisionPayload,
+-): Promise<ApiResponse<AttendanceCorrectionRequest>> {
+-  const { data } = await api.post<ApiResponse<AttendanceCorrectionRequest>>(
+-    `${BASE_URL}${id}/reject/`,
+-    payload,
+-  );
+-  return data;
+-}
+-
+-export async function cancelAttendanceCorrectionRequest(
+-  id: number | string,
+-): Promise<ApiResponse<AttendanceCorrectionRequest>> {
+-  const { data } = await api.post<ApiResponse<AttendanceCorrectionRequest>>(
+-    `${BASE_URL}${id}/cancel/`,
+-  );
+-  return data;
+-}
+diff --git a/FrontEnd/src/services/api/managerApi.ts b/FrontEnd/src/services/api/managerApi.ts
+--- a/FrontEnd/src/services/api/managerApi.ts
++++ b/FrontEnd/src/services/api/managerApi.ts
+@@ -1,3 +1,8 @@
++import type {
++  AttendanceRecord,
++  AttendanceFilters,
++} from "../../types/attendance";
++import type { AttendanceListResponse } from "./attendanceApi";
+ import { api } from "./apiClient";
+ import type { ApiResponse } from "./apiTypes";
+ import type { AssetReturnRequest } from "./assetsApi";
+@@ -113,23 +118,7 @@
+ 
+ // -- Attendance Requests --
+ 
+-export type ManagerAttendanceRecord = {
+-  id: number;
+-  employee_profile: {
+-    id: number;
+-    user: {
+-      id: number;
+-      email: string;
+-      full_name: string;
+-    };
+-  };
+-  date: string;
+-  check_in_at: string | null;
+-  check_out_at: string | null;
+-  status: string;
+-  source: string;
+-  created_at: string;
+-};
++export type ManagerAttendanceRecord = AttendanceRecord;
+ 
+ export type ManagerTeamMember = {
+   id: number;
+@@ -188,43 +177,12 @@
+   };
+ }
+ 
+-export async function getManagerAttendance(status?: string) {
+-  const params = status ? { status } : {};
+-  const { data } = await api.get<ApiResponse<any>>("/api/manager/attendance/", {
+-    params,
+-  });
+-  if (data?.status === "success" && data?.data?.items) {
+-    return {
+-      ...data,
+-      data: data.data.items as ManagerAttendanceRecord[],
+-    } as ApiResponse<ManagerAttendanceRecord[]>;
+-  }
+-  if (Array.isArray((data as any)?.results)) {
+-    return { status: "success", data: (data as any).results } as ApiResponse<
+-      ManagerAttendanceRecord[]
+-    >;
+-  }
+-  if (Array.isArray(data)) {
+-    return {
+-      status: "success",
+-      data: data as ManagerAttendanceRecord[],
+-    } as ApiResponse<ManagerAttendanceRecord[]>;
+-  }
+-  return data as ApiResponse<ManagerAttendanceRecord[]>;
+-}
+-
+-export async function approveAttendanceManager(id: number, notes?: string) {
+-  const { data } = await api.post<ApiResponse<any>>(
+-    `/api/manager/attendance/${id}/approve/`,
+-    { notes },
+-  );
+-  return data;
+-}
+-
+-export async function rejectAttendanceManager(id: number, notes: string) {
+-  const { data } = await api.post<ApiResponse<any>>(
+-    `/api/manager/attendance/${id}/reject/`,
+-    { notes },
++export async function getManagerAttendance(
++  params?: Pick<AttendanceFilters, "status" | "page" | "page_size">,
++) {
++  const { data } = await api.get<ApiResponse<AttendanceListResponse>>(
++    "/api/manager/attendance/",
++    { params },
+   );
+   return data;
+ }
+diff --git a/FrontEnd/src/services/api/managerSummaryApi.ts b/FrontEnd/src/services/api/managerSummaryApi.ts
+--- a/FrontEnd/src/services/api/managerSummaryApi.ts
++++ b/FrontEnd/src/services/api/managerSummaryApi.ts
+@@ -5,10 +5,6 @@
+   type ManagerLeaveRequest,
+ } from "./managerApi";
+ import { getManagerLoanRequests, type LoanRequest } from "./loanApi";
+-import {
+-  listAttendanceCorrectionRequests,
+-  type AttendanceCorrectionRequest,
+-} from "./attendanceCorrectionsApi";
+ import type { AssetReturnRequest } from "./assetsApi";
+ 
+ /**
+@@ -25,12 +21,11 @@
+  * not only counts.
+  */
+ 
+-export type ManagerQueueKey = "leave" | "loan" | "attendance" | "assetReturn";
++export type ManagerQueueKey = "leave" | "loan" | "assetReturn";
+ 
+ export const MANAGER_QUEUE_KEYS: ManagerQueueKey[] = [
+   "leave",
+   "loan",
+-  "attendance",
+   "assetReturn",
+ ];
+ 
+@@ -121,27 +116,6 @@
+   }));
+ }
+ 
+-async function readAttendance(): Promise<ManagerPendingItem[]> {
+-  const res = await listAttendanceCorrectionRequests({
+-    status: "pending_manager",
+-    page: 1,
+-    page_size: QUEUE_PAGE_SIZE,
+-  });
+-  if (isApiError(res)) throw new Error(res.message);
+-  const rows = (res.data?.results ?? []) as AttendanceCorrectionRequest[];
+-  return rows.map((row) => ({
+-    key: `attendance-${row.id}`,
+-    queue: "attendance" as const,
+-    id: row.id,
+-    employeeName: displayName(row.employee_name, row.employee_email),
+-    employeeEmail: row.employee_email || "",
+-    detail: row.date || "",
+-    status: row.status,
+-    submittedAt: row.submitted_at || row.created_at || null,
+-    path: "/manager/attendance-corrections",
+-  }));
+-}
+-
+ async function readAssetReturn(): Promise<ManagerPendingItem[]> {
+   // The endpoint ignores an unknown status filter on some deployments, so the
+   // pending rows are selected here rather than trusted from the query.
+@@ -166,7 +140,6 @@
+ const LOADERS: Record<ManagerQueueKey, () => Promise<ManagerPendingItem[]>> = {
+   leave: readLeave,
+   loan: readLoan,
+-  attendance: readAttendance,
+   assetReturn: readAssetReturn,
+ };
+ 
+diff --git a/FrontEnd/src/stores/attendanceStore.ts b/FrontEnd/src/stores/attendanceStore.ts
+--- a/FrontEnd/src/stores/attendanceStore.ts
++++ b/FrontEnd/src/stores/attendanceStore.ts
+@@ -1,12 +1,6 @@
+ import { create } from "zustand";
+ import type { AttendanceRecord, AttendanceFilters } from "../types/attendance";
+-import {
+-  getMyAttendance,
+-  checkIn,
+-  checkOut,
+-  getGlobalAttendance,
+-  overrideAttendance,
+-} from "../services/api/attendanceApi";
++import { getMyAttendance } from "../services/api/attendanceApi";
+ import { unwrapEnvelope, normalizeListData } from "../utils/dataUtils";
+ 
+ interface EmployeeAttendanceState {
+@@ -16,33 +10,55 @@
+   error: string | null;
+ 
+   fetchMyRecords: (params?: AttendanceFilters) => Promise<void>;
+-  /**
+-   * `refreshParams` is the caller's current filter. Reloading without it would
+-   * refetch the backend default range and drop the range the page is showing,
+-   * so the new check-in could land outside the visible rows.
+-   */
+-  performCheckIn: (refreshParams?: AttendanceFilters) => Promise<void>;
+-  performCheckOut: (refreshParams?: AttendanceFilters) => Promise<void>;
++  accessUnavailable: boolean;
+   reset: () => void;
+ }
+ 
+ export const useEmployeeAttendanceStore = create<EmployeeAttendanceState>(
+-  (set, get) => ({
++  (set) => ({
+     records: [],
+     total: 0,
+     loading: false,
+     error: null,
++    accessUnavailable: false,
+ 
+-    reset: () => set({ records: [], total: 0, loading: false, error: null }),
++    reset: () =>
++      set({
++        records: [],
++        total: 0,
++        loading: false,
++        error: null,
++        accessUnavailable: false,
++      }),
+ 
+     fetchMyRecords: async (params) => {
+-      set({ loading: true, error: null });
++      set({
++        records: [],
++        total: 0,
++        loading: true,
++        error: null,
++        accessUnavailable: false,
++      });
+       try {
+         const response = await getMyAttendance(params);
+         const data = unwrapEnvelope(response);
+         const { items, total } = normalizeListData<AttendanceRecord>(data);
+         set({ records: items, total, loading: false });
+       } catch (err: any) {
++        if (
++          err.response?.status === 403 &&
++          err.response?.data?.message ===
++            "Attendance is unavailable until your BioTime mapping is completed. Contact HR to be registered on a BioTime device."
++        ) {
++          set({
++            records: [],
++            total: 0,
++            loading: false,
++            error: null,
++            accessUnavailable: true,
++          });
++          return;
++        }
+         const msg =
+           err.response?.data?.message ||
+           err.message ||
+@@ -50,86 +66,5 @@
+         set({ loading: false, error: msg });
+       }
+     },
+-
+-    performCheckIn: async (refreshParams) => {
+-      set({ loading: true, error: null });
+-      try {
+-        const response = await checkIn();
+-        unwrapEnvelope(response);
+-        set({ loading: false });
+-        // Refresh list, keeping the caller's filter so the new row stays in view
+-        await get().fetchMyRecords(refreshParams ?? {});
+-      } catch (err: any) {
+-        const msg =
+-          err.response?.data?.message || err.message || "Check-in failed";
+-        set({ loading: false, error: msg });
+-        throw err;
+-      }
+-    },
+-
+-    performCheckOut: async (refreshParams) => {
+-      set({ loading: true, error: null });
+-      try {
+-        const response = await checkOut();
+-        unwrapEnvelope(response);
+-        set({ loading: false });
+-        // Refresh list, keeping the caller's filter so the new row stays in view
+-        await get().fetchMyRecords(refreshParams ?? {});
+-      } catch (err: any) {
+-        const msg =
+-          err.response?.data?.message || err.message || "Check-out failed";
+-        set({ loading: false, error: msg });
+-        throw err;
+-      }
+-    },
+   }),
+ );
+-
+-interface HrAttendanceState {
+-  records: AttendanceRecord[];
+-  total: number;
+-  loading: boolean;
+-  error: string | null;
+-
+-  fetchGlobalRecords: (params?: AttendanceFilters) => Promise<void>;
+-  performOverride: (id: string | number, data: any) => Promise<void>;
+-  reset: () => void;
+-}
+-
+-export const useHrAttendanceStore = create<HrAttendanceState>((set) => ({
+-  records: [],
+-  total: 0,
+-  loading: false,
+-  error: null,
+-
+-  reset: () => set({ records: [], total: 0, loading: false, error: null }),
+-
+-  fetchGlobalRecords: async (params) => {
+-    set({ loading: true, error: null });
+-    try {
+-      const response = await getGlobalAttendance(params);
+-      const data = unwrapEnvelope(response);
+-      const { items, total } = normalizeListData<AttendanceRecord>(data);
+-      set({ records: items, total, loading: false });
+-    } catch (err: any) {
+-      // Prioritize explicit error message from unwrap or backend envelope
+-      const msg =
+-        err.response?.data?.message || err.message || "Failed to fetch records";
+-      set({ loading: false, error: msg });
+-    }
+-  },
+-
+-  performOverride: async (id, data) => {
+-    set({ loading: true, error: null });
+-    try {
+-      const response = await overrideAttendance(id, data);
+-      unwrapEnvelope(response); // Verify success status
+-      set({ loading: false });
+-    } catch (err: any) {
+-      const msg =
+-        err.response?.data?.message || err.message || "Override failed";
+-      set({ loading: false, error: msg });
+-      throw err;
+-    }
+-  },
+-}));

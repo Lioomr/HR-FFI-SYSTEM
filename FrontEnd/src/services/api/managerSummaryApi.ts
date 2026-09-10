@@ -5,10 +5,6 @@ import {
   type ManagerLeaveRequest,
 } from "./managerApi";
 import { getManagerLoanRequests, type LoanRequest } from "./loanApi";
-import {
-  listAttendanceCorrectionRequests,
-  type AttendanceCorrectionRequest,
-} from "./attendanceCorrectionsApi";
 import type { AssetReturnRequest } from "./assetsApi";
 
 /**
@@ -25,12 +21,11 @@ import type { AssetReturnRequest } from "./assetsApi";
  * not only counts.
  */
 
-export type ManagerQueueKey = "leave" | "loan" | "attendance" | "assetReturn";
+export type ManagerQueueKey = "leave" | "loan" | "assetReturn";
 
 export const MANAGER_QUEUE_KEYS: ManagerQueueKey[] = [
   "leave",
   "loan",
-  "attendance",
   "assetReturn",
 ];
 
@@ -121,27 +116,6 @@ async function readLoan(): Promise<ManagerPendingItem[]> {
   }));
 }
 
-async function readAttendance(): Promise<ManagerPendingItem[]> {
-  const res = await listAttendanceCorrectionRequests({
-    status: "pending_manager",
-    page: 1,
-    page_size: QUEUE_PAGE_SIZE,
-  });
-  if (isApiError(res)) throw new Error(res.message);
-  const rows = (res.data?.results ?? []) as AttendanceCorrectionRequest[];
-  return rows.map((row) => ({
-    key: `attendance-${row.id}`,
-    queue: "attendance" as const,
-    id: row.id,
-    employeeName: displayName(row.employee_name, row.employee_email),
-    employeeEmail: row.employee_email || "",
-    detail: row.date || "",
-    status: row.status,
-    submittedAt: row.submitted_at || row.created_at || null,
-    path: "/manager/attendance-corrections",
-  }));
-}
-
 async function readAssetReturn(): Promise<ManagerPendingItem[]> {
   // The endpoint ignores an unknown status filter on some deployments, so the
   // pending rows are selected here rather than trusted from the query.
@@ -166,7 +140,6 @@ async function readAssetReturn(): Promise<ManagerPendingItem[]> {
 const LOADERS: Record<ManagerQueueKey, () => Promise<ManagerPendingItem[]>> = {
   leave: readLeave,
   loan: readLoan,
-  attendance: readAttendance,
   assetReturn: readAssetReturn,
 };
 

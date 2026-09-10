@@ -33,6 +33,9 @@ export default function HrLoanRequestDetailsPage() {
           ? "pending_disbursement"
           : ["pending_hr", "pending_finance"]
       }
+      // `IsLoanOwnerOrHR` admits HRManager and SystemAdmin, so among the shared
+      // review surfaces only this one offers the PDF.
+      showPdfDownload
       approveLabel={
         isFinancePath
           ? t("loans.inbox.btnMarkDisbursed")

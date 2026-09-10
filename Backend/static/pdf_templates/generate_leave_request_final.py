@@ -22,7 +22,7 @@ except ImportError:  # pragma: no cover - generation environment guard
 OUT_DIR = Path(__file__).resolve().parent
 PDF_PATH = OUT_DIR / "leave_request_blank.pdf"
 MAP_PATH = OUT_DIR / "leave_request_blank_field_map.json"
-DEFAULT_LOGO = Path(r"C:\Users\PC\Downloads\FFI LOGO.png")
+DEFAULT_LOGO = Path("output_logo_transparent.png")
 PAGE_W, PAGE_H = A4
 
 ORANGE = colors.HexColor("#FF5A00")
@@ -158,7 +158,7 @@ def build(logo_path: Path) -> None:
     pdf.setTitle("FFI Leave Request Blank Template")
 
     logo = ImageReader(str(logo_path))
-    logo_width = 236
+    logo_width = 220
     logo_height = logo_width * logo.getSize()[1] / logo.getSize()[0]
     pdf.drawImage(logo, 15, bottom(14, logo_height), logo_width, logo_height, mask="auto")
     draw_text(pdf, PAGE_W - 15, 14, "Leave Request", size=18, bold=True, right=True)
@@ -168,14 +168,15 @@ def build(logo_path: Path) -> None:
     pdf.line(15, bottom(73), PAGE_W - 15, bottom(73))
 
     # Header row
-    rect(pdf, 15, 81, 276, 28, fill=CELL)
-    rect(pdf, 304, 81, 276, 28, fill=CELL)
+    rect(pdf, 15, 81, 176, 28, fill=CELL)
+    rect(pdf, 202, 81, 176, 28, fill=CELL)
+    rect(pdf, 389, 81, 191, 28, fill=CELL)
     draw_text(pdf, 23, 91, "Reference No.", size=7.3, bold=True)
-    draw_arabic(pdf, 282, 91, "رقم المرجع", size=7)
-    input_box(pdf, "reference_no", 92, 86, 150, 18, font_size=8.2)
-    draw_text(pdf, 312, 91, "Request Date", size=7.3, bold=True)
-    draw_arabic(pdf, 572, 91, "تاريخ الطلب", size=7)
-    input_box(pdf, "request_date", 390, 86, 132, 18, font_size=8.2)
+    input_box(pdf, "reference_no", 89, 86, 78, 18, font_size=8)
+    draw_text(pdf, 210, 91, "Request Date", size=7.3, bold=True)
+    input_box(pdf, "request_date", 290, 86, 74, 18, font_size=7.4)
+    draw_text(pdf, 397, 91, "Filed Date", size=7.3, bold=True)
+    input_box(pdf, "filed_date", 465, 86, 92, 18, font_size=7.4, source="leave_request.filed_at")
 
     # Employee information
     section(pdf, 118, "Employee Information", "بيانات الموظف")
@@ -285,36 +286,56 @@ def build(logo_path: Path) -> None:
     no = checkbox(pdf, 458, 633, "No")
     FIELD_MAP["ticket_required"] = {"page": 1, "checkboxes": {"yes": yes, "no": no}}
 
-    # Approval
-    section(pdf, 663, "Approval", "الاعتماد")
-    rect(pdf, 15, 682, 565, 25, fill=CELL)
-    draw_text(pdf, 23, 691, "Recommended by Line Manager", size=6.2)
-    yes = checkbox(pdf, 170, 689, "Yes")
-    no = checkbox(pdf, 221, 689, "No")
-    FIELD_MAP["manager_recommended"] = {"page": 1, "checkboxes": {"yes": yes, "no": no}}
-    draw_text(pdf, 307, 691, "Date", size=6.4)
-    draw_arabic(pdf, 572, 691, "التاريخ", size=6.4)
-    input_box(pdf, "approval_date", 390, 685, 120, 19, font_size=7.4)
-    label_pair(pdf, 707, 36, "Comments", "التعليقات")
-    input_box(pdf, "approval_comments", 102, 710, 406, 30, font_size=7.0, multiline=True, max_lines=2)
-
-    # Signatures
-    section(pdf, 751, "Signature", "التوقيع")
+    # Signature area: a clean, open layout for future real-signature images.
+    section(pdf, 663, "Signature", "التوقيع")
+    pdf.setStrokeColor(ORANGE)
+    pdf.setLineWidth(0.9)
+    pdf.line(15, bottom(682), PAGE_W - 15, bottom(682))
     signature_fields = [
-        ("employee", "Employee Signature", "توقيع الموظف"),
-        ("line_manager", "Line Manager Signature", "توقيع المدير المباشر"),
-        ("department_head", "Department Head Signature", "توقيع رئيس الإدارة"),
-        ("hr", "HR Signature", "توقيع الموارد البشرية"),
+        ("employee", "Employee", "الموظف"),
+        ("line_manager", "Line Manager", "المدير المباشر"),
+        ("department_head", "Department Head", "رئيس الإدارة"),
+        ("hr", "HR", "الموارد البشرية"),
     ]
-    col_width = 565 / 4
+    signature_widths = [226, 113, 113, 113]
+    x = 15
     for index, (key, en, ar) in enumerate(signature_fields):
-        x = 15 + index * col_width
-        rect(pdf, x, 770, col_width, 59, fill=CELL)
-        draw_text(pdf, x + 7, 777, en, size=5.3)
-        draw_arabic(pdf, x + col_width - 7, 777, ar, size=5.3)
-        input_box(pdf, f"{key}_signature", x + 7, 790, col_width - 14, 23, font_size=6.6, shrink=True)
-        draw_text(pdf, x + 7, 818, "Date", size=5.6)
-        input_box(pdf, f"{key}_signature_date", x + 42, 815, col_width - 49, 11, font_size=6.0, shrink=True)
+        width = signature_widths[index]
+        draw_text(pdf, x + 10, 692, en, size=6.4, bold=True, color=MUTED)
+        draw_arabic(pdf, x + width - 10, 704, ar, size=6.0, bold=False, color=MUTED)
+        signature_x, signature_top = x + 10, 712
+        signature_width, signature_height = width - 20, 68
+        FIELD_MAP[f"{key}_signature_image"] = {
+            "page": 1,
+            "x": round(signature_x, 2),
+            "y": round(bottom(signature_top, signature_height), 2),
+            "width": round(signature_width, 2),
+            "height": round(signature_height, 2),
+            "kind": "image",
+            "padding": 3,
+            "source": f"request.signers.{key}.signature",
+        }
+        pdf.setStrokeColor(MUTED)
+        pdf.setLineWidth(0.55)
+        pdf.line(signature_x, bottom(786), signature_x + signature_width, bottom(786))
+        draw_text(pdf, x + 10, 800, "Date", size=6, color=MUTED)
+        date_x, date_width = x + 54, width - 64
+        pdf.line(date_x, bottom(806), date_x + date_width, bottom(806))
+        field(
+            f"{key}_signature_date",
+            date_x,
+            790,
+            date_width,
+            16,
+            font_size=6.2,
+            shrink=True,
+            source="leave_request.workflow_timestamp",
+        )
+        if index < len(signature_fields) - 1:
+            pdf.setStrokeColor(BORDER)
+            pdf.setLineWidth(0.45)
+            pdf.line(x + width, bottom(690), x + width, bottom(814))
+        x += width
 
     pdf.showPage()
     pdf.save()

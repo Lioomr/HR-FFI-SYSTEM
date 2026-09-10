@@ -29,7 +29,6 @@ from employees.services.manager_relationships import (
     manager_approval_actor_source,
     manager_scope_q,
 )
-from leaves.permissions import IsOwnerOrHR
 from organization.services import filter_queryset_by_accessible_companies, filter_queryset_by_company_scope
 
 from .models import LoanRequest
@@ -39,6 +38,7 @@ from .permissions import (
     IsEmployeeOnly,
     IsFinanceApproverOrAdmin,
     IsHRApproverOrAdmin,
+    IsLoanOwnerOrHR,
     IsManagerOrAdmin,
     get_active_workflow_config,
     is_accountant_user,
@@ -77,6 +77,7 @@ def _configure_sensitive_download(response, filename):
     response["X-Content-Type-Options"] = "nosniff"
     response["Cache-Control"] = "private, no-store"
     return response
+
 
 LEGACY_PENDING_HR_STATUSES = [
     LoanRequest.RequestStatus.PENDING_HR,
@@ -311,7 +312,7 @@ def _build_loan_request_pdf_fallback(instance: LoanRequest) -> bytes:
     return render_request_pdf(doc)
 
 
-def _build_loan_request_pdf(instance: LoanRequest) -> bytes:
+def _build_loan_request_pdf_legacy(instance: LoanRequest) -> bytes:
     from io import BytesIO
 
     from pypdf import PdfReader, PdfWriter
@@ -563,6 +564,14 @@ def _build_loan_request_pdf(instance: LoanRequest) -> bytes:
     return output.getvalue()
 
 
+def _build_loan_request_pdf(instance: LoanRequest) -> bytes:
+    """Build the mapped form, falling back only when its paired asset is absent."""
+
+    from .pdf_loan_request import build_loan_request_pdf
+
+    return build_loan_request_pdf(instance, fallback=_build_loan_request_pdf_fallback)
+
+
 class LoanRequestViewSet(viewsets.ModelViewSet):
     serializer_class = LoanRequestReadSerializer
     permission_classes = [IsAuthenticated]
@@ -573,6 +582,8 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
     ordering = ["-created_at"]
 
     def get_permissions(self):
+        if self.action == "pdf":
+            return [IsAuthenticated(), IsLoanOwnerOrHR()]
         if self.action == "create":
             return [IsAuthenticated(), IsEmployeeOnly()]
         if self.action in ["list", "retrieve", "approve", "reject"]:
@@ -876,7 +887,7 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
         audit(request, "loan_request_cancelled", entity="LoanRequest", entity_id=instance.id)
         return success(LoanRequestReadSerializer(instance).data)
 
-    @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated, IsOwnerOrHR])
+    @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated, IsLoanOwnerOrHR])
     def pdf(self, request, pk=None):
         instance = self.get_queryset().filter(pk=pk).first()
         if not instance:

@@ -72,7 +72,6 @@ const EMPTY_SUMMARY: ManagerWorkSummary = {
   queues: {
     leave: { key: "leave", count: 0, available: true, items: [] },
     loan: { key: "loan", count: 0, available: true, items: [] },
-    attendance: { key: "attendance", count: 0, available: true, items: [] },
     assetReturn: { key: "assetReturn", count: 0, available: true, items: [] },
   },
   items: [],

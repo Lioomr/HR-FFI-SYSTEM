@@ -1,15 +1,25 @@
-from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from django.test import SimpleTestCase, override_settings
+from django.contrib.auth import get_user_model
+from django.test import SimpleTestCase, TestCase, override_settings
 
 from core.notifications import send_sms_notification
 from core.services.messaging_providers import TextBeeSmsProvider, render_template_message
 from core.services.pending_approval_email import notify_users_for_pending_status
 from core.services.whatsapp_service import WhatsAppService
+from employees.models import EmployeeProfile
+from loans.models import LoanRequest
+from organization.models import OrganizationNode
 
 
 class MessagingProviderTests(SimpleTestCase):
+    def setUp(self):
+        # Provider unit tests exercise default templates, independently of
+        # tenant-configured template storage (covered by template library tests).
+        template = patch("core.services.whatsapp_template_library.get_custom_template_body", return_value=None)
+        template.start()
+        self.addCleanup(template.stop)
+
     @patch("core.services.messaging_providers.requests.post")
     def test_evolution_whatsapp_provider_sends_rendered_template_message(self, post):
         post.return_value = Mock(status_code=201, text="", json=lambda: {"key": {"id": "wamid-1"}, "status": "PENDING"})
@@ -348,24 +358,30 @@ class EvolutionTemplateRenderingTests(SimpleTestCase):
         self.assertIn("WhatsApp provider: Evolution", message)
 
 
-class PendingApprovalWhatsAppTests(SimpleTestCase):
+class PendingApprovalWhatsAppTests(TestCase):
     @patch("in_app_notifications.integrations.dispatch_notification_channels")
     def test_pending_approval_uses_whatsapp_first_dispatcher(self, dispatch):
         dispatch.return_value = {
             "whatsapp": {"status": "sent", "provider": "evolution_whatsapp"},
             "email": None,
         }
-        user = SimpleNamespace(
-            id=1,
-            email="approver@example.com",
+        company = OrganizationNode.objects.create(code="WA-APPROVAL", name="Approval", node_type="company")
+        user = get_user_model().objects.create_user(email="approver@example.com", full_name="Approver")
+        profile = EmployeeProfile.objects.create(
+            user=user,
+            company=company,
             full_name="Approver",
-            employee_profile=SimpleNamespace(mobile="+201013530963"),
+            employee_id="WA-APPROVAL",
+            mobile="+201013530963",
+        )
+        loan = LoanRequest.objects.create(
+            employee=user, employee_profile=profile, company=company, requested_amount=100
         )
 
         result = notify_users_for_pending_status(
             users=[user],
             request_type="Loan Request",
-            request_id=7,
+            request_id=loan.id,
             requester_name="Sara",
             status_label="Pending HR",
             details=["Amount: 5000"],

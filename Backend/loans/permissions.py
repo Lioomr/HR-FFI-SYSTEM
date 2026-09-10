@@ -68,6 +68,16 @@ class IsEmployeeOnly(BasePermission):
         return request.user.is_authenticated and get_role(request.user) in ["Employee", "Manager", "HRManager"]
 
 
+class IsLoanOwnerOrHR(BasePermission):
+    """PDF access requires ownership or HR/Admin, within the scoped queryset."""
+
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated)
+
+    def has_object_permission(self, request, view, obj):
+        return obj.employee_id == request.user.id or get_role(request.user) in {"HRManager", "SystemAdmin"}
+
+
 class IsManagerOrAdmin(BasePermission):
     def has_permission(self, request, view):
         return request.user.is_authenticated and (

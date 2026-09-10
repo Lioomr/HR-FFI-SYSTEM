@@ -12,8 +12,8 @@ from openpyxl import Workbook, load_workbook
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from audit.models import AuditLog
 from attendance.models import BioTimeEmployeeMap
+from audit.models import AuditLog
 from hr_reference.models import Department, Position
 from leaves.models import LeaveRequest, LeaveType
 from organization.models import OrganizationNode, UserOrganizationAccess
@@ -145,6 +145,27 @@ class EmployeeProfileTests(TestCase):
 
         # Verify Audit Log
         self.assertTrue(AuditLog.objects.filter(action="employee_profile_updated", entity_id=profile.id).exists())
+
+    def test_linking_already_linked_account_returns_detail_instead_of_500(self):
+        linked_profile = EmployeeProfile.objects.create(
+            user=self.employee_user,
+            company=self.company,
+            employee_id="EMP-LINKED-01",
+        )
+        target_profile = EmployeeProfile.objects.create(
+            company=self.company,
+            employee_id="EMP-LINK-TARGET",
+        )
+
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.patch(f"/api/employees/{target_profile.pk}/", {"user_id": self.employee_user.id})
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        user_errors = [error for error in response.data["errors"] if error.get("field") == "user_id"]
+        self.assertTrue(user_errors)
+        self.assertIn(linked_profile.employee_id, user_errors[0]["message"])
+        target_profile.refresh_from_db()
+        self.assertIsNone(target_profile.user_id)
 
     def test_employee_me_endpoint(self):
         EmployeeProfile.objects.create(

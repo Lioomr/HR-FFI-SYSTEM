@@ -81,6 +81,13 @@ docker compose --env-file .env.prod.compose -f docker-compose.prod.yml down
 - `BIRD_WORKSPACE_ID`
 - `BIRD_EMAIL_CHANNEL_ID` (or `BIRD_CHANNEL_ID`)
 
+### Optional Sentry monitoring
+
+- Set `SENTRY_DSN` in the backend runtime environment to enable backend and Celery error reporting.
+- Leave `SENTRY_DSN` empty to keep the integration fully disabled.
+- Start with `SENTRY_TRACES_SAMPLE_RATE=0.0` and `SENTRY_PROFILES_SAMPLE_RATE=0.0`; enable sampling only after the production data policy is reviewed.
+- Set `SENTRY_ENVIRONMENT=production` and optionally set `SENTRY_RELEASE` to the deployed revision.
+
 ## 5) Deployment Notes
 
 - On cloud or VPS, run the production compose file only.

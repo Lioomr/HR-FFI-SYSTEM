@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Grid, Input, Modal, Table, Typography, notification } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
 
 import { useI18n } from "../../i18n/useI18n";
 import { isApiError, type ApiResponse } from "../../services/api/apiTypes";
@@ -24,6 +25,7 @@ export interface CeoAssetRecord {
   asset_name: string;
   employee_name?: string;
   employee_email?: string;
+  employee?: number;
   status: string;
 }
 
@@ -44,6 +46,7 @@ export default function CeoAssetApprovalPage<T extends CeoAssetRecord>({
   approve,
   reject,
   expandedRowRender,
+  employeeProfilePath,
 }: {
   title: string;
   subtitle: string;
@@ -65,6 +68,8 @@ export default function CeoAssetApprovalPage<T extends CeoAssetRecord>({
     comment: string,
   ) => Promise<ApiResponse<unknown>>;
   expandedRowRender?: (record: T) => ReactNode;
+  /** Optional role-safe profile destination for the request employee. */
+  employeeProfilePath?: (employeeProfileId: number) => string;
 }) {
   const { t } = useI18n();
   const screens = useBreakpoint();
@@ -233,9 +238,22 @@ export default function CeoAssetApprovalPage<T extends CeoAssetRecord>({
       key: "employee",
       render: (_, record) => (
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 600, color: "#0f172a" }}>
-            {record.employee_name || "—"}
-          </div>
+          {record.employee && employeeProfilePath ? (
+            <Link
+              to={employeeProfilePath(record.employee)}
+              style={{
+                color: "#f97316",
+                fontWeight: 600,
+                textDecoration: "none",
+              }}
+            >
+              {record.employee_name || "—"}
+            </Link>
+          ) : (
+            <div style={{ fontWeight: 600, color: "#0f172a" }}>
+              {record.employee_name || "—"}
+            </div>
+          )}
           {record.employee_email && (
             <div style={{ fontSize: 12, color: "#64748b" }}>
               {record.employee_email}

@@ -131,10 +131,11 @@ export const useAuthStore = create<AuthState>((set) => ({
         },
       });
     } else if (token) {
-      // Legacy/Fallback: Token exists but no user data.
-      // We mark authenticated so RequireAuth passes,
-      // but user is null so RequireRole will block (safety).
-      set({ isAuthenticated: true, user: null });
+      // A token without its paired user record cannot be routed safely. It can
+      // be left behind by an interrupted write, corrupt storage, or a legacy
+      // session, so fail closed instead of mounting an empty protected shell.
+      clearToken();
+      set({ isAuthenticated: false, user: null });
     } else {
       // No token = definitely logged out
       set({ isAuthenticated: false, user: null });

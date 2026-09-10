@@ -167,9 +167,7 @@ describe("HR Annual Leave settlements queue", () => {
     await openReview();
 
     expect(
-      screen.getByText(
-        "This employee has Annual Leave requests still awaiting a decision. Those days are reserved and are not part of the settlement.",
-      ),
+      screen.getByText("This employee has a pending Annual Leave request."),
     ).toBeInTheDocument();
   });
 
@@ -178,9 +176,7 @@ describe("HR Annual Leave settlements queue", () => {
     await openReview();
 
     expect(
-      screen.queryByText(
-        "This employee has Annual Leave requests still awaiting a decision. Those days are reserved and are not part of the settlement.",
-      ),
+      screen.queryByText("This employee has a pending Annual Leave request."),
     ).not.toBeInTheDocument();
   });
 
@@ -205,7 +201,7 @@ describe("HR Annual Leave settlements queue", () => {
     renderPage();
     await openReview();
 
-    fireEvent.change(screen.getByLabelText("HR Comment"), {
+    fireEvent.change(screen.getByLabelText("HR comment"), {
       target: { value: "Reviewed by HR." },
     });
     fireEvent.click(screen.getByRole("button", { name: "Submit" }));
@@ -234,9 +230,9 @@ describe("HR Annual Leave settlements queue", () => {
     await openReview();
 
     // Ant Design's Select is a combobox; pick the carry-forward option by name.
-    fireEvent.mouseDown(screen.getByLabelText("HR Decision"));
-    fireEvent.click(await screen.findByTitle("Carry Forward"));
-    fireEvent.change(screen.getByLabelText("HR Comment"), {
+    fireEvent.mouseDown(screen.getByLabelText("HR decision"));
+    fireEvent.click(await screen.findByTitle("Carry forward"));
+    fireEvent.change(screen.getByLabelText("HR comment"), {
       target: { value: "Carry forward approved for CEO review." },
     });
     fireEvent.click(screen.getByRole("button", { name: "Submit" }));
@@ -278,11 +274,11 @@ describe("HR Annual Leave settlements queue", () => {
 
     renderPage();
     fireEvent.click(
-      await screen.findByRole("button", { name: /New Settlement/ }, FIND),
+      await screen.findByRole("button", { name: /Open Settlement/ }, FIND),
     );
     fireEvent.mouseDown(await screen.findByLabelText("Employee"));
     fireEvent.click(await screen.findByTitle("Sara Ahmed (FFI-047)", {}, FIND));
-    fireEvent.mouseDown(screen.getByLabelText("HR Decision"));
+    fireEvent.mouseDown(screen.getByLabelText("HR decision"));
     fireEvent.click(await screen.findByTitle("Pay", {}, FIND));
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
 
@@ -307,7 +303,7 @@ describe("HR Annual Leave settlements queue", () => {
 
     renderPage();
     fireEvent.click(
-      await screen.findByRole("button", { name: /New Settlement/ }),
+      await screen.findByRole("button", { name: /Open Settlement/ }),
     );
     expect(
       await screen.findByText("Open Annual Leave Settlement"),
@@ -338,7 +334,7 @@ describe("HR Annual Leave settlements queue", () => {
 
     renderPage();
     fireEvent.click(
-      await screen.findByRole("button", { name: /New Settlement/ }),
+      await screen.findByRole("button", { name: /Open Settlement/ }),
     );
     fireEvent.mouseDown(await screen.findByLabelText("Employee"));
     fireEvent.click(await screen.findByTitle("Sara Ahmed (FFI-047)"));
@@ -372,6 +368,6 @@ describe("HR Annual Leave settlements queue", () => {
   it("opens the record named by the notification deep link", async () => {
     renderPage("/hr/annual-leave-payments/9");
 
-    expect(await screen.findByText("Settlement #9")).toBeInTheDocument();
+    expect(await screen.findByText("Request #9")).toBeInTheDocument();
   });
 });
