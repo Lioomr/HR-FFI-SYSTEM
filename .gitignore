@@ -45,7 +45,8 @@ build/
 .codex-upload-staging/
 .opencode/
 FrontEnd/.codex-*
-.claude/
+# .claude/ is team-shared (hooks/, settings.json); only local overrides are ignored
+.claude/settings.local.json
 .cursor/
 .cursorrules
 .playwright-cli/

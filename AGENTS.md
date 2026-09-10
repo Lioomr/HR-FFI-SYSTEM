@@ -80,6 +80,16 @@ Rules:
 - Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
 
+## serena
+
+This project registers the Serena MCP server (`.mcp.json`) for LSP-based, symbol-level code navigation and editing — configured for TypeScript (`FrontEnd/`) and Python (`Backend/`). It needs the `serena` binary on `PATH`; `.claude/hooks/session-start.sh` installs it automatically on Claude Code on the web via the `SessionStart` hook in `.claude/settings.json`.
+
+Rules:
+- If Serena's tools are deferred, load them via tool search before reading, searching, or editing code on a file in `FrontEnd/` or `Backend/`. Once loaded, prefer them over raw `Read`/`Edit` for code: `get_symbols_overview` for a file's shape, `find_symbol` (with `include_body` only when needed) instead of reading whole files, `find_referencing_symbols`/`find_implementations`/`find_declaration` instead of grepping for callers, and `replace_symbol_body`/`insert_before_symbol`/`insert_after_symbol`/`rename_symbol`/`safe_delete_symbol`/`replace_content` for edits.
+- `Grep`/`Glob` are still fine for plain-text discovery (finding a file by name, a string in a non-code file, a TODO) — the rule above is about reading/editing *code* once you have a target.
+- Serena complements graphify, it doesn't replace it: graphify answers whole-repo structural questions (god nodes, community structure, what relates to what); Serena fetches or edits one exact symbol cheaply once you know where to look.
+- Do not run Serena's `onboarding` tool or use `write_memory` to re-derive project conventions, architecture, or domain rules — `.agents/context/`, `.agents/rules/`, `.agents/skills/`, and this file are the source of truth (see the documentation authority hierarchy in `.agents/context/INDEX.md`). See the `project_conventions_pointer` Serena memory.
+
 ## AWS Guidance
 
 - Prefer the AWS MCP Server for AWS interactions — it provides sandboxed execution, observability, and audit logging. If unavailable, use the AWS CLI directly.
