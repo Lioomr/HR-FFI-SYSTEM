@@ -1,0 +1,33 @@
+# Self-hosted OCR stack for the employee document archive pilot.
+#
+# Kept out of requirements.txt on purpose: these are large, CPU-inference wheels
+# that are only published for the Linux/CPython 3.12 target of Backend/Dockerfile.
+# The Django app imports them lazily, so the test suite and a plain developer
+# checkout run fine without them.
+#
+# Install (inside the 3.12 image):
+#   pip install --no-cache-dir -r requirements-ocr.txt
+# Then provision the models once, offline-safe from that point on:
+#   python manage.py provision_ocr_models
+
+# PaddlePaddle 2.6 imports its C++ extension helpers through setuptools.
+setuptools>=70,<81
+# PaddleOCR 2.x uses the pre-3.0 PaddlePaddle API surface.
+paddlepaddle==2.6.2
+paddleocr==2.10.0
+# PaddlePaddle 2.6's C++ layer is built against the protobuf 3/4 Python runtime.
+# Leaving this unpinned resolves to protobuf 7, which segfaults on first use.
+protobuf==4.25.8
+# PaddleOCR requires both opencv distributions; pin them to one matching version
+# and do NOT add opencv-python-headless as well - three cv2 copies conflict.
+opencv-python==4.10.0.84
+opencv-contrib-python==4.10.0.84
+# PaddlePaddle 2.6 requires numpy 1.x.
+numpy==1.26.4
+# Geometry helpers PaddleOCR uses for detection post-processing.
+shapely==2.0.6
+pyclipper==1.3.0.post6
+# Everything else PaddleOCR needs is declared by the package itself. Do NOT add
+# imgaug / scikit-image / lmdb / albumentations here: those are PaddleOCR's
+# TRAINING extras, they are not used for inference, and newer albucore builds
+# pull a hard PyTorch requirement that fails the image build.
