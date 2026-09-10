@@ -30,7 +30,7 @@ Frontend `FrontEnd/src/services/api/apiClient.ts` retries a non-login, non-refre
 | `Manager` | Team leave/loan pre-approval, team view, team announcements |
 | `Employee` | Self-service: profile, payslips, leave/loan/asset requests, announcements |
 
-Role resolution: `accounts.utils.get_role(user)` reads `user.groups` — one user can belong to multiple groups; priority order enforced in `get_role`.
+Role resolution: `accounts.permissions.get_role(user)` reads `user.groups` — one user can belong to multiple groups; priority order enforced in `get_role`.
 
 ## Permission Classes (Backend)
 
