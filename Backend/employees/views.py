@@ -10,7 +10,7 @@ from decimal import Decimal, InvalidOperation
 
 from django.db import IntegrityError, transaction
 from django.db.models import Case, CharField, Exists, F, OuterRef, Q, Value, When
-from django.http import FileResponse
+from django.http import FileResponse, HttpResponse
 from django.utils import timezone
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
@@ -52,6 +52,7 @@ from .contract_expiry import (
     reject_decision,
     submit_decision,
 )
+from .document_thumbnail import DocumentThumbnailError, build_document_thumbnail
 from .models import ContractDecision, EmployeeDeletionRequest, EmployeeDocument, EmployeeImport, EmployeeProfile
 from .notifications import notify_document_expiry_in_app
 from .permissions import IsEmployeeOwner, IsHRManagerOnly, IsHRManagerOrAdmin
@@ -389,8 +390,10 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             permission_classes = [IsAuthenticated]
         elif self.action == "me":
             permission_classes = [IsAuthenticated, IsHRManagerOrAdmin | IsEmployeeOwner]
-        elif self.action in ["documents", "download_document", "document_detail"]:
+        elif self.action in ["documents", "download_document", "document_thumbnail", "document_detail"]:
             permission_classes = [IsAuthenticated]
+        elif self.action == "review_document":
+            permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
         elif self.action in ["signature", "signature_preview"]:
             # Ownership and company scope are enforced in
             # _signature_profile_for_request; an employee never reaches
@@ -874,6 +877,56 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         except FileNotFoundError:
             return error("Not found", errors=["Document file is missing from storage."], status=404)
 
+    @action(detail=True, methods=["get"], url_path=r"documents/(?P<document_id>[^/.]+)/thumbnail")
+    def document_thumbnail(self, request, pk=None, document_id=None):
+        """Serve a compact, private first-page image for HR document review."""
+
+        if get_requested_organization_scope(request) is not None and get_role(request.user) not in {
+            "HRManager",
+            "SystemAdmin",
+        }:
+            return error(
+                "Forbidden",
+                errors=["Scoped employee access does not include documents."],
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        profile, error_response = self._document_profile_for_request(request, pk)
+        if error_response:
+            return error_response
+
+        document = (
+            self._documents_for_profile(
+                profile,
+                include_hr_only=get_role(request.user) in {"SystemAdmin", "HRManager"},
+            )
+            .filter(pk=document_id)
+            .first()
+        )
+        if document is None:
+            return error("Not found", errors=["Not found."], status=404)
+
+        try:
+            thumbnail = build_document_thumbnail(document.file)
+        except DocumentThumbnailError as exc:
+            message = str(exc)
+            if "missing from storage" in message:
+                return error("Not found", errors=[message], status=404)
+            return error("Preview unavailable", errors=[message], status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+        response = HttpResponse(thumbnail, content_type="image/jpeg")
+        response["Content-Disposition"] = f'inline; filename="employee-document-{document.id}-thumbnail.jpg"'
+        response["Content-Length"] = str(len(thumbnail))
+        response["X-Content-Type-Options"] = "nosniff"
+        response["Cache-Control"] = "private, no-store"
+        audit(
+            request,
+            "employee_document_thumbnail_viewed",
+            entity="employee_document",
+            entity_id=document.id,
+            metadata={"employee_profile_id": profile.id, "document_type": document.document_type},
+        )
+        return response
+
     @action(detail=True, methods=["patch", "delete"], url_path=r"documents/(?P<document_id>[^/.]+)")
     def document_detail(self, request, pk=None, document_id=None):
         """Update document metadata, or permanently delete the document.
@@ -979,6 +1032,70 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         if outcome.warnings:
             payload["extraction_warnings"] = outcome.warnings
         return success(payload)
+
+    @action(detail=True, methods=["post"], url_path=r"documents/(?P<document_id>[^/.]+)/review")
+    def review_document(self, request, pk=None, document_id=None):
+        """Record HR acknowledgement of OCR suggestions without applying them.
+
+        A re-run clears this acknowledgement because its OCR suggestions are a
+        new result that must be reviewed separately.
+        """
+
+        profile, error_response = self._document_profile_for_request(request, pk)
+        if error_response:
+            return error_response
+
+        role = get_role(request.user)
+        if role not in ["SystemAdmin", "HRManager"]:
+            return error("Forbidden", errors=["Forbidden."], status=status.HTTP_403_FORBIDDEN)
+
+        ensure_company_write_allowed(request)
+        with transaction.atomic():
+            document = (
+                self._documents_for_profile(profile)
+                # _documents_for_profile joins nullable relations for the
+                # serializer. Lock only the document row; PostgreSQL rejects
+                # FOR UPDATE on an outer-joined nullable relation.
+                .select_for_update(of=("self",))
+                .filter(pk=document_id)
+                .first()
+            )
+            if document is None:
+                return error("Not found", errors=["Not found."], status=404)
+            if document.is_system_generated:
+                return error(
+                    "Forbidden",
+                    errors=["System-generated documents cannot be reviewed."],
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            if document.extraction_status not in {
+                EmployeeDocument.ExtractionStatus.SUCCESS,
+                EmployeeDocument.ExtractionStatus.PARTIAL,
+            }:
+                return error(
+                    "Validation error",
+                    errors=["OCR suggestions are not ready for review."],
+                    status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                )
+
+            if document.ocr_reviewed_at is None:
+                document.ocr_reviewed_at = timezone.now()
+                document.ocr_reviewed_by = request.user
+                document.save(update_fields=["ocr_reviewed_at", "ocr_reviewed_by", "updated_at"])
+                audit(
+                    request,
+                    "employee_document_ocr_reviewed",
+                    entity="employee_document",
+                    entity_id=document.id,
+                    metadata={
+                        "employee_profile_id": profile.id,
+                        "company_id": profile.company_id,
+                        "document_type": document.document_type,
+                        "extraction_status": document.extraction_status,
+                    },
+                )
+
+        return success(EmployeeDocumentSerializer(document, context={"request": request}).data)
 
     @staticmethod
     def _audit_document_deleted(request, profile, snapshot, *, cleanup_pending=False):

@@ -473,6 +473,17 @@ class EmployeeDocument(models.Model):
     extraction_queued_at = models.DateTimeField(null=True, blank=True)
     extraction_completed_at = models.DateTimeField(null=True, blank=True)
     extraction_attempts = models.PositiveSmallIntegerField(default=0)
+    # This acknowledges that an HR user has reviewed OCR *suggestions*. It is
+    # intentionally separate from employee-profile data: review never applies
+    # any OCR value to the employee record.
+    ocr_reviewed_at = models.DateTimeField(null=True, blank=True)
+    ocr_reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ocr_reviewed_employee_documents",
+    )
     uploaded_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

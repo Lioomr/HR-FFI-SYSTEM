@@ -13,6 +13,7 @@ from hr_reference.models import Department, Position, Sponsor, TaskGroup
 from in_app_notifications.models import Notification
 
 from .models import ContractDecision, EmployeeDeletionRequest, EmployeeDocument, EmployeeImport, EmployeeProfile
+from .ocr.parsers import sanitize_extracted_fields
 from .services.manager_relationships import validate_manager_assignment
 from .services.signature_image import SignatureImageError, normalize_signature
 
@@ -771,6 +772,8 @@ class EmployeeDocumentSerializer(serializers.ModelSerializer):
             "extraction_metadata",
             "extraction_attempts",
             "extraction_completed_at",
+            "ocr_reviewed_at",
+            "ocr_reviewed_by",
             "is_system_generated",
             "uploaded_by",
             "uploaded_by_name",
@@ -790,6 +793,8 @@ class EmployeeDocumentSerializer(serializers.ModelSerializer):
             "extraction_metadata",
             "extraction_attempts",
             "extraction_completed_at",
+            "ocr_reviewed_at",
+            "ocr_reviewed_by",
             "is_system_generated",
             "uploaded_by",
             "uploaded_by_name",
@@ -812,7 +817,10 @@ class EmployeeDocumentSerializer(serializers.ModelSerializer):
         }
 
     def get_extracted_fields(self, obj):
-        return self._public_extracted_fields(obj.extracted_fields)
+        # Reapply the parser's safety gate for rows saved before the OCR
+        # hardening.  This keeps historical label/placeholder mistakes out of
+        # HR's review surface without mutating evidence or raw OCR text.
+        return sanitize_extracted_fields(obj.document_type, self._public_extracted_fields(obj.extracted_fields))
 
     def get_extraction_metadata(self, obj):
         metadata = obj.extraction_metadata

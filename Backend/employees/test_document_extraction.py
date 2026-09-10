@@ -305,6 +305,15 @@ class DocumentExtractionPipelineTests(TestCase):
         self.assertIn("P<EGY", document.extraction_raw_text)
         self.assertNotIn("raw_text", document.extracted_fields)
 
+    def test_passport_header_text_is_never_saved_as_an_issue_date(self):
+        document = self._document(EmployeeDocument.DocumentType.PASSPORT)
+
+        self._run(document, "Date of Issue Date of Expiry\n" + build_mrz())
+
+        document.refresh_from_db()
+        self.assertNotIn("issue_date", document.extracted_fields)
+        self.assertEqual(document.extracted_fields["expiry_date"], "2030-01-01")
+
     def test_low_confidence_downgrades_a_valid_read_to_partial(self):
         document = self._document(EmployeeDocument.DocumentType.PASSPORT)
 

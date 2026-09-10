@@ -11,8 +11,10 @@ vi.mock("../../services/api/employeesApi", () => ({
   getEmployeeDocuments: vi.fn(),
   uploadEmployeeDocument: vi.fn(),
   downloadEmployeeDocument: vi.fn(),
+  getEmployeeDocumentThumbnail: vi.fn(),
   notifyEmployeeDocumentExpiry: vi.fn(),
   extractEmployeeDocument: vi.fn(),
+  reviewEmployeeDocument: vi.fn(),
   deleteEmployeeDocument: vi.fn(),
 }));
 
@@ -30,8 +32,14 @@ const uploadEmployeeDocument =
   employeesApi.uploadEmployeeDocument as unknown as ReturnType<typeof vi.fn>;
 const extractEmployeeDocument =
   employeesApi.extractEmployeeDocument as unknown as ReturnType<typeof vi.fn>;
+const reviewEmployeeDocument =
+  employeesApi.reviewEmployeeDocument as unknown as ReturnType<typeof vi.fn>;
 const downloadEmployeeDocument =
   employeesApi.downloadEmployeeDocument as unknown as ReturnType<typeof vi.fn>;
+const getEmployeeDocumentThumbnail =
+  employeesApi.getEmployeeDocumentThumbnail as unknown as ReturnType<
+    typeof vi.fn
+  >;
 const deleteEmployeeDocument =
   employeesApi.deleteEmployeeDocument as unknown as ReturnType<typeof vi.fn>;
 
@@ -82,9 +90,12 @@ beforeEach(() => {
   getEmployeeDocuments.mockReset();
   uploadEmployeeDocument.mockReset();
   extractEmployeeDocument.mockReset();
+  reviewEmployeeDocument.mockReset();
   downloadEmployeeDocument.mockReset();
+  getEmployeeDocumentThumbnail.mockReset();
   deleteEmployeeDocument.mockReset();
   getEmployeeDocuments.mockResolvedValue(documentsResponse([]));
+  getEmployeeDocumentThumbnail.mockRejectedValue(new Error("not available"));
   useI18nStore.getState().setLanguage("en");
 });
 
@@ -109,10 +120,137 @@ describe("EmployeeDocumentArchive OCR", () => {
       expect(extractEmployeeDocument).toHaveBeenCalledWith(7, failed.id),
     );
   });
+
+  it("records an authorised HR review only after explicit confirmation", async () => {
+    const document = makeDocument({
+      extraction_status: "partial",
+      extracted_fields: { full_name: "Amina Ahmed" },
+    });
+    const reviewed = {
+      ...document,
+      ocr_reviewed_at: "2026-09-10T09:30:00Z",
+      ocr_reviewed_by: 15,
+    };
+    getEmployeeDocuments.mockResolvedValue(documentsResponse([document]));
+    reviewEmployeeDocument.mockResolvedValue({
+      status: "success",
+      data: reviewed,
+    });
+
+    render(<EmployeeDocumentArchive employeeId={7} canManageDocuments />);
+    await expandFirstRow();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Mark review complete" }),
+    );
+
+    expect(reviewEmployeeDocument).not.toHaveBeenCalled();
+    expect(
+      await screen.findByText(
+        "This records that HR reviewed the OCR suggestions against the original document. It does not change employee master data.",
+      ),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Mark review complete" })[1],
+    );
+    await waitFor(() =>
+      expect(reviewEmployeeDocument).toHaveBeenCalledWith(7, document.id),
+    );
+    expect(
+      await screen.findByTestId(`ocr-reviewed-${document.id}`),
+    ).toHaveTextContent("Reviewed");
+    expect(
+      await screen.findByTestId(`review-complete-${document.id}`),
+    ).toHaveTextContent("Review complete");
+    expect(
+      screen.queryByTestId(`verification-required-${document.id}`),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Mark review complete" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not offer review completion for pending, failed, system, or reviewed records", async () => {
+    const pending = makeDocument({ extraction_status: "pending" });
+    const failed = makeDocument({ extraction_status: "failed" });
+    const system = makeDocument({
+      extraction_status: "success",
+      is_system_generated: true,
+      extracted_fields: { approved_at: "2026-09-10T09:30:00Z" },
+    });
+    const reviewed = makeDocument({
+      extraction_status: "success",
+      ocr_reviewed_at: "2026-09-10T09:30:00Z",
+    });
+    getEmployeeDocuments.mockResolvedValue(
+      documentsResponse([pending, failed, system, reviewed]),
+    );
+
+    render(<EmployeeDocumentArchive employeeId={7} canManageDocuments />);
+    await screen.findByTestId(`document-type-${pending.id}`);
+
+    expect(
+      screen.queryByRole("button", { name: "Mark review complete" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not offer review completion without the management capability", async () => {
+    const document = makeDocument({
+      extraction_status: "success",
+      extracted_fields: { full_name: "Amina Ahmed" },
+    });
+    getEmployeeDocuments.mockResolvedValue(documentsResponse([document]));
+
+    render(<EmployeeDocumentArchive employeeId={7} />);
+    await expandFirstRow();
+
+    expect(
+      screen.queryByRole("button", { name: "Mark review complete" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps the record available when recording the review is refused", async () => {
+    const document = makeDocument({ extraction_status: "success" });
+    getEmployeeDocuments.mockResolvedValue(documentsResponse([document]));
+    reviewEmployeeDocument.mockRejectedValue(
+      apiRejection(422, "OCR is pending."),
+    );
+
+    render(<EmployeeDocumentArchive employeeId={7} canManageDocuments />);
+    await expandFirstRow();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Mark review complete" }),
+    );
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Mark review complete" })[1],
+    );
+
+    await waitFor(() =>
+      expect(reviewEmployeeDocument).toHaveBeenCalledWith(7, document.id),
+    );
+    expect(
+      screen.getByRole("button", { name: "Mark review complete" }),
+    ).toBeInTheDocument();
+  });
 });
 
 describe("EmployeeDocumentArchive document preview", () => {
+  let nativePdfWindow: {
+    closed: boolean;
+    close: ReturnType<typeof vi.fn>;
+    location: { href: string };
+  };
+
   beforeEach(() => {
+    vi.restoreAllMocks();
+    nativePdfWindow = {
+      closed: false,
+      close: vi.fn(),
+      location: { href: "" },
+    };
+    vi.spyOn(window, "open").mockReturnValue(
+      nativePdfWindow as unknown as Window,
+    );
     Object.defineProperty(URL, "createObjectURL", {
       configurable: true,
       value: vi.fn(() => "blob:employee-document-preview"),
@@ -127,7 +265,7 @@ describe("EmployeeDocumentArchive document preview", () => {
     const doc = makeDocument({ original_filename: "passport.pdf" });
     getEmployeeDocuments.mockResolvedValue(documentsResponse([doc]));
     downloadEmployeeDocument.mockResolvedValue(
-      new Blob(["pdf"], { type: "application/pdf" }),
+      new Blob(["%PDF-1.7"], { type: "application/octet-stream" }),
     );
 
     render(<EmployeeDocumentArchive employeeId={7} />);
@@ -139,17 +277,21 @@ describe("EmployeeDocumentArchive document preview", () => {
     await waitFor(() =>
       expect(downloadEmployeeDocument).toHaveBeenCalledWith(7, doc.id),
     );
-    expect(await screen.findByTestId("document-preview-pdf")).toHaveAttribute(
-      "src",
-      "blob:employee-document-preview",
+    await waitFor(() =>
+      expect(nativePdfWindow.location.href).toBe(
+        "blob:employee-document-preview",
+      ),
     );
+    expect(window.open).toHaveBeenCalledWith("about:blank", "_blank");
   });
 
   it("renders a fetched common image in the preview dialog", async () => {
     const doc = makeDocument({ original_filename: "iqama.jpeg" });
     getEmployeeDocuments.mockResolvedValue(documentsResponse([doc]));
     downloadEmployeeDocument.mockResolvedValue(
-      new Blob(["image"], { type: "image/jpeg" }),
+      new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xe0])], {
+        type: "application/octet-stream",
+      }),
     );
 
     render(<EmployeeDocumentArchive employeeId={7} />);
@@ -158,6 +300,53 @@ describe("EmployeeDocumentArchive document preview", () => {
 
     expect(await screen.findByTestId("document-preview-image")).toHaveAttribute(
       "src",
+      "blob:employee-document-preview",
+    );
+  });
+
+  it("does not embed an invalid PDF response just because the filename ends in .pdf", async () => {
+    const doc = makeDocument({ original_filename: "passport.pdf" });
+    getEmployeeDocuments.mockResolvedValue(documentsResponse([doc]));
+    // A proxy/login error could arrive as a successful blob response; embedding
+    // it gives Chromium's PDF viewer the broken-document screen.
+    downloadEmployeeDocument.mockResolvedValue(
+      new Blob(["<html>not a PDF</html>"], { type: "application/pdf" }),
+    );
+
+    render(<EmployeeDocumentArchive employeeId={7} />);
+    await screen.findByTestId("document-type-1");
+    fireEvent.click(screen.getByRole("button", { name: "Preview document" }));
+
+    expect(
+      await screen.findByText("The downloaded file could not be previewed."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("document-preview-pdf"),
+    ).not.toBeInTheDocument();
+    expect(URL.createObjectURL).not.toHaveBeenCalled();
+    expect(nativePdfWindow.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("revokes the private object URL when the preview closes", async () => {
+    const doc = makeDocument({ original_filename: "iqama.jpeg" });
+    getEmployeeDocuments.mockResolvedValue(documentsResponse([doc]));
+    downloadEmployeeDocument.mockResolvedValue(
+      new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xe0])], {
+        type: "image/jpeg",
+      }),
+    );
+
+    render(<EmployeeDocumentArchive employeeId={7} />);
+    await screen.findByTestId("document-type-1");
+    fireEvent.click(screen.getByRole("button", { name: "Preview document" }));
+    await screen.findByTestId("document-preview-image");
+    // Notifications also have a Close button. Target the preview dialog's
+    // close affordance so this assertion stays scoped to the preview.
+    const modalClose = document.querySelector(".ant-modal-close");
+    expect(modalClose).not.toBeNull();
+    fireEvent.click(modalClose as HTMLButtonElement);
+
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith(
       "blob:employee-document-preview",
     );
   });
@@ -376,7 +565,7 @@ describe("EmployeeDocumentArchive extracted metadata", () => {
     getEmployeeDocuments.mockResolvedValue(
       documentsResponse([
         makeDocument({
-          document_type: "PASSPORT",
+          document_type: "SAUDI_ID",
           extracted_fields: {
             passport_number: "P7654321",
             full_name: "   ",
@@ -435,7 +624,10 @@ describe("EmployeeDocumentArchive extracted metadata", () => {
   it("does not offer expansion when no metadata, warning or error exists", async () => {
     getEmployeeDocuments.mockResolvedValue(
       documentsResponse([
-        makeDocument({ extracted_fields: { full_name: "" } }),
+        makeDocument({
+          document_type: "SAUDI_ID",
+          extracted_fields: { full_name: "" },
+        }),
       ]),
     );
 
@@ -1217,12 +1409,12 @@ describe("EmployeeDocumentArchive OCR reliability signals", () => {
     expect(
       await screen.findByTestId("verification-required-1"),
     ).toHaveTextContent(/Compare every suggested value/i);
-    expect(screen.getByText("Suggested metadata (OCR)")).toBeInTheDocument();
+    expect(screen.getByText("Passport details")).toBeInTheDocument();
     expect(
-      screen.getByText(/Nothing here is approved employee data/i),
+      screen.getByText(/OCR suggestions - compare with the original document/i),
     ).toBeInTheDocument();
-    const fields = screen.getByTestId("extracted-fields-1");
-    expect(within(fields).getByText("Passport Number:")).toBeInTheDocument();
+    const fields = screen.getByTestId("passport-review-card-1");
+    expect(within(fields).getByText(/Passport Number/)).toBeInTheDocument();
     expect(within(fields).getByText("P1234567")).toBeInTheDocument();
 
     const status = screen.getByTestId("extraction-status-1");
@@ -1300,10 +1492,60 @@ describe("EmployeeDocumentArchive OCR reliability signals", () => {
     await screen.findByTestId("document-type-1");
     await expandFirstRow();
 
-    const panel = await screen.findByTestId("extracted-fields-1");
+    const panel = await screen.findByTestId("passport-review-card-1");
     expect(within(panel).getByText("P1234567")).toBeInTheDocument();
     expect(screen.queryByText(/SECRET RAW SCAN LINE/)).not.toBeInTheDocument();
     expect(screen.queryByText(/field_confidence/i)).not.toBeInTheDocument();
+  });
+
+  it("groups Passport suggestions in a review card and rejects OCR labels mistaken for values", async () => {
+    getEmployeeDocuments.mockResolvedValue(
+      documentsResponse([
+        makeDocument({
+          extraction_status: "partial",
+          extracted_fields: {
+            full_name: "Amina Ahmed",
+            nationality: "Saudi",
+            date_of_birth: "1990-02-03",
+            passport_number: "P1234567",
+            profession: "Engineer",
+            employer: "FFI",
+            issue_date: "Date of Issue",
+            expiry_date: "Date of Expiry",
+          },
+        }),
+      ]),
+    );
+
+    render(<EmployeeDocumentArchive employeeId={7} canManageDocuments />);
+    await expandFirstRow();
+
+    const card = await screen.findByTestId("passport-review-card-1");
+    expect(within(card).getByText("Identity")).toBeInTheDocument();
+    expect(within(card).getByText("Passport")).toBeInTheDocument();
+    // Both date values are labels, not OCR values. The compact card omits the
+    // entire empty Dates section instead of showing placeholder boxes.
+    expect(within(card).queryByText("Dates")).not.toBeInTheDocument();
+    for (const value of [
+      "Amina Ahmed",
+      "Saudi",
+      "1990-02-03",
+      "P1234567",
+      "Engineer",
+      "FFI",
+    ]) {
+      expect(within(card).getByText(value)).toBeInTheDocument();
+    }
+    expect(within(card).queryByText("Not detected")).not.toBeInTheDocument();
+    expect(within(card).queryByText("Not available")).not.toBeInTheDocument();
+    expect(within(card).queryByText("Date of Issue")).not.toBeInTheDocument();
+    expect(within(card).queryByText("Date of Expiry")).not.toBeInTheDocument();
+    expect(
+      within(card).getByRole("button", { name: "Preview original" }),
+    ).toBeInTheDocument();
+    expect(
+      within(card).getByRole("button", { name: "Mark review complete" }),
+    ).toBeInTheDocument();
   });
 
   it("keeps polling a pending extraction past the former 60-second stop", async () => {
