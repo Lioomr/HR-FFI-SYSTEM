@@ -84,6 +84,53 @@ def _label(pdf: canvas.Canvas, spec: dict, y: float, height: float, regular: str
 def build(logo_path: Path) -> None:
     payload = json.loads(MAP_PATH.read_text(encoding="utf-8"))
     fields = payload["fields"]
+    payload["version"] = 4
+    section_positions = {
+        "employee_information": 722,
+        "loan_details": 560,
+        "previous_loan": 398,
+        "reason": 280,
+        "approvals": 195,
+    }
+    for key, y in section_positions.items():
+        payload["sections"][key]["y"] = y
+    for keys, start in (
+        (("employee_name", "employee_number", "department", "job_title", "mobile_number", "basic_salary"), 692),
+        (("loan_type", "requested_amount", "installment_months", "monthly_deduction", "deduction_start_date", "payroll_reference"), 530),
+        (("previous_loan_status", "previous_loan_type", "previous_loan_value", "previous_loan_end_date"), 368),
+    ):
+        for index, key in enumerate(keys):
+            fields[key]["y"] = start - index * 21
+            fields[key]["height"] = 19
+            fields[key]["font_size"] = 8.4
+    fields["reason_details"].update({"y": 212, "height": 55, "font_size": 8.2})
+
+    role_layout = {
+        "manager": (24, 182.33, 154, 142, 108, 32, 89, 168),
+        "hr": (206.33, 182.33, 154, 142, 108, 32, 89, 168),
+        "cfo": (388.66, 182.34, 154, 142, 108, 32, 89, 168),
+        "ceo": (24, 273.5, 71, 59, 30, 26, 12, 82),
+        "disbursement": (297.5, 273.5, 71, 59, 30, 26, 12, 82),
+    }
+    payload["signing_area"].update({"x": 24, "y": 9, "width": 547, "height": 179})
+    role_meta = {role["key"]: role for role in payload["signing_area"]["roles"]}
+    updated_roles = []
+    for key, (x, role_width, name_y, decision_y, signature_y, signature_height, date_y, label_y) in role_layout.items():
+        role = role_meta[key]
+        role.update({"x": x, "width": role_width, "label_y": label_y})
+        updated_roles.append(role)
+        name_key = f"{key}_approval_name" if key != "disbursement" else "disbursement_name"
+        decision_key = f"{key}_approval_decision" if key != "disbursement" else "disbursement_status"
+        date_key = f"{key}_approval_date" if key != "disbursement" else "disbursement_date"
+        signature_key = f"{key}_signature"
+        fields[name_key].update({"x": x + 8, "y": name_y, "width": role_width - 16, "height": 10, "font_size": 6.2})
+        fields[decision_key].update({"x": x + 8, "y": decision_y, "width": role_width - 16, "height": 9, "font_size": 6.0})
+        fields[signature_key].update({"x": x + 8, "y": signature_y, "width": role_width - 16, "height": signature_height, "font_size": 6.2})
+        fields[date_key].update({"x": x + 48, "y": date_y, "width": role_width - 96, "height": 14, "font_size": 6.4})
+        fields[f"{key}_signature_image"].update(
+            {"x": x + 8, "y": signature_y, "width": role_width - 16, "height": signature_height, "padding": 4}
+        )
+    payload["signing_area"]["roles"] = updated_roles
     regular, bold = _fonts()
     width, height = A4
     pdf = canvas.Canvas(str(OUTPUT_PATH), pagesize=A4, pageCompression=1)
@@ -119,6 +166,10 @@ def build(logo_path: Path) -> None:
         pdf.drawString(x + 8, 743, label)
         pdf.setFillColor(white)
         pdf.rect(float(spec["x"]), float(spec["y"]), float(spec["width"]), float(spec["height"]), fill=1, stroke=0)
+    for x, value in ((183, "الرقم المرجعي"), (370, "تاريخ الطلب"), (565, "تاريخ التقديم")):
+        pdf.setFillColor(NAVY)
+        pdf.setFont(bold, 7.1)
+        pdf.drawRightString(x, 743, _ar(value))
 
     for section in payload["sections"].values():
         pdf.setFillColor(ORANGE)
@@ -150,26 +201,34 @@ def build(logo_path: Path) -> None:
     signing_area = payload["signing_area"]
     pdf.setStrokeColor(ORANGE)
     pdf.setLineWidth(0.9)
-    pdf.line(float(signing_area["x"]), 160, float(signing_area["x"]) + float(signing_area["width"]), 160)
-    for index, role in enumerate(signing_area["roles"]):
+    pdf.line(float(signing_area["x"]), 180, float(signing_area["x"]) + float(signing_area["width"]), 180)
+    for role in signing_area["roles"]:
         x = float(role["x"])
         role_width = float(role["width"])
+        label_y = float(role["label_y"])
         pdf.setFillColor(NAVY)
-        pdf.setFont(bold, 6.6)
-        pdf.drawCentredString(x + role_width / 2, 145, role["label_en"])
-        pdf.setFont(regular, 6.1)
-        pdf.drawCentredString(x + role_width / 2, 133, _ar(role["label_ar"]))
-        pdf.setStrokeColor(HexColor("#55585c"))
-        pdf.setLineWidth(0.55)
-        pdf.line(x + 8, 78, x + role_width - 8, 78)
-        pdf.setFillColor(HexColor("#55585c"))
-        pdf.setFont(regular, 6)
-        pdf.drawString(x + 8, 56, "Date")
-        pdf.line(x + 40, 54, x + role_width - 8, 54)
-        if index < len(signing_area["roles"]) - 1:
-            pdf.setStrokeColor(GRID)
-            pdf.setLineWidth(0.45)
-            pdf.line(x + role_width, 65, x + role_width, 150)
+        pdf.setFont(bold, 6.8)
+        pdf.drawString(x + 8, label_y, role["label_en"])
+        pdf.setFont(regular, 6.4)
+        pdf.drawRightString(x + role_width - 8, label_y, _ar(role["label_ar"]))
+        date_key = f"{role['key']}_approval_date" if role["key"] != "disbursement" else "disbursement_date"
+        date_spec = fields[date_key]
+        pdf.setFillColor(LABEL)
+        pdf.setStrokeColor(GRID)
+        pdf.rect(x + 3, float(date_spec["y"]) - 3, role_width - 6, 20, fill=1, stroke=1)
+        pdf.setFillColor(NAVY)
+        pdf.setFont(bold, 6.2)
+        pdf.drawString(x + 9, float(date_spec["y"]) + 3, "Date")
+        pdf.drawRightString(x + role_width - 9, float(date_spec["y"]) + 3, _ar("التاريخ"))
+        pdf.setFillColor(white)
+        pdf.rect(float(date_spec["x"]), float(date_spec["y"]), float(date_spec["width"]), float(date_spec["height"]), fill=1, stroke=1)
+
+    pdf.setStrokeColor(GRID)
+    pdf.setLineWidth(0.45)
+    for x in (206.33, 388.66):
+        pdf.line(x, 88, x, 176)
+    pdf.line(297.5, 9, 297.5, 86)
+    pdf.line(24, 87, 571, 87)
 
     pdf.setStrokeColor(GRID)
     pdf.setLineWidth(0.65)
@@ -183,11 +242,9 @@ def build(logo_path: Path) -> None:
                 fill=0,
                 stroke=1,
             )
+
+    MAP_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     pdf.rect(float(reason["x"]), float(reason["y"]), float(reason["width"]), float(reason["height"]), fill=0, stroke=1)
-    pdf.setFillColor(HexColor("#667085"))
-    pdf.setFont(regular, 6.4)
-    pdf.drawString(28, 29, "FFI HR System - confidential personnel record")
-    pdf.drawRightString(width - 28, 29, _ar("سجل موارد بشرية سري"))
     pdf.save()
 
 

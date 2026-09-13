@@ -42,20 +42,23 @@ export default function RentTypesPage() {
         name="code"
         rules={[{ required: true, message: t("common.required", "Required") }]}
       >
-        <Input placeholder="e.g., OFFICE" />
+        <Input placeholder={t("reference.rentTypes.codePlaceholder")} />
       </Form.Item>
       <Form.Item
         label={t("reference.departments.colName", "Name")}
         name="name"
         rules={[{ required: true, message: t("common.required", "Required") }]}
       >
-        <Input placeholder="e.g., Office Rent" />
+        <Input placeholder={t("reference.rentTypes.namePlaceholder")} />
       </Form.Item>
       <Form.Item
         label={t("common.description", "Description")}
         name="description"
       >
-        <Input.TextArea rows={3} placeholder="Optional description" />
+        <Input.TextArea
+          rows={3}
+          placeholder={t("reference.optionalDescription")}
+        />
       </Form.Item>
     </>
   );

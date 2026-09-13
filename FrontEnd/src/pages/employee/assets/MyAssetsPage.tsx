@@ -48,6 +48,8 @@ const statusColorMap: Record<string, string> = {
   RETIRED: "default",
 };
 
+const ASSET_STATUSES = Object.keys(statusColorMap);
+
 const requestStatusColorMap: Record<string, string> = {
   PENDING_MANAGER: "orange",
   PENDING: "gold",
@@ -146,14 +148,14 @@ export default function MyAssetsPage() {
       if (isApiError(damageRes)) {
         setRequestError(
           damageRes.message ||
-            t("common.error.generic", "Failed to load request history."),
+            t("assets.requestHistoryUnavailable"),
         );
         return;
       }
       if (isApiError(returnRes)) {
         setRequestError(
           returnRes.message ||
-            t("common.error.generic", "Failed to load request history."),
+            t("assets.requestHistoryUnavailable"),
         );
         return;
       }
@@ -166,7 +168,7 @@ export default function MyAssetsPage() {
     } catch (err: any) {
       setRequestError(
         err?.message ||
-          t("common.error.generic", "Failed to load request history."),
+          t("assets.requestHistoryUnavailable"),
       );
     } finally {
       setRequestLoading(false);
@@ -233,11 +235,13 @@ export default function MyAssetsPage() {
       key: "status",
       width: 140,
       render: (value: string) => (
-        <Tag color={requestStatusColorMap[value] || "default"}>{value}</Tag>
+        <Tag color={requestStatusColorMap[value] || "default"}>
+          {t(`assets.requestStatus.${value}`, value)}
+        </Tag>
       ),
     },
     {
-      title: t("assets.lastUpdated", "Decision"),
+      title: t("assets.decision"),
       key: "decision",
       ellipsis: true,
       responsive: ["lg"],
@@ -266,11 +270,13 @@ export default function MyAssetsPage() {
       key: "status",
       width: 140,
       render: (value: string) => (
-        <Tag color={requestStatusColorMap[value] || "default"}>{value}</Tag>
+        <Tag color={requestStatusColorMap[value] || "default"}>
+          {t(`assets.requestStatus.${value}`, value)}
+        </Tag>
       ),
     },
     {
-      title: t("assets.lastUpdated", "Decision"),
+      title: t("assets.decision"),
       key: "decision",
       ellipsis: true,
       responsive: ["lg"],
@@ -330,7 +336,9 @@ export default function MyAssetsPage() {
       key: "status",
       width: 160,
       render: (status: string) => (
-        <Tag color={statusColorMap[status] || "default"}>{status}</Tag>
+        <Tag color={statusColorMap[status] || "default"}>
+          {t(`assets.status.${status}`, status)}
+        </Tag>
       ),
     },
     {
@@ -531,14 +539,10 @@ export default function MyAssetsPage() {
                 setStatusFilter(value);
                 setAssetPage(1);
               }}
-              options={[
-                { label: "AVAILABLE", value: "AVAILABLE" },
-                { label: "ASSIGNED", value: "ASSIGNED" },
-                { label: "UNDER_MAINTENANCE", value: "UNDER_MAINTENANCE" },
-                { label: "LOST", value: "LOST" },
-                { label: "DAMAGED", value: "DAMAGED" },
-                { label: "RETIRED", value: "RETIRED" },
-              ]}
+              options={ASSET_STATUSES.map((value) => ({
+                label: t(`assets.status.${value}`, value),
+                value,
+              }))}
             />
           </Col>
           <Col xs={24} md={2}>

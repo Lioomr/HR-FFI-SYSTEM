@@ -12,10 +12,13 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.fields import DecimalField
 
 from audit.utils import audit
+from core.models import WorkflowAction
 from core.services import get_ceo_approver_users
-from core.services.workflow_engine import sync_workflow
+from core.services.workflow_engine import begin_recorded_transition, record_workflow_transition
 from employees.services.archiving import retire_biotime_mapping_and_archive_profile
 from in_app_notifications.dispatcher import dispatch_notification_channels
+from in_app_notifications.i18n import decision_type_label, notification_text, pair, profile_name, render
+from in_app_notifications.i18n import status_label as status_label_text
 from in_app_notifications.models import Notification
 
 from .models import ContractDecision, EmployeeProfile
@@ -65,7 +68,15 @@ def ensure_contract_decision(profile: EmployeeProfile) -> tuple[ContractDecision
         },
     )
     if created:
-        sync_workflow(decision)
+        start = begin_recorded_transition(decision, new_instance=True)
+        record_workflow_transition(
+            decision,
+            start,
+            action=WorkflowAction.Action.SUBMIT,
+            actor=None,
+            note="Contract expiry workflow created",
+            approver_role="",
+        )
     return decision, created
 
 
@@ -85,13 +96,14 @@ def _company_ceo_recipients(company_id: int):
     )
 
 
-def _dispatch(*, recipient, decision, title, message, action_url, category, deduplication_key, metadata):
+def _dispatch(*, recipient, decision, title, message, action_url, category, deduplication_key, metadata, i18n=None):
     return dispatch_notification_channels(
         recipient=recipient,
         company=decision.company,
         event_key="contract.expiry",
         title=title,
         message=message,
+        i18n=i18n,
         category=category,
         action_url=action_url,
         related_object=decision,
@@ -100,8 +112,8 @@ def _dispatch(*, recipient, decision, title, message, action_url, category, dedu
         email_enabled=True,
         whatsapp_enabled=True,
         email_context={
-            "title_ar": title,
-            "message_ar": message,
+            "title_ar": render(i18n, "title", "ar") or title,
+            "message_ar": render(i18n, "message", "ar") or message,
             "employee_name": decision.employee_profile.full_name or decision.employee_profile.employee_id,
         },
     )
@@ -112,15 +124,17 @@ def notify_hr_milestone(decision: ContractDecision, milestone: str, days_left: i
     attempted = False
     failed = False
     profile = decision.employee_profile
+    text = notification_text(
+        "contract.expiry_milestone",
+        employee_name=profile_name(profile),
+        date=decision.original_contract_expiry,
+        days_left=days_left,
+    )
     for recipient in _company_hr_recipients(decision.company_id):
         result = _dispatch(
             recipient=recipient,
             decision=decision,
-            title=f"Contract expiry: {profile.full_name or profile.employee_id}",
-            message=(
-                f"{profile.full_name or profile.employee_id}'s contract expires on "
-                f"{decision.original_contract_expiry.isoformat()} ({days_left} days remaining)."
-            ),
+            **text,
             action_url=f"/hr/contract-decisions/{decision.id}",
             category=Notification.Category.DOCUMENT,
             deduplication_key=f"contract.expiry:{decision.id}:hr:{milestone}",
@@ -145,10 +159,11 @@ def notify_ceo_pending(
     reminder_number: int | None = None,
 ) -> int | None:
     profile = decision.employee_profile
-    label = "CEO reminder: contract decision" if reminder else "Contract decision requires CEO approval"
-    message = (
-        f"HR selected {decision.get_decision_type_display()} for {profile.full_name or profile.employee_id}. "
-        f"Review before {decision.ceo_deadline.isoformat() if decision.ceo_deadline else 'the deadline'}."
+    text = notification_text(
+        "contract.ceo_reminder" if reminder else "contract.ceo_pending",
+        decision=decision_type_label(decision.decision_type, decision.get_decision_type_display()),
+        employee_name=profile_name(profile),
+        deadline=decision.ceo_deadline.isoformat() if decision.ceo_deadline else pair("the deadline", "الموعد النهائي"),
     )
     count = 0
     attempted = False
@@ -162,8 +177,7 @@ def notify_ceo_pending(
         result = _dispatch(
             recipient=recipient,
             decision=decision,
-            title=label,
-            message=message,
+            **text,
             action_url=f"/ceo/contract-decisions/{decision.id}",
             category=Notification.Category.APPROVAL,
             deduplication_key=f"contract.expiry:{decision.id}:ceo:{suffix}",
@@ -213,11 +227,12 @@ def notify_hr_final(decision: ContractDecision, *, automatic: bool = False) -> i
     if decision is None:
         return None
     profile = decision.employee_profile
-    profile.refresh_from_db(fields=["contract_expiry", "full_name", "employee_id"])
-    status_label = decision.get_status_display()
-    message = (
-        f"Contract decision for {profile.full_name or profile.employee_id}: {status_label}. "
-        f"New expiry: {profile.contract_expiry.isoformat() if profile.contract_expiry else 'none'}."
+    profile.refresh_from_db(fields=["contract_expiry", "full_name", "full_name_ar", "employee_id"])
+    text = notification_text(
+        "contract.decision_completed",
+        employee_name=profile_name(profile),
+        status=pair(decision.get_status_display(), status_label_text(decision.status)["ar"]),
+        expiry=profile.contract_expiry.isoformat() if profile.contract_expiry else pair("none", "لا يوجد"),
     )
     count = 0
     attempted = False
@@ -226,8 +241,7 @@ def notify_hr_final(decision: ContractDecision, *, automatic: bool = False) -> i
         result = _dispatch(
             recipient=recipient,
             decision=decision,
-            title="Contract decision completed",
-            message=message,
+            **text,
             action_url=f"/hr/contract-decisions/{decision.id}",
             category=Notification.Category.APPROVAL,
             deduplication_key=f"contract.expiry:{decision.id}:final:{decision.status}",
@@ -253,9 +267,10 @@ def notify_manual_resolution(decision: ContractDecision) -> int | None:
     if decision is None:
         return None
     profile = decision.employee_profile
-    message = (
-        f"Contract processing requires manual resolution for {profile.full_name or profile.employee_id}. "
-        f"Manual resolution is required: {decision.failure_reason}"
+    text = notification_text(
+        "contract.manual_resolution",
+        employee_name=profile_name(profile),
+        reason=decision.failure_reason,
     )
     recipients = {}
     for recipient in _company_hr_recipients(decision.company_id):
@@ -270,8 +285,7 @@ def notify_manual_resolution(decision: ContractDecision) -> int | None:
         result = _dispatch(
             recipient=recipient,
             decision=decision,
-            title="Contract processing requires manual resolution",
-            message=message,
+            **text,
             action_url=action_url,
             category=Notification.Category.APPROVAL,
             deduplication_key=f"contract.expiry:{decision.id}:auto-renewal-failure",
@@ -395,6 +409,7 @@ def submit_decision(
         decision.proposed_contract_date = proposed_contract_date
         decision.proposed_contract_expiry = proposed_contract_expiry
         _renewal_dates(decision)
+    start = begin_recorded_transition(decision, actor=actor)
     now = timezone.now()
     decision.decision_type = decision_type
     decision.proposed_contract_date = proposed_contract_date
@@ -419,7 +434,15 @@ def submit_decision(
     decision.final_notification_attempts = 0
     decision.last_final_notification_attempt_at = None
     decision.save()
-    sync_workflow(decision, actor=actor)
+    record_workflow_transition(
+        decision,
+        start,
+        action=WorkflowAction.Action.ADVANCE,
+        actor=actor,
+        note=decision.hr_comment or decision.get_decision_type_display(),
+        approver_role="hr",
+        metadata={"decision_type": decision.decision_type},
+    )
     try:
         notification_result = notify_ceo_pending(decision)
         if notification_result is not None:
@@ -443,6 +466,7 @@ def finalize_decision(decision_id: int, *, actor=None, automatic: bool = False, 
         .select_related("user")
         .get(pk=decision.employee_profile_id)
     )
+    workflow_start = begin_recorded_transition(decision, actor=actor)
     now = timezone.now()
     execution_snapshot = {}
     mismatch_reason = _snapshot_mismatch_reason(decision, profile)
@@ -461,7 +485,16 @@ def finalize_decision(decision_id: int, *, actor=None, automatic: bool = False, 
         decision.last_final_notification_attempt_at = None
         decision.finalized_at = now
         decision.save()
-        sync_workflow(decision, actor=actor)
+        # The live contract changed since HR submitted, so it goes back to HR to resolve.
+        record_workflow_transition(
+            decision,
+            workflow_start,
+            action=WorkflowAction.Action.ADVANCE,
+            actor=actor if not automatic else None,
+            note=comment or "",
+            approver_role="ceo",
+            metadata={"automatic": automatic, "reason": mismatch_reason},
+        )
         audit(
             None,
             "contract_decision_manual_resolution_required",
@@ -518,7 +551,15 @@ def finalize_decision(decision_id: int, *, actor=None, automatic: bool = False, 
     decision.last_final_notification_attempt_at = None
     decision.finalized_at = now
     decision.save()
-    sync_workflow(decision, actor=actor)
+    record_workflow_transition(
+        decision,
+        workflow_start,
+        action=WorkflowAction.Action.APPROVE,
+        actor=actor if not automatic else None,
+        note=comment or "",
+        approver_role="ceo",
+        metadata={"automatic": automatic},
+    )
     audit(
         None,
         "contract_decision_auto_approved" if automatic else "contract_decision_approved",
@@ -540,6 +581,7 @@ def reject_decision(decision_id: int, *, actor, comment: str = ""):
     decision = ContractDecision.objects.select_for_update().get(pk=decision_id)
     if decision.status != ContractDecision.Status.PENDING_CEO:
         raise ValueError("This contract decision is no longer pending CEO approval.")
+    workflow_start = begin_recorded_transition(decision, actor=actor)
     now = timezone.now()
     decision.status = ContractDecision.Status.REJECTED
     decision.ceo_decided_by = actor
@@ -554,7 +596,14 @@ def reject_decision(decision_id: int, *, actor, comment: str = ""):
     decision.final_notification_attempts = 0
     decision.last_final_notification_attempt_at = None
     decision.save()
-    sync_workflow(decision, actor=actor)
+    record_workflow_transition(
+        decision,
+        workflow_start,
+        action=WorkflowAction.Action.REJECT,
+        actor=actor,
+        note=comment or "",
+        approver_role="ceo",
+    )
     audit(
         None,
         "contract_decision_rejected",
@@ -566,6 +615,18 @@ def reject_decision(decision_id: int, *, actor, comment: str = ""):
     return decision
 
 
+def _record_automatic_outcome(decision: ContractDecision, workflow_start, note: str) -> None:
+    record_workflow_transition(
+        decision,
+        workflow_start,
+        action=WorkflowAction.Action.OVERRIDE,
+        actor=None,
+        note=note,
+        approver_role="",
+        metadata={"automatic": True, "result": decision.status},
+    )
+
+
 @transaction.atomic
 def auto_renew_decision(decision_id: int):
     decision = (
@@ -574,6 +635,7 @@ def auto_renew_decision(decision_id: int):
     if decision.status != ContractDecision.Status.PENDING_HR:
         return decision, False
     profile = EmployeeProfile.objects.select_for_update().get(pk=decision.employee_profile_id)
+    workflow_start = begin_recorded_transition(decision)
     mismatch_reason = _snapshot_mismatch_reason(decision, profile)
     if mismatch_reason:
         decision.status = ContractDecision.Status.MANUAL_RESOLUTION_REQUIRED
@@ -586,7 +648,7 @@ def auto_renew_decision(decision_id: int):
         decision.final_notification_attempts = 0
         decision.last_final_notification_attempt_at = None
         decision.save()
-        sync_workflow(decision)
+        _record_automatic_outcome(decision, workflow_start, decision.automatic_renewal_reason)
         return decision, False
     try:
         start, expiry = _renewal_dates(decision)
@@ -604,7 +666,7 @@ def auto_renew_decision(decision_id: int):
         decision.final_notification_attempts = 0
         decision.last_final_notification_attempt_at = None
         decision.save()
-        sync_workflow(decision)
+        _record_automatic_outcome(decision, workflow_start, decision.automatic_renewal_reason)
         return decision, False
     profile.contract_date = start
     profile.contract_expiry = expiry
@@ -621,7 +683,7 @@ def auto_renew_decision(decision_id: int):
     decision.final_notification_attempts = 0
     decision.last_final_notification_attempt_at = None
     decision.save()
-    sync_workflow(decision)
+    _record_automatic_outcome(decision, workflow_start, "Automatically renewed because HR took no action")
     audit(
         None,
         "contract_decision_auto_renewed",

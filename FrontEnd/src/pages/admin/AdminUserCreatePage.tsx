@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Alert,
   Button,
@@ -34,6 +34,7 @@ const roleOptions: { label: string; value: Role }[] = [
   { label: "Manager", value: "Manager" },
   { label: "Employee", value: "Employee" },
   { label: "CEO", value: "CEO" },
+  { label: "CFO", value: "CFO" },
 ];
 
 export default function AdminUserCreatePage() {
@@ -44,7 +45,6 @@ export default function AdminUserCreatePage() {
   const navigate = useNavigate();
   const { t } = useI18n();
   const currentUser = useAuthStore((state) => state.user);
-  const selectedRole = Form.useWatch("role", form);
   const organizationOptions = (currentUser?.accessible_organizations ?? []).map(
     (organization) => ({
       label:
@@ -55,12 +55,6 @@ export default function AdminUserCreatePage() {
     }),
   );
 
-  useEffect(() => {
-    if (selectedRole !== "HRManager") {
-      form.setFieldValue("organization_ids", []);
-    }
-  }, [form, selectedRole]);
-
   async function onSave(values: FormValues) {
     setError(null);
     setSaving(true);
@@ -68,8 +62,7 @@ export default function AdminUserCreatePage() {
     try {
       await createUser({
         ...values,
-        organization_ids:
-          values.role === "HRManager" ? (values.organization_ids ?? []) : [],
+        organization_ids: values.organization_ids ?? [],
       });
 
       // Success case
@@ -182,7 +175,12 @@ export default function AdminUserCreatePage() {
               style={{ minWidth: 220 }}
             >
               <Select
-                options={roleOptions.filter(
+                options={roleOptions
+                  .map((option) => ({
+                    ...option,
+                    label: t(`role.${option.value}`, option.label),
+                  }))
+                  .filter(
                   (r) =>
                     r.value !== "SystemAdmin" ||
                     useAuthStore.getState().user?.role === "SystemAdmin",
@@ -205,15 +203,10 @@ export default function AdminUserCreatePage() {
               label={t("admin.users.companyAccess", "Company Access")}
               name="organization_ids"
               extra={
-                selectedRole === "HRManager"
-                  ? t(
-                      "admin.users.companyAccessHint",
-                      "Select the companies and head office contexts this HR Manager can switch between.",
-                    )
-                  : t(
-                      "admin.users.companyAccessAuto",
-                      "Organization access is managed from the linked employee profile for non-HR users.",
-                    )
+                t(
+                  "admin.users.companyAccessHint",
+                  "Select the companies and head office contexts this user can switch between.",
+                )
               }
             >
               <Select
@@ -223,7 +216,6 @@ export default function AdminUserCreatePage() {
                   "Select companies",
                 )}
                 options={organizationOptions}
-                disabled={selectedRole !== "HRManager"}
               />
             </Form.Item>
           ) : null}

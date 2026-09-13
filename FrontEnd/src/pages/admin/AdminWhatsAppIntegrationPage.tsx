@@ -29,8 +29,11 @@ import {
   type WhatsAppQrResponse,
 } from "../../services/api/whatsappIntegrationApi";
 import { isApiError } from "../../services/api/apiTypes";
+import { useI18n } from "../../i18n/useI18n";
 
 const { Text, Title } = Typography;
+
+type Translate = (key: string, fallback?: string) => string;
 
 function isBase64Image(value: string) {
   return value.startsWith("data:image/");
@@ -46,15 +49,20 @@ function statusColor(status?: WhatsAppIntegrationStatus) {
   return "default";
 }
 
-function statusLabel(status?: WhatsAppIntegrationStatus) {
-  if (!status) return "Checking";
-  if (!status.configured) return "Not configured";
-  if (status.connected) return "Connected";
-  if (status.connection_state === "unreachable") return "Unreachable";
-  return status.connection_state || "Disconnected";
+function statusLabel(
+  status: WhatsAppIntegrationStatus | undefined,
+  t: Translate,
+) {
+  if (!status) return t("admin.whatsapp.status.checking");
+  if (!status.configured) return t("admin.whatsapp.status.notConfigured");
+  if (status.connected) return t("admin.whatsapp.status.connected");
+  const state = (status.connection_state || "").toLowerCase();
+  if (!state) return t("admin.whatsapp.status.disconnected");
+  return t(`admin.whatsapp.status.${state}`, status.connection_state);
 }
 
 export default function AdminWhatsAppIntegrationPage() {
+  const { t } = useI18n();
   const [status, setStatus] = useState<WhatsAppIntegrationStatus>();
   const [qr, setQr] = useState<WhatsAppQrResponse>();
   const [loading, setLoading] = useState(true);
@@ -72,7 +80,7 @@ export default function AdminWhatsAppIntegrationPage() {
       if (isApiError(res)) throw new Error(res.message);
       setStatus(res.data);
     } catch (err: any) {
-      message.error(err?.message || "Could not load WhatsApp status.");
+      message.error(err?.message || t("admin.whatsapp.loadStatusFailed"));
     } finally {
       setLoading(false);
     }
@@ -85,11 +93,11 @@ export default function AdminWhatsAppIntegrationPage() {
       if (isApiError(res)) throw new Error(res.message);
       setQr(res.data);
       if (!res.data.qr_available) {
-        message.info("No QR code returned. Refresh status in a few seconds.");
+        message.info(t("admin.whatsapp.noQrReturned"));
       }
       await refreshStatus();
     } catch (err: any) {
-      message.error(err?.message || "Could not start WhatsApp connection.");
+      message.error(err?.message || t("admin.whatsapp.connectFailed"));
     } finally {
       setActionLoading(null);
     }
@@ -102,10 +110,10 @@ export default function AdminWhatsAppIntegrationPage() {
       if (isApiError(res)) throw new Error(res.message);
       setQr(res.data);
       if (!res.data.qr_available) {
-        message.info("No QR code is available right now.");
+        message.info(t("admin.whatsapp.noQrAvailable"));
       }
     } catch (err: any) {
-      message.error(err?.message || "Could not refresh QR code.");
+      message.error(err?.message || t("admin.whatsapp.refreshQrFailed"));
     } finally {
       setActionLoading(null);
     }
@@ -116,10 +124,10 @@ export default function AdminWhatsAppIntegrationPage() {
     try {
       await logoutWhatsAppIntegration();
       setQr(undefined);
-      message.success("WhatsApp device disconnected.");
+      message.success(t("admin.whatsapp.disconnected"));
       await refreshStatus();
     } catch (err: any) {
-      message.error(err?.message || "Could not disconnect WhatsApp device.");
+      message.error(err?.message || t("admin.whatsapp.disconnectFailed"));
     } finally {
       setActionLoading(null);
     }
@@ -131,12 +139,12 @@ export default function AdminWhatsAppIntegrationPage() {
       const res = await testWhatsAppIntegration(values.phone_number);
       if (isApiError(res)) throw new Error(res.message);
       if (res.data.success || res.data.sent) {
-        message.success("Test WhatsApp message submitted.");
+        message.success(t("templates.whatsapp.testSent"));
       } else {
-        message.error(res.data.error || "Test WhatsApp message failed.");
+        message.error(res.data.error || t("templates.whatsapp.testFailed"));
       }
     } catch (err: any) {
-      message.error(err?.message || "Test WhatsApp message failed.");
+      message.error(err?.message || t("templates.whatsapp.testFailed"));
     } finally {
       setActionLoading(null);
     }
@@ -160,25 +168,23 @@ export default function AdminWhatsAppIntegrationPage() {
         >
           <div>
             <Title level={3} style={{ margin: 0 }}>
-              WhatsApp Integration
+              {t("layout.whatsappIntegration")}
             </Title>
-            <Text type="secondary">
-              Evolution API device pairing and delivery test
-            </Text>
+            <Text type="secondary">{t("admin.whatsapp.subtitle")}</Text>
           </div>
           <Space wrap>
             <Tag
               color={statusColor(status)}
               style={{ padding: "4px 10px", fontSize: 13 }}
             >
-              {statusLabel(status)}
+              {statusLabel(status, t)}
             </Tag>
             <Button
               icon={<ReloadOutlined />}
               onClick={refreshStatus}
               loading={loading}
             >
-              Refresh
+              {t("common.refresh")}
             </Button>
           </Space>
         </div>
@@ -202,10 +208,14 @@ export default function AdminWhatsAppIntegrationPage() {
                         style={{ color: "#16a34a", fontSize: 22 }}
                       />
                       <div>
-                        <Text strong>Device pairing</Text>
+                        <Text strong>{t("admin.whatsapp.devicePairing")}</Text>
                         <div>
                           <Text type="secondary">
-                            Instance: {status?.instance_name || "Not set"}
+                            {t("admin.whatsapp.instance", {
+                              name:
+                                status?.instance_name ||
+                                t("admin.whatsapp.notSet"),
+                            })}
                           </Text>
                         </div>
                       </div>
@@ -218,7 +228,7 @@ export default function AdminWhatsAppIntegrationPage() {
                         loading={actionLoading === "connect"}
                         disabled={!status?.configured}
                       >
-                        Generate QR
+                        {t("admin.whatsapp.generateQr")}
                       </Button>
                       <Button
                         icon={<ReloadOutlined />}
@@ -226,7 +236,7 @@ export default function AdminWhatsAppIntegrationPage() {
                         loading={actionLoading === "qr"}
                         disabled={!status?.configured}
                       >
-                        Refresh QR
+                        {t("admin.whatsapp.refreshQr")}
                       </Button>
                     </Space>
                   </div>
@@ -247,7 +257,7 @@ export default function AdminWhatsAppIntegrationPage() {
                       qrAsImage ? (
                         <img
                           src={qrCode}
-                          alt="WhatsApp pairing QR"
+                          alt={t("admin.whatsapp.qrAlt")}
                           style={{
                             width: 280,
                             height: 280,
@@ -264,13 +274,13 @@ export default function AdminWhatsAppIntegrationPage() {
                         />
                         <Text strong>
                           {status?.connected
-                            ? "Device is connected"
-                            : "Generate a QR code"}
+                            ? t("admin.whatsapp.deviceConnected")
+                            : t("admin.whatsapp.generateQrPrompt")}
                         </Text>
                         <Text type="secondary">
                           {status?.connected
-                            ? "WhatsApp notifications can be sent."
-                            : "Scan the QR code from WhatsApp Linked devices."}
+                            ? t("admin.whatsapp.canSend")
+                            : t("admin.whatsapp.scanHint")}
                         </Text>
                       </Space>
                     )}
@@ -284,7 +294,7 @@ export default function AdminWhatsAppIntegrationPage() {
                       loading={actionLoading === "disconnect"}
                       disabled={!status?.configured}
                     >
-                      Disconnect device
+                      {t("admin.whatsapp.disconnectDevice")}
                     </Button>
                   </Space>
                 </Space>
@@ -293,7 +303,10 @@ export default function AdminWhatsAppIntegrationPage() {
 
             <Col xs={24} lg={10}>
               <Space direction="vertical" size={16} style={{ width: "100%" }}>
-                <Card title="Configuration" style={{ borderRadius: 8 }}>
+                <Card
+                  title={t("admin.whatsapp.configuration")}
+                  style={{ borderRadius: 8 }}
+                >
                   <Space
                     direction="vertical"
                     size={10}
@@ -306,11 +319,13 @@ export default function AdminWhatsAppIntegrationPage() {
                         gap: 12,
                       }}
                     >
-                      <Text type="secondary">API URL</Text>
+                      <Text type="secondary">{t("admin.whatsapp.apiUrl")}</Text>
                       <Tag
                         color={status?.base_url_configured ? "green" : "red"}
                       >
-                        {status?.base_url_configured ? "Set" : "Missing"}
+                        {status?.base_url_configured
+                          ? t("admin.whatsapp.set")
+                          : t("admin.whatsapp.missing")}
                       </Tag>
                     </div>
                     <div
@@ -320,9 +335,11 @@ export default function AdminWhatsAppIntegrationPage() {
                         gap: 12,
                       }}
                     >
-                      <Text type="secondary">API key</Text>
+                      <Text type="secondary">{t("admin.whatsapp.apiKey")}</Text>
                       <Tag color={status?.api_key_configured ? "green" : "red"}>
-                        {status?.api_key_configured ? "Set" : "Missing"}
+                        {status?.api_key_configured
+                          ? t("admin.whatsapp.set")
+                          : t("admin.whatsapp.missing")}
                       </Tag>
                     </div>
                     <div
@@ -332,7 +349,9 @@ export default function AdminWhatsAppIntegrationPage() {
                         gap: 12,
                       }}
                     >
-                      <Text type="secondary">Provider status</Text>
+                      <Text type="secondary">
+                        {t("admin.whatsapp.providerStatus")}
+                      </Text>
                       <Text>{status?.provider_status_code || "-"}</Text>
                     </div>
                     {status?.error ? (
@@ -341,19 +360,22 @@ export default function AdminWhatsAppIntegrationPage() {
                   </Space>
                 </Card>
 
-                <Card title="Send test" style={{ borderRadius: 8 }}>
+                <Card
+                  title={t("admin.whatsapp.sendTestTitle")}
+                  style={{ borderRadius: 8 }}
+                >
                   <Form form={form} layout="vertical" onFinish={sendTest}>
                     <Form.Item
                       name="phone_number"
-                      label="Phone number"
+                      label={t("admin.invites.phoneNumber")}
                       rules={[
                         {
                           required: true,
-                          message: "Enter a phone number in E.164 format.",
+                          message: t("admin.whatsapp.phoneRequired"),
                         },
                       ]}
                     >
-                      <Input placeholder="+9665XXXXXXXX" />
+                      <Input placeholder="+9665XXXXXXXX" dir="ltr" />
                     </Form.Item>
                     <Button
                       type="primary"
@@ -362,7 +384,7 @@ export default function AdminWhatsAppIntegrationPage() {
                       loading={actionLoading === "test"}
                       block
                     >
-                      Send test WhatsApp
+                      {t("admin.whatsapp.sendTestButton")}
                     </Button>
                   </Form>
                 </Card>

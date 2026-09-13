@@ -36,7 +36,8 @@ WORKFLOW_TEMPLATES = {
             },
             {"key": "manager", "title": "Manager Review", "approver_role": "manager", "order": 1},
             {"key": "hr", "title": "HR Review", "approver_role": "hr", "order": 2},
-            {"key": "ceo", "title": "CEO Review", "approver_role": "ceo", "order": 3, "is_optional": True},
+            # The CEO stage is required for every leave request.
+            {"key": "ceo", "title": "CEO Review", "approver_role": "ceo", "order": 3, "is_optional": False},
         ],
     },
     "loan_request": {
@@ -105,6 +106,26 @@ WORKFLOW_TEMPLATES = {
             {"key": "ceo", "title": "CEO Contract Approval", "approver_role": "ceo", "order": 2},
         ],
     },
+    # Exit permission requests stop at HR: there is deliberately no CEO stage. Both
+    # stages are optional because a request without a valid manager starts at HR,
+    # and an HR approver's own request is finalized by the manager.
+    "permission_request": {
+        "name": "Exit Permission Request Workflow",
+        "module_key": "permission_requests",
+        "stages": [
+            {"key": "manager", "title": "Manager Review", "approver_role": "manager", "order": 1, "is_optional": True},
+            {"key": "hr", "title": "HR Review", "approver_role": "hr", "order": 2, "is_optional": True},
+        ],
+    },
+    # An HR-submitted termination settlement can start at the CEO, so the HR stage is optional.
+    "annual_leave_payment_request": {
+        "name": "Annual Leave Settlement Workflow",
+        "module_key": "leaves",
+        "stages": [
+            {"key": "hr", "title": "HR Review", "approver_role": "hr", "order": 1, "is_optional": True},
+            {"key": "ceo", "title": "CEO Review", "approver_role": "ceo", "order": 2},
+        ],
+    },
 }
 
 
@@ -135,16 +156,16 @@ def _build_action_url_path(workflow_key: str, role: str, object_id: int) -> str:
         ("leave_request", "delegate"): f"/employee/leave/requests/{object_id}",
         ("leave_request", "manager"): f"/manager/leave/requests/{object_id}",
         ("leave_request", "hr"): f"/hr/leave/requests/{object_id}",
-        ("leave_request", "ceo"): f"/ceo/leave/requests/{object_id}",
+        ("leave_request", "ceo"): "/ceo/leave/requests",
         ("loan_request", "manager"): f"/manager/loan-requests/{object_id}",
         ("loan_request", "hr"): f"/hr/loan-requests/{object_id}",
         ("loan_request", "cfo"): f"/cfo/loan-requests/{object_id}",
         ("loan_request", "ceo"): f"/ceo/loan-requests/{object_id}",
         ("loan_request", "disbursement"): f"/finance/loan-requests/{object_id}",
-        ("attendance_request", "manager"): "/manager/team-requests?tab=attendance",
+        ("attendance_request", "manager"): "/manager/attendance",
         ("attendance_request", "hr"): "/hr/attendance",
         ("attendance_request", "ceo"): "/ceo/attendance",
-        ("attendance_correction_request", "manager"): "/manager/team-requests?tab=attendance-corrections",
+        ("attendance_correction_request", "manager"): "/manager/attendance",
         ("attendance_correction_request", "hr"): "/hr/attendance-correction-requests",
         ("asset_return_request", "manager"): "/manager/team-requests?tab=asset-returns",
         ("asset_return_request", "hr"): "/hr/assets",
@@ -152,6 +173,10 @@ def _build_action_url_path(workflow_key: str, role: str, object_id: int) -> str:
         ("employee_deletion_request", "ceo"): f"/ceo/employees/deletion-requests/{object_id}",
         ("contract_decision", "hr"): f"/hr/contract-decisions/{object_id}",
         ("contract_decision", "ceo"): f"/ceo/contract-decisions/{object_id}",
+        ("permission_request", "manager"): f"/manager/permission-requests/{object_id}",
+        ("permission_request", "hr"): f"/hr/permission-requests/{object_id}",
+        ("annual_leave_payment_request", "hr"): f"/hr/annual-leave-payments/{object_id}",
+        ("annual_leave_payment_request", "ceo"): f"/ceo/annual-leave-payments/{object_id}",
     }
     return route_map.get((workflow_key, role), "")
 
@@ -411,6 +436,15 @@ def _legacy_events_for_leave(instance) -> list[WorkflowEvent]:
             )
         )
     if instance.ceo_decision_at:
+        # A CEO approval is final unless it routed the request to HR completion.
+        if instance.status == LeaveRequest.RequestStatus.REJECTED:
+            ceo_to_status, ceo_to_stage = "rejected", ""
+        elif instance.status == LeaveRequest.RequestStatus.PENDING_HR_COMPLETION or getattr(
+            instance, "hr_completed_at", None
+        ):
+            ceo_to_status, ceo_to_stage = "in_review", "hr_completion"
+        else:
+            ceo_to_status, ceo_to_stage = "approved", ""
         events.append(
             WorkflowEvent(
                 signature=f"leave:ceo:{instance.id}:{instance.ceo_decision_at.isoformat()}",
@@ -419,9 +453,9 @@ def _legacy_events_for_leave(instance) -> list[WorkflowEvent]:
                 else WorkflowAction.Action.APPROVE,
                 approver_role="ceo",
                 from_status="in_review",
-                to_status="rejected" if instance.status == LeaveRequest.RequestStatus.REJECTED else "in_review",
+                to_status=ceo_to_status,
                 from_stage="ceo",
-                to_stage="" if instance.status == LeaveRequest.RequestStatus.REJECTED else "hr_completion",
+                to_stage=ceo_to_stage,
                 actor=instance.ceo_decision_by,
                 note=instance.ceo_decision_note or "",
                 at=instance.ceo_decision_at,
@@ -1401,8 +1435,222 @@ def _legacy_events_for_starting_work_acknowledgment(instance) -> list[WorkflowEv
     return events
 
 
+def _legacy_status_snapshot_for_permission_request(instance):
+    from permission_requests.models import PermissionRequest
+
+    statuses = PermissionRequest.Status
+    current_stage, current_role = {
+        statuses.PENDING_MANAGER: ("manager", "manager"),
+        statuses.PENDING_HR: ("hr", "hr"),
+    }.get(instance.status, ("", ""))
+    status = WorkflowInstance.Status.IN_REVIEW
+    terminal_at = None
+    if instance.status == statuses.APPROVED:
+        status = WorkflowInstance.Status.APPROVED
+        terminal_at = instance.hr_decision_at or instance.manager_decision_at
+    elif instance.status == statuses.REJECTED:
+        status = WorkflowInstance.Status.REJECTED
+        terminal_at = instance.hr_decision_at or instance.manager_decision_at
+    elif instance.status == statuses.CANCELLED:
+        status = WorkflowInstance.Status.CANCELLED
+        terminal_at = instance.cancelled_at or instance.updated_at
+    current_actor_user = _resolve_current_actor(current_role, instance) if current_role else None
+    return {
+        "status": status,
+        "current_stage": current_stage,
+        "current_role": current_role,
+        "current_actor_user": current_actor_user,
+        "submitted_by": instance.employee,
+        "submitted_at": instance.created_at,
+        "decided_at": terminal_at
+        if status in {WorkflowInstance.Status.APPROVED, WorkflowInstance.Status.REJECTED}
+        else None,
+        "cancelled_at": terminal_at if status == WorkflowInstance.Status.CANCELLED else None,
+    }
+
+
+def _legacy_events_for_permission_request(instance) -> list[WorkflowEvent]:
+    from permission_requests.models import PermissionRequest
+
+    statuses = PermissionRequest.Status
+    approved = PermissionRequest.Decision.APPROVED
+    workflow_key = "permission_request"
+    first_stage = "manager" if instance.manager_decision_at or instance.status == statuses.PENDING_MANAGER else "hr"
+    events = [
+        WorkflowEvent(
+            signature=f"permission:submitted:{instance.id}:{instance.created_at.isoformat()}",
+            action=WorkflowAction.Action.SUBMIT,
+            approver_role="",
+            from_status="draft",
+            to_status="submitted",
+            from_stage="",
+            to_stage=first_stage,
+            actor=instance.employee,
+            at=instance.created_at,
+            metadata={"legacy_signature": "submitted", "workflow_key": workflow_key},
+        )
+    ]
+    if instance.manager_decision_at:
+        if instance.manager_decision != approved:
+            action, to_status, to_stage = WorkflowAction.Action.REJECT, "rejected", ""
+        elif instance.hr_decision_at or instance.status != statuses.APPROVED:
+            action, to_status, to_stage = WorkflowAction.Action.ADVANCE, "in_review", "hr"
+        else:
+            # An HR approver's own request is final once their manager approves it.
+            action, to_status, to_stage = WorkflowAction.Action.APPROVE, "approved", ""
+        events.append(
+            WorkflowEvent(
+                signature=f"permission:manager:{instance.id}:{instance.manager_decision_at.isoformat()}",
+                action=action,
+                approver_role="manager",
+                from_status="in_review",
+                to_status=to_status,
+                from_stage="manager",
+                to_stage=to_stage,
+                actor=instance.manager_decision_by,
+                note=instance.manager_decision_note or "",
+                at=instance.manager_decision_at,
+                metadata={
+                    "legacy_signature": "manager",
+                    "workflow_key": workflow_key,
+                    "decision": instance.manager_decision or "",
+                },
+            )
+        )
+    if instance.hr_decision_at:
+        rejected = instance.hr_decision != approved
+        events.append(
+            WorkflowEvent(
+                signature=f"permission:hr:{instance.id}:{instance.hr_decision_at.isoformat()}",
+                action=WorkflowAction.Action.REJECT if rejected else WorkflowAction.Action.APPROVE,
+                approver_role="hr",
+                from_status="in_review",
+                to_status="rejected" if rejected else "approved",
+                from_stage="hr",
+                to_stage="",
+                actor=instance.hr_decision_by,
+                note=instance.hr_decision_note or "",
+                at=instance.hr_decision_at,
+                metadata={
+                    "legacy_signature": "hr",
+                    "workflow_key": workflow_key,
+                    "decision": instance.hr_decision or "",
+                },
+            )
+        )
+    if instance.status == statuses.CANCELLED:
+        cancelled_at = instance.cancelled_at or instance.updated_at
+        events.append(
+            WorkflowEvent(
+                signature=f"permission:cancel:{instance.id}:{cancelled_at.isoformat()}",
+                action=WorkflowAction.Action.CANCEL,
+                approver_role="",
+                from_status="in_review",
+                to_status="cancelled",
+                from_stage="",
+                to_stage="",
+                actor=instance.employee,
+                at=cancelled_at,
+                metadata={"legacy_signature": "cancel", "workflow_key": workflow_key},
+            )
+        )
+    return events
+
+
+def _legacy_status_snapshot_for_annual_leave_payment(instance):
+    request_status = type(instance).Status
+    current_stage, current_role = {
+        request_status.PENDING_HR: ("hr", "hr"),
+        request_status.PENDING_CEO: ("ceo", "ceo"),
+    }.get(instance.status, ("", ""))
+    if instance.status in {request_status.APPROVED, request_status.CARRIED_FORWARD}:
+        status = WorkflowInstance.Status.APPROVED
+    elif instance.status == request_status.REJECTED:
+        status = WorkflowInstance.Status.REJECTED
+    else:
+        status = WorkflowInstance.Status.IN_REVIEW
+    terminal = status in {WorkflowInstance.Status.APPROVED, WorkflowInstance.Status.REJECTED}
+    return {
+        "status": status,
+        "current_stage": current_stage,
+        "current_role": current_role,
+        "current_actor_user": None,
+        "submitted_by": instance.submitted_by or instance.employee,
+        "submitted_at": instance.submitted_at,
+        "decided_at": (instance.ceo_decided_at or instance.settled_at) if terminal else None,
+        "cancelled_at": None,
+    }
+
+
+def _legacy_events_for_annual_leave_payment(instance) -> list[WorkflowEvent]:
+    request_status = type(instance).Status
+    workflow_key = "annual_leave_payment_request"
+    started_at_hr = bool(instance.hr_reviewed_at) or instance.status == request_status.PENDING_HR
+    events = [
+        WorkflowEvent(
+            signature=f"annual-payment:submitted:{instance.id}",
+            action=WorkflowAction.Action.SUBMIT,
+            approver_role="",
+            from_status="draft",
+            to_status="in_review",
+            from_stage="",
+            to_stage="hr" if started_at_hr else "ceo",
+            actor=instance.submitted_by or instance.employee,
+            note=instance.employee_note or "",
+            at=instance.submitted_at,
+            metadata={"legacy_signature": "submitted", "workflow_key": workflow_key},
+        )
+    ]
+    if instance.hr_reviewed_at:
+        events.append(
+            WorkflowEvent(
+                signature=f"annual-payment:hr:{instance.id}:{instance.hr_reviewed_at.isoformat()}",
+                action=WorkflowAction.Action.ADVANCE,
+                approver_role="hr",
+                from_status="in_review",
+                to_status="in_review",
+                from_stage="hr",
+                to_stage="ceo",
+                actor=instance.hr_reviewed_by,
+                note=instance.hr_review_note or "",
+                at=instance.hr_reviewed_at,
+                metadata={"legacy_signature": "hr", "workflow_key": workflow_key},
+            )
+        )
+    if instance.ceo_decided_at:
+        rejected = instance.status == request_status.REJECTED
+        events.append(
+            WorkflowEvent(
+                signature=f"annual-payment:ceo:{instance.id}:{instance.ceo_decided_at.isoformat()}",
+                action=WorkflowAction.Action.REJECT if rejected else WorkflowAction.Action.APPROVE,
+                approver_role="ceo",
+                from_status="in_review",
+                to_status="rejected" if rejected else "approved",
+                from_stage="ceo",
+                to_stage="",
+                actor=instance.ceo_decided_by,
+                note=instance.ceo_decision_note or "",
+                at=instance.ceo_decided_at,
+                metadata={"legacy_signature": "ceo", "workflow_key": workflow_key},
+            )
+        )
+    return events
+
+
 def _adapter_for_instance(instance):
     class_name = instance.__class__.__name__
+    if class_name == "AnnualLeavePaymentRequest":
+        return (
+            "annual_leave_payment_request",
+            _legacy_status_snapshot_for_annual_leave_payment,
+            _legacy_events_for_annual_leave_payment,
+        )
+    if class_name == "PermissionRequest":
+        return (
+            "permission_request",
+            _legacy_status_snapshot_for_permission_request,
+            _legacy_events_for_permission_request,
+        )
     if class_name == "LeaveRequest":
         return "leave_request", _legacy_status_snapshot_for_leave, _legacy_events_for_leave
     if class_name == "LoanRequest":
@@ -1472,6 +1720,10 @@ def sync_workflow(instance, *, actor=None, workflow_key: str | None = None) -> W
     }
     workflow.save()
 
+    if uses_recorded_history(workflow):
+        # record_workflow_transition writes this workflow's history as each action happens.
+        return workflow
+
     existing_signatures = {(action.metadata or {}).get("legacy_signature"): action for action in workflow.actions.all()}
     for event in events_builder(instance):
         signature_key = (event.metadata or {}).get("legacy_signature")
@@ -1498,30 +1750,148 @@ def sync_workflow(instance, *, actor=None, workflow_key: str | None = None) -> W
         if event.at:
             WorkflowAction.objects.filter(pk=created.pk).update(created_at=event.at)
             created.created_at = event.at
-        audit(
-            None,
-            "workflow_transition",
-            entity=instance.__class__.__name__,
-            entity_id=instance.pk,
-            metadata={
-                "workflow_key": workflow_key,
-                "workflow_instance_id": workflow.id,
-                "workflow_action_id": created.id,
-                "action": created.action,
-                "from_status": created.from_status,
-                "to_status": created.to_status,
-                "from_stage": created.from_stage,
-                "to_stage": created.to_stage,
-                "acting_user_id": created.actor_id,
-                "delegated": bool(
-                    workflow.current_actor_user_id
-                    and created.actor_id
-                    and workflow.current_actor_user_id != created.actor_id
-                ),
-            },
-            actor=created.actor or actor,
+        _audit_workflow_transition(
+            instance,
+            workflow,
+            created,
+            workflow_key=workflow_key,
+            actor=actor,
+            assigned_actor_id=workflow.current_actor_user_id,
         )
     return workflow
+
+
+def _audit_workflow_transition(instance, workflow, action, *, workflow_key, actor=None, assigned_actor_id=None) -> None:
+    audit(
+        None,
+        "workflow_transition",
+        entity=instance.__class__.__name__,
+        entity_id=instance.pk,
+        metadata={
+            "workflow_key": workflow_key,
+            "workflow_instance_id": workflow.id,
+            "workflow_action_id": action.id,
+            "action": action.action,
+            "from_status": action.from_status,
+            "to_status": action.to_status,
+            "from_stage": action.from_stage,
+            "to_stage": action.to_stage,
+            "acting_user_id": action.actor_id,
+            "delegated": bool(assigned_actor_id and action.actor_id and assigned_actor_id != action.actor_id),
+        },
+        actor=action.actor or actor,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Recorded history
+#
+# Legacy workflows rebuild WorkflowAction rows from the domain model's decision
+# timestamps on every sync, which loses repeated or overwritten decisions. A
+# recorded workflow instead gets one row per action, written when it happens:
+#
+#     start = begin_recorded_transition(locked_instance, actor=actor)
+#     ... change and save the domain status ...
+#     record_workflow_transition(locked_instance, start, action=..., actor=actor)
+# ---------------------------------------------------------------------------
+
+RECORDED_HISTORY = "recorded"
+
+
+def uses_recorded_history(workflow: WorkflowInstance) -> bool:
+    return (workflow.metadata or {}).get("history_mode") == RECORDED_HISTORY
+
+
+@dataclass(frozen=True)
+class TransitionStart:
+    workflow_id: int
+    from_status: str
+    from_stage: str
+    approver_role: str
+    assigned_actor_id: int | None
+
+
+@transaction.atomic
+def begin_recorded_transition(instance, *, actor=None, new_instance: bool = False) -> TransitionStart:
+    """Capture where ``instance`` stands before a transition and switch it to recorded history.
+
+    Call under the row lock, before changing the instance. A workflow still on
+    rebuilt history (or an existing instance with no workflow yet) is synced
+    first, so its earlier events are kept. Pass ``new_instance=True`` only when
+    recording a brand-new submission; it then starts from a draft workflow.
+    """
+
+    content_type = ContentType.objects.get_for_model(instance.__class__)
+    if new_instance and not WorkflowInstance.objects.filter(content_type=content_type, object_id=instance.pk).exists():
+        workflow_key, _, _ = _adapter_for_instance(instance)
+        workflow = WorkflowInstance.objects.create(
+            definition=get_or_create_workflow_definition(workflow_key),
+            content_type=content_type,
+            object_id=instance.pk,
+            metadata={
+                "workflow_key": workflow_key,
+                "entity": instance.__class__.__name__,
+                "entity_id": instance.pk,
+                "history_mode": RECORDED_HISTORY,
+            },
+        )
+        return TransitionStart(workflow.id, WorkflowInstance.Status.DRAFT, "", "", None)
+
+    workflow = sync_workflow(instance, actor=actor)
+    if not uses_recorded_history(workflow):
+        workflow.metadata = {**(workflow.metadata or {}), "history_mode": RECORDED_HISTORY}
+        workflow.save(update_fields=["metadata", "updated_at"])
+    return TransitionStart(
+        workflow.id,
+        workflow.status,
+        workflow.current_stage,
+        workflow.current_approver_role,
+        workflow.current_actor_user_id,
+    )
+
+
+@transaction.atomic
+def record_workflow_transition(
+    instance,
+    start: TransitionStart,
+    *,
+    action: str,
+    actor,
+    note: str = "",
+    approver_role: str | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> WorkflowAction:
+    """Project ``instance``'s saved state into its workflow and record the action that caused it.
+
+    ``approver_role`` defaults to the role that owned the stage when the
+    transition began.
+    """
+
+    workflow = sync_workflow(instance, actor=actor)
+    if workflow.id != start.workflow_id or not uses_recorded_history(workflow):
+        raise ValueError("record_workflow_transition needs the TransitionStart of the same recorded workflow.")
+    workflow_key = (workflow.metadata or {}).get("workflow_key", "")
+    created = WorkflowAction.objects.create(
+        workflow=workflow,
+        action=action,
+        actor=actor,
+        approver_role=start.approver_role if approver_role is None else approver_role,
+        from_status=start.from_status,
+        to_status=workflow.status,
+        from_stage=start.from_stage,
+        to_stage=workflow.current_stage,
+        note=note or "",
+        metadata={"workflow_key": workflow_key, "recorded": True, **(metadata or {})},
+    )
+    _audit_workflow_transition(
+        instance,
+        workflow,
+        created,
+        workflow_key=workflow_key,
+        actor=actor,
+        assigned_actor_id=start.assigned_actor_id,
+    )
+    return created
 
 
 def _workflow_action_snapshot(action) -> dict[str, Any]:
@@ -1618,6 +1988,8 @@ def _workflow_snapshot_from_instance(instance, workflow, *, actor=None, use_pref
             and actor.is_authenticated
             and workflow.status in {WorkflowInstance.Status.SUBMITTED, WorkflowInstance.Status.IN_REVIEW}
             and getattr(_get_subject_user(instance), "id", None) == actor.id
+            # Employees cannot cancel their own leave requests; only HR can.
+            and instance.__class__.__name__ != "LeaveRequest"
         ),
         "history": history,
     }
@@ -1739,9 +2111,24 @@ def build_pending_approval_item(workflow: WorkflowInstance) -> dict[str, Any] | 
         "asset_return_request": "Asset Return",
         "employee_deletion_request": "Employee Deletion",
         "contract_decision": "Contract Decision",
+        "permission_request": "Exit Permission",
+        "annual_leave_payment_request": "Annual Leave Settlement",
     }
     review_path = _build_action_url_path(workflow_key, workflow.current_approver_role, obj.pk)
-    if workflow_key == "leave_request":
+    if workflow_key == "annual_leave_payment_request":
+        profile = getattr(obj, "employee_profile", None)
+        name = getattr(profile, "full_name", "") or getattr(profile, "employee_id", f"Request #{obj.pk}")
+        action = f"Annual leave settlement: {getattr(obj, 'payment_amount', '')}"
+        request_type = "ANNUAL_LEAVE_PAYMENT"
+    elif workflow_key == "permission_request":
+        profile = getattr(obj, "employee_profile", None)
+        employee = getattr(obj, "employee", None)
+        name = getattr(profile, "full_name", "") or getattr(employee, "email", f"Request #{obj.pk}")
+        from_time, to_time = getattr(obj, "from_time", None), getattr(obj, "to_time", None)
+        window = f"{from_time:%H:%M}-{to_time:%H:%M}" if from_time and to_time else ""
+        action = f"Exit permission: {getattr(obj, 'request_date', '')} {window}".strip()
+        request_type = "PERMISSION"
+    elif workflow_key == "leave_request":
         profile = getattr(getattr(obj, "employee", None), "employee_profile", None)
         name = getattr(profile, "full_name", "") or getattr(
             getattr(obj, "employee", None), "email", f"Request #{obj.pk}"

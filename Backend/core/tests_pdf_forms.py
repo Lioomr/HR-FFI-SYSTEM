@@ -307,45 +307,48 @@ def test_a_real_signature_supersedes_only_its_own_typed_twin():
     assert "manager_approval_decision" not in superseded
 
 
-def test_job_offer_hr_signature_sits_on_its_printed_rule_not_the_name_boxes():
-    """Regression: the HR signature must never cover the signer's name or title.
-
-    The job offer prints a dedicated ``Signature`` rule beneath the HR name and
-    position boxes; the map targets that rule, so both text values survive.
-    """
+def test_job_offer_internal_signatures_use_open_space_clear_of_name_and_date_boxes():
+    """HR and CEO signatures occupy only their approved open signing spaces."""
 
     assets = load_form_assets("job_offer_blank.pdf", "job_offer_blank_field_map.json")
     assert assets is not None
-    signature_spec = assets.fields["hr_signature_image"]
-    name_spec = assets.fields["hr_name"]
-    position_spec = assets.fields["hr_position"]
+    assert "applicant_signature_image" not in assets.fields
+    assert "hr_position" not in assets.fields
 
     pdf_bytes, diagnostics = render_mapped_form(
         assets,
-        {"hr_name": "Nour Hassan", "hr_position": "Human Resources Manager"},
-        signatures={"hr_signature_image": SignatureAsset(data=make_png(), signer_label="Nour Hassan")},
+        {
+            "hr_name": "Nour Hassan",
+            "hr_signature_date": "2026-09-13",
+            "ceo_name": "Maha Ali",
+            "ceo_signature_date": "2026-09-13",
+        },
+        signatures={
+            "hr_signature_image": SignatureAsset(data=make_png(), signer_label="Nour Hassan"),
+            "ceo_signature_image": SignatureAsset(data=make_png(), signer_label="Maha Ali"),
+        },
     )
 
-    assert diagnostics[0]["state"] == SIGNATURE_PLACED
+    assert [item["state"] for item in diagnostics] == [SIGNATURE_PLACED, SIGNATURE_PLACED]
     boxes = image_boxes(pdf_bytes)
-    assert len(boxes) == 1
-    x0, y0, x1, y1 = boxes[0]
-    # Inside the box the approved map declares...
-    assert signature_spec["x"] <= x0 and x1 <= signature_spec["x"] + signature_spec["width"]
-    assert signature_spec["y"] <= y0 and y1 <= signature_spec["y"] + signature_spec["height"]
-    # ...and clear of both text fields it used to sit on top of.
-    for other in (name_spec, position_spec):
-        covers = not (
-            x1 <= other["x"]
-            or x0 >= other["x"] + other["width"]
-            or y1 <= other["y"]
-            or y0 >= other["y"] + other["height"]
-        )
-        assert not covers, "the HR signature must not overlap the name or position box"
+    assert len(boxes) == 2
+    for role, (x0, y0, x1, y1) in zip(("hr", "ceo"), boxes):
+        signature_spec = assets.fields[f"{role}_signature_image"]
+        assert signature_spec["x"] <= x0 and x1 <= signature_spec["x"] + signature_spec["width"]
+        assert signature_spec["y"] <= y0 and y1 <= signature_spec["y"] + signature_spec["height"]
+        for suffix in ("name", "signature_date"):
+            other = assets.fields[f"{role}_{suffix}"]
+            covers = not (
+                x1 <= other["x"]
+                or x0 >= other["x"] + other["width"]
+                or y1 <= other["y"]
+                or y0 >= other["y"] + other["height"]
+            )
+            assert not covers, f"the {role.upper()} signature must not overlap its {suffix} box"
 
     extracted = PdfReader(BytesIO(pdf_bytes)).pages[0].extract_text()
     assert "Nour Hassan" in extracted
-    assert "Human Resources Manager" in extracted
+    assert "Maha Ali" in extracted
 
 
 def test_signature_box_fully_blocked_by_values_is_reported_not_overpainted():
@@ -392,6 +395,7 @@ RENDERED_FORM_PAIRS = (
         "starting_work_acknowledgment_blank.pdf",
         "starting_work_acknowledgment_blank_field_map.json",
     ),
+    ("exit_permission_request_blank.pdf", "exit_permission_request_blank_field_map.json"),
 )
 
 #: Blank forms the template library serves but no renderer fills. They are

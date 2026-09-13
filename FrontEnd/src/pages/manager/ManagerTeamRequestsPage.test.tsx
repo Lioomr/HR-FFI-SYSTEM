@@ -68,6 +68,10 @@ function renderPage(path = "/manager/team-requests") {
           path="/manager/team-requests"
           element={<ManagerTeamRequestsPage />}
         />
+        <Route
+          path="/manager/attendance"
+          element={<div>Attendance destination</div>}
+        />
       </Routes>
     </MemoryRouter>,
   );
@@ -105,6 +109,17 @@ describe("ManagerTeamRequestsPage", () => {
   afterEach(() => {
     useAuthStore.setState({ isAuthenticated: false, user: null });
   });
+
+  it.each(["attendance", "attendance-corrections"])(
+    "redirects legacy %s links",
+    async (tab) => {
+      renderPage(`/manager/team-requests?tab=${tab}`);
+      expect(
+        await screen.findByText("Attendance destination"),
+      ).toBeInTheDocument();
+      expect(mockedLeave).not.toHaveBeenCalled();
+    },
+  );
 
   it("shows the outstanding count per tab and totals them in the header", async () => {
     // Only active request workflows contribute to the pending count.

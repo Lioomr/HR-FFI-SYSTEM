@@ -1,6 +1,7 @@
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
+import { useI18nStore } from "../i18n/i18nStore";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -26,9 +27,13 @@ export function formatDateTimeShort(
   fallback = "-",
 ) {
   const parsed = parseDateTime(value);
-  return parsed
-    ? parsed.tz(APP_TIME_ZONE).format("MMM DD, YYYY HH:mm")
-    : fallback;
+  if (!parsed) return fallback;
+  // English month abbreviations read as untranslated text in the Arabic UI.
+  const pattern =
+    useI18nStore.getState().language === "ar"
+      ? "YYYY-MM-DD HH:mm"
+      : "MMM DD, YYYY HH:mm";
+  return parsed.tz(APP_TIME_ZONE).format(pattern);
 }
 
 export function formatDateOnly(value?: string | Date | null, fallback = "-") {

@@ -191,9 +191,6 @@ class UserDetailView(APIView):
         serializer = UpdateUserOrganizationsSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
 
-        if not user.groups.filter(name="HRManager").exists():
-            return error("Organization access can only be managed for HR Manager users.", status=422)
-
         organization_ids = serializer.validated_data["organization_ids"]
         sync_user_organization_access(user, organization_ids)
 

@@ -22,13 +22,8 @@ from core.services import (
     notify_profile_request_status_whatsapp,
     notify_users_for_pending_status,
     send_request_submission_email,
-    sync_workflow,
 )
-from employees.services.manager_relationships import (
-    get_valid_manager_user,
-    manager_approval_actor_source,
-    manager_scope_q,
-)
+from employees.services.manager_relationships import manager_scope_q
 from organization.services import filter_queryset_by_accessible_companies, filter_queryset_by_company_scope
 
 from .models import LoanRequest
@@ -40,13 +35,27 @@ from .permissions import (
     IsHRApproverOrAdmin,
     IsLoanOwnerOrHR,
     IsManagerOrAdmin,
-    get_active_workflow_config,
     is_accountant_user,
     is_ceo_approver_user,
     is_cfo_approver_user,
     is_hr_approver_user,
 )
 from .serializers import LoanRequestActionSerializer, LoanRequestCreateSerializer, LoanRequestReadSerializer
+from .services import (
+    LEGACY_PENDING_HR_STATUSES,
+    LoanTransitionError,
+    apply_cancellation,
+    apply_ceo_approval,
+    apply_ceo_referral,
+    apply_ceo_rejection,
+    apply_cfo_approval,
+    apply_cfo_rejection,
+    apply_disbursement,
+    apply_hr_recommendation,
+    apply_manager_recommendation,
+    record_loan_submission,
+    submission_status,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -77,12 +86,6 @@ def _configure_sensitive_download(response, filename):
     response["X-Content-Type-Options"] = "nosniff"
     response["Cache-Control"] = "private, no-store"
     return response
-
-
-LEGACY_PENDING_HR_STATUSES = [
-    LoanRequest.RequestStatus.PENDING_HR,
-    LoanRequest.RequestStatus.PENDING_FINANCE,
-]
 
 
 def _flatten_errors(error_dict):
@@ -118,38 +121,6 @@ def _scope_ceo_queryset_for_user(user, qs):
     if not is_ceo_approver_user(user):
         return qs.none()
     return qs
-
-
-def _reject_self_approval(request, instance):
-    if instance.employee_id == request.user.id:
-        return error("Validation error", errors=["Self approval is not allowed."], status=422)
-    return None
-
-
-def _next_year_month(year, month):
-    if month == 12:
-        return year + 1, 1
-    return year, month + 1
-
-
-def _is_hr_manager_user(user):
-    return bool(user and user.is_authenticated and user.groups.filter(name="HRManager").exists())
-
-
-def _resolve_open_loan_target_period():
-    """
-    Open-loan policy:
-    - Deduct in current payroll month by default.
-    - If current month payroll is already finalized/paid, move target to next month.
-    """
-    from payroll.models import PayrollRun
-
-    now = timezone.localtime()
-    year, month = now.year, now.month
-    current_run = PayrollRun.objects.filter(year=year, month=month).order_by("-id").first()
-    if current_run and current_run.status in [PayrollRun.Status.COMPLETED, PayrollRun.Status.PAID]:
-        return _next_year_month(year, month)
-    return year, month
 
 
 _LOAN_STATUS_LABELS = {
@@ -609,27 +580,18 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
             return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
 
         profile = serializer.validated_data["employee_profile"]
-        manager_user = get_valid_manager_user(profile, cross_company_capability="loans.approve")
-
-        config = get_active_workflow_config()
-        if _is_hr_manager_user(request.user):
-            initial_status = LoanRequest.RequestStatus.PENDING_CEO
-        elif manager_user and config.require_manager_stage:
-            initial_status = LoanRequest.RequestStatus.PENDING_MANAGER
-        else:
-            initial_status = LoanRequest.RequestStatus.PENDING_HR
-
-        instance = LoanRequest.objects.create(
-            employee=request.user,
-            employee_profile=profile,
-            company=profile.company,
-            requested_amount=serializer.validated_data["amount"],
-            loan_type=serializer.validated_data.get("loan_type", LoanRequest.LoanType.OPEN),
-            installment_months=serializer.validated_data.get("installment_months"),
-            reason=serializer.validated_data.get("reason", ""),
-            status=initial_status,
-        )
-        sync_workflow(instance, actor=request.user)
+        with transaction.atomic():
+            instance = LoanRequest.objects.create(
+                employee=request.user,
+                employee_profile=profile,
+                company=profile.company,
+                requested_amount=serializer.validated_data["amount"],
+                loan_type=serializer.validated_data.get("loan_type", LoanRequest.LoanType.OPEN),
+                installment_months=serializer.validated_data.get("installment_months"),
+                reason=serializer.validated_data.get("reason", ""),
+                status=submission_status(request.user, profile),
+            )
+            record_loan_submission(instance, actor=request.user)
 
         audit(
             request,
@@ -757,36 +719,19 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
         instance = _scope_hr_queryset_for_user(request.user, self.get_queryset()).filter(pk=pk).first()
         if not instance:
             return error("Not found", errors=["Not found."], status=404)
-        self_approval_error = _reject_self_approval(request, instance)
-        if self_approval_error:
-            return self_approval_error
-        if instance.status not in LEGACY_PENDING_HR_STATUSES:
-            return error("Validation error", errors=["Request is not pending HR approval."], status=422)
-
         serializer = LoanRequestActionSerializer(data=request.data)
         if not serializer.is_valid():
             return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
 
-        with transaction.atomic():
-            instance = LoanRequest.objects.select_for_update().get(pk=instance.pk)
-            if instance.status not in LEGACY_PENDING_HR_STATUSES:
-                return error("Validation error", errors=["Request is not pending HR approval."], status=422)
-            instance.status = LoanRequest.RequestStatus.PENDING_CFO
-            instance.finance_decision_by = request.user
-            instance.finance_decision_at = timezone.now()
-            instance.finance_decision_note = serializer.validated_data.get("comment", "")
-            instance.hr_recommendation = LoanRequest.Recommendation.APPROVE
-            instance.save(
-                update_fields=[
-                    "status",
-                    "finance_decision_by",
-                    "finance_decision_at",
-                    "finance_decision_note",
-                    "hr_recommendation",
-                    "updated_at",
-                ]
+        try:
+            instance = apply_hr_recommendation(
+                instance,
+                actor=request.user,
+                recommendation=LoanRequest.Recommendation.APPROVE,
+                note=serializer.validated_data.get("comment", ""),
             )
-            sync_workflow(instance, actor=request.user)
+        except LoanTransitionError as exc:
+            return exc.to_response()
         audit(request, "loan_request_recommended_hr_approve", entity="LoanRequest", entity_id=instance.id)
         try:
             notify_users_for_pending_status(
@@ -812,36 +757,19 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
         instance = _scope_hr_queryset_for_user(request.user, self.get_queryset()).filter(pk=pk).first()
         if not instance:
             return error("Not found", errors=["Not found."], status=404)
-        self_approval_error = _reject_self_approval(request, instance)
-        if self_approval_error:
-            return self_approval_error
-        if instance.status not in LEGACY_PENDING_HR_STATUSES:
-            return error("Validation error", errors=["Request is not pending HR approval."], status=422)
-
         serializer = LoanRequestActionSerializer(data=request.data)
         if not serializer.is_valid():
             return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
 
-        with transaction.atomic():
-            instance = LoanRequest.objects.select_for_update().get(pk=instance.pk)
-            if instance.status not in LEGACY_PENDING_HR_STATUSES:
-                return error("Validation error", errors=["Request is not pending HR approval."], status=422)
-            instance.status = LoanRequest.RequestStatus.PENDING_CFO
-            instance.finance_decision_by = request.user
-            instance.finance_decision_at = timezone.now()
-            instance.finance_decision_note = serializer.validated_data.get("comment", "")
-            instance.hr_recommendation = LoanRequest.Recommendation.REJECT
-            instance.save(
-                update_fields=[
-                    "status",
-                    "finance_decision_by",
-                    "finance_decision_at",
-                    "finance_decision_note",
-                    "hr_recommendation",
-                    "updated_at",
-                ]
+        try:
+            instance = apply_hr_recommendation(
+                instance,
+                actor=request.user,
+                recommendation=LoanRequest.Recommendation.REJECT,
+                note=serializer.validated_data.get("comment", ""),
             )
-            sync_workflow(instance, actor=request.user)
+        except LoanTransitionError as exc:
+            return exc.to_response()
         audit(request, "loan_request_recommended_hr_reject", entity="LoanRequest", entity_id=instance.id)
         try:
             notify_users_for_pending_status(
@@ -864,26 +792,10 @@ class LoanRequestViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsEmployeeOnly])
     def cancel(self, request, pk=None):
-        instance = self.get_object()
-        if instance.employee_id != request.user.id:
-            return error("Forbidden", errors=["Forbidden."], status=status.HTTP_403_FORBIDDEN)
-
-        allowed_statuses = [
-            LoanRequest.RequestStatus.SUBMITTED,
-            LoanRequest.RequestStatus.PENDING_MANAGER,
-            LoanRequest.RequestStatus.PENDING_HR,
-            LoanRequest.RequestStatus.PENDING_FINANCE,
-            LoanRequest.RequestStatus.PENDING_CFO,
-            LoanRequest.RequestStatus.PENDING_CEO,
-        ]
-
-        with transaction.atomic():
-            instance = LoanRequest.objects.select_for_update().get(pk=instance.pk)
-            if instance.status not in allowed_statuses:
-                return error("Validation error", errors=["Only pending requests can be cancelled."], status=422)
-            instance.status = LoanRequest.RequestStatus.CANCELLED
-            instance.save(update_fields=["status", "updated_at"])
-            sync_workflow(instance, actor=request.user)
+        try:
+            instance = apply_cancellation(self.get_object(), actor=request.user)
+        except LoanTransitionError as exc:
+            return exc.to_response()
         audit(request, "loan_request_cancelled", entity="LoanRequest", entity_id=instance.id)
         return success(LoanRequestReadSerializer(instance).data)
 
@@ -962,45 +874,19 @@ class ManagerLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsManagerOrAdmin])
     def approve(self, request, pk=None):
-        instance = self.get_object()
-        self_approval_error = _reject_self_approval(request, instance)
-        if self_approval_error:
-            return self_approval_error
-        actor_source = manager_approval_actor_source(
-            request.user,
-            instance.employee_profile,
-            capability="loans.approve",
-            allow_admin=True,
-        )
-        if not actor_source:
-            return error("Forbidden", errors=["You cannot approve this loan request."], status=403)
-        if instance.status != LoanRequest.RequestStatus.PENDING_MANAGER:
-            return error("Validation error", errors=["Request is not pending manager approval."], status=422)
-
         serializer = LoanRequestActionSerializer(data=request.data)
         if not serializer.is_valid():
             return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
 
-        with transaction.atomic():
-            instance = LoanRequest.objects.select_for_update().get(pk=instance.pk)
-            if instance.status != LoanRequest.RequestStatus.PENDING_MANAGER:
-                return error("Validation error", errors=["Request is not pending manager approval."], status=422)
-            instance.status = LoanRequest.RequestStatus.PENDING_HR
-            instance.manager_decision_by = request.user
-            instance.manager_decision_at = timezone.now()
-            instance.manager_decision_note = serializer.validated_data.get("comment", "")
-            instance.manager_recommendation = LoanRequest.Recommendation.APPROVE
-            instance.save(
-                update_fields=[
-                    "status",
-                    "manager_decision_by",
-                    "manager_decision_at",
-                    "manager_decision_note",
-                    "manager_recommendation",
-                    "updated_at",
-                ]
+        try:
+            instance, actor_source = apply_manager_recommendation(
+                self.get_object(),
+                actor=request.user,
+                recommendation=LoanRequest.Recommendation.APPROVE,
+                note=serializer.validated_data.get("comment", ""),
             )
-            sync_workflow(instance, actor=request.user)
+        except LoanTransitionError as exc:
+            return exc.to_response()
         audit(
             request,
             "loan_request_recommended_manager_approve",
@@ -1029,45 +915,19 @@ class ManagerLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsManagerOrAdmin])
     def reject(self, request, pk=None):
-        instance = self.get_object()
-        self_approval_error = _reject_self_approval(request, instance)
-        if self_approval_error:
-            return self_approval_error
-        actor_source = manager_approval_actor_source(
-            request.user,
-            instance.employee_profile,
-            capability="loans.approve",
-            allow_admin=True,
-        )
-        if not actor_source:
-            return error("Forbidden", errors=["You cannot reject this loan request."], status=403)
-        if instance.status != LoanRequest.RequestStatus.PENDING_MANAGER:
-            return error("Validation error", errors=["Request is not pending manager approval."], status=422)
-
         serializer = LoanRequestActionSerializer(data=request.data)
         if not serializer.is_valid():
             return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
 
-        with transaction.atomic():
-            instance = LoanRequest.objects.select_for_update().get(pk=instance.pk)
-            if instance.status != LoanRequest.RequestStatus.PENDING_MANAGER:
-                return error("Validation error", errors=["Request is not pending manager approval."], status=422)
-            instance.status = LoanRequest.RequestStatus.PENDING_HR
-            instance.manager_decision_by = request.user
-            instance.manager_decision_at = timezone.now()
-            instance.manager_decision_note = serializer.validated_data.get("comment", "")
-            instance.manager_recommendation = LoanRequest.Recommendation.REJECT
-            instance.save(
-                update_fields=[
-                    "status",
-                    "manager_decision_by",
-                    "manager_decision_at",
-                    "manager_decision_note",
-                    "manager_recommendation",
-                    "updated_at",
-                ]
+        try:
+            instance, actor_source = apply_manager_recommendation(
+                self.get_object(),
+                actor=request.user,
+                recommendation=LoanRequest.Recommendation.REJECT,
+                note=serializer.validated_data.get("comment", ""),
             )
-            sync_workflow(instance, actor=request.user)
+        except LoanTransitionError as exc:
+            return exc.to_response()
         audit(
             request,
             "loan_request_recommended_manager_reject",
@@ -1122,50 +982,16 @@ class CFOLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsCFOApproverOrAdmin])
     def approve(self, request, pk=None):
-        instance = self.get_object()
-        self_approval_error = _reject_self_approval(request, instance)
-        if self_approval_error:
-            return self_approval_error
-        if instance.status != LoanRequest.RequestStatus.PENDING_CFO:
-            return error("Validation error", errors=["Request is not pending CFO approval."], status=422)
-
         serializer = LoanRequestActionSerializer(data=request.data)
         if not serializer.is_valid():
             return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
 
-        with transaction.atomic():
-            instance = LoanRequest.objects.select_for_update().get(pk=instance.pk)
-            if instance.status != LoanRequest.RequestStatus.PENDING_CFO:
-                return error("Validation error", errors=["Request is not pending CFO approval."], status=422)
-            approved_year, approved_month = timezone.localtime().year, timezone.localtime().month
-            target_year = None
-            target_month = None
-            if instance.loan_type == LoanRequest.LoanType.OPEN:
-                target_year, target_month = _resolve_open_loan_target_period()
-            instance.status = LoanRequest.RequestStatus.PENDING_DISBURSEMENT
-            instance.approved_amount = instance.requested_amount
-            instance.approved_year = approved_year
-            instance.approved_month = approved_month
-            instance.target_deduction_year = target_year
-            instance.target_deduction_month = target_month
-            instance.cfo_decision_by = request.user
-            instance.cfo_decision_at = timezone.now()
-            instance.cfo_decision_note = serializer.validated_data.get("comment", "")
-            instance.save(
-                update_fields=[
-                    "status",
-                    "approved_amount",
-                    "approved_year",
-                    "approved_month",
-                    "target_deduction_year",
-                    "target_deduction_month",
-                    "cfo_decision_by",
-                    "cfo_decision_at",
-                    "cfo_decision_note",
-                    "updated_at",
-                ]
+        try:
+            instance = apply_cfo_approval(
+                self.get_object(), actor=request.user, note=serializer.validated_data.get("comment", "")
             )
-            sync_workflow(instance, actor=request.user)
+        except LoanTransitionError as exc:
+            return exc.to_response()
         audit(request, "loan_request_approved_cfo", entity="LoanRequest", entity_id=instance.id)
         try:
             notify_users_for_pending_status(
@@ -1188,38 +1014,16 @@ class CFOLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsCFOApproverOrAdmin])
     def reject(self, request, pk=None):
-        instance = self.get_object()
-        self_approval_error = _reject_self_approval(request, instance)
-        if self_approval_error:
-            return self_approval_error
-        if instance.status != LoanRequest.RequestStatus.PENDING_CFO:
-            return error("Validation error", errors=["Request is not pending CFO approval."], status=422)
-
         serializer = LoanRequestActionSerializer(data=request.data)
         if not serializer.is_valid():
             return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
-        comment = serializer.validated_data.get("comment", "").strip()
-        if not comment:
-            return error("Validation error", errors=["comment is required."], status=422)
 
-        with transaction.atomic():
-            instance = LoanRequest.objects.select_for_update().get(pk=instance.pk)
-            if instance.status != LoanRequest.RequestStatus.PENDING_CFO:
-                return error("Validation error", errors=["Request is not pending CFO approval."], status=422)
-            instance.status = LoanRequest.RequestStatus.REJECTED
-            instance.cfo_decision_by = request.user
-            instance.cfo_decision_at = timezone.now()
-            instance.cfo_decision_note = comment
-            instance.save(
-                update_fields=[
-                    "status",
-                    "cfo_decision_by",
-                    "cfo_decision_at",
-                    "cfo_decision_note",
-                    "updated_at",
-                ]
+        try:
+            instance = apply_cfo_rejection(
+                self.get_object(), actor=request.user, comment=serializer.validated_data.get("comment", "")
             )
-            sync_workflow(instance, actor=request.user)
+        except LoanTransitionError as exc:
+            return exc.to_response()
         audit(request, "loan_request_rejected_cfo", entity="LoanRequest", entity_id=instance.id)
         try:
             notify_profile_request_status_whatsapp(
@@ -1227,7 +1031,7 @@ class CFOLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
                 request_type="Loan Request",
                 request_id=instance.id,
                 status_label="Rejected",
-                reason=comment,
+                reason=instance.cfo_decision_note,
                 details=[f"Requested Amount: {instance.requested_amount}", "Rejected by CFO"],
                 action_path="/employee/loans",
             )
@@ -1247,38 +1051,16 @@ class CFOLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
         permission_classes=[IsAuthenticated, IsCFOApproverOrAdmin],
     )
     def refer_to_ceo(self, request, pk=None):
-        instance = self.get_object()
-        self_approval_error = _reject_self_approval(request, instance)
-        if self_approval_error:
-            return self_approval_error
-        if instance.status != LoanRequest.RequestStatus.PENDING_CFO:
-            return error("Validation error", errors=["Request is not pending CFO approval."], status=422)
-
         serializer = LoanRequestActionSerializer(data=request.data)
         if not serializer.is_valid():
             return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
-        comment = serializer.validated_data.get("comment", "").strip()
-        if not comment:
-            return error("Validation error", errors=["comment is required."], status=422)
 
-        with transaction.atomic():
-            instance = LoanRequest.objects.select_for_update().get(pk=instance.pk)
-            if instance.status != LoanRequest.RequestStatus.PENDING_CFO:
-                return error("Validation error", errors=["Request is not pending CFO approval."], status=422)
-            instance.status = LoanRequest.RequestStatus.PENDING_CEO
-            instance.cfo_decision_by = request.user
-            instance.cfo_decision_at = timezone.now()
-            instance.cfo_decision_note = comment
-            instance.save(
-                update_fields=[
-                    "status",
-                    "cfo_decision_by",
-                    "cfo_decision_at",
-                    "cfo_decision_note",
-                    "updated_at",
-                ]
+        try:
+            instance = apply_ceo_referral(
+                self.get_object(), actor=request.user, comment=serializer.validated_data.get("comment", "")
             )
-            sync_workflow(instance, actor=request.user)
+        except LoanTransitionError as exc:
+            return exc.to_response()
         audit(request, "loan_request_referred_to_ceo", entity="LoanRequest", entity_id=instance.id)
         try:
             notify_users_for_pending_status(
@@ -1327,50 +1109,16 @@ class CEOLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsCEOApproverOrAdmin])
     def approve(self, request, pk=None):
-        instance = self.get_object()
-        self_approval_error = _reject_self_approval(request, instance)
-        if self_approval_error:
-            return self_approval_error
-        if instance.status != LoanRequest.RequestStatus.PENDING_CEO:
-            return error("Validation error", errors=["Request is not pending CEO approval."], status=422)
-
         serializer = LoanRequestActionSerializer(data=request.data)
         if not serializer.is_valid():
             return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
 
-        with transaction.atomic():
-            instance = LoanRequest.objects.select_for_update().get(pk=instance.pk)
-            if instance.status != LoanRequest.RequestStatus.PENDING_CEO:
-                return error("Validation error", errors=["Request is not pending CEO approval."], status=422)
-            approved_year, approved_month = timezone.localtime().year, timezone.localtime().month
-            target_year = None
-            target_month = None
-            if instance.loan_type == LoanRequest.LoanType.OPEN:
-                target_year, target_month = _resolve_open_loan_target_period()
-            instance.status = LoanRequest.RequestStatus.PENDING_DISBURSEMENT
-            instance.approved_amount = instance.requested_amount
-            instance.approved_year = approved_year
-            instance.approved_month = approved_month
-            instance.target_deduction_year = target_year
-            instance.target_deduction_month = target_month
-            instance.ceo_decision_by = request.user
-            instance.ceo_decision_at = timezone.now()
-            instance.ceo_decision_note = serializer.validated_data.get("comment", "")
-            instance.save(
-                update_fields=[
-                    "status",
-                    "approved_amount",
-                    "approved_year",
-                    "approved_month",
-                    "target_deduction_year",
-                    "target_deduction_month",
-                    "ceo_decision_by",
-                    "ceo_decision_at",
-                    "ceo_decision_note",
-                    "updated_at",
-                ]
+        try:
+            instance = apply_ceo_approval(
+                self.get_object(), actor=request.user, note=serializer.validated_data.get("comment", "")
             )
-            sync_workflow(instance, actor=request.user)
+        except LoanTransitionError as exc:
+            return exc.to_response()
         audit(request, "loan_request_approved_ceo", entity="LoanRequest", entity_id=instance.id)
         try:
             notify_users_for_pending_status(
@@ -1393,38 +1141,16 @@ class CEOLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsCEOApproverOrAdmin])
     def reject(self, request, pk=None):
-        instance = self.get_object()
-        self_approval_error = _reject_self_approval(request, instance)
-        if self_approval_error:
-            return self_approval_error
-        if instance.status != LoanRequest.RequestStatus.PENDING_CEO:
-            return error("Validation error", errors=["Request is not pending CEO approval."], status=422)
-
         serializer = LoanRequestActionSerializer(data=request.data)
         if not serializer.is_valid():
             return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
-        comment = serializer.validated_data.get("comment", "").strip()
-        if not comment:
-            return error("Validation error", errors=["comment is required."], status=422)
 
-        with transaction.atomic():
-            instance = LoanRequest.objects.select_for_update().get(pk=instance.pk)
-            if instance.status != LoanRequest.RequestStatus.PENDING_CEO:
-                return error("Validation error", errors=["Request is not pending CEO approval."], status=422)
-            instance.status = LoanRequest.RequestStatus.REJECTED
-            instance.ceo_decision_by = request.user
-            instance.ceo_decision_at = timezone.now()
-            instance.ceo_decision_note = comment
-            instance.save(
-                update_fields=[
-                    "status",
-                    "ceo_decision_by",
-                    "ceo_decision_at",
-                    "ceo_decision_note",
-                    "updated_at",
-                ]
+        try:
+            instance = apply_ceo_rejection(
+                self.get_object(), actor=request.user, comment=serializer.validated_data.get("comment", "")
             )
-            sync_workflow(instance, actor=request.user)
+        except LoanTransitionError as exc:
+            return exc.to_response()
         audit(request, "loan_request_rejected_ceo", entity="LoanRequest", entity_id=instance.id)
         try:
             notify_profile_request_status_whatsapp(
@@ -1432,7 +1158,7 @@ class CEOLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
                 request_type="Loan Request",
                 request_id=instance.id,
                 status_label="Rejected",
-                reason=comment,
+                reason=instance.ceo_decision_note,
                 details=[f"Requested Amount: {instance.requested_amount}", "Rejected by CEO"],
                 action_path="/employee/loans",
             )
@@ -1474,33 +1200,16 @@ class DisbursementLoanRequestViewSet(viewsets.ReadOnlyModelViewSet):
         permission_classes=[IsAuthenticated, IsFinanceApproverOrAdmin],
     )
     def mark_disbursed(self, request, pk=None):
-        instance = self.get_object()
-        if instance.status != LoanRequest.RequestStatus.PENDING_DISBURSEMENT:
-            return error("Validation error", errors=["Request is not pending disbursement."], status=422)
-
         serializer = LoanRequestActionSerializer(data=request.data)
         if not serializer.is_valid():
             return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
 
-        with transaction.atomic():
-            instance = LoanRequest.objects.select_for_update().get(pk=instance.pk)
-            if instance.status != LoanRequest.RequestStatus.PENDING_DISBURSEMENT:
-                return error("Validation error", errors=["Request is not pending disbursement."], status=422)
-
-            instance.status = LoanRequest.RequestStatus.APPROVED
-            instance.disbursed_by = request.user
-            instance.disbursed_at = timezone.now()
-            instance.disbursement_note = serializer.validated_data.get("comment", "")
-            instance.save(
-                update_fields=[
-                    "status",
-                    "disbursed_by",
-                    "disbursed_at",
-                    "disbursement_note",
-                    "updated_at",
-                ]
+        try:
+            instance = apply_disbursement(
+                self.get_object(), actor=request.user, note=serializer.validated_data.get("comment", "")
             )
-            sync_workflow(instance, actor=request.user)
+        except LoanTransitionError as exc:
+            return exc.to_response()
         audit(request, "loan_request_disbursed", entity="LoanRequest", entity_id=instance.id)
         try:
             notify_profile_request_status_whatsapp(

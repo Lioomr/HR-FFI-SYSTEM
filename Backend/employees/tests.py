@@ -180,7 +180,7 @@ class EmployeeProfileTests(TestCase):
             "save",
             side_effect=IntegrityError("Changing this employee user would orphan leave relationships."),
         ):
-            response = self.client.patch(f"/api/employees/{profile.pk}/", {"user_id": None})
+            response = self.client.patch(f"/api/employees/{profile.pk}/", {"user_id": None}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(
@@ -188,6 +188,47 @@ class EmployeeProfileTests(TestCase):
             "This account cannot be unlinked because leave records reference it.",
         )
         self.assertIn("Reassign or preserve", response.data["errors"][0])
+
+    def test_unlinking_user_is_not_blocked_by_stale_manager_profile(self):
+        profile = EmployeeProfile.objects.create(
+            user=self.employee_user,
+            company=self.company,
+            employee_id="EMP-STALE-MGR-UNLINK",
+        )
+        stale_manager = EmployeeProfile.objects.create(
+            company=self.company,
+            employee_id="EMP-STALE-MGR",
+            full_name="Stale Manager",
+        )
+        # Simulate legacy data where the manager account was unlinked later.
+        EmployeeProfile.objects.filter(pk=profile.pk).update(manager_profile=stale_manager)
+
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.patch(f"/api/employees/{profile.pk}/", {"user_id": None}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        profile.refresh_from_db()
+        self.assertIsNone(profile.user_id)
+
+    def test_profile_update_reports_model_validation_as_422(self):
+        profile = EmployeeProfile.objects.create(
+            user=self.employee_user,
+            company=self.company,
+            position_ref=self.pos,
+            employee_id="EMP-STALE-MGR-422",
+        )
+        stale_manager = EmployeeProfile.objects.create(
+            company=self.company,
+            employee_id="EMP-422-MANAGER",
+            full_name="Stale Manager",
+        )
+        EmployeeProfile.objects.filter(pk=profile.pk).update(manager_profile=stale_manager)
+
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.patch(f"/api/employees/{profile.pk}/", {"position_id": self.pos_senior.id})
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertIn("linked to a user account", response.data["message"])
 
     def test_employee_me_endpoint(self):
         EmployeeProfile.objects.create(
@@ -1089,6 +1130,8 @@ class EmployeeDeletionWorkflowTests(TestCase):
             email="ceo-delete@test.com", password="password", full_name="CEO Delete"
         )
         self.ceo_user.groups.add(self.ceo_group)
+        # Explicit access rows are authoritative, so the CEO needs one for each company they approve for.
+        UserOrganizationAccess.objects.create(user=self.ceo_user, organization=self.company)
         UserOrganizationAccess.objects.create(user=self.ceo_user, organization=self.other_company)
         self.ceo_profile = EmployeeProfile.objects.create(
             user=self.ceo_user,

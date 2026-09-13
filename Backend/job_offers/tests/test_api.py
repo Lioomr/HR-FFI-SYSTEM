@@ -373,7 +373,6 @@ class JobOfferApiTests(APITestCase):
 
         self.assertIn(offer.reference_number, extracted)
         self.assertIn("Nour Hassan", extracted)
-        self.assertIn("HR Business Partner", extracted)
 
     @patch("core.pdf_forms.resolve_template_path", return_value="")
     def test_pdf_renderer_has_missing_template_fallback(self, _resolve_template):

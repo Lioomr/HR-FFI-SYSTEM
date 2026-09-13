@@ -282,7 +282,10 @@ export default function ManagerEmployeeProfilePage() {
                 fontWeight: 600,
               }}
             >
-              {employee.employment_status || "ACTIVE"}
+              {t(
+                `employees.status.${String(employee.employment_status || "ACTIVE").toLowerCase()}`,
+                employee.employment_status || "ACTIVE",
+              )}
             </Tag>
           </Space>
         }

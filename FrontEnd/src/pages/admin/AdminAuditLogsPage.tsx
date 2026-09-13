@@ -64,10 +64,10 @@ type AuditRow = {
 
 type AuditDateRange = [Dayjs, Dayjs] | null;
 
-function severityTag(s: AuditSeverity) {
-  if (s === "Critical") return <Tag color="red">Critical</Tag>;
-  if (s === "Warning") return <Tag color="gold">Warning</Tag>;
-  return <Tag color="blue">Info</Tag>;
+function severityTag(s: AuditSeverity, t: (key: string) => string) {
+  if (s === "Critical") return <Tag color="red">{t("status.critical")}</Tag>;
+  if (s === "Warning") return <Tag color="gold">{t("status.warning")}</Tag>;
+  return <Tag color="blue">{t("status.info")}</Tag>;
 }
 
 function inferSeverity(action: string): AuditSeverity {
@@ -337,13 +337,17 @@ export default function AdminAuditLogsPage() {
         blob,
         `audit_logs_${new Date().toISOString().slice(0, 10)}.${exportFormat}`,
       );
-      message.success(`Exported ${exportFormat.toUpperCase()}.`);
+      message.success(
+        t("admin.audit.exported", { format: exportFormat.toUpperCase() }),
+      );
     } catch (err: any) {
       if (err?.response?.status === 403) {
         setUnauthorized(true);
         return;
       }
-      message.error(`Failed to export ${exportFormat.toUpperCase()}.`);
+      message.error(
+        t("admin.audit.exportFailed", { format: exportFormat.toUpperCase() }),
+      );
     }
   }
 
@@ -374,15 +378,15 @@ export default function AdminAuditLogsPage() {
         render: (v) => <Tag>{t(`audit.action.${v}`, v)}</Tag>,
         width: 180,
       },
-      { title: "Target", dataIndex: "target", key: "target" },
+      { title: t("admin.audit.colTarget"), dataIndex: "target", key: "target" },
       {
         title: t("admin.dashboard.severity"),
         dataIndex: "severity",
         key: "severity",
-        render: (v: AuditSeverity) => severityTag(v),
+        render: (v: AuditSeverity) => severityTag(v, t),
         width: 120,
       },
-      { title: "IP", dataIndex: "ip", key: "ip", width: 140 },
+      { title: t("admin.audit.colIp"), dataIndex: "ip", key: "ip", width: 140 },
     ];
     return allColumns.filter((column) =>
       visibleColumnKeys.includes(String(column.key)),
@@ -392,9 +396,9 @@ export default function AdminAuditLogsPage() {
     { label: t("admin.dashboard.time"), value: "timestamp" },
     { label: t("admin.dashboard.actor"), value: "actorEmail" },
     { label: t("admin.dashboard.action"), value: "action" },
-    { label: "Target", value: "target" },
+    { label: t("admin.audit.colTarget"), value: "target" },
     { label: t("admin.dashboard.severity"), value: "severity" },
-    { label: "IP", value: "ip" },
+    { label: t("admin.audit.colIp"), value: "ip" },
   ];
   const columnsPopoverContent = (
     <div
@@ -414,7 +418,7 @@ export default function AdminAuditLogsPage() {
       <Typography.Text type="secondary" style={{ fontSize: 12 }}>
         {savingPreference
           ? t("common.saving", "Saving...")
-          : t("common.saved", "Saved automatically")}
+          : t("common.savedAutomatically")}
       </Typography.Text>
     </div>
   );

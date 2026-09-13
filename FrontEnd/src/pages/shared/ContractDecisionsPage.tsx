@@ -80,6 +80,38 @@ const statusColors: Record<ContractDecisionStatus, string> = {
   MANUAL_RESOLUTION_REQUIRED: "volcano",
 };
 
+/** The backend's `status_label` is English-only, so labels follow the UI language. */
+const STATUS_LABEL_KEYS: Record<ContractDecisionStatus, string> = {
+  PENDING_HR: "contractDecisions.pendingHr",
+  PENDING_CEO: "contractDecisions.pendingCeo",
+  APPROVED: "contractDecisions.approved",
+  AUTO_APPROVED: "contractDecisions.autoApproved",
+  AUTO_RENEWED: "contractDecisions.autoRenewedShort",
+  REJECTED: "contractDecisions.rejected",
+  AUTO_RENEWAL_FAILED: "contractDecisions.renewalFailed",
+  MANUAL_RESOLUTION_REQUIRED: "contractDecisions.manualResolution",
+};
+
+const DECISION_TYPE_LABEL_KEYS: Record<ContractDecisionType, string> = {
+  RENEW: "contractDecisions.renew",
+  RENEW_WITH_CHANGES: "contractDecisions.renewChanges",
+  TERMINATE: "contractDecisions.terminate",
+};
+
+/**
+ * `employees.contract_expiry` stores the automatic-renewal reason as fixed
+ * English prose rather than a code. Known system texts are mapped; anything
+ * else is shown verbatim.
+ */
+const SYSTEM_REASON_KEYS: Record<string, string> = {
+  "HR took no action before contract expiry.":
+    "contractDecisions.reason.noAction",
+  "HR took no action before contract expiry, but the live contract changed.":
+    "contractDecisions.reason.noActionContractChanged",
+  "HR took no action before contract expiry, but the original contract was invalid.":
+    "contractDecisions.reason.noActionInvalidContract",
+};
+
 /**
  * `employees.contract_expiry.submit_decision` accepts exactly these two
  * statuses; anything else answers 422, so the HR action stays hidden elsewhere.
@@ -148,6 +180,23 @@ export default function ContractDecisionsPage() {
   const [comment, setComment] = useState("");
   const [messageApi, messageContext] = message.useMessage();
 
+  const statusLabel = (decision: ContractDecision) => {
+    const key = STATUS_LABEL_KEYS[decision.status];
+    return key ? t(key) : decision.status_label || decision.status;
+  };
+  const decisionTypeLabel = (decision: ContractDecision) =>
+    decision.decision_type
+      ? t(
+          DECISION_TYPE_LABEL_KEYS[decision.decision_type],
+          decision.decision_type_label,
+        )
+      : decision.decision_type_label || "—";
+  const reasonText = (reason?: string | null) => {
+    if (!reason) return "";
+    const key = SYSTEM_REASON_KEYS[reason];
+    return key ? t(key) : reason;
+  };
+
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
@@ -214,7 +263,7 @@ export default function ContractDecisionsPage() {
    * "the contract was approved" are different facts.
    */
   const announceResolvedStatus = (decision: ContractDecision) => {
-    const status = decision.status_label || decision.status;
+    const status = statusLabel(decision);
     const text = t("contractDecisions.resultStatus", { status });
     if (
       decision.status === "MANUAL_RESOLUTION_REQUIRED" ||
@@ -333,9 +382,7 @@ export default function ContractDecisionsPage() {
       title: t("contractDecisions.status"),
       dataIndex: "status",
       render: (value: ContractDecisionStatus, item) => (
-        <Tag color={statusColors[value] ?? "default"}>
-          {item.status_label || value}
-        </Tag>
+        <Tag color={statusColors[value] ?? "default"}>{statusLabel(item)}</Tag>
       ),
     },
     {
@@ -476,11 +523,11 @@ export default function ContractDecisionsPage() {
             </Descriptions.Item>
             <Descriptions.Item label={t("contractDecisions.status")}>
               <Tag color={statusColors[item.status] ?? "default"}>
-                {item.status_label || item.status}
+                {statusLabel(item)}
               </Tag>
             </Descriptions.Item>
             <Descriptions.Item label={t("contractDecisions.decision")}>
-              {item.decision_type_label || "—"}
+              {decisionTypeLabel(item)}
             </Descriptions.Item>
             <Descriptions.Item label={t("contractDecisions.ceoDeadline")}>
               {item.ceo_deadline ? formatDateTimeShort(item.ceo_deadline) : "—"}
@@ -504,7 +551,7 @@ export default function ContractDecisionsPage() {
                 label={t("contractDecisions.automaticReason")}
                 span={2}
               >
-                {item.automatic_renewal_reason}
+                {reasonText(item.automatic_renewal_reason)}
               </Descriptions.Item>
             ) : null}
             {item.failure_reason ? (
@@ -543,12 +590,16 @@ export default function ContractDecisionsPage() {
                 {item.notification_status?.length
                   ? item.notification_status.map((notification) => (
                       <Tag key={notification.id} color="cyan">
-                        {notification.milestone || notification.event_key}:{" "}
+                        {t(
+                          `contractDecisions.milestone.${notification.milestone || notification.event_key}`,
+                          notification.milestone || notification.event_key,
+                        )}
+                        :{" "}
                         {notification.deliveries.length
                           ? notification.deliveries
                               .map(
                                 (delivery) =>
-                                  `${delivery.channel} ${delivery.status}`,
+                                  `${t(`contractDecisions.channel.${delivery.channel}`, delivery.channel)} ${t(`contractDecisions.deliveryStatus.${delivery.status}`, delivery.status)}`,
                               )
                               .join(", ")
                           : t("contractDecisions.deliveryInAppOnly")}
@@ -565,7 +616,7 @@ export default function ContractDecisionsPage() {
               type="info"
               showIcon
               message={t("contractDecisions.autoRenewed")}
-              description={item.automatic_renewal_reason || undefined}
+              description={reasonText(item.automatic_renewal_reason) || undefined}
             />
           ) : null}
           {item.status === "AUTO_APPROVED" ? (
@@ -574,7 +625,7 @@ export default function ContractDecisionsPage() {
               type="info"
               showIcon
               message={t("contractDecisions.autoApprovedNotice")}
-              description={item.automatic_renewal_reason || undefined}
+              description={reasonText(item.automatic_renewal_reason) || undefined}
             />
           ) : null}
           {item.status === "AUTO_RENEWAL_FAILED" ? (

@@ -6,6 +6,7 @@ from django.utils import timezone
 from core.services.pending_approval_email import get_hr_approver_users
 from employees.models import EmployeeProfile
 from in_app_notifications.dispatcher import dispatch_notification_channels
+from in_app_notifications.i18n import notification_text, profile_name
 from in_app_notifications.models import Notification
 from organization.models import OrganizationNode
 
@@ -51,13 +52,13 @@ def send_annual_leave_year_end_notifications():
                 dispatch_notification_channels(
                     recipient=hr_user,
                     event_key="annual_leave.year_end_reminder",
-                    title="Annual Leave year-end is approaching",
-                    message=(
-                        f"{profile.full_name or profile.employee_id}'s contract year ends on {cycle_end}. "
-                        "Review unused Annual Leave during the final 5 days."
+                    **notification_text(
+                        "annual_leave.year_end_reminder",
+                        employee_name=profile_name(profile),
+                        date=cycle_end,
                     ),
                     category=Notification.Category.LEAVE,
-                    action_url=f"/employees/{profile.id}",
+                    action_url=f"/hr/employees/{profile.id}",
                     related_object=profile,
                     metadata={
                         "employee_profile_id": profile.id,
@@ -83,13 +84,13 @@ def send_annual_leave_year_end_notifications():
                     dispatch_notification_channels(
                         recipient=hr_user,
                         event_key="annual_leave.year_end_decision_required",
-                        title="Annual Leave settlement decision required",
-                        message=(
-                            f"{profile.full_name or profile.employee_id}'s Annual Leave year ended on {previous_end}. "
-                            "Decide whether to carry forward or pay the unused balance."
+                        **notification_text(
+                            "annual_leave.year_end_decision_required",
+                            employee_name=profile_name(profile),
+                            date=previous_end,
                         ),
                         category=Notification.Category.LEAVE,
-                        action_url=f"/employees/{profile.id}",
+                        action_url=f"/hr/employees/{profile.id}",
                         related_object=profile,
                         metadata={
                             "employee_profile_id": profile.id,

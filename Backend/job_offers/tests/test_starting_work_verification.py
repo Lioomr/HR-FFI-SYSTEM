@@ -127,6 +127,27 @@ class StartingWorkVerificationTests(TestCase):
         self.assertFalse(Notification.objects.filter(recipient=self.foreign_hr).exists())
         self.assertEqual(dispatch.call_count, 1)
         self.assertEqual(dispatch.call_args.kwargs["recipient"], self.hr)
+        self.assertEqual(dispatch.call_args.kwargs["whatsapp_template"], "starting_work_acknowledgment_v1")
+        self.assertEqual(
+            dispatch.call_args.kwargs["whatsapp_document"], {"starting_work_acknowledgment_id": acknowledgment.id}
+        )
+
+    def test_whatsapp_document_loader_reads_the_stored_acknowledgment_pdf(self):
+        import base64
+
+        from in_app_notifications.dispatcher import _load_whatsapp_document
+
+        with patch(
+            "job_offers.starting_work_service.build_starting_work_acknowledgment_pdf", return_value=b"%PDF-1.4\n%%EOF"
+        ):
+            acknowledgment = self._generate()
+
+        attachment = _load_whatsapp_document({"starting_work_acknowledgment_id": acknowledgment.id})
+
+        self.assertIsNotNone(attachment)
+        self.assertTrue(attachment["file_name"].endswith(".pdf"))
+        self.assertEqual(base64.b64decode(attachment["document_base64"]), b"%PDF-1.4\n%%EOF")
+        self.assertIsNone(_load_whatsapp_document({"starting_work_acknowledgment_id": 999999}))
 
     def test_hr_only_document_is_hidden_from_employee_and_company_scoped(self):
         acknowledgment = self._generate()

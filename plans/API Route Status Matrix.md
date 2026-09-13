@@ -7,6 +7,12 @@
 
 ## Employee mobile MVP routes
 
+### Attendance leave resolution (2026-09-10)
+
+Existing attendance list/detail routes retain raw `status` and `summary`. Additive read-only fields `effective_status` (including `EXCUSED`) and `excused_by_leave_id` explain SYSTEM absences with no punches using active, finally approved leave for the same profile/company/date. List routes accept optional `effective_status`; HR/CEO lists add `effective_summary`. No route is renamed and no manual-attendance mutation is restored. Web consumes the effective fields; mobile adoption and leave-only calendar entries are tracked in `plans/Cross-Module Integration Plan.md`.
+
+Documentation mismatch: `.agents/context/biotime_integration.md` mentions a MANUAL source, but current model sources are SYSTEM/HR/EMPLOYEE and manual attendance mutations are retired. This integration preserves raw BioTime evidence and adds a derived explanation.
+
 | Area | Actual route and method | Status | Verified behavior / required action |
 |---|---|---|---|
 | Login | `POST /auth/login` | Current; Gate 1 verified | Throttled and lockout-protected. Preserves `data.token` and adds the identical `data.access` plus rotating `data.refresh`. Access lifetime is fixed at 15 minutes; refresh lifetime is 14 days. Login success/failure audits contain no credentials or tokens. |
@@ -58,6 +64,17 @@ and 5; hiring-request approvals are implemented in phase 6. Loan approvals remai
 | Attendance correction list/action | `GET /api/attendance-correction-requests/?status=pending_manager|pending_hr`; `POST /{id}/approve/`; `POST /{id}/reject/` | Current; mobile Phase 5 | Manager and HR rows use the same server-scoped list endpoint and are filtered to their actionable state. Manager approval advances to HR; HR approval applies the correction. Both rejection paths require `notes`; mobile sends no employee, company, or role selector. |
 | Hiring request list/action | `GET /hiring-requests/?page=1&page_size=25`; `POST /hiring-requests/{id}/approve/`; `POST /hiring-requests/{id}/reject/` | Current; mobile Phase 6 | This Django app is intentionally root-mounted (not `/api`). HRManager/SystemAdmin list every active-company request and may create/submit/cancel; department CEO approvers list `submitted` rows plus records they previously decided. Both decisions accept only `submitted`, require `is_department_ceo_approver_user` plus the workflow actor check, and send optional `{note}` (blank is valid). Approval becomes `approved`; rejection becomes `rejected`. The mobile CEO/SystemAdmin section exposes only the decision surface and sends no company, employee, or role selector. |
 | Loan approval list/action | `GET /api/loans/hr/loan-requests/`, `/cfo/loan-requests/`, `/ceo/loan-requests/`; role-scoped `POST /{id}/approve|reject/`, CFO `POST /{id}/refer-to-ceo/` | Current; mobile Phase 7 | HR defaults to `pending_hr` plus legacy `pending_finance`; CFO defaults to `pending_cfo`; CEO defaults to `pending_ceo`. HR approve/reject both recommend to CFO (comment optional). CFO approve goes to disbursement, reject requires `comment`, and refer-to-CEO requires `comment`; CEO approve goes to disbursement and reject requires `comment`. |
+
+## Exit permission requests (web; added 2026-09-10)
+
+New backend module `permission_requests`; full contract in `plans/Permission Requests Backend Handoff.md`. Approval is Direct Manager → HR → `approved` with **no CEO stage or CEO route**. All routes are active-company scoped; ids are numeric and trailing slashes are optional.
+
+| Area | Actual route and method | Status | Verified behavior / required action |
+|---|---|---|---|
+| Submit / my requests | `POST /api/permission-requests/`; `GET /api/permission-requests/?status=&date_from=&date_to=` | Current; backend verified 2026-09-10 | Any active employee profile whose company is the active company (Employee, Manager, HRManager, CFO, CEO, SystemAdmin-with-profile). Same-day only (`APP_TIME_ZONE`), 1–120 minutes, no cross-midnight, one active request per day. Server-owned fields are refused with 422. The list returns only the caller's own requests as `data.items`. |
+| Detail / cancel / PDF | `GET /{id}/`; `POST /{id}/cancel/`; `GET /{id}/pdf/` | Current; backend verified 2026-09-10 | Visible to the owner, the requester's direct/delegated/deciding manager, and HR approvers; otherwise 404. Only the owner cancels, and only while pending. The PDF is an audited `application/pdf` attachment with `private, no-store` and `nosniff`. |
+| Manager stage | `GET /manager/`; `POST /{id}/manager-approve/`; `POST /{id}/manager-reject/` | Current; backend verified 2026-09-10 | Requires manager access. Decisions accept only the requester's valid direct manager or active `workflow.approve` delegate, never the requester (403). Stale state returns 422. Optional `{comment}`. Approval moves to `pending_hr`, or straight to `approved` for an HRManager/SystemAdmin requester. |
+| HR stage | `GET /hr/`; `POST /{id}/hr-approve/`; `POST /{id}/hr-reject/` | Current; backend verified 2026-09-10 | HRManager/SystemAdmin group or active HR delegate, never the requester (403). The queue excludes the caller's own requests. Optional `{comment}`. Approval sets `approved`; rejection sets `rejected`. CEO users get 403. |
 
 ## Contract reconciliation notes
 

@@ -17,7 +17,7 @@ import dayjs from "dayjs";
 import { useEmployeeAttendanceStore } from "../../stores/attendanceStore";
 import type {
   AttendanceRecord,
-  AttendanceStatus,
+  EffectiveAttendanceStatus,
 } from "../../types/attendance";
 import { useI18n } from "../../i18n/useI18n";
 import { formatDateOnly, formatTimeOnly12 } from "../../utils/dateTime";
@@ -26,8 +26,10 @@ const { Title } = Typography;
 const { RangePicker } = DatePicker;
 
 // Status colors
-const getStatusColor = (status: AttendanceStatus) => {
+const getStatusColor = (status: EffectiveAttendanceStatus) => {
   switch (status) {
+    case "EXCUSED":
+      return "blue";
     case "PRESENT":
       return "green";
     case "ABSENT":
@@ -98,10 +100,15 @@ const EmployeeAttendancePage: React.FC = () => {
       dataIndex: "status",
       key: "status",
       width: 160,
-      render: (status: AttendanceStatus, record: AttendanceRecord) => (
+      render: (status: EffectiveAttendanceStatus, record: AttendanceRecord) => (
         <Space size={4} wrap>
-          <Tag color={getStatusColor(status)} style={{ marginInlineEnd: 0 }}>
-            {status}
+          <Tag
+            color={getStatusColor(record.effective_status || status)}
+            style={{ marginInlineEnd: 0 }}
+          >
+            {record.effective_status === "EXCUSED"
+              ? t("attendancePreview.status.excused")
+              : status}
           </Tag>
           {/* `is_late_flagged` is the stable "was late" signal for a row still
               awaiting approval, where `status` only says PENDING_*. */}

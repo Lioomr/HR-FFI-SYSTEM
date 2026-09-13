@@ -67,6 +67,10 @@ You have access to a rich context library in the `.agents/` directory. To maximi
 - **Start here:** Always read `.agents/context/INDEX.md` first to map your current task to the correct context file.
 - **Lazy Load:** Only use `view_file` to read the specific files from `.agents/context/`, `.agents/rules/`, or `.agents/skills/` that are explicitly required for your task. Do NOT bulk-load the entire folder.
 
+## Engineering References
+
+For work involving API schemas, frontend/backend type alignment, company-scoping safety, production migrations, Celery dispatch, or feature-level regression tests, read `.agents/context/engineering_references.md`. Apply the relevant PostHog and Vinta patterns incrementally in the existing FFI architecture; they do not replace FFI's plans, API rules, workflow engine, or security policy.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.

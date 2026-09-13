@@ -56,6 +56,17 @@ def row(c, top, key, en, ara, height=25):
 def halfrow(c, x, top, key, en, ara):
     width=274; box(c,x,top,width,25,CELL); txt(c,x+8,top+9,en,6.2); artxt(c,x+width-8,top+9,ara,6.2); input(c,key,x+122,top+3,96,19,font_size=7.2,shrink=True)
 
+def approval_panel(c, x, top, width, role_en, role_ar, name_key, date_key, signature_key, source):
+    txt(c,x+8,top,role_en,7,True,color=MUTED); artxt(c,x+width-8,top,role_ar,6.6,bold=True,color=MUTED)
+    signature_top=top+17; signature_height=31
+    mapfield(signature_key,x+8,signature_top,width-16,signature_height,kind="image",padding=4,source=source)
+    box(c,x+4,top+50,width-8,20,CELL)
+    txt(c,x+10,top+56,"Name",6.3,True,color=MUTED); artxt(c,x+width-10,top+56,"الاسم",6.1,bold=True,color=MUTED)
+    input(c,name_key,x+48,top+53,width-142,14,font_size=6.8,shrink=True)
+    box(c,x+4,top+72,width-8,20,CELL)
+    txt(c,x+10,top+78,"Date",6.3,True,color=MUTED); artxt(c,x+width-10,top+78,"التاريخ",6.1,bold=True,color=MUTED)
+    input(c,date_key,x+48,top+75,width-142,14,font_size=6.8,shrink=True)
+
 
 def build(logo: Path):
     if not logo.exists(): raise FileNotFoundError(logo)
@@ -74,11 +85,18 @@ def build(logo: Path):
     left=[("vacation_days","Vacation","مدة الإجازة"),("contract_status","Contract Status","حالة العقد"),("medical_insurance","Medical Insurance","العلاج الطبي")]; right=[("tickets","Tickets","تذاكر السفر"),("contract_type","Contract Type","نوع العقد"),("contract_duration","Contract Duration","مدة العقد")]
     for i in range(3): halfrow(c,15,501+i*21,*left[i]); halfrow(c,306,501+i*21,*right[i])
     section(c,567,"Validity Note","ملاحظة صلاحية العرض"); box(c,15,586,W-30,43,DATA); txt(c,28,597,"This offer is not binding on Fathi Fouad Itani Contracting Co. until the employment contract is signed and recruitment procedures are completed.",6.1,color=MUTED); txt(c,28,611,"This offer is valid for one week from its date.",6.1,color=MUTED); artxt(c,W-28,614,"هذا العرض غير ملزم للشركة حتى توقيع عقد العمل واستكمال إجراءات التعيين.",6.1,color=MUTED)
-    section(c,642,"HR Signature","توقيع الموارد البشرية"); c.setStrokeColor(ORANGE); c.setLineWidth(.9); c.line(15,bot(661),W-15,bot(661))
-    # Open signing area, consistent with the approved request forms.
-    txt(c,25,671,"HR Director / Human Resources",6.8,True,color=MUTED); artxt(c,281,671,"مدير الموارد البشرية",6.8,color=MUTED); mapfield("hr_name",25,684,125,27,font_size=7,shrink=True); mapfield("hr_position",155,684,126,27,font_size=7,shrink=True); FIELDS["hr_signature_image"]={"page":1,"x":76,"y":round(bot(727)+0.5,2),"width":98,"height":13,"kind":"image","padding":1.5,"source":"job_offer.hr.signature"}; c.setStrokeColor(MUTED); c.line(25,bot(713),281,bot(713)); txt(c,25,721,"Signature",6,color=MUTED); c.line(76,bot(727),174,bot(727)); txt(c,184,721,"Date",6,color=MUTED); c.line(210,bot(727),281,bot(727))
-    c.setStrokeColor(BORDER); c.line(296,bot(669),296,bot(738)); txt(c,306,671,"Applicant Decision",6.8,True,color=MUTED); artxt(c,W-25,671,"قرار المتقدم",6.8,color=MUTED); FIELDS["applicant_decision"]={"page":1,"checkboxes":{"agree":[317,bot(688,10)+5],"reject":[421,bot(688,10)+5]}}; box(c,312,683,10,10,colors.white); txt(c,328,684,"I agree",6.4); box(c,416,683,10,10,colors.white); txt(c,432,684,"I do not agree",6.4); mapfield("rejection_reason",306,702,258,16,font_size=6.5,multiline=True,max_lines=2); c.line(306,bot(720),564,bot(720))
-    section(c,743,"Applicant Acceptance","قبول المتقدم"); c.setStrokeColor(ORANGE); c.line(15,bot(762),W-15,bot(762)); txt(c,25,771,"Applicant",6.4,True,color=MUTED); artxt(c,280,771,"المتقدم",6.4,color=MUTED); mapfield("applicant_name_acceptance",25,783,256,16,font_size=7,shrink=True); c.line(25,bot(801),281,bot(801)); txt(c,306,771,"Signature",6.4,True,color=MUTED); artxt(c,W-25,771,"التوقيع",6.4,color=MUTED); FIELDS["applicant_signature"]={"page":1,"x":306,"y":round(bot(783,16),2),"width":126,"height":16,"kind":"image","padding":2,"source":"job_offer.candidate.signature"}; c.line(306,bot(801),432,bot(801)); txt(c,448,771,"Date",6.4,True,color=MUTED); mapfield("applicant_decision_date",448,783,116,16,font_size=7,shrink=True); c.line(448,bot(801),564,bot(801))
+    section(c,638,"Approval Signatures","توقيعات الاعتماد"); c.setStrokeColor(ORANGE); c.setLineWidth(.9); c.line(15,bot(657),W-15,bot(657))
+    approval_panel(c,15,660,274,"HR","الموارد البشرية","hr_name","hr_signature_date","hr_signature_image","job_offer.hr.signature")
+    approval_panel(c,306,660,274,"CEO","الرئيس التنفيذي","ceo_name","ceo_signature_date","ceo_signature_image","job_offer.ceo.signature")
+    c.setStrokeColor(BORDER); c.setLineWidth(.45); c.line(297,bot(658),297,bot(754))
+
+    section(c,756,"Applicant Decision","قرار المتقدم"); c.setStrokeColor(ORANGE); c.line(15,bot(775),W-15,bot(775))
+    box(c,15,780,565,19,CELL); txt(c,23,786,"Applicant Name",6.4,True); artxt(c,W-23,786,"اسم المتقدم",6.2,bold=True); input(c,"applicant_name_acceptance",105,782,385,14,font_size=7.2,shrink=True)
+    agree=(145,bot(805,10)+5); reject=(300,bot(805,10)+5); FIELDS["applicant_decision"]={"page":1,"checkboxes":{"agree":agree,"reject":reject}}
+    box(c,140,805,10,10,colors.white); txt(c,156,805,"I agree",6.4); artxt(c,225,805,"أوافق",6.1)
+    box(c,295,805,10,10,colors.white); txt(c,311,805,"I do not agree",6.4); artxt(c,402,805,"لا أوافق",6.1)
+    box(c,425,802,155,18,CELL); txt(c,433,807,"Date",6.2,True); artxt(c,572,807,"التاريخ",6.0,bold=True); input(c,"applicant_decision_date",470,804,62,14,font_size=6.8,shrink=True)
+    box(c,15,821,565,18,CELL); txt(c,23,826,"Reason",6.2,True); artxt(c,W-23,826,"السبب",6.0,bold=True); input(c,"rejection_reason",75,823,435,14,font_size=6.6,multiline=True,max_lines=2,padding=3)
     c.showPage(); c.save(); MAP.write_text(json.dumps(FIELDS,ensure_ascii=False,indent=2),encoding="utf-8")
 
 

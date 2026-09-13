@@ -331,7 +331,7 @@ export default function AdminInvitesPage() {
         const firstError = res.errors
           ? Object.values(res.errors).flat().join(" ")
           : res.message;
-        setError(firstError || "Failed to send invite.");
+        setError(firstError || t("admin.invites.sendFailed"));
         return;
       }
 
@@ -347,12 +347,19 @@ export default function AdminInvitesPage() {
         delivery.delivery_status !== "sent"
       ) {
         const channelLabel =
-          channel === "whatsapp" ? "WhatsApp message" : "email";
+          channel === "whatsapp"
+            ? t("admin.invites.channelLabelWhatsapp")
+            : t("admin.invites.channelLabelEmail");
         message.warning(
-          `Invite created, but ${channelLabel} was not delivered${delivery.error ? `: ${delivery.error}` : "."}`,
+          delivery.error
+            ? t("admin.invites.createdNotDeliveredWithError", {
+                channel: channelLabel,
+                error: delivery.error,
+              })
+            : t("admin.invites.createdNotDelivered", { channel: channelLabel }),
         );
       } else {
-        message.success("Invite sent successfully.");
+        message.success(t("admin.invites.sentSuccess"));
       }
       form.resetFields([channel === "whatsapp" ? "phone_number" : "email"]);
       loadInvites(1, pagination.pageSize || 8);
@@ -371,7 +378,7 @@ export default function AdminInvitesPage() {
         const firstError = Object.values(data.errors).flat().join(" ");
         setError(firstError);
       } else {
-        setError(e?.message || "Failed to send invite.");
+        setError(e?.message || t("admin.invites.sendFailed"));
       }
     } finally {
       setSending(false);
@@ -381,21 +388,23 @@ export default function AdminInvitesPage() {
   async function resendInviteRow(invite: InviteRow) {
     try {
       message.loading({
-        content: "Resending invite...",
+        content: t("admin.invites.resending"),
         key: `resend-${invite.id}`,
       });
       const res = await resendInvite(invite.id);
 
       if (isApiError(res)) {
         message.error({
-          content: res.message || "Failed to resend.",
+          content: res.message || t("admin.invites.resendFailed"),
           key: `resend-${invite.id}`,
         });
         return;
       }
 
       const channelLabel =
-        invite.channel === "whatsapp" ? "WhatsApp message" : "email";
+        invite.channel === "whatsapp"
+          ? t("admin.invites.channelLabelWhatsapp")
+          : t("admin.invites.channelLabelEmail");
       const delivery = resolveDelivery(res.data);
       if (
         delivery.sent === false &&
@@ -404,12 +413,17 @@ export default function AdminInvitesPage() {
         delivery.deliveryStatus !== "sent"
       ) {
         message.warning({
-          content: `Invite updated, but ${channelLabel} was not delivered${delivery.error ? `: ${delivery.error}` : "."}`,
+          content: delivery.error
+            ? t("admin.invites.updatedNotDeliveredWithError", {
+                channel: channelLabel,
+                error: delivery.error,
+              })
+            : t("admin.invites.updatedNotDelivered", { channel: channelLabel }),
           key: `resend-${invite.id}`,
         });
       } else {
         message.success({
-          content: "Invite resent.",
+          content: t("admin.invites.resent"),
           key: `resend-${invite.id}`,
         });
       }
@@ -420,7 +434,7 @@ export default function AdminInvitesPage() {
         return;
       }
       message.error({
-        content: e?.message || "Failed to resend.",
+        content: e?.message || t("admin.invites.resendFailed"),
         key: `resend-${invite.id}`,
       });
     }
@@ -437,7 +451,7 @@ export default function AdminInvitesPage() {
     );
     try {
       message.loading({
-        content: "Revoking invite...",
+        content: t("admin.invites.revoking"),
         key: `revoke-${invite.id}`,
       });
       const res = await revokeInvite(invite.id);
@@ -449,14 +463,14 @@ export default function AdminInvitesPage() {
           ),
         );
         message.error({
-          content: res.message || "Failed to revoke.",
+          content: res.message || t("admin.invites.revokeFailed"),
           key: `revoke-${invite.id}`,
         });
         return;
       }
 
       message.success({
-        content: "Invite revoked.",
+        content: t("admin.invites.revoked"),
         key: `revoke-${invite.id}`,
       });
     } catch (e: any) {
@@ -470,7 +484,7 @@ export default function AdminInvitesPage() {
         return;
       }
       message.error({
-        content: e?.message || "Failed to revoke.",
+        content: e?.message || t("admin.invites.revokeFailed"),
         key: `revoke-${invite.id}`,
       });
     }

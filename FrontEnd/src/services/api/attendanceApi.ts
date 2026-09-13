@@ -17,6 +17,9 @@ export interface AttendanceListResponse {
   page?: number;
   page_size?: number;
   summary?: Partial<Record<AttendanceRecord["status"], number>>;
+  effective_summary?: Partial<
+    Record<NonNullable<AttendanceRecord["effective_status"]>, number>
+  >;
 }
 
 // Employee Endpoints

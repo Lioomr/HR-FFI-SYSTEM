@@ -101,7 +101,7 @@ export default function CreateEmployeePage() {
           return;
         }
 
-        notifyError(err.message || "Failed to load reference data");
+        notifyError(err.message || t("hr.employees.fetchRefDataFailed"));
         setLoading(false);
       }
     };
@@ -134,7 +134,7 @@ export default function CreateEmployeePage() {
         setManagerAssignmentError(
           getFieldApiError(response, "manager_profile_id") ?? null,
         );
-        notifyError(response.message || "Failed to create employee");
+        notifyError(response.message || t("hr.employees.createFailed"));
         setSubmitting(false);
         return;
       }
@@ -167,7 +167,7 @@ export default function CreateEmployeePage() {
       }
 
       if (!err.response || err.response.status !== 422) {
-        notifyError(err.message || "Failed to create employee");
+        notifyError(err.message || t("hr.employees.createFailed"));
       }
     }
   };
@@ -186,18 +186,18 @@ export default function CreateEmployeePage() {
 
   // Render loading state
   if (loading) {
-    return <LoadingState title="Loading form..." />;
+    return <LoadingState title={t("loading.generic")} />;
   }
 
   return (
     <div>
       <PageHeader
-        title="Create Employee"
+        title={t("hr.employees.create")}
         actions={
           <Space>
-            <Button onClick={handleCancel}>Cancel</Button>
+            <Button onClick={handleCancel}>{t("common.cancel")}</Button>
             <Button type="primary" onClick={handleSubmit} loading={submitting}>
-              Save
+              {t("common.save")}
             </Button>
           </Space>
         }

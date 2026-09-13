@@ -193,8 +193,18 @@ describe("ContractDecisionsPage list", () => {
 
     renderAt("/hr/contract-decisions");
 
-    for (const status of statuses) {
-      expect(await screen.findByText(`Label ${status}`)).toBeInTheDocument();
+    // Labels come from the frontend dictionary so they follow the UI language.
+    for (const label of [
+      "Awaiting HR action",
+      "Pending CEO approval",
+      "Approved",
+      "CEO auto-approved",
+      "Automatically renewed",
+      "Rejected",
+      "Automatic renewal failed",
+      "Manual resolution required",
+    ]) {
+      expect((await screen.findAllByText(label)).length).toBeGreaterThan(0);
     }
   });
 
@@ -320,7 +330,8 @@ describe("ContractDecisionsPage detail", () => {
     expect(screen.getByText("First CEO look")).toBeInTheDocument();
     expect(screen.getByText("Second submission")).toBeInTheDocument();
     expect(screen.getByText("Second CEO look")).toBeInTheDocument();
-    expect(screen.getAllByText("submit")).toHaveLength(2);
+    // Action codes render through the dictionary ("submit" → "Submitted").
+    expect(screen.getAllByText("Submitted")).toHaveLength(2);
   });
 
   it("explains an automatic renewal and its reason", async () => {
@@ -425,7 +436,7 @@ describe("ContractDecisionsPage detail", () => {
     renderAt("/hr/contract-decisions/7");
 
     expect(
-      await screen.findByText("final: email failed, whatsapp delivered"),
+      await screen.findByText("final: email failed, WhatsApp delivered"),
     ).toBeInTheDocument();
     expect(
       screen.getByText("contract.reminder: in-app only"),
@@ -663,7 +674,7 @@ describe("ContractDecisionsPage CEO decision", () => {
 
     renderAt("/ceo/contract-decisions/7");
 
-    await screen.findByText("Pending CEO");
+    await screen.findByText("Pending CEO approval");
     expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Reject" })).toBeNull();
   });

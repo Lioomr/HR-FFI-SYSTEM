@@ -29,6 +29,7 @@ import {
   approveLeaveRequest,
   rejectLeaveRequest,
   sendLeaveRequestToCEO,
+  hrCancelLeaveRequest,
   getLeaveRequestDocumentBlob,
   getLeaveRequestPdfBlob,
   type LeaveRequest,
@@ -68,6 +69,8 @@ export default function LeaveRequestDetailsPage() {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [rejectModalVisible, setRejectModalVisible] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
+  const [cancelModalVisible, setCancelModalVisible] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
 
   const loadData = useCallback(async () => {
     if (!id) return;
@@ -228,12 +231,55 @@ export default function LeaveRequestDetailsPage() {
     }
   };
 
-  if (loading) return <LoadingState title="Loading request details..." />;
+  const handleHrCancel = async () => {
+    const reason = cancelReason.trim();
+    if (!request || !reason) {
+      notification.error({
+        message: t("leave.hrCancelFail"),
+        description: t("leave.hrCancelReasonRequired"),
+      });
+      return;
+    }
+
+    setProcessing(true);
+    try {
+      const res = await hrCancelLeaveRequest(request.id, reason);
+      if (isApiError(res)) {
+        notification.error({
+          message: t("leave.hrCancelFail"),
+          description: res.message,
+        });
+      } else {
+        notification.success({ message: t("leave.hrCancelSuccess") });
+        setCancelModalVisible(false);
+        setCancelReason("");
+        loadData();
+      }
+    } catch {
+      notification.error({
+        message: t("common.error"),
+        description: t("leave.hrCancelFail"),
+      });
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  if (loading) return <LoadingState title={t("leave.loadingDetails")} />;
   if (error)
-    return <ErrorState title="Error" description={error} onRetry={loadData} />;
+    return (
+      <ErrorState
+        title={t("common.error")}
+        description={error}
+        onRetry={loadData}
+      />
+    );
   if (!request)
     return (
-      <ErrorState title="Not Found" description="Leave request not found." />
+      <ErrorState
+        title={t("leave.notFound")}
+        description={t("leave.notFoundDesc")}
+      />
     );
 
   // HR can only action submitted or pending_hr requests.
@@ -242,6 +288,16 @@ export default function LeaveRequestDetailsPage() {
     request.status?.toLowerCase() === "submitted" ||
     request.status?.toLowerCase() === "pending_hr";
   const canSendToCEO = canAction;
+  // Employees cannot cancel their own leave; HR cancels any request in progress or already approved.
+  const canHrCancel = [
+    "submitted",
+    "pending_delegate",
+    "pending_manager",
+    "pending_hr",
+    "pending_ceo",
+    "pending_hr_completion",
+    "approved",
+  ].includes(request.status?.toLowerCase() ?? "");
 
   const statusLabel = (() => {
     const statusKey = `leave.status.${(request.status || "").toLowerCase()}`;
@@ -381,12 +437,27 @@ export default function LeaveRequestDetailsPage() {
             )}
           </Descriptions>
 
-          {canAction && (
+          {(canAction || canHrCancel) && (
             <>
               <Divider />
               <div
-                style={{ display: "flex", gap: 16, justifyContent: "flex-end" }}
+                style={{
+                  display: "flex",
+                  gap: 16,
+                  justifyContent: "flex-end",
+                  flexWrap: "wrap",
+                }}
               >
+                {canHrCancel && (
+                  <Button
+                    danger
+                    type="text"
+                    onClick={() => setCancelModalVisible(true)}
+                    disabled={processing}
+                  >
+                    {t("leave.cancel")}
+                  </Button>
+                )}
                 {canSendToCEO && (
                   <Button
                     icon={<ExportOutlined />}
@@ -396,22 +467,26 @@ export default function LeaveRequestDetailsPage() {
                     {t("leave.sendToCeoBtn")}
                   </Button>
                 )}
-                <Button
-                  danger
-                  icon={<CloseCircleOutlined />}
-                  onClick={() => setRejectModalVisible(true)}
-                  disabled={processing}
-                >
-                  {t("leave.reject")}
-                </Button>
-                <Button
-                  type="primary"
-                  icon={<CheckCircleOutlined />}
-                  onClick={handleApprove}
-                  loading={processing}
-                >
-                  {t("leave.approve")}
-                </Button>
+                {canAction && (
+                  <>
+                    <Button
+                      danger
+                      icon={<CloseCircleOutlined />}
+                      onClick={() => setRejectModalVisible(true)}
+                      disabled={processing}
+                    >
+                      {t("leave.reject")}
+                    </Button>
+                    <Button
+                      type="primary"
+                      icon={<CheckCircleOutlined />}
+                      onClick={handleApprove}
+                      loading={processing}
+                    >
+                      {t("leave.approve")}
+                    </Button>
+                  </>
+                )}
               </div>
             </>
           )}
@@ -439,6 +514,31 @@ export default function LeaveRequestDetailsPage() {
           placeholder={t("leave.rejectPlaceholder")}
           value={rejectionReason}
           onChange={(e) => setRejectionReason(e.target.value)}
+        />
+      </Modal>
+
+      {/* HR Cancel Modal */}
+      <Modal
+        title={t("leave.hrCancelTitle")}
+        open={cancelModalVisible}
+        onOk={handleHrCancel}
+        onCancel={() => setCancelModalVisible(false)}
+        okText={t("leave.cancel")}
+        cancelText={t("common.no")}
+        okType="danger"
+        confirmLoading={processing}
+      >
+        <Alert
+          type="warning"
+          message={t("leave.hrCancelDesc")}
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+        <TextArea
+          rows={4}
+          placeholder={t("leave.hrCancelReasonPlaceholder")}
+          value={cancelReason}
+          onChange={(e) => setCancelReason(e.target.value)}
         />
       </Modal>
     </div>

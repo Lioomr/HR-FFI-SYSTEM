@@ -186,83 +186,102 @@
     "font_size": 7.2,
     "shrink": true
   },
-  "hr_name": {
-    "page": 1,
-    "x": 25,
-    "y": 130.89,
-    "width": 125,
-    "height": 27,
-    "font_size": 7,
-    "shrink": true
-  },
-  "hr_position": {
-    "page": 1,
-    "x": 155,
-    "y": 130.89,
-    "width": 126,
-    "height": 27,
-    "font_size": 7,
-    "shrink": true
-  },
   "hr_signature_image": {
     "page": 1,
-    "x": 76,
-    "y": 115.39,
-    "width": 98,
-    "height": 13,
+    "x": 23,
+    "y": 133.89,
+    "width": 258,
+    "height": 31,
     "kind": "image",
-    "padding": 1.5,
+    "padding": 4,
     "source": "job_offer.hr.signature"
+  },
+  "hr_name": {
+    "page": 1,
+    "x": 63,
+    "y": 114.89,
+    "width": 132,
+    "height": 14,
+    "font_size": 6.8,
+    "shrink": true
+  },
+  "hr_signature_date": {
+    "page": 1,
+    "x": 63,
+    "y": 92.89,
+    "width": 132,
+    "height": 14,
+    "font_size": 6.8,
+    "shrink": true
+  },
+  "ceo_signature_image": {
+    "page": 1,
+    "x": 314,
+    "y": 133.89,
+    "width": 258,
+    "height": 31,
+    "kind": "image",
+    "padding": 4,
+    "source": "job_offer.ceo.signature"
+  },
+  "ceo_name": {
+    "page": 1,
+    "x": 354,
+    "y": 114.89,
+    "width": 132,
+    "height": 14,
+    "font_size": 6.8,
+    "shrink": true
+  },
+  "ceo_signature_date": {
+    "page": 1,
+    "x": 354,
+    "y": 92.89,
+    "width": 132,
+    "height": 14,
+    "font_size": 6.8,
+    "shrink": true
+  },
+  "applicant_name_acceptance": {
+    "page": 1,
+    "x": 105,
+    "y": 45.89,
+    "width": 385,
+    "height": 14,
+    "font_size": 7.2,
+    "shrink": true
   },
   "applicant_decision": {
     "page": 1,
     "checkboxes": {
       "agree": [
-        317,
-        148.8897637795277
+        145,
+        31.889763779527698
       ],
       "reject": [
-        421,
-        148.8897637795277
+        300,
+        31.889763779527698
       ]
     }
   },
-  "rejection_reason": {
-    "page": 1,
-    "x": 306,
-    "y": 123.89,
-    "width": 258,
-    "height": 16,
-    "font_size": 6.5,
-    "multiline": true,
-    "max_lines": 2
-  },
-  "applicant_name_acceptance": {
-    "page": 1,
-    "x": 25,
-    "y": 42.89,
-    "width": 256,
-    "height": 16,
-    "font_size": 7,
-    "shrink": true
-  },
-  "applicant_signature": {
-    "page": 1,
-    "x": 306,
-    "y": 42.89,
-    "width": 126,
-    "height": 16,
-    "kind": "image",
-    "padding": 2,
-    "source": "job_offer.candidate.signature"
-  },
   "applicant_decision_date": {
     "page": 1,
-    "x": 448,
-    "y": 42.89,
-    "width": 116,
-    "height": 16,
-    "font_size": 7,
+    "x": 470,
+    "y": 23.89,
+    "width": 62,
+    "height": 14,
+    "font_size": 6.8,
     "shrink": true
+  },
+  "rejection_reason": {
+    "page": 1,
+    "x": 75,
+    "y": 4.89,
+    "width": 435,
+    "height": 14,
+    "font_size": 6.6,
+    "multiline": true,
+    "max_lines": 2,
+    "padding": 3
   }
 }

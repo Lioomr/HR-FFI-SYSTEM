@@ -5,7 +5,7 @@ import PageHeader from "../../components/ui/PageHeader";
 import { getManagerAttendance } from "../../services/api/managerApi";
 import type {
   AttendanceRecord,
-  AttendanceStatus,
+  EffectiveAttendanceStatus,
 } from "../../types/attendance";
 import { normalizeListData, unwrapEnvelope } from "../../utils/dataUtils";
 import { formatDateOnly, formatTimeOnly12 } from "../../utils/dateTime";
@@ -17,7 +17,7 @@ export default function ManagerAttendancePage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
-  const [status, setStatus] = useState<AttendanceStatus>();
+  const [status, setStatus] = useState<EffectiveAttendanceStatus>();
   const [pagination, setPagination] = useState({ current: 1, pageSize: 25 });
   const load = useCallback(async () => {
     setLoading(true);
@@ -26,7 +26,7 @@ export default function ManagerAttendancePage() {
     try {
       // This endpoint owns mapped direct-report visibility; never use the HR list.
       const response = await getManagerAttendance({
-        status,
+        effective_status: status,
         page: pagination.current,
         page_size: pagination.pageSize,
       });
@@ -67,7 +67,7 @@ export default function ManagerAttendancePage() {
             setStatus(value);
             setPagination((p) => ({ ...p, current: 1 }));
           }}
-          options={["PRESENT", "ABSENT", "LATE"].map((value) => ({
+          options={["PRESENT", "ABSENT", "EXCUSED", "LATE"].map((value) => ({
             value,
             label: t(`attendancePreview.status.${value.toLowerCase()}`),
           }))}
@@ -117,9 +117,12 @@ export default function ManagerAttendancePage() {
             {
               title: t("common.status"),
               dataIndex: "status",
-              render: (value: string) => (
+              render: (rawValue: string, record: AttendanceRecord) => (
                 <Tag>
-                  {t(`attendancePreview.status.${value.toLowerCase()}`, value)}
+                  {t(
+                    `attendancePreview.status.${(record.effective_status || rawValue).toLowerCase()}`,
+                    record.effective_status || rawValue,
+                  )}
                 </Tag>
               ),
             },

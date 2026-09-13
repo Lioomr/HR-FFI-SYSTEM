@@ -388,28 +388,37 @@ class LeaveManagementTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
-    def test_cancel_leave_request(self):
-        self.client.force_authenticate(user=self.emp1)
+    def test_employee_contacts_hr_who_cancels_leave_request(self):
         start = date.today() + timedelta(days=10)
         end = date.today() + timedelta(days=12)
-
-        # Create
         req = LeaveRequest.objects.create(
             employee=self.emp1,
             leave_type=self.sick_leave,
             start_date=start,
             end_date=end,
-            status=LeaveRequest.RequestStatus.PENDING_HR,  # Ensure pending state
+            status=LeaveRequest.RequestStatus.PENDING_HR,
         )
 
-        # Cancel
+        # Employees cannot cancel their own request at any stage.
+        self.client.force_authenticate(user=self.emp1)
         response = self.client.post(f"/api/leaves/leave-requests/{req.id}/cancel/")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        req.refresh_from_db()
+        self.assertEqual(req.status, LeaveRequest.RequestStatus.PENDING_HR)
+
+        self.client.force_authenticate(user=self.hr)
+        response = self.client.post(
+            f"/api/leaves/leave-requests/{req.id}/hr-cancel/", {"comment": "Employee asked HR to cancel."}
+        )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         req.refresh_from_db()
         self.assertEqual(req.status, "cancelled")
         workflow = get_workflow_snapshot(req, actor=self.emp1)
         self.assertEqual(workflow["status"], "cancelled")
-        self.assertTrue(any(item["action"] == "cancel" for item in workflow["history"]))
+        self.assertFalse(workflow["can_cancel"])
+        cancel_entry = next(item for item in workflow["history"] if item["action"] == "cancel")
+        self.assertEqual(cancel_entry["actor"]["id"], self.hr.id)
+        self.assertEqual(cancel_entry["note"], "Employee asked HR to cancel.")
 
     def test_view_others_request_forbidden(self):
         # Emp1 creates request

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Button,
   Input,
@@ -65,9 +65,11 @@ export default function ManagerTeamRequestsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { access } = useManagerAccess();
 
-  const requestedTab = searchParams.get("tab") as TabKey | null;
+  const requestedTab = searchParams.get("tab");
   const activeTab: TabKey =
-    requestedTab && TAB_KEYS.includes(requestedTab) ? requestedTab : "leave";
+    requestedTab && TAB_KEYS.includes(requestedTab as TabKey)
+      ? (requestedTab as TabKey)
+      : "leave";
 
   const [counts, setCounts] = useState<Partial<Record<TabKey, number>>>({});
   // Bumped by the header refresh so every mounted tab reloads.
@@ -102,6 +104,13 @@ export default function ManagerTeamRequestsPage() {
       </span>
     );
   };
+
+  if (
+    requestedTab === "attendance" ||
+    requestedTab === "attendance-corrections"
+  ) {
+    return <Navigate to="/manager/attendance" replace />;
+  }
 
   return (
     <div style={{ maxWidth: 1600, margin: "0 auto", paddingBottom: 24 }}>

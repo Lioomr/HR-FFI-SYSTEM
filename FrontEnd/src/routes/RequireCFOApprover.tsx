@@ -5,10 +5,12 @@ import { useAuthStore } from "../auth/authStore";
 import { getEmployee } from "../services/api/employeesApi";
 import { isApiError } from "../services/api/apiTypes";
 import LoadingState from "../components/ui/LoadingState";
+import { useI18n } from "../i18n/useI18n";
 import { isCFOApproverEmployee } from "../utils/cfoApprover";
 
 export default function RequireCFOApprover() {
   const location = useLocation();
+  const { t } = useI18n();
   const user = useAuthStore((s) => s.user);
   const [loading, setLoading] = useState(true);
   const [allowed, setAllowed] = useState(false);
@@ -55,7 +57,7 @@ export default function RequireCFOApprover() {
   if (loading) {
     return (
       <div style={{ display: "grid", placeItems: "center", minHeight: "50vh" }}>
-        <LoadingState title="Checking Access..." lines={1} />
+        <LoadingState title={t("loading.checkingAccess")} lines={1} />
       </div>
     );
   }

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import base64
 import json
 import logging
+import os
 from collections.abc import Callable
 
 from django.conf import settings
@@ -13,7 +15,9 @@ from core.services.email_html import email_action_url
 from core.services.email_service import EmailService
 from core.services.messaging_providers import EvolutionWhatsAppProvider, is_e164, normalize_phone_number
 from core.services.whatsapp_service import WhatsAppService
+from core.services.whatsapp_template_library import render_generic_notification
 
+from .i18n import render as render_i18n
 from .models import Notification, NotificationDelivery
 from .services import _broadcast_created, create_notification
 
@@ -87,12 +91,58 @@ def _queue_whatsapp(notification_id: int, payload: dict) -> None:
         logger.exception("notification_whatsapp_queue_failed", extra={"notification_id": notification_id})
 
 
-def _generic_whatsapp_text(title: str, message: str, action_url: str) -> str:
-    action = f"\n{action_url}" if action_url else ""
-    return f"إشعار الموارد البشرية\n{title}\n{message}{action}\n\nHR Notification\n{title}\n{message}{action}"
+def _generic_whatsapp_text(title: str, message: str, action_url: str, title_ar: str = "", message_ar: str = "") -> str:
+    return render_generic_notification(
+        title=title, message=message, action_url=action_url, title_ar=title_ar, message_ar=message_ar
+    )
 
 
-def _send_whatsapp(*, recipient, title, message, action_url, template, variables, timeout, document=None):
+def _file_attachment(field_file, file_name: str) -> dict | None:
+    if not field_file:
+        return None
+    try:
+        field_file.open("rb")
+        try:
+            content = field_file.read()
+        finally:
+            field_file.close()
+    except (FileNotFoundError, OSError, ValueError):
+        return None
+    name = os.path.basename(file_name or getattr(field_file, "name", "") or "") or "document.pdf"
+    if not name.lower().endswith(".pdf"):
+        name = f"{name}.pdf"
+    return {"file_name": name, "document_base64": base64.b64encode(content).decode("ascii")}
+
+
+def _load_whatsapp_document(document: dict) -> dict | None:
+    """Read a queued document reference from private storage for direct provider upload."""
+    try:
+        if document.get("announcement_id"):
+            from announcements.models import Announcement
+            from announcements.whatsapp import load_announcement_attachment
+
+            announcement = Announcement.objects.filter(pk=document["announcement_id"]).first()
+            return load_announcement_attachment(announcement) if announcement else None
+        if document.get("starting_work_acknowledgment_id"):
+            from job_offers.models import StartingWorkAcknowledgment
+
+            acknowledgment = (
+                StartingWorkAcknowledgment.objects.select_related("document")
+                .filter(pk=document["starting_work_acknowledgment_id"])
+                .first()
+            )
+            stored = getattr(acknowledgment, "document", None)
+            if stored is None:
+                return None
+            return _file_attachment(stored.file, stored.original_filename or f"starting-work-{acknowledgment.id}.pdf")
+    except (TypeError, ValueError):
+        return None
+    return None
+
+
+def _send_whatsapp(
+    *, recipient, title, message, action_url, template, variables, timeout, document=None, title_ar="", message_ar=""
+):
     try:
         profile = recipient.employee_profile
     except (AttributeError, ObjectDoesNotExist):
@@ -105,46 +155,39 @@ def _send_whatsapp(*, recipient, title, message, action_url, template, variables
             "provider": "evolution_whatsapp",
             "error": "No valid E.164 WhatsApp number.",
         }
-    if document and document.get("announcement_id"):
-        from announcements.models import Announcement
-        from announcements.whatsapp import build_announcement_message, load_announcement_attachment
-
-        try:
-            announcement = Announcement.objects.get(pk=document["announcement_id"])
-        except (Announcement.DoesNotExist, TypeError, ValueError):
-            return {
-                "success": False,
-                "provider": "evolution_whatsapp",
-                "error": "Announcement attachment is unavailable.",
-            }
-        attachment = load_announcement_attachment(announcement)
+    service = WhatsAppService(timeout_seconds=timeout)
+    if document:
+        attachment = _load_whatsapp_document(document)
         if not attachment:
             return {
                 "success": False,
                 "provider": "evolution_whatsapp",
-                "error": "Announcement attachment is unavailable.",
+                "error": "WhatsApp document attachment is unavailable.",
             }
-        caption = build_announcement_message(
-            employee_name=str((variables or {}).get("employee_name") or "there"),
-            title=str((variables or {}).get("announcement_title") or title),
-            content=str((variables or {}).get("announcement_message") or message),
-            has_attachment=True,
-        )
-        return WhatsAppService(timeout_seconds=timeout).send_document_message(
+        if template:
+            return service.send_template_document_message(
+                phone_number=phone,
+                template_name=template,
+                template_variables=variables or {},
+                document_base64=attachment["document_base64"],
+                file_name=attachment["file_name"],
+            )
+        return service.send_document_with_text(
             phone_number=phone,
+            text=_generic_whatsapp_text(title, message, action_url, title_ar, message_ar),
             document_base64=attachment["document_base64"],
             file_name=attachment["file_name"],
-            caption=caption,
+            event="in_app_notification",
         )
     if template:
-        return WhatsAppService(timeout_seconds=timeout).send_template_message(
+        return service.send_template_message(
             phone_number=phone,
             template_name=template,
             template_variables=variables or {},
         )
     return EvolutionWhatsAppProvider(timeout_seconds=timeout).send_text(
         phone_number=phone,
-        text=_generic_whatsapp_text(title, message, action_url),
+        text=_generic_whatsapp_text(title, message, action_url, title_ar, message_ar),
         event="in_app_notification",
     )
 
@@ -213,6 +256,7 @@ def dispatch_notification_channels(
     related_object_type: str = "",
     related_object_id=None,
     metadata: dict | None = None,
+    i18n: dict | None = None,
     whatsapp_template: str | None = None,
     whatsapp_variables: dict | None = None,
     whatsapp_document: dict | None = None,
@@ -231,6 +275,10 @@ def dispatch_notification_channels(
     ``known_new`` lets a caller that has already batch-checked recipients against
     a shared ``deduplication_key`` (e.g. a company-wide announcement) skip the
     per-recipient dedup SELECT that create_notification would otherwise run.
+
+    ``i18n`` is the block returned by :func:`in_app_notifications.i18n.notification_text`.
+    It lets the API render the text in each reader's language and fills the Arabic
+    half of the generic bilingual email.
     """
     try:
         notification, created = create_notification(
@@ -249,9 +297,17 @@ def dispatch_notification_channels(
             company_id=company_id,
             broadcast=False,
             known_new=known_new,
+            i18n=i18n,
         )
         if notification is None:
             return {"notification": None, "created": False, "whatsapp": None, "email": None}
+
+        if i18n and not email_template:
+            email_context = {
+                "title_ar": render_i18n(i18n, "title", "ar") or title,
+                "message_ar": render_i18n(i18n, "message", "ar") or message,
+                **(email_context or {}),
+            }
 
         preferred_whatsapp, preferred_email = _channel_preferences(recipient)
         whatsapp_enabled = preferred_whatsapp if whatsapp_enabled is None else preferred_whatsapp and whatsapp_enabled
