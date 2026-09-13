@@ -9,7 +9,6 @@ from django.db import IntegrityError, transaction
 from django.db.models import Avg, Q, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
-from django.utils import timezone
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -588,19 +587,9 @@ def _generate_payroll_items(run, request=None):
 
         # 4. Persist deducted loan state
         if loan_to_deduct:
-            loan_to_deduct.deduction_payroll_run = run
-            loan_to_deduct.deducted_at = timezone.now()
-            loan_to_deduct.deducted_amount = loan_to_deduct.approved_amount or loan_to_deduct.requested_amount
-            loan_to_deduct.status = loan_to_deduct.RequestStatus.DEDUCTED
-            loan_to_deduct.save(
-                update_fields=[
-                    "deduction_payroll_run",
-                    "deducted_at",
-                    "deducted_amount",
-                    "status",
-                    "updated_at",
-                ]
-            )
+            from loans.services import apply_payroll_deduction
+
+            apply_payroll_deduction(loan_to_deduct, run=run)
             if request:
                 audit(
                     request,
@@ -838,14 +827,16 @@ class PayrollRunViewSet(
                 run.status = PayrollRun.Status.PAID
                 run.save(update_fields=["status", "updated_at"])
 
+        from in_app_notifications.i18n import notification_text
+
+        payslip_text = notification_text("payroll.payslip_available", period=f"{run.year}-{run.month:02d}")
         for payslip in Payslip.objects.select_related("employee").filter(payroll_run=run, is_active=True):
             try:
                 dispatch_notification_channels(
                     recipient=payslip.employee,
                     company=run.company,
                     event_key="payroll.payslip_available",
-                    title="Payslip available",
-                    message=f"Your payslip for {run.year}-{run.month:02d} is available.",
+                    **payslip_text,
                     category=Notification.Category.PAYROLL,
                     action_url=f"/employee/payslips/{payslip.id}",
                     related_object=payslip,

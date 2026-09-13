@@ -590,8 +590,7 @@ const BioTimeSettingsPage: React.FC = () => {
         title={t("bioTime.titles.manualSync")}
       >
         <Text type="secondary" style={{ display: "block", marginBottom: 12 }}>
-          The BioTime office agent performs synchronization from inside the
-          office network. AWS cannot directly test or sync the private device.
+          {t("bioTime.manualSyncHint")}
         </Text>
 
         <Space wrap align="end" style={{ marginBottom: 12 }}>

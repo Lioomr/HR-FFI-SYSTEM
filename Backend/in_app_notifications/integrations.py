@@ -6,6 +6,8 @@ from django.contrib.auth import get_user_model
 from django.db.models import Q
 
 from .dispatcher import dispatch_notification_channels
+from .i18n import notification_text, request_type_label
+from .i18n import status_label as status_label_text
 from .models import Notification
 from .services import create_notification, create_notifications
 
@@ -38,6 +40,10 @@ def _company_for_request(request_type: str, request_id):
             from loans.models import LoanRequest
 
             return LoanRequest.objects.filter(pk=request_id).values_list("company", flat=True).first()
+        if request_type == "Permission Request":
+            from permission_requests.models import PermissionRequest
+
+            return PermissionRequest.objects.filter(pk=request_id).values_list("company", flat=True).first()
         if request_type == "Asset Damage Report":
             from assets.models import AssetDamageReport
 
@@ -123,6 +129,17 @@ def notify_pending_approvers(
     users = _company_scoped_recipients(users, company_id)
     from core.services.pending_approval_email import _build_action_url, send_pending_approval_email
 
+    # Workflows often pass the raw status code; people only ever see the labels.
+    status = status_label_text(status_label)
+    request_type_text = request_type_label(request_type)
+    text = notification_text(
+        "approval.pending",
+        request_type=request_type_text,
+        requester_name=requester_name,
+        request_id=request_id,
+        status=status,
+    )
+
     results = []
     for user in users:
         results.append(
@@ -130,21 +147,25 @@ def notify_pending_approvers(
                 recipient=user,
                 company_id=company_id,
                 event_key="approval.pending",
-                title=f"{request_type} requires your review",
-                message=f"{requester_name}'s request #{request_id} is {status_label}.",
+                title=text["title"],
+                message=text["message"],
+                i18n=text["i18n"],
                 category=Notification.Category.APPROVAL,
                 action_url=action_path or "",
                 related_object_type=request_type.lower().replace(" ", "_"),
                 related_object_id=request_id,
                 metadata={"request_type": request_type, "status": status_label, "details": list(details or [])},
+                # Keyed on the value the workflow passed so existing rows still dedupe.
                 deduplication_key=f"approval.pending:{request_type}:{request_id}:{status_label}",
                 whatsapp_template="pending_approval",
                 whatsapp_variables={
                     "approver_name": getattr(user, "full_name", "") or getattr(user, "email", "") or "there",
                     "request_type": request_type,
+                    "request_type_ar": request_type_text["ar"],
                     "request_id": request_id,
                     "requester_name": requester_name,
-                    "status_label": status_label,
+                    "status_label": status["en"],
+                    "status_label_ar": status["ar"],
                     "details": [str(item) for item in (details or [])],
                     "action_url": _build_action_url(action_path) or "",
                 },
@@ -152,9 +173,11 @@ def notify_pending_approvers(
                 email_context={
                     "approver_name": getattr(user, "full_name", "") or getattr(user, "email", ""),
                     "request_type": request_type,
+                    "request_type_ar": request_type_text["ar"],
                     "request_id": request_id,
                     "requester_name": requester_name,
-                    "status_label": status_label,
+                    "status_label": status["en"],
+                    "status_label_ar": status["ar"],
                     "details": details,
                     "action_path": action_path,
                 },
@@ -167,12 +190,23 @@ def notify_request_status(
     *, profile, request_type, request_id, status_label, details=None, action_path=None, reason=None
 ):
     recipient = getattr(profile, "user", None)
+    status = status_label_text(status_label)
+    request_type_text = request_type_label(request_type)
+    if reason:
+        text = notification_text(
+            "request.status_changed_reason", request_type=request_type_text, status=status, reason=reason
+        )
+    else:
+        text = notification_text(
+            "request.status_changed", request_type=request_type_text, status=status, request_id=request_id
+        )
     return dispatch_notification_channels(
         recipient=recipient,
         company=getattr(profile, "company", None),
         event_key="request.status_changed",
-        title=f"{request_type} {status_label}",
-        message=reason or f"Request #{request_id} is now {status_label}.",
+        title=text["title"],
+        message=text["message"],
+        i18n=text["i18n"],
         category=_category_for_request_type(request_type),
         action_url=action_path or "",
         related_object_type=request_type.lower().replace(" ", "_"),
@@ -188,8 +222,10 @@ def notify_request_status(
         whatsapp_variables={
             "employee_name": getattr(profile, "full_name", "") or "there",
             "request_type": request_type,
+            "request_type_ar": request_type_text["ar"],
             "request_id": request_id,
-            "status_label": status_label,
+            "status_label": status["en"],
+            "status_label_ar": status["ar"],
             "reason": reason or "",
             "details": [str(item) for item in (details or [])],
             "action_url": action_path or "",
@@ -211,11 +247,18 @@ def notify_request_submitted_by_email(
     if not to_email:
         return None, False
     user = get_user_model().objects.filter(email__iexact=to_email, is_active=True).first()
+    text = notification_text(
+        "request.submitted",
+        request_type=request_type_label(request_type),
+        request_id=request_id,
+        status=status_label_text(status_label),
+    )
     return dispatch_notification_channels(
         recipient=user,
         event_key="request.submitted",
-        title=f"{request_type} submitted",
-        message=f"Request #{request_id} was submitted and is {status_label}.",
+        title=text["title"],
+        message=text["message"],
+        i18n=text["i18n"],
         category=_category_for_request_type(request_type),
         action_url=action_path or "",
         related_object_type=request_type.lower().replace(" ", "_"),

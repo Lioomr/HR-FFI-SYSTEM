@@ -90,11 +90,15 @@ def test_loan_field_map_contains_every_renderer_field():
     assert field_map["employee_name"]["y"] > field_map["employee_number"]["y"]
     assert field_map["basic_salary"]["y"] != field_map["requested_amount"]["y"]
     assert field_map["installment_months"]["y"] != field_map["deduction_start_date"]["y"]
-    # The five approval columns share one row and are ordered left to right.
-    columns = ["manager", "hr", "cfo", "ceo", "disbursement"]
-    xs = [field_map["disbursement_name" if c == "disbursement" else f"{c}_approval_name"]["x"] for c in columns]
-    assert xs == sorted(xs)
-    assert len({field_map[f"{c}_approval_name"]["y"] for c in columns[:4]}) == 1
+    # The approved compact layout uses three roles above and two wider roles below.
+    first_row = ["manager", "hr", "cfo"]
+    second_row = ["ceo", "disbursement"]
+    for row in (first_row, second_row):
+        xs = [field_map["disbursement_name" if c == "disbursement" else f"{c}_approval_name"]["x"] for c in row]
+        assert xs == sorted(xs)
+    assert len({field_map[f"{c}_approval_name"]["y"] for c in first_row}) == 1
+    assert field_map["ceo_approval_name"]["y"] == field_map["disbursement_name"]["y"]
+    assert field_map["manager_approval_name"]["y"] > field_map["ceo_approval_name"]["y"]
 
 
 def test_loan_values_keep_approval_rows_and_optional_values_separate():
@@ -170,7 +174,7 @@ def test_template_and_map_are_resolved_as_one_pair():
     assert assets is not None
     assert Path(assets.template_path).name == TEMPLATE_FILENAME
     assert (Path(assets.template_path).parent / "loan_request_blank_field_map.json").exists()
-    assert assets.meta["version"] == 3
+    assert assets.meta["version"] == 4
 
 
 def _decided(name):
@@ -308,35 +312,34 @@ def text_boxes(pdf_bytes, needle):
         document.close()
 
 
-def test_each_approval_date_box_matches_its_printed_rule():
+def test_each_approval_date_has_a_visible_box_clear_of_its_signature_space():
     assets = load_loan_form_assets()
     assert assets is not None
-    rules = printed_date_rules(assets.template_path)
+    assert printed_date_rules(assets.template_path) == []
 
-    assert len(rules) == len(APPROVAL_DATE_FIELDS), "one printed date rule per approval column"
-
-    for field, (rule_y, rule_x0, rule_x1) in zip(APPROVAL_DATE_FIELDS, rules):
+    for field in APPROVAL_DATE_FIELDS:
         spec = assets.fields[field]
-        assert spec["x"] == pytest.approx(rule_x0, abs=0.5), f"{field} must start where its rule starts"
-        assert spec["x"] + spec["width"] == pytest.approx(rule_x1, abs=0.5), f"{field} must end where its rule ends"
-        assert spec["y"] >= rule_y, f"{field} box must sit above the printed rule, not across it"
+        signature_field = field.replace("_approval_date", "_signature_image").replace(
+            "disbursement_date", "disbursement_signature_image"
+        )
+        signature = assets.fields[signature_field]
+        assert spec["height"] >= 14
+        assert spec["y"] + spec["height"] <= signature["y"]
 
 
-def test_each_approval_date_baseline_clears_the_printed_rule():
-    """The renderer's centred baseline must land above the line, not on it."""
+def test_each_approval_date_baseline_stays_inside_its_box():
+    """The renderer's centred baseline remains inside each boxed date field."""
 
     assets = load_loan_form_assets()
-    rules = printed_date_rules(assets.template_path)
 
-    for field, (rule_y, _, _) in zip(APPROVAL_DATE_FIELDS, rules):
+    for field in APPROVAL_DATE_FIELDS:
         spec = assets.fields[field]
         baseline = spec["y"] + (spec["height"] - spec["font_size"]) / 2 + 1
-        assert baseline > rule_y, f"{field} baseline {baseline} would draw on the rule at {rule_y}"
+        assert spec["y"] < baseline < spec["y"] + spec["height"]
 
 
-def test_rendered_dates_stay_inside_their_boxes_and_off_the_rules():
+def test_rendered_dates_stay_inside_their_boxes():
     assets = load_loan_form_assets()
-    rules = dict(zip(APPROVAL_DATE_FIELDS, printed_date_rules(assets.template_path)))
     dates = {
         "manager_approval_date": "2026-09-01",
         "hr_approval_date": "2026-09-08",
@@ -349,7 +352,6 @@ def test_rendered_dates_stay_inside_their_boxes_and_off_the_rules():
 
     for field, value in dates.items():
         spec = assets.fields[field]
-        rule_y, _, _ = rules[field]
         boxes = [
             box
             for box in text_boxes(pdf_bytes, value)
@@ -357,22 +359,20 @@ def test_rendered_dates_stay_inside_their_boxes_and_off_the_rules():
         ]
         assert len(boxes) == 1, f"{field} should render {value} once inside its own column"
         x0, y0, x1, y1 = boxes[0]
-        assert y0 >= rule_y, f"{field} text must not touch or cross the rule at {rule_y}"
+        assert y0 >= spec["y"] - 1.5, f"{field} text must stay within its mapped box"
         assert y1 <= spec["y"] + spec["height"] + 1.5, f"{field} text must stay within its mapped box"
-        # Centred over the printed rule.
+        # Centred in the approved visible date box.
         assert (x0 + x1) / 2 == pytest.approx(spec["x"] + spec["width"] / 2, abs=1.0)
 
 
-def test_hr_approval_date_does_not_collide_with_its_column_neighbours():
-    """The reported case: the HR date must clear the rule, label, and signature."""
+def test_hr_approval_date_does_not_collide_with_its_signature_space():
+    """The HR date box remains below the blank signature region."""
 
     assets = load_loan_form_assets()
     spec = assets.fields["hr_approval_date"]
     signature = assets.fields["hr_signature_image"]
 
-    # Above the printed rule...
-    assert spec["y"] >= 54.0
-    # ...below the signature block, so it neither overlaps nor blocks it.
+    assert spec["height"] >= 14
     assert spec["y"] + spec["height"] <= signature["y"]
 
 

@@ -15,6 +15,8 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
     employee_email = serializers.EmailField(source="employee_profile.user.email", read_only=True)
     late_minutes = serializers.SerializerMethodField()
     workflow = serializers.SerializerMethodField()
+    effective_status = serializers.SerializerMethodField()
+    excused_by_leave_id = serializers.SerializerMethodField()
 
     class Meta:
         model = AttendanceRecord
@@ -29,6 +31,8 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
             "check_in_at",
             "check_out_at",
             "status",
+            "effective_status",
+            "excused_by_leave_id",
             "source",
             "biotime_emp_code",
             "biotime_terminal_sn",
@@ -70,6 +74,28 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
             "updated_at",
             "is_overridden",
         ]
+
+    def _leave_resolution(self, obj):
+        if hasattr(obj, "effective_status"):
+            return obj
+        from .leave_resolution import with_leave_resolution
+
+        cache = getattr(self, "_resolution_cache", None)
+        if cache is None:
+            cache = self._resolution_cache = {}
+        if obj.pk not in cache:
+            cache[obj.pk] = with_leave_resolution(AttendanceRecord.objects.filter(pk=obj.pk)).first()
+        return cache[obj.pk]
+
+    def get_effective_status(self, obj):
+        resolved = self._leave_resolution(obj)
+        return resolved.effective_status if resolved else obj.status
+
+    def get_excused_by_leave_id(self, obj):
+        resolved = self._leave_resolution(obj)
+        if resolved and resolved.effective_status == "EXCUSED":
+            return resolved.covering_leave_id
+        return None
 
     def _work_schedule(self):
         # Cache on the serializer instance so a list response resolves the

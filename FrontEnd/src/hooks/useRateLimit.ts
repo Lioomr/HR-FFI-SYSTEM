@@ -1,5 +1,6 @@
 import { useRef, useCallback } from "react";
 import { message } from "antd";
+import { useI18n } from "../i18n/useI18n";
 
 /**
  * Custom hook to prevent rapid successive function calls (UI rate limiting).
@@ -16,6 +17,7 @@ export function useRateLimit<T extends (...args: any[]) => any>(
   showWarning: boolean = true,
 ): (...args: Parameters<T>) => void {
   const lastCalledRef = useRef<number>(0);
+  const { t } = useI18n();
 
   return useCallback(
     (...args: Parameters<T>) => {
@@ -24,7 +26,7 @@ export function useRateLimit<T extends (...args: any[]) => any>(
 
       if (timeSinceLastCall < delayMs) {
         if (showWarning) {
-          message.warning(`Please wait before trying again.`);
+          message.warning(t("common.rateLimited"));
         }
         return;
       }
@@ -32,6 +34,6 @@ export function useRateLimit<T extends (...args: any[]) => any>(
       lastCalledRef.current = now;
       return callback(...args);
     },
-    [callback, delayMs, showWarning],
+    [callback, delayMs, showWarning, t],
   );
 }

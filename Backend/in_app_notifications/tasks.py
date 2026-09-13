@@ -126,12 +126,15 @@ def deliver_whatsapp_notification(
                 fallback = True
             else:
                 from .dispatcher import _send_whatsapp
+                from .i18n import localized_notification_field
 
                 try:
                     result = _send_whatsapp(
                         recipient=notification.recipient,
                         title=notification.title,
                         message=notification.message,
+                        title_ar=localized_notification_field(notification, "title", "ar"),
+                        message_ar=localized_notification_field(notification, "message", "ar"),
                         action_url=notification.action_url,
                         template=whatsapp_template,
                         variables=whatsapp_variables or {},

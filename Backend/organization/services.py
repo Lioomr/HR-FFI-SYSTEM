@@ -7,7 +7,7 @@ from rest_framework.exceptions import PermissionDenied
 
 from core.permissions import get_role
 
-from .models import OrganizationNode, OrganizationScope
+from .models import OrganizationNode, OrganizationScope, UserOrganizationAccess
 
 User = get_user_model()
 
@@ -65,8 +65,10 @@ def get_user_accessible_organizations(user) -> list[OrganizationNode]:
     if role == "SystemAdmin":
         return list(qs.order_by("node_type", "name", "id"))
 
-    if role == "HRManager":
-        assigned_ids = list(user.organization_access_entries.values_list("organization_id", flat=True))
+    # Explicit access assignments are authoritative for every non-admin role.
+    # Keep the profile-company fallback for legacy accounts without assignment rows.
+    assigned_ids = list(UserOrganizationAccess.objects.filter(user=user).values_list("organization_id", flat=True))
+    if assigned_ids:
         return list(qs.filter(id__in=assigned_ids).order_by("node_type", "name", "id"))
 
     profile = getattr(user, "employee_profile", None)

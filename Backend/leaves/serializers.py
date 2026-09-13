@@ -116,6 +116,8 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
         read_only_fields = [
             "employee",
             "status",
+            # Fixed at submission: CEO approval routing depends on it.
+            "will_travel",
             "decided_by",
             "decided_at",
             "decision_reason",
@@ -199,8 +201,8 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
         return get_obligations_summary(obj)
 
     def get_requires_hr_completion_visa(self, obj):
-        profile = obj.employee_profile or resolve_employee_profile(obj.employee)
-        return bool(profile and not profile.is_saudi and obj.status == LeaveRequest.RequestStatus.PENDING_HR_COMPLETION)
+        # Independent of status so approved requests still describe the path they took.
+        return obj.requires_hr_completion()
 
     def get_employee_documents(self, obj):
         from employees.serializers import EmployeeDocumentSerializer
@@ -230,6 +232,7 @@ class LeaveRequestCreateSerializer(serializers.ModelSerializer):
             "full_address",
             "airplane_ticket_payer",
             "airplane_ticket_address",
+            "will_travel",
             "delegated_to",
             "delegation_note",
         ]
@@ -383,6 +386,7 @@ class HRManualLeaveRequestSerializer(serializers.ModelSerializer):
             "full_address",
             "airplane_ticket_payer",
             "airplane_ticket_address",
+            "will_travel",
             "delegated_to",
             "delegation_note",
         ]

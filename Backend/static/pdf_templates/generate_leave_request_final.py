@@ -297,14 +297,14 @@ def build(logo_path: Path) -> None:
         ("department_head", "Department Head", "رئيس الإدارة"),
         ("hr", "HR", "الموارد البشرية"),
     ]
-    signature_widths = [226, 113, 113, 113]
+    signature_widths = [(PAGE_W - 30) / 4] * 4
     x = 15
     for index, (key, en, ar) in enumerate(signature_fields):
         width = signature_widths[index]
-        draw_text(pdf, x + 10, 692, en, size=6.4, bold=True, color=MUTED)
-        draw_arabic(pdf, x + width - 10, 704, ar, size=6.0, bold=False, color=MUTED)
-        signature_x, signature_top = x + 10, 712
-        signature_width, signature_height = width - 20, 68
+        draw_text(pdf, x + 10, 692, en, size=6.8, bold=True, color=MUTED)
+        draw_arabic(pdf, x + width - 10, 692, ar, size=6.4, bold=True, color=MUTED)
+        signature_x, signature_top = x + 10, 710
+        signature_width, signature_height = width - 20, 70
         FIELD_MAP[f"{key}_signature_image"] = {
             "page": 1,
             "x": round(signature_x, 2),
@@ -315,19 +315,19 @@ def build(logo_path: Path) -> None:
             "padding": 3,
             "source": f"request.signers.{key}.signature",
         }
-        pdf.setStrokeColor(MUTED)
-        pdf.setLineWidth(0.55)
-        pdf.line(signature_x, bottom(786), signature_x + signature_width, bottom(786))
-        draw_text(pdf, x + 10, 800, "Date", size=6, color=MUTED)
-        date_x, date_width = x + 54, width - 64
-        pdf.line(date_x, bottom(806), date_x + date_width, bottom(806))
-        field(
+        date_top = 790
+        rect(pdf, x + 7, date_top, width - 14, 22, fill=CELL)
+        draw_text(pdf, x + 14, date_top + 7, "Date", size=6.4, bold=True, color=MUTED)
+        draw_arabic(pdf, x + width - 14, date_top + 7, "التاريخ", size=6.2, bold=True, color=MUTED)
+        date_x, date_width = x + 48, width - 96
+        input_box(
+            pdf,
             f"{key}_signature_date",
             date_x,
-            790,
+            date_top + 3,
             date_width,
             16,
-            font_size=6.2,
+            font_size=6.6,
             shrink=True,
             source="leave_request.workflow_timestamp",
         )

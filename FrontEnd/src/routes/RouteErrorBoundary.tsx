@@ -7,17 +7,17 @@ import {
 import { useNavigate, useRouteError } from "react-router-dom";
 import { useState } from "react";
 import { reportErrorApi } from "../services/api/errorApi";
+import { useI18n } from "../i18n/useI18n";
 
 export default function RouteErrorBoundary() {
   const err = useRouteError() as any;
   const navigate = useNavigate();
+  const { t } = useI18n();
   const [reporting, setReporting] = useState(false);
 
-  const title = "Something went wrong";
+  const title = t("error.generic");
   const subtitle =
-    err?.statusText ||
-    err?.message ||
-    "An unexpected error occurred while rendering this page.";
+    err?.statusText || err?.message || t("error.renderFailed");
 
   const handleReport = async () => {
     setReporting(true);
@@ -27,10 +27,10 @@ export default function RouteErrorBoundary() {
         stack: err?.stack || String(err),
         url: window.location.href,
       });
-      message.success("Error reported successfully. Thank you.");
+      message.success(t("error.reportSuccess"));
     } catch (apiErr) {
       console.error("Failed to report error:", apiErr);
-      message.error("Failed to report error.");
+      message.error(t("error.reportFailed"));
     } finally {
       setReporting(false);
     }
@@ -169,7 +169,7 @@ export default function RouteErrorBoundary() {
               minWidth: 160,
             }}
           >
-            Reload Page
+            {t("error.reloadPage")}
           </Button>
 
           <Button
@@ -187,7 +187,7 @@ export default function RouteErrorBoundary() {
               minWidth: 160,
             }}
           >
-            Back to Home
+            {t("error.notFound.backHome")}
           </Button>
 
           <Button
@@ -207,18 +207,19 @@ export default function RouteErrorBoundary() {
               minWidth: 200,
             }}
           >
-            Report Issue
+            {t("error.reportIssue")}
           </Button>
         </div>
 
         {err && (
-          <div style={{ textAlign: "left", marginTop: 16 }}>
+          <div style={{ textAlign: "start", marginTop: 16 }}>
             <Typography.Text
               style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}
             >
-              Technical Details:
+              {t("error.technicalDetails")}:
             </Typography.Text>
             <pre
+              dir="ltr"
               style={{
                 marginTop: 8,
                 padding: 16,

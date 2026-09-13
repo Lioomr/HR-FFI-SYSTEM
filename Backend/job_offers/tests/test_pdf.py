@@ -93,7 +93,7 @@ class HrDocumentPdfTests(SimpleTestCase):
             with override_settings(HR_TEMPLATES_DIR=template_dir):
                 self.assertIsNone(_load_form_assets())
 
-    def test_job_offer_signers_use_the_recorded_hr_signer_only(self):
+    def test_job_offer_signers_use_recorded_internal_approvers_only(self):
         offer = self.offer()
         hr_user = get_user_model()(full_name="Nour Hassan", email="nour@ffi.test")
         offer.hr_signer_user = hr_user
@@ -101,16 +101,16 @@ class HrDocumentPdfTests(SimpleTestCase):
         signers = build_job_offer_signers(offer)
 
         self.assertIs(signers["hr_signature_image"], hr_user)
-        # A candidate is external and has no stored signature to place.
-        self.assertIsNone(signers["applicant_signature"])
+        self.assertIsNone(signers["ceo_signature_image"])
+        self.assertNotIn("applicant_signature", signers)
 
     def test_offer_without_a_recorded_hr_signer_has_no_signer(self):
         signers = build_job_offer_signers(self.offer())
 
         self.assertIsNone(signers["hr_signature_image"])
-        self.assertIsNone(signers["applicant_signature"])
+        self.assertIsNone(signers["ceo_signature_image"])
 
-    def test_candidate_signature_box_stays_empty(self):
+    def test_external_candidate_has_no_signature_box(self):
         assets = _load_form_assets()
         pdf_bytes, diagnostics = render_mapped_form(
             assets,
@@ -120,7 +120,7 @@ class HrDocumentPdfTests(SimpleTestCase):
 
         self.assertEqual(image_boxes(pdf_bytes), [])
         states = {row["field"]: row["state"] for row in diagnostics}
-        self.assertEqual(states["applicant_signature"], SIGNATURE_MISSING)
+        self.assertNotIn("applicant_signature", states)
 
     def test_starting_work_signature_lands_only_in_its_mapped_box(self):
         assets = load_starting_work_form_assets()

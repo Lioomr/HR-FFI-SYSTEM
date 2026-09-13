@@ -53,6 +53,7 @@ import { isForbidden } from "../../../services/api/httpErrors";
 import AmountWithSAR from "../../../components/ui/AmountWithSAR";
 import { useI18n } from "../../../i18n/useI18n";
 import { useAuthStore } from "../../../auth/authStore";
+import { getDetailedHttpErrorMessage } from "../../../services/api/userErrorMessages";
 
 /**
  * Format value for display (show "—" for missing values)
@@ -315,7 +316,9 @@ export default function ViewEmployeePage() {
       setIsLinkModalOpen(false);
       loadEmployee();
     } catch (err: any) {
-      message.error(err.message || t("hr.employees.linkFailed"));
+      message.error(
+        getDetailedHttpErrorMessage(t, err, "hr.employees.linkFailed"),
+      );
     } finally {
       setLinking(false);
     }
@@ -335,7 +338,9 @@ export default function ViewEmployeePage() {
           message.success(t("hr.employees.unlinkSuccess"));
           loadEmployee();
         } catch (err: any) {
-          message.error(err.message || t("hr.employees.unlinkFailed"));
+          message.error(
+            getDetailedHttpErrorMessage(t, err, "hr.employees.unlinkFailed"),
+          );
         }
       },
     });

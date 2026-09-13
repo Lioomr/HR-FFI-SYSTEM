@@ -1,3 +1,11 @@
+vi.mock("./jobOffersApi", () => ({ listJobOffers: vi.fn() }));
+vi.mock("./contractDecisionsApi", () => ({ listContractDecisions: vi.fn() }));
+vi.mock("./annualLeavePaymentsApi", () => ({
+  getAnnualLeavePaymentRequests: vi.fn(),
+}));
+import { listJobOffers } from "./jobOffersApi";
+import { listContractDecisions } from "./contractDecisionsApi";
+import { getAnnualLeavePaymentRequests } from "./annualLeavePaymentsApi";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 vi.mock("./leaveApi", () => ({ getCEOLeaveRequests: vi.fn() }));
@@ -20,6 +28,9 @@ import {
 import { listEmployeeArchiveRequests } from "./employeesApi";
 
 const mocks = {
+  offers: vi.mocked(listJobOffers),
+  contracts: vi.mocked(listContractDecisions),
+  annual: vi.mocked(getAnnualLeavePaymentRequests),
   leave: getCEOLeaveRequests as unknown as ReturnType<typeof vi.fn>,
   loan: getCEOLoanRequests as unknown as ReturnType<typeof vi.fn>,
   attendance: getCEOAttendance as unknown as ReturnType<typeof vi.fn>,
@@ -35,6 +46,9 @@ const counted = (count: number) => ({
 
 beforeEach(() => {
   Object.values(mocks).forEach((fn) => fn.mockReset());
+  [mocks.offers, mocks.contracts, mocks.annual].forEach((fn) =>
+    fn.mockResolvedValue(counted(0)),
+  );
 });
 
 describe("getCeoApprovalSummary", () => {
@@ -48,10 +62,13 @@ describe("getCeoApprovalSummary", () => {
     mocks.damage.mockResolvedValue(counted(1));
     mocks.returns.mockResolvedValue(counted(5));
     mocks.archive.mockResolvedValue(counted(6));
+    mocks.offers.mockResolvedValue(counted(7));
+    mocks.contracts.mockResolvedValue(counted(8));
+    mocks.annual.mockResolvedValue(counted(9));
 
     const summary = await getCeoApprovalSummary();
 
-    expect(summary.totalPending).toBe(21);
+    expect(summary.totalPending).toBe(45);
     expect(summary.queues.attendance).toEqual({
       key: "attendance",
       count: 4,
@@ -65,6 +82,21 @@ describe("getCeoApprovalSummary", () => {
 
     await getCeoApprovalSummary();
 
+    expect(mocks.offers).toHaveBeenCalledWith({
+      approval_status: "pending_ceo",
+      page: 1,
+      page_size: 1,
+    });
+    expect(mocks.contracts).toHaveBeenCalledWith({
+      status: "PENDING_CEO",
+      page: 1,
+      page_size: 1,
+    });
+    expect(mocks.annual).toHaveBeenCalledWith({
+      status: "pending_ceo",
+      page: 1,
+      page_size: 1,
+    });
     expect(mocks.leave).toHaveBeenCalledWith({ page: 1, page_size: 1 });
     expect(mocks.loan).toHaveBeenCalledWith({
       status: "pending_ceo",
@@ -120,7 +152,7 @@ describe("getCeoApprovalSummary", () => {
     const summary = await getCeoApprovalSummary();
 
     expect(summary.queues.loan.available).toBe(false);
-    expect(summary.totalPending).toBe(5);
+    expect(summary.totalPending).toBe(8);
   });
 
   it("reports allUnavailable only when no queue can be read", async () => {

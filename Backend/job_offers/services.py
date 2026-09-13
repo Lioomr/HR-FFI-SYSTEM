@@ -179,7 +179,7 @@ def deliver_job_offer(offer: JobOffer) -> dict[str, Any]:
                     phone_number=offer.candidate_phone_number,
                     document_base64=pdf_base64,
                     file_name=filename,
-                    caption=f"Job Offer {offer.reference_number}",
+                    caption=f"📄 عرض العمل · Job offer {offer.reference_number}",
                 )
             except Exception:
                 logger.exception("job_offer_candidate_whatsapp_pdf_failed", extra={"job_offer_id": offer.id})
@@ -217,7 +217,7 @@ def deliver_job_offer(offer: JobOffer) -> dict[str, Any]:
                     phone_number=phone,
                     document_base64=pdf_base64,
                     file_name=filename,
-                    caption=f"CEO copy: Job Offer {offer.reference_number}",
+                    caption=f"📄 نسخة للرئيس التنفيذي · CEO copy: job offer {offer.reference_number}",
                 )
             except Exception:
                 logger.exception(

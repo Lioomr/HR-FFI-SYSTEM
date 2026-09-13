@@ -19,7 +19,6 @@ class LeaveType(models.Model):
     code = models.CharField(max_length=20, blank=True, help_text=_("Optional code (e.g. ANNUAL, SICK)"))
     is_paid = models.BooleanField(default=True)
     requires_attachment = models.BooleanField(default=False)
-    requires_ceo_approval = models.BooleanField(default=False, help_text=_("If true, requires CEO approval after HR."))
     is_active = models.BooleanField(default=True)
 
     # Quota and Carry-over (Phase 2.4)
@@ -183,6 +182,10 @@ class LeaveRequest(models.Model):
         help_text=_("Who pays for the airplane ticket."),
     )
     airplane_ticket_address = models.CharField(max_length=255, blank=True)
+    will_travel = models.BooleanField(
+        default=False,
+        help_text=_("Whether the employee will travel during the leave."),
+    )
 
     # Work delegation
     delegated_to = models.ForeignKey(
@@ -203,6 +206,11 @@ class LeaveRequest(models.Model):
         related_name="delegate_decided_leaves",
     )
     delegate_decision_note = models.TextField(blank=True, help_text=_("Delegated employee's decision note."))
+    delegate_return_status = models.CharField(
+        max_length=30,
+        blank=True,
+        help_text=_("Stage a request returns to once an alternative employee added after submission approves."),
+    )
 
     is_active = models.BooleanField(default=True)
     deleted_at = models.DateTimeField(null=True, blank=True)
@@ -244,6 +252,18 @@ class LeaveRequest(models.Model):
         elif self.employee_profile:
             employee_label = self.employee_profile.full_name or self.employee_profile.employee_id
         return f"{employee_label} - {self.leave_type.code} ({self.status})"
+
+    def requires_hr_completion(self) -> bool:
+        """Only a non-Saudi employee who travels needs HR to record a visa after CEO approval."""
+        if not self.will_travel:
+            return False
+        profile = self.employee_profile
+        if profile is None and self.employee_id:
+            try:
+                profile = self.employee.employee_profile
+            except ObjectDoesNotExist:
+                profile = None
+        return profile is not None and not profile.is_saudi
 
     def clean(self):
         super().clean()

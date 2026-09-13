@@ -167,7 +167,9 @@ export default function AssetLookupPage() {
       key: "status",
       width: 140,
       render: (value: string) => (
-        <Tag color={requestStatusColorMap[value] || "default"}>{value}</Tag>
+        <Tag color={requestStatusColorMap[value] || "default"}>
+          {t(`assets.requestStatus.${value}`, value)}
+        </Tag>
       ),
     },
     {
@@ -193,7 +195,9 @@ export default function AssetLookupPage() {
       key: "status",
       width: 140,
       render: (value: string) => (
-        <Tag color={requestStatusColorMap[value] || "default"}>{value}</Tag>
+        <Tag color={requestStatusColorMap[value] || "default"}>
+          {t(`assets.requestStatus.${value}`, value)}
+        </Tag>
       ),
     },
     {
@@ -300,7 +304,10 @@ export default function AssetLookupPage() {
               </Descriptions.Item>
               <Descriptions.Item label={t("common.status")}>
                 <Tag color={statusColorMap[result.asset.status] || "default"}>
-                  {result.asset.status}
+                  {t(
+                    `assets.status.${result.asset.status}`,
+                    result.asset.status,
+                  )}
                 </Tag>
               </Descriptions.Item>
               <Descriptions.Item label={t("assets.serialNumber")}>

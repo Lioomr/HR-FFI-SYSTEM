@@ -39,7 +39,11 @@ REQUIRED_FIELD_KEYS = frozenset(
         "medical_insurance",
         "contract_duration",
         "hr_name",
-        "hr_position",
+        "hr_signature_date",
+        "hr_signature_image",
+        "ceo_name",
+        "ceo_signature_date",
+        "ceo_signature_image",
         "applicant_decision",
         "rejection_reason",
         "applicant_name_acceptance",
@@ -50,6 +54,14 @@ REQUIRED_FIELD_KEYS = frozenset(
 
 def _money(value) -> str:
     return f"{value:,.2f}"
+
+
+def _date(value) -> str:
+    return value.date().isoformat() if hasattr(value, "date") else value.isoformat() if value else ""
+
+
+def _display_user(user) -> str:
+    return str(getattr(user, "full_name", "") or getattr(user, "email", "") or "")
 
 
 def _field_values(offer: JobOffer) -> dict[str, str]:
@@ -77,7 +89,9 @@ def _field_values(offer: JobOffer) -> dict[str, str]:
         "medical_insurance": offer.medical_insurance,
         "contract_duration": offer.contract_duration,
         "hr_name": offer.hr_signer_name,
-        "hr_position": offer.hr_signer_title,
+        "hr_signature_date": _date(offer.sent_at or offer.submitted_at),
+        "ceo_name": _display_user(offer.ceo_decision_by),
+        "ceo_signature_date": _date(offer.ceo_decision_at),
         "rejection_reason": offer.rejection_reason if offer.status == JobOffer.Status.REJECTED else "",
         "applicant_name_acceptance": (
             offer.candidate_full_name if offer.status in {JobOffer.Status.ACCEPTED, JobOffer.Status.REJECTED} else ""
@@ -98,12 +112,11 @@ def _decision_checkbox(offer: JobOffer) -> str | None:
 
 
 def build_job_offer_signers(offer: JobOffer) -> dict[str, object]:
-    """Return ``{map_field: recorded signer}`` for the offer's signature boxes.
+    """Return the recorded internal signers for the offer.
 
-    The applicant signs by accepting the offer, so their box is filled only once
-    ``accepted_at`` is recorded and only from the employee profile linked to the
-    offer. A candidate with no profile yet has no stored signature and the box
-    stays blank rather than being filled with a stand-in.
+    Candidates are external at this point, so their recorded name, decision,
+    and decision date constitute acceptance; no employee signature is forged or
+    expected. CEO placement is gated by the recorded CEO decision timestamp.
     """
 
     try:
@@ -111,13 +124,9 @@ def build_job_offer_signers(offer: JobOffer) -> dict[str, object]:
     except ObjectDoesNotExist:
         # An offer drafted without an HR signer has nobody to sign for it.
         hr_signer = None
-    try:
-        applicant = offer.employee_profile if offer.accepted_at else None
-    except ObjectDoesNotExist:
-        applicant = None
     return {
         "hr_signature_image": hr_signer,
-        "applicant_signature": applicant,
+        "ceo_signature_image": offer.ceo_decision_by if offer.ceo_decision_at else None,
     }
 
 
@@ -154,7 +163,6 @@ def _fallback_rows(offer: JobOffer) -> list[tuple[str, str]]:
         ("Contract duration", offer.contract_duration),
         ("Medical insurance", offer.medical_insurance),
         ("HR signer", offer.hr_signer_name),
-        ("HR title", offer.hr_signer_title),
         ("Offer date", offer.offer_date.isoformat()),
         ("Expiry date", offer.expiry_date.isoformat()),
         ("Rejection reason", offer.rejection_reason if offer.status == JobOffer.Status.REJECTED else ""),

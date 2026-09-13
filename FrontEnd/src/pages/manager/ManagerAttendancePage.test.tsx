@@ -39,14 +39,14 @@ describe("Manager BioTime attendance", () => {
       }),
     ).not.toBeInTheDocument();
     expect(getManagerAttendance).toHaveBeenCalledWith({
-      status: undefined,
+      effective_status: undefined,
       page: 1,
       page_size: 25,
     });
     fireEvent.click(screen.getByTitle("2"));
     await waitFor(() =>
       expect(getManagerAttendance).toHaveBeenLastCalledWith({
-        status: undefined,
+        effective_status: undefined,
         page: 2,
         page_size: 25,
       }),

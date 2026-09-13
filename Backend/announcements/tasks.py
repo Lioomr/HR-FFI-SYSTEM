@@ -63,27 +63,19 @@ def send_announcement_group(delivery_id):
 def enqueue_announcement_group(announcement):
     if not announcement.publish_to_whatsapp or not announcement.whatsapp_group_id:
         return
-    from .utils import _meeting_datetime_parts
+    from core.services.whatsapp_template_library import render_configured_template_message
+
+    from .utils import meeting_whatsapp_variables
     from .whatsapp import build_announcement_message
 
-    message = build_announcement_message(
-        employee_name="فريق الشركة / Company team",
-        title=announcement.title,
-        content=announcement.content,
-        has_attachment=bool(announcement.attachment),
-    )
     if announcement.announcement_type == "MEETING":
-        date, time = _meeting_datetime_parts(announcement)
-        message += f"\n\nاجتماع / Meeting: {date} {time}"
-        for detail in (
-            announcement.meeting_location,
-            announcement.meeting_agenda,
-            announcement.google_meet_url,
-            announcement.microsoft_teams_url,
-            announcement.zoom_url,
-        ):
-            if detail:
-                message += f"\n{detail}"
+        creator = announcement.created_by
+        organizer_name = (creator.full_name or creator.email) if creator else ""
+        message = render_configured_template_message(
+            "meeting_notification_v1", meeting_whatsapp_variables(announcement, organizer_name=organizer_name)
+        )
+    else:
+        message = build_announcement_message(employee_name="", title=announcement.title, content=announcement.content)
     # Attachments and private download links never go to external group members.
     delivery, created = AnnouncementWhatsAppGroupDelivery.objects.get_or_create(
         announcement=announcement, defaults={"group_id": announcement.whatsapp_group_id, "message": message}

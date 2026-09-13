@@ -1,4 +1,5 @@
 import type { ApiResponse, ApiError } from "./apiTypes";
+import { translate } from "../../i18n/translate";
 
 /**
  * Type guard to check if an API response is an error
@@ -29,7 +30,7 @@ export function isApiError<T>(res: ApiResponse<T>): res is ApiError {
  */
 export function unwrapApiData<T>(res: ApiResponse<T>): T {
   if (isApiError(res)) {
-    throw new Error(res.message || "API request failed");
+    throw new Error(res.message || translate("common.error.requestFailed"));
   }
   return res.data;
 }
@@ -51,5 +52,5 @@ export function getErrorMessage(error: unknown): string {
   if (error && typeof error === "object" && "message" in error) {
     return String(error.message);
   }
-  return "An unexpected error occurred";
+  return translate("common.error.unexpected");
 }

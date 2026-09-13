@@ -2,10 +2,12 @@ import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuthStore } from "../auth/authStore";
 import { getToken } from "../services/api/tokenStorage";
 import LoadingState from "../components/ui/LoadingState";
+import { useI18n } from "../i18n/useI18n";
 
 export default function RequireAuth() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const location = useLocation();
+  const { t } = useI18n();
 
   if (!isAuthenticated) {
     // Safety: If token exists but store thinks we are logged out,
@@ -18,7 +20,7 @@ export default function RequireAuth() {
         <div
           style={{ display: "grid", placeItems: "center", minHeight: "50vh" }}
         >
-          <LoadingState title="Verifying Session..." lines={2} />
+          <LoadingState title={t("loading.verifyingSession")} lines={2} />
         </div>
       );
     }

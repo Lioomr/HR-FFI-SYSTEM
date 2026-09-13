@@ -1,28 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  Button,
-  Card,
-  Grid,
-  Table,
-  Tag,
-  Tooltip,
-  notification,
-  Modal,
-} from "antd";
+import { Button, Card, Grid, Table, Tag, Tooltip, notification } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import {
-  PlusOutlined,
-  CloseCircleOutlined,
-  EyeOutlined,
-  FilePdfOutlined,
-} from "@ant-design/icons";
+import { PlusOutlined, EyeOutlined, FilePdfOutlined } from "@ant-design/icons";
 
 import PageHeader from "../../../components/ui/PageHeader";
 import { useI18n } from "../../../i18n/useI18n";
 import {
   getMyLeaveRequests,
-  cancelLeaveRequest,
   getLeaveRequestPdfBlob,
   type LeaveRequest,
 } from "../../../services/api/leaveApi";
@@ -35,9 +20,9 @@ import {
 } from "../../../services/api/userErrorMessages";
 import { downloadBlob } from "../../../utils/download";
 
-const { confirm } = Modal;
 const { useBreakpoint } = Grid;
 
+// Employees cannot cancel their own leave requests; HR cancels them on request.
 export default function MyLeaveRequestsPage() {
   const navigate = useNavigate();
   const { t } = useI18n();
@@ -48,9 +33,7 @@ export default function MyLeaveRequestsPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [cancellingId, setCancellingId] = useState<number | null>(null);
   const [pdfLoadingId, setPdfLoadingId] = useState<number | null>(null);
-  const [canCancel, setCanCancel] = useState(true);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -78,47 +61,6 @@ export default function MyLeaveRequestsPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
-
-  const handleCancel = (id: number) => {
-    confirm({
-      title: t("leave.cancel"),
-      content: t("common.required"),
-      okText: t("common.yes"),
-      okType: "danger",
-      cancelText: t("common.no"),
-      onOk: async () => {
-        setCancellingId(id);
-        try {
-          const res = await cancelLeaveRequest(id);
-          if (isApiError(res)) {
-            notification.error({
-              message: t("common.error"),
-              description: getDetailedApiMessage(t, res.message),
-            });
-          } else {
-            notification.success({ message: t("leave.cancelled") });
-            loadData();
-          }
-        } catch (e: unknown) {
-          const status = getHttpStatus(e);
-          if (status === 404 || status === 405) {
-            notification.warning({
-              message: t("common.error"),
-              description: getDetailedHttpErrorMessage(t, e),
-            });
-            setCanCancel(false);
-          } else {
-            notification.error({
-              message: t("common.error"),
-              description: getDetailedHttpErrorMessage(t, e),
-            });
-          }
-        } finally {
-          setCancellingId(null);
-        }
-      },
-    });
-  };
 
   const handlePdfDownload = async (record: LeaveRequest) => {
     setPdfLoadingId(record.id);
@@ -263,13 +205,6 @@ export default function MyLeaveRequestsPage() {
       width: isMobile ? 140 : 170,
       fixed: screens.lg ? "right" : undefined,
       render: (_, record) => {
-        const s = record.status?.toLowerCase();
-        const isPending =
-          s === "submitted" ||
-          s === "pending_manager" ||
-          s === "pending_hr" ||
-          s === "pending";
-
         return (
           <div
             style={{
@@ -300,20 +235,6 @@ export default function MyLeaveRequestsPage() {
                 }}
               />
             </Tooltip>
-            {canCancel && isPending && (
-              <Tooltip title={t("leave.cancel")}>
-                <Button
-                  danger
-                  icon={<CloseCircleOutlined />}
-                  size="small"
-                  loading={cancellingId === record.id}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    handleCancel(record.id);
-                  }}
-                />
-              </Tooltip>
-            )}
           </div>
         );
       },

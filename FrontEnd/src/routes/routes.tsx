@@ -1,4 +1,4 @@
-import { Navigate } from "react-router-dom";
+import { Navigate, useParams } from "react-router-dom";
 import RequireAuth from "./RequireAuth";
 import RequireRole from "./RequireRole";
 import RequireManagerAccess from "./RequireManagerAccess";
@@ -85,6 +85,13 @@ import ManagerEmployeeProfilePage from "../pages/manager/ManagerEmployeeProfileP
 import MyProfilePage from "../pages/employee/MyProfilePage";
 import UserProfilePage from "../pages/shared/UserProfilePage";
 import DashboardPage from "../pages/employee/DashboardPage";
+import {
+  PermissionRequestDetailPage,
+  PermissionRequestFormPage,
+  HrPermissionRequestsPage,
+  ManagerPermissionRequestsPage,
+  MyPermissionRequestsPage,
+} from "../pages/shared/permission/PermissionRequestPages";
 
 // Announcements
 import AnnouncementsManagementPage from "../pages/hr/announcements/AnnouncementsManagementPage";
@@ -118,6 +125,11 @@ import NotificationsPage from "../pages/shared/NotificationsPage";
 import ContractDecisionsPage from "../pages/shared/ContractDecisionsPage";
 
 import BaseLayout from "../layouts/BaseLayout";
+
+function LegacyEmployeeRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/hr/employees/${id}`} replace />;
+}
 
 export const routes = [
   // Public
@@ -211,6 +223,7 @@ export const routes = [
               { path: "hr/employees", element: <EmployeesListPage /> },
               { path: "hr/employees/create", element: <CreateEmployeePage /> },
               { path: "hr/employees/:id", element: <ViewEmployeePage /> },
+              { path: "employees/:id", element: <LegacyEmployeeRedirect /> },
               { path: "hr/employees/:id/edit", element: <EditEmployeePage /> },
               {
                 path: "hr/employees/expiries",
@@ -277,6 +290,14 @@ export const routes = [
                 path: "hr/leave/requests/:id",
                 element: <LeaveRequestDetailsPage />,
               },
+              {
+                path: "hr/permission-requests",
+                element: <HrPermissionRequestsPage />,
+              },
+              {
+                path: "hr/permission-requests/:id",
+                element: <PermissionRequestDetailPage role="hr" />,
+              },
               // Annual Leave settlement queue; ":id" is the deep link carried by
               // the HR year-end notification.
               {
@@ -336,7 +357,14 @@ export const routes = [
           {
             element: (
               <RequireRole
-                roles={["Employee", "SystemAdmin", "HRManager", "Manager"]}
+                roles={[
+                  "Employee",
+                  "SystemAdmin",
+                  "HRManager",
+                  "Manager",
+                  "CEO",
+                  "CFO",
+                ]}
               />
             ),
             children: [
@@ -349,6 +377,18 @@ export const routes = [
                 element: <Navigate to="/employee/dashboard" replace />,
               },
               { path: "employee/dashboard", element: <DashboardPage /> },
+              {
+                path: "employee/permission-requests/new",
+                element: <PermissionRequestFormPage />,
+              },
+              {
+                path: "employee/permission-requests",
+                element: <MyPermissionRequestsPage />,
+              },
+              {
+                path: "employee/permission-requests/:id",
+                element: <PermissionRequestDetailPage role="employee" />,
+              },
               { path: "employee/profile", element: <MyProfilePage /> },
               {
                 path: "employee/attendance",
@@ -425,6 +465,14 @@ export const routes = [
                 element: <ManagerTeamRequestsPage />,
               },
               {
+                path: "manager/permission-requests",
+                element: <ManagerPermissionRequestsPage />,
+              },
+              {
+                path: "manager/permission-requests/:id",
+                element: <PermissionRequestDetailPage role="manager" />,
+              },
+              {
                 path: "manager/attendance",
                 element: <ManagerAttendancePage />,
               },
@@ -475,6 +523,10 @@ export const routes = [
               },
               { path: "ceo/dashboard", element: <CEODashboardPage /> },
               { path: "ceo/leave/requests", element: <CEOLeaveInboxPage /> },
+              {
+                path: "ceo/leave/requests/:id",
+                element: <Navigate to="/ceo/leave/requests" replace />,
+              },
               // The queue itself is scoped to pending_ceo; ":id" only exists so
               // the notification deep link resolves to the queue.
               {

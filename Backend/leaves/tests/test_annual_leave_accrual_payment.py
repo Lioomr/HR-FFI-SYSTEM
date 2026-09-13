@@ -121,7 +121,7 @@ class AnnualLeaveAccrualPaymentTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("Annual leave exceeds available balance", str(response.data))
 
-    @patch("leaves.views.notify_users_for_pending_status")
+    @patch("leaves.annual_payment_services.notify_users_for_pending_status")
     def test_payment_hr_review_and_ceo_approval_uses_year_end_salary(self, notify):
         self.client.force_authenticate(self.employee)
         response = self.client.post("/api/leaves/annual-leave-payments/", {})
@@ -148,7 +148,7 @@ class AnnualLeaveAccrualPaymentTests(APITestCase):
         self.assertEqual(approved.status_code, status.HTTP_200_OK)
         self.assertEqual(approved.data["data"]["status"], AnnualLeavePaymentRequest.Status.APPROVED)
 
-    @patch("leaves.views.notify_users_for_pending_status")
+    @patch("leaves.annual_payment_services.notify_users_for_pending_status")
     def test_ceo_rejection_does_not_settle_balance(self, notify):
         self.client.force_authenticate(self.employee)
         payment = self.client.post("/api/leaves/annual-leave-payments/", {}).data["data"]
@@ -167,7 +167,7 @@ class AnnualLeaveAccrualPaymentTests(APITestCase):
         self.assertEqual(response.data["data"]["status"], AnnualLeavePaymentRequest.Status.REJECTED)
         self.assertIsNone(AnnualLeavePaymentRequest.objects.get(pk=payment["id"]).settled_at)
 
-    @patch("leaves.views.notify_users_for_pending_status")
+    @patch("leaves.annual_payment_services.notify_users_for_pending_status")
     def test_terminated_employee_before_six_months_can_be_paid_by_hr(self, notify):
         terminated_user = User.objects.create_user(email="terminated.annual@test.com", password="password")
         terminated = EmployeeProfile.objects.create(

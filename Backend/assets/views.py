@@ -27,18 +27,16 @@ from core.services import (
     notify_users_for_pending_status,
     send_request_submission_email,
     sync_leave_obligations,
-    sync_workflow,
 )
 from employees.models import EmployeeProfile
 from employees.services.manager_relationships import (
     get_valid_manager_user,
-    manager_approval_actor_source,
     manager_scope_q,
 )
 from in_app_notifications.dispatcher import dispatch_notification_channels
 from in_app_notifications.models import Notification
 from leaves.models import LeaveRequest
-from loans.permissions import IsManagerOrAdmin, get_active_workflow_config
+from loans.permissions import IsManagerOrAdmin
 from organization.services import (
     ensure_company_write_allowed,
     filter_queryset_by_accessible_companies,
@@ -62,6 +60,20 @@ from .serializers import (
     PrintedLabelJobSerializer,
 )
 from .services.label_pdf import ASSET_LABEL_QR_SALT, render_labels_pdf
+from .services.return_requests import (
+    OPEN_STATUSES as OPEN_RETURN_REQUEST_STATUSES,
+)
+from .services.return_requests import (
+    AssetReturnTransitionError,
+    apply_ceo_decision,
+    apply_hr_decision,
+    apply_manager_decision,
+    mark_return_request_processed,
+    record_return_request_submission,
+)
+from .services.return_requests import (
+    submission_status as return_request_submission_status,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -107,12 +119,6 @@ def _asset_invoice_pdf_bytes(asset) -> bytes | None:
     """Read the asset's invoice file bytes when it's a PDF attachment."""
 
     return read_field_file_bytes(getattr(asset, "invoice_file", None), suffix=".pdf")
-
-
-def _reject_self_approval(request, profile):
-    if getattr(profile, "user_id", None) == request.user.id:
-        return error("Validation error", errors=["Self approval is not allowed."], status=422)
-    return None
 
 
 def _resolve_manager_user(profile: EmployeeProfile | None):
@@ -518,11 +524,15 @@ class AssetViewSet(viewsets.ModelViewSet):
             },
         )
         try:
+            from in_app_notifications.i18n import notification_text, pair
+
+            asset_name = self._asset_display_name(asset)
             dispatch_notification_channels(
                 recipient=employee.user,
                 event_key="asset.assigned",
-                title="Asset assigned",
-                message=f"{self._asset_display_name(asset)} ({asset.asset_code}) was assigned to you.",
+                **notification_text(
+                    "asset.assigned", asset=pair(asset_name, asset.name_ar or asset_name), asset_code=asset.asset_code
+                ),
                 category=Notification.Category.ASSET,
                 action_url="/employee/assets",
                 related_object=assignment,
@@ -579,19 +589,10 @@ class AssetViewSet(viewsets.ModelViewSet):
             pending_requests = AssetReturnRequest.objects.select_for_update().filter(
                 asset=asset,
                 employee=assignment.employee,
-                status__in=[
-                    AssetReturnRequest.RequestStatus.PENDING_MANAGER,
-                    AssetReturnRequest.RequestStatus.PENDING,
-                    AssetReturnRequest.RequestStatus.PENDING_CEO,
-                    AssetReturnRequest.RequestStatus.APPROVED,
-                ],
+                status__in=OPEN_RETURN_REQUEST_STATUSES,
             )
             for request_obj in pending_requests:
-                request_obj.status = AssetReturnRequest.RequestStatus.PROCESSED
-                request_obj.processed_by = request.user
-                request_obj.processed_at = timezone.now()
-                request_obj.save(update_fields=["status", "processed_by", "processed_at"])
-                sync_workflow(request_obj, actor=request.user)
+                mark_return_request_processed(request_obj, actor=request.user)
             for leave_request in LeaveRequest.objects.filter(
                 employee_profile=assignment.employee,
                 status=LeaveRequest.RequestStatus.PENDING_CEO,
@@ -612,11 +613,15 @@ class AssetViewSet(viewsets.ModelViewSet):
             },
         )
         try:
+            from in_app_notifications.i18n import notification_text, pair
+
+            asset_name = self._asset_display_name(asset)
             dispatch_notification_channels(
                 recipient=assignment.employee.user,
                 event_key="asset.returned",
-                title="Asset returned",
-                message=f"{self._asset_display_name(asset)} ({asset.asset_code}) was marked as returned.",
+                **notification_text(
+                    "asset.returned", asset=pair(asset_name, asset.name_ar or asset_name), asset_code=asset.asset_code
+                ),
                 category=Notification.Category.ASSET,
                 action_url="/employee/assets",
                 related_object=assignment,
@@ -868,22 +873,16 @@ class AssetViewSet(viewsets.ModelViewSet):
         if not instance:
             return error("Not found", status=status.HTTP_404_NOT_FOUND)
 
-        self_approval_error = _reject_self_approval(request, instance.employee)
-        if self_approval_error:
-            return self_approval_error
-        if instance.status != AssetReturnRequest.RequestStatus.PENDING:
-            return error("Validation error", errors=["Request is not pending HR approval."], status=422)
-
         serializer = AssetRequestActionSerializer(data=request.data)
         if not serializer.is_valid():
             return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
 
-        instance.status = AssetReturnRequest.RequestStatus.APPROVED
-        instance.hr_decision_by = request.user
-        instance.hr_decision_at = timezone.now()
-        instance.hr_decision_note = serializer.validated_data.get("comment", "")
-        instance.save(update_fields=["status", "hr_decision_by", "hr_decision_at", "hr_decision_note"])
-        sync_workflow(instance, actor=request.user)
+        try:
+            instance = apply_hr_decision(
+                instance, actor=request.user, approve=True, comment=serializer.validated_data.get("comment", "")
+            )
+        except AssetReturnTransitionError as exc:
+            return exc.to_response()
         audit(request, "asset_return_request_approved_hr", entity="AssetReturnRequest", entity_id=instance.id)
         try:
             notify_profile_request_status_whatsapp(
@@ -917,25 +916,16 @@ class AssetViewSet(viewsets.ModelViewSet):
         if not instance:
             return error("Not found", status=status.HTTP_404_NOT_FOUND)
 
-        self_approval_error = _reject_self_approval(request, instance.employee)
-        if self_approval_error:
-            return self_approval_error
-        if instance.status != AssetReturnRequest.RequestStatus.PENDING:
-            return error("Validation error", errors=["Request is not pending HR approval."], status=422)
-
         serializer = AssetRequestActionSerializer(data=request.data)
         if not serializer.is_valid():
             return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
-        comment = (serializer.validated_data.get("comment") or "").strip()
-        if not comment:
-            return error("Validation error", errors=["comment is required."], status=422)
 
-        instance.status = AssetReturnRequest.RequestStatus.REJECTED
-        instance.hr_decision_by = request.user
-        instance.hr_decision_at = timezone.now()
-        instance.hr_decision_note = comment
-        instance.save(update_fields=["status", "hr_decision_by", "hr_decision_at", "hr_decision_note"])
-        sync_workflow(instance, actor=request.user)
+        try:
+            instance = apply_hr_decision(
+                instance, actor=request.user, approve=False, comment=serializer.validated_data.get("comment")
+            )
+        except AssetReturnTransitionError as exc:
+            return exc.to_response()
         audit(request, "asset_return_request_rejected_hr", entity="AssetReturnRequest", entity_id=instance.id)
         try:
             notify_profile_request_status_whatsapp(
@@ -943,7 +933,7 @@ class AssetViewSet(viewsets.ModelViewSet):
                 request_type="Asset Return Request",
                 request_id=instance.id,
                 status_label="Rejected",
-                reason=comment,
+                reason=instance.hr_decision_note,
                 details=[f"Asset: {self._asset_display_name(instance.asset)} ({instance.asset.asset_code})"],
                 action_path="/employee/assets",
             )
@@ -1113,35 +1103,23 @@ class AssetViewSet(viewsets.ModelViewSet):
         if AssetReturnRequest.objects.filter(
             asset=asset,
             employee=profile,
-            status__in=[
-                AssetReturnRequest.RequestStatus.PENDING_MANAGER,
-                AssetReturnRequest.RequestStatus.PENDING,
-                AssetReturnRequest.RequestStatus.PENDING_CEO,
-                AssetReturnRequest.RequestStatus.APPROVED,
-            ],
+            status__in=OPEN_RETURN_REQUEST_STATUSES,
         ).exists():
             return error(
                 "Validation error",
                 errors=["There is already an open return request for this asset."],
                 status=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
-        is_hr_manager_request = _is_hr_manager_user(request.user)
-        manager_user = _resolve_manager_user(profile)
-        workflow_config = get_active_workflow_config()
-        if is_hr_manager_request:
-            initial_status = AssetReturnRequest.RequestStatus.PENDING_CEO
-        elif workflow_config.require_manager_stage and manager_user:
-            initial_status = AssetReturnRequest.RequestStatus.PENDING_MANAGER
-        else:
-            initial_status = AssetReturnRequest.RequestStatus.PENDING
 
-        return_request = AssetReturnRequest.objects.create(
-            asset=asset,
-            employee=profile,
-            note=serializer.validated_data["note"],
-            status=initial_status,
-        )
-        sync_workflow(return_request, actor=request.user)
+        manager_user = _resolve_manager_user(profile)
+        with transaction.atomic():
+            return_request = AssetReturnRequest.objects.create(
+                asset=asset,
+                employee=profile,
+                note=serializer.validated_data["note"],
+                status=return_request_submission_status(request.user, profile),
+            )
+            record_return_request_submission(return_request, actor=request.user)
 
         audit(
             request,
@@ -1188,7 +1166,7 @@ class AssetViewSet(viewsets.ModelViewSet):
                 status_label=return_request.status,
                 details=[
                     f"Asset: {self._asset_display_name(asset)} ({asset.asset_code})",
-                    f"Current status: {return_request.status}",
+                    f"Current status: {return_request.get_status_display()}",
                 ],
                 action_path=action_path,
             )
@@ -1442,31 +1420,19 @@ class ManagerAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
-        instance = self.get_object()
-        self_approval_error = _reject_self_approval(request, instance.employee)
-        if self_approval_error:
-            return self_approval_error
-        actor_source = manager_approval_actor_source(
-            request.user,
-            instance.employee,
-            capability="assets.approve",
-            allow_admin=True,
-        )
-        if not actor_source:
-            return error("Forbidden", errors=["You cannot approve this asset return request."], status=403)
-        if instance.status != AssetReturnRequest.RequestStatus.PENDING_MANAGER:
-            return error("Validation error", errors=["Request is not pending manager approval."], status=422)
-
         serializer = AssetRequestActionSerializer(data=request.data)
         if not serializer.is_valid():
             return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
 
-        instance.status = AssetReturnRequest.RequestStatus.PENDING
-        instance.manager_decision_by = request.user
-        instance.manager_decision_at = timezone.now()
-        instance.manager_decision_note = serializer.validated_data.get("comment", "")
-        instance.save(update_fields=["status", "manager_decision_by", "manager_decision_at", "manager_decision_note"])
-        sync_workflow(instance, actor=request.user)
+        try:
+            instance, actor_source = apply_manager_decision(
+                self.get_object(),
+                actor=request.user,
+                approve=True,
+                comment=serializer.validated_data.get("comment", ""),
+            )
+        except AssetReturnTransitionError as exc:
+            return exc.to_response()
         audit(
             request,
             "asset_return_request_approved_manager",
@@ -1495,34 +1461,16 @@ class ManagerAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=True, methods=["post"])
     def reject(self, request, pk=None):
-        instance = self.get_object()
-        self_approval_error = _reject_self_approval(request, instance.employee)
-        if self_approval_error:
-            return self_approval_error
-        actor_source = manager_approval_actor_source(
-            request.user,
-            instance.employee,
-            capability="assets.approve",
-            allow_admin=True,
-        )
-        if not actor_source:
-            return error("Forbidden", errors=["You cannot reject this asset return request."], status=403)
-        if instance.status != AssetReturnRequest.RequestStatus.PENDING_MANAGER:
-            return error("Validation error", errors=["Request is not pending manager approval."], status=422)
-
         serializer = AssetRequestActionSerializer(data=request.data)
         if not serializer.is_valid():
             return error("Validation error", errors=_flatten_errors(serializer.errors), status=422)
-        comment = (serializer.validated_data.get("comment") or "").strip()
-        if not comment:
-            return error("Validation error", errors=["comment is required."], status=422)
 
-        instance.status = AssetReturnRequest.RequestStatus.REJECTED
-        instance.manager_decision_by = request.user
-        instance.manager_decision_at = timezone.now()
-        instance.manager_decision_note = comment
-        instance.save(update_fields=["status", "manager_decision_by", "manager_decision_at", "manager_decision_note"])
-        sync_workflow(instance, actor=request.user)
+        try:
+            instance, actor_source = apply_manager_decision(
+                self.get_object(), actor=request.user, approve=False, comment=serializer.validated_data.get("comment")
+            )
+        except AssetReturnTransitionError as exc:
+            return exc.to_response()
         audit(
             request,
             "asset_return_request_rejected_manager",
@@ -1536,7 +1484,7 @@ class ManagerAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
                 request_type="Asset Return Request",
                 request_id=instance.id,
                 status_label="Rejected",
-                reason=comment,
+                reason=instance.manager_decision_note,
                 details=[f"Asset: {instance.asset.name_en or instance.asset.asset_code} ({instance.asset.asset_code})"],
                 action_path="/employee/assets",
             )
@@ -1571,22 +1519,16 @@ class CEOAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
-        instance = self.get_object()
-        if instance.status != AssetReturnRequest.RequestStatus.PENDING_CEO:
-            return error("Validation error", errors=["Request is not pending CEO approval."], status=422)
-        if _is_hr_manager_profile(instance.employee) and instance.employee.user_id == request.user.id:
-            return error("Validation error", errors=["Self approval is not allowed."], status=422)
-
         s = AssetRequestActionSerializer(data=request.data)
         if not s.is_valid():
             return error("Validation error", errors=s.errors.get("comment", ["Invalid payload."]), status=422)
 
-        instance.status = AssetReturnRequest.RequestStatus.APPROVED
-        instance.ceo_decision_by = request.user
-        instance.ceo_decision_at = timezone.now()
-        instance.ceo_decision_note = s.validated_data.get("comment", "")
-        instance.save(update_fields=["status", "ceo_decision_by", "ceo_decision_at", "ceo_decision_note"])
-        sync_workflow(instance, actor=request.user)
+        try:
+            instance = apply_ceo_decision(
+                self.get_object(), actor=request.user, approve=True, comment=s.validated_data.get("comment", "")
+            )
+        except AssetReturnTransitionError as exc:
+            return exc.to_response()
         audit(request, "asset_return_request_approved_ceo", entity="AssetReturnRequest", entity_id=instance.id)
         try:
             notify_profile_request_status_whatsapp(
@@ -1608,25 +1550,16 @@ class CEOAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=True, methods=["post"])
     def reject(self, request, pk=None):
-        instance = self.get_object()
-        if instance.status != AssetReturnRequest.RequestStatus.PENDING_CEO:
-            return error("Validation error", errors=["Request is not pending CEO approval."], status=422)
-        if _is_hr_manager_profile(instance.employee) and instance.employee.user_id == request.user.id:
-            return error("Validation error", errors=["Self approval is not allowed."], status=422)
-
         s = AssetRequestActionSerializer(data=request.data)
         if not s.is_valid():
             return error("Validation error", errors=s.errors.get("comment", ["Invalid payload."]), status=422)
-        comment = (s.validated_data.get("comment") or "").strip()
-        if not comment:
-            return error("Validation error", errors=["comment is required."], status=422)
 
-        instance.status = AssetReturnRequest.RequestStatus.REJECTED
-        instance.ceo_decision_by = request.user
-        instance.ceo_decision_at = timezone.now()
-        instance.ceo_decision_note = comment
-        instance.save(update_fields=["status", "ceo_decision_by", "ceo_decision_at", "ceo_decision_note"])
-        sync_workflow(instance, actor=request.user)
+        try:
+            instance = apply_ceo_decision(
+                self.get_object(), actor=request.user, approve=False, comment=s.validated_data.get("comment")
+            )
+        except AssetReturnTransitionError as exc:
+            return exc.to_response()
         audit(request, "asset_return_request_rejected_ceo", entity="AssetReturnRequest", entity_id=instance.id)
         try:
             notify_profile_request_status_whatsapp(
@@ -1634,7 +1567,7 @@ class CEOAssetReturnRequestViewSet(viewsets.ReadOnlyModelViewSet):
                 request_type="Asset Return Request",
                 request_id=instance.id,
                 status_label="Rejected",
-                reason=comment,
+                reason=instance.ceo_decision_note,
                 details=[f"Asset: {instance.asset.name_en or instance.asset.asset_code} ({instance.asset.asset_code})"],
                 action_path="/employee/assets",
             )

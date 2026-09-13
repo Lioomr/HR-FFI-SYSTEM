@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useI18nStore } from "./i18nStore";
-import { translations } from "./translations";
+import { resolveTranslation, type TranslateParams } from "./translate";
 
 export function useI18n() {
   const language = useI18nStore((s) => s.language);
@@ -9,28 +9,8 @@ export function useI18n() {
   const toggleLanguage = useI18nStore((s) => s.toggleLanguage);
 
   const t = useMemo(
-    () =>
-      (
-        key: string,
-        params?: Record<string, any> | string,
-        fallback?: string,
-      ) => {
-        const actualFallback = typeof params === "string" ? params : fallback;
-        const actualParams = typeof params === "object" ? params : undefined;
-
-        let translated = translations[language]?.[key] ?? actualFallback ?? key;
-
-        if (actualParams) {
-          Object.entries(actualParams).forEach(([k, v]) => {
-            translated = translated.replace(
-              new RegExp(`{${k}}`, "g"),
-              String(v),
-            );
-          });
-        }
-
-        return translated;
-      },
+    () => (key: string, params?: TranslateParams, fallback?: string) =>
+      resolveTranslation(language, key, params, fallback),
     [language],
   );
 

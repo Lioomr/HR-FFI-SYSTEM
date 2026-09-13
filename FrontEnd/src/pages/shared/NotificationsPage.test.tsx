@@ -75,6 +75,29 @@ describe("NotificationsPage", () => {
     expect(await screen.findByText("Inbox item")).toBeInTheDocument();
   });
 
+  it("sections notifications by day", async () => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    listNotifications.mockResolvedValue(
+      page([
+        makeNotification({ id: 1, title: "Fresh item" }),
+        makeNotification({
+          id: 2,
+          title: "Old item",
+          created_at: yesterday.toISOString(),
+        }),
+      ]),
+    );
+    render(<NotificationsPage />);
+    await screen.findByText("Fresh item");
+    expect(
+      screen.getByRole("heading", { level: 5, name: "Today" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { level: 5, name: "Yesterday" }),
+    ).toBeInTheDocument();
+  });
+
   it("requests unread-only when the Unread filter is chosen", async () => {
     listNotifications.mockResolvedValue(page([makeNotification()]));
     render(<NotificationsPage />);

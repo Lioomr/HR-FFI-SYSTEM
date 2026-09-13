@@ -60,3 +60,36 @@ describe("home-route resolution", () => {
     );
   });
 });
+
+describe("capability-based login return paths", () => {
+  it.each([
+    ["Employee", "/manager/team-requests"],
+    ["Employee", "/ceo/loan-requests/123"],
+    ["Manager", "/cfo/loan-requests/123"],
+    ["SystemAdmin", "/finance/loan-requests/123"],
+    ["HRManager", "/finance/loan-requests"],
+  ] as const)(
+    "restores %s to %s for the route guard to authorize",
+    (role, path) => {
+      expect(getPostLoginDestination(role, path)).toBe(path);
+    },
+  );
+  it.each([
+    "//evil.example/manager",
+    "/\\evil.example/manager",
+    "https://evil.example/manager",
+  ])("rejects external destination %s", (path) => {
+    expect(getPostLoginDestination("Employee", path)).toBe(
+      "/employee/dashboard",
+    );
+  });
+});
+
+it("restores a legacy HR reminder after login", () => {
+  expect(getPostLoginDestination("HRManager", "/employees/123")).toBe(
+    "/hr/employees/123",
+  );
+  expect(getPostLoginDestination("Employee", "/employees/123")).toBe(
+    "/employee/dashboard",
+  );
+});

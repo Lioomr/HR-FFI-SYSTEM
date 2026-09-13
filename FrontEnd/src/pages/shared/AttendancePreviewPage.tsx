@@ -41,7 +41,7 @@ import type {
   AttendanceFilters,
   AttendanceRecord,
   AttendanceSource,
-  AttendanceStatus,
+  EffectiveAttendanceStatus,
 } from "../../types/attendance";
 import { unwrapEnvelope, normalizeListData } from "../../utils/dataUtils";
 import {
@@ -70,10 +70,11 @@ interface AttendancePreviewPageProps {
   role: PreviewRole;
 }
 
-const STATUS_OPTIONS: AttendanceStatus[] = [
+const STATUS_OPTIONS: EffectiveAttendanceStatus[] = [
   "PRESENT",
   "LATE",
   "ABSENT",
+  "EXCUSED",
   "PENDING",
   "PENDING_HR",
   "PENDING_MGR",
@@ -83,9 +84,10 @@ const STATUS_OPTIONS: AttendanceStatus[] = [
 
 const SOURCE_OPTIONS: AttendanceSource[] = ["SYSTEM", "EMPLOYEE", "HR"];
 
-const statusColors: Record<AttendanceStatus, string> = {
+const statusColors: Record<EffectiveAttendanceStatus, string> = {
   PRESENT: "green",
   ABSENT: "red",
+  EXCUSED: "blue",
   LATE: "gold",
   PENDING: "orange",
   PENDING_HR: "orange",
@@ -121,14 +123,16 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
 
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [summary, setSummary] = useState<
-    Partial<Record<AttendanceStatus, number>>
+    Partial<Record<EffectiveAttendanceStatus, number>>
   >({});
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const [status, setStatus] = useState<AttendanceStatus | "ALL">("ALL");
+  const [status, setStatus] = useState<EffectiveAttendanceStatus | "ALL">(
+    "ALL",
+  );
   const [source, setSource] = useState<AttendanceSource | "ALL">("ALL");
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(
     defaultRange(),
@@ -181,7 +185,7 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
   // pagination — the export walks its own pages.
   const buildBaseParams = useCallback((): AttendanceFilters => {
     const params: AttendanceFilters = {};
-    if (status !== "ALL") params.status = status;
+    if (status !== "ALL") params.effective_status = status;
     if (dateRange) {
       params.date_from = dateRange[0].format("YYYY-MM-DD");
       params.date_to = dateRange[1].format("YYYY-MM-DD");
@@ -208,12 +212,12 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
           ? await getCEOAttendance(params)
           : await getGlobalAttendance(params);
       const data = unwrapEnvelope(response) as AttendanceListResponse & {
-        summary?: Partial<Record<AttendanceStatus, number>>;
+        summary?: Partial<Record<EffectiveAttendanceStatus, number>>;
       };
       const normalized = normalizeListData<AttendanceRecord>(data);
       setRecords(normalized.items);
       setTotal(normalized.total);
-      setSummary(data.summary || {});
+      setSummary(data.effective_summary || data.summary || {});
       setErrorMessage(null);
     } catch (error: any) {
       const msg =
@@ -259,7 +263,7 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
     };
   }, [employeeQuery, supportsAdvancedFilters]);
 
-  const handleStatusChange = (value: AttendanceStatus | "ALL") => {
+  const handleStatusChange = (value: EffectiveAttendanceStatus | "ALL") => {
     setStatus(value);
     setPagination((current) => ({ ...current, current: 1 }));
   };
@@ -321,10 +325,11 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
     },
   ];
 
-  const getStatusLabel = (value: AttendanceStatus) => {
-    const keyByStatus: Record<AttendanceStatus, string> = {
+  const getStatusLabel = (value: EffectiveAttendanceStatus) => {
+    const keyByStatus: Record<EffectiveAttendanceStatus, string> = {
       PRESENT: "attendancePreview.status.present",
       ABSENT: "attendancePreview.status.absent",
+      EXCUSED: "attendancePreview.status.excused",
       LATE: "attendancePreview.status.late",
       PENDING: "attendancePreview.status.pending",
       PENDING_HR: "attendancePreview.status.pendingHr",
@@ -398,6 +403,7 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
         t("attendance.checkOut"),
         t("attendancePreview.columns.duration"),
         t("common.status"),
+        t("attendancePreview.approvedLeaveReference"),
         t("attendancePreview.columns.lateBy"),
         t("hr.attendance.source"),
       ];
@@ -407,7 +413,8 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
         formatTimeOnly(record.check_in_at, ""),
         formatTimeOnly(record.check_out_at, ""),
         formatDurationBetween(record.check_in_at, record.check_out_at, ""),
-        getStatusLabel(record.status),
+        getStatusLabel(record.effective_status || record.status),
+        record.excused_by_leave_id || "",
         record.late_minutes && record.late_minutes > 0
           ? String(record.late_minutes)
           : "",
@@ -500,6 +507,11 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
       color: "#ef4444",
     },
     {
+      label: t("attendancePreview.status.excused"),
+      value: summary.EXCUSED || 0,
+      color: "#3b82f6",
+    },
+    {
       label: t("attendancePreview.status.pending"),
       value: pendingTotal,
       color: "#f97316",
@@ -583,11 +595,20 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
       dataIndex: "status",
       key: "status",
       width: 170,
-      render: (value: AttendanceStatus, record: AttendanceRecord) => (
+      render: (value: EffectiveAttendanceStatus, record: AttendanceRecord) => (
         <Space size={4} wrap>
-          <Tag color={statusColors[value]} style={{ marginInlineEnd: 0 }}>
-            {getStatusLabel(value)}
+          <Tag
+            color={statusColors[record.effective_status || value]}
+            style={{ marginInlineEnd: 0 }}
+          >
+            {getStatusLabel(record.effective_status || value)}
           </Tag>
+          {record.excused_by_leave_id && (
+            <Text type="secondary">
+              {t("attendancePreview.approvedLeaveReference")} #
+              {record.excused_by_leave_id}
+            </Text>
+          )}
           {record.is_late_flagged && value.startsWith("PENDING") && (
             <Tag color="gold" style={{ marginInlineEnd: 0 }}>
               {t("attendancePreview.lateArrivalTag")}

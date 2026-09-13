@@ -67,6 +67,7 @@ const roleOptions: Role[] = [
   "Manager",
   "Employee",
   "CEO",
+  "CFO",
 ];
 
 // Color map for role badge
@@ -346,8 +347,7 @@ export default function AdminUsersListPage() {
               >
                 {summary}
               </Typography.Text>
-              {currentUserRole === "SystemAdmin" &&
-              record.role === "HRManager" ? (
+              {currentUserRole === "SystemAdmin" ? (
                 <Button
                   size="small"
                   icon={<ApartmentOutlined />}
@@ -569,13 +569,15 @@ export default function AdminUsersListPage() {
           onChange={setStatus}
           style={{ flex: "0 1 140px", minWidth: 110 }}
           options={[
-            { label: t("common.filter") + " Status", value: "All" },
+            { label: t("admin.users.allStatuses"), value: "All" },
             { label: t("status.active"), value: "Active" },
             { label: t("status.inactive"), value: "Disabled" },
           ]}
         />
         <div style={{ marginLeft: "auto", color: "#94a3b8", fontSize: 13 }}>
-          {rows.length} {rows.length === 1 ? "user" : "users"}
+          {rows.length === 1
+            ? t("admin.users.countOne")
+            : t("admin.users.countOther", { count: rows.length })}
         </div>
       </div>
 
@@ -601,7 +603,7 @@ export default function AdminUsersListPage() {
       <Modal
         title={
           <span style={{ fontWeight: 700 }}>
-            {t("admin.users.manageCompanies", "Manage Companies")}
+            {t("admin.users.manageCompaniesTitle")}
           </span>
         }
         open={orgModalOpen}
@@ -721,8 +723,10 @@ export default function AdminUsersListPage() {
             onChange={(e) => setResetMode(e.target.value)}
           >
             <Space direction="vertical">
-              <Radio value="temporary_password">Temporary password</Radio>
-              <Radio value="reset_link">Reset link token</Radio>
+              <Radio value="temporary_password">
+                {t("admin.users.resetModeTemporary")}
+              </Radio>
+              <Radio value="reset_link">{t("admin.users.resetModeLink")}</Radio>
             </Space>
           </Radio.Group>
           {resetResult && (
@@ -736,10 +740,9 @@ export default function AdminUsersListPage() {
               }}
             >
               <Typography.Text strong style={{ color: "#065f46" }}>
-                Success:{" "}
+                {t("common.success")}:{" "}
               </Typography.Text>
-              Password reset operation completed successfully. Detailed
-              credentials have been securely routed.
+              {t("admin.users.resetDone")}
             </div>
           )}
         </Space>

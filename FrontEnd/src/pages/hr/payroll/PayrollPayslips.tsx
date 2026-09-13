@@ -51,7 +51,10 @@ export default function PayrollPayslips({
         const totalPayslips = res.data.total_payslips ?? 0;
         notification.success({
           message: t("payroll.runDetails.payslipsReady"),
-          description: `${generatedCount} payslips updated. Total payslips: ${totalPayslips}.`,
+          description: t("payroll.runDetails.payslipsUpdatedDesc", {
+            generated: generatedCount,
+            total: totalPayslips,
+          }),
         });
         setGenerated({ generatedCount, totalPayslips });
 

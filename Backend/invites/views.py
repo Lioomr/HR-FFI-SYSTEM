@@ -654,13 +654,13 @@ class InviteAcceptView(APIView):
         )
 
         from in_app_notifications.dispatcher import dispatch_notification_channels
+        from in_app_notifications.i18n import notification_text, role_label
         from in_app_notifications.models import Notification
 
         dispatch_notification_channels(
             recipient=user,
             event_key="invite.accepted",
-            title="Welcome to the FFI HR System",
-            message=f"Your {invite.role} account is ready.",
+            **notification_text("invite.accepted", role=role_label(invite.role)),
             category=Notification.Category.INVITE,
             action_url="/login",
             related_object=invite,

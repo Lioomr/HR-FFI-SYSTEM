@@ -83,7 +83,7 @@ class AnnualLeavePaymentFollowUpTests(APITestCase):
             status=status,
         )
 
-    @patch("leaves.views.notify_users_for_pending_status")
+    @patch("leaves.annual_payment_services.notify_users_for_pending_status")
     def test_retrieve_uses_standard_success_envelope(self, notify):
         self.client.force_authenticate(self.employee)
         created = self.client.post(self.url, {}, format="json", **self.headers)
@@ -247,7 +247,7 @@ class AnnualLeavePaymentFollowUpTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data["data"]["has_pending_annual_leave"])
 
-    @patch("leaves.views.notify_users_for_pending_status")
+    @patch("leaves.annual_payment_services.notify_users_for_pending_status")
     def test_system_admin_can_create_scoped_employee_payment_request(self, notify):
         self.client.force_authenticate(self.system_admin)
 
