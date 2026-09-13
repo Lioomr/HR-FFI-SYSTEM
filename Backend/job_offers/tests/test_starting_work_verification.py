@@ -17,7 +17,7 @@ from employees.models import EmployeeDocument, EmployeeProfile
 from in_app_notifications.models import Notification
 from organization.models import OrganizationNode, UserOrganizationAccess
 
-from ..models import StartingWorkAcknowledgment
+from ..models import JobOffer, StartingWorkAcknowledgment
 from ..starting_work_service import generate_starting_work_acknowledgment
 
 User = get_user_model()
@@ -64,6 +64,25 @@ class StartingWorkVerificationTests(TestCase):
         self.mapping = BioTimeEmployeeMap.objects.create(
             employee_profile=self.profile,
             biotime_emp_code="SWV100",
+        )
+        self.offer = JobOffer.objects.create(
+            company=self.company,
+            employee_profile=self.profile,
+            candidate_full_name=self.profile.full_name,
+            candidate_email=self.employee.email,
+            position_title=self.profile.job_title,
+            basic_salary=1000,
+            total_salary_package=1000,
+            offer_date=date(2026, 7, 1),
+            expiry_date=date(2026, 7, 8),
+            reference_number="JO-SWV_A-2026-0001",
+            hr_signer_user=self.hr,
+            hr_signer_name=self.hr.full_name,
+            hr_signer_title="HR Manager",
+            status=JobOffer.Status.ACCEPTED,
+            accepted_at=timezone.now(),
+            created_by=self.hr,
+            updated_by=self.hr,
         )
 
     def _system_record(self, record_date, *, status=AttendanceRecord.Status.PRESENT):
@@ -278,6 +297,34 @@ class StartingWorkVerificationTests(TestCase):
         SyncBioTimeService.ingest_transactions(transaction)
         first.refresh_from_db()
         self.assertEqual(first.status, AttendanceRecord.Status.ABSENT)
+
+    def test_voiding_an_erroneous_acknowledgment_releases_the_verification_hold(self):
+        first = self._system_record(date(2026, 8, 1))
+        acknowledgment = self._generate(first)
+        first.refresh_from_db()
+        self.assertEqual(first.status, AttendanceRecord.Status.PENDING_HR)
+
+        response = self._hr_client().post(
+            f"/starting-work-acknowledgments/{acknowledgment.id}/void/",
+            {"reason": "Created after a BioTime identity remap for an existing employee."},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        acknowledgment.refresh_from_db()
+        first.refresh_from_db()
+        self.assertEqual(acknowledgment.status, StartingWorkAcknowledgment.Status.VOIDED)
+        self.assertEqual(acknowledgment.voided_by, self.hr)
+        self.assertEqual(
+            acknowledgment.void_reason,
+            "Created after a BioTime identity remap for an existing employee.",
+        )
+        self.assertNotEqual(first.status, AttendanceRecord.Status.PENDING_HR)
+        self.assertTrue(
+            AuditLog.objects.filter(
+                action="starting_work_acknowledgment_voided", entity_id=str(acknowledgment.id)
+            ).exists()
+        )
 
     def test_list_detail_actions_workflow_audits_and_role_scope(self):
         acknowledgment = self._generate()

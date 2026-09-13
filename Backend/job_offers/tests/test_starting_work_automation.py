@@ -79,6 +79,7 @@ class StartingWorkAcknowledgmentAutomationTests(TestCase):
         self.config.is_active = True
         self.config.last_sync_time = None
         self.config.save()
+        self.offer = self._accepted_job_offer()
 
     def _sync(self, transactions):
         with (
@@ -133,8 +134,6 @@ class StartingWorkAcknowledgmentAutomationTests(TestCase):
         )
 
     def test_first_biotime_attendance_generates_and_archives_one_acknowledgment(self):
-        offer = self._accepted_job_offer()
-
         successful, result, notify = self._sync(self._transactions())
 
         self.assertTrue(successful)
@@ -142,7 +141,7 @@ class StartingWorkAcknowledgmentAutomationTests(TestCase):
         acknowledgment = StartingWorkAcknowledgment.objects.select_related("document").get(
             employee_profile=self.profile
         )
-        self.assertEqual(acknowledgment.job_offer, offer)
+        self.assertEqual(acknowledgment.job_offer, self.offer)
         self.assertEqual(acknowledgment.reference_number, "SWA-SWA-EMP-100-20260401")
         self.assertEqual(acknowledgment.status, StartingWorkAcknowledgment.Status.PENDING_HR)
         self.assertTrue(acknowledgment.generated_by_system)
@@ -298,6 +297,38 @@ class StartingWorkAcknowledgmentAutomationTests(TestCase):
             date=date(2026, 4, 1),
             source=AttendanceRecord.Source.HR,
             status=AttendanceRecord.Status.PRESENT,
+        )
+
+        self.assertIsNone(generate_starting_work_acknowledgment(record))
+        self.assertFalse(StartingWorkAcknowledgment.objects.exists())
+
+    def test_existing_employee_with_remapped_biotime_code_does_not_generate_an_acknowledgment(self):
+        AttendanceRecord.objects.create(
+            employee_profile=self.profile,
+            date=date(2026, 3, 1),
+            source=AttendanceRecord.Source.SYSTEM,
+            status=AttendanceRecord.Status.PRESENT,
+            biotime_emp_code="PREVIOUS-CODE",
+        )
+        remapped_record = AttendanceRecord.objects.create(
+            employee_profile=self.profile,
+            date=date(2026, 4, 1),
+            source=AttendanceRecord.Source.SYSTEM,
+            status=AttendanceRecord.Status.PRESENT,
+            biotime_emp_code=self.mapping.biotime_emp_code,
+        )
+
+        self.assertIsNone(generate_starting_work_acknowledgment(remapped_record))
+        self.assertFalse(StartingWorkAcknowledgment.objects.exists())
+
+    def test_employee_without_an_accepted_job_offer_does_not_generate_an_acknowledgment(self):
+        self.offer.delete()
+        record = AttendanceRecord.objects.create(
+            employee_profile=self.profile,
+            date=date(2026, 4, 1),
+            source=AttendanceRecord.Source.SYSTEM,
+            status=AttendanceRecord.Status.PRESENT,
+            biotime_emp_code=self.mapping.biotime_emp_code,
         )
 
         self.assertIsNone(generate_starting_work_acknowledgment(record))

@@ -312,6 +312,7 @@ class StartingWorkAcknowledgmentSerializer(serializers.ModelSerializer):
     first_biotime_attendance_date = serializers.DateField(source="attendance_record.date", read_only=True)
     approved_by = serializers.SerializerMethodField()
     rejected_by = serializers.SerializerMethodField()
+    voided_by = serializers.SerializerMethodField()
     document_available = serializers.SerializerMethodField()
     document_download_url = serializers.SerializerMethodField()
     affected_attendance_count = serializers.SerializerMethodField()
@@ -334,6 +335,9 @@ class StartingWorkAcknowledgmentSerializer(serializers.ModelSerializer):
             "rejected_by",
             "rejected_at",
             "rejection_reason",
+            "voided_by",
+            "voided_at",
+            "void_reason",
             "document_available",
             "document_download_url",
             "affected_attendance_count",
@@ -360,6 +364,9 @@ class StartingWorkAcknowledgmentSerializer(serializers.ModelSerializer):
     def get_rejected_by(self, obj):
         return self._user_identity(obj.rejected_by)
 
+    def get_voided_by(self, obj):
+        return self._user_identity(obj.voided_by)
+
     def get_document_available(self, obj):
         return bool(obj.document_id and obj.document.file)
 
@@ -383,6 +390,7 @@ class StartingWorkAcknowledgmentSerializer(serializers.ModelSerializer):
                 StartingWorkAcknowledgment.Status.REJECTED,
             },
             "can_reject": is_hr and obj.status == StartingWorkAcknowledgment.Status.PENDING_HR,
+            "can_void": is_hr and obj.status == StartingWorkAcknowledgment.Status.PENDING_HR,
             "can_download": is_hr and bool(obj.document_id and obj.document.file),
         }
 
@@ -392,6 +400,7 @@ class StartingWorkAcknowledgmentSerializer(serializers.ModelSerializer):
         actions = self.get_actions(obj)
         snapshot["can_approve"] = actions["can_approve"]
         snapshot["can_reject"] = actions["can_reject"]
+        snapshot["can_void"] = actions["can_void"]
         snapshot["can_download"] = actions["can_download"]
         return snapshot
 
@@ -403,3 +412,7 @@ class StartingWorkRejectionSerializer(serializers.Serializer):
         if not value.strip():
             raise serializers.ValidationError("This field may not be blank.")
         return value.strip()
+
+
+class StartingWorkVoidSerializer(StartingWorkRejectionSerializer):
+    pass
