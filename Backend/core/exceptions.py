@@ -1,3 +1,6 @@
+import logging
+
+import sentry_sdk
 from django.http import Http404
 from django.utils.translation import get_language
 from rest_framework.exceptions import ErrorDetail, ValidationError
@@ -5,6 +8,8 @@ from rest_framework.views import exception_handler
 
 from core.error_translations import ARABIC_ERRORS
 from core.responses import error
+
+logger = logging.getLogger(__name__)
 
 
 def _translate_if_arabic(data):
@@ -41,6 +46,12 @@ def custom_exception_handler(exc, context):
     resp = exception_handler(exc, context)
 
     if resp is None:
+        # DRF's exception_handler returns None for anything it doesn't
+        # recognize (i.e. a real bug, not a validation/permission error).
+        # It swallows exc here rather than re-raising, so this is the only
+        # place left to log it and get it into Sentry.
+        logger.exception("unhandled_view_exception", exc_info=exc)
+        sentry_sdk.capture_exception(exc)
         msg = _translate_if_arabic("Server error")
         return error(msg, status=500)
 
