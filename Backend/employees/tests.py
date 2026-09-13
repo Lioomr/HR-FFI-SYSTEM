@@ -1164,6 +1164,49 @@ class EmployeeDeletionWorkflowTests(TestCase):
             employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
         )
 
+    def test_approval_archives_employee_with_preexisting_invalid_manager_link(self):
+        # A manager profile with no linked user account is invalid for *new*
+        # assignments (see validate_manager_assignment), but this one already
+        # existed before that rule mattered to this employee. Approving the
+        # archive request must not be blocked by re-validating an assignment
+        # nobody is touching.
+        manager_without_login = EmployeeProfile.objects.create(
+            user=None,
+            company=self.company,
+            employee_id="DEL-MGR",
+            full_name="Manager No Login",
+            department_ref=self.department,
+            position_ref=self.position,
+            department=self.department.name,
+            job_title=self.position.name,
+            hire_date="2024-01-01",
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        )
+        EmployeeProfile.objects.filter(pk=self.profile.pk).update(manager_profile_id=manager_without_login.pk)
+        self.profile.refresh_from_db()
+
+        request_obj = EmployeeDeletionRequest.objects.create(
+            company=self.company,
+            employee_profile=self.profile,
+            target_user=self.employee_user,
+            requested_by=self.hr_user,
+            reason="Resigned",
+            archive_reason=EmployeeProfile.ArchiveReason.OTHER,
+            request_snapshot={"employee_id": self.profile.employee_id, "full_name": self.profile.full_name},
+        )
+
+        self.client.force_authenticate(user=self.ceo_user)
+        response = self.client.post(
+            f"/api/employees/deletion-requests/{request_obj.id}/approve/",
+            {},
+            format="json",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.profile.refresh_from_db()
+        self.assertTrue(self.profile.is_archived)
+
     def test_hr_can_create_employee_archive_request(self):
         self.client.force_authenticate(user=self.hr_user)
 
@@ -1344,8 +1387,25 @@ class EmployeeDeletionWorkflowTests(TestCase):
             [{"id": mapping.id, "biotime_emp_code": "BIO-DEL-001"}],
         )
 
-    @patch("employees.views.EmployeeProfile.save", side_effect=IntegrityError("archive guard failed"))
-    def test_approval_returns_a_clear_reason_when_an_archive_integrity_check_fails(self, _save_mock):
+    def test_approval_returns_a_clear_reason_when_an_archive_integrity_check_fails(self):
+        # retire_biotime_mapping_and_archive_profile writes the archive columns
+        # with EmployeeProfile._base_manager.filter(...).update(...) rather than
+        # profile.save(), so simulate the integrity failure on that specific
+        # write. Patching QuerySet.update wholesale would also break unrelated
+        # queries this request makes (e.g. refresh_from_db), so only the
+        # archive write itself raises.
+        from django.db.models.query import QuerySet
+
+        original_update = QuerySet.update
+
+        def flaky_update(queryset_self, **kwargs):
+            if kwargs.get("is_archived") is True:
+                raise IntegrityError("archive guard failed")
+            return original_update(queryset_self, **kwargs)
+
+        patcher = patch.object(QuerySet, "update", flaky_update)
+        patcher.start()
+        self.addCleanup(patcher.stop)
         mapping = BioTimeEmployeeMap.objects.create(employee_profile=self.profile, biotime_emp_code="BIO-DEL-BLOCKED")
         request_obj = EmployeeDeletionRequest.objects.create(
             company=self.company,
