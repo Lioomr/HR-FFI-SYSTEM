@@ -1370,6 +1370,11 @@ def _legacy_status_snapshot_for_starting_work_acknowledgment(instance):
         current_stage = ""
         current_role = ""
         decided_at = instance.approved_at or instance.generated_at
+    elif instance.status == StartingWorkAcknowledgment.Status.VOIDED:
+        status = WorkflowInstance.Status.CANCELLED
+        current_stage = ""
+        current_role = ""
+        decided_at = instance.voided_at or instance.generated_at
     else:
         status = WorkflowInstance.Status.REJECTED
         current_stage = ""
@@ -1383,7 +1388,7 @@ def _legacy_status_snapshot_for_starting_work_acknowledgment(instance):
         "submitted_by": None,
         "submitted_at": instance.generated_at,
         "decided_at": decided_at,
-        "cancelled_at": None,
+        "cancelled_at": decided_at if status == WorkflowInstance.Status.CANCELLED else None,
     }
 
 
@@ -1430,6 +1435,22 @@ def _legacy_events_for_starting_work_acknowledgment(instance) -> list[WorkflowEv
                 actor=instance.approved_by,
                 at=instance.approved_at,
                 metadata={"legacy_signature": "approved", "workflow_key": "starting_work_acknowledgment"},
+            )
+        )
+    if instance.voided_at:
+        events.append(
+            WorkflowEvent(
+                signature=f"starting-work:{instance.id}:voided:{instance.voided_at.isoformat()}",
+                action=WorkflowAction.Action.CANCEL,
+                approver_role="hr",
+                from_status="pending_hr",
+                to_status="voided",
+                from_stage="hr",
+                to_stage="",
+                actor=instance.voided_by,
+                note=instance.void_reason,
+                at=instance.voided_at,
+                metadata={"legacy_signature": "voided", "workflow_key": "starting_work_acknowledgment"},
             )
         )
     return events

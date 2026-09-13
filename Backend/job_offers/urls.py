@@ -17,6 +17,7 @@ from .views import (
     StartingWorkAcknowledgmentListView,
     StartingWorkAcknowledgmentPdfView,
     StartingWorkAcknowledgmentRejectView,
+    StartingWorkAcknowledgmentVoidView,
 )
 
 urlpatterns = [
@@ -59,5 +60,10 @@ urlpatterns = [
         "starting-work-acknowledgments/<int:acknowledgment_id>/reject/",
         StartingWorkAcknowledgmentRejectView.as_view(),
         name="starting-work-acknowledgment-reject",
+    ),
+    path(
+        "starting-work-acknowledgments/<int:acknowledgment_id>/void/",
+        StartingWorkAcknowledgmentVoidView.as_view(),
+        name="starting-work-acknowledgment-void",
     ),
 ]

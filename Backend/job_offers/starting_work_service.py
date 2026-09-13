@@ -7,6 +7,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from attendance.models import AttendanceRecord, BioTimeEmployeeMap
+from attendance.schedule import classify_check_in, get_work_schedule
 from audit.utils import audit
 from core.models import WorkflowAction
 from core.services.workflow_engine import begin_recorded_transition, record_workflow_transition
@@ -135,22 +136,6 @@ def generate_starting_work_acknowledgment(
             .first()
         )
         if acknowledgment is None:
-            if attendance_record.status != AttendanceRecord.Status.PRESENT and not received_from_biotime:
-                return None
-            first_biotime_id = (
-                AttendanceRecord.objects.filter(
-                    employee_profile=profile,
-                    source=AttendanceRecord.Source.SYSTEM,
-                    is_overridden=False,
-                    biotime_emp_code=mapping.biotime_emp_code,
-                )
-                .order_by("date", "id")
-                .values_list("id", flat=True)
-                .first()
-            )
-            if first_biotime_id != attendance_record.id:
-                return None
-
             job_offer = (
                 JobOffer.objects.filter(
                     employee_profile=profile,
@@ -160,6 +145,22 @@ def generate_starting_work_acknowledgment(
                 .order_by("-accepted_at", "-id")
                 .first()
             )
+            if job_offer is None:
+                return None
+            if attendance_record.status != AttendanceRecord.Status.PRESENT and not received_from_biotime:
+                return None
+            first_biotime_id = (
+                AttendanceRecord.objects.filter(
+                    employee_profile=profile,
+                    source=AttendanceRecord.Source.SYSTEM,
+                    is_overridden=False,
+                )
+                .order_by("date", "id")
+                .values_list("id", flat=True)
+                .first()
+            )
+            if first_biotime_id != attendance_record.id:
+                return None
             reference_number = f"SWA-{profile.employee_id}-{attendance_record.date:%Y%m%d}"
             pdf_bytes = build_starting_work_acknowledgment_pdf(
                 profile,
@@ -306,4 +307,55 @@ def reject_starting_work_acknowledgment(
         record_workflow_transition(
             acknowledgment, start, action=WorkflowAction.Action.REJECT, actor=rejector, note=reason, approver_role="hr"
         )
+    return acknowledgment
+
+
+def void_starting_work_acknowledgment(
+    acknowledgment: StartingWorkAcknowledgment, actor, reason: str, *, record_audit: bool = True
+) -> StartingWorkAcknowledgment:
+    """Void an acknowledgement generated in error and restore its BioTime attendance states."""
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValueError("A void reason is required.")
+
+    with transaction.atomic():
+        acknowledgment = (
+            StartingWorkAcknowledgment.objects.select_for_update()
+            .select_related("employee_profile", "attendance_record", "document")
+            .get(pk=acknowledgment.pk)
+        )
+        if acknowledgment.status != StartingWorkAcknowledgment.Status.PENDING_HR:
+            raise ValueError("Only pending acknowledgements can be voided.")
+
+        start = begin_recorded_transition(acknowledgment, actor=actor)
+        records = acknowledgment.affected_attendance_records.filter(
+            source=AttendanceRecord.Source.SYSTEM,
+            is_overridden=False,
+        )
+        schedule = get_work_schedule()
+        for record in records:
+            restored_status = classify_check_in(record.check_in_at, record.date, schedule)
+            record.status = restored_status
+            record.is_late_flagged = restored_status == AttendanceRecord.Status.LATE
+            record.save(update_fields=["status", "is_late_flagged", "updated_at"])
+
+        voided_at = timezone.now()
+        acknowledgment.status = StartingWorkAcknowledgment.Status.VOIDED
+        acknowledgment.voided_by = actor
+        acknowledgment.voided_at = voided_at
+        acknowledgment.void_reason = reason
+        acknowledgment.save(update_fields=["status", "voided_by", "voided_at", "void_reason"])
+        record_workflow_transition(
+            acknowledgment,
+            start,
+            action=WorkflowAction.Action.CANCEL,
+            actor=actor,
+            note=reason,
+            approver_role="hr",
+        )
+
+    if record_audit:
+        metadata = _audit_metadata(acknowledgment)
+        metadata["void_reason"] = reason
+        _safe_audit("starting_work_acknowledgment_voided", acknowledgment, metadata)
     return acknowledgment

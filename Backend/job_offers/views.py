@@ -37,6 +37,7 @@ from .serializers import (
     PublicJobOfferSerializer,
     StartingWorkAcknowledgmentSerializer,
     StartingWorkRejectionSerializer,
+    StartingWorkVoidSerializer,
 )
 from .services import (
     create_and_send_employee_invite,
@@ -45,7 +46,11 @@ from .services import (
     get_biotime_status,
     update_employee_profile_from_offer,
 )
-from .starting_work_service import approve_starting_work_acknowledgment, reject_starting_work_acknowledgment
+from .starting_work_service import (
+    approve_starting_work_acknowledgment,
+    reject_starting_work_acknowledgment,
+    void_starting_work_acknowledgment,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +86,7 @@ def _scoped_starting_work_acknowledgments(request):
         "document",
         "approved_by",
         "rejected_by",
+        "voided_by",
     ).prefetch_related("affected_attendance_records")
     return filter_queryset_by_company_scope(queryset, request)
 
@@ -980,4 +986,41 @@ class StartingWorkAcknowledgmentRejectView(APIView):
         return success(
             _serialize_starting_work_acknowledgment(acknowledgment, request),
             message="Starting work attendance rejected.",
+        )
+
+
+class StartingWorkAcknowledgmentVoidView(APIView):
+    permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
+
+    def post(self, request, acknowledgment_id: int):
+        serializer = StartingWorkVoidSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error(
+                "Validation error",
+                errors=serializer.errors,
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+        acknowledgment = _scoped_starting_work_acknowledgments(request).filter(pk=acknowledgment_id).first()
+        if acknowledgment is None:
+            return error("Starting work acknowledgement not found.", status=status.HTTP_404_NOT_FOUND)
+        try:
+            acknowledgment = void_starting_work_acknowledgment(
+                acknowledgment, request.user, serializer.validated_data["reason"], record_audit=False
+            )
+        except ValueError as exc:
+            return error(str(exc), status=status.HTTP_409_CONFLICT)
+        audit(
+            request,
+            "starting_work_acknowledgment_voided",
+            entity="StartingWorkAcknowledgment",
+            entity_id=acknowledgment.id,
+            metadata={
+                "company_id": acknowledgment.company_id,
+                "void_reason": acknowledgment.void_reason,
+                "affected_attendance_count": acknowledgment.affected_attendance_records.count(),
+            },
+        )
+        return success(
+            _serialize_starting_work_acknowledgment(acknowledgment, request),
+            message="Starting work acknowledgement voided and attendance restored.",
         )

@@ -157,6 +157,7 @@ class StartingWorkAcknowledgment(models.Model):
         PENDING_HR = "pending_hr", "Pending HR Verification"
         APPROVED = "approved", "Approved"
         REJECTED = "rejected", "Rejected"
+        VOIDED = "voided", "Voided"
 
     employee_profile = models.OneToOneField(
         "employees.EmployeeProfile",
@@ -201,6 +202,15 @@ class StartingWorkAcknowledgment(models.Model):
     )
     rejected_at = models.DateTimeField(null=True, blank=True)
     rejection_reason = models.TextField(blank=True)
+    voided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="voided_starting_work_acknowledgments",
+        null=True,
+        blank=True,
+    )
+    voided_at = models.DateTimeField(null=True, blank=True)
+    void_reason = models.TextField(blank=True)
     affected_attendance_records = models.ManyToManyField(
         "attendance.AttendanceRecord",
         related_name="starting_work_verifications",
