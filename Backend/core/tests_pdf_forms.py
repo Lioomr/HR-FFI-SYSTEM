@@ -334,6 +334,8 @@ def test_job_offer_internal_signatures_use_open_space_clear_of_name_and_date_box
     assert len(boxes) == 2
     for role, (x0, y0, x1, y1) in zip(("hr", "ceo"), boxes):
         signature_spec = assets.fields[f"{role}_signature_image"]
+        assert signature_spec["height"] >= 45, "job-offer signatures need enough height to remain legible"
+        assert signature_spec["padding"] <= 1, "the signature should use the approved open space"
         assert signature_spec["x"] <= x0 and x1 <= signature_spec["x"] + signature_spec["width"]
         assert signature_spec["y"] <= y0 and y1 <= signature_spec["y"] + signature_spec["height"]
         for suffix in ("name", "signature_date"):

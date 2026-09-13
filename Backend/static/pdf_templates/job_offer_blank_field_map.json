@@ -191,9 +191,9 @@
     "x": 23,
     "y": 133.89,
     "width": 258,
-    "height": 31,
+    "height": 45,
     "kind": "image",
-    "padding": 4,
+    "padding": 1,
     "source": "job_offer.hr.signature"
   },
   "hr_name": {
@@ -219,9 +219,9 @@
     "x": 314,
     "y": 133.89,
     "width": 258,
-    "height": 31,
+    "height": 45,
     "kind": "image",
-    "padding": 4,
+    "padding": 1,
     "source": "job_offer.ceo.signature"
   },
   "ceo_name": {

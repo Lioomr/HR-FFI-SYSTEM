@@ -58,14 +58,14 @@ def halfrow(c, x, top, key, en, ara):
 
 def approval_panel(c, x, top, width, role_en, role_ar, name_key, date_key, signature_key, source):
     txt(c,x+8,top,role_en,7,True,color=MUTED); artxt(c,x+width-8,top,role_ar,6.6,bold=True,color=MUTED)
-    signature_top=top+17; signature_height=31
-    mapfield(signature_key,x+8,signature_top,width-16,signature_height,kind="image",padding=4,source=source)
-    box(c,x+4,top+50,width-8,20,CELL)
-    txt(c,x+10,top+56,"Name",6.3,True,color=MUTED); artxt(c,x+width-10,top+56,"الاسم",6.1,bold=True,color=MUTED)
-    input(c,name_key,x+48,top+53,width-142,14,font_size=6.8,shrink=True)
-    box(c,x+4,top+72,width-8,20,CELL)
-    txt(c,x+10,top+78,"Date",6.3,True,color=MUTED); artxt(c,x+width-10,top+78,"التاريخ",6.1,bold=True,color=MUTED)
-    input(c,date_key,x+48,top+75,width-142,14,font_size=6.8,shrink=True)
+    signature_top=top+13; signature_height=45
+    mapfield(signature_key,x+8,signature_top,width-16,signature_height,kind="image",padding=1,source=source)
+    box(c,x+4,top+60,width-8,20,CELL)
+    txt(c,x+10,top+66,"Name",6.3,True,color=MUTED); artxt(c,x+width-10,top+66,"الاسم",6.1,bold=True,color=MUTED)
+    input(c,name_key,x+48,top+63,width-142,14,font_size=6.8,shrink=True)
+    box(c,x+4,top+82,width-8,20,CELL)
+    txt(c,x+10,top+88,"Date",6.3,True,color=MUTED); artxt(c,x+width-10,top+88,"التاريخ",6.1,bold=True,color=MUTED)
+    input(c,date_key,x+48,top+85,width-142,14,font_size=6.8,shrink=True)
 
 
 def build(logo: Path):
@@ -84,11 +84,11 @@ def build(logo: Path):
     section(c,482,"Benefits / Contract Details","تفاصيل المزايا / العقد")
     left=[("vacation_days","Vacation","مدة الإجازة"),("contract_status","Contract Status","حالة العقد"),("medical_insurance","Medical Insurance","العلاج الطبي")]; right=[("tickets","Tickets","تذاكر السفر"),("contract_type","Contract Type","نوع العقد"),("contract_duration","Contract Duration","مدة العقد")]
     for i in range(3): halfrow(c,15,501+i*21,*left[i]); halfrow(c,306,501+i*21,*right[i])
-    section(c,567,"Validity Note","ملاحظة صلاحية العرض"); box(c,15,586,W-30,43,DATA); txt(c,28,597,"This offer is not binding on Fathi Fouad Itani Contracting Co. until the employment contract is signed and recruitment procedures are completed.",6.1,color=MUTED); txt(c,28,611,"This offer is valid for one week from its date.",6.1,color=MUTED); artxt(c,W-28,614,"هذا العرض غير ملزم للشركة حتى توقيع عقد العمل واستكمال إجراءات التعيين.",6.1,color=MUTED)
-    section(c,638,"Approval Signatures","توقيعات الاعتماد"); c.setStrokeColor(ORANGE); c.setLineWidth(.9); c.line(15,bot(657),W-15,bot(657))
-    approval_panel(c,15,660,274,"HR","الموارد البشرية","hr_name","hr_signature_date","hr_signature_image","job_offer.hr.signature")
-    approval_panel(c,306,660,274,"CEO","الرئيس التنفيذي","ceo_name","ceo_signature_date","ceo_signature_image","job_offer.ceo.signature")
-    c.setStrokeColor(BORDER); c.setLineWidth(.45); c.line(297,bot(658),297,bot(754))
+    section(c,567,"Validity Note","ملاحظة صلاحية العرض"); box(c,15,586,W-30,35,DATA); txt(c,28,594,"This offer is not binding on Fathi Fouad Itani Contracting Co. until the employment contract is signed and recruitment procedures are completed.",6.1,color=MUTED); txt(c,28,607,"This offer is valid for one week from its date.",6.1,color=MUTED); artxt(c,W-28,610,"هذا العرض غير ملزم للشركة حتى توقيع عقد العمل واستكمال إجراءات التعيين.",6.1,color=MUTED)
+    section(c,628,"Approval Signatures","توقيعات الاعتماد"); c.setStrokeColor(ORANGE); c.setLineWidth(.9); c.line(15,bot(647),W-15,bot(647))
+    approval_panel(c,15,650,274,"HR","الموارد البشرية","hr_name","hr_signature_date","hr_signature_image","job_offer.hr.signature")
+    approval_panel(c,306,650,274,"CEO","الرئيس التنفيذي","ceo_name","ceo_signature_date","ceo_signature_image","job_offer.ceo.signature")
+    c.setStrokeColor(BORDER); c.setLineWidth(.45); c.line(297,bot(648),297,bot(754))
 
     section(c,756,"Applicant Decision","قرار المتقدم"); c.setStrokeColor(ORANGE); c.line(15,bot(775),W-15,bot(775))
     box(c,15,780,565,19,CELL); txt(c,23,786,"Applicant Name",6.4,True); artxt(c,W-23,786,"اسم المتقدم",6.2,bold=True); input(c,"applicant_name_acceptance",105,782,385,14,font_size=7.2,shrink=True)
