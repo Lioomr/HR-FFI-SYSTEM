@@ -250,10 +250,7 @@ function buildStages(
       detail: ceoName
         ? t("leave.approvalMap.ceoName", { name: ceoName }, `CEO: ${ceoName}`)
         : undefined,
-      note:
-        ceoState === "skipped"
-          ? t("leave.approvalMap.notRequired")
-          : request.ceo_decision_note || t(`leave.approvalMap.${ceoState}`),
+      note: request.ceo_decision_note || t(`leave.approvalMap.${ceoState}`),
       at: request.ceo_decision_at,
     },
     {
