@@ -8,7 +8,8 @@ from django.utils import timezone
 
 from attendance.models import AttendanceRecord, BioTimeEmployeeMap
 from audit.utils import audit
-from core.services.workflow_engine import sync_workflow
+from core.models import WorkflowAction
+from core.services.workflow_engine import begin_recorded_transition, record_workflow_transition
 from employees.models import EmployeeDocument, EmployeeProfile
 
 from .models import JobOffer, StartingWorkAcknowledgment
@@ -197,7 +198,10 @@ def generate_starting_work_acknowledgment(
         _apply_verification_hold(acknowledgment)
 
     if created:
-        sync_workflow(acknowledgment)
+        start = begin_recorded_transition(acknowledgment, new_instance=True)
+        record_workflow_transition(
+            acknowledgment, start, action=WorkflowAction.Action.SUBMIT, actor=None, approver_role=""
+        )
         metadata = _audit_metadata(acknowledgment)
         _safe_audit("starting_work_acknowledgment_pending_hr_created", acknowledgment, metadata)
         _safe_audit("starting_work_acknowledgment_document_archived", acknowledgment, metadata)
@@ -220,6 +224,7 @@ def approve_starting_work_acknowledgment(
         }:
             raise ValueError("Only pending or rejected acknowledgements can be approved.")
 
+        start = begin_recorded_transition(acknowledgment, actor=approver)
         approved_at = timezone.now()
         eligible_ids = list(
             acknowledgment.affected_attendance_records.filter(
@@ -266,8 +271,9 @@ def approve_starting_work_acknowledgment(
         acknowledgment.approved_by = approver
         acknowledgment.approved_at = approved_at
         acknowledgment.save(update_fields=["status", "approved_by", "approved_at"])
-
-    sync_workflow(acknowledgment, actor=approver)
+        record_workflow_transition(
+            acknowledgment, start, action=WorkflowAction.Action.APPROVE, actor=approver, approver_role="hr"
+        )
     return acknowledgment
 
 
@@ -291,11 +297,13 @@ def reject_starting_work_acknowledgment(
         if ids:
             acknowledgment.affected_attendance_records.add(*ids)
             records.update(status=AttendanceRecord.Status.ABSENT, updated_at=rejected_at)
+        start = begin_recorded_transition(acknowledgment, actor=rejector)
         acknowledgment.status = StartingWorkAcknowledgment.Status.REJECTED
         acknowledgment.rejected_by = rejector
         acknowledgment.rejected_at = rejected_at
         acknowledgment.rejection_reason = reason
         acknowledgment.save(update_fields=["status", "rejected_by", "rejected_at", "rejection_reason"])
-
-    sync_workflow(acknowledgment, actor=rejector)
+        record_workflow_transition(
+            acknowledgment, start, action=WorkflowAction.Action.REJECT, actor=rejector, note=reason, approver_role="hr"
+        )
     return acknowledgment

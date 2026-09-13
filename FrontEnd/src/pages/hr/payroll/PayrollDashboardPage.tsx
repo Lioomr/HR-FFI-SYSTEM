@@ -77,7 +77,9 @@ export default function PayrollDashboardPage() {
         if (status === "DRAFT") color = "orange";
         if (status === "PAID") color = "blue";
         if (status === "CANCELLED") color = "red";
-        return <Tag color={color}>{status}</Tag>;
+        return (
+          <Tag color={color}>{t(`payroll.status.${status}`, status)}</Tag>
+        );
       },
       width: 120,
     },
@@ -232,11 +234,10 @@ export default function PayrollDashboardPage() {
                 setPageSize(value);
               }}
               style={{ width: isMobile ? "100%" : 150 }}
-              options={[
-                { value: 10, label: "10 / page" },
-                { value: 20, label: "20 / page" },
-                { value: 50, label: "50 / page" },
-              ]}
+              options={[10, 20, 50].map((count) => ({
+                value: count,
+                label: t("common.perPage", { count }),
+              }))}
             />
           </Col>
         </Row>

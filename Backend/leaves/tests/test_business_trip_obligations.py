@@ -11,6 +11,7 @@ from core.models import DelegationRule, RequestObligation, WorkflowDefinition, W
 from core.services import BUSINESS_TRIP_CODE, sync_leave_obligations
 from employees.models import EmployeeProfile
 from leaves.models import LeaveRequest, LeaveType
+from leaves.services import apply_hr_cancellation
 from organization.models import OrganizationNode
 
 User = get_user_model()
@@ -48,7 +49,6 @@ class BusinessTripObligationsTests(TestCase):
             company=self.company,
             name="Business Trip",
             code=BUSINESS_TRIP_CODE,
-            requires_ceo_approval=True,
         )
         self.annual_type = LeaveType.objects.create(company=self.company, name="Annual", code="ANNUAL")
 
@@ -159,5 +159,31 @@ class BusinessTripObligationsTests(TestCase):
                 from_user=self.employee,
                 to_user=self.delegate,
                 is_active=True,
+            ).exists()
+        )
+
+    def test_hr_cancellation_closes_obligations_and_ends_trip_delegation(self):
+        hr_user = User.objects.create_user(email="trip-hr@example.com", password="password")
+        leave_request = self._leave(delegated_to=self.delegate, status=LeaveRequest.RequestStatus.APPROVED)
+        sync_leave_obligations(leave_request, actor=self.employee)
+        RequestObligation.objects.create(
+            company=self.company,
+            parent_content_type=ContentType.objects.get_for_model(LeaveRequest),
+            parent_object_id=leave_request.pk,
+            type=RequestObligation.ObligationType.ASSET_RETURN,
+            severity=RequestObligation.Severity.BLOCKING,
+            title="Return laptop",
+        )
+
+        apply_hr_cancellation(leave_request, actor=hr_user, comment="Trip called off")
+
+        leave_request.refresh_from_db()
+        self.assertEqual(leave_request.status, LeaveRequest.RequestStatus.CANCELLED)
+        self.assertFalse(
+            DelegationRule.objects.filter(from_user=self.employee, to_user=self.delegate, is_active=True).exists()
+        )
+        self.assertFalse(
+            RequestObligation.objects.filter(
+                parent_object_id=leave_request.pk, status=RequestObligation.Status.OPEN
             ).exists()
         )

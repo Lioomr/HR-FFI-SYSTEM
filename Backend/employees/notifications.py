@@ -9,6 +9,7 @@ from core.services.bird_email_service import send_document_expiry_reminder_email
 from core.services.whatsapp_service import WhatsAppService
 from employees.models import EmployeeProfile
 from in_app_notifications.dispatcher import dispatch_notification_channels
+from in_app_notifications.i18n import document_label, notification_text, profile_name
 from in_app_notifications.models import Notification
 from organization.models import OrganizationNode
 
@@ -85,8 +86,9 @@ def notify_document_expiry_in_app(
             recipient=getattr(profile, "user", None),
             company=profile.company,
             event_key="document.expiring",
-            title="Document expiry reminder",
-            message=f"{document.get('label') or document_type or 'Document'} expires on {expiry_date}.",
+            **notification_text(
+                "document.expiring", document=document_label(document.get("label"), document_type), date=expiry_date
+            ),
             category=Notification.Category.DOCUMENT,
             action_url="/employee/profile",
             related_object=profile,
@@ -101,6 +103,7 @@ def notify_document_expiry_in_app(
                 "employee_name": profile.full_name or profile.employee_id or "Employee",
                 "document_type": document.get("label") or document_type or "Document",
                 "expiry_date": _format_expiry_date(document.get("expiry_date")),
+                "action_url": "/employee/profile",
             },
             email_template=send_document_expiry_reminder_email,
             email_context={
@@ -147,8 +150,9 @@ def notify_expiring_work_licenses(*, today=None) -> dict:
                 recipient=recipient,
                 company=profile.company,
                 event_key="document.expiring",
-                title="Work license expiry reminder",
-                message=f"{profile.full_name or profile.employee_id}'s work license expires on {expiry_date}.",
+                **notification_text(
+                    "document.work_license_expiring", employee_name=profile_name(profile), date=expiry_date
+                ),
                 category=Notification.Category.DOCUMENT,
                 action_url="/hr/employees/expiries",
                 related_object=profile,
@@ -161,11 +165,15 @@ def notify_expiring_work_licenses(*, today=None) -> dict:
                     "days_left": (profile.work_license_expiry - today).days,
                 },
                 deduplication_key=deduplication_key,
-                whatsapp_template="document_expiry_reminder",
+                # Addressed to HR about the employee, not to the employee.
+                whatsapp_template="work_license_expiry_hr_v1",
                 whatsapp_variables={
+                    "recipient_name": getattr(recipient, "full_name", "") or "",
                     "employee_name": profile.full_name or profile.employee_id or "Employee",
-                    "document_type": "Work License",
+                    "employee_name_ar": profile.full_name_ar or "",
+                    "employee_id": profile.employee_id or "",
                     "expiry_date": _format_expiry_date(profile.work_license_expiry),
+                    "action_url": "/hr/employees/expiries",
                 },
                 whatsapp_enabled=True,
                 email_enabled=False,

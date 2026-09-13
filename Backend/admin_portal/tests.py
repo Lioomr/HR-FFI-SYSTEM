@@ -86,6 +86,40 @@ class OrganizationAccessScopeTests(TestCase):
             {self.company_a.id},
         )
 
+    def test_system_admin_can_assign_company_access_to_employee(self):
+        self.client.force_authenticate(user=self.system_admin)
+        response = self.client.post(
+            "/users/",
+            {
+                "full_name": "Company Employee",
+                "email": "company-employee@test.com",
+                "role": "Employee",
+                "is_active": True,
+                "organization_ids": [self.company_b.id],
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        employee = User.objects.get(email="company-employee@test.com")
+        self.assertEqual(
+            set(UserOrganizationAccess.objects.filter(user=employee).values_list("organization_id", flat=True)),
+            {self.company_b.id},
+        )
+
+    def test_explicit_company_access_is_used_for_non_hr_user(self):
+        employee_group, _ = Group.objects.get_or_create(name="Employee")
+        employee = User.objects.create_user(
+            email="assigned-employee@test.com", password="password", full_name="Assigned Employee"
+        )
+        employee.groups.add(employee_group)
+        UserOrganizationAccess.objects.create(user=employee, organization=self.company_b)
+
+        self.client.force_authenticate(user=self.system_admin)
+        response = self.client.get(f"/users/{employee.id}/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual([org["id"] for org in response.data["data"]["accessible_organizations"]], [self.company_b.id])
+
     def test_system_admin_can_assign_any_active_company(self):
         self.client.force_authenticate(user=self.system_admin)
         response = self.client.post(

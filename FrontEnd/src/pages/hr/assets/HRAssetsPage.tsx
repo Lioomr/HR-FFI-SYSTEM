@@ -78,6 +78,8 @@ const statusColorMap: Record<string, string> = {
   RETIRED: "default",
 };
 
+const ASSET_STATUSES = Object.keys(statusColorMap);
+
 function StatCard({
   title,
   value,
@@ -299,7 +301,9 @@ export default function HRAssetsPage() {
       key: "status",
       width: 180,
       render: (status: string) => (
-        <Tag color={statusColorMap[status] || "default"}>{status}</Tag>
+        <Tag color={statusColorMap[status] || "default"}>
+          {t(`assets.status.${status}`, status)}
+        </Tag>
       ),
     },
     ...(isHeadOffice
@@ -648,7 +652,7 @@ export default function HRAssetsPage() {
 
       await apiMessage.success(
         action === "approve"
-          ? t("assets.approvalMap.approvedForReturn", "Return request approved")
+          ? t("assets.returnRequestApproved")
           : t("assets.returnRequestRejected", "Return request rejected"),
       );
     } catch (err: any) {
@@ -694,7 +698,9 @@ export default function HRAssetsPage() {
       key: "status",
       width: 140,
       render: (value: string) => (
-        <Tag color={requestStatusColorMap[value] || "default"}>{value}</Tag>
+        <Tag color={requestStatusColorMap[value] || "default"}>
+          {t(`assets.requestStatus.${value}`, value)}
+        </Tag>
       ),
     },
     {
@@ -736,7 +742,9 @@ export default function HRAssetsPage() {
       key: "status",
       width: 140,
       render: (value: string) => (
-        <Tag color={requestStatusColorMap[value] || "default"}>{value}</Tag>
+        <Tag color={requestStatusColorMap[value] || "default"}>
+          {t(`assets.requestStatus.${value}`, value)}
+        </Tag>
       ),
     },
     {
@@ -1162,14 +1170,10 @@ export default function HRAssetsPage() {
                 setActiveKpi(null);
                 setAssetPage(1);
               }}
-              options={[
-                { label: "AVAILABLE", value: "AVAILABLE" },
-                { label: "ASSIGNED", value: "ASSIGNED" },
-                { label: "UNDER_MAINTENANCE", value: "UNDER_MAINTENANCE" },
-                { label: "LOST", value: "LOST" },
-                { label: "DAMAGED", value: "DAMAGED" },
-                { label: "RETIRED", value: "RETIRED" },
-              ]}
+              options={ASSET_STATUSES.map((value) => ({
+                label: t(`assets.status.${value}`, value),
+                value,
+              }))}
             />
           </Col>
           <Col xs={24} md={2}>
@@ -1537,7 +1541,7 @@ export default function HRAssetsPage() {
                 label={t("common.name")}
                 rules={[{ required: true, message: t("hr.assets.nameReq") }]}
               >
-                <Input placeholder="Name (English)" />
+                <Input placeholder={t("hr.assets.nameEnPlaceholder")} />
               </Form.Item>
             </Col>
             <Col xs={24} md={12}>
@@ -1545,7 +1549,7 @@ export default function HRAssetsPage() {
                 name="name_ar"
                 label={t("common.nameAr", "Name (Arabic)")}
               >
-                <Input placeholder="Name (Arabic)" />
+                <Input placeholder={t("common.nameAr")} dir="rtl" />
               </Form.Item>
             </Col>
           </Row>
@@ -1832,7 +1836,7 @@ export default function HRAssetsPage() {
                             type="text"
                             icon={<DeleteOutlined />}
                             onClick={() => remove(name)}
-                            aria-label="Remove custom detail"
+                            aria-label={t("hr.assets.removeCustomDetail")}
                           />
                         </Col>
                       </Row>

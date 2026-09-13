@@ -75,6 +75,15 @@ TEMPLATE_CATALOG = [
         "description_ar": "نموذج طلب سلفة فارغ مع مسار الموافقة والتوقيعات.",
     },
     {
+        "key": "exit_permission_request",
+        "category": "request",
+        "filename": "exit_permission_request_blank.pdf",
+        "title_en": "Exit Permission Request",
+        "title_ar": "طلب استئذان أثناء الدوام الرسمي",
+        "description_en": "Blank bilingual exit permission request form with manager and HR signatures.",
+        "description_ar": "نموذج طلب استئذان ثنائي اللغة مع توقيعات المدير والموارد البشرية.",
+    },
+    {
         "key": "annual_entitlements_disbursement",
         "category": "request",
         "filename": "annual_entitlements_disbursement_blank.pdf",

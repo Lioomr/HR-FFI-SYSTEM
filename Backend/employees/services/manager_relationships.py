@@ -400,6 +400,7 @@ def fallback_invalid_manager_stage(instance, *, actor=None) -> bool:
     mapping = {
         "LeaveRequest": ("pending_manager", "pending_hr", "employee_profile"),
         "LoanRequest": ("pending_manager", "pending_hr", "employee_profile"),
+        "PermissionRequest": ("pending_manager", "pending_hr", "employee_profile"),
         "AttendanceRecord": ("PENDING_MGR", "PENDING_HR", "employee_profile"),
         "AttendanceCorrectionRequest": ("PENDING_MANAGER", "PENDING_HR", "employee_profile"),
         "AssetReturnRequest": ("PENDING_MANAGER", "PENDING", "employee"),
@@ -453,8 +454,13 @@ def reroute_pending_manager_requests(profiles: EmployeeProfile | Iterable[Employ
     from attendance.models import AttendanceCorrectionRequest, AttendanceRecord
     from leaves.models import LeaveRequest
     from loans.models import LoanRequest
+    from permission_requests.models import PermissionRequest
 
     requests = [
+        *PermissionRequest.objects.filter(
+            employee_profile_id__in=profile_ids,
+            status=PermissionRequest.Status.PENDING_MANAGER,
+        ),
         *LeaveRequest.objects.filter(
             Q(employee_profile_id__in=profile_ids) | Q(employee__employee_profile__id__in=profile_ids),
             status=LeaveRequest.RequestStatus.PENDING_MANAGER,

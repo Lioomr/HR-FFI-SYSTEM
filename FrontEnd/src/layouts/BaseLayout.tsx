@@ -172,6 +172,8 @@ function getTitle(
   if (pathname.startsWith("/hr/invites")) return t("layout.invites");
   if (pathname.startsWith("/hr/workflow/delegations"))
     return t("layout.delegationRules", "Delegation Rules");
+  if (pathname.startsWith("/hr/permission-requests"))
+    return t("permissionRequests.list.hrTitle");
   if (pathname.startsWith("/hr")) return t("layout.hrManagement");
   if (pathname.startsWith("/manager/dashboard"))
     return t("layout.teamDashboard", "Team Dashboard");
@@ -179,6 +181,8 @@ function getTitle(
     return t("attendance.managerTitle");
   if (pathname.startsWith("/manager/team-requests"))
     return t("layout.teamRequests", "Team Requests");
+  if (pathname.startsWith("/manager/permission-requests"))
+    return t("permissionRequests.list.managerTitle");
   if (pathname.startsWith("/manager/team"))
     return t("layout.myTeam", "My Team");
   if (pathname.startsWith("/manager/announcements"))
@@ -220,6 +224,8 @@ function getTitle(
   if (pathname.startsWith("/cfo/profile")) return t("layout.profile");
   if (pathname.startsWith("/employee/loans"))
     return t("layout.loanRequests", "Loan Requests");
+  if (pathname.startsWith("/employee/permission-requests"))
+    return t("permissionRequests.title");
   if (pathname.startsWith("/employee/delegated-approvals"))
     return t("layout.delegatedApprovals", "Delegated Approvals");
   if (pathname.startsWith("/employee/assets"))
@@ -238,10 +244,12 @@ function getOpenKeysForPath(pathname: string): string[] {
   const opens: string[] = [];
   const isEmployeeRequestPath =
     pathname.startsWith("/employee/leave") ||
-    pathname.startsWith("/employee/loans");
+    pathname.startsWith("/employee/loans") ||
+    pathname.startsWith("/employee/permission-requests");
   const isHrInboxPath =
     pathname.startsWith("/hr/leave/requests") ||
-    pathname.startsWith("/hr/loan-requests");
+    pathname.startsWith("/hr/loan-requests") ||
+    pathname.startsWith("/hr/permission-requests");
 
   // HR sidebar sub-menus
   if (pathname.startsWith("/hr/assets")) opens.push("hr-assets-sub");
@@ -267,6 +275,8 @@ function getOpenKeysForPath(pathname: string): string[] {
     opens.push("mgr-announcements-sub");
   if (pathname.startsWith("/manager/attendance"))
     opens.push("mgr-attendance-sub");
+  if (pathname.startsWith("/manager/permission-requests"))
+    opens.push("mgr-requests-sub");
   // CEO sidebar sub-menus (owned by ceoNav so the groups stay in one place)
   opens.push(...getCeoOpenKeysForPath(pathname));
   return opens;
@@ -406,16 +416,12 @@ function getSidebarTheme(code?: string, nodeType?: string) {
   }
 }
 
-function getRoleLabel(role?: string): string {
-  const map: Record<string, string> = {
-    SystemAdmin: "System Admin",
-    HRManager: "HR Manager",
-    Manager: "Manager",
-    CEO: "CEO",
-    CFO: "CFO",
-    Employee: "Employee",
-  };
-  return map[role || ""] || role || "";
+function getRoleLabel(
+  role: string | undefined,
+  t: (key: string, fallback?: string) => string,
+): string {
+  if (!role) return "";
+  return t(`role.${role}`, role);
 }
 
 function getSidebarBrandTheme(code?: string, nodeType?: string) {
@@ -737,6 +743,14 @@ export default function BaseLayout() {
               ),
             },
             {
+              key: "/hr/permission-requests",
+              label: (
+                <Link to="/hr/permission-requests">
+                  {t("permissionRequests.list.hrTitle")}
+                </Link>
+              ),
+            },
+            {
               key: "/hr/contract-decisions",
               label: (
                 <Link to="/hr/contract-decisions">
@@ -813,6 +827,22 @@ export default function BaseLayout() {
               label: (
                 <Link to="/employee/loans">
                   {t("layout.myLoans", "My Loans")}
+                </Link>
+              ),
+            },
+            {
+              key: "/employee/permission-requests/new",
+              label: (
+                <Link to="/employee/permission-requests/new">
+                  {t("employee.dashboard.permissionAction")}
+                </Link>
+              ),
+            },
+            {
+              key: "/employee/permission-requests",
+              label: (
+                <Link to="/employee/permission-requests">
+                  {t("permissionRequests.list.mineTitle")}
                 </Link>
               ),
             },
@@ -1079,6 +1109,22 @@ export default function BaseLayout() {
                 </Link>
               ),
             },
+            {
+              key: "/employee/permission-requests/new",
+              label: (
+                <Link to="/employee/permission-requests/new">
+                  {t("employee.dashboard.permissionAction")}
+                </Link>
+              ),
+            },
+            {
+              key: "/employee/permission-requests",
+              label: (
+                <Link to="/employee/permission-requests">
+                  {t("permissionRequests.list.mineTitle")}
+                </Link>
+              ),
+            },
           ],
         },
         {
@@ -1286,6 +1332,14 @@ export default function BaseLayout() {
               label: (
                 <Link to="/manager/attendance">
                   {t("layout.attendanceRecords", "Records")}
+                </Link>
+              ),
+            },
+            {
+              key: "/manager/permission-requests",
+              label: (
+                <Link to="/manager/permission-requests">
+                  {t("permissionRequests.list.managerTitle")}
                 </Link>
               ),
             },
@@ -1560,7 +1614,7 @@ export default function BaseLayout() {
         label: (
           <div style={{ padding: "4px 0" }}>
             <div style={{ fontWeight: 600, fontSize: 14, color: "#0f172a" }}>
-              {user?.email?.split("@")[0] || "User"}
+              {user?.email?.split("@")[0] || t("common.user")}
             </div>
             <div style={{ fontSize: 12, color: "#94a3b8" }}>{user?.email}</div>
           </div>
@@ -1651,7 +1705,7 @@ export default function BaseLayout() {
       >
         <Tooltip
           title={
-            collapsed ? `${displayName} · ${getRoleLabel(role)}` : undefined
+            collapsed ? `${displayName} · ${getRoleLabel(role, t)}` : undefined
           }
           placement="right"
         >
@@ -1691,7 +1745,7 @@ export default function BaseLayout() {
                 whiteSpace: "nowrap",
               }}
             >
-              {getRoleLabel(role)}
+              {getRoleLabel(role, t)}
             </div>
           </div>
         )}

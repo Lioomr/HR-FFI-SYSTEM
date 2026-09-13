@@ -74,24 +74,25 @@ def _profiles_on_leave(profiles, value: date_type) -> set:
         return set()
 
     profile_ids = [p.id for p in profiles]
+    company_by_profile = {p.id: p.company_id for p in profiles}
     user_to_profile = {p.user_id: p.id for p in profiles if p.user_id}
 
     rows = (
         LeaveRequest.objects.filter(
             status=LeaveRequest.RequestStatus.APPROVED,
+            is_active=True,
             start_date__lte=value,
             end_date__gte=value,
         )
         .filter(Q(employee_profile_id__in=profile_ids) | Q(employee_id__in=list(user_to_profile.keys())))
-        .values_list("employee_profile_id", "employee_id")
+        .values_list("employee_profile_id", "employee_id", "company_id")
     )
 
     on_leave: set = set()
-    for profile_id, user_id in rows:
-        if profile_id:
-            on_leave.add(profile_id)
-        elif user_id in user_to_profile:
-            on_leave.add(user_to_profile[user_id])
+    for profile_id, user_id, company_id in rows:
+        resolved_id = profile_id or user_to_profile.get(user_id)
+        if resolved_id in company_by_profile and company_by_profile[resolved_id] == company_id:
+            on_leave.add(resolved_id)
     return on_leave
 
 

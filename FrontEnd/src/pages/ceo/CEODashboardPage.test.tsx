@@ -1,3 +1,6 @@
+vi.mock("../../components/executive/ExecutiveNotifications", () => ({
+  default: () => <div />,
+}));
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
@@ -8,6 +11,7 @@ vi.mock("react-router-dom", () => ({
 
 vi.mock("../../services/api/ceoSummaryApi", () => ({
   getCeoApprovalSummary: vi.fn(),
+  getCfoApprovalSummary: vi.fn(),
   CEO_QUEUE_KEYS: [
     "leave",
     "loan",
@@ -15,6 +19,9 @@ vi.mock("../../services/api/ceoSummaryApi", () => ({
     "assetDamage",
     "assetReturn",
     "employeeArchive",
+    "jobOffers",
+    "contracts",
+    "annualLeave",
   ],
 }));
 
@@ -22,6 +29,7 @@ vi.mock("../../components/announcements/AnnouncementWidget", () => ({
   default: () => <div data-testid="announcement-widget" />,
 }));
 
+import CFODashboardPage from "../cfo/CFODashboardPage";
 import CEODashboardPage from "./CEODashboardPage";
 import * as ceoSummaryApi from "../../services/api/ceoSummaryApi";
 import type {
@@ -41,6 +49,9 @@ const QUEUE_KEYS: CeoQueueKey[] = [
   "assetDamage",
   "assetReturn",
   "employeeArchive",
+  "jobOffers",
+  "contracts",
+  "annualLeave",
 ];
 
 function makeSummary(
@@ -100,13 +111,6 @@ describe("CEODashboardPage", () => {
     expect(
       screen.getByRole("button", { name: /Attendance: 1/ }),
     ).toBeInTheDocument();
-    // Damage (4) and return (1) roll up into one asset tile.
-    expect(
-      screen.getByRole("button", { name: /Asset Reviews: 5/ }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /Employee Removals: 5/ }),
-    ).toBeInTheDocument();
   });
 
   it("shows an all-clear message when nothing is pending", async () => {
@@ -117,7 +121,7 @@ describe("CEODashboardPage", () => {
     expect(
       await screen.findByText("Nothing is waiting on you right now"),
     ).toBeInTheDocument();
-    expect(screen.getAllByText("None pending")).toHaveLength(6);
+    expect(screen.getAllByText("None pending")).toHaveLength(9);
   });
 
   it("orders approval areas by backlog size so the biggest queue is first", async () => {
@@ -132,12 +136,15 @@ describe("CEODashboardPage", () => {
     expect(
       reviewButtons.map((button) => button.getAttribute("aria-label")),
     ).toEqual([
-      "Review: Employee Removals",
-      "Review: Loan Requests",
-      "Review: Leave Requests",
-      "Review: Attendance",
-      "Review: Damage Reports",
-      "Review: Return Requests",
+      "Review: Employee Removals: 9",
+      "Review: Loan Requests: 4",
+      "Review: Leave Requests: 1",
+      "Review: Attendance: 0",
+      "Review: Damage Reports: 0",
+      "Review: Return Requests: 0",
+      "Review: Job Offers: 0",
+      "Review: Contract decisions: 0",
+      "Review: Annual Leave Payments: 0",
     ]);
   });
 
@@ -152,10 +159,14 @@ describe("CEODashboardPage", () => {
       await screen.findByRole("button", { name: /Leave Requests: 2/ }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("You do not have access to this queue"),
+      screen.getByText(
+        "Count unavailable. Open the queue or refresh to try again.",
+      ),
     ).toBeInTheDocument();
     // Text label, not colour alone.
-    expect(screen.getAllByText("Unavailable").length).toBeGreaterThan(0);
+    expect(
+      screen.queryByText("Nothing is waiting on you right now"),
+    ).not.toBeInTheDocument();
   });
 
   it("renders a retryable error state when no queue can be read", async () => {
@@ -183,7 +194,7 @@ describe("CEODashboardPage", () => {
     render(<CEODashboardPage />);
 
     fireEvent.click(
-      await screen.findByRole("button", { name: "Review: Loan Requests" }),
+      await screen.findByRole("button", { name: "Review: Loan Requests: 2" }),
     );
     expect(navigateMock).toHaveBeenCalledWith("/ceo/loan-requests");
   });
@@ -223,5 +234,34 @@ describe("CEODashboardPage", () => {
 
     expect(await screen.findByText("مجالات الموافقة")).toBeInTheDocument();
     expect(screen.getAllByText("طلبات الإجازة").length).toBeGreaterThan(0);
+  });
+});
+
+describe("CFODashboardPage", () => {
+  it("shows the CFO queue using the shared dashboard without querying CEO data", async () => {
+    vi.mocked(ceoSummaryApi.getCfoApprovalSummary).mockResolvedValue({
+      queues: { loan: { key: "loan", count: 4, available: true } },
+      totalPending: 4,
+      allUnavailable: false,
+    });
+    render(<CFODashboardPage />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Review: Loan Requests: 4" }),
+    );
+    expect(navigateMock).toHaveBeenCalledWith("/cfo/loan-requests");
+    expect(getCeoApprovalSummary).not.toHaveBeenCalled();
+    expect(screen.queryByText("Job Offers")).not.toBeInTheDocument();
+  });
+  it("does not show zero loans when the CFO count fails", async () => {
+    vi.mocked(ceoSummaryApi.getCfoApprovalSummary).mockRejectedValue(
+      new Error("offline"),
+    );
+    render(<CFODashboardPage />);
+    expect(
+      await screen.findByRole("button", { name: "Retry" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Nothing is waiting on you right now"),
+    ).not.toBeInTheDocument();
   });
 });

@@ -1040,7 +1040,7 @@ export default function EmployeesListPage() {
       <Text type="secondary" style={{ fontSize: 12 }}>
         {savingPreference
           ? t("common.saving", "Saving...")
-          : t("common.saved", "Saved automatically")}
+          : t("common.savedAutomatically")}
       </Text>
     </div>
   );

@@ -10,6 +10,7 @@ export type AttendanceStatus =
   | "PENDING_CEO"
   | "REJECTED";
 export type AttendanceSource = "EMPLOYEE" | "HR" | "SYSTEM";
+export type EffectiveAttendanceStatus = AttendanceStatus | "EXCUSED";
 
 export interface AttendanceRecord {
   id: string | number;
@@ -24,6 +25,8 @@ export interface AttendanceRecord {
   check_in_at: string | null;
   check_out_at: string | null;
   status: AttendanceStatus;
+  effective_status?: EffectiveAttendanceStatus;
+  excused_by_leave_id?: number | null;
   source: AttendanceSource;
   /** Device employee code that produced this record (SYSTEM/BioTime records only). */
   biotime_emp_code?: string | null;
@@ -56,6 +59,7 @@ export interface AttendanceFilters {
   page?: number;
   page_size?: number;
   status?: AttendanceStatus;
+  effective_status?: EffectiveAttendanceStatus;
   source?: AttendanceSource;
   employee_id?: number | string;
   search?: string;

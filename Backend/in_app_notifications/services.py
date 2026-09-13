@@ -94,6 +94,7 @@ def create_notification(
     company_id: int | None = None,
     broadcast: bool = True,
     known_new: bool = False,
+    i18n: dict | None = None,
 ) -> tuple[Notification | None, bool]:
     if recipient is None or not getattr(recipient, "pk", None) or not getattr(recipient, "is_active", True):
         return None, False
@@ -113,7 +114,8 @@ def create_notification(
         "action_url": str(action_url or "")[:500],
         "related_object_type": str(related_object_type or "")[:100],
         "related_object_id": str(related_object_id or "")[:100],
-        "metadata": metadata or {},
+        # The catalog block lets the API render title/message in the reader's language.
+        "metadata": {**(metadata or {}), "i18n": i18n} if i18n else (metadata or {}),
         "deduplication_key": str(deduplication_key or "")[:255],
     }
 

@@ -1,4 +1,5 @@
 import type { AxiosError } from "axios";
+import { translate } from "../../i18n/translate";
 import { getFirstApiErrorMessage } from "../../utils/formErrors";
 
 /**
@@ -114,19 +115,19 @@ export function isAxiosError(err: unknown): err is AxiosError {
  */
 export function getHttpErrorMessage(err: unknown): string {
   if (!err) {
-    return "An unknown error occurred";
+    return translate("common.error.unknown");
   }
 
   const status = getHttpStatus(err);
 
   // Mask internal server errors to prevent stack trace or raw SQL exposure
   if (status !== undefined && status >= 500) {
-    return "An internal server error occurred. Please try again later.";
+    return translate("common.error.internalServer");
   }
 
   if (status === 422) {
     return (
-      getFirstApiErrorMessage(err) || "Please check your input and try again."
+      getFirstApiErrorMessage(err) || translate("common.error.checkInput")
     );
   }
 
@@ -137,7 +138,7 @@ export function getHttpErrorMessage(err: unknown): string {
       const msg = data.message;
       return typeof msg === "string"
         ? msg
-        : "An unexpected server response occurred.";
+        : translate("common.error.unexpectedResponse");
     }
   }
 
@@ -159,5 +160,5 @@ export function getHttpErrorMessage(err: unknown): string {
     return error.message;
   }
 
-  return "An unexpected error occurred";
+  return translate("common.error.unexpected");
 }

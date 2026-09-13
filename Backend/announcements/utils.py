@@ -16,7 +16,6 @@ from in_app_notifications.dispatcher import dispatch_notification_channels
 from in_app_notifications.models import Notification
 
 from .models import Announcement
-from .whatsapp import build_announcement_message
 
 User = get_user_model()
 ANNOUNCEMENT_ATTACHMENT_SALT = "announcement-email-attachment"
@@ -99,16 +98,9 @@ def send_announcement_in_app(announcement):
                 "action_url": _announcement_action_url(user),
             }
             whatsapp_template = "meeting_notification_v1"
-            whatsapp_variables = {
-                "employee_name": recipient_name,
-                "meeting_title": announcement.title,
-                "meeting_date": meeting_date,
-                "meeting_time": meeting_time,
-                "organizer_name": publisher_name,
-                "google_meet_url": announcement.google_meet_url or "",
-                "microsoft_teams_url": announcement.microsoft_teams_url or "",
-                "zoom_url": announcement.zoom_url or "",
-            }
+            whatsapp_variables = meeting_whatsapp_variables(
+                announcement, employee_name=recipient_name, organizer_name=publisher_name
+            )
             whatsapp_document = None
         else:
             email_template = send_announcement_notification_email
@@ -191,6 +183,23 @@ def _meeting_datetime_parts(announcement):
         return "", ""
     starts_at = _email_localtime(announcement.meeting_starts_at)
     return starts_at.strftime("%Y-%m-%d"), starts_at.strftime("%I:%M %p %Z")
+
+
+def meeting_whatsapp_variables(announcement, *, employee_name="", organizer_name=""):
+    meeting_date, meeting_time = _meeting_datetime_parts(announcement)
+    return {
+        "employee_name": employee_name,
+        "meeting_title": announcement.title,
+        "meeting_message": announcement.content or "",
+        "meeting_date": meeting_date,
+        "meeting_time": meeting_time,
+        "meeting_location": announcement.meeting_location or "",
+        "meeting_agenda": announcement.meeting_agenda or "",
+        "organizer_name": organizer_name,
+        "google_meet_url": announcement.google_meet_url or "",
+        "microsoft_teams_url": announcement.microsoft_teams_url or "",
+        "zoom_url": announcement.zoom_url or "",
+    }
 
 
 def _email_localtime(value):
@@ -334,52 +343,38 @@ def send_announcement_whatsapp(announcement):
             result = service.send_template_message(
                 phone_number=phone,
                 template_name="meeting_notification_v1",
-                template_variables={
-                    "employee_name": employee_name,
-                    "meeting_title": announcement.title,
-                    "meeting_date": meeting_date,
-                    "meeting_time": meeting_time,
-                    "organizer_name": organizer_name,
-                    "google_meet_url": announcement.google_meet_url,
-                    "microsoft_teams_url": announcement.microsoft_teams_url,
-                    "zoom_url": announcement.zoom_url,
-                },
+                template_variables=meeting_whatsapp_variables(
+                    announcement, employee_name=employee_name, organizer_name=organizer_name
+                ),
                 language="en",
             )
         else:
-            result = service.send_text_message(
-                phone_number=phone,
-                text=build_announcement_message(
-                    employee_name=employee_name,
-                    title=announcement.title,
-                    content=announcement.content,
-                    has_attachment=bool(announcement.attachment),
-                ),
-                event="announcement_created",
-            )
-        if result.get("success"):
-            sent_count += 1
-            if announcement.attachment and attachment_name:
-                from .whatsapp import load_announcement_attachment
+            from .whatsapp import build_announcement_message, load_announcement_attachment
 
-                attachment = load_announcement_attachment(announcement)
-                document_result = service.send_document_message(
+            text = build_announcement_message(
+                employee_name=employee_name, title=announcement.title, content=announcement.content
+            )
+            attachment = load_announcement_attachment(announcement) if announcement.attachment else None
+            if attachment:
+                # One message: the PDF with the announcement as its caption.
+                result = service.send_document_with_text(
                     phone_number=phone,
-                    document_base64=attachment["document_base64"] if attachment else "",
-                    file_name=attachment_name,
-                    caption=f"{announcement.title} - PDF attachment",
+                    text=text,
+                    document_base64=attachment["document_base64"],
+                    file_name=attachment_name or attachment["file_name"],
+                    event="announcement_created",
                 )
-                if document_result.get("success"):
+                if result.get("success"):
                     document_sent_count += 1
-                else:
+            else:
+                if announcement.attachment:
                     logger.warning(
                         "announcement_whatsapp_document_failed",
-                        extra={
-                            "announcement_id": announcement.id,
-                            "channel": "whatsapp",
-                            "status_code": document_result.get("status_code"),
-                        },
+                        extra={"announcement_id": announcement.id, "channel": "whatsapp", "status_code": None},
                     )
+                result = service.send_text_message(phone_number=phone, text=text, event="announcement_created")
+        if result.get("success"):
+            sent_count += 1
         else:
             logger.error(
                 "announcement_whatsapp_delivery_failed",

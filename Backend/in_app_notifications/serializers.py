@@ -4,6 +4,7 @@ from rest_framework import serializers
 
 from accounts.permissions import get_role
 
+from .i18n import localized_notification_field, normalize_language
 from .models import Notification, NotificationDelivery
 
 _AUTHORIZATION_PATTERN = re.compile(r"(?i)(authorization\s*:\s*(?:bearer|accesskey)\s+)\S+")
@@ -39,7 +40,23 @@ class NotificationDeliverySerializer(serializers.ModelSerializer):
 
 class NotificationSerializer(serializers.ModelSerializer):
     is_read = serializers.BooleanField(read_only=True)
+    title = serializers.SerializerMethodField()
+    message = serializers.SerializerMethodField()
     deliveries = serializers.SerializerMethodField()
+
+    def _language(self) -> str:
+        """Reader's UI language from ``Accept-Language`` (via LocaleMiddleware); English otherwise."""
+        if not hasattr(self, "_notification_language"):
+            request = self.context.get("request")
+            language = self.context.get("language") or getattr(request, "LANGUAGE_CODE", None)
+            self._notification_language = normalize_language(language)
+        return self._notification_language
+
+    def get_title(self, obj):
+        return localized_notification_field(obj, "title", self._language())
+
+    def get_message(self, obj):
+        return localized_notification_field(obj, "message", self._language())
 
     def get_deliveries(self, obj):
         deliveries = [item for item in obj.deliveries.all() if item.recipient_id == obj.recipient_id]

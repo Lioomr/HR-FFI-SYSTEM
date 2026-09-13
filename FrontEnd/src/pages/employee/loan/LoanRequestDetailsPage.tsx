@@ -363,7 +363,8 @@ export default function EmployeeLoanRequestDetailsPage() {
                               ·
                             </Text>
                             <Text style={{ fontSize: 11, color: "#64748b" }}>
-                              {entry.actor_email || "System"}
+                              {entry.actor_email ||
+                                t("loans.details.systemActor")}
                             </Text>
                           </div>
                           <Text

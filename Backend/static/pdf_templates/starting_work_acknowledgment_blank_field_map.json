@@ -81,12 +81,21 @@
   "direct_superior_signature": {
     "page": 1,
     "x": 25,
-    "y": 405.89,
+    "y": 401.89,
     "width": 539,
-    "height": 35,
+    "height": 42,
     "kind": "image",
-    "padding": 3,
+    "padding": 4,
     "source": "starting_work.signers.direct_superior.signature"
+  },
+  "direct_superior_date": {
+    "page": 1,
+    "x": 474,
+    "y": 379.89,
+    "width": 47,
+    "height": 16,
+    "font_size": 6.6,
+    "shrink": true
   },
   "work_start_status": {
     "page": 1,
@@ -136,92 +145,94 @@
   },
   "general_manager_signature_image": {
     "page": 1,
-    "x": 25,
-    "y": 139.89,
-    "width": 254,
-    "height": 38,
+    "x": 23,
+    "y": 148.89,
+    "width": 258,
+    "height": 32,
     "kind": "image",
-    "padding": 3,
+    "padding": 4,
     "source": "starting_work.signers.general_manager.signature"
-  },
-  "details_approver_signature_image": {
-    "page": 1,
-    "x": 316,
-    "y": 139.89,
-    "width": 254,
-    "height": 38,
-    "kind": "image",
-    "padding": 3,
-    "source": "starting_work.signers.details_approver.signature"
   },
   "general_manager_name": {
     "page": 1,
-    "x": 25,
-    "y": 157.89,
-    "width": 120,
-    "height": 18,
-    "font_size": 7,
+    "x": 63,
+    "y": 126.89,
+    "width": 34.0,
+    "height": 16,
+    "font_size": 6.6,
     "shrink": true
   },
   "general_manager_date": {
     "page": 1,
-    "x": 160,
-    "y": 157.89,
-    "width": 110,
-    "height": 18,
-    "font_size": 7
+    "x": 199.0,
+    "y": 126.89,
+    "width": 34.0,
+    "height": 16,
+    "font_size": 6.6,
+    "shrink": true
+  },
+  "details_approver_signature_image": {
+    "page": 1,
+    "x": 314,
+    "y": 148.89,
+    "width": 258,
+    "height": 32,
+    "kind": "image",
+    "padding": 4,
+    "source": "starting_work.signers.details_approver.signature"
   },
   "details_approver_name": {
     "page": 1,
-    "x": 316,
-    "y": 157.89,
-    "width": 120,
-    "height": 18,
-    "font_size": 7,
+    "x": 354,
+    "y": 126.89,
+    "width": 34.0,
+    "height": 16,
+    "font_size": 6.6,
     "shrink": true
   },
   "details_approver_date": {
     "page": 1,
-    "x": 451,
-    "y": 157.89,
-    "width": 110,
-    "height": 18,
-    "font_size": 7
+    "x": 490.0,
+    "y": 126.89,
+    "width": 34.0,
+    "height": 16,
+    "font_size": 6.6,
+    "shrink": true
   },
   "not_started_reason": {
     "page": 1,
-    "x": 25,
-    "y": 40.89,
-    "width": 539,
-    "height": 19,
+    "x": 75,
+    "y": 54.89,
+    "width": 435,
+    "height": 16,
     "font_size": 6.8,
     "multiline": true,
     "max_lines": 2
   },
   "not_started_name": {
     "page": 1,
-    "x": 25,
-    "y": 8.89,
-    "width": 160,
-    "height": 14,
+    "x": 62,
+    "y": 30.89,
+    "width": 170,
+    "height": 16,
+    "font_size": 7
+  },
+  "not_started_date": {
+    "page": 1,
+    "x": 352,
+    "y": 30.89,
+    "width": 170,
+    "height": 16,
     "font_size": 7
   },
   "not_started_signature": {
     "page": 1,
-    "x": 205,
-    "y": 8.89,
-    "width": 160,
-    "height": 14,
+    "x": 25,
+    "y": 1.89,
+    "width": 539,
+    "height": 21,
     "kind": "image",
     "padding": 2,
     "source": "starting_work.not_started.signature"
-  },
-  "not_started_date": {
-    "page": 1,
-    "x": 385,
-    "y": 8.89,
-    "width": 160,
-    "height": 14,
-    "font_size": 7
   }
 }

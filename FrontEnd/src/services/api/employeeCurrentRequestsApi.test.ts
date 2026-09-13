@@ -1,0 +1,77 @@
+import { beforeEach, expect, it, vi } from "vitest";
+import { api } from "./apiClient";
+import { getEmployeeCurrentRequests } from "./employeeCurrentRequestsApi";
+
+vi.mock("./apiClient", () => ({ api: { get: vi.fn() } }));
+const response = (items: unknown[], total_pages = 1) => ({
+  data: { status: "success", data: { items, total_pages } },
+});
+beforeEach(() => {
+  vi.resetAllMocks();
+  vi.mocked(api.get).mockResolvedValue(response([]));
+});
+it("reads older pages, excludes completed requests and links ongoing requests to their owner views", async () => {
+  vi.mocked(api.get).mockImplementation(async (url, config) => {
+    if (url === "/api/leaves/employee/leave-requests/") {
+      if ((config?.params as { page?: number } | undefined)?.page === 1)
+        return response(
+          [
+            { id: 1, status: "approved" },
+            { id: 2, status: "cancelled" },
+          ],
+          2,
+        );
+      return response(
+        [{ id: 3, status: "pending_hr_completion", created_at: "2026-09-01" }],
+        2,
+      );
+    }
+    if (url === "/api/loans/employee/loan-requests/")
+      return response([
+        { id: 3, status: "pending_disbursement", created_at: "2026-09-03" },
+        { id: 4, status: "deducted" },
+        { id: 5, status: "rejected" },
+      ]);
+    if (url === "/api/permission-requests/")
+      return response([
+        {
+          id: 3,
+          status: "pending_manager",
+          created_at: "2026-09-02",
+          reference_no: "PER-3",
+        },
+      ]);
+    throw new Error(`Unexpected endpoint: ${url}`);
+  });
+  const result = await getEmployeeCurrentRequests();
+  expect(result.failed).toEqual([]);
+  expect(result.requests.map((item) => item.path)).toEqual([
+    "/employee/loans/3",
+    "/employee/permission-requests/3",
+    "/employee/leave/requests/3",
+  ]);
+  expect(api.get).toHaveBeenCalledWith("/api/leaves/employee/leave-requests/", {
+    params: { page: 2, page_size: 100 },
+  });
+});
+it("preserves successful sources and identifies failed sources including API error envelopes", async () => {
+  vi.mocked(api.get).mockImplementation(async (url) => {
+    if (url === "/api/leaves/employee/leave-requests/")
+      throw new Error("offline");
+    if (url === "/api/permission-requests/")
+      return { data: { status: "error", message: "unavailable" } };
+    return response([{ id: 7, status: "submitted" }]);
+  });
+  const result = await getEmployeeCurrentRequests();
+  expect(result.failed).toEqual(["leave", "permission"]);
+  expect(result.requests).toHaveLength(1);
+});
+it("stops pagination when the view or employee scope changes", async () => {
+  let active = true;
+  vi.mocked(api.get).mockImplementation(async () => {
+    active = false;
+    return response([], 10);
+  });
+  await getEmployeeCurrentRequests(() => active);
+  expect(api.get).toHaveBeenCalledTimes(1);
+});

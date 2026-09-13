@@ -1,6 +1,6 @@
 # Workflow Engine Context
 
-> **TL;DR:** `core` app defines a shared approval engine. Models: `WorkflowDefinition`, `WorkflowStageDefinition`, `WorkflowInstance`, `WorkflowAction`, `DelegationRule`, `RequestObligation`. The engine is a **projection layer**: the domain request models (LeaveRequest, LoanRequest, …) own their `status` field — views transition the status per stage, then call `core.services.sync_workflow(instance, actor=request.user)` to mirror state into `WorkflowInstance`/`WorkflowAction`. Never write those two models directly. Gate actions with `can_user_act_on_instance(user, instance)` (respects delegation). Serialize workflow-backed detail responses with `context={"request": request}` so `workflow.can_approve` / `can_reject` / `current_actor` resolve — otherwise the frontend hides valid buttons. Chains: Leave Employee→Manager→HR→CEO (CEO optional), Loan →Manager→HR→CFO→CEO, Asset →Manager→CEO.
+> **TL;DR:** `core` app defines a shared approval engine. Models: `WorkflowDefinition`, `WorkflowStageDefinition`, `WorkflowInstance`, `WorkflowAction`, `DelegationRule`, `RequestObligation`. The engine is a **projection layer**: the domain request models (LeaveRequest, LoanRequest, …) own their `status` field — views transition the status per stage, then call `core.services.sync_workflow(instance, actor=request.user)` to mirror state into `WorkflowInstance`/`WorkflowAction`. Never write those two models directly. Gate actions with `can_user_act_on_instance(user, instance)` (respects delegation). Serialize workflow-backed detail responses with `context={"request": request}` so `workflow.can_approve` / `can_reject` / `current_actor` resolve — otherwise the frontend hides valid buttons. Chains: Leave Employee→Manager→HR→CEO (CEO optional), Loan →Manager→HR→CFO→CEO, Asset →Manager→CEO, Exit permission (`permission_requests`) →Manager→HR with **no CEO stage** (no valid manager starts at HR; an HR approver's own request is final after manager approval).
 
 The `core` app provides a shared approval engine used by Leave, Loan, and Asset flows.
 
@@ -22,6 +22,8 @@ Default leave/loan flow: **Employee → Manager → HRManager → CEO** (CEO sta
 Asset flow: **Employee → Manager → CEO**
 
 Loan flow: **Employee → Manager → HRManager → CFO → CEO**
+
+Exit permission flow (`permission_requests`, workflow key `permission_request`): **Employee → Manager → HRManager → approved**. There is no CEO stage. No valid manager starts at HR (refused with 422 when no HR approver other than the requester exists); an HRManager/SystemAdmin requester's request is final after manager approval. See `plans/Permission Requests Backend Handoff.md`.
 
 ## Delegation Rules
 
@@ -46,6 +48,39 @@ Loan flow: **Employee → Manager → HRManager → CFO → CEO**
 2. On request creation, set the initial domain status and call `sync_workflow(instance, actor=request.user)` — it get-or-creates the `WorkflowInstance`.
 3. Each approval/rejection action transitions the parent request `status`, then calls `sync_workflow(instance, actor=request.user)`; missing `WorkflowAction` rows and `AuditLog` entries (`workflow_transition`) are generated automatically.
 4. Notify the next approver (email via Bird when configured, WhatsApp via Evolution when a valid mobile exists).
+
+## Recorded History
+
+Legacy workflows rebuild `WorkflowAction` rows from the domain model's decision timestamps on every `sync_workflow`, which loses repeated or overwritten decisions. A workflow whose `metadata["history_mode"] == "recorded"` skips that rebuild; its history is written when each action happens:
+
+```python
+start = begin_recorded_transition(locked, actor=actor)  # under the row lock, before changing the instance
+# ... change and save the domain status ...
+record_workflow_transition(locked, start, action=WorkflowAction.Action.APPROVE, actor=actor, note=note)
+```
+
+- `begin_recorded_transition` syncs a legacy workflow first (keeping its rebuilt rows), then switches it to recorded. Pass `new_instance=True` only for a brand-new submission.
+- `record_workflow_transition` projects the saved status and writes one row with the real actor, stages, and note, plus the `workflow_transition` audit.
+- These modules record every transition this way, each from a service module that owns the transition rules:
+  - Leave requests — `Backend/leaves/services.py`
+  - Annual leave settlements — `Backend/leaves/annual_payment_services.py`
+  - Loan requests (including payroll deduction) — `Backend/loans/services.py`
+  - Asset return requests — `Backend/assets/services/return_requests.py`
+  - Exit permission requests — `Backend/permission_requests/services.py`
+  - Employee archive requests — `Backend/employees/archive_request_services.py`
+  - Contract decisions — `Backend/employees/contract_expiry.py`
+  - Starting work acknowledgments — `Backend/job_offers/starting_work_service.py`
+- Job offers already keep an explicit per-event log (`approval_events`), rebuilt one row per event, so they need no conversion. Manual attendance approval and attendance corrections have no live transitions; their adapters only serve existing history.
+- Each module keeps its existing history vocabulary (for example `advance` when a stage forwards to the next one), so frontends render recorded rows like the rebuilt ones.
+
+## Leave Request Rules (`Backend/leaves/services.py`)
+
+- Route: alternative employee (if chosen) → direct manager (if valid) → HR → CEO → HR completion (non-Saudi travellers only). An HR manager's own leave also goes to their manager first, then skips the HR stage and goes to the CEO.
+- The CEO stage is required for every leave request.
+- Employees cannot cancel. HR cancels any in-progress or approved request with a reason via `POST /api/leaves/leave-requests/{id}/hr-cancel/`; an HR member's own request needs another HR member. Cancelling a Business Trip closes its obligations and ends the delegation rule it created.
+- An alternative employee added after submission (`set-delegate`) moves the request to `pending_delegate`; `delegate_return_status` remembers the stage it returns to once they approve.
+- There is no per-leave-type CEO flag; HR manual leave records are the only leave that skips approval.
+- HR "send to CEO" works only from `submitted`/`pending_hr`; a request already waiting on the CEO is refused, never overwritten.
 
 ## Key Service Functions
 

@@ -91,6 +91,21 @@ Important:
 - This file can affect what gets baked into the frontend bundle at build time.
 - If it contains `VITE_API_BASE_URL=http://localhost:8000`, a production rebuild may accidentally ship a localhost API target unless the compose build arg overrides it correctly.
 
+### HR PDF template library
+
+Production request-form templates are stored on the host at:
+- `/hr/templates`
+
+This directory is bind-mounted read-only into `ffi_hr_backend_prod` at the same path. It is the production source of truth and overrides the fallback templates bundled in the Docker image at `Backend/static/pdf_templates`.
+
+Each overridden form must be deployed as a matched pair:
+- `<form_name>.pdf`
+- `<form_name>_field_map.json`
+
+Do not replace only one file of a pair. A missing, unreadable, or incompatible map causes the relevant form renderer to fall back to its generic PDF. The request-form pairs currently managed there are `leave_request_blank`, `loan_request_blank`, `annual_entitlements_disbursement_blank`, `job_offer_blank`, and `starting_work_acknowledgment_blank`.
+
+Before changing a production template, create a timestamped backup under `/hr/templates/backups/`, then verify the live backend resolves the expected path. The backend reads these files at render time, so no image rebuild is required for a template-only update.
+
 ## 4) Local vs Production Differences
 
 Agents must not assume local and production behave the same.

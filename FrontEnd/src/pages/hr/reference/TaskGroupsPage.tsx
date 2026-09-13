@@ -56,10 +56,10 @@ export default function TaskGroupsPage() {
         name="code"
         rules={[
           { required: true, message: t("common.required") },
-          { max: 10, message: "Code must be at most 10 characters" },
+          { max: 10, message: t("reference.codeMax", { max: 10 }) },
         ]}
       >
-        <Input placeholder="e.g., PROJ" />
+        <Input placeholder={t("reference.taskGroups.codePlaceholder")} />
       </Form.Item>
 
       <Form.Item
@@ -67,14 +67,17 @@ export default function TaskGroupsPage() {
         name="name"
         rules={[
           { required: true, message: t("common.required") },
-          { max: 100, message: "Name must be at most 100 characters" },
+          { max: 100, message: t("reference.nameMax", { max: 100 }) },
         ]}
       >
-        <Input placeholder="e.g., Project Tasks" />
+        <Input placeholder={t("reference.taskGroups.namePlaceholder")} />
       </Form.Item>
 
       <Form.Item label={t("common.description")} name="description">
-        <Input.TextArea rows={3} placeholder="Optional description" />
+        <Input.TextArea
+          rows={3}
+          placeholder={t("reference.optionalDescription")}
+        />
       </Form.Item>
     </>
   );

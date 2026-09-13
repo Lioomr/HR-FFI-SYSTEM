@@ -110,16 +110,27 @@ def send_pending_approval_email(
     status_label: str,
     details: Iterable[str] | None = None,
     action_path: str | None = None,
+    request_type_ar: str | None = None,
+    status_label_ar: str | None = None,
 ) -> dict:
+    from in_app_notifications.i18n import request_type_label
+    from in_app_notifications.i18n import status_label as status_label_text
+
     action_url = _build_action_url(action_path)
     subject = f"{request_type} pending approval - #{request_id}"
+    # Never show a raw workflow code, and keep the Arabic half fully Arabic.
+    status = status_label_text(status_label)
+    status_label = status["en"]
+    status_label_ar = status_label_ar or status["ar"]
+    request_type_ar = request_type_ar or request_type_label(request_type)["ar"]
+    status_value = status_label if status_label_ar == status_label else f"{status_label} / {status_label_ar}"
 
     message = f"A new {request_type} request from {requester_name} (#{request_id}) is pending your review."
-    message_ar = f"طلب {request_type} جديد من {requester_name} (رقم {request_id}) بانتظار مراجعتك."
+    message_ar = f"{request_type_ar} جديد من {requester_name} (رقم {request_id}) بانتظار مراجعتك."
     rows = [
         {"label": "Request ID", "label_ar": "رقم الطلب", "value": f"#{request_id}"},
         {"label": "Requested by", "label_ar": "مقدّم الطلب", "value": requester_name},
-        {"label": "Status", "label_ar": "الحالة", "value": status_label},
+        {"label": "Status", "label_ar": "الحالة", "value": status_value},
     ]
     for item in details or []:
         rows.append({"label": "Detail", "label_ar": "تفصيل", "value": str(item)})
@@ -129,7 +140,7 @@ def send_pending_approval_email(
         "contact_name": getattr(settings, "EMAIL_CONTACT_NAME", "") or "",
         "contact_phone": getattr(settings, "EMAIL_CONTACT_PHONE", "") or "",
         "title": f"{request_type} requires your review",
-        "title_ar": f"طلب {request_type} يتطلب مراجعتك",
+        "title_ar": f"{request_type_ar} بانتظار مراجعتك",
         "employee_name": approver_name,
         "message": message,
         "message_ar": message_ar,

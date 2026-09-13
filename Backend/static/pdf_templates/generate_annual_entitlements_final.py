@@ -108,22 +108,20 @@ def label_pair(pdf: canvas.Canvas, top: float, height: float, en: str, ar: str) 
 
 
 def signature(pdf: canvas.Canvas, key: str, x: float, width: float, en: str, ar: str) -> None:
-    text(pdf, x + 10, 666, en, size=7.0, bold=True, color=MUTED)
-    arabic(pdf, x + width - 10, 678, ar, size=6.4, color=MUTED)
-    signature_x, signature_top, signature_height = x + 10, 690, 56
+    text(pdf, x + 8, 552, en, size=6.7, bold=True, color=MUTED)
+    arabic(pdf, x + width - 8, 552, ar, size=6.2, bold=True, color=MUTED)
+    signature_x, signature_top, signature_height = x + 8, 570, 87
     signature_width = width - 20
     FIELD_MAP[f"{key}_signature_image"] = {
         "page": 1, "x": round(signature_x, 2), "y": round(bottom(signature_top, signature_height), 2),
         "width": round(signature_width, 2), "height": signature_height, "kind": "image", "padding": 3,
         "source": f"request.signers.{key}.signature",
     }
-    pdf.setStrokeColor(MUTED)
-    pdf.setLineWidth(0.55)
-    pdf.line(signature_x, bottom(752), signature_x + signature_width, bottom(752))
-    text(pdf, x + 10, 766, "Date", size=6.2, color=MUTED)
-    date_x, date_width = x + 45, width - 55
-    pdf.line(date_x, bottom(772), date_x + date_width, bottom(772))
-    field(f"{key}_signature_date", date_x, 756, date_width, 16, font_size=6.2, shrink=True, source="annual_entitlements.workflow_timestamp")
+    rect(pdf, x + 4, 662, width - 8, 22, fill=CELL)
+    text(pdf, x + 10, 669, "Date", size=6.2, bold=True, color=MUTED)
+    arabic(pdf, x + width - 10, 669, "التاريخ", size=6.0, bold=True, color=MUTED)
+    date_x, date_width = x + 45, width - 90
+    input_box(pdf, f"{key}_signature_date", date_x, 665, date_width, 16, font_size=6.4, shrink=True, source="annual_entitlements.workflow_timestamp")
 
 
 def build(logo_path: Path) -> None:
@@ -187,32 +185,18 @@ def build(logo_path: Path) -> None:
     pdf.setLineWidth(0.9)
     pdf.line(15, bottom(542), PAGE_W - 15, bottom(542))
 
-    applicant_x, applicant_width = 15, 185
-    text(pdf, applicant_x + 10, 552, "Applicant", size=7, bold=True, color=MUTED)
-    arabic(pdf, applicant_x + applicant_width - 10, 564, "مقدم الطلب", size=6.4, color=MUTED)
-    FIELD_MAP["applicant_signature_image"] = {
-        "page": 1, "x": 25, "y": round(bottom(576, 62), 2), "width": 165, "height": 62,
-        "kind": "image", "padding": 3, "source": "request.signers.applicant.signature",
-    }
-    pdf.setStrokeColor(MUTED)
-    pdf.line(25, bottom(644), 190, bottom(644))
-    text(pdf, 25, 657, "Date", size=6.2, color=MUTED)
-    pdf.line(60, bottom(663), 190, bottom(663))
-    field("applicant_signature_date", 60, 647, 130, 16, font_size=6.2, shrink=True, source="annual_entitlements.workflow_timestamp")
-    pdf.setStrokeColor(BORDER)
-    pdf.line(200, bottom(550), 200, bottom(680))
-
-    approval_width = (PAGE_W - 215) / 3
+    approval_width = (PAGE_W - 30) / 4
     for index, (key, en, ar) in enumerate([
+        ("applicant", "Applicant", "مقدم الطلب"),
         ("financial_management", "Financial Management", "الإدارة المالية"),
         ("hr_department", "HR Department", "الموارد البشرية"),
         ("accounts_officer", "Accounts Officer", "مسؤول الحسابات"),
     ]):
-        x = 200 + index * approval_width
+        x = 15 + index * approval_width
         signature(pdf, key, x, approval_width, en, ar)
-        if index < 2:
+        if index < 3:
             pdf.setStrokeColor(BORDER)
-            pdf.line(x + approval_width, bottom(550), x + approval_width, bottom(680))
+            pdf.line(x + approval_width, bottom(548), x + approval_width, bottom(684))
 
     pdf.showPage()
     pdf.save()

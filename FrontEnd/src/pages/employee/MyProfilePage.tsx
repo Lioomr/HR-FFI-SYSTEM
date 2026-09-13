@@ -67,10 +67,13 @@ function getExpiryStatus(
 }
 
 function ExpiryTag({ status }: { status: ReturnType<typeof getExpiryStatus> }) {
-  if (status === "expired") return <Tag color="error">Expired</Tag>;
-  if (status === "warning") return <Tag color="warning">Expiring Soon</Tag>;
-  if (status === "ok") return <Tag color="success">Valid</Tag>;
-  return <Tag>Unknown</Tag>;
+  const { t } = useI18n();
+  if (status === "expired")
+    return <Tag color="error">{t("status.expired")}</Tag>;
+  if (status === "warning")
+    return <Tag color="warning">{t("status.expiringSoon")}</Tag>;
+  if (status === "ok") return <Tag color="success">{t("status.valid")}</Tag>;
+  return <Tag>{t("status.unknown")}</Tag>;
 }
 
 function DocCard({
@@ -86,6 +89,7 @@ function DocCard({
   number: string;
   expiry: string | undefined;
 }) {
+  const { t } = useI18n();
   const status = getExpiryStatus(expiry);
   const borderColor =
     status === "expired"
@@ -121,7 +125,7 @@ function DocCard({
         {number}
       </div>
       <div style={{ fontSize: 12, color: "#8c8c8c" }}>
-        Expires: {formatDate(expiry)}
+        {t("profile.expires")}: {formatDate(expiry)}
       </div>
     </div>
   );
@@ -237,7 +241,10 @@ export default function MyProfilePage() {
                     : "default"
                 }
               >
-                {employee.employment_status || "ACTIVE"}
+                {t(
+                  `employees.status.${(employee.employment_status || "ACTIVE").toLowerCase()}`,
+                  employee.employment_status || "ACTIVE",
+                )}
               </Tag>
               <Tag
                 style={{
@@ -259,7 +266,9 @@ export default function MyProfilePage() {
               }}
             >
               <Text type="secondary" style={{ fontSize: 12 }}>
-                <span style={{ marginRight: 4 }}>Manager:</span>
+                <span style={{ marginInlineEnd: 4 }}>
+                  {t("profile.directManager")}:
+                </span>
                 <Text style={{ fontSize: 12 }}>{directManagerName}</Text>
               </Text>
             </div>
@@ -318,7 +327,7 @@ export default function MyProfilePage() {
                       <Descriptions.Item label={t("profile.employeeNumber")}>
                         <Space>
                           {formatValue((employee as any).employee_number)}
-                          <Tooltip title="Copy">
+                          <Tooltip title={t("common.copy")}>
                             <Button
                               type="text"
                               size="small"
@@ -329,7 +338,7 @@ export default function MyProfilePage() {
                                     (employee as any).employee_number || "",
                                   ),
                                 );
-                                message.success("Copied!");
+                                message.success(t("common.copied"));
                               }}
                             />
                           </Tooltip>

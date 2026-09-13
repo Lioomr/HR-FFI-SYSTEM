@@ -35,6 +35,7 @@ from .biotime_policy import (
     limit_to_mapped_employees,
     manual_attendance_gone,
 )
+from .leave_resolution import filter_effective_status, with_leave_resolution
 from .models import AttendanceCorrectionRequest, AttendanceRecord, WorkLocation
 from .permissions import IsAttendanceSelfServiceRole
 from .serializers import (
@@ -193,7 +194,7 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         role = get_role(user)
 
         # Date Filter Logic (Default: Last 30 days)
-        queryset = AttendanceRecord.objects.all().select_related("employee_profile__user")
+        queryset = with_leave_resolution(AttendanceRecord.objects.all().select_related("employee_profile__user"))
         queryset = _scope_attendance_queryset(queryset, self.request)
         date_str = self.request.query_params.get("date")
         date_from_str = self.request.query_params.get("date_from")
@@ -251,6 +252,7 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         # Apply custom status mapping first.
         queryset = self._apply_status_filter(queryset)
         queryset = self._apply_source_filter(queryset)
+        queryset = filter_effective_status(queryset, self.request.query_params.get("effective_status"))
 
         # Skip DjangoFilterBackend because we've already handled status.
         # Keep ordering behavior from OrderingFilter.
@@ -268,6 +270,10 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
             return error(f"Invalid attendance filter: {filter_error}", status=status.HTTP_400_BAD_REQUEST)
 
         summary = {row["status"]: row["n"] for row in filtered_queryset.values("status").annotate(n=Count("id"))}
+        effective_summary = {
+            row["effective_status"]: row["n"]
+            for row in filtered_queryset.values("effective_status").annotate(n=Count("id"))
+        }
 
         response = super().list(request, *args, **kwargs)
 
@@ -275,6 +281,7 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         if isinstance(response.data, dict) and response.data.get("status") == "success":
             if isinstance(response.data.get("data"), dict):
                 response.data["data"]["summary"] = summary
+                response.data["data"]["effective_summary"] = effective_summary
             return response
 
         return success(response.data)
@@ -411,6 +418,7 @@ class ManagerAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ["-date"]
 
     def filter_queryset(self, queryset):
+        queryset = filter_effective_status(queryset, self.request.query_params.get("effective_status"))
         status_param = self.request.query_params.get("status")
         if status_param == AttendanceRecord.Status.PENDING:
             queryset = queryset.filter(
@@ -431,7 +439,9 @@ class ManagerAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         role = get_role(self.request.user)
-        qs = AttendanceRecord.objects.select_related("employee_profile__user", "employee_profile__manager_profile")
+        qs = with_leave_resolution(
+            AttendanceRecord.objects.select_related("employee_profile__user", "employee_profile__manager_profile")
+        )
         base_qs = qs
         base_qs = _scope_attendance_queryset(base_qs, self.request)
         if role == "SystemAdmin":
@@ -456,7 +466,8 @@ class CEOAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ["-date"]
 
     def get_queryset(self):
-        qs = AttendanceRecord.objects.select_related("employee_profile__user")
+        qs = with_leave_resolution(AttendanceRecord.objects.select_related("employee_profile__user"))
+        qs = filter_effective_status(qs, self.request.query_params.get("effective_status"))
         qs = _scope_attendance_queryset(qs, self.request)
         date_from_str = self.request.query_params.get("date_from")
         date_to_str = self.request.query_params.get("date_to")
@@ -481,12 +492,17 @@ class CEOAttendanceViewSet(viewsets.ReadOnlyModelViewSet):
             row["status"]: row["n"]
             for row in self.filter_queryset(self.get_queryset()).values("status").annotate(n=Count("id"))
         }
+        effective_summary = {
+            row["effective_status"]: row["n"]
+            for row in self.filter_queryset(self.get_queryset()).values("effective_status").annotate(n=Count("id"))
+        }
 
         response = super().list(request, *args, **kwargs)
 
         if isinstance(response.data, dict) and response.data.get("status") == "success":
             if isinstance(response.data.get("data"), dict):
                 response.data["data"]["summary"] = summary
+                response.data["data"]["effective_summary"] = effective_summary
 
         return response
 

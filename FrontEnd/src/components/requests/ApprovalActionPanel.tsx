@@ -1,5 +1,7 @@
 import { Button, Card, Input, Space } from "antd";
 
+import { useI18n } from "../../i18n/useI18n";
+
 type Props = {
   canApprove?: boolean;
   canReject?: boolean;
@@ -21,6 +23,7 @@ export default function ApprovalActionPanel({
   approveLoading,
   rejectLoading,
 }: Props) {
+  const { t } = useI18n();
   if (!canApprove && !canReject) return null;
 
   return (
@@ -30,17 +33,17 @@ export default function ApprovalActionPanel({
           rows={4}
           value={note}
           onChange={(e) => onNoteChange(e.target.value)}
-          placeholder="Add approval note"
+          placeholder={t("workflow.approvalNotePlaceholder")}
         />
         <Space>
           {canApprove ? (
             <Button type="primary" onClick={onApprove} loading={approveLoading}>
-              Approve
+              {t("common.approve")}
             </Button>
           ) : null}
           {canReject ? (
             <Button danger onClick={onReject} loading={rejectLoading}>
-              Reject
+              {t("common.reject")}
             </Button>
           ) : null}
         </Space>

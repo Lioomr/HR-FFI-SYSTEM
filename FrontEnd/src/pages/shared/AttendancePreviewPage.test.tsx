@@ -118,6 +118,37 @@ beforeEach(() => {
 });
 
 describe("AttendancePreviewPage BioTime fields", () => {
+  it("shows approved leave as an excused absence and filters by the effective result", async () => {
+    const response = listResponse([
+      record({
+        status: "ABSENT",
+        effective_status: "EXCUSED",
+        excused_by_leave_id: 75,
+        check_in_at: null,
+        check_out_at: null,
+      }),
+    ]);
+    getGlobal.mockResolvedValue({
+      ...response,
+      data: {
+        ...response.data,
+        summary: { ABSENT: 1 },
+        effective_summary: { EXCUSED: 1 },
+      },
+    });
+    render(<AttendancePreviewPage role="hr" />);
+    expect(await screen.findByText("Sara Ali")).toBeInTheDocument();
+    const table = screen.getByRole("table");
+    expect(within(table).getByText("Excused absence")).toBeInTheDocument();
+    expect(within(table).getByText("Approved leave #75")).toBeInTheDocument();
+    expect(within(table).queryByText("Absent")).not.toBeInTheDocument();
+    fireEvent.click(statusChip("Excused absence"));
+    await waitFor(() =>
+      expect(lastGlobalParams().effective_status).toBe("EXCUSED"),
+    );
+    expect(lastGlobalParams().status).toBeUndefined();
+  });
+
   it("renders the device code, terminal serial, duration and source", async () => {
     render(<AttendancePreviewPage role="hr" />);
 
@@ -192,7 +223,9 @@ describe("AttendancePreviewPage filters", () => {
 
     fireEvent.click(statusChip("Absent"));
 
-    await waitFor(() => expect(lastGlobalParams().status).toBe("ABSENT"));
+    await waitFor(() =>
+      expect(lastGlobalParams().effective_status).toBe("ABSENT"),
+    );
   });
 
   it("filters by source so SYSTEM/BioTime records can be isolated", async () => {
@@ -237,11 +270,15 @@ describe("AttendancePreviewPage filters", () => {
     await screen.findByText("Sara Ali");
 
     fireEvent.click(statusChip("Absent"));
-    await waitFor(() => expect(lastGlobalParams().status).toBe("ABSENT"));
+    await waitFor(() =>
+      expect(lastGlobalParams().effective_status).toBe("ABSENT"),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Reset" }));
 
-    await waitFor(() => expect(lastGlobalParams().status).toBeUndefined());
+    await waitFor(() =>
+      expect(lastGlobalParams().effective_status).toBeUndefined(),
+    );
     expect(lastGlobalParams().source).toBeUndefined();
     expect(lastGlobalParams().employee_id).toBeUndefined();
   });

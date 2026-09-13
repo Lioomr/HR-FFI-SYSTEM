@@ -143,6 +143,7 @@ INSTALLED_APPS = [
     "hr_reference",
     "announcements",
     "loans",
+    "permission_requests",
     "rents",
     "organization",
     "in_app_notifications",
