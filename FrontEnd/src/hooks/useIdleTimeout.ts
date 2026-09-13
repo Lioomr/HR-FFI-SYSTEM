@@ -6,7 +6,9 @@ import { isApiError } from "../services/api/apiTypes";
 const FALLBACK_IDLE_TIMEOUT_MS = 15 * 60 * 1000;
 
 export function useIdleTimeout() {
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   useEffect(() => {
+    if (!isAuthenticated) return;
     let timeoutId: number;
     let idleTimeoutMs = FALLBACK_IDLE_TIMEOUT_MS;
     let disposed = false;
@@ -57,5 +59,5 @@ export function useIdleTimeout() {
         window.removeEventListener(event, resetTimer);
       });
     };
-  }, []);
+  }, [isAuthenticated]);
 }

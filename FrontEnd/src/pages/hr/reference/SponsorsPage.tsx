@@ -59,22 +59,25 @@ export default function SponsorsPage() {
         name="code"
         rules={[
           { required: true, message: t("common.required") },
-          { max: 20, message: "Code must be at most 20 characters" },
+          { max: 20, message: t("reference.codeMax", { max: 20 }) },
         ]}
       >
-        <Input placeholder="e.g., SPONSOR-001" />
+        <Input placeholder={t("reference.sponsors.codePlaceholder")} />
       </Form.Item>
 
       <Form.Item
         label={t("reference.departments.colName")}
         name="name"
-        rules={[{ max: 100, message: "Name must be at most 100 characters" }]}
+        rules={[{ max: 100, message: t("reference.nameMax", { max: 100 }) }]}
       >
-        <Input placeholder="Optional sponsor name" />
+        <Input placeholder={t("reference.sponsors.namePlaceholder")} />
       </Form.Item>
 
       <Form.Item label={t("common.description")} name="description">
-        <Input.TextArea rows={3} placeholder="Optional description" />
+        <Input.TextArea
+          rows={3}
+          placeholder={t("reference.optionalDescription")}
+        />
       </Form.Item>
     </>
   );

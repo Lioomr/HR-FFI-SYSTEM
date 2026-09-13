@@ -13,6 +13,7 @@ Resolve templates through `core.views_templates.resolve_template_path(...)`. Do 
 Current catalog entries include:
 - `leave_request_blank.pdf`
 - `loan_request_blank.pdf`
+- `exit_permission_request_blank.pdf` (Direct Manager and HR panels only; no CEO section)
 - asset/rent/certificate templates in `Backend/core/views_templates.py`
 
 ## Current Request PDF Pattern
@@ -67,8 +68,9 @@ Audit events: `employee_signature_uploaded`, `employee_signature_replaced`,
 only `employee_profile_id`, `company_id`, `replaced`, and `size_bytes`.
 
 Signatures are only ever drawn into a `kind: "image"` field the approved map
-declares. Where a signature box overlaps another mapped value, the image is
-confined to the free part of its own box rather than covering that value.
+declares. Approved request templates reserve a clean, unruled white signing
+area for each signature; the invisible image box is centred in that space and
+does not overlap the adjacent name, decision, or visible date fields.
 
 ## Implemented Files
 
@@ -77,6 +79,7 @@ confined to the free part of its own box rather than covering that value.
 | Leave | `leaves/pdf_leave_request.py` | `leaves/tests/test_pdf_leave_request.py` |
 | Loan | `loans/pdf_loan_request.py` | `loans/tests_pdf.py`, `loans/test_pdf_permissions.py` |
 | Annual entitlements | `leaves/pdf_annual_entitlements.py` | `leaves/tests/test_pdf_annual_entitlements.py` |
+| Exit permission (Manager + HR panels only, no CEO) | `permission_requests/pdf_permission_request.py` | `permission_requests/tests/test_pdf.py` |
 | Job offer | `job_offers/pdf.py` | `job_offers/tests/test_pdf.py` |
 | Starting work | `job_offers/starting_work_pdf.py` | `job_offers/tests/test_pdf.py` |
 | Shared renderer | `core/pdf_forms.py`, `core/pdf_signers.py` | `core/tests_pdf_forms.py`, `core/tests_pdf_signers.py` |
@@ -89,11 +92,10 @@ Fallbacks: `leaves/views.py::_build_leave_request_pdf_fallback`,
 `rent_agreement` have no supplied field map. Do not author one without measuring
 it against the actual PDF and attaching visual evidence.
 
-**Job offer HR signature**: `hr_signature_image` targets the template's own
-printed `Signature` rule (x 76-174, y 115.39, height 13), measured from the
-rules the generator draws at `bot(727)` and `bot(713)`. It previously spanned
-the HR name and position boxes and was reported unplaceable. Do not move it back
-over those boxes.
+**Job offer approvals**: the internal HR and CEO each have an open signature
+area plus visible name and date fields. The external applicant has no signature
+slot; applicant name and agree/reject decision are the applicant confirmation,
+with a large rejection-reason area below.
 
 ## Verification Workflow
 

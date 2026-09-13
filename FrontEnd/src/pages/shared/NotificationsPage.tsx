@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Card,
   Segmented,
@@ -27,19 +27,31 @@ import NotificationItem from "../../components/notifications/NotificationItem";
 import NotificationDeliveryAdminDetails from "../../components/notifications/NotificationDeliveryAdminDetails";
 import NotificationPreferences from "../../components/notifications/NotificationPreferences";
 import { useNotificationNavigate } from "../../components/notifications/notificationUrl";
+import {
+  groupNotificationsByDay,
+  type NotificationDayGroup,
+} from "../../components/notifications/notificationMeta";
 import "../../components/notifications/notifications.css";
 
 const { Title, Text } = Typography;
 
+const GROUP_LABELS: Record<NotificationDayGroup, [string, string]> = {
+  today: ["notifications.group.today", "Today"],
+  yesterday: ["notifications.group.yesterday", "Yesterday"],
+  lastWeek: ["notifications.group.lastWeek", "Last 7 days"],
+  older: ["notifications.group.older", "Older"],
+};
+
 /**
  * Full notification inbox — available to every authenticated role.
- * Filters (all/unread), pagination, mark-read actions, deep links, and the
- * full set of loading / empty / error / disconnected states.
+ * Filters (all/unread), day sections, pagination, mark-read actions, deep
+ * links, and the full set of loading / empty / error / disconnected states.
  */
 export default function NotificationsPage() {
-  const { t, direction } = useI18n();
+  const { t, direction, language } = useI18n();
   const navigateToNotification = useNotificationNavigate();
   const [prefsOpen, setPrefsOpen] = useState(false);
+  const languageRef = useRef(language);
 
   const items = useNotificationStore((s) => s.items);
   const loading = useNotificationStore((s) => s.listLoading);
@@ -61,6 +73,14 @@ export default function NotificationsPage() {
     // Load on mount only; filter changes are handled explicitly below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // The API renders notification text in the UI language, so refetch on switch.
+  useEffect(() => {
+    if (languageRef.current === language) return;
+    languageRef.current = language;
+    void fetchList({ page, filter });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [language]);
 
   const handleFilter = (value: NotificationFilter) => {
     void fetchList({ page: 1, filter: value });
@@ -138,40 +158,44 @@ export default function NotificationsPage() {
       );
     }
 
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        {items.map((n) => (
-          <div
-            key={n.id}
-            className={`ffi-notif-page-row${
-              n.is_read ? "" : " ffi-notif-page-row--unread"
-            }`}
-          >
-            <NotificationItem notification={n} onSelect={handleSelect} />
-            <NotificationDeliveryAdminDetails deliveries={n.deliveries} />
-          </div>
-        ))}
-      </div>
-    );
+    return groupNotificationsByDay(items).map((group, index) => {
+      const [labelKey, labelFallback] = GROUP_LABELS[group.key];
+      const headingId = `ffi-notif-group-${index}`;
+      return (
+        <section
+          key={`${group.key}-${index}`}
+          className="ffi-notif-group"
+          aria-labelledby={headingId}
+        >
+          <h5 id={headingId} className="ffi-notif-group__label">
+            {t(labelKey, labelFallback)}
+          </h5>
+          {group.items.map((n) => (
+            <div
+              key={n.id}
+              className={`ffi-notif-page-row${
+                n.is_read ? "" : " ffi-notif-page-row--unread"
+              }`}
+            >
+              <NotificationItem notification={n} onSelect={handleSelect} />
+              <NotificationDeliveryAdminDetails deliveries={n.deliveries} />
+            </div>
+          ))}
+        </section>
+      );
+    });
   };
 
+  const unreadLabel = t("notifications.filter.unread", "Unread");
+
   return (
-    <div style={{ maxWidth: 820, margin: "0 auto" }}>
+    <div className="ffi-notif-page">
       <Card
         styles={{ body: { padding: 0 } }}
         style={{ borderRadius: 16, overflow: "hidden" }}
       >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-            flexWrap: "wrap",
-            padding: "16px 18px 12px",
-          }}
-        >
-          <div style={{ minWidth: 0 }}>
+        <div className="ffi-notif-page__header">
+          <div className="ffi-notif-page__heading">
             <Title
               level={4}
               style={{ margin: 0, textWrap: "balance" } as React.CSSProperties}
@@ -179,14 +203,14 @@ export default function NotificationsPage() {
               {t("notifications.title", "Notifications")}
             </Title>
             {showConnState && (
-              <span className="ffi-notif-conn" style={{ marginTop: 4 }}>
+              <span className="ffi-notif-conn">
                 <span className="ffi-notif-conn__dot ffi-notif-conn__dot--pulsing" />
                 {connLabel}
               </span>
             )}
           </div>
 
-          <Space wrap>
+          <Space wrap size={8}>
             <Button
               icon={<SettingOutlined />}
               onClick={() => setPrefsOpen(true)}
@@ -215,7 +239,7 @@ export default function NotificationsPage() {
           </Space>
         </div>
 
-        <div style={{ padding: "0 18px 12px" }}>
+        <div className="ffi-notif-page__toolbar">
           <Segmented
             value={filter}
             onChange={(v) => handleFilter(v as NotificationFilter)}
@@ -223,26 +247,26 @@ export default function NotificationsPage() {
               { label: t("notifications.filter.all", "All"), value: "all" },
               {
                 label:
-                  unreadCount > 0
-                    ? `${t("notifications.filter.unread", "Unread")} (${unreadCount})`
-                    : t("notifications.filter.unread", "Unread"),
+                  unreadCount > 0 ? (
+                    <span className="ffi-notif-seg">
+                      {unreadLabel}
+                      <span className="ffi-notif-seg__count ffi-notif-count">
+                        {unreadCount > 99 ? "99+" : unreadCount}
+                      </span>
+                    </span>
+                  ) : (
+                    unreadLabel
+                  ),
                 value: "unread",
               },
             ]}
           />
         </div>
 
-        <div style={{ padding: "0 12px 8px", minHeight: 200 }}>{body()}</div>
+        <div className="ffi-notif-page__body">{body()}</div>
 
         {count > pageSize && (
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              padding: "12px 16px 18px",
-              borderTop: "1px solid rgba(226,232,240,0.7)",
-            }}
-          >
+          <div className="ffi-notif-page__footer">
             <Pagination
               current={page}
               pageSize={pageSize}
@@ -254,15 +278,7 @@ export default function NotificationsPage() {
         )}
       </Card>
 
-      <Text
-        type="secondary"
-        style={{
-          display: "block",
-          textAlign: "center",
-          marginTop: 12,
-          fontSize: 12,
-        }}
-      >
+      <Text type="secondary" className="ffi-notif-page__note">
         {t(
           "notifications.retentionNote",
           "Notifications are kept for 90 days.",

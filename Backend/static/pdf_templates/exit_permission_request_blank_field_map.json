@@ -1,0 +1,230 @@
+{
+  "reference_no": {
+    "page": 1,
+    "x": 158,
+    "y": 737.89,
+    "width": 123,
+    "height": 18,
+    "font_size": 8
+  },
+  "request_date": {
+    "page": 1,
+    "x": 440,
+    "y": 737.89,
+    "width": 123,
+    "height": 18,
+    "font_size": 7.4
+  },
+  "employee_name": {
+    "page": 1,
+    "x": 160,
+    "y": 682.89,
+    "width": 275.28,
+    "height": 19,
+    "font_size": 7.8,
+    "shrink": true,
+    "multiline": false,
+    "max_lines": 2
+  },
+  "employee_id": {
+    "page": 1,
+    "x": 160,
+    "y": 657.89,
+    "width": 275.28,
+    "height": 19,
+    "font_size": 7.8,
+    "shrink": true,
+    "multiline": false,
+    "max_lines": 2
+  },
+  "department": {
+    "page": 1,
+    "x": 160,
+    "y": 632.89,
+    "width": 275.28,
+    "height": 19,
+    "font_size": 7.8,
+    "shrink": true,
+    "multiline": false,
+    "max_lines": 2
+  },
+  "job_title": {
+    "page": 1,
+    "x": 160,
+    "y": 607.89,
+    "width": 275.28,
+    "height": 19,
+    "font_size": 7.8,
+    "shrink": true,
+    "multiline": false,
+    "max_lines": 2
+  },
+  "direct_manager": {
+    "page": 1,
+    "x": 160,
+    "y": 582.89,
+    "width": 275.28,
+    "height": 19,
+    "font_size": 7.8,
+    "shrink": true,
+    "multiline": false,
+    "max_lines": 2
+  },
+  "exit_date": {
+    "page": 1,
+    "x": 83,
+    "y": 527.89,
+    "width": 47,
+    "height": 18,
+    "font_size": 7.5
+  },
+  "from_time": {
+    "page": 1,
+    "x": 274,
+    "y": 527.89,
+    "width": 47,
+    "height": 18,
+    "font_size": 7.5
+  },
+  "to_time": {
+    "page": 1,
+    "x": 465,
+    "y": 527.89,
+    "width": 47,
+    "height": 18,
+    "font_size": 7.5
+  },
+  "exit_type": {
+    "page": 1,
+    "checkboxes": {
+      "business": [
+        185.0,
+        503.8897637795277
+      ],
+      "personal": [
+        335.0,
+        503.8897637795277
+      ],
+      "emergency": [
+        485.0,
+        503.8897637795277
+      ]
+    }
+  },
+  "justification": {
+    "page": 1,
+    "x": 160,
+    "y": 432.89,
+    "width": 420,
+    "height": 51,
+    "font_size": 7.2,
+    "multiline": true,
+    "max_lines": 3
+  },
+  "employee_signature_image": {
+    "page": 1,
+    "x": 25,
+    "y": 321.89,
+    "width": 365,
+    "height": 62,
+    "kind": "image",
+    "padding": 4,
+    "source": "request.signers.employee.signature"
+  },
+  "employee_signature_date": {
+    "page": 1,
+    "x": 472,
+    "y": 310.89,
+    "width": 51,
+    "height": 14,
+    "font_size": 6.8,
+    "shrink": true,
+    "source": "request.created_at"
+  },
+  "manager_decision": {
+    "page": 1,
+    "checkboxes": {
+      "approved": [
+        150.0,
+        268.8897637795277
+      ],
+      "rejected": [
+        360.0,
+        268.8897637795277
+      ]
+    }
+  },
+  "manager_name": {
+    "page": 1,
+    "x": 160,
+    "y": 233.89,
+    "width": 275.28,
+    "height": 18,
+    "font_size": 7.6,
+    "shrink": true,
+    "multiline": false,
+    "max_lines": 2
+  },
+  "manager_signature_image": {
+    "page": 1,
+    "x": 25,
+    "y": 153.89,
+    "width": 365,
+    "height": 54,
+    "kind": "image",
+    "padding": 4,
+    "source": "request.signers.manager.signature"
+  },
+  "manager_signature_date": {
+    "page": 1,
+    "x": 472,
+    "y": 150.89,
+    "width": 51,
+    "height": 14,
+    "font_size": 6.8,
+    "shrink": true,
+    "source": "request.manager_decision_at"
+  },
+  "hr_notes": {
+    "page": 1,
+    "x": 160,
+    "y": 105.89,
+    "width": 275.28,
+    "height": 19,
+    "font_size": 7.5,
+    "shrink": true,
+    "multiline": true,
+    "max_lines": 2
+  },
+  "hr_name": {
+    "page": 1,
+    "x": 160,
+    "y": 81.89,
+    "width": 275.28,
+    "height": 18,
+    "font_size": 7.5,
+    "shrink": true,
+    "multiline": false,
+    "max_lines": 2
+  },
+  "hr_signature_image": {
+    "page": 1,
+    "x": 25,
+    "y": 15.89,
+    "width": 365,
+    "height": 48,
+    "kind": "image",
+    "padding": 4,
+    "source": "request.signers.hr.signature"
+  },
+  "hr_signature_date": {
+    "page": 1,
+    "x": 472,
+    "y": 12.89,
+    "width": 51,
+    "height": 14,
+    "font_size": 6.8,
+    "shrink": true,
+    "source": "request.hr_completed_at"
+  }
+}

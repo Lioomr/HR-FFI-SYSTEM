@@ -6,7 +6,7 @@ from typing import Any
 from django.conf import settings
 
 from .messaging_providers import EvolutionWhatsAppProvider
-from .whatsapp_template_library import render_configured_template_message
+from .whatsapp_template_library import CAPTION_MAX_CHARS, render_configured_template_message
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +100,18 @@ WHATSAPP_TEMPLATE_REGISTRY: dict[str, WhatsAppTemplateSpec] = {
         template_name="employee_invitation",
         variable_order=("role", "invite_link", "expires_in_hours", "inviter_name"),
     ),
+    "leave_request_received_v1": WhatsAppTemplateSpec(
+        template_name="leave_request_received_v1",
+        variable_order=("employee_name", "leave_type", "start_date", "end_date", "total_days"),
+    ),
+    "work_license_expiry_hr_v1": WhatsAppTemplateSpec(
+        template_name="work_license_expiry_hr_v1",
+        variable_order=("employee_name", "expiry_date"),
+    ),
+    "starting_work_acknowledgment_v1": WhatsAppTemplateSpec(
+        template_name="starting_work_acknowledgment_v1",
+        variable_order=("employee_name", "employee_id", "start_date"),
+    ),
     "whatsapp_provider_test": WhatsAppTemplateSpec(
         template_name="whatsapp_provider_test",
         variable_order=("provider_name",),
@@ -115,15 +127,8 @@ class WhatsAppService:
     ) -> None:
         self.timeout_seconds = timeout_seconds or int(getattr(settings, "NOTIFICATION_HTTP_TIMEOUT_SECONDS", 10))
 
-    def send_template_message(
-        self,
-        *,
-        phone_number: str,
-        template_name: str,
-        template_variables: dict[str, Any],
-        language: str = "en",
-    ) -> dict[str, Any]:
-        _ = language
+    def render_template(self, *, template_name: str, template_variables: dict[str, Any]) -> tuple[str, str]:
+        """Return ``(text, error)`` for a registered template; exactly one of them is empty."""
         resolved_template = resolve_template_key(template_name=template_name, template_variables=template_variables)
         # The previous announcement template exposed a private attachment URL.
         # Route legacy queued payloads through the safe renderer while keeping
@@ -136,35 +141,32 @@ class WhatsAppService:
             }
         spec = WHATSAPP_TEMPLATE_REGISTRY.get(resolved_template or "")
         if not spec:
-            return {
-                "success": False,
-                "message_id": None,
-                "status_code": 0,
-                "error": f"Unknown template: {template_name}",
-            }
+            return "", f"Unknown template: {template_name}"
 
         missing = [name for name in spec.variable_order if name not in template_variables]
         if missing:
-            return {
-                "success": False,
-                "message_id": None,
-                "status_code": 0,
-                "error": f"Missing template variables: {', '.join(missing)}",
-            }
+            return "", f"Missing template variables: {', '.join(missing)}"
+        return render_configured_template_message(resolved_template, template_variables), ""
+
+    def send_template_message(
+        self,
+        *,
+        phone_number: str,
+        template_name: str,
+        template_variables: dict[str, Any],
+        language: str = "en",
+    ) -> dict[str, Any]:
+        _ = language
+        text, error = self.render_template(template_name=template_name, template_variables=template_variables)
+        if error:
+            return _template_error(error)
 
         result = EvolutionWhatsAppProvider(timeout_seconds=self.timeout_seconds).send_text(
             phone_number=phone_number,
-            text=render_configured_template_message(resolved_template, template_variables),
+            text=text,
             event=template_name,
         )
-        return {
-            "success": result["success"],
-            "provider": result["provider"],
-            "status_code": result["status_code"],
-            "message_id": result["message_id"],
-            "provider_status": result.get("provider_status"),
-            "error": result["error"],
-        }
+        return _public_result(result)
 
     def send_text_message(self, *, phone_number: str, text: str, event: str = "") -> dict[str, Any]:
         result = EvolutionWhatsAppProvider(timeout_seconds=self.timeout_seconds).send_text(
@@ -172,14 +174,7 @@ class WhatsAppService:
             text=text,
             event=event,
         )
-        return {
-            "success": result["success"],
-            "provider": result["provider"],
-            "status_code": result["status_code"],
-            "message_id": result["message_id"],
-            "provider_status": result.get("provider_status"),
-            "error": result["error"],
-        }
+        return _public_result(result)
 
     def send_document_message(
         self,
@@ -189,6 +184,7 @@ class WhatsAppService:
         document_base64: str = "",
         file_name: str,
         caption: str = "",
+        event: str = "whatsapp_document",
     ) -> dict[str, Any]:
         result = EvolutionWhatsAppProvider(timeout_seconds=self.timeout_seconds).send_document(
             phone_number=phone_number,
@@ -196,16 +192,72 @@ class WhatsAppService:
             document_base64=document_base64,
             file_name=file_name,
             caption=caption,
-            event="whatsapp_document",
+            event=event,
         )
-        return {
-            "success": result["success"],
-            "provider": result["provider"],
-            "status_code": result["status_code"],
-            "message_id": result["message_id"],
-            "provider_status": result.get("provider_status"),
-            "error": result["error"],
-        }
+        return _public_result(result)
+
+    def send_document_with_text(
+        self,
+        *,
+        phone_number: str,
+        text: str,
+        file_name: str,
+        document_url: str = "",
+        document_base64: str = "",
+        event: str = "whatsapp_document",
+    ) -> dict[str, Any]:
+        """Send a PDF captioned with ``text``; text too long for a caption goes out first on its own."""
+        caption = text or ""
+        if len(caption) > CAPTION_MAX_CHARS:
+            text_result = self.send_text_message(phone_number=phone_number, text=caption, event=event)
+            if not text_result["success"]:
+                return text_result
+            caption = ""
+        return self.send_document_message(
+            phone_number=phone_number,
+            document_url=document_url,
+            document_base64=document_base64,
+            file_name=file_name,
+            caption=caption,
+            event=event,
+        )
+
+    def send_template_document_message(
+        self,
+        *,
+        phone_number: str,
+        template_name: str,
+        template_variables: dict[str, Any],
+        file_name: str,
+        document_url: str = "",
+        document_base64: str = "",
+    ) -> dict[str, Any]:
+        text, error = self.render_template(template_name=template_name, template_variables=template_variables)
+        if error:
+            return _template_error(error)
+        return self.send_document_with_text(
+            phone_number=phone_number,
+            text=text,
+            file_name=file_name,
+            document_url=document_url,
+            document_base64=document_base64,
+            event=template_name,
+        )
+
+
+def _template_error(error: str) -> dict[str, Any]:
+    return {"success": False, "message_id": None, "status_code": 0, "error": error}
+
+
+def _public_result(result: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "success": result["success"],
+        "provider": result["provider"],
+        "status_code": result["status_code"],
+        "message_id": result["message_id"],
+        "provider_status": result.get("provider_status"),
+        "error": result["error"],
+    }
 
 
 def get_template_info(template_name: str) -> dict[str, Any]:

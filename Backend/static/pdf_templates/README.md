@@ -11,6 +11,7 @@ different PDF.
 |---|---|---|---|
 | Leave request | `leave_request_blank.pdf` | `leave_request_blank_field_map.json` | `leaves/pdf_leave_request.py` |
 | Loan request | `loan_request_blank.pdf` | `loan_request_blank_field_map.json` | `loans/pdf_loan_request.py` |
+| Exit permission request | `exit_permission_request_blank.pdf` | `exit_permission_request_blank_field_map.json` | `permission_requests/pdf_permission_request.py` |
 | Annual entitlements disbursement | `annual_entitlements_disbursement_blank.pdf` | `annual_entitlements_disbursement_blank_field_map.json` | `leaves/pdf_annual_entitlements.py` |
 | Job offer | `job_offer_blank.pdf` | `job_offer_blank_field_map.json` | `job_offers/pdf.py` |
 | Starting work acknowledgment | `starting_work_acknowledgment_blank.pdf` | `starting_work_acknowledgment_blank_field_map.json` | `job_offers/starting_work_pdf.py` |
@@ -23,7 +24,7 @@ authored and verified against the actual PDF.
 
 ## How a map is applied
 
-All five pairs render through `core/pdf_forms.py`. No renderer carries
+Every mapped pair renders through `core/pdf_forms.py`. No renderer carries
 coordinates of its own. Both map schemas in the bundle are accepted:
 
 ```jsonc
@@ -31,7 +32,7 @@ coordinates of its own. Both map schemas in the bundle are accepted:
 { "employee_name": { "page": 1, "x": 102, "y": 682.89, "width": 406, "height": 19, "font_size": 7.8 } }
 
 // versioned
-{ "template": "loan_request_blank.pdf", "version": 3, "coordinate_origin": "bottom_left",
+{ "template": "loan_request_blank.pdf", "version": 4, "coordinate_origin": "bottom_left",
   "fields": { "employee_name": { "page": 1, "x": 102, "y": 692 } } }
 ```
 
@@ -44,16 +45,14 @@ Coordinates use the PDF's own bottom-left origin, 1 unit = 1 point. Field kinds:
 - **image** - `{"kind": "image"}`; only signature images are drawn here, and only
   for the actor the workflow recorded for that stage.
 
-Where a map lets a signature box overlap a printed value (the loan approval
-columns, the acknowledgment approval rows), the image is confined to the free
-part of its own box so it can never bury that value. The one exception is a
-`*_signature_image` whose exact twin `*_signature` text field is the same slot -
-a real signature supersedes its typed placeholder.
+Every approved signature is mapped to an invisible image box centred in an
+open, unruled white area. Adjacent names, decisions, and dates use their own
+visible boxes. A real signature supersedes only its exact `*_signature` typed
+placeholder, when such a compatibility field exists.
 
 Signature images come from `EmployeeProfile.signature`, resolved for the actor
-the workflow recorded for that stage. The job offer's `hr_signature_image`
-targets the template's printed `Signature` rule beneath the HR name and position
-boxes - never the boxes themselves.
+the workflow recorded for that stage. The job offer maps separate HR and CEO
+signature areas; its external applicant has no signature field.
 
 Some boxes the maps declare are **pre-printed on the template** and must be left
 alone. `annual_entitlements_disbursement_blank_field_map.json` declares
@@ -64,6 +63,7 @@ renderer lists it in `PRE_PRINTED_FIELDS` and never writes there.
 
 ```bash
 python static/pdf_templates/generate_leave_request_final.py
+python static/pdf_templates/generate_exit_permission_request.py
 python static/pdf_templates/generate_annual_entitlements_final.py
 python static/pdf_templates/generate_job_offer_final.py
 python static/pdf_templates/generate_starting_work_final.py

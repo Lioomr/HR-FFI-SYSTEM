@@ -1,4 +1,3 @@
-import { Tag } from "antd";
 import type { NotificationDto } from "../../services/api/notificationsApi";
 import { useI18n } from "../../i18n/useI18n";
 import {
@@ -20,7 +19,7 @@ interface NotificationItemProps {
 
 /**
  * Presentational row shared by the header bell dropdown and the inbox page.
- * Renders category, title, message, relative + absolute time, and unread state.
+ * Layout: category icon | title + time/unread dot, message, category + delivery.
  * Rendered as a real <button> for keyboard and screen-reader accessibility.
  */
 export default function NotificationItem({
@@ -69,47 +68,39 @@ export default function NotificationItem({
       </span>
 
       <span className="ffi-notif-item__body">
-        <span className="ffi-notif-item__title">{notification.title}</span>
+        <span className="ffi-notif-item__head">
+          <span className="ffi-notif-item__title">{notification.title}</span>
+          <span className="ffi-notif-item__aside">
+            <time
+              className="ffi-notif-time"
+              dateTime={notification.created_at}
+              title={absolute}
+            >
+              {relative}
+            </time>
+            {unread ? (
+              <span className="ffi-notif-item__dot" aria-hidden="true" />
+            ) : null}
+          </span>
+        </span>
         {notification.message ? (
           <span className="ffi-notif-item__message">
             {notification.message}
           </span>
         ) : null}
         <span className="ffi-notif-item__meta">
-          <Tag
-            variant="filled"
-            style={{
-              margin: 0,
-              color,
-              background: `${color}14`,
-              fontSize: 10.5,
-              lineHeight: "16px",
-              padding: "0 7px",
-            }}
+          <span
+            className="ffi-notif-item__category"
+            style={{ color, background: `${color}14` }}
           >
             {categoryLabel}
-          </Tag>
-          <time
-            className="ffi-notif-time"
-            dateTime={notification.created_at}
-            title={absolute}
-          >
-            {relative}
-          </time>
+          </span>
+          <NotificationDeliveryStatus
+            deliveries={notification.deliveries}
+            compact
+          />
         </span>
-        <NotificationDeliveryStatus
-          deliveries={notification.deliveries}
-          compact
-        />
       </span>
-
-      {unread ? (
-        <span
-          className="ffi-notif-item__dot"
-          aria-hidden="true"
-          style={{ background: color }}
-        />
-      ) : null}
     </button>
   );
 }

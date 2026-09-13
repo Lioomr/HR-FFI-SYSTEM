@@ -92,10 +92,12 @@ def employee_on_leave(employee_profile, value: date_type) -> bool:
     match = Q(employee_profile=employee_profile)
     user_id = getattr(employee_profile, "user_id", None)
     if user_id:
-        match |= Q(employee_id=user_id)
+        match |= Q(employee_profile__isnull=True, employee_id=user_id)
     return LeaveRequest.objects.filter(
         match,
+        company_id=employee_profile.company_id,
         status=LeaveRequest.RequestStatus.APPROVED,
+        is_active=True,
         start_date__lte=value,
         end_date__gte=value,
     ).exists()

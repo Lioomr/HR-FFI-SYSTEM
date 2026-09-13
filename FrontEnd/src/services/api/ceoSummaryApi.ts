@@ -1,3 +1,6 @@
+import { listJobOffers } from "./jobOffersApi";
+import { listContractDecisions } from "./contractDecisionsApi";
+import { getAnnualLeavePaymentRequests } from "./annualLeavePaymentsApi";
 import { isApiError } from "./apiTypes";
 import {
   getCEOAssetDamageReports,
@@ -6,7 +9,7 @@ import {
 import { getCEOAttendance } from "./attendanceApi";
 import { listEmployeeArchiveRequests } from "./employeesApi";
 import { getCEOLeaveRequests } from "./leaveApi";
-import { getCEOLoanRequests } from "./loanApi";
+import { getCFOLoanRequests, getCEOLoanRequests } from "./loanApi";
 
 /**
  * Executive approval summary.
@@ -25,7 +28,10 @@ export type CeoQueueKey =
   | "attendance"
   | "assetDamage"
   | "assetReturn"
-  | "employeeArchive";
+  | "employeeArchive"
+  | "jobOffers"
+  | "contracts"
+  | "annualLeave";
 
 export const CEO_QUEUE_KEYS: CeoQueueKey[] = [
   "leave",
@@ -34,6 +40,9 @@ export const CEO_QUEUE_KEYS: CeoQueueKey[] = [
   "assetDamage",
   "assetReturn",
   "employeeArchive",
+  "jobOffers",
+  "contracts",
+  "annualLeave",
 ];
 
 export interface CeoQueueCount {
@@ -55,7 +64,7 @@ const PROBE = { page: 1, page_size: 1 } as const;
 
 /** Reads `count` off any of the list shapes the CEO endpoints return. */
 function readCount(payload: unknown): number {
-  if (!payload) return 0;
+  if (!payload) throw new Error("Missing queue data");
   if (Array.isArray(payload)) return payload.length;
   if (typeof payload === "object") {
     const record = payload as {
@@ -67,7 +76,7 @@ function readCount(payload: unknown): number {
     if (Array.isArray(record.items)) return record.items.length;
     if (Array.isArray(record.results)) return record.results.length;
   }
-  return 0;
+  throw new Error("Invalid queue data");
 }
 
 async function probe(loader: () => Promise<unknown>): Promise<number> {
@@ -82,6 +91,11 @@ async function probe(loader: () => Promise<unknown>): Promise<number> {
 
 export async function getCeoApprovalSummary(): Promise<CeoApprovalSummary> {
   const loaders: Record<CeoQueueKey, () => Promise<unknown>> = {
+    jobOffers: () =>
+      listJobOffers({ approval_status: "pending_ceo", ...PROBE }),
+    contracts: () => listContractDecisions({ status: "PENDING_CEO", ...PROBE }),
+    annualLeave: () =>
+      getAnnualLeavePaymentRequests({ status: "pending_ceo", ...PROBE }),
     leave: () => getCEOLeaveRequests({ ...PROBE }),
     loan: () => getCEOLoanRequests({ status: "pending_ceo", ...PROBE }),
     attendance: () => getCEOAttendance({ status: "PENDING_CEO", ...PROBE }),
@@ -113,4 +127,19 @@ export async function getCeoApprovalSummary(): Promise<CeoApprovalSummary> {
   });
 
   return { queues, totalPending, allUnavailable: availableCount === 0 };
+}
+
+export type CfoApprovalSummary = Omit<CeoApprovalSummary, "queues"> & {
+  queues: Pick<CeoApprovalSummary["queues"], "loan">;
+};
+
+export async function getCfoApprovalSummary(): Promise<CfoApprovalSummary> {
+  const count = await probe(() =>
+    getCFOLoanRequests({ status: "pending_cfo", ...PROBE }),
+  );
+  return {
+    queues: { loan: { key: "loan", count, available: true } },
+    totalPending: count,
+    allUnavailable: false,
+  };
 }

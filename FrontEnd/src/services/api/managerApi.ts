@@ -178,7 +178,10 @@ export function normalizeManagerAccess(raw: unknown): ManagerAccess {
 }
 
 export async function getManagerAttendance(
-  params?: Pick<AttendanceFilters, "status" | "page" | "page_size">,
+  params?: Pick<
+    AttendanceFilters,
+    "status" | "effective_status" | "page" | "page_size"
+  >,
 ) {
   const { data } = await api.get<ApiResponse<AttendanceListResponse>>(
     "/api/manager/attendance/",

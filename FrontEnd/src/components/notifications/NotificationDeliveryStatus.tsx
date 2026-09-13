@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { Tooltip } from "antd";
 import {
   CheckCircleFilled,
@@ -65,7 +65,7 @@ export default function NotificationDeliveryStatus({
           <Tooltip key={`${d.channel}-${i}`} title={hint}>
             <span
               className="ffi-notif-delivery"
-              style={{ color, background: `${color}14` }}
+              style={{ "--ffi-delivery-color": color } as CSSProperties}
               title={`${label} — ${hint}`}
             >
               <span className="ffi-notif-delivery__icon" aria-hidden="true">

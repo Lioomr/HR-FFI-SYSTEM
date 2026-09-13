@@ -77,6 +77,46 @@ export function formatRelativeTime(iso: string, locale: string): string {
   return rtf.format(Math.round(diffSec / 31557600), "year");
 }
 
+export type NotificationDayGroup = "today" | "yesterday" | "lastWeek" | "older";
+
+const DAY_MS = 86_400_000;
+
+/** Calendar-day bucket (local time) used to section the inbox list. */
+export function notificationDayGroup(
+  iso: string,
+  now: Date = new Date(),
+): NotificationDayGroup {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "older";
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  ).getTime();
+  if (then >= startOfToday) return "today";
+  if (then >= startOfToday - DAY_MS) return "yesterday";
+  if (then >= startOfToday - 6 * DAY_MS) return "lastWeek";
+  return "older";
+}
+
+/**
+ * Split an already-sorted list into consecutive day sections, preserving the
+ * server's order (newest first) instead of re-sorting client-side.
+ */
+export function groupNotificationsByDay<T extends { created_at: string }>(
+  items: T[],
+  now: Date = new Date(),
+): { key: NotificationDayGroup; items: T[] }[] {
+  const groups: { key: NotificationDayGroup; items: T[] }[] = [];
+  for (const item of items) {
+    const key = notificationDayGroup(item.created_at, now);
+    const last = groups[groups.length - 1];
+    if (last && last.key === key) last.items.push(item);
+    else groups.push({ key, items: [item] });
+  }
+  return groups;
+}
+
 /** Full, accessible absolute timestamp for tooltips / `title` / `aria-label`. */
 export function formatAbsoluteTime(iso: string, locale: string): string {
   const d = new Date(iso);

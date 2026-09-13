@@ -11,6 +11,7 @@ from core.services.bird_email_service import send_generic_notification_email
 from core.services.email_html import email_button
 from employees.models import EmployeeProfile
 from in_app_notifications.dispatcher import dispatch_notification_channels
+from in_app_notifications.i18n import notification_text, pair, status_label
 from in_app_notifications.models import Notification
 from organization.services import get_user_accessible_company_ids
 
@@ -69,21 +70,20 @@ def notify_job_offer_submitted(offer: JobOffer) -> list[dict]:
     review_url = _frontend_url(review_path)
     backend_url = (getattr(settings, "BACKEND_PUBLIC_URL", "") or "").rstrip("/")
     cv_url = f"{backend_url}/job-offers/{offer.id}/cv/" if backend_url else f"{review_url}?open_cv=1"
-    details = [
-        f"Candidate: {offer.candidate_full_name}",
-        f"Company: {offer.company.name}",
-        f"Reference: {offer.reference_number}",
-        f"Salary package: {offer.total_salary_package}",
-    ]
-    message = "; ".join(details)
+    text = notification_text(
+        "job_offer.submitted",
+        candidate=offer.candidate_full_name,
+        company=offer.company.name,
+        reference=offer.reference_number,
+        salary=offer.total_salary_package,
+    )
     results = []
     event_key = _approval_event_key(offer)
     for recipient in get_company_ceo_recipients(offer.company):
         dispatch = dispatch_notification_channels(
             recipient=recipient,
             event_key="job_offer.submitted",
-            title=f"Job offer {offer.reference_number} requires CEO review",
-            message=message,
+            **text,
             category=Notification.Category.APPROVAL,
             action_url=review_url,
             related_object=offer,
@@ -140,9 +140,17 @@ def notify_job_offer_decided(offer: JobOffer) -> list[dict]:
     detail_path = f"/hr/job-offers/{offer.id}"
     detail_url = _frontend_url(detail_path)
     decision = offer.get_approval_status_display()
-    reason_text = f" Reason: {offer.ceo_decision_reason}" if offer.ceo_decision_reason else ""
-    recommendation_text = f" Recommendation: {offer.ceo_recommendation}" if offer.ceo_recommendation else ""
-    message = f"Job offer {offer.reference_number} is {decision.lower()}.{reason_text}{recommendation_text}"
+    reason = offer.ceo_decision_reason
+    recommendation = offer.ceo_recommendation
+    text = notification_text(
+        "job_offer.decided",
+        reference=offer.reference_number,
+        decision=pair(decision.lower(), status_label(offer.approval_status)["ar"]),
+        reason=pair(f" Reason: {reason}", f" السبب: {reason}") if reason else "",
+        recommendation=(
+            pair(f" Recommendation: {recommendation}", f" التوصية: {recommendation}") if recommendation else ""
+        ),
+    )
     approved = "approv" in str(offer.approval_status).lower()
     rejected = "reject" in str(offer.approval_status).lower()
     results = []
@@ -151,8 +159,7 @@ def notify_job_offer_decided(offer: JobOffer) -> list[dict]:
         dispatch = dispatch_notification_channels(
             recipient=recipient,
             event_key=f"job_offer.{offer.approval_status}",
-            title=f"Job offer {decision.lower()}",
-            message=message,
+            **text,
             category=Notification.Category.REQUEST,
             action_url=detail_url,
             related_object=offer,
@@ -225,17 +232,18 @@ def notify_job_offer_biotime_mapping_missing(offer: JobOffer) -> list[dict]:
 
     employee_name = profile.full_name_en or profile.full_name or offer.candidate_full_name or profile.employee_id
     action_url = f"/hr/job-offers/{offer.id}"
-    message = (
-        f"BioTime mapping is missing for {employee_name} ({profile.employee_id}) after accepting "
-        f"job offer {offer.reference_number}. Add the employee mapping before attendance synchronization."
+    text = notification_text(
+        "job_offer.biotime_mapping_missing",
+        employee_name=pair(employee_name, profile.full_name_ar or employee_name),
+        employee_id=profile.employee_id,
+        reference=offer.reference_number,
     )
     results = []
     for recipient in get_company_hr_recipients(profile.company):
         dispatch = dispatch_notification_channels(
             recipient=recipient,
             event_key="job_offer.biotime_mapping_missing",
-            title=f"BioTime mapping required for {employee_name}",
-            message=message,
+            **text,
             category=Notification.Category.ATTENDANCE,
             action_url=action_url,
             related_object=offer,
@@ -278,10 +286,13 @@ def notify_starting_work_acknowledgment_ready(
     download_path = f"/starting-work-acknowledgments/{acknowledgment.id}/pdf/"
     download_url = f"{backend_url}{download_path}" if backend_url else download_path
     start_date = acknowledgment.attendance_record.date.isoformat()
-    message = (
-        f"Starting Work Acknowledgment requires HR BioTime verification. Employee: {employee_name}; "
-        f"Employee ID: {profile.employee_id}; Start date: {start_date}; "
-        f"Profile: {profile_url}; Document: {download_url}"
+    text = notification_text(
+        "starting_work_acknowledgment.pending_hr",
+        employee_name=pair(employee_name, profile.full_name_ar or employee_name),
+        employee_id=profile.employee_id,
+        start_date=start_date,
+        profile_url=profile_url,
+        document_url=download_url,
     )
 
     results = []
@@ -289,8 +300,7 @@ def notify_starting_work_acknowledgment_ready(
         dispatch = dispatch_notification_channels(
             recipient=recipient,
             event_key="starting_work_acknowledgment.pending_hr",
-            title=f"Verify starting work attendance for {employee_name}",
-            message=message,
+            **text,
             category=Notification.Category.DOCUMENT,
             action_url=profile_path,
             related_object=acknowledgment,
@@ -303,6 +313,20 @@ def notify_starting_work_acknowledgment_ready(
             },
             deduplication_key=f"starting_work_acknowledgment.pending_hr:{acknowledgment.id}",
             company=acknowledgment.company,
+            whatsapp_template="starting_work_acknowledgment_v1",
+            whatsapp_variables={
+                "recipient_name": recipient.full_name or "",
+                "employee_name": employee_name,
+                "employee_name_ar": profile.full_name_ar or employee_name,
+                "employee_id": profile.employee_id,
+                "start_date": start_date,
+                "reference_number": acknowledgment.reference_number,
+                "action_url": profile_path,
+            },
+            # HR receives the acknowledgment itself; the download link needs a login.
+            whatsapp_document=(
+                {"starting_work_acknowledgment_id": acknowledgment.id} if acknowledgment.document_id else None
+            ),
             whatsapp_enabled=True,
             email_enabled=False,
         )

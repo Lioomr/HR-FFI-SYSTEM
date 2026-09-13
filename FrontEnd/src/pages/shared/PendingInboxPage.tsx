@@ -233,7 +233,7 @@ export default function PendingInboxPage() {
         <Button
           icon={<EyeOutlined />}
           size="small"
-          onClick={() => navigate(record.review_path)}
+          onClick={() => navigateToNotification(record.review_path)}
         >
           {t("common.review")}
         </Button>
@@ -410,6 +410,9 @@ export default function PendingInboxPage() {
                   </Select.Option>
                   <Select.Option value="EMPLOYEE_DELETION">
                     {t("pendingInbox.requestType.EMPLOYEE_DELETION")}
+                  </Select.Option>
+                  <Select.Option value="ANNUAL_LEAVE_PAYMENT">
+                    {t("pendingInbox.requestType.ANNUAL_LEAVE_PAYMENT")}
                   </Select.Option>
                 </Select>
               </Form.Item>

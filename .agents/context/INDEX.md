@@ -21,6 +21,7 @@ Scan this file first. Each row lists the file, size, and the exact keywords that
 | `biotime_integration.md` | ~2.8K | BioTime, ZKTeme 8.5, `biotime_client.py`, `sync_biotime`, singleton |
 | `deployment.md` | ~3K | env vars, staging, prod, Gunicorn, Nginx |
 | `reliability_and_perf_fixes.md` | ~5K | gzip, compression, `select_for_update`, `transaction.atomic`, loan/leave approval race, celery beat, `known_new`, bulk_update, bulk_create, optimistic UI, CinematicSite hosting |
+| `engineering_references.md` | ~3K | PostHog, Vinta, OpenAPI, generated API types, tenant-scope regression tests, safe migrations |
 
 ## Frontend-Only
 

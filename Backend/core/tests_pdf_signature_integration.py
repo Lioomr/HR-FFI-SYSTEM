@@ -277,7 +277,7 @@ def _offer(signed_world, **overrides):
     return JobOffer.objects.create(**fields)
 
 
-def test_job_offer_prints_the_hr_signature_without_covering_name_or_position(signed_world):
+def test_job_offer_prints_the_hr_signature_without_covering_name_or_date(signed_world):
     from job_offers.pdf import _load_form_assets, build_job_offer_pdf
 
     assets = _load_form_assets()
@@ -286,7 +286,7 @@ def test_job_offer_prints_the_hr_signature_without_covering_name_or_position(sig
 
     assert len(boxes) == 1
     assert_inside(boxes[0], assets.fields["hr_signature_image"], "HR signs its own printed rule")
-    for other in ("hr_name", "hr_position"):
+    for other in ("hr_name", "hr_signature_date"):
         spec = assets.fields[other]
         x0, y0, x1, y1 = boxes[0]
         covers = not (
@@ -295,27 +295,22 @@ def test_job_offer_prints_the_hr_signature_without_covering_name_or_position(sig
         assert not covers, f"HR signature must not cover {other}"
 
 
-def test_job_offer_applicant_signs_only_after_accepting(signed_world):
-    from job_offers.models import JobOffer
+def test_job_offer_uses_ceo_signature_and_never_an_external_applicant_signature(signed_world):
     from job_offers.pdf import _load_form_assets, build_job_offer_pdf, build_job_offer_signers
 
     assets = _load_form_assets()
-    # The HR signer here has no stored signature, so only the applicant's can appear.
-    pending = _offer(
+    offer = _offer(
         signed_world,
-        employee_profile=signed_world["employee_profile"],
         hr_signer_user=signed_world["unsigned_user"],
+        ceo_decision_by=signed_world["manager_user"],
+        ceo_decision_at=timezone.now(),
     )
-    assert build_job_offer_signers(pending)["applicant_signature"] is None
-    assert signature_boxes(build_job_offer_pdf(pending), assets.template_path) == []
-
-    pending.status = JobOffer.Status.ACCEPTED
-    pending.accepted_at = timezone.now()
-    pending.save(update_fields=["status", "accepted_at"])
-
-    boxes = signature_boxes(build_job_offer_pdf(pending), assets.template_path)
+    signers = build_job_offer_signers(offer)
+    assert "applicant_signature" not in signers
+    assert signers["ceo_signature_image"] is signed_world["manager_user"]
+    boxes = signature_boxes(build_job_offer_pdf(offer), assets.template_path)
     assert len(boxes) == 1
-    assert_inside(boxes[0], assets.fields["applicant_signature"], "applicant signs the acceptance box")
+    assert_inside(boxes[0], assets.fields["ceo_signature_image"], "CEO signs the approval box")
 
 
 # --------------------------------------------------------------------------

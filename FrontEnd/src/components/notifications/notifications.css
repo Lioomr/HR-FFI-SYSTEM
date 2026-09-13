@@ -1,8 +1,10 @@
-/* ── Notification UI polish ──────────────────────────────────────────────────
-   Scoped styles for the header bell dropdown and the full inbox page.
-   Principles applied: concentric radii, soft shadows, tabular numbers, crisp
-   typography, balanced/pretty text wrapping, staggered entry + subtle exit,
-   interruptible animations, and full prefers-reduced-motion support. */
+/* ── Notification UI ──────────────────────────────────────────────────────────
+   Scoped styles for the header bell dropdown, dashboard widgets and the full
+   inbox page. RTL/Arabic aware: logical properties, larger Arabic type sizes
+   (Readex Pro renders visually smaller than Latin at the same px), and bidi
+   isolation so English backend text keeps its punctuation in the right place
+   inside an Arabic layout. Also: concentric radii, tabular numbers, explicit
+   transition properties and full prefers-reduced-motion support. */
 
 /* Let our panel own its own padding/background inside the Popover shell. */
 .ffi-notif-popover .ant-popover-inner {
@@ -10,12 +12,11 @@
 }
 
 .ffi-notif-panel {
-  width: 380px;
+  width: 400px;
   max-width: calc(100vw - 24px);
   border-radius: 16px;
   overflow: hidden;
   background: #ffffff;
-  /* Soft, layered shadow instead of a hard border. */
   box-shadow:
     0 1px 2px rgba(15, 23, 42, 0.04),
     0 12px 32px rgba(15, 23, 42, 0.12);
@@ -32,15 +33,14 @@
 
 .ffi-notif-panel__title {
   margin: 0;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   color: #0f172a;
-  letter-spacing: -0.01em;
   text-wrap: balance;
 }
 
 .ffi-notif-panel__list {
-  max-height: 380px;
+  max-height: 420px;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 4px;
@@ -54,28 +54,30 @@
 /* ── Individual item ── */
 .ffi-notif-item {
   display: flex;
+  align-items: flex-start;
   gap: 12px;
-  padding: 10px 12px;
-  /* Concentric with the 16px panel minus 4px list padding. */
-  border-radius: 12px;
-  cursor: pointer;
-  text-align: start;
   width: 100%;
+  padding: 12px 14px;
+  /* Concentric with the 16px panel minus 4px list padding. */
   border: none;
+  border-radius: 12px;
   background: transparent;
-  transition:
-    background-color 160ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition-property: background-color, transform, box-shadow;
+  transition-duration: 160ms;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.ffi-notif-item:hover,
+.ffi-notif-item:hover {
+  background: #f8fafc;
+}
+
 .ffi-notif-item:focus-visible {
-  background: rgba(249, 115, 22, 0.06);
   outline: none;
-}
-
-.ffi-notif-item:focus-visible {
-  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.45);
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.5);
 }
 
 .ffi-notif-item:active {
@@ -86,40 +88,80 @@
   background: rgba(59, 130, 246, 0.05);
 }
 
+.ffi-notif-item--unread:hover {
+  background: rgba(59, 130, 246, 0.08);
+}
+
 .ffi-notif-item__icon {
   flex-shrink: 0;
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
+  font-size: 16px;
 }
 
 .ffi-notif-item__body {
-  min-width: 0;
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ffi-notif-item__head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+/* Titles/messages come from the backend and are often English even when the
+   UI is Arabic. `plaintext` resolves direction per paragraph from the content
+   (so "…is Pending HR." keeps its period at the end), while the alignment stays
+   pinned to the page's reading edge for a clean, consistent column. */
+.ffi-notif-item__title,
+.ffi-notif-item__message,
+.ffi-notif-delivery-details__grid dd {
+  unicode-bidi: plaintext;
+  text-align: left;
+}
+
+html[dir="rtl"] .ffi-notif-item__title,
+html[dir="rtl"] .ffi-notif-item__message,
+html[dir="rtl"] .ffi-notif-delivery-details__grid dd {
+  text-align: right;
 }
 
 .ffi-notif-item__title {
-  font-size: 13.5px;
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
   font-weight: 600;
+  line-height: 1.45;
   color: #0f172a;
-  line-height: 1.35;
   text-wrap: pretty;
+  overflow-wrap: anywhere;
 }
 
 .ffi-notif-item--unread .ffi-notif-item__title {
   font-weight: 700;
 }
 
+.ffi-notif-item__aside {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .ffi-notif-item__message {
-  font-size: 12.5px;
-  color: #64748b;
-  line-height: 1.4;
-  margin-top: 2px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #475569;
   text-wrap: pretty;
+  overflow-wrap: anywhere;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -128,11 +170,27 @@
 
 .ffi-notif-item__meta {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   margin-top: 5px;
+}
+
+.ffi-notif-item__category {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding-inline: 8px;
+  border-radius: 6px;
   font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ffi-notif-time {
+  font-size: 12px;
   color: #94a3b8;
+  white-space: nowrap;
 }
 
 /* Time and counts should never shift width as digits change. */
@@ -147,8 +205,8 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #3b82f6;
-  align-self: center;
+  background: #f97316;
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.16);
 }
 
 /* ── Connection indicator ── */
@@ -156,8 +214,13 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 11.5px;
-  color: #94a3b8;
+  padding-block: 2px;
+  padding-inline: 8px 10px;
+  border-radius: 999px;
+  background: #fffbeb;
+  color: #b45309;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .ffi-notif-conn__dot {
@@ -198,13 +261,111 @@
 }
 
 /* ── Full inbox page ── */
+.ffi-notif-page {
+  max-width: 880px;
+  margin: 0 auto;
+}
+
+.ffi-notif-page__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px 16px;
+  flex-wrap: wrap;
+  padding: 20px 24px 14px;
+}
+
+.ffi-notif-page__heading {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.ffi-notif-page__toolbar {
+  padding: 0 24px 16px;
+}
+
+.ffi-notif-page__body {
+  min-height: 200px;
+  border-top: 1px solid #eef2f6;
+}
+
+.ffi-notif-page__footer {
+  display: flex;
+  justify-content: center;
+  padding: 14px 16px 18px;
+  border-top: 1px solid #eef2f6;
+}
+
+.ffi-notif-page__note {
+  display: block;
+  text-align: center;
+  margin-top: 12px;
+  font-size: 12px;
+}
+
+.ffi-notif-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ffi-notif-seg__count {
+  min-width: 20px;
+  height: 20px;
+  padding-inline: 6px;
+  border-radius: 999px;
+  background: #f97316;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+}
+
+/* Day group headers: a quiet band that lets HR scan "what's new today". */
+.ffi-notif-group__label {
+  margin: 0;
+  padding: 8px 24px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: #64748b;
+  background: #f8fafc;
+  border-bottom: 1px solid #eef2f6;
+}
+
+.ffi-notif-group + .ffi-notif-group .ffi-notif-group__label {
+  border-top: 1px solid #eef2f6;
+}
+
 .ffi-notif-page-row {
-  border-radius: 12px;
+  padding: 6px 10px;
   transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ffi-notif-page-row + .ffi-notif-page-row {
+  border-top: 1px solid #f1f5f9;
+}
+
+.ffi-notif-page-row:hover {
+  background: #fafbfc;
 }
 
 .ffi-notif-page-row--unread {
   background: rgba(59, 130, 246, 0.04);
+}
+
+.ffi-notif-page-row--unread:hover {
+  background: rgba(59, 130, 246, 0.07);
+}
+
+/* The row owns the tint on the page; avoid a second nested tint. */
+.ffi-notif-page-row .ffi-notif-item,
+.ffi-notif-page-row .ffi-notif-item:hover {
+  background: transparent;
 }
 
 /* ── Channel preferences ── */
@@ -218,7 +379,6 @@
   align-items: center;
   gap: 12px;
   padding: 12px 14px;
-  /* Concentric with the surrounding drawer/card. */
   border-radius: 12px;
   background: rgba(148, 163, 184, 0.06);
 }
@@ -240,88 +400,110 @@
 }
 
 /* ── Delivery status chips ── */
+/* Neutral outline chips: the status colour lives on the icon only, so a row
+   with two channels reads as calm metadata instead of competing badges. */
 .ffi-notif-delivery-row {
-  display: flex;
+  display: inline-flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
-  margin-top: 6px;
 }
 
 .ffi-notif-delivery {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  line-height: 18px;
-  padding: 0 8px;
-  border-radius: 8px;
-  font-weight: 600;
+  gap: 5px;
+  height: 22px;
+  padding-inline: 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #475569;
+  font-size: 11.5px;
+  font-weight: 500;
   white-space: nowrap;
-}
-
-.ffi-notif-delivery-row--compact .ffi-notif-delivery {
-  font-size: 10.5px;
-  line-height: 16px;
-  padding: 0 6px;
 }
 
 .ffi-notif-delivery__icon {
   display: inline-flex;
+  font-size: 12px;
+  color: var(--ffi-delivery-color, #94a3b8);
+}
+
+.ffi-notif-panel .ffi-notif-delivery-row--compact .ffi-notif-delivery {
+  height: 20px;
+  padding-inline: 6px;
   font-size: 11px;
-  /* Optical alignment: nudge the glyph onto the text baseline. */
-  transform: translateY(0.5px);
 }
 
 /* ── Admin-only technical details (full page) ── */
 .ffi-notif-delivery-details {
-  margin-block: 2px 10px;
-  margin-inline: 58px 12px;
+  /* Align with the text column: item padding (14) + icon (36) + gap (12). */
+  margin-block: -6px 8px;
+  margin-inline: 62px 14px;
 }
 
 .ffi-notif-delivery-details__summary {
   cursor: pointer;
-  font-size: 12px;
-  color: #64748b;
-  font-weight: 600;
   list-style: none;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  margin-inline-start: -8px;
   padding: 4px 8px;
   border-radius: 8px;
-  transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+  transition-property: background-color, color;
+  transition-duration: 160ms;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .ffi-notif-delivery-details__summary::-webkit-details-marker {
   display: none;
 }
 
+/* CSS chevron: points toward the reading direction when closed, down when open. */
 .ffi-notif-delivery-details__summary::before {
-  content: "▸";
-  font-size: 10px;
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
   transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+html[dir="rtl"] .ffi-notif-delivery-details__summary::before {
+  transform: rotate(135deg);
+}
+
 .ffi-notif-delivery-details[open] .ffi-notif-delivery-details__summary::before {
-  transform: rotate(90deg);
+  transform: rotate(45deg);
 }
 
 .ffi-notif-delivery-details__summary:hover {
-  background: rgba(148, 163, 184, 0.1);
+  background: #f1f5f9;
+  color: #334155;
 }
 
 .ffi-notif-delivery-details__summary:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.45);
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.5);
 }
 
 .ffi-notif-delivery-details__body {
-  padding: 6px 10px 2px;
+  margin-top: 6px;
+  padding: 2px 12px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
 }
 
 .ffi-notif-delivery-details__row {
   padding: 8px 0;
-  border-top: 1px solid rgba(226, 232, 240, 0.7);
+  border-top: 1px solid #f1f5f9;
 }
 
 .ffi-notif-delivery-details__row:first-child {
@@ -329,7 +511,7 @@
 }
 
 .ffi-notif-delivery-details__label {
-  font-weight: 700;
+  font-weight: 600;
   font-size: 12.5px;
   margin-bottom: 4px;
   color: #0f172a;
@@ -337,8 +519,8 @@
 
 .ffi-notif-delivery-details__grid {
   display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 2px 12px;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
   margin: 0;
   font-size: 12px;
 }
@@ -357,6 +539,38 @@
 .ffi-notif-delivery-details__mono {
   font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
   font-size: 11.5px;
+}
+
+/* ── Arabic typography ── */
+/* Arabic glyphs need more size and line-height to stay legible. */
+:lang(ar) .ffi-notif-item__title {
+  font-size: 14.5px;
+  line-height: 1.6;
+}
+
+:lang(ar) .ffi-notif-item__message {
+  font-size: 13.5px;
+  line-height: 1.75;
+}
+
+:lang(ar) .ffi-notif-time,
+:lang(ar) .ffi-notif-conn,
+:lang(ar) .ffi-notif-delivery-details__summary {
+  font-size: 12.5px;
+}
+
+:lang(ar) .ffi-notif-item__category,
+:lang(ar) .ffi-notif-delivery {
+  font-size: 12px;
+}
+
+:lang(ar) .ffi-notif-group__label {
+  font-size: 13px;
+}
+
+:lang(ar) .ffi-notif-delivery-details__grid,
+:lang(ar) .ffi-notif-delivery-details__label {
+  font-size: 13px;
 }
 
 /* ── Respect reduced-motion ── */

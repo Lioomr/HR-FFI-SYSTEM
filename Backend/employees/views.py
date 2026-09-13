@@ -8,6 +8,7 @@ import string
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Case, CharField, Exists, F, OuterRef, Q, Value, When
 from django.http import FileResponse
@@ -33,7 +34,6 @@ from core.services import (
 )
 from in_app_notifications.models import Notification
 from leaves.models import LeaveRequest
-from loans.models import LoanRequest
 from organization.services import (
     ensure_company_write_allowed,
     filter_queryset_by_accessible_companies,
@@ -44,6 +44,12 @@ from organization.services import (
     get_scope_company_ids,
 )
 
+from .archive_request_services import (
+    ArchiveRequestError,
+    apply_archive_approval,
+    apply_archive_rejection,
+    record_archive_request_submission,
+)
 from .contract_expiry import (
     ensure_contract_decision,
     finalize_decision,
@@ -1354,6 +1360,8 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             if conflict_response is not None:
                 return conflict_response
             raise
+        except DjangoValidationError as exc:
+            return error("Validation error", errors=exc.message_dict or exc.messages, status=422)
         read_serializer = EmployeeProfileReadSerializer(serializer.instance)
         return success(read_serializer.data)
 
@@ -1361,8 +1369,27 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         ensure_company_write_allowed(self.request)
         before = _audit_snapshot(serializer.instance)
         previous_manager = serializer.instance.manager_profile
-        instance = serializer.save()
-        _sync_legacy_fields(instance)
+        instance = serializer.instance
+
+        # EmployeeProfile.save() validates the whole manager relationship even
+        # when the request only unlinks the employee's user. Legacy data can
+        # contain a manager profile whose own user was later unlinked; that
+        # unrelated stale relationship must not block this safe user unlink.
+        unlinking_only = serializer.validated_data == {"user": None}
+        stale_manager = bool(
+            instance.manager_profile_id
+            and instance.manager_profile
+            and not instance.manager_profile.user_id
+        )
+        if unlinking_only and stale_manager:
+            EmployeeProfile.objects.filter(pk=instance.pk).update(
+                user=None,
+                updated_at=timezone.now(),
+            )
+            instance.refresh_from_db()
+        else:
+            instance = serializer.save()
+            _sync_legacy_fields(instance)
         log_manager_assignment_change(
             employee=instance,
             previous_manager=previous_manager,
@@ -1392,6 +1419,8 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             if conflict_response is not None:
                 return conflict_response
             raise
+        except DjangoValidationError as exc:
+            return error("Validation error", errors=exc.message_dict or exc.messages, status=422)
         read_serializer = EmployeeProfileReadSerializer(serializer.instance)
         return success(read_serializer.data)
 
@@ -1888,15 +1917,17 @@ class EmployeeDeletionRequestViewSet(viewsets.ModelViewSet):
             return error("Validation error", errors=serializer.errors, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
         employee_profile = serializer.validated_data["employee_profile"]
-        instance = EmployeeDeletionRequest.objects.create(
-            company=employee_profile.company,
-            employee_profile=employee_profile,
-            target_user=employee_profile.user,
-            requested_by=request.user,
-            reason=serializer.validated_data["reason"],
-            archive_reason=serializer.validated_data["archive_reason"],
-            request_snapshot=_deletion_request_snapshot(employee_profile),
-        )
+        with transaction.atomic():
+            instance = EmployeeDeletionRequest.objects.create(
+                company=employee_profile.company,
+                employee_profile=employee_profile,
+                target_user=employee_profile.user,
+                requested_by=request.user,
+                reason=serializer.validated_data["reason"],
+                archive_reason=serializer.validated_data["archive_reason"],
+                request_snapshot=_deletion_request_snapshot(employee_profile),
+            )
+            record_archive_request_submission(instance, actor=request.user)
         audit(
             request,
             "employee_archive_requested",
@@ -1933,104 +1964,16 @@ class EmployeeDeletionRequestViewSet(viewsets.ModelViewSet):
         data = EmployeeDeletionRequestReadSerializer(instance, context=self.get_serializer_context()).data
         return success(data, status=status.HTTP_201_CREATED)
 
-    @staticmethod
-    def _build_execution_snapshot(instance: EmployeeDeletionRequest) -> dict:
-        from assets.models import AssetAssignment
-
-        profile = instance.employee_profile
-        target_user = instance.target_user
-        snapshot = dict(instance.request_snapshot or {})
-        if profile:
-            snapshot.update(
-                {
-                    "open_leave_requests": LeaveRequest.objects.filter(employee_profile=profile).count(),
-                    "asset_assignments": AssetAssignment.objects.filter(employee=profile, is_active=True).count(),
-                    "loan_requests": LoanRequest.objects.filter(employee_profile=profile).count(),
-                }
-            )
-        snapshot["target_user_email"] = target_user.email if target_user else snapshot.get("email", "")
-        snapshot["target_user_was_active"] = bool(target_user and target_user.is_active)
-        return snapshot
-
-    @staticmethod
-    def _retire_biotime_mapping_and_archive_profile(profile, execution_snapshot, actor, archive_reason, archived_at):
-        from employees.services.archiving import retire_biotime_mapping_and_archive_profile
-
-        retire_biotime_mapping_and_archive_profile(profile, execution_snapshot, actor, archive_reason, archived_at)
-
     @action(detail=True, methods=["post"], url_path="approve")
     def approve(self, request, pk=None):
         if get_role(request.user) not in ["CEO", "SystemAdmin"]:
             return error("Forbidden", status=status.HTTP_403_FORBIDDEN)
 
-        request_id = self.get_object().pk
-        with transaction.atomic():
-            # PostgreSQL cannot apply FOR UPDATE to the nullable outer joins
-            # introduced by select_related() on these optional relations.
-            # Lock the request row directly, then load its relations normally.
-            instance = EmployeeDeletionRequest.objects.select_for_update().get(pk=request_id)
-            if instance.status != EmployeeDeletionRequest.Status.PENDING_CEO:
-                return error("Validation error", errors=["Request is not pending CEO approval."], status=422)
+        try:
+            instance, profile, execution_snapshot = apply_archive_approval(self.get_object(), actor=request.user)
+        except ArchiveRequestError as exc:
+            return exc.to_response()
 
-            profile = instance.employee_profile
-            target_user = instance.target_user or (profile.user if profile and profile.user_id else None)
-            if profile is None:
-                return error("Validation error", errors=["Employee profile is no longer available."], status=422)
-            if profile.is_archived:
-                return error("Validation error", errors=["Employee is already archived."], status=422)
-
-            execution_snapshot = self._build_execution_snapshot(instance)
-            now = timezone.now()
-            try:
-                self._retire_biotime_mapping_and_archive_profile(
-                    profile,
-                    execution_snapshot,
-                    request.user,
-                    instance.archive_reason,
-                    now,
-                )
-            except IntegrityError:
-                logger.exception("employee_archive_integrity_check_failed", extra={"request_id": instance.id})
-                return error(
-                    "Archive cannot be completed.",
-                    errors=[
-                        "The employee could not be archived because an active record still blocks the request. "
-                        "No attendance history or BioTime mapping was changed. Please contact HR support."
-                    ],
-                    status=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                )
-            execution_snapshot.update(
-                {
-                    "is_archived": True,
-                    "archived_at": now.isoformat(),
-                    "archived_by_id": request.user.id,
-                    "archive_reason": instance.archive_reason,
-                    "target_user_disabled": bool(target_user),
-                }
-            )
-
-            if target_user is not None and target_user.is_active:
-                target_user.is_active = False
-                target_user.auth_token_version += 1
-                target_user.save(update_fields=["is_active", "auth_token_version"])
-
-            instance.status = EmployeeDeletionRequest.Status.EXECUTED
-            instance.approved_by = request.user
-            instance.approved_at = now
-            instance.executed_at = now
-            instance.execution_snapshot = execution_snapshot
-            instance.save(
-                update_fields=[
-                    "status",
-                    "approved_by",
-                    "approved_at",
-                    "executed_at",
-                    "execution_snapshot",
-                    "updated_at",
-                ]
-            )
-
-        instance.refresh_from_db()
         try:
             reroute_pending_manager_requests(
                 EmployeeProfile.objects.select_related("user", "manager_profile", "manager_profile__user").filter(
@@ -2079,19 +2022,11 @@ class EmployeeDeletionRequestViewSet(viewsets.ModelViewSet):
         if get_role(request.user) not in ["CEO", "SystemAdmin"]:
             return error("Forbidden", status=status.HTTP_403_FORBIDDEN)
 
-        instance = self.get_object()
-        if instance.status != EmployeeDeletionRequest.Status.PENDING_CEO:
-            return error("Validation error", errors=["Request is not pending CEO approval."], status=422)
-
-        reason = (request.data.get("reason") or "").strip()
-        if not reason:
-            return error("Validation error", errors={"reason": ["Reason is required."]}, status=422)
-
-        instance.status = EmployeeDeletionRequest.Status.REJECTED
-        instance.rejected_by = request.user
-        instance.rejected_at = timezone.now()
-        instance.rejection_reason = reason
-        instance.save(update_fields=["status", "rejected_by", "rejected_at", "rejection_reason", "updated_at"])
+        try:
+            instance = apply_archive_rejection(self.get_object(), actor=request.user, reason=request.data.get("reason"))
+        except ArchiveRequestError as exc:
+            return exc.to_response()
+        reason = instance.rejection_reason
 
         audit(
             request,

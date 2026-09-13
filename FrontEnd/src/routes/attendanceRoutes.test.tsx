@@ -29,6 +29,7 @@ function collect(
 const paths = collect(routes);
 describe("BioTime attendance routes", () => {
   it.each([
+    ["ceo/leave/requests/:id", "/ceo/leave/requests"],
     ["employee/attendance-corrections", "/employee/attendance"],
     ["hr/attendance-correction-requests", "/hr/attendance"],
     ["manager/attendance-corrections", "/manager/attendance"],

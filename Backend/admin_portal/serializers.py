@@ -169,8 +169,7 @@ class CreateUserSerializer(serializers.Serializer):
         group, _ = Group.objects.get_or_create(name=role)
         user.groups.clear()
         user.groups.add(group)
-        if role == "HRManager":
-            sync_user_organization_access(user, organization_ids)
+        sync_user_organization_access(user, organization_ids)
         return user
 
 

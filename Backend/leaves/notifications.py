@@ -11,6 +11,7 @@ from core.services.bird_email_service import (
 from core.services.whatsapp_service import WhatsAppService
 from employees.services.manager_relationships import get_valid_direct_manager_user
 from in_app_notifications.dispatcher import dispatch_notification_channels
+from in_app_notifications.i18n import notification_text, pair, user_name
 from in_app_notifications.models import Notification
 from leaves.models import LeaveRequest
 from leaves.utils import get_leave_days
@@ -103,8 +104,9 @@ def notify_leave_submitted(leave_request: LeaveRequest) -> None:
     if manager:
         manager_notification = {
             "event_key": "leave.submitted",
-            "title": "Leave request requires your review",
-            "message": f"{_employee_name(employee)} submitted leave request #{leave_request.id}.",
+            **notification_text(
+                "leave.submitted_manager", employee_name=user_name(employee, "Employee"), request_id=leave_request.id
+            ),
             "category": Notification.Category.LEAVE,
             "action_url": f"/manager/leave/requests/{leave_request.id}",
             "related_object": leave_request,
@@ -117,6 +119,7 @@ def notify_leave_submitted(leave_request: LeaveRequest) -> None:
                 template_name="leave_request_submitted_v1",
                 language="en",
                 variables={
+                    "action_url": f"/manager/leave/requests/{leave_request.id}",
                     "manager_name": _employee_name(manager),
                     "employee_name": _employee_name(employee),
                     "leave_type": leave_request.leave_type.name,
@@ -140,6 +143,7 @@ def notify_leave_submitted(leave_request: LeaveRequest) -> None:
             },
             whatsapp_template="leave_request_submitted_v1",
             whatsapp_variables={
+                "action_url": f"/manager/leave/requests/{leave_request.id}",
                 "manager_name": _employee_name(manager),
                 "employee_name": _employee_name(employee),
                 "leave_type": leave_request.leave_type.name,
@@ -153,8 +157,7 @@ def notify_leave_submitted(leave_request: LeaveRequest) -> None:
     # — Notify employee (confirmation) —
     employee_notification = {
         "event_key": "leave.submitted",
-        "title": "Leave request submitted",
-        "message": f"Your leave request #{leave_request.id} was submitted.",
+        **notification_text("leave.submitted_employee", request_id=leave_request.id),
         "category": Notification.Category.LEAVE,
         "action_url": "/employee/leave/requests",
         "related_object": leave_request,
@@ -164,10 +167,10 @@ def notify_leave_submitted(leave_request: LeaveRequest) -> None:
     def _employee_whatsapp():
         return _send_whatsapp_template(
             phone_number=_employee_phone(employee),
-            template_name="leave_request_submitted_v1",
+            template_name="leave_request_received_v1",
             language="en",
             variables={
-                "manager_name": _employee_name(employee),
+                "action_url": "/employee/leave/requests",
                 "employee_name": _employee_name(employee),
                 "leave_type": leave_request.leave_type.name,
                 "start_date": leave_request.start_date.isoformat(),
@@ -187,9 +190,9 @@ def notify_leave_submitted(leave_request: LeaveRequest) -> None:
             "total_days": days,
             "action_url": f"{base_url}/employee/leave/requests",
         },
-        whatsapp_template="leave_request_submitted_v1",
+        whatsapp_template="leave_request_received_v1",
         whatsapp_variables={
-            "manager_name": _employee_name(employee),
+            "action_url": "/employee/leave/requests",
             "employee_name": _employee_name(employee),
             "leave_type": leave_request.leave_type.name,
             "start_date": leave_request.start_date.isoformat(),
@@ -208,8 +211,7 @@ def notify_leave_approved(leave_request: LeaveRequest) -> dict:
 
     notification_kwargs = {
         "event_key": "leave.approved",
-        "title": "Leave request approved",
-        "message": f"Your leave request #{leave_request.id} was approved.",
+        **notification_text("leave.approved", request_id=leave_request.id),
         "category": Notification.Category.LEAVE,
         "action_url": "/employee/leave/requests",
         "related_object": leave_request,
@@ -264,8 +266,10 @@ def notify_leave_rejected(leave_request: LeaveRequest, rejection_reason: str) ->
     reason = rejection_reason or "Not specified"
     notification_kwargs = {
         "event_key": "leave.rejected",
-        "title": "Leave request rejected",
-        "message": reason,
+        **notification_text(
+            "leave.rejected",
+            reason=pair(rejection_reason, rejection_reason) if rejection_reason else pair("Not specified", "غير محدد"),
+        ),
         "category": Notification.Category.LEAVE,
         "action_url": "/employee/leave/requests",
         "related_object": leave_request,
@@ -322,8 +326,10 @@ def notify_delegation_assigned(leave_request: LeaveRequest) -> dict:
     base_url = _frontend_url()
     notification_kwargs = {
         "event_key": "leave.delegation_assigned",
-        "title": "Leave delegation assigned",
-        "message": f"You were assigned as delegate for {employee_name}.",
+        **notification_text(
+            "leave.delegation_assigned",
+            employee_name=user_name(employee) if employee else pair("An employee", "أحد الموظفين"),
+        ),
         "category": Notification.Category.DELEGATION,
         "action_url": f"/employee/leave/requests/{leave_request.id}",
         "related_object": leave_request,

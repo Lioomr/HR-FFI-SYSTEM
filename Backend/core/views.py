@@ -38,7 +38,7 @@ from core.services import (
 )
 from core.tasks import send_error_report_email
 from employees.models import EmployeeDeletionRequest, EmployeeProfile
-from leaves.models import LeaveRequest
+from leaves.models import AnnualLeavePaymentRequest, LeaveRequest
 from loans.models import LoanRequest
 from organization.models import OrganizationNode, OrganizationScope
 from organization.services import (
@@ -100,12 +100,16 @@ def _safe_send_delegation_emails(rule: DelegationRule):
         (rule.from_user, "delegator"),
         (rule.to_user, "delegate"),
     ]
+    from in_app_notifications.i18n import notification_text
+
+    delegation_text = notification_text(
+        "delegation.assigned", from_user=str(rule.from_user), to_user=str(rule.to_user)
+    )
     for user, recipient_role in users:
         dispatch_notification_channels(
             recipient=user,
             event_key="delegation.assigned",
-            title="Workflow delegation updated",
-            message=f"Delegation from {rule.from_user} to {rule.to_user} is active.",
+            **delegation_text,
             category=Notification.Category.DELEGATION,
             action_url=role_route,
             related_object=rule,
@@ -146,6 +150,19 @@ def _sync_pending_request_workflows_for_request(request, *, limit_per_type: int 
     )
     for leave_req in _maybe_limit(leave_qs):
         sync_workflow(leave_req, actor=request.user)
+
+    payment_qs = (
+        filter_queryset_by_company_scope(AnnualLeavePaymentRequest.objects.all(), request)
+        .filter(
+            status__in=[
+                AnnualLeavePaymentRequest.Status.PENDING_HR,
+                AnnualLeavePaymentRequest.Status.PENDING_CEO,
+            ]
+        )
+        .order_by("-submitted_at", "-id")
+    )
+    for payment in _maybe_limit(payment_qs):
+        sync_workflow(payment, actor=request.user)
 
     attendance_statuses = [
         AttendanceRecord.Status.PENDING,

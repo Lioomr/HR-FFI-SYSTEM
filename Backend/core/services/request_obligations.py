@@ -142,6 +142,24 @@ def ensure_leave_delegation_rule(leave_request, *, actor=None) -> DelegationRule
     return rule
 
 
+def close_leave_obligations(leave_request, *, note: str, actor=None) -> None:
+    """Resolve a cancelled leave's open obligations and end the delegation it created."""
+
+    parent_ct = _parent_content_type(leave_request)
+    for obligation in RequestObligation.objects.filter(
+        parent_content_type=parent_ct, parent_object_id=leave_request.pk
+    ):
+        _resolve_obligation(obligation, note=note, actor=actor)
+    employee = getattr(leave_request, "employee", None)
+    if employee and leave_request.delegated_to_id:
+        DelegationRule.objects.filter(
+            from_user=employee,
+            to_user_id=leave_request.delegated_to_id,
+            reason=f"Business Trip leave request #{leave_request.pk}",
+            is_active=True,
+        ).update(is_active=False, updated_at=timezone.now())
+
+
 def has_covering_delegation_for_leave(leave_request) -> bool:
     employee = getattr(leave_request, "employee", None)
     if not employee:

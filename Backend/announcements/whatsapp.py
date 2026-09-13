@@ -4,30 +4,13 @@ import base64
 import os
 
 
-def build_announcement_message(*, employee_name: str, title: str, content: str, has_attachment: bool = False) -> str:
-    """Build a readable bilingual announcement without exposing attachment URLs."""
-    attachment_ar = "📎 تم إرفاق ملف PDF بهذه الرسالة." if has_attachment else ""
-    attachment_en = "📎 The PDF file is attached to this message." if has_attachment else ""
-    content = (content or "").strip()
-    return "\n".join(
-        line
-        for line in (
-            f"مرحباً {employee_name}،",
-            "إعلان من نظام الموارد البشرية FFI",
-            f"العنوان: {title}",
-            "",
-            content,
-            attachment_ar,
-            "",
-            "---",
-            f"Hello {employee_name},",
-            "FFI HR announcement",
-            f"Title: {title}",
-            "",
-            content,
-            attachment_en,
-        )
-        if line is not None
+def build_announcement_message(*, employee_name: str, title: str, content: str) -> str:
+    """Render the configured announcement template. Attachments travel as documents, never as links."""
+    from core.services.whatsapp_template_library import render_configured_template_message
+
+    return render_configured_template_message(
+        "announcement_notification_v2",
+        {"employee_name": employee_name, "announcement_title": title, "announcement_message": content or ""},
     )
 
 

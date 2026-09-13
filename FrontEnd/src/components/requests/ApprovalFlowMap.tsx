@@ -18,6 +18,7 @@ type TranslateFn = (
 export type ApprovalFlowStage = {
   key: string;
   title: string;
+  labelKey?: string;
   state:
     | "completed"
     | "current"
@@ -84,7 +85,9 @@ export default function ApprovalFlowMap({
   };
 
   const getStageLabel = (stage: ApprovalFlowStage) =>
-    t(`workflow.role.${stage.key}`, stage.title);
+    stage.labelKey
+      ? t(stage.labelKey, stage.title)
+      : t(`workflow.role.${stage.key}`, stage.title);
 
   const activeStages = stages.filter((stage) => stage.state !== "skipped");
   const completedStages = activeStages.filter(

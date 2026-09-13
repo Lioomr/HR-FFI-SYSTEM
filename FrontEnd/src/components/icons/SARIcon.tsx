@@ -3,6 +3,8 @@
  * Displays the official SAR currency symbol as SVG
  */
 
+import { useI18n } from "../../i18n/useI18n";
+
 interface SARIconProps {
   size?: number;
   color?: string;
@@ -14,13 +16,14 @@ export default function SARIcon({
   color = "#000000",
   style,
 }: SARIconProps) {
+  const { t } = useI18n();
   return (
     <svg
       width={size}
       height={size}
       viewBox="0 0 1124.14 1256.39"
       style={{ display: "inline-block", verticalAlign: "middle", ...style }}
-      aria-label="Saudi Riyal"
+      aria-label={t("common.currency.sar")}
     >
       <path
         fill={color}

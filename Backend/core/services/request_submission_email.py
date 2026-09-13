@@ -31,22 +31,32 @@ def _send_request_submission_email_provider(
     status_label: str,
     details: Iterable[str] | None = None,
     action_path: str | None = None,
+    request_type_ar: str | None = None,
+    status_label_ar: str | None = None,
 ) -> dict:
     if not to_email:
         return {"success": False, "error": "Recipient email is missing."}
 
+    from in_app_notifications.i18n import request_type_label
+    from in_app_notifications.i18n import status_label as status_label_text
+
     action_url = _build_action_url(action_path)
     subject = f"{request_type} submitted - #{request_id}"
+    # Never show a raw workflow code, and keep the Arabic half fully Arabic.
+    status = status_label_text(status_label)
+    status_label = status["en"]
+    status_label_ar = status_label_ar or status["ar"]
+    request_type_ar = request_type_ar or request_type_label(request_type)["ar"]
 
     message = f"Your {request_type} request (#{request_id}) has been submitted and is now {status_label}."
-    message_ar = f"تم تقديم طلب {request_type} (رقم {request_id}) بنجاح وهو الآن في حالة: {status_label}."
+    message_ar = f"تم تقديم {request_type_ar} (رقم {request_id}) بنجاح وحالته الآن: {status_label_ar}."
     context = {
         "logo_url": _resolve_logo_source(),
         "contact_email": getattr(settings, "EMAIL_CONTACT_EMAIL", "hr@fficontracting.com"),
         "contact_name": getattr(settings, "EMAIL_CONTACT_NAME", "") or "",
         "contact_phone": getattr(settings, "EMAIL_CONTACT_PHONE", "") or "",
         "title": f"{request_type} submitted successfully",
-        "title_ar": f"تم تقديم طلب {request_type} بنجاح",
+        "title_ar": f"تم تقديم {request_type_ar} بنجاح",
         "employee_name": employee_name,
         "message": message,
         "message_ar": message_ar,

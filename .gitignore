@@ -118,6 +118,10 @@ Backend/static/pdf_templates/*
 !Backend/static/pdf_templates/leave_request_blank.pdf
 !Backend/static/pdf_templates/leave_request_blank_field_map.json
 
+# Exit permission request pair
+!Backend/static/pdf_templates/exit_permission_request_blank.pdf
+!Backend/static/pdf_templates/exit_permission_request_blank_field_map.json
+
 # Loan request pair
 !Backend/static/pdf_templates/loan_request_blank.pdf
 !Backend/static/pdf_templates/loan_request_blank_field_map.json

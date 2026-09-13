@@ -538,7 +538,7 @@ class ManagerWorkflowTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["data"]["status"], LeaveRequest.RequestStatus.PENDING_HR_COMPLETION)
+        self.assertEqual(response.data["data"]["status"], LeaveRequest.RequestStatus.APPROVED)
 
     def test_non_saudi_hr_completion_requires_visa_document(self):
         request_obj = LeaveRequest.objects.create(
@@ -548,6 +548,7 @@ class ManagerWorkflowTests(APITestCase):
             start_date=date(2026, 10, 8),
             end_date=date(2026, 10, 9),
             status=LeaveRequest.RequestStatus.PENDING_HR_COMPLETION,
+            will_travel=True,
         )
 
         self.client.force_authenticate(user=self.hr_user)
@@ -563,6 +564,7 @@ class ManagerWorkflowTests(APITestCase):
             start_date=date(2026, 10, 8),
             end_date=date(2026, 10, 9),
             status=LeaveRequest.RequestStatus.PENDING_HR_COMPLETION,
+            will_travel=True,
         )
         pdf_buffer = BytesIO()
         pdf = canvas.Canvas(pdf_buffer)
@@ -601,6 +603,7 @@ class ManagerWorkflowTests(APITestCase):
             start_date=date(2026, 10, 8),
             end_date=date(2026, 10, 9),
             status=LeaveRequest.RequestStatus.PENDING_HR_COMPLETION,
+            will_travel=True,
         )
         first_upload = SimpleUploadedFile("first-visa.pdf", b"%PDF-1.4 first", content_type="application/pdf")
         second_upload = SimpleUploadedFile("second-visa.pdf", b"%PDF-1.4 second", content_type="application/pdf")
@@ -653,12 +656,13 @@ class ManagerWorkflowTests(APITestCase):
             start_date=date(2026, 10, 8),
             end_date=date(2026, 10, 9),
             status=LeaveRequest.RequestStatus.PENDING_HR_COMPLETION,
+            will_travel=True,
         )
         upload = SimpleUploadedFile("rollback-visa.pdf", b"%PDF-1.4 rollback", content_type="application/pdf")
 
         self.client.force_authenticate(user=self.hr_user)
         self.client.raise_request_exception = False
-        with patch("leaves.views.sync_workflow", side_effect=RuntimeError("workflow unavailable")):
+        with patch("leaves.services.record_workflow_transition", side_effect=RuntimeError("workflow unavailable")):
             response = self.client.post(
                 f"{self.requests_url}{request_obj.id}/complete/",
                 {"visa_document": upload},
@@ -681,6 +685,7 @@ class ManagerWorkflowTests(APITestCase):
             start_date=date(2026, 10, 8),
             end_date=date(2026, 10, 9),
             status=LeaveRequest.RequestStatus.PENDING_HR_COMPLETION,
+            will_travel=True,
         )
 
         self.client.force_authenticate(user=self.hr_user)

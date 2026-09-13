@@ -71,7 +71,9 @@ def test_late_termination_failure_rolls_back_account_profile_mapping_and_history
     version = contract.employee.auth_token_version
     decision, _ = ensure_contract_decision(contract.profile)
     submit_decision(decision.id, actor=contract.hr, decision_type="TERMINATE")
-    with patch("employees.contract_expiry.sync_workflow", side_effect=RuntimeError("projection unavailable")):
+    with patch(
+        "employees.contract_expiry.record_workflow_transition", side_effect=RuntimeError("projection unavailable")
+    ):
         with pytest.raises(RuntimeError, match="projection unavailable"):
             finalize_decision(decision.id, actor=contract.ceo)
     decision.refresh_from_db()
@@ -167,6 +169,16 @@ def test_all_hr_and_ceo_attempts_survive_resubmission_without_rewriting_history(
         content_type=ContentType.objects.get_for_model(ContractDecision),
         object_id=decision.id,
     )
+    if legacy:
+        # A decision created before contract history was recorded: rows rebuilt by
+        # the old adapter, stored under its fixed signatures.
+        workflow.actions.all().delete()
+        workflow.metadata = {key: value for key, value in workflow.metadata.items() if key != "history_mode"}
+        workflow.save(update_fields=["metadata"])
+        sync_workflow(decision)
+        for action in workflow.actions.all():
+            action.metadata["legacy_signature"] = action.metadata.pop("legacy_kind")
+            action.save(update_fields=["metadata"])
     preserved = {}
     for attempt in range(3):
         submit_decision(decision.id, actor=contract.hr, decision_type="RENEW", hr_comment=f"HR attempt {attempt}")
@@ -178,10 +190,6 @@ def test_all_hr_and_ceo_attempts_survive_resubmission_without_rewriting_history(
             finalized = reject_decision(decision.id, actor=contract.ceo, comment=f"CEO attempt {attempt}")
         else:
             finalized = finalize_decision(decision.id, actor=contract.ceo, comment=f"CEO attempt {attempt}")
-        if legacy and attempt == 0:
-            for action in workflow.actions.all():
-                action.metadata["legacy_signature"] = action.metadata.pop("legacy_kind")
-                action.save(update_fields=["metadata"])
         for _ in range(2):
             sync_workflow(finalized)
         current = {row["id"]: row for row in workflow.actions.values()}

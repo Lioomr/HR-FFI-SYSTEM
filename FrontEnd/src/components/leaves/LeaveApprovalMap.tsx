@@ -68,13 +68,6 @@ function buildStages(
       request.delegate_decision_at ||
       request.delegate_decision_note,
     );
-  const needsCeo =
-    request.status === "pending_ceo" ||
-    Boolean(
-      request.ceo_decision_at ||
-      request.ceo_decision_note ||
-      request.leave_type?.requires_ceo_approval,
-    );
   const finalRejected = request.status === "rejected";
   const finalCancelled = request.status === "cancelled";
   const decisionNote = inferDecisionNote(request);
@@ -160,9 +153,9 @@ function buildStages(
             ? "upcoming"
             : "current";
 
-  const ceoState: ApprovalFlowStage["state"] = !needsCeo
-    ? "skipped"
-    : finalRejected && !!request.ceo_decision_note
+  // The CEO stage is required for every leave request.
+  const ceoState: ApprovalFlowStage["state"] =
+    finalRejected && !!request.ceo_decision_note
       ? "rejected"
       : finalCancelled && Boolean(request.ceo_decision_at)
         ? "completed"
@@ -174,7 +167,10 @@ function buildStages(
             ? "completed"
             : "upcoming";
 
-  const hrCompletionState: ApprovalFlowStage["state"] = !needsCeo
+  // HR completion only applies to non-Saudi employees who travel.
+  const needsHrCompletion =
+    isPendingHrCompletion || Boolean(request.requires_hr_completion_visa);
+  const hrCompletionState: ApprovalFlowStage["state"] = !needsHrCompletion
     ? "skipped"
     : isPendingHrCompletion
       ? "current"
@@ -285,14 +281,11 @@ function buildStages(
   if (finalCancelled) {
     stages.push({
       key: "cancelled",
-      title:
-        t("status.cancelled") === "status.cancelled"
-          ? "Cancelled"
-          : t("status.cancelled"),
+      title: t("status.cancelled"),
       state: "cancelled",
       note:
         t("leave.cancelled") === "leave.cancelled"
-          ? "Request cancelled by employee."
+          ? "Request cancelled by HR."
           : t("leave.cancelled"),
       at: request.updated_at,
     });

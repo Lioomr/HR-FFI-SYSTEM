@@ -13,7 +13,6 @@ export interface LeaveType {
   code: string;
   days_allowed_per_year: number;
   is_active: boolean;
-  requires_ceo_approval: boolean;
 }
 
 /**
@@ -366,11 +365,14 @@ export async function deleteHRManualLeaveRequest(
   return data;
 }
 
-export async function cancelLeaveRequest(
+// Employees cannot cancel their own leave requests; HR cancels them with a reason.
+export async function hrCancelLeaveRequest(
   id: string | number,
+  comment: string,
 ): Promise<ApiResponse<LeaveRequest>> {
   const { data } = await api.post<ApiResponse<LeaveRequest>>(
-    `/api/leaves/leave-requests/${id}/cancel/`,
+    `/api/leaves/leave-requests/${id}/hr-cancel/`,
+    { comment },
   );
   return data;
 }
