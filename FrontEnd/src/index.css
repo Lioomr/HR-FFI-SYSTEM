@@ -581,6 +581,141 @@ html[dir="rtl"] .modern-sidebar .ant-menu-item-selected::before {
 }
 
 /* ===========================
+   RESPONSIVE TABLE — PHONE CARDS
+   Rendered by components/ui/ResponsiveTable below the md breakpoint.
+   =========================== */
+.responsive-table-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.responsive-table-card {
+  background: var(--surface-0);
+  border: 1px solid var(--surface-3);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  box-shadow: var(--shadow-sm);
+  overflow-wrap: anywhere;
+}
+
+.responsive-table-card--clickable {
+  cursor: pointer;
+  transition: transform var(--transition-fast);
+}
+
+.responsive-table-card--clickable:active {
+  transform: scale(0.99);
+}
+
+.responsive-table-card--clickable:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .responsive-table-card--clickable:active {
+    transform: none;
+  }
+}
+
+.responsive-table-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.responsive-table-card__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.responsive-table-card__extra {
+  flex: 0 0 auto;
+  max-width: 100%;
+}
+
+.responsive-table-card__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0 0;
+}
+
+.responsive-table-card__field {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13.5px;
+}
+
+.responsive-table-card__field dt {
+  flex: 0 0 auto;
+  max-width: 45%;
+  color: var(--text-secondary);
+}
+
+.responsive-table-card__field dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--text-primary);
+  text-align: end;
+}
+
+.responsive-table-card__extra .ant-tag:last-child,
+.responsive-table-card__field dd .ant-tag:last-child {
+  margin-inline-end: 0;
+}
+
+.responsive-table-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--surface-2);
+}
+
+.responsive-table-card__toggle.ant-btn {
+  padding-inline: 0;
+}
+
+.responsive-table-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-inline-start: auto;
+}
+
+.responsive-table-card__expanded {
+  margin-top: 10px;
+  overflow-x: auto;
+}
+
+.responsive-table-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 96px;
+}
+
+.responsive-table-pagination {
+  margin-top: 14px;
+}
+
+/* ===========================
    SCROLLBAR STYLING
    =========================== */
 ::-webkit-scrollbar {
