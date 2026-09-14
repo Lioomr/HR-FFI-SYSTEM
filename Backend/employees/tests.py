@@ -1207,6 +1207,37 @@ class EmployeeDeletionWorkflowTests(TestCase):
         self.profile.refresh_from_db()
         self.assertTrue(self.profile.is_archived)
 
+    def test_ceo_can_approve_archive_in_an_explicitly_accessible_other_company(self):
+        other_profile = EmployeeProfile.objects.create(
+            company=self.other_company,
+            employee_id="OTH-001",
+            full_name="Other Company Employee",
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        )
+        request_obj = EmployeeDeletionRequest.objects.create(
+            company=self.other_company,
+            employee_profile=other_profile,
+            target_user=None,
+            requested_by=self.hr_user,
+            reason="Archive employee in another explicitly accessible company",
+            archive_reason=EmployeeProfile.ArchiveReason.OTHER,
+            request_snapshot={"employee_id": other_profile.employee_id, "full_name": other_profile.full_name},
+        )
+
+        self.client.force_authenticate(user=self.ceo_user)
+        response = self.client.post(
+            f"/api/employees/deletion-requests/{request_obj.id}/approve/",
+            {},
+            format="json",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.other_company.id),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        request_obj.refresh_from_db()
+        other_profile.refresh_from_db()
+        self.assertEqual(request_obj.status, EmployeeDeletionRequest.Status.EXECUTED)
+        self.assertTrue(other_profile.is_archived)
+
     def test_hr_can_create_employee_archive_request(self):
         self.client.force_authenticate(user=self.hr_user)
 
