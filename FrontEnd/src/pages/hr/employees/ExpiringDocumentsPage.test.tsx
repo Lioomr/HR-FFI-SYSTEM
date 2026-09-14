@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 
 vi.mock("react-router-dom", () => ({
@@ -16,6 +16,10 @@ import ExpiringDocumentsPage from "./ExpiringDocumentsPage";
 import * as employeesApi from "../../../services/api/employeesApi";
 import type { ExpiringEmployee } from "../../../services/api/employeesApi";
 import { useI18nStore } from "../../../i18n/i18nStore";
+import {
+  restorePhoneViewport,
+  setDesktopViewport,
+} from "../../../test/viewport";
 
 const getExpiringEmployees =
   employeesApi.getExpiringEmployees as unknown as ReturnType<typeof vi.fn>;
@@ -60,6 +64,13 @@ beforeEach(() => {
   getExpiringEmployees.mockResolvedValue(expiriesResponse([makeEntry()]));
   useI18nStore.getState().setLanguage("en");
   window.localStorage.clear();
+  // Row-scoped assertions use desktop table markup; the phone card layout is
+  // covered by ResponsiveTable.
+  setDesktopViewport();
+});
+
+afterEach(() => {
+  restorePhoneViewport();
 });
 
 describe("ExpiringDocumentsPage work license", () => {

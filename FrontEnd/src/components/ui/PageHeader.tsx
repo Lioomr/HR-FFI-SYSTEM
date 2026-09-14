@@ -25,7 +25,7 @@ export default function PageHeader({
   const isHeadOffice = isHeadOfficeOrganization(user);
 
   return (
-    <div style={{ marginBottom: 24 }}>
+    <div className="page-header" style={{ marginBottom: 24 }}>
       {breadcrumb && (
         <div
           style={{
@@ -35,7 +35,7 @@ export default function PageHeader({
             letterSpacing: "0.05em",
             color: "#94a3b8",
             marginBottom: 4,
-            marginLeft: 18, // Align with title
+            marginInlineStart: 18, // Align with title
           }}
         >
           {breadcrumb}
@@ -51,9 +51,17 @@ export default function PageHeader({
         }}
       >
         {/* Left: accent bar + title + subtitle */}
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 14,
+            minWidth: 0,
+          }}
+        >
           {/* Gradient accent pill */}
           <div
+            className="page-header__accent"
             style={{
               width: 4,
               height: 48,
@@ -63,9 +71,11 @@ export default function PageHeader({
               marginTop: 2,
             }}
           />
-          <div>
+          <div style={{ minWidth: 0 }}>
             <Space
               align="center"
+              wrap
+              size={[8, 4]}
               style={{ marginBottom: subtitle || secondarySubtitle ? 0 : 0 }}
             >
               <Typography.Title
@@ -135,9 +145,11 @@ export default function PageHeader({
         {/* Right: action buttons */}
         {actions && (
           <div
+            className="page-header__actions"
             style={{
               display: "flex",
               alignItems: "center",
+              flexWrap: "wrap",
               gap: 8,
               paddingTop: 4,
             }}

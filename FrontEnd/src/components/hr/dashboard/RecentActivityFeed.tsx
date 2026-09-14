@@ -1,4 +1,5 @@
-import { Avatar, Table, Tag } from "antd";
+import { Avatar, Tag } from "antd";
+import ResponsiveTable from "../../ui/ResponsiveTable";
 import type { ColumnsType } from "antd/es/table";
 import { useI18n } from "../../../i18n/useI18n";
 import type { HrRecentActivityItem } from "../../../services/api/hrSummaryApi";
@@ -228,7 +229,11 @@ export default function RecentActivityFeed({
   ];
 
   return (
-    <Table
+    <ResponsiveTable
+      mobileCard={{
+        titleKey: "employee",
+        extraKey: "action",
+      }}
       dataSource={items}
       rowKey="key"
       columns={columns}

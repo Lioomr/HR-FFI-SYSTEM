@@ -1,15 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  Button,
-  Card,
-  Grid,
-  Modal,
-  Table,
-  Tag,
-  Tooltip,
-  notification,
-} from "antd";
+import { Button, Card, Grid, Modal, Tag, Tooltip, notification } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
   CloseCircleOutlined,
@@ -18,6 +9,7 @@ import {
 } from "@ant-design/icons";
 
 import PageHeader from "../../../components/ui/PageHeader";
+import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import { isApiError } from "../../../services/api/apiTypes";
 import {
   cancelLoanRequest,
@@ -242,7 +234,8 @@ export default function MyLoanRequestsPage() {
         }
       />
       <Card style={{ borderRadius: 16 }}>
-        <Table
+        <ResponsiveTable
+          mobileCard={{ titleKey: "requested_amount", extraKey: "status" }}
           rowKey="id"
           loading={loading}
           columns={columns}

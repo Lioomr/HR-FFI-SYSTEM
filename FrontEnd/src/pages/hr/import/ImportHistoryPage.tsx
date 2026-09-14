@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import {
-  Table,
   Tag,
   Button,
   Space,
@@ -10,6 +9,7 @@ import {
   Tooltip,
   message,
 } from "antd";
+import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import { ReloadOutlined, DownloadOutlined } from "@ant-design/icons";
 import {
   getImportHistory,
@@ -182,7 +182,11 @@ const ImportHistoryPage: React.FC = () => {
         />
       </Space>
 
-      <Table
+      <ResponsiveTable
+        mobileCard={{
+          titleKey: "created_at",
+          extraKey: "status",
+        }}
         columns={columns}
         dataSource={data}
         rowKey="id"

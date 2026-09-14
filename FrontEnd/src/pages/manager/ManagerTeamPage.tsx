@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Input, Select, Space, Table, Tag } from "antd";
+import { Button, Input, Select, Space, Tag } from "antd";
 import { EyeOutlined, SearchOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 
 import ApprovalQueuePage from "../../components/ceo/ApprovalQueuePage";
+import ResponsiveTable from "../../components/ui/ResponsiveTable";
 import TeamMemberCell from "../../components/manager/TeamMemberCell";
 import {
   getManagerTeam,
@@ -239,7 +240,11 @@ export default function ManagerTeamPage() {
         </Space>
       }
     >
-      <Table
+      <ResponsiveTable
+        mobileCard={{
+          titleKey: "name",
+          extraKey: "employment_status",
+        }}
         dataSource={filtered}
         columns={columns}
         rowKey="id"

@@ -8,7 +8,6 @@ import {
   Row,
   Select,
   Space,
-  Table,
   Tag,
   Typography,
 } from "antd";
@@ -16,6 +15,7 @@ import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined } from "@ant-design/icons";
 
 import PageHeader from "../../../components/ui/PageHeader";
+import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import ErrorState from "../../../components/ui/ErrorState";
 import EmptyState from "../../../components/ui/EmptyState";
 import Unauthorized403Page from "../../Unauthorized403Page";
@@ -244,7 +244,11 @@ export default function PayrollDashboardPage() {
       </Card>
 
       <Card style={{ borderRadius: 16 }}>
-        <Table
+        <ResponsiveTable
+          mobileCard={{
+            titleKey: "period",
+            extraKey: "status",
+          }}
           dataSource={runs}
           columns={columns}
           rowKey="id"

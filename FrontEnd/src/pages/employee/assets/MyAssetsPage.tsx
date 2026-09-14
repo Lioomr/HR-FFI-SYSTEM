@@ -10,7 +10,6 @@ import {
   Col,
   Select,
   Space,
-  Table,
   Tabs,
   Tag,
   Typography,
@@ -22,6 +21,7 @@ import EmptyState from "../../../components/ui/EmptyState";
 import ErrorState from "../../../components/ui/ErrorState";
 import LoadingState from "../../../components/ui/LoadingState";
 import PageHeader from "../../../components/ui/PageHeader";
+import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import {
   listMyAssetDamageReports,
   listMyAssetReturnRequests,
@@ -560,7 +560,8 @@ export default function MyAssetsPage() {
         />
       ) : (
         <Card style={{ marginBottom: 16 }}>
-          <Table
+          <ResponsiveTable
+            mobileCard={{ titleKey: "name", extraKey: "status" }}
             columns={columns}
             dataSource={dataSource}
             loading={assetLoading}
@@ -622,7 +623,8 @@ export default function MyAssetsPage() {
                 key: "damage",
                 label: `${t("assets.damageReports", "Damage Reports")} (${damageTotal})`,
                 children: (
-                  <Table
+                  <ResponsiveTable
+                    mobileCard={{ titleKey: "asset_code", extraKey: "status" }}
                     rowKey="id"
                     columns={damageColumns}
                     dataSource={damageReports}
@@ -646,7 +648,8 @@ export default function MyAssetsPage() {
                 key: "return",
                 label: `${t("assets.returnRequests", "Return Requests")} (${returnTotal})`,
                 children: (
-                  <Table
+                  <ResponsiveTable
+                    mobileCard={{ titleKey: "asset_code", extraKey: "status" }}
                     rowKey="id"
                     columns={returnColumns}
                     dataSource={returnRequests}

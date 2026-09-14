@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import {
-  Table,
   Button,
   Modal,
   Form,
@@ -12,6 +11,7 @@ import {
   Tag,
   Descriptions,
 } from "antd";
+import ResponsiveTable from "../../../../components/ui/ResponsiveTable";
 import { CalculatorOutlined } from "@ant-design/icons";
 import {
   getLeaveBalances,
@@ -188,10 +188,12 @@ export default function EmployeeLeaveBalances({
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
+          flexWrap: "wrap",
+          gap: 12,
         }}
       >
-        <h3>{t("hr.employees.balances.title")}</h3>
-        <Space>
+        <h3 style={{ margin: 0 }}>{t("hr.employees.balances.title")}</h3>
+        <Space wrap>
           <Select
             value={year}
             onChange={setYear}
@@ -217,7 +219,11 @@ export default function EmployeeLeaveBalances({
         </Space>
       </div>
 
-      <Table
+      <ResponsiveTable
+        mobileCard={{
+          titleKey: "leave_type",
+          extraKey: "requestable_days",
+        }}
         dataSource={balances}
         columns={columns}
         rowKey="leave_type_id"
@@ -225,6 +231,7 @@ export default function EmployeeLeaveBalances({
         loading={loading}
         size="small"
         bordered
+        scroll={{ x: "max-content" }}
         expandable={{ expandedRowRender }}
       />
 

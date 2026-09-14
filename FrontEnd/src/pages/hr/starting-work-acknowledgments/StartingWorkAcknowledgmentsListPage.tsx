@@ -6,7 +6,6 @@ import {
   Modal,
   Segmented,
   Space,
-  Table,
   Tag,
   Tooltip,
   Typography,
@@ -21,6 +20,7 @@ import {
 } from "@ant-design/icons";
 
 import EmptyState from "../../../components/ui/EmptyState";
+import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import ErrorState from "../../../components/ui/ErrorState";
 import LoadingState from "../../../components/ui/LoadingState";
 import PageHeader from "../../../components/ui/PageHeader";
@@ -413,7 +413,11 @@ export default function StartingWorkAcknowledgmentsListPage() {
             boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
           }}
         >
-          <Table<StartingWorkAcknowledgment>
+          <ResponsiveTable<StartingWorkAcknowledgment>
+            mobileCard={{
+              titleKey: "employee",
+              extraKey: "status",
+            }}
             rowKey="id"
             columns={columns}
             dataSource={items}

@@ -9,7 +9,6 @@ import {
   Modal,
   Select,
   Space,
-  Table,
   Tag,
   Tooltip,
   Typography,
@@ -23,6 +22,7 @@ import {
 import type { ColumnsType } from "antd/es/table";
 
 import PageHeader from "../../../components/ui/PageHeader";
+import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import AnnualLeavePaymentStatusTag from "../../../components/leaves/AnnualLeavePaymentStatusTag";
 import {
   formatSettlementAmount,
@@ -396,7 +396,11 @@ export default function AnnualLeaveSettlementsPage() {
       )}
 
       <Card style={{ borderRadius: 16 }}>
-        <Table
+        <ResponsiveTable
+          mobileCard={{
+            titleKey: "employee",
+            extraKey: "status",
+          }}
           columns={columns}
           dataSource={requests}
           rowKey="id"

@@ -10,7 +10,6 @@ import {
   Select,
   Space,
   Switch,
-  Table,
   Tag,
   Typography,
   message,
@@ -20,6 +19,7 @@ import { DeleteOutlined, PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 
 import PageHeader from "../../components/ui/PageHeader";
+import ResponsiveTable from "../../components/ui/ResponsiveTable";
 import LoadingState from "../../components/ui/LoadingState";
 import ErrorState from "../../components/ui/ErrorState";
 import Unauthorized403Page from "../Unauthorized403Page";
@@ -307,7 +307,11 @@ export default function DelegationRulesPage() {
           </Typography.Text>
         </Space>
 
-        <Table
+        <ResponsiveTable
+          mobileCard={{
+            titleKey: "from_user",
+            extraKey: "is_active",
+          }}
           rowKey="id"
           columns={columns}
           dataSource={rows}
