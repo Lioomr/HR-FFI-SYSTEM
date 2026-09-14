@@ -13,6 +13,10 @@ export type InvitesListParams = {
   search?: string;
 };
 
+export type InvitesListResponse = PaginatedResponse<InviteDto> & {
+  pending_count: number;
+};
+
 export type InviteChannel = "email" | "whatsapp";
 
 export type CreateInviteRequest = {
@@ -50,7 +54,7 @@ export type WhatsappTestResult = {
 };
 
 export async function listInvites(params: InvitesListParams = {}) {
-  const { data } = await api.get<ApiResponse<PaginatedResponse<InviteDto>>>(
+  const { data } = await api.get<ApiResponse<InvitesListResponse>>(
     "/invites/",
     { params },
   );
