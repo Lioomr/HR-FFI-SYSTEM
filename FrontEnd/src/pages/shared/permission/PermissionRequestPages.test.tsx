@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useI18nStore } from "../../../i18n/i18nStore";
 import { PermissionRequestDetailPage } from "./PermissionRequestPages";
 import * as permissionApi from "../../../services/api/permissionRequestsApi";
@@ -14,12 +14,22 @@ vi.mock("../../../services/api/permissionRequestsApi", async () => {
   const actual = await vi.importActual<typeof permissionApi>(
     "../../../services/api/permissionRequestsApi",
   );
-  return { ...actual, getPermissionRequest: vi.fn() };
+  return {
+    ...actual,
+    getPermissionRequest: vi.fn(),
+    downloadPermissionRequestAttachment: vi.fn(),
+    addPermissionRequestAttachments: vi.fn(),
+  };
 });
 
 const base: PermissionRequest = {
   id: 1,
   reference_no: "PERM-20260912-0001",
+  permission_type: "exit",
+  attachments: [],
+  attachment_count: 0,
+  monthly_late_permission_usage: null,
+  monthly_late_permission_limit: null,
   request_date: "2026-09-12",
   from_time: "16:00:00",
   to_time: "16:30:00",
@@ -158,5 +168,98 @@ describe("permission request approval trail", () => {
     expect(screen.getAllByText("اعتماد المدير المباشر").length).toBeGreaterThan(
       0,
     );
+  });
+});
+
+describe("late permission detail", () => {
+  const late = (overrides: Partial<PermissionRequest> = {}) =>
+    response({
+      permission_type: "late",
+      from_time: null,
+      to_time: null,
+      duration_minutes: 0,
+      exit_type: "",
+      exit_type_label: "",
+      exit_type_label_ar: "",
+      monthly_late_permission_usage: 2,
+      monthly_late_permission_limit: 3,
+      attachment_count: 1,
+      attachments: [
+        {
+          id: 5,
+          original_filename: "photo.jpg",
+          content_type: "image/jpeg",
+          size_bytes: 2048,
+          // Multipart uploads currently come back as JSON text.
+          capture_metadata:
+            '{"source":"camera","captured_at":"2026-09-13T06:00:00Z"}',
+          created_at: "2026-09-13T06:01:00Z",
+          download_url: "/api/permission-requests/1/attachments/5/download/",
+        },
+      ],
+      ...overrides,
+    });
+
+  it("shows the type, monthly usage and evidence, and downloads through the API", async () => {
+    vi.mocked(permissionApi.getPermissionRequest).mockResolvedValue(late());
+    vi.mocked(
+      permissionApi.downloadPermissionRequestAttachment,
+    ).mockResolvedValue(undefined);
+
+    render(<PermissionRequestDetailPage role="employee" />);
+
+    expect(await screen.findByText("Late arrival")).toBeInTheDocument();
+    expect(screen.getByText("2 of 3 approved this month")).toBeInTheDocument();
+    expect(screen.getByText("Evidence (1)")).toBeInTheDocument();
+    expect(screen.getByText("Captured 2026-09-13 09:00")).toBeInTheDocument();
+    expect(screen.queryByText("Download PDF")).not.toBeInTheDocument();
+    expect(screen.queryByText("Exit type")).not.toBeInTheDocument();
+    expect(document.querySelector('a[href*="attachments"]')).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Download photo.jpg" }));
+    await waitFor(() =>
+      expect(
+        permissionApi.downloadPermissionRequestAttachment,
+      ).toHaveBeenCalledWith(1, expect.objectContaining({ id: 5 })),
+    );
+  });
+
+  it("lets the owner add evidence while the request is pending", async () => {
+    vi.mocked(permissionApi.getPermissionRequest).mockResolvedValue(late());
+    vi.mocked(permissionApi.addPermissionRequestAttachments).mockResolvedValue(
+      late({ attachment_count: 2 }),
+    );
+
+    render(<PermissionRequestDetailPage role="employee" />);
+
+    expect(await screen.findByText("Add evidence")).toBeInTheDocument();
+    const pdf = new File(["%PDF"], "more.pdf", { type: "application/pdf" });
+    fireEvent.change(screen.getByTestId("evidence-file-input"), {
+      target: { files: [pdf] },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Upload selected files" }),
+    );
+
+    await waitFor(() =>
+      expect(
+        permissionApi.addPermissionRequestAttachments,
+      ).toHaveBeenCalledWith(1, [pdf], [undefined]),
+    );
+    expect(await screen.findByText("Evidence (2)")).toBeInTheDocument();
+  });
+
+  it("offers no evidence upload once the request is decided", async () => {
+    vi.mocked(permissionApi.getPermissionRequest).mockResolvedValue(
+      late({
+        status: "approved",
+        workflow: { ...base.workflow, can_cancel: false },
+      }),
+    );
+
+    render(<PermissionRequestDetailPage role="manager" />);
+
+    expect(await screen.findByText("Evidence (1)")).toBeInTheDocument();
+    expect(screen.queryByText("Add evidence")).not.toBeInTheDocument();
   });
 });

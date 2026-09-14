@@ -2,6 +2,22 @@ import type { FormInstance } from "antd";
 import type { ApiError } from "../services/api/apiTypes";
 
 /**
+ * Converts a server field path into an Ant Design name path.
+ *
+ * Nested serializer errors use dotted paths: `attendance.grace_window_minutes`
+ * becomes `["attendance", "grace_window_minutes"]`, and a list item such as
+ * `items.1.qty` becomes `["items", 1, "qty"]`. A plain field name stays a
+ * single-segment path.
+ */
+export function toAntdNamePath(field: string): (string | number)[] {
+  const segments = field
+    .split(".")
+    .filter((segment) => segment !== "")
+    .map((segment) => (/^\d+$/.test(segment) ? Number(segment) : segment));
+  return segments.length ? segments : [field];
+}
+
+/**
  * Converts API error to Ant Design form field errors format
  * Per Global API Rules (v1), errors is contractually an array
  */
@@ -27,9 +43,9 @@ export function toAntdFieldErrors(
           code?: string;
         };
         if (errorObj.field) {
-          // Field-specific error
+          // Field-specific error; nested fields arrive as dotted paths
           fieldErrors.push({
-            name: [errorObj.field],
+            name: toAntdNamePath(errorObj.field),
             errors: [errorObj.message],
           });
         } else {
@@ -55,12 +71,12 @@ export function toAntdFieldErrors(
     Object.entries(apiError.errors).forEach(([field, messages]) => {
       if (Array.isArray(messages)) {
         fieldErrors.push({
-          name: [field],
+          name: toAntdNamePath(field),
           errors: messages,
         });
       } else if (typeof messages === "string") {
         fieldErrors.push({
-          name: [field],
+          name: toAntdNamePath(field),
           errors: [messages],
         });
       }

@@ -251,6 +251,7 @@ class EmployeeProfileReadSerializer(serializers.ModelSerializer):
             "total_salary",
             "data_source",
             "employment_status",
+            "attendance_exempt",
             "is_archived",
             "archived_at",
             "archived_by",
@@ -518,6 +519,7 @@ class EmployeeProfileWriteSerializer(serializers.ModelSerializer):
             "total_salary",
             "data_source",
             "employment_status",
+            "attendance_exempt",
             "user_id",
             "manager_profile_id",
         ]

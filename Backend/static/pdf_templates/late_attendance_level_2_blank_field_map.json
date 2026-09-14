@@ -1,0 +1,160 @@
+{
+  "template": "late_attendance_level_2_blank.pdf",
+  "version": 1,
+  "coordinate_origin": "bottom_left",
+  "page_size": {
+    "width": 595.2756,
+    "height": 841.8898,
+    "unit": "pt"
+  },
+  "style": {
+    "level": 2,
+    "severity": "formal_caution",
+    "accent": "#B87500",
+    "static_brand_accent": "#FF7A00",
+    "logo_mode": "active_company_brand_asset"
+  },
+  "fields": {
+    "notice_reference": {
+      "page": 1,
+      "x": 409,
+      "y": 764,
+      "width": 98,
+      "height": 10,
+      "font_size": 6.3,
+      "align": "left",
+      "shrink": true
+    },
+    "issue_timestamp": {
+      "page": 1,
+      "x": 409,
+      "y": 744,
+      "width": 98,
+      "height": 10,
+      "font_size": 6.3,
+      "align": "right",
+      "shrink": true
+    },
+    "employee_name": {
+      "page": 1,
+      "x": 174,
+      "y": 571,
+      "width": 239,
+      "height": 14,
+      "font_size": 7.4,
+      "shrink": true
+    },
+    "employee_code": {
+      "page": 1,
+      "x": 174,
+      "y": 548,
+      "width": 239,
+      "height": 14,
+      "font_size": 7.4,
+      "shrink": true
+    },
+    "department": {
+      "page": 1,
+      "x": 174,
+      "y": 524,
+      "width": 239,
+      "height": 14,
+      "font_size": 7.2,
+      "shrink": true
+    },
+    "position": {
+      "page": 1,
+      "x": 174,
+      "y": 501,
+      "width": 239,
+      "height": 14,
+      "font_size": 7.2,
+      "shrink": true
+    },
+    "violation_date": {
+      "page": 1,
+      "x": 174,
+      "y": 477,
+      "width": 239,
+      "height": 14,
+      "font_size": 7.2,
+      "shrink": true
+    },
+    "actual_first_check_in": {
+      "page": 1,
+      "x": 174,
+      "y": 454,
+      "width": 239,
+      "height": 14,
+      "font_size": 7.2,
+      "shrink": true
+    },
+    "scheduled_shift_start": {
+      "page": 1,
+      "x": 174,
+      "y": 430,
+      "width": 239,
+      "height": 14,
+      "font_size": 7.2,
+      "shrink": true
+    },
+    "minutes_late": {
+      "page": 1,
+      "x": 174,
+      "y": 407,
+      "width": 239,
+      "height": 14,
+      "font_size": 7.2,
+      "shrink": true
+    },
+    "hr_representative_name": {
+      "page": 1,
+      "x": 59,
+      "y": 151,
+      "width": 115,
+      "height": 13,
+      "font_size": 6.6,
+      "align": "left",
+      "shrink": true
+    },
+    "hr_representative_title": {
+      "page": 1,
+      "x": 59,
+      "y": 138,
+      "width": 115,
+      "height": 12,
+      "font_size": 6.2,
+      "align": "left",
+      "shrink": true
+    },
+    "hr_signature_image": {
+      "page": 1,
+      "x": 186,
+      "y": 157,
+      "width": 216,
+      "height": 52,
+      "kind": "image",
+      "padding": 3,
+      "source": "manual_hr_signature_only",
+      "auto_sign": false
+    }
+  },
+  "preprinted_content": {
+    "localized_title_en": "Late Attendance Notice",
+    "localized_title_ar": "إشعار التأخر في الحضور",
+    "level_title_en": "Level 2 - Formal Caution",
+    "level_title_ar": "المستوى الثاني - تنبيه رسمي",
+    "level_explanation_en": "Formal caution - 5% daily-rate deduction.",
+    "level_explanation_ar": "تنبيه رسمي - خصم بنسبة ٥٪ من الأجر اليومي.",
+    "signature_label_en": "Authorized HR signature",
+    "signature_label_ar": "توقيع الموارد البشرية"
+  },
+  "integration_required_fields": [
+    "occurrence_number",
+    "reason",
+    "penalty_percent",
+    "penalty_amount",
+    "payroll_status"
+  ],
+  "integration_notes": "The current approved visual has no separate empty zones for the listed integration-required fields. The backend handoff must add them only through a separately approved Level 2 layout revision, rather than guessing new overlay coordinates."
+}

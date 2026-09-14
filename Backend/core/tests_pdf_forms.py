@@ -398,6 +398,19 @@ RENDERED_FORM_PAIRS = (
         "starting_work_acknowledgment_blank_field_map.json",
     ),
     ("exit_permission_request_blank.pdf", "exit_permission_request_blank_field_map.json"),
+    # Late attendance notices: version 3 renders new notices; versions 1 and 2 are kept for issued ones.
+    *(
+        (f"late_attendance_level_{level}_blank_v3.pdf", f"late_attendance_level_{level}_field_map_v3.json")
+        for level in (1, 2, 3, 4)
+    ),
+    *(
+        (f"late_attendance_level_{level}_blank_v2.pdf", f"late_attendance_level_{level}_field_map_v2.json")
+        for level in (1, 2, 3, 4)
+    ),
+    *(
+        (f"late_attendance_level_{level}_blank.pdf", f"late_attendance_level_{level}_blank_field_map.json")
+        for level in (1, 2, 3, 4)
+    ),
 )
 
 #: Blank forms the template library serves but no renderer fills. They are
@@ -425,7 +438,7 @@ def test_no_bundled_template_is_left_without_a_map_by_accident():
     """A new blank PDF must either be mapped or listed as deliberately unmapped."""
 
     mapped = {template for template, _ in RENDERED_FORM_PAIRS}
-    present = {path.name for path in BUNDLED_DIR.glob("*_blank.pdf")}
+    present = {path.name for path in BUNDLED_DIR.glob("*_blank*.pdf")}
 
     assert present - mapped - UNMAPPED_TEMPLATES == set()
 

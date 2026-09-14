@@ -137,6 +137,9 @@ class EmployeeProfile(models.Model):
         default=EmploymentStatus.ACTIVE,
         help_text=_("Current employment status."),
     )
+    # Explicit HR/System Admin exemption. Role-driven exemptions (for example
+    # CEO users) are evaluated by enforcement code and are never encoded here.
+    attendance_exempt = models.BooleanField(default=False)
     is_archived = models.BooleanField(default=False, db_index=True)
     archived_at = models.DateTimeField(null=True, blank=True)
     archived_by = models.ForeignKey(

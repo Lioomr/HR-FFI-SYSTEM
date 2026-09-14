@@ -65,6 +65,21 @@ def has_active_biotime_mapping(profile) -> bool:
     return active_biotime_mappings().filter(employee_profile_id=profile.pk).exists()
 
 
+def is_attendance_exempt(profile) -> bool:
+    """Return the explicit exemption or the automatic CEO-role exemption.
+
+    Enforcement remains the responsibility of later attendance/permission
+    workflows. Keeping the rule here prevents those workflows from hard-coding
+    employee names or duplicating role checks.
+    """
+    if profile is None:
+        return False
+    if bool(getattr(profile, "attendance_exempt", False)):
+        return True
+    user = getattr(profile, "user", None)
+    return bool(user and user.groups.filter(name="CEO").exists())
+
+
 def limit_to_mapped_employees(queryset, *, profile_field="employee_profile"):
     """Restrict an attendance queryset to employees with an active BioTime mapping."""
     return queryset.filter(**{f"{profile_field}_id__in": mapped_employee_profile_ids()})

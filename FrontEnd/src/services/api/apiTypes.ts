@@ -183,18 +183,41 @@ export type SettingsDto = {
    * required whenever `attendance` is sent; the work-schedule keys are optional
    * and omitting one leaves it unchanged.
    */
-  attendance?: {
-    geofence_enabled: boolean;
-    /** "HH:MM" (24h). A check-in after this + grace is classified LATE. */
-    work_day_start_time?: string;
-    /** Minutes after `work_day_start_time` before a check-in counts as late (0–240). */
-    late_grace_minutes?: number;
-    /** When true, a daily job marks Absent anyone with no record and no approved leave. */
-    absence_detection_enabled?: boolean;
-    /** Working weekdays as Python `date.weekday()` (Mon=0 … Sun=6). Default [6,0,1,2,3] = Sun–Thu. */
-    work_week_days?: number[];
-  };
+  attendance?: AttendancePolicySettings;
   updated_at: string;
+};
+
+/**
+ * The global attendance policy (one singleton, not per company). HR Manager
+ * and System Admin may PUT it alone as `{ attendance: {...} }`.
+ */
+export type AttendancePolicySettings = {
+  geofence_enabled?: boolean;
+  /** "HH:MM" (24h) shift start. */
+  work_day_start_time?: string;
+  /** "HH:MM" (24h) shift end used when an employee has no shift of their own. */
+  default_shift_end_time?: string;
+  /** Canonical grace window after shift start, in minutes (0–240). */
+  grace_window_minutes?: number;
+  /**
+   * @deprecated Legacy alias of `grace_window_minutes`, kept in responses.
+   * Do not send it; the server keeps both synchronized.
+   */
+  late_grace_minutes?: number;
+  /** Arrivals within the grace window forgiven per month (0–31). */
+  grace_use_limit_per_month?: number;
+  /** Once grace is used up, minutes still treated as on time (0–240). */
+  post_grace_tolerance_minutes?: number;
+  /** Final-approved Late Permissions allowed per month (0–31). */
+  approved_late_permission_limit_per_month?: number;
+  /** Longest During Shift permission, in minutes (1–1440). */
+  during_shift_permission_max_minutes?: number;
+  /** How many days ahead Late and During Shift requests may be dated (0–365). */
+  permission_request_advance_limit_days?: number;
+  /** When true, a daily job marks Absent anyone with no record and no approved leave. */
+  absence_detection_enabled?: boolean;
+  /** Working weekdays as Python `date.weekday()` (Mon=0 … Sun=6). Default [6,0,1,2,3] = Sun–Thu. */
+  work_week_days?: number[];
 };
 
 /**

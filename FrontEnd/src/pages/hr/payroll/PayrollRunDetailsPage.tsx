@@ -8,12 +8,12 @@ import {
   Grid,
   Row,
   Space,
-  Table,
   Tag,
   Tabs,
   Modal,
   notification,
   Alert,
+  Typography,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
@@ -24,6 +24,7 @@ import {
 } from "@ant-design/icons";
 
 import PageHeader from "../../../components/ui/PageHeader";
+import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import LoadingState from "../../../components/ui/LoadingState";
 import ErrorState from "../../../components/ui/ErrorState";
 import EmptyState from "../../../components/ui/EmptyState";
@@ -229,6 +230,12 @@ export default function PayrollRunDetailsPage() {
             type="warning"
             showIcon
           />
+          <Alert
+            title={t("payroll.runDetails.finalizeAttendanceNote")}
+            type="info"
+            showIcon
+            style={{ marginTop: 12 }}
+          />
         </div>
       ),
       okText: t("payroll.runDetails.finalizeConfirmOkBtn"),
@@ -249,8 +256,9 @@ export default function PayrollRunDetailsPage() {
               message: t("common.success"),
               description: t("payroll.runDetails.finalizeSuccess"),
             });
-            // Update local state
-            setRun(res.data);
+            // Finalization can claim attendance penalties recorded after the
+            // draft, so reload the run, its items and its summary.
+            await loadData();
           }
         } catch (e: any) {
           notification.error({
@@ -457,7 +465,17 @@ export default function PayrollRunDetailsPage() {
                   title={t("payroll.runDetails.employeePayslipsReview")}
                   style={{ borderRadius: 16 }}
                 >
-                  <Table
+                  <Typography.Text
+                    type="secondary"
+                    style={{ display: "block", marginBottom: 12 }}
+                  >
+                    {t("payroll.runDetails.deductionsIncludeAttendance")}
+                  </Typography.Text>
+                  <ResponsiveTable
+                    mobileCard={{
+                      titleKey: "employee_name",
+                      extraKey: "net_salary",
+                    }}
                     dataSource={items}
                     columns={columns}
                     rowKey="id"

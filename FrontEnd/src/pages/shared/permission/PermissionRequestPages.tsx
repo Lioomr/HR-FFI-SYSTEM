@@ -5,15 +5,17 @@ import {
   Alert,
   Button,
   Card,
+  DatePicker,
   Descriptions,
   Empty,
+  Flex,
   Form,
   Input,
   Modal,
+  Segmented,
   Select,
   Space,
   Spin,
-  Table,
   Tag,
   TimePicker,
   Typography,
@@ -21,12 +23,16 @@ import {
 } from "antd";
 import dayjs from "dayjs";
 import PageHeader from "../../../components/ui/PageHeader";
+import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import ApprovalFlowMap, {
   type ApprovalFlowStage,
 } from "../../../components/requests/ApprovalFlowMap";
 import { formatDateTime } from "../../../utils/dateTime";
+import { fieldErrorsFromResponse } from "../../../utils/attendancePolicy";
 import { isApiError } from "../../../services/api/apiTypes";
+import { getSettings } from "../../../services/api/settingsApi";
 import {
+  PERMISSION_TYPES,
   cancelPermissionRequest,
   createPermissionRequest,
   decidePermissionRequest,
@@ -35,9 +41,23 @@ import {
   getManagerPermissionRequests,
   getMyPermissionRequests,
   getPermissionRequest,
+  type CreatePermissionRequestPayload,
+  type ExitType,
   type PermissionRequest,
   type PermissionStatus,
+  type PermissionType,
 } from "../../../services/api/permissionRequestsApi";
+import EvidencePicker, { type EvidenceItem } from "./EvidencePicker";
+import PermissionAttachmentsSection from "./PermissionAttachmentsSection";
+import {
+  DEFAULT_PERMISSION_POLICY,
+  EXIT_MAX_MINUTES,
+  PERMISSION_TYPE_COLORS,
+  isOutsideRequestWindow,
+  minutesBetween,
+  permissionTypeLabel,
+  splitServerErrors,
+} from "./permissionRequestHelpers";
 
 const statusColors: Record<PermissionStatus, string> = {
   pending_manager: "orange",
@@ -85,121 +105,449 @@ function historyLabel(
 ) {
   return t(`permissionRequests.history.${action}`, action);
 }
+function timeWindow(request: PermissionRequest) {
+  return request.from_time && request.to_time
+    ? `${request.from_time.slice(0, 5)} - ${request.to_time.slice(0, 5)}`
+    : null;
+}
+
+function PermissionTypeTag({ type }: { type: PermissionType }) {
+  const { t } = useI18n();
+  return (
+    <Tag
+      color={PERMISSION_TYPE_COLORS[type] ?? "default"}
+      style={{ marginInlineEnd: 0 }}
+    >
+      {permissionTypeLabel(t, type)}
+    </Tag>
+  );
+}
+
+type PermissionFormValues = {
+  permission_type: PermissionType;
+  request_date?: dayjs.Dayjs;
+  from_time?: dayjs.Dayjs;
+  to_time?: dayjs.Dayjs;
+  exit_type?: ExitType;
+  reason: string;
+  attachments?: EvidenceItem[];
+};
+
+/** Fields each type renders; a server error on any other field is form-level. */
+const FIELDS_BY_TYPE: Record<PermissionType, readonly string[]> = {
+  exit: ["from_time", "to_time", "exit_type", "reason"],
+  late: ["request_date", "reason", "attachments"],
+  during_shift: [
+    "request_date",
+    "from_time",
+    "to_time",
+    "reason",
+    "attachments",
+  ],
+};
+const ERROR_ALIASES: Record<string, string> = {
+  attachment_metadata: "attachments",
+  duration_minutes: "to_time",
+};
+
+/** The global request policy; defaults apply until settings load. */
+function usePermissionPolicy() {
+  const [policy, setPolicy] = useState(DEFAULT_PERMISSION_POLICY);
+  useEffect(() => {
+    let cancelled = false;
+    getSettings()
+      .then((response) => {
+        if (cancelled || isApiError(response)) return;
+        const attendance = response.data.attendance;
+        setPolicy({
+          advanceDays:
+            attendance?.permission_request_advance_limit_days ??
+            DEFAULT_PERMISSION_POLICY.advanceDays,
+          duringShiftMaxMinutes:
+            attendance?.during_shift_permission_max_minutes ??
+            DEFAULT_PERMISSION_POLICY.duringShiftMaxMinutes,
+          lateLimit:
+            attendance?.approved_late_permission_limit_per_month ??
+            DEFAULT_PERMISSION_POLICY.lateLimit,
+        });
+      })
+      .catch(() => {
+        // Keep the defaults; the server enforces the real policy on submit.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return policy;
+}
+
+/**
+ * Final-approved Late Permissions in the month of `date`. Uses the server's
+ * own counter from any Late request dated that month; with none, nothing has
+ * been used yet.
+ */
+function useLateUsage(
+  date: dayjs.Dayjs | undefined,
+  enabled: boolean,
+  fallbackLimit: number,
+) {
+  const monthKey = enabled && date ? date.format("YYYY-MM") : null;
+  const [usage, setUsage] = useState<{ usage: number; limit: number } | null>(
+    null,
+  );
+  useEffect(() => {
+    if (!monthKey) return;
+    let cancelled = false;
+    const month = dayjs(`${monthKey}-01`);
+    getMyPermissionRequests({
+      date_from: month.startOf("month").format("YYYY-MM-DD"),
+      date_to: month.endOf("month").format("YYYY-MM-DD"),
+      page_size: 100,
+    })
+      .then((response) => {
+        if (cancelled || isApiError(response)) return;
+        const late = (response.data.items ?? []).filter(
+          (item) => item.permission_type === "late",
+        );
+        const counted = late.find(
+          (item) => item.monthly_late_permission_usage != null,
+        );
+        setUsage({
+          usage: counted?.monthly_late_permission_usage ?? 0,
+          limit: counted?.monthly_late_permission_limit ?? fallbackLimit,
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setUsage(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [fallbackLimit, monthKey]);
+  return monthKey ? usage : null;
+}
 
 export function PermissionRequestFormPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
-  const [form] = Form.useForm();
+  const [form] = Form.useForm<PermissionFormValues>();
   const [submitting, setSubmitting] = useState(false);
+  const [formErrors, setFormErrors] = useState<string[]>([]);
+  const [companyRequired, setCompanyRequired] = useState(false);
+  const policy = usePermissionPolicy();
+  const today = dayjs();
+  const type = (Form.useWatch("permission_type", form) ??
+    "exit") as PermissionType;
+  const requestDate = Form.useWatch("request_date", form) as
+    | dayjs.Dayjs
+    | undefined;
   const from = Form.useWatch("from_time", form) as dayjs.Dayjs | undefined;
   const to = Form.useWatch("to_time", form) as dayjs.Dayjs | undefined;
-  const duration = from && to ? to.diff(from, "minute") : 0;
-  async function submit(values: {
-    from_time: dayjs.Dayjs;
-    to_time: dayjs.Dayjs;
-    exit_type: "business" | "personal" | "emergency";
-    reason: string;
-  }) {
+  const timed = type !== "late";
+  const duration = minutesBetween(from, to);
+  const maxMinutes =
+    type === "exit" ? EXIT_MAX_MINUTES : policy.duringShiftMaxMinutes;
+  const durationInvalid = timed && (duration <= 0 || duration > maxMinutes);
+  const lateUsage = useLateUsage(
+    requestDate,
+    type === "late",
+    policy.lateLimit,
+  );
+
+  function buildPayload(
+    values: PermissionFormValues,
+  ): CreatePermissionRequestPayload {
+    const reason = values.reason.trim();
+    const evidence = values.attachments ?? [];
+    const requestDay = (values.request_date ?? dayjs()).format("YYYY-MM-DD");
+    if (values.permission_type === "late") {
+      return {
+        permission_type: "late",
+        request_date: requestDay,
+        reason,
+        attachments: evidence.map((item) => item.file),
+        attachment_metadata: evidence.map((item) => item.metadata),
+      };
+    }
+    const fromTime = (values.from_time as dayjs.Dayjs).format("HH:mm");
+    const toTime = (values.to_time as dayjs.Dayjs).format("HH:mm");
+    if (values.permission_type === "during_shift") {
+      return {
+        permission_type: "during_shift",
+        request_date: requestDay,
+        from_time: fromTime,
+        to_time: toTime,
+        reason,
+        attachments: evidence.map((item) => item.file),
+        attachment_metadata: evidence.map((item) => item.metadata),
+      };
+    }
+    // Exit keeps the legacy same-day JSON payload, without permission_type.
+    return {
+      request_date: dayjs().format("YYYY-MM-DD"),
+      from_time: fromTime,
+      to_time: toTime,
+      exit_type: values.exit_type ?? "personal",
+      reason,
+      duration_minutes: duration,
+    };
+  }
+
+  function showServerErrors(errors: Record<string, string>, fallback: string) {
+    const { fields, other } = splitServerErrors(
+      errors,
+      FIELDS_BY_TYPE[type],
+      ERROR_ALIASES,
+    );
+    form.setFields(fields);
+    setFormErrors(other.length ? other : fields.length ? [] : [fallback]);
+  }
+
+  async function submit(values: PermissionFormValues) {
     setSubmitting(true);
+    setFormErrors([]);
+    setCompanyRequired(false);
     try {
-      const response = await createPermissionRequest({
-        request_date: dayjs().format("YYYY-MM-DD"),
-        from_time: values.from_time.format("HH:mm"),
-        to_time: values.to_time.format("HH:mm"),
-        exit_type: values.exit_type,
-        reason: values.reason.trim(),
-        duration_minutes: duration,
-      });
-      if (isApiError(response))
-        notification.error({ message: response.message });
-      else {
-        notification.success({
-          message:
-            response.message || t("permissionRequests.success.submitted"),
-        });
-        navigate("/employee/permission-requests");
+      const response = await createPermissionRequest(buildPayload(values));
+      if (isApiError(response)) {
+        showServerErrors(
+          fieldErrorsFromResponse({ response: { data: response } }),
+          response.message,
+        );
+        return;
       }
-    } catch (error) {
-      notification.error({
-        message: t("permissionRequests.error.submit"),
-        description: errorText(t, error, t("permissionRequests.error.submit")),
+      notification.success({
+        message: response.message || t("permissionRequests.success.submitted"),
       });
+      navigate("/employee/permission-requests");
+    } catch (error) {
+      const status = httpStatus(error);
+      if (status === 422) {
+        showServerErrors(
+          fieldErrorsFromResponse(error),
+          errorText(t, error, t("permissionRequests.error.submit")),
+        );
+      } else if (status === 403) {
+        setCompanyRequired(true);
+      } else {
+        notification.error({
+          message: t("permissionRequests.error.submit"),
+          description: errorText(
+            t,
+            error,
+            t("permissionRequests.error.submit"),
+          ),
+        });
+      }
     } finally {
       setSubmitting(false);
     }
   }
+
+  const typeHint =
+    type === "late"
+      ? t("permissionRequests.type.lateHint")
+      : type === "during_shift"
+        ? t("permissionRequests.type.duringShiftHint")
+        : t("permissionRequests.type.exitHint");
+
   return (
     <div style={{ maxWidth: 720, margin: "0 auto" }}>
       <PageHeader
         title={t("permissionRequests.newTitle")}
-        subtitle={`${t("permissionRequests.formSubtitle")} (${dayjs().format("YYYY-MM-DD")})`}
+        subtitle={
+          // Late and During Shift explain their date window under the date field.
+          type === "exit"
+            ? `${t("permissionRequests.formSubtitle")} (${today.format("YYYY-MM-DD")})`
+            : undefined
+        }
       />
       <Card>
-        <Form
+        {companyRequired && (
+          <Alert
+            type="warning"
+            showIcon
+            title={t("permissionRequests.error.companyRequired")}
+            description={t("attendancePolicy.companyRequiredHint")}
+            style={{ marginBottom: 16 }}
+          />
+        )}
+        {formErrors.length > 0 && (
+          <Alert
+            type="error"
+            showIcon
+            title={t("permissionRequests.form.fixErrors")}
+            description={
+              formErrors.length === 1 ? (
+                formErrors[0]
+              ) : (
+                <ul style={{ margin: 0, paddingInlineStart: 18 }}>
+                  {formErrors.map((text) => (
+                    <li key={text}>{text}</li>
+                  ))}
+                </ul>
+              )
+            }
+            style={{ marginBottom: 16 }}
+          />
+        )}
+        <Form<PermissionFormValues>
           form={form}
           layout="vertical"
           onFinish={submit}
-          initialValues={{ exit_type: "personal" }}
+          onValuesChange={(changed) => {
+            if ("permission_type" in changed) setFormErrors([]);
+          }}
+          initialValues={{
+            permission_type: "exit",
+            exit_type: "personal",
+            request_date: today,
+            attachments: [],
+          }}
         >
-          <Space style={{ width: "100%" }} size="middle" wrap>
-            <Form.Item
-              label={t("permissionRequests.form.fromTime")}
-              name="from_time"
-              rules={[
-                {
-                  required: true,
-                  message: t("permissionRequests.form.timeRequired"),
-                },
-              ]}
-            >
-              <TimePicker format="HH:mm" minuteStep={1} />
-            </Form.Item>
-            <Form.Item
-              label={t("permissionRequests.form.toTime")}
-              name="to_time"
-              rules={[
-                {
-                  required: true,
-                  message: t("permissionRequests.form.timeRequired"),
-                },
-              ]}
-            >
-              <TimePicker format="HH:mm" minuteStep={1} />
-            </Form.Item>
-          </Space>
-          <Typography.Text
-            type={duration > 120 || duration <= 0 ? "danger" : undefined}
-          >
-            {duration > 0
-              ? t("permissionRequests.form.duration", { minutes: duration })
-              : t("permissionRequests.form.chooseWindow")}
-          </Typography.Text>
           <Form.Item
-            label={t("permissionRequests.form.exitType")}
-            name="exit_type"
-            style={{ marginTop: 16 }}
-            rules={[{ required: true }]}
+            label={t("permissionRequests.type.label")}
+            name="permission_type"
+            extra={typeHint}
           >
-            <Select
-              options={[
-                {
-                  value: "business",
-                  label: t("permissionRequests.form.business"),
-                },
-                {
-                  value: "personal",
-                  label: t("permissionRequests.form.personal"),
-                },
-                {
-                  value: "emergency",
-                  label: t("permissionRequests.form.emergency"),
-                },
-              ]}
+            <Segmented
+              block
+              options={PERMISSION_TYPES.map((value) => ({
+                value,
+                label: permissionTypeLabel(t, value),
+              }))}
             />
           </Form.Item>
+
+          {type !== "exit" && (
+            <Form.Item
+              label={t("permissionRequests.form.requestDate")}
+              name="request_date"
+              extra={t("permissionRequests.form.dateWindow", {
+                days: policy.advanceDays,
+              })}
+              rules={[
+                {
+                  required: true,
+                  message: t("permissionRequests.form.dateRequired"),
+                },
+              ]}
+            >
+              <DatePicker
+                allowClear={false}
+                style={{ width: "100%", maxWidth: 260 }}
+                disabledDate={(day) =>
+                  isOutsideRequestWindow(day, today, policy.advanceDays)
+                }
+              />
+            </Form.Item>
+          )}
+
+          {type === "late" && (
+            <Flex vertical gap={12} style={{ marginBottom: 16 }}>
+              <Alert
+                type="info"
+                showIcon
+                title={t("permissionRequests.form.lateNoTimes")}
+              />
+              {lateUsage && (
+                <Alert
+                  type={
+                    lateUsage.usage >= lateUsage.limit ? "warning" : "success"
+                  }
+                  showIcon
+                  title={t("permissionRequests.form.lateUsage", lateUsage)}
+                  description={
+                    lateUsage.usage >= lateUsage.limit
+                      ? t("permissionRequests.form.lateLimitReached")
+                      : undefined
+                  }
+                />
+              )}
+            </Flex>
+          )}
+
+          {timed && (
+            <>
+              <Space style={{ width: "100%" }} size="middle" wrap>
+                <Form.Item
+                  label={t("permissionRequests.form.fromTime")}
+                  name="from_time"
+                  rules={[
+                    {
+                      required: true,
+                      message: t("permissionRequests.form.timeRequired"),
+                    },
+                  ]}
+                >
+                  <TimePicker format="HH:mm" minuteStep={1} />
+                </Form.Item>
+                <Form.Item
+                  label={t("permissionRequests.form.toTime")}
+                  name="to_time"
+                  rules={[
+                    {
+                      required: true,
+                      message: t("permissionRequests.form.timeRequired"),
+                    },
+                  ]}
+                >
+                  <TimePicker format="HH:mm" minuteStep={1} />
+                </Form.Item>
+              </Space>
+              <Flex vertical gap={2}>
+                <Typography.Text type={durationInvalid ? "danger" : undefined}>
+                  {duration > 0
+                    ? t("permissionRequests.form.duration", {
+                        minutes: duration,
+                      })
+                    : t("permissionRequests.form.chooseWindow")}
+                </Typography.Text>
+                <Typography.Text
+                  type={duration > maxMinutes ? "danger" : "secondary"}
+                >
+                  {duration > maxMinutes
+                    ? t("permissionRequests.form.durationTooLong", {
+                        minutes: maxMinutes,
+                      })
+                    : t("permissionRequests.form.maxDuration", {
+                        minutes: maxMinutes,
+                      })}
+                </Typography.Text>
+              </Flex>
+            </>
+          )}
+
+          {type === "exit" && (
+            <Form.Item
+              label={t("permissionRequests.form.exitType")}
+              name="exit_type"
+              style={{ marginTop: 16 }}
+              rules={[{ required: true }]}
+            >
+              <Select
+                options={[
+                  {
+                    value: "business",
+                    label: t("permissionRequests.form.business"),
+                  },
+                  {
+                    value: "personal",
+                    label: t("permissionRequests.form.personal"),
+                  },
+                  {
+                    value: "emergency",
+                    label: t("permissionRequests.form.emergency"),
+                  },
+                ]}
+              />
+            </Form.Item>
+          )}
+
           <Form.Item
             label={t("permissionRequests.form.reason")}
             name="reason"
+            style={{ marginTop: type === "during_shift" ? 16 : undefined }}
             rules={[
               {
                 required: true,
@@ -211,11 +559,41 @@ export function PermissionRequestFormPage() {
           >
             <Input.TextArea rows={5} maxLength={1000} showCount />
           </Form.Item>
+
+          {type !== "exit" && (
+            <Form.Item
+              label={
+                type === "late"
+                  ? t("permissionRequests.evidence.title")
+                  : t("permissionRequests.evidence.optional")
+              }
+              name="attachments"
+              rules={
+                type === "late"
+                  ? [
+                      {
+                        validator: (_, value?: EvidenceItem[]) =>
+                          value?.length
+                            ? Promise.resolve()
+                            : Promise.reject(
+                                new Error(
+                                  t("permissionRequests.evidence.required"),
+                                ),
+                              ),
+                      },
+                    ]
+                  : []
+              }
+            >
+              <EvidencePicker disabled={submitting} />
+            </Form.Item>
+          )}
+
           <Button
             type="primary"
             htmlType="submit"
             loading={submitting}
-            disabled={duration <= 0 || duration > 120}
+            disabled={durationInvalid}
           >
             {t("permissionRequests.form.submit")}
           </Button>
@@ -239,6 +617,8 @@ function RequestList({ inbox }: { inbox: "mine" | "manager" | "hr" }) {
         ? "pending_manager"
         : "pending_hr",
   );
+  // The API has no permission_type filter, so this narrows the loaded page only.
+  const [typeFilter, setTypeFilter] = useState<PermissionType | "all">("all");
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -271,6 +651,10 @@ function RequestList({ inbox }: { inbox: "mine" | "manager" | "hr" }) {
   useEffect(() => {
     void load();
   }, [load]);
+  const visibleItems =
+    typeFilter === "all"
+      ? items
+      : items.filter((item) => item.permission_type === typeFilter);
   const title =
     inbox === "mine"
       ? t("permissionRequests.list.mineTitle")
@@ -295,27 +679,51 @@ function RequestList({ inbox }: { inbox: "mine" | "manager" | "hr" }) {
         }
       />
       <Card>
-        <Select
-          aria-label={t("permissionRequests.list.status")}
-          value={status}
-          onChange={(value) => {
-            setStatus(value);
-            setPage(1);
-          }}
-          style={{ width: 190, marginBottom: 16 }}
-          options={[
-            { value: "all", label: t("permissionRequests.list.all") },
-            {
-              value: "pending_manager",
-              label: statusLabel(t, "pending_manager"),
-            },
-            { value: "pending_hr", label: statusLabel(t, "pending_hr") },
-            { value: "approved", label: statusLabel(t, "approved") },
-            { value: "rejected", label: statusLabel(t, "rejected") },
-            { value: "cancelled", label: statusLabel(t, "cancelled") },
-          ]}
-        />
-        <Table
+        <Flex wrap gap={12} style={{ marginBottom: 16 }}>
+          <Select
+            aria-label={t("permissionRequests.list.status")}
+            value={status}
+            onChange={(value) => {
+              setStatus(value);
+              setPage(1);
+            }}
+            style={{ width: 190 }}
+            options={[
+              { value: "all", label: t("permissionRequests.list.all") },
+              {
+                value: "pending_manager",
+                label: statusLabel(t, "pending_manager"),
+              },
+              { value: "pending_hr", label: statusLabel(t, "pending_hr") },
+              { value: "approved", label: statusLabel(t, "approved") },
+              { value: "rejected", label: statusLabel(t, "rejected") },
+              { value: "cancelled", label: statusLabel(t, "cancelled") },
+            ]}
+          />
+          <Select
+            aria-label={t("permissionRequests.list.typeFilter")}
+            value={typeFilter}
+            onChange={setTypeFilter}
+            style={{ width: 220 }}
+            options={[
+              {
+                value: "all",
+                label: `${t("permissionRequests.list.typeFilter")}: ${t("permissionRequests.list.allTypes")}`,
+              },
+              ...PERMISSION_TYPES.map((value) => ({
+                value,
+                label: permissionTypeLabel(t, value),
+              })),
+            ]}
+          />
+        </Flex>
+        {typeFilter !== "all" && (
+          <Typography.Paragraph type="secondary">
+            {t("permissionRequests.list.typeFilterNote")}
+          </Typography.Paragraph>
+        )}
+        <ResponsiveTable
+          mobileCard={{ titleKey: "reference_no", extraKey: "status" }}
           rowKey="id"
           loading={loading}
           locale={{
@@ -323,7 +731,7 @@ function RequestList({ inbox }: { inbox: "mine" | "manager" | "hr" }) {
               <Empty description={t("permissionRequests.list.empty")} />
             ),
           }}
-          dataSource={items}
+          dataSource={visibleItems}
           scroll={{ x: "max-content" }}
           pagination={{ current: page, pageSize: 10, total, onChange: setPage }}
           onRow={(record) => ({
@@ -337,6 +745,7 @@ function RequestList({ inbox }: { inbox: "mine" | "manager" | "hr" }) {
             ...(inbox !== "mine"
               ? [
                   {
+                    key: "employee",
                     title: t("permissionRequests.list.employee"),
                     render: (_: unknown, record: PermissionRequest) =>
                       record.employee.full_name,
@@ -344,22 +753,34 @@ function RequestList({ inbox }: { inbox: "mine" | "manager" | "hr" }) {
                 ]
               : []),
             {
+              key: "permission_type",
+              title: t("permissionRequests.list.permissionType"),
+              render: (_: unknown, record: PermissionRequest) => (
+                <PermissionTypeTag type={record.permission_type ?? "exit"} />
+              ),
+            },
+            {
               title: t("permissionRequests.list.date"),
               dataIndex: "request_date",
             },
             {
+              key: "time",
               title: t("permissionRequests.list.time"),
               render: (_: unknown, record: PermissionRequest) =>
-                `${record.from_time.slice(0, 5)} - ${record.to_time.slice(0, 5)}`,
+                timeWindow(record) ?? "—",
             },
             {
-              title: t("permissionRequests.list.type"),
+              key: "type",
+              title: t("permissionRequests.detail.exitType"),
               render: (_: unknown, record: PermissionRequest) =>
-                language === "ar"
-                  ? record.exit_type_label_ar
-                  : record.exit_type_label,
+                record.exit_type
+                  ? language === "ar"
+                    ? record.exit_type_label_ar
+                    : record.exit_type_label
+                  : "—",
             },
             {
+              key: "status",
               title: t("permissionRequests.list.status"),
               render: (_: unknown, record: PermissionRequest) => (
                 <Tag color={statusColors[record.status]}>
@@ -606,16 +1027,23 @@ export function PermissionRequestDetailPage({
         />
       </Card>
     );
+  const permissionType = request.permission_type ?? "exit";
+  const isExit = permissionType === "exit";
+  const timeRange = timeWindow(request);
   const typeLabel =
     language === "ar" ? request.exit_type_label_ar : request.exit_type_label;
+  const attachments = request.attachments ?? [];
   return (
     <div>
       <PageHeader
         title={request.reference_no}
         actions={
-          <Button loading={pdfBusy} onClick={() => void downloadPdf()}>
-            {t("permissionRequests.detail.downloadPdf")}
-          </Button>
+          // The permission PDF is the Exit Permission form.
+          isExit ? (
+            <Button loading={pdfBusy} onClick={() => void downloadPdf()}>
+              {t("permissionRequests.detail.downloadPdf")}
+            </Button>
+          ) : undefined
         }
       />
       <Card>
@@ -623,23 +1051,44 @@ export function PermissionRequestDetailPage({
           <Descriptions.Item label={t("permissionRequests.detail.employee")}>
             {request.employee.full_name}
           </Descriptions.Item>
+          <Descriptions.Item
+            label={t("permissionRequests.detail.permissionType")}
+          >
+            <PermissionTypeTag type={permissionType} />
+          </Descriptions.Item>
           <Descriptions.Item label={t("permissionRequests.detail.date")}>
             {request.request_date}
           </Descriptions.Item>
-          <Descriptions.Item label={t("permissionRequests.detail.time")}>
-            <span
-              dir="ltr"
-              style={{ unicodeBidi: "isolate", whiteSpace: "nowrap" }}
-            >
-              {request.from_time.slice(0, 5)} - {request.to_time.slice(0, 5)}
-            </span>{" "}
-            {t("permissionRequests.detail.duration", {
-              minutes: request.duration_minutes,
-            })}
-          </Descriptions.Item>
-          <Descriptions.Item label={t("permissionRequests.detail.exitType")}>
-            {typeLabel}
-          </Descriptions.Item>
+          {timeRange && (
+            <Descriptions.Item label={t("permissionRequests.detail.time")}>
+              <span
+                dir="ltr"
+                style={{ unicodeBidi: "isolate", whiteSpace: "nowrap" }}
+              >
+                {timeRange}
+              </span>{" "}
+              {t("permissionRequests.detail.duration", {
+                minutes: request.duration_minutes,
+              })}
+            </Descriptions.Item>
+          )}
+          {isExit && (
+            <Descriptions.Item label={t("permissionRequests.detail.exitType")}>
+              {typeLabel}
+            </Descriptions.Item>
+          )}
+          {permissionType === "late" &&
+            request.monthly_late_permission_usage != null &&
+            request.monthly_late_permission_limit != null && (
+              <Descriptions.Item
+                label={t("permissionRequests.detail.lateUsageLabel")}
+              >
+                {t("permissionRequests.detail.lateUsage", {
+                  usage: request.monthly_late_permission_usage,
+                  limit: request.monthly_late_permission_limit,
+                })}
+              </Descriptions.Item>
+            )}
           <Descriptions.Item label={t("permissionRequests.detail.reason")}>
             {request.reason}
           </Descriptions.Item>
@@ -717,6 +1166,15 @@ export function PermissionRequestDetailPage({
           <Empty description={t("permissionRequests.list.empty")} />
         )}
       </Card>
+      {(!isExit || attachments.length > 0) && (
+        <PermissionAttachmentsSection
+          request={request}
+          // `can_cancel` is exactly "the owner, while pending", the same
+          // condition the server applies to adding evidence.
+          canAdd={request.workflow.can_cancel}
+          onUpdated={setRequest}
+        />
+      )}
       <ApprovalTrail request={request} />
     </div>
   );

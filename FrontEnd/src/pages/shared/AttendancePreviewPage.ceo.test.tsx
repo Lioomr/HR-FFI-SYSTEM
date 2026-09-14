@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 vi.mock("../../services/api/attendanceApi", () => ({
   getCEOAttendance: vi.fn(),
   getGlobalAttendance: vi.fn(),
@@ -39,7 +40,12 @@ describe("BioTime attendance read-only views", () => {
           count: 1,
         },
       } as never);
-      render(<AttendancePreviewPage role={role} />);
+      // The HR view keeps its tab in the URL, so the page needs a router.
+      render(
+        <MemoryRouter>
+          <AttendancePreviewPage role={role} />
+        </MemoryRouter>,
+      );
       expect(await screen.findByText("Sara Ahmed")).toBeInTheDocument();
       expect(
         screen.getByText("Attendance is recorded through BioTime."),

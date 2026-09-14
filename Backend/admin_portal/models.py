@@ -36,7 +36,16 @@ class SystemSettings(models.Model):
     geofence_attendance_enabled = models.BooleanField(default=False)
     # Company-wide work schedule used to classify Late arrivals and detect Absences.
     work_day_start_time = models.TimeField(default=time(9, 0))
+    default_shift_end_time = models.TimeField(default=time(18, 0))
     late_grace_minutes = models.PositiveIntegerField(default=15)
+    # Attendance permission policy. This singleton intentionally remains
+    # global/company-wide: no per-company or employee schedules are introduced.
+    grace_window_minutes = models.PositiveIntegerField(default=15)
+    grace_use_limit_per_month = models.PositiveIntegerField(default=3)
+    post_grace_tolerance_minutes = models.PositiveIntegerField(default=5)
+    approved_late_permission_limit_per_month = models.PositiveIntegerField(default=3)
+    during_shift_permission_max_minutes = models.PositiveIntegerField(default=120)
+    permission_request_advance_limit_days = models.PositiveIntegerField(default=7)
     absence_detection_enabled = models.BooleanField(default=True)
     # List of Python weekday() ints (Mon=0 .. Sun=6) considered working days.
     work_week_days = models.JSONField(default=default_work_week_days, blank=True)
@@ -50,3 +59,25 @@ class SystemSettings(models.Model):
     def get_solo(cls):
         obj, _ = cls.objects.get_or_create(id=1)
         return obj
+
+    def save(self, *args, **kwargs):
+        """Keep the legacy grace alias synchronized for ORM callers too."""
+        if not self._state.adding:
+            previous = (
+                type(self).objects.filter(pk=self.pk).values("grace_window_minutes", "late_grace_minutes").first()
+            )
+            if previous:
+                canonical_changed = self.grace_window_minutes != previous["grace_window_minutes"]
+                legacy_changed = self.late_grace_minutes != previous["late_grace_minutes"]
+                if legacy_changed and not canonical_changed:
+                    self.grace_window_minutes = self.late_grace_minutes
+                else:
+                    self.late_grace_minutes = self.grace_window_minutes
+                if canonical_changed or legacy_changed:
+                    update_fields = kwargs.get("update_fields")
+                    if update_fields is not None:
+                        kwargs["update_fields"] = set(update_fields) | {
+                            "grace_window_minutes",
+                            "late_grace_minutes",
+                        }
+        return super().save(*args, **kwargs)

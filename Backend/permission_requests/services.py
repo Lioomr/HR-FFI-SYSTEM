@@ -13,12 +13,17 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import date
 
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.db.models.functions import Length
 from django.utils import timezone
 
+from admin_portal.models import SystemSettings
+from attendance.biotime_policy import is_attendance_exempt
+from attendance.calculation import AttendanceCalculationService
+from attendance.models import AttendanceAdjustment
 from audit.utils import audit
 from core.models import WorkflowAction
 from core.responses import error
@@ -32,7 +37,7 @@ from employees.models import EmployeeProfile
 from employees.services.manager_relationships import get_valid_manager_user, manager_approval_actor_source
 
 from .labels import EXIT_TYPE_LABELS, STATUS_LABELS
-from .models import ACTIVE_STATUSES, PENDING_STATUSES, PermissionRequest
+from .models import ACTIVE_STATUSES, PENDING_STATUSES, PermissionRequest, PermissionRequestAttachment
 from .permissions import is_base_hr_approver, is_hr_approver_user
 
 logger = logging.getLogger(__name__)
@@ -48,7 +53,7 @@ EMPLOYEE_ACTION_PATH = "/employee/permission-requests/{id}"
 MANAGER_ACTION_PATH = "/manager/permission-requests/{id}"
 HR_ACTION_PATH = "/hr/permission-requests/{id}"
 
-DUPLICATE_ACTIVE_MESSAGE = "You already have an active permission request for this date."
+INTERVAL_CONFLICT_MESSAGE = "An active Exit or During Shift Permission already overlaps this time."
 NO_APPROVER_MESSAGE = (
     "No eligible approver is available for this permission request. Ask HR to assign your direct manager."
 )
@@ -143,11 +148,92 @@ def can_actor_decide(
 
 
 def _has_active_request(user, request_date) -> bool:
+    """Compatibility helper retained for callers; Late requests never conflict."""
+
     return PermissionRequest.objects.filter(
         employee=user,
         request_date=request_date,
         status__in=ACTIVE_STATUSES,
+        permission_type__in=[PermissionRequest.PermissionType.EXIT, PermissionRequest.PermissionType.DURING_SHIFT],
     ).exists()
+
+
+def approved_late_permission_usage(
+    employee_id: int, request_date: date, *, exclude_request_id: int | None = None
+) -> int:
+    """Finally approved Late Permissions in the employee's local calendar month."""
+
+    queryset = PermissionRequest.objects.filter(
+        employee_id=employee_id,
+        permission_type=PermissionRequest.PermissionType.LATE,
+        status=Status.APPROVED,
+        request_date__year=request_date.year,
+        request_date__month=request_date.month,
+    )
+    if exclude_request_id is not None:
+        queryset = queryset.exclude(pk=exclude_request_id)
+    return queryset.count()
+
+
+def _assert_no_interval_conflict(*, user, request_date, from_time, to_time) -> None:
+    conflict = PermissionRequest.objects.filter(
+        employee=user,
+        request_date=request_date,
+        status__in=ACTIVE_STATUSES,
+        permission_type__in=[PermissionRequest.PermissionType.EXIT, PermissionRequest.PermissionType.DURING_SHIFT],
+        from_time__lt=to_time,
+        to_time__gt=from_time,
+    ).exists()
+    if conflict:
+        raise PermissionRequestError(INTERVAL_CONFLICT_MESSAGE, field="from_time")
+
+
+def _assert_late_permission_allowed(
+    *, profile: EmployeeProfile, request_date: date, exclude_request_id: int | None = None
+) -> None:
+    if is_attendance_exempt(profile):
+        raise PermissionRequestError(
+            "Attendance-exempt employees cannot submit Late Permission.", field="permission_type"
+        )
+    limit = SystemSettings.get_solo().approved_late_permission_limit_per_month
+    # Pending requests do not consume the limit, so this check remains valid at
+    # submission and is repeated under lock immediately before final approval.
+    if (
+        approved_late_permission_usage(
+            profile.user_id,
+            request_date,
+            exclude_request_id=exclude_request_id,
+        )
+        >= limit
+    ):
+        raise PermissionRequestError(
+            f"You have reached the monthly Late Permission limit of {limit}.", field="request_date"
+        )
+
+
+def _create_attachments(*, instance: PermissionRequest, user, files, metadata) -> None:
+    for index, upload in enumerate(files or []):
+        PermissionRequestAttachment.objects.create(
+            permission_request=instance,
+            file=upload,
+            original_filename=(getattr(upload, "name", "evidence") or "evidence")[:255],
+            content_type=(getattr(upload, "content_type", "") or "")[:100],
+            size_bytes=upload.size,
+            capture_metadata=(metadata or [{}] * len(files))[index] or {},
+            uploaded_by=user,
+        )
+
+
+def add_permission_request_attachments(*, instance: PermissionRequest, user, files, metadata) -> None:
+    """Append evidence under the request row lock to avoid stale pending-state writes."""
+
+    with transaction.atomic():
+        locked = _lock(instance)
+        if locked.employee_id != user.pk:
+            raise PermissionRequestError("Only the requester can add evidence attachments.", status=403)
+        if locked.status not in PENDING_STATUSES:
+            raise PermissionRequestError("Evidence can only be changed while the request is pending.")
+        _create_attachments(instance=locked, user=user, files=files, metadata=metadata)
 
 
 def _next_reference_no(on_date) -> str:
@@ -169,22 +255,31 @@ def submit_permission_request(*, user, profile: EmployeeProfile, data: dict):
     """
 
     request_date = data["request_date"]
+    permission_type = data["permission_type"]
     attempt = 0
     while True:
         attempt += 1
         try:
             with transaction.atomic():
-                # Serialize simultaneous submissions by the same employee so the
-                # one-active-request-per-day rule is evaluated one at a time.
+                # Serialize simultaneous submissions by the same employee so
+                # interval conflicts and monthly limits are rechecked together.
                 EmployeeProfile.objects.select_for_update().only("pk").get(pk=profile.pk)
-                if _has_active_request(user, request_date):
-                    raise PermissionRequestError(DUPLICATE_ACTIVE_MESSAGE, field="request_date")
+                if permission_type == PermissionRequest.PermissionType.LATE:
+                    _assert_late_permission_allowed(profile=profile, request_date=request_date)
+                else:
+                    _assert_no_interval_conflict(
+                        user=user,
+                        request_date=request_date,
+                        from_time=data["from_time"],
+                        to_time=data["to_time"],
+                    )
                 initial_status, manager_user = resolve_initial_status(user, profile)
                 instance = PermissionRequest.objects.create(
                     employee=user,
                     employee_profile=profile,
                     company_id=profile.company_id,
                     reference_no=_next_reference_no(request_date),
+                    permission_type=permission_type,
                     request_date=request_date,
                     from_time=data["from_time"],
                     to_time=data["to_time"],
@@ -193,6 +288,12 @@ def submit_permission_request(*, user, profile: EmployeeProfile, data: dict):
                     reason=data["reason"],
                     status=initial_status,
                 )
+                _create_attachments(
+                    instance=instance,
+                    user=user,
+                    files=data.get("attachments", []),
+                    metadata=data.get("attachment_metadata", []),
+                )
                 # The free-text reason stays out of the workflow history.
                 start = begin_recorded_transition(instance, actor=user, new_instance=True)
                 record_workflow_transition(
@@ -200,12 +301,55 @@ def submit_permission_request(*, user, profile: EmployeeProfile, data: dict):
                 )
             return instance, manager_user
         except IntegrityError:
-            # The partial unique index backs up the duplicate rule; any other
-            # collision is a reference-number race between employees, so retry.
-            if _has_active_request(user, request_date):
-                raise PermissionRequestError(DUPLICATE_ACTIVE_MESSAGE, field="request_date") from None
+            # Reference numbers are generated per day and can race between users.
             if attempt >= REFERENCE_ATTEMPTS:
                 raise
+
+
+def _upsert_attendance_adjustment(instance: PermissionRequest, *, actor) -> None:
+    """Create one auditable calculation input for a finally approved request."""
+
+    kind_by_type = {
+        PermissionRequest.PermissionType.LATE: AttendanceAdjustment.Kind.LATE_PERMISSION,
+        PermissionRequest.PermissionType.DURING_SHIFT: AttendanceAdjustment.Kind.DURING_SHIFT_PERMISSION,
+        PermissionRequest.PermissionType.EXIT: AttendanceAdjustment.Kind.EXIT_PERMISSION,
+    }
+    # Late is a durable arrival-excusal marker. Its raw-punch-dependent effect
+    # belongs to Backend Agent 3's final enforcement, so this workflow never
+    # converts a physical arrival into approved minutes. Exit remains metadata
+    # only; During Shift is the sole interval that contributes minutes here.
+    approved_minutes = (
+        instance.duration_minutes if instance.permission_type == PermissionRequest.PermissionType.DURING_SHIFT else 0
+    )
+    AttendanceAdjustment.objects.update_or_create(
+        kind=kind_by_type[instance.permission_type],
+        source_key=str(instance.pk),
+        defaults={
+            "employee_profile": instance.employee_profile,
+            "company": instance.company,
+            "date": instance.request_date,
+            "effective_date": instance.request_date,
+            "start_time": instance.from_time,
+            "end_time": instance.to_time,
+            "approved_minutes": approved_minutes,
+            "reason": f"{instance.permission_type}:{instance.reference_no}",
+            "created_by": actor,
+        },
+    )
+
+
+def schedule_attendance_recalculation(instance: PermissionRequest) -> None:
+    """Schedule calculation only after the approval transaction commits."""
+
+    def recalculate():
+        try:
+            AttendanceCalculationService.recalculate(instance.employee_profile, instance.request_date)
+        except Exception:
+            # The approval and source adjustment are durable; a worker or HR can
+            # retry calculation without losing either audit trail.
+            logger.exception("permission_request_attendance_recalculation_failed", extra={"request_id": instance.pk})
+
+    transaction.on_commit(recalculate)
 
 
 def _manager_decision_action(instance: PermissionRequest, decision: str) -> str:
@@ -224,6 +368,18 @@ def _lock(instance: PermissionRequest) -> PermissionRequest:
         .select_related("employee", "employee_profile")
         .get(pk=instance.pk)
     )
+
+
+def _assert_final_approval_allowed(locked: PermissionRequest) -> None:
+    """Recheck final-only limits before transition, under the employee lock."""
+
+    EmployeeProfile.objects.select_for_update().only("pk").get(pk=locked.employee_profile_id)
+    if locked.permission_type == PermissionRequest.PermissionType.LATE:
+        _assert_late_permission_allowed(
+            profile=locked.employee_profile,
+            request_date=locked.request_date,
+            exclude_request_id=locked.pk,
+        )
 
 
 def apply_manager_decision(instance: PermissionRequest, *, actor, decision: str, note: str = "") -> Transition:
@@ -245,7 +401,10 @@ def apply_manager_decision(instance: PermissionRequest, *, actor, decision: str,
         locked.manager_decision_by = actor
         locked.manager_decision_at = timezone.now()
         locked.manager_decision_note = note
-        locked.status = Status.REJECTED if decision == Decision.REJECTED else status_after_manager_approval(locked)
+        next_status = Status.REJECTED if decision == Decision.REJECTED else status_after_manager_approval(locked)
+        if next_status == Status.APPROVED:
+            _assert_final_approval_allowed(locked)
+        locked.status = next_status
         locked.save(
             update_fields=[
                 "status",
@@ -265,6 +424,9 @@ def apply_manager_decision(instance: PermissionRequest, *, actor, decision: str,
             approver_role="manager",
             metadata={"decision": decision, "actor_source": actor_source},
         )
+        if locked.status == Status.APPROVED:
+            _upsert_attendance_adjustment(locked, actor=actor)
+            schedule_attendance_recalculation(locked)
     return Transition(locked, from_status, actor_source)
 
 
@@ -284,7 +446,10 @@ def apply_hr_decision(instance: PermissionRequest, *, actor, decision: str, note
         locked.hr_decision_by = actor
         locked.hr_decision_at = timezone.now()
         locked.hr_decision_note = note
-        locked.status = Status.APPROVED if decision == Decision.APPROVED else Status.REJECTED
+        next_status = Status.APPROVED if decision == Decision.APPROVED else Status.REJECTED
+        if next_status == Status.APPROVED:
+            _assert_final_approval_allowed(locked)
+        locked.status = next_status
         locked.save(
             update_fields=[
                 "status",
@@ -304,6 +469,9 @@ def apply_hr_decision(instance: PermissionRequest, *, actor, decision: str, note
             approver_role="hr",
             metadata={"decision": decision},
         )
+        if locked.status == Status.APPROVED:
+            _upsert_attendance_adjustment(locked, actor=actor)
+            schedule_attendance_recalculation(locked)
     return Transition(locked, from_status)
 
 
@@ -338,6 +506,7 @@ def audit_permission_request(request, action: str, instance: PermissionRequest, 
         "company_id": instance.company_id,
         "from_status": from_status,
         "to_status": instance.status,
+        "permission_type": instance.permission_type,
         "duration_minutes": instance.duration_minutes,
         "exit_type": instance.exit_type,
         "actor_id": getattr(request.user, "pk", None),
@@ -356,13 +525,18 @@ def _status_label(instance: PermissionRequest) -> str:
 
 
 def _details(instance: PermissionRequest) -> list[str]:
-    exit_type = EXIT_TYPE_LABELS.get(instance.exit_type, (str(instance.exit_type),))[0]
-    return [
+    details = [
         f"Reference: {instance.reference_no}",
         f"Date: {instance.request_date:%Y-%m-%d}",
-        f"Time: {instance.from_time:%H:%M} - {instance.to_time:%H:%M} ({instance.duration_minutes} min)",
-        f"Exit type: {exit_type}",
     ]
+    if instance.from_time and instance.to_time:
+        details.append(f"Time: {instance.from_time:%H:%M} - {instance.to_time:%H:%M} ({instance.duration_minutes} min)")
+    if instance.permission_type == PermissionRequest.PermissionType.EXIT:
+        exit_type = EXIT_TYPE_LABELS.get(instance.exit_type, (str(instance.exit_type),))[0]
+        details.append(f"Exit type: {exit_type}")
+    else:
+        details.append(f"Permission type: {instance.get_permission_type_display()}")
+    return details
 
 
 def _requester_name(instance: PermissionRequest) -> str:
@@ -428,23 +602,32 @@ def _notify_requester(instance: PermissionRequest, event: str, *, reason: str = 
 
 
 def notify_after_submission(instance: PermissionRequest, manager_user=None) -> None:
-    if instance.status == Status.PENDING_MANAGER and manager_user is not None:
-        _notify_approvers(instance, "submitted", lambda: [manager_user], MANAGER_ACTION_PATH)
-    elif instance.status == Status.PENDING_HR:
-        _notify_hr(instance, "submitted")
+    def send():
+        if instance.status == Status.PENDING_MANAGER and manager_user is not None:
+            _notify_approvers(instance, "submitted", lambda: [manager_user], MANAGER_ACTION_PATH)
+        elif instance.status == Status.PENDING_HR:
+            _notify_hr(instance, "submitted")
+
+    transaction.on_commit(send)
 
 
 def notify_after_manager_decision(instance: PermissionRequest) -> None:
-    if instance.status == Status.PENDING_HR:
-        _notify_hr(instance, "manager_approved")
-    elif instance.status == Status.REJECTED:
-        _notify_requester(instance, "manager_rejected", reason=instance.manager_decision_note)
-    else:
-        _notify_requester(instance, "manager_approved_final")
+    def send():
+        if instance.status == Status.PENDING_HR:
+            _notify_hr(instance, "manager_approved")
+        elif instance.status == Status.REJECTED:
+            _notify_requester(instance, "manager_rejected", reason=instance.manager_decision_note)
+        else:
+            _notify_requester(instance, "manager_approved_final")
+
+    transaction.on_commit(send)
 
 
 def notify_after_hr_decision(instance: PermissionRequest) -> None:
-    if instance.status == Status.REJECTED:
-        _notify_requester(instance, "hr_rejected", reason=instance.hr_decision_note)
-    else:
-        _notify_requester(instance, "hr_approved")
+    def send():
+        if instance.status == Status.REJECTED:
+            _notify_requester(instance, "hr_rejected", reason=instance.hr_decision_note)
+        else:
+            _notify_requester(instance, "hr_approved")
+
+    transaction.on_commit(send)

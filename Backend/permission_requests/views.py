@@ -4,12 +4,15 @@ The workflow is Direct Manager -> HR -> approved. There is no CEO stage and
 therefore no CEO route, queue, or action.
 """
 
+import os
+
 from django.db.models import Q
-from django.http import HttpResponse
+from django.http import FileResponse, HttpResponse
 from django.utils.dateparse import parse_date
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 
 from core.pagination import StandardPagination
@@ -22,7 +25,7 @@ from organization.services import (
 )
 
 from . import services
-from .models import PermissionRequest
+from .models import PENDING_STATUSES, PermissionRequest
 from .pdf_permission_request import build_permission_request_pdf
 from .permissions import (
     HasActiveEmployeeProfile,
@@ -32,6 +35,7 @@ from .permissions import (
     is_hr_approver_user,
 )
 from .serializers import (
+    PermissionRequestAttachmentCreateSerializer,
     PermissionRequestCreateSerializer,
     PermissionRequestDecisionSerializer,
     PermissionRequestDetailSerializer,
@@ -83,7 +87,7 @@ class PermissionRequestViewSet(viewsets.GenericViewSet):
     # -- scoping ----------------------------------------------------------------
 
     def _base_queryset(self):
-        return PermissionRequest.objects.select_related(*READ_SELECT_RELATED)
+        return PermissionRequest.objects.select_related(*READ_SELECT_RELATED).prefetch_related("attachments")
 
     def _visible_queryset(self):
         """Requests the caller may open: their own, their team's, or all for HR approvers.
@@ -141,6 +145,15 @@ class PermissionRequestViewSet(viewsets.GenericViewSet):
     def _reload(self, instance):
         return self._base_queryset().get(pk=instance.pk)
 
+    def get_parsers(self):
+        # DRF builds the request parsers before ViewSetMixin assigns ``self.action``.
+        action = getattr(self, "action", None)
+        if action is None and hasattr(self, "request"):
+            action = getattr(self, "action_map", {}).get(self.request.method.lower())
+        if action in {"create", "add_attachments"}:
+            return [MultiPartParser(), FormParser(), JSONParser()]
+        return super().get_parsers()
+
     # -- employee self-service --------------------------------------------------
 
     def list(self, request, *args, **kwargs):
@@ -166,6 +179,13 @@ class PermissionRequestViewSet(viewsets.GenericViewSet):
 
         instance = self._reload(instance)
         services.audit_permission_request(request, "permission_request_submitted", instance)
+        if instance.attachments.exists():
+            services.audit_permission_request(
+                request,
+                "permission_request_attachment_added",
+                instance,
+                extra={"attachment_count": instance.attachments.count()},
+            )
         services.notify_after_submission(instance, manager_user)
         return success(self._detail(instance), message="Permission request submitted.", status=201)
 
@@ -201,6 +221,61 @@ class PermissionRequestViewSet(viewsets.GenericViewSet):
         response["Content-Disposition"] = f'attachment; filename="permission_request_{instance.reference_no}.pdf"'
         response["Cache-Control"] = "private, no-store"
         response["X-Content-Type-Options"] = "nosniff"
+        return response
+
+    @action(detail=True, methods=["post"], url_path="attachments")
+    def add_attachments(self, request, pk=None):
+        instance = self._get_visible(pk)
+        if instance is None:
+            return _not_found()
+        if instance.employee_id != request.user.pk:
+            return error("Only the requester can add evidence attachments.", errors=["Forbidden."], status=403)
+        if instance.status not in PENDING_STATUSES:
+            return error(
+                "Evidence can only be changed while the request is pending.", errors=["Invalid state."], status=422
+            )
+        serializer = PermissionRequestAttachmentCreateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error("Validation error", errors=serializer.errors, status=422)
+        services.add_permission_request_attachments(
+            instance=instance,
+            user=request.user,
+            files=serializer.validated_data["attachments"],
+            metadata=serializer.validated_data.get("attachment_metadata", []),
+        )
+        instance = self._reload(instance)
+        services.audit_permission_request(request, "permission_request_attachment_added", instance)
+        return success(self._detail(instance), message="Evidence attachment added.")
+
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path=r"attachments/(?P<attachment_id>\d+)/download",
+    )
+    def download_attachment(self, request, pk=None, attachment_id=None):
+        instance = self._get_visible(pk)
+        if instance is None:
+            return _not_found()
+        attachment = instance.attachments.filter(pk=attachment_id).first()
+        if attachment is None:
+            return _not_found()
+        try:
+            response = FileResponse(
+                attachment.file.open("rb"),
+                content_type="application/octet-stream",
+                as_attachment=True,
+                filename=os.path.basename(attachment.original_filename) or f"permission-evidence-{attachment.pk}",
+            )
+        except FileNotFoundError:
+            return _not_found()
+        response["Cache-Control"] = "private, no-store"
+        response["X-Content-Type-Options"] = "nosniff"
+        services.audit_permission_request(
+            request,
+            "permission_request_attachment_downloaded",
+            instance,
+            extra={"attachment_id": attachment.pk},
+        )
         return response
 
     # -- manager stage ------------------------------------------------------------
@@ -265,6 +340,13 @@ class PermissionRequestViewSet(viewsets.GenericViewSet):
             from_status=transition.from_status,
             extra={"actor_source": transition.actor_source} if transition.actor_source else None,
         )
+        if instance.status == Status.APPROVED:
+            services.audit_permission_request(
+                request,
+                "permission_request_final_approved",
+                instance,
+                from_status=transition.from_status,
+            )
         if stage == "manager":
             services.notify_after_manager_decision(instance)
         else:
