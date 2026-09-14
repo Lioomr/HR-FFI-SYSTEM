@@ -1871,7 +1871,11 @@ class EmployeeDeletionRequestViewSet(viewsets.ModelViewSet):
         )
         if self.action == "list":
             return filter_queryset_by_company_scope(base_qs, self.request)
-        return filter_queryset_by_accessible_companies(base_qs, self.request)
+        return filter_queryset_by_accessible_companies(
+            base_qs,
+            self.request,
+            roles_with_access={"SystemAdmin", "HRManager", "CEO"},
+        )
 
     def get_serializer_class(self):
         if self.action == "create":

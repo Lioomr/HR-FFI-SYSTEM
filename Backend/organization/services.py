@@ -240,12 +240,18 @@ def filter_queryset_by_active_company(queryset, request, field_name: str = "comp
 
 
 def filter_queryset_by_accessible_companies(
-    queryset, request, field_name: str = "company_id", include_null: bool = False
+    queryset,
+    request,
+    field_name: str = "company_id",
+    include_null: bool = False,
+    roles_with_access: set[str] | None = None,
 ):
     """
     Scope direct object lookups to every company the user can access.
 
-    Use only for an explicitly authorized HR/SystemAdmin multi-company workflow.
+    Use only for an explicitly authorized multi-company workflow. By default,
+    this is restricted to HRManager and SystemAdmin; callers can explicitly
+    include another role for a workflow that has its own role check.
     A selected company still narrows the result to that company; an authorized
     head-office context expands it to all accessible companies.
     """
@@ -258,7 +264,8 @@ def filter_queryset_by_accessible_companies(
     active_org = get_active_organization_for_request(request)
 
     role = get_role(request.user)
-    if role not in {"SystemAdmin", "HRManager"}:
+    allowed_roles = roles_with_access or {"SystemAdmin", "HRManager"}
+    if role not in allowed_roles:
         return filter_queryset_by_employee_own_company(queryset, request, field_name=field_name)
 
     accessible_company_ids = get_user_accessible_company_ids(request.user)
