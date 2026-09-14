@@ -46,6 +46,11 @@ Status = PermissionRequest.Status
 Decision = PermissionRequest.Decision
 
 REQUEST_TYPE = "Permission Request"
+REQUEST_TYPE_BY_PERMISSION_TYPE = {
+    PermissionRequest.PermissionType.EXIT: "Exit Permission",
+    PermissionRequest.PermissionType.LATE: "Late Permission",
+    PermissionRequest.PermissionType.DURING_SHIFT: "During Shift Permission",
+}
 REFERENCE_PREFIX = "PERM"
 REFERENCE_ATTEMPTS = 5
 
@@ -524,6 +529,12 @@ def _status_label(instance: PermissionRequest) -> str:
     return STATUS_LABELS.get(instance.status, (str(instance.status),))[0]
 
 
+def _request_type_label(instance: PermissionRequest) -> str:
+    """Use the concrete permission in employee-facing notifications."""
+
+    return REQUEST_TYPE_BY_PERMISSION_TYPE.get(instance.permission_type, REQUEST_TYPE)
+
+
 def _details(instance: PermissionRequest) -> list[str]:
     details = [
         f"Reference: {instance.reference_no}",
@@ -565,7 +576,7 @@ def _notify_approvers(instance: PermissionRequest, event: str, users: Callable[[
             return None
         return notify_users_for_pending_status(
             users=recipients,
-            request_type=REQUEST_TYPE,
+            request_type=_request_type_label(instance),
             request_id=instance.pk,
             requester_name=_requester_name(instance),
             status_label=_status_label(instance),
@@ -591,7 +602,7 @@ def _notify_requester(instance: PermissionRequest, event: str, *, reason: str = 
         instance,
         lambda: notify_profile_request_status_whatsapp(
             profile=instance.employee_profile,
-            request_type=REQUEST_TYPE,
+            request_type=_request_type_label(instance),
             request_id=instance.pk,
             status_label=_status_label(instance),
             details=_details(instance),
