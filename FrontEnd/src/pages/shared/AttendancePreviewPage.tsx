@@ -341,7 +341,13 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
     },
   ];
 
-  const getStatusLabel = (value: EffectiveAttendanceStatus) => {
+  const getStatusLabel = (
+    value: EffectiveAttendanceStatus,
+    rawStatus?: EffectiveAttendanceStatus,
+  ) => {
+    if (value === "EXCUSED" && rawStatus === "LATE") {
+      return t("attendancePreview.status.lateExcused");
+    }
     const keyByStatus: Record<EffectiveAttendanceStatus, string> = {
       PRESENT: "attendancePreview.status.present",
       ABSENT: "attendancePreview.status.absent",
@@ -429,7 +435,7 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
         formatTimeOnly(record.check_in_at, ""),
         formatTimeOnly(record.check_out_at, ""),
         formatDurationBetween(record.check_in_at, record.check_out_at, ""),
-        getStatusLabel(record.effective_status || record.status),
+        getStatusLabel(record.effective_status || record.status, record.status),
         record.excused_by_leave_id || "",
         record.late_minutes && record.late_minutes > 0
           ? String(record.late_minutes)
@@ -617,7 +623,7 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
             color={statusColors[record.effective_status || value]}
             style={{ marginInlineEnd: 0 }}
           >
-            {getStatusLabel(record.effective_status || value)}
+            {getStatusLabel(record.effective_status || value, record.status)}
           </Tag>
           {record.excused_by_leave_id && (
             <Text type="secondary">
