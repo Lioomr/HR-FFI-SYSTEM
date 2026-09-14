@@ -8,7 +8,8 @@ artwork and bilingual policy copy are never covered or extended.
 Image slots: the shared renderer draws every ``kind: image`` field from its
 ``signatures`` mapping. The configured ``OrganizationNode.logo`` travels through
 that mapping under ``company_logo`` purely as a transport; it is not a signature.
-``hr_signature_image`` is manual-only and is never passed, so it always stays blank.
+``hr_signature_image`` comes only from the company's explicitly configured HR
+representative. It is never inferred from the employee, viewer, or approver.
 
 Version 1 and version 2 notices keep their stored PDF and template snapshot.
 Nothing here re-renders, replaces, or redelivers an existing notice.
@@ -34,6 +35,7 @@ from core.pdf_forms import (
     load_form_assets,
     render_mapped_form,
 )
+from core.pdf_signers import signature_for_profile
 from in_app_notifications.dispatcher import dispatch_notification_channels
 from in_app_notifications.i18n import MESSAGES, notification_text
 from in_app_notifications.models import Notification, NotificationDelivery
@@ -269,21 +271,28 @@ def render_notice_pdf(
     *,
     assets: FormAssets | None = None,
     company_logo: SignatureAsset | None = None,
+    hr_signature: SignatureAsset | None = None,
 ) -> tuple[bytes, str]:
     """Overlay ``values`` and the optional logo onto the approved pair. Returns ``(pdf, logo_outcome)``.
 
-    The HR signature slot is never passed to the renderer. A logo that cannot be
-    drawn leaves the approved blank placeholder and never fails the notice.
+    Only the configured HR representative's stored signature may fill the HR
+    slot. A missing or invalid image leaves its approved slot blank and never
+    fails the notice.
     """
     unapproved = sorted(set(values) - set(MAPPED_TEXT_FIELDS))
     if unapproved:
         raise ValueError(f"Values outside the approved field map: {', '.join(unapproved)}")
     assets = assets or load_notice_assets(level)
+    signatures = {}
+    if company_logo is not None:
+        signatures[LOGO_FIELD] = company_logo
+    if hr_signature is not None:
+        signatures[HR_SIGNATURE_FIELD] = hr_signature
     if company_logo is None:
-        pdf_bytes, _ = render_mapped_form(assets, values, signatures={})
+        pdf_bytes, _ = render_mapped_form(assets, values, signatures=signatures)
         return pdf_bytes, LOGO_NOT_CONFIGURED
     try:
-        pdf_bytes, diagnostics = render_mapped_form(assets, values, signatures={LOGO_FIELD: company_logo})
+        pdf_bytes, diagnostics = render_mapped_form(assets, values, signatures=signatures)
     except Exception as exc:
         logger.warning(
             "attendance_late_notice_logo_render_failed", extra={"level": level, "error_type": type(exc).__name__}
@@ -327,6 +336,7 @@ def issue_late_notice_for_new_violation(violation: AttendanceLateViolation) -> A
     level = level_for_occurrence(violation.occurrence_number)
     company = violation.company
     logo_asset, logo_state = load_company_logo(company)
+    hr_signature = signature_for_profile(getattr(company, "late_notice_signer", None))
     try:
         with transaction.atomic():
             assets = load_notice_assets(level)
@@ -344,7 +354,11 @@ def issue_late_notice_for_new_violation(violation: AttendanceLateViolation) -> A
                 company_logo_configured=bool(getattr(company, "logo", None)),
             )
             pdf_bytes, rendered_logo_state = render_notice_pdf(
-                level, build_notice_values(notice), assets=assets, company_logo=logo_asset
+                level,
+                build_notice_values(notice),
+                assets=assets,
+                company_logo=logo_asset,
+                hr_signature=hr_signature,
             )
             logo_state = logo_state or rendered_logo_state
             notice.document.save(notice_filename(notice), ContentFile(pdf_bytes), save=False)

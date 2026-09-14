@@ -5,7 +5,8 @@ from .models import OrganizationNode, UserOrganizationAccess
 
 @admin.register(OrganizationNode)
 class OrganizationNodeAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "code", "node_type", "parent", "employee_id_prefix", "is_active")
+    list_display = ("id", "name", "code", "node_type", "parent", "employee_id_prefix", "late_notice_signer", "is_active")
+    list_select_related = ("late_notice_signer",)
     list_filter = ("node_type", "is_active")
     search_fields = ("name", "code")
 
