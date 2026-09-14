@@ -62,6 +62,9 @@ REQUEST_TYPE_LABELS: dict[str, str] = {
     "Loan Request": "طلب سلفة",
     "Loan Disbursement": "صرف سلفة",
     "Permission Request": "طلب إذن خروج",
+    "Exit Permission": "طلب إذن خروج",
+    "Late Permission": "طلب إذن تأخير",
+    "During Shift Permission": "طلب إذن أثناء الدوام",
     "Asset Damage Report": "تقرير ضرر أصل",
     "Asset Return Request": "طلب إعادة أصل",
     "Attendance Request": "طلب حضور",
@@ -304,6 +307,15 @@ MESSAGES: dict[str, dict[str, tuple[str, str]]] = {
             "ينتهي عقد {employee_name} في {date} (الأيام المتبقية: {days_left}).",
         ),
     },
+    "contract.expiry_action_required": {
+        "title": ("Action required: contract expiry for {employee_name}", "مطلوب إجراء: انتهاء عقد {employee_name}"),
+        "message": (
+            "{employee_name}'s contract expires on {date} ({days_left} days remaining). Submit a renewal or "
+            "termination decision before {deadline}, or the contract will be renewed automatically.",
+            "ينتهي عقد {employee_name} في {date} (الأيام المتبقية: {days_left}). يرجى تقديم قرار التجديد أو "
+            "الإنهاء قبل {deadline}، وإلا سيتم تجديد العقد تلقائياً.",
+        ),
+    },
     "contract.ceo_pending": {
         "title": ("Contract decision requires CEO approval", "قرار العقد بانتظار موافقة الرئيس التنفيذي"),
         "message": _CONTRACT_CEO_MESSAGE,
@@ -505,6 +517,7 @@ LEGACY_EVENT_KEYS: dict[str, tuple[str, ...]] = {
     "leave.submitted": ("leave.submitted_manager", "leave.submitted_employee"),
     "request.status_changed": ("request.status_changed", "request.status_changed_reason"),
     "contract.expiry": (
+        "contract.expiry_action_required",
         "contract.expiry_milestone",
         "contract.ceo_pending",
         "contract.ceo_reminder",
