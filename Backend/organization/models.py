@@ -29,6 +29,14 @@ class OrganizationNode(models.Model):
         blank=True,
         help_text=_("Optional company logo used on company-specific private documents."),
     )
+    late_notice_signer = models.ForeignKey(
+        "employees.EmployeeProfile",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="companies_signed_for_late_notices",
+        help_text=_("HR representative whose stored signature is printed on new late-attendance notices."),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -37,6 +45,16 @@ class OrganizationNode(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+    def clean(self):
+        super().clean()
+        signer = self.late_notice_signer
+        if signer is None:
+            return
+        if self.pk and signer.company_id != self.pk:
+            raise ValidationError({"late_notice_signer": _("The notice signer must belong to this company.")})
+        if not signer.user.groups.filter(name__in=["HRManager", "SystemAdmin"]).exists():
+            raise ValidationError({"late_notice_signer": _("The notice signer must be an HR Manager or System Admin.")})
 
 
 class UserOrganizationAccess(models.Model):
