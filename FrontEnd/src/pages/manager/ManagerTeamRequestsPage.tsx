@@ -4,7 +4,6 @@ import {
   Button,
   Input,
   Space,
-  Table,
   Tabs,
   Tag,
   Tooltip,
@@ -15,6 +14,7 @@ import { EyeOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 
 import PageHeader from "../../components/ui/PageHeader";
+import ResponsiveTable from "../../components/ui/ResponsiveTable";
 import EmptyState from "../../components/ui/EmptyState";
 import ApprovalSurface from "../../components/ceo/ApprovalSurface";
 import ApprovalActions from "../../components/ceo/ApprovalActions";
@@ -483,7 +483,12 @@ function LeaveRequestsTab({
         hint={t("manager.requests.expandHint")}
       />
       <ApprovalSurface>
-        <Table
+        <ResponsiveTable
+          mobileCard={{
+            titleKey: "employee",
+            extraKey: "status",
+            expandLabel: t("leave.approvalMap.title"),
+          }}
           dataSource={filtered}
           columns={columns}
           rowKey="id"
@@ -762,7 +767,11 @@ function AssetReturnRequestsTab({
         hint={t("manager.requests.expandHint")}
       />
       <ApprovalSurface>
-        <Table
+        <ResponsiveTable
+          mobileCard={{
+            titleKey: "employee",
+            extraKey: "status",
+          }}
           dataSource={filtered}
           columns={columns}
           rowKey="id"
@@ -927,7 +936,8 @@ function TeamTab({ refreshToken }: { refreshToken: number }) {
         placeholder={t("manager.team.searchPlaceholder")}
       />
       <ApprovalSurface>
-        <Table
+        <ResponsiveTable
+          mobileCard={{ titleKey: "name" }}
           dataSource={filtered}
           columns={columns}
           rowKey="id"

@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { Button, Card, Form, Modal, Table, Space, Input } from "antd";
+import { Button, Card, Form, Modal, Space, Input } from "antd";
+import type { AnyObject } from "antd/es/_util/type";
 import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined, EditOutlined } from "@ant-design/icons";
 
 import PageHeader from "../ui/PageHeader";
+import ResponsiveTable from "../ui/ResponsiveTable";
 import LoadingState from "../ui/LoadingState";
 import EmptyState from "../ui/EmptyState";
 import ErrorState from "../ui/ErrorState";
@@ -22,7 +24,11 @@ import { isHeadOfficeOrganization } from "../../utils/organizationContext";
 /**
  * Generic props for ReferenceCrudPage component
  */
-export interface ReferenceCrudPageProps<TItem, TCreate, TUpdate> {
+export interface ReferenceCrudPageProps<
+  TItem extends AnyObject,
+  TCreate,
+  TUpdate,
+> {
   // Required props
   title: string;
   entityName: string;
@@ -61,7 +67,11 @@ export interface ReferenceCrudPageProps<TItem, TCreate, TUpdate> {
  * Reusable CRUD page component for reference data management
  * Handles loading, error, empty states, and 403/422 errors consistently
  */
-export function ReferenceCrudPage<TItem = any, TCreate = any, TUpdate = any>({
+export function ReferenceCrudPage<
+  TItem extends AnyObject = any,
+  TCreate = any,
+  TUpdate = any,
+>({
   title,
   entityName,
   columns,
@@ -439,7 +449,7 @@ export function ReferenceCrudPage<TItem = any, TCreate = any, TUpdate = any>({
       <PageHeader
         title={title}
         actions={
-          <Space>
+          <Space wrap>
             <Input.Search
               placeholder={`${t("common.search")}...`}
               allowClear
@@ -448,7 +458,7 @@ export function ReferenceCrudPage<TItem = any, TCreate = any, TUpdate = any>({
                 setPage(1);
                 loadData(1, value);
               }}
-              style={{ width: 250 }}
+              style={{ width: 250, maxWidth: "100%" }}
             />
             {createForm && (
               <Button
@@ -476,11 +486,12 @@ export function ReferenceCrudPage<TItem = any, TCreate = any, TUpdate = any>({
       />
 
       <Card style={{ borderRadius: 16 }}>
-        <Table
+        <ResponsiveTable
           dataSource={items}
           columns={enhancedColumns}
           rowKey={rowKey}
           loading={loading}
+          scroll={{ x: "max-content" }}
           pagination={
             enablePagination
               ? {

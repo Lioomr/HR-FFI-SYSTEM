@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   render,
   screen,
@@ -23,6 +23,7 @@ import type {
   EmployeeDocument,
 } from "../../services/api/employeesApi";
 import { useI18nStore } from "../../i18n/i18nStore";
+import { restorePhoneViewport, setDesktopViewport } from "../../test/viewport";
 
 const getEmployeeDocuments =
   employeesApi.getEmployeeDocuments as unknown as ReturnType<typeof vi.fn>;
@@ -86,6 +87,13 @@ beforeEach(() => {
   deleteEmployeeDocument.mockReset();
   getEmployeeDocuments.mockResolvedValue(documentsResponse([]));
   useI18nStore.getState().setLanguage("en");
+  // These tests drive the archive through the desktop table (column headers,
+  // row expanders); the phone card layout is covered by ResponsiveTable.
+  setDesktopViewport();
+});
+
+afterEach(() => {
+  restorePhoneViewport();
 });
 
 describe("EmployeeDocumentArchive OCR", () => {

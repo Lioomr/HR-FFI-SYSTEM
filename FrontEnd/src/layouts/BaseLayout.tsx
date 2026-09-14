@@ -40,6 +40,7 @@ import {
   InboxOutlined,
   WhatsAppOutlined,
   SafetyCertificateOutlined,
+  GlobalOutlined,
 } from "@ant-design/icons";
 import type { MenuProps } from "antd";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -1632,6 +1633,21 @@ export default function BaseLayout() {
         disabled: true,
       },
       { type: "divider" },
+      // On phones the header has no room for the language picker, so it
+      // lives in the account menu instead.
+      ...(isMobile
+        ? [
+            {
+              key: "language",
+              icon: <GlobalOutlined />,
+              label:
+                language === "ar"
+                  ? t("language.english")
+                  : t("language.arabic"),
+              onClick: () => setLanguage(language === "ar" ? "en" : "ar"),
+            },
+          ]
+        : []),
       {
         key: "change-password",
         icon: <KeyOutlined />,
@@ -1818,11 +1834,19 @@ export default function BaseLayout() {
             alignItems: "center",
             justifyContent: "space-between",
             padding: isMobile ? "0 12px" : "0 28px",
-            gap: 12,
-            height: 72,
+            gap: isMobile ? 8 : 12,
+            height: isMobile ? 60 : 72,
             position: "sticky",
             top: 0,
             zIndex: 50,
+            // Phones scroll page content under the sticky header, so give it
+            // a frosted surface instead of letting text show through.
+            ...(isMobile && {
+              background: "rgba(248, 250, 255, 0.92)",
+              backdropFilter: "blur(10px)",
+              WebkitBackdropFilter: "blur(10px)",
+              borderBottom: "1px solid rgba(226, 232, 240, 0.8)",
+            }),
           }}
         >
           {/* Left: hamburger + page title. Shrinks (and truncates) before the
@@ -1833,7 +1857,7 @@ export default function BaseLayout() {
               alignItems: "center",
               gap: isMobile ? 10 : 16,
               minWidth: 0,
-              flexShrink: 1,
+              flex: "1 1 auto",
             }}
           >
             {isMobile && (
@@ -1856,7 +1880,7 @@ export default function BaseLayout() {
               style={{
                 margin: 0,
                 fontWeight: 600,
-                fontSize: isMobile ? 14 : 15,
+                fontSize: isMobile ? 13 : 15,
                 color: "#64748b",
                 letterSpacing: "0.02em",
                 textTransform: "uppercase",
@@ -1891,8 +1915,9 @@ export default function BaseLayout() {
                   display: "flex",
                   alignItems: "center",
                   gap: 8,
-                  minWidth: 0,
-                  width: isMobile ? 112 : 168,
+                  minWidth: isMobile ? 96 : 0,
+                  width: isMobile ? undefined : 168,
+                  flex: isMobile ? "0 1 150px" : undefined,
                   padding: isMobile ? "4px 8px" : "5px 10px",
                   borderRadius: 10,
                   background: organizationTheme.selectBg,
@@ -1935,35 +1960,26 @@ export default function BaseLayout() {
               </div>
             )}
 
-            <div
-              style={{
-                padding: isMobile ? "4px 2px" : "5px 4px",
-                borderRadius: 8,
-              }}
-            >
-              <Select
-                size="small"
-                value={language}
-                onChange={(value) => setLanguage(value as AppLanguage)}
-                options={[
-                  {
-                    value: "en",
-                    label: isMobile ? "EN" : t("language.english"),
-                  },
-                  {
-                    value: "ar",
-                    label: isMobile ? "AR" : t("language.arabic"),
-                  },
-                ]}
-                variant="borderless"
-                style={{
-                  minWidth: isMobile ? 48 : 82,
-                  fontWeight: 600,
-                  fontSize: 13,
-                  color: organizationTheme.text,
-                }}
-              />
-            </div>
+            {!isMobile && (
+              <div style={{ padding: "5px 4px", borderRadius: 8 }}>
+                <Select
+                  size="small"
+                  value={language}
+                  onChange={(value) => setLanguage(value as AppLanguage)}
+                  options={[
+                    { value: "en", label: t("language.english") },
+                    { value: "ar", label: t("language.arabic") },
+                  ]}
+                  variant="borderless"
+                  style={{
+                    minWidth: 82,
+                    fontWeight: 600,
+                    fontSize: 13,
+                    color: organizationTheme.text,
+                  }}
+                />
+              </div>
+            )}
 
             {/* Notification Bell */}
             <NotificationBell
@@ -2019,9 +2035,11 @@ export default function BaseLayout() {
                     </div>
                   </div>
                 )}
-                <DownOutlined
-                  style={{ fontSize: 9, color: organizationTheme.muted }}
-                />
+                {!isMobile && (
+                  <DownOutlined
+                    style={{ fontSize: 9, color: organizationTheme.muted }}
+                  />
+                )}
               </div>
             </Dropdown>
           </div>

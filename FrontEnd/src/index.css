@@ -69,6 +69,12 @@ body,
   min-height: 100%;
 }
 
+html {
+  /* Stop iOS from inflating text when the device rotates to landscape. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
   min-width: 320px;
@@ -201,9 +207,13 @@ body.ltr textarea.ant-input {
     box-shadow var(--transition-med);
 }
 
-.hover-lift:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-lg) !important;
+/* Hover-only: on touch screens :hover sticks after a tap and leaves the
+   element floating. */
+@media (hover: hover) {
+  .hover-lift:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-lg) !important;
+  }
 }
 
 /* Dynamic numbers: prevent width jitter as values update */
@@ -557,10 +567,12 @@ html[dir="rtl"] .modern-sidebar .ant-menu-item-selected::before {
   transition: all var(--transition-fast) !important;
 }
 
-.ant-btn-primary:hover {
-  transform: translateY(-1px) !important;
-  box-shadow: 0 6px 20px rgba(249, 115, 22, 0.5) !important;
-  opacity: 0.92 !important;
+@media (hover: hover) {
+  .ant-btn-primary:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 6px 20px rgba(249, 115, 22, 0.5) !important;
+    opacity: 0.92 !important;
+  }
 }
 
 .ant-btn-primary:active {
@@ -742,9 +754,28 @@ html[dir="rtl"] .modern-sidebar .ant-menu-item-selected::before {
 
 /* ── Tablet & Mobile (≤768px) ── */
 @media (max-width: 768px) {
+  /* 16px field text: iOS Safari zooms the whole page when a focused field is
+     smaller, and the page stays zoomed (and wider than the screen) after. */
+  input.ant-input,
+  textarea.ant-input,
+  input.ant-input-number-input,
+  .ant-picker-input > input,
+  input.ant-select-input,
+  input.ant-select-selection-search-input {
+    font-size: 16px !important;
+  }
+
   /* Tables: always allow horizontal scroll */
   .ant-table-wrapper {
     overflow-x: auto;
+    max-width: 100%;
+  }
+
+  /* Pagination: wrap under the table instead of overflowing it */
+  .ant-table-wrapper .ant-table-pagination.ant-pagination {
+    flex-wrap: wrap;
+    justify-content: center;
+    row-gap: 8px;
   }
 
   /* Descriptions: stack to single column on mobile */
@@ -783,15 +814,60 @@ html[dir="rtl"] .modern-sidebar .ant-menu-item-selected::before {
     min-width: 0 !important;
   }
 
-  /* Page header adjustments */
-  .ant-typography h3,
+  /* Page headers: title block and actions stack; actions get the full row */
+  .page-header {
+    margin-bottom: 16px !important;
+  }
+
+  .page-header__accent {
+    height: 36px !important;
+  }
+
+  .page-header__actions {
+    width: 100%;
+    padding-top: 0 !important;
+  }
+
+  /* Headings: antd renders <hN class="ant-typography">, so match the element
+     itself as well as headings nested inside a Typography block. */
+  h1.ant-typography,
+  .ant-typography h1 {
+    font-size: 24px !important;
+  }
+
+  h2.ant-typography,
   .ant-typography h2 {
-    font-size: 18px !important;
+    font-size: 22px !important;
+  }
+
+  h3.ant-typography,
+  .ant-typography h3 {
+    font-size: 20px !important;
   }
 
   /* Card padding reduction */
   .ant-card-body {
     padding: 12px !important;
+  }
+
+  /* Card header: let the title wrap and push "extra" actions below it
+     rather than squeezing both onto one line. */
+  .ant-card-head {
+    padding-inline: 12px !important;
+  }
+
+  .ant-card-head-wrapper {
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    padding-block: 8px;
+  }
+
+  .ant-card-head-title {
+    white-space: normal;
+  }
+
+  .ant-card-extra {
+    margin-inline-start: 0 !important;
   }
 
   /* Stat cards: make values slightly smaller */
@@ -815,16 +891,43 @@ html[dir="rtl"] .modern-sidebar .ant-menu-item-selected::before {
     margin: 16px auto !important;
   }
 
+  /* Modal footer: wrap buttons instead of pushing them off-screen */
+  .ant-modal-footer {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .ant-modal-footer .ant-btn + .ant-btn {
+    margin-inline-start: 0 !important;
+  }
+
+  /* Drawers opened with a desktop width never exceed the screen */
+  .ant-drawer-content-wrapper {
+    max-width: 100vw;
+  }
+
+  .ant-popover {
+    max-width: calc(100vw - 16px);
+  }
+
+  /* Date range picker: stack the two month panels (and presets) vertically;
+     side by side they are ~560px wide. */
+  .ant-picker-dropdown .ant-picker-panel-layout,
+  .ant-picker-dropdown .ant-picker-panels {
+    flex-direction: column;
+  }
+
+  /* Segmented controls scroll sideways rather than overflow the page */
+  .ant-segmented {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
   /* Space component: wrap on mobile */
   .ant-space-horizontal {
     flex-wrap: wrap !important;
-  }
-
-  /* Action buttons in Page Headers */
-  .ant-space-item .ant-btn {
-    font-size: 12px !important;
-    padding: 4px 8px !important;
-    height: auto !important;
   }
 }
 

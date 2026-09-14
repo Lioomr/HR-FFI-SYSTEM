@@ -20,6 +20,8 @@ Success: { "status": "success", "data": ... }
 
 Error: { "status": "error", "message": "...", "errors": [...] }
 
+422 validation errors are items of { "field": "...", "message": "..." } (or { "message": "..." } without a field). Nested serializer errors use dotted field paths: "attendance.grace_window_minutes", or "items.1.quantity" for a list item. A nested non_field_errors entry uses its parent path. Flat fields are unchanged. "message" is the first item's message.
+
 Pagination (for list screens)
 
 ?page=1&page_size=25

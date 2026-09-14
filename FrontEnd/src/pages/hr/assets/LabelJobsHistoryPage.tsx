@@ -1,19 +1,11 @@
 import { useEffect, useState } from "react";
-import {
-  Button,
-  Card,
-  Space,
-  Table,
-  Tag,
-  Tooltip,
-  Typography,
-  message,
-} from "antd";
+import { Button, Card, Space, Tag, Tooltip, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { DownloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 
 import ErrorState from "../../../components/ui/ErrorState";
+import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import LoadingState from "../../../components/ui/LoadingState";
 import PageHeader from "../../../components/ui/PageHeader";
 import { useI18n } from "../../../i18n/useI18n";
@@ -177,7 +169,8 @@ export default function LabelJobsHistoryPage() {
       />
 
       <Card>
-        <Table
+        <ResponsiveTable
+          mobileCard={{ titleKey: "created_at" }}
           rowKey="id"
           columns={columns}
           dataSource={jobs}

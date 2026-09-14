@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import {
   Button,
   Card,
-  Table,
   Tag,
   Tooltip,
   notification,
@@ -28,6 +27,7 @@ import type { UploadFile } from "antd/es/upload/interface";
 import dayjs from "dayjs";
 
 import PageHeader from "../../../components/ui/PageHeader";
+import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import {
   createHRManualLeaveRequest,
   deleteHRManualLeaveRequest,
@@ -590,11 +590,17 @@ export default function LeaveInboxPage() {
       </Card>
 
       <Card style={{ borderRadius: 16 }}>
-        <Table
+        <ResponsiveTable
+          mobileCard={{
+            titleKey: "employee",
+            extraKey: "status",
+            expandLabel: t("leave.approvalMap.title"),
+          }}
           dataSource={data}
           columns={columns}
           rowKey="id"
           loading={loading}
+          scroll={{ x: "max-content" }}
           expandable={{
             expandedRowRender: (record) => (
               <LeaveApprovalMap request={record} t={t} />

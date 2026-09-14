@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Table, Button, Space, Tag, message, Tooltip, Popconfirm } from "antd";
+import { Button, Space, Tag, message, Tooltip, Popconfirm } from "antd";
+import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import {
   PlusOutlined,
   EditOutlined,
@@ -191,12 +192,14 @@ export default function AnnouncementsManagementPage() {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
+          flexWrap: "wrap",
+          gap: 12,
         }}
       >
         <h1 style={{ fontSize: 24, margin: 0 }}>
           {t("hr.announcements.managementTitle")}
         </h1>
-        <Space>
+        <Space wrap>
           <Button
             icon={<ReloadOutlined />}
             onClick={() => loadData(pagination.current, pagination.pageSize)}
@@ -220,7 +223,8 @@ export default function AnnouncementsManagementPage() {
         </Space>
       </div>
 
-      <Table
+      <ResponsiveTable
+        mobileCard={{ titleKey: "title" }}
         columns={columns}
         dataSource={data}
         rowKey="id"

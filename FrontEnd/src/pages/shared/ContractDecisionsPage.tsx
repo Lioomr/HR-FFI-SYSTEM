@@ -12,7 +12,6 @@ import {
   Modal,
   Select,
   Space,
-  Table,
   Tag,
   Typography,
   message,
@@ -26,6 +25,7 @@ import {
 } from "@ant-design/icons";
 
 import PageHeader from "../../components/ui/PageHeader";
+import ResponsiveTable from "../../components/ui/ResponsiveTable";
 import ErrorState from "../../components/ui/ErrorState";
 import LoadingState from "../../components/ui/LoadingState";
 import ApprovalTimeline from "../../components/requests/ApprovalTimeline";
@@ -924,7 +924,11 @@ export default function ContractDecisionsPage() {
             }
           />
         ) : null}
-        <Table
+        <ResponsiveTable
+          mobileCard={{
+            titleKey: "employee",
+            extraKey: "status",
+          }}
           rowKey="id"
           loading={loading}
           columns={columns}

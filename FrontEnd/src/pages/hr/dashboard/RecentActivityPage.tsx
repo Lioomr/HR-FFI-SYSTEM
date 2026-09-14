@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import {
-  Table,
   Avatar,
   Tag,
   Card,
@@ -20,6 +19,7 @@ import { useI18n } from "../../../i18n/useI18n";
 import { getHrRecentActivity } from "../../../services/api/hrSummaryApi";
 import type { HrRecentActivityItem } from "../../../services/api/hrSummaryApi";
 import ErrorState from "../../../components/ui/ErrorState";
+import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import dayjs from "dayjs";
 import { useAuthStore } from "../../../auth/authStore";
 import { isHeadOfficeOrganization } from "../../../utils/organizationContext";
@@ -295,7 +295,11 @@ export default function RecentActivityPage() {
           </Button>
         </Space>
 
-        <Table
+        <ResponsiveTable
+          mobileCard={{
+            titleKey: "employee",
+            extraKey: "action",
+          }}
           columns={columns}
           dataSource={data}
           loading={loading}

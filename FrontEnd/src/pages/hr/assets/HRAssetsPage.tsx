@@ -34,6 +34,7 @@ import { Link } from "react-router-dom";
 import dayjs from "dayjs";
 
 import ErrorState from "../../../components/ui/ErrorState";
+import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import LoadingState from "../../../components/ui/LoadingState";
 import PageHeader from "../../../components/ui/PageHeader";
 import {
@@ -1464,7 +1465,11 @@ export default function HRAssetsPage() {
                   key: "damage-reports",
                   label: `${t("assets.damageReports", "Damage Reports")} (${damageReports.length})`,
                   children: (
-                    <Table
+                    <ResponsiveTable
+                      mobileCard={{
+                        titleKey: "employee_name",
+                        extraKey: "status",
+                      }}
                       rowKey="id"
                       columns={damageReportColumns}
                       dataSource={damageReports}
@@ -1485,7 +1490,11 @@ export default function HRAssetsPage() {
                   key: "return-requests",
                   label: `${t("assets.returnRequests", "Return Requests")} (${returnRequests.length})`,
                   children: (
-                    <Table
+                    <ResponsiveTable
+                      mobileCard={{
+                        titleKey: "employee_name",
+                        extraKey: "status",
+                      }}
                       rowKey="id"
                       columns={returnRequestColumns}
                       dataSource={returnRequests}
@@ -1729,12 +1738,12 @@ export default function HRAssetsPage() {
                   <>
                     {fields.map(({ key, name, ...restField }) => (
                       <Row
-                        gutter={12}
+                        gutter={[12, 8]}
                         key={key}
                         align="middle"
                         style={{ marginBottom: 8 }}
                       >
-                        <Col span={8}>
+                        <Col xs={24} md={8}>
                           <Form.Item
                             {...restField}
                             name={[name, "title"]}
@@ -1752,7 +1761,7 @@ export default function HRAssetsPage() {
                             />
                           </Form.Item>
                         </Col>
-                        <Col span={6}>
+                        <Col xs={24} sm={10} md={6}>
                           <Form.Item
                             {...restField}
                             name={[name, "value_type"]}
@@ -1774,7 +1783,7 @@ export default function HRAssetsPage() {
                             />
                           </Form.Item>
                         </Col>
-                        <Col span={8}>
+                        <Col xs={20} sm={12} md={8}>
                           <Form.Item noStyle shouldUpdate>
                             {({ getFieldValue }) => {
                               const valueType =
@@ -1830,7 +1839,7 @@ export default function HRAssetsPage() {
                             }}
                           </Form.Item>
                         </Col>
-                        <Col span={2}>
+                        <Col xs={4} sm={2}>
                           <Button
                             danger
                             type="text"

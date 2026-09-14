@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Card, Grid, Table, Tag, Tooltip, notification } from "antd";
+import { Button, Card, Grid, Tag, Tooltip, notification } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined, EyeOutlined, FilePdfOutlined } from "@ant-design/icons";
 
 import PageHeader from "../../../components/ui/PageHeader";
+import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import { useI18n } from "../../../i18n/useI18n";
 import {
   getMyLeaveRequests,
@@ -259,7 +260,12 @@ export default function MyLeaveRequestsPage() {
       />
 
       <Card style={{ borderRadius: 16 }}>
-        <Table
+        <ResponsiveTable
+          mobileCard={{
+            titleKey: "leave_type",
+            extraKey: "status",
+            expandLabel: t("leave.approvalMap.title"),
+          }}
           dataSource={data}
           columns={columns}
           rowKey="id"

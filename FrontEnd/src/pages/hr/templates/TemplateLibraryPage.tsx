@@ -508,6 +508,8 @@ export default function TemplateLibraryPage() {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
+          flexWrap: "wrap",
+          gap: 12,
         }}
       >
         <Space direction="vertical" size={4}>

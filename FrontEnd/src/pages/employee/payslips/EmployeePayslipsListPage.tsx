@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Card, Table, Tag, Tooltip, notification } from "antd";
+import { Button, Card, Tag, Tooltip, notification } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { EyeOutlined, DownloadOutlined } from "@ant-design/icons";
 
 import PageHeader from "../../../components/ui/PageHeader";
+import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import {
   getMyPayslips,
   downloadMyPayslipPdf,
@@ -155,7 +156,8 @@ export default function EmployeePayslipsListPage() {
       />
 
       <Card style={{ borderRadius: 16 }}>
-        <Table
+        <ResponsiveTable
+          mobileCard={{ titleKey: "period", extraKey: "status" }}
           dataSource={data}
           columns={columns}
           rowKey="id"

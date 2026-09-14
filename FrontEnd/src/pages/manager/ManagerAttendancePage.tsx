@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Button, Select, Space, Table, Tag } from "antd";
+import { Alert, Button, Select, Space, Tag } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import PageHeader from "../../components/ui/PageHeader";
+import ResponsiveTable from "../../components/ui/ResponsiveTable";
 import { getManagerAttendance } from "../../services/api/managerApi";
 import type {
   AttendanceRecord,
@@ -76,7 +77,11 @@ export default function ManagerAttendancePage() {
       {failed ? (
         <Alert type="error" title={t("attendancePreview.loadFailed")} />
       ) : (
-        <Table<AttendanceRecord>
+        <ResponsiveTable<AttendanceRecord>
+          mobileCard={{
+            titleKey: "employee",
+            extraKey: "status",
+          }}
           rowKey="id"
           loading={loading}
           dataSource={records}

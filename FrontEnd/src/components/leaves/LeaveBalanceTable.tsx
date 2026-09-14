@@ -1,6 +1,7 @@
 import React from "react";
-import { Table, Tag } from "antd";
+import { Tag } from "antd";
 import { useI18n } from "../../i18n/useI18n";
+import ResponsiveTable from "../ui/ResponsiveTable";
 import type { LeaveBalance } from "../../services/api/apiTypes";
 
 interface LeaveBalanceTableProps {
@@ -91,7 +92,8 @@ const LeaveBalanceTable: React.FC<LeaveBalanceTableProps> = ({
   ];
 
   return (
-    <Table
+    <ResponsiveTable
+      mobileCard={{ titleKey: "leave_type", extraKey: "remaining_days" }}
       dataSource={balances}
       columns={columns}
       rowKey="leave_type_id"

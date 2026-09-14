@@ -218,6 +218,8 @@ export default function EmployeePayslipDetailsPage() {
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
+            flexWrap: "wrap",
+            gap: 8,
             background: "#f5f5f5",
             padding: 16,
             borderRadius: 8,

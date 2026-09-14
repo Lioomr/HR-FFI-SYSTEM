@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Select, Space, Table, Tag, Typography } from "antd";
+import { Button, Select, Space, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { EyeOutlined } from "@ant-design/icons";
 
 import ApprovalQueuePage from "../ceo/ApprovalQueuePage";
+import ResponsiveTable from "../ui/ResponsiveTable";
 import ApprovalStatusTag from "../ceo/ApprovalStatusTag";
 import { approvalStatusLabel } from "../ceo/approvalStatusLabel";
 import TeamMemberCell from "../manager/TeamMemberCell";
@@ -251,7 +252,12 @@ export default function LoanRequestsTablePage({
         </Space>
       }
     >
-      <Table
+      <ResponsiveTable
+        mobileCard={{
+          titleKey: "employee",
+          extraKey: "status",
+          actionsKey: "action",
+        }}
         rowKey="id"
         columns={columns}
         dataSource={items}

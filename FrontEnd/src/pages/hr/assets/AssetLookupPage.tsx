@@ -10,7 +10,6 @@ import {
   Row,
   Space,
   Spin,
-  Table,
   Tag,
   Typography,
 } from "antd";
@@ -21,6 +20,7 @@ import { useSearchParams } from "react-router-dom";
 import dayjs from "dayjs";
 
 import PageHeader from "../../../components/ui/PageHeader";
+import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import { useI18n } from "../../../i18n/useI18n";
 import { isApiError } from "../../../services/api/apiTypes";
 import {
@@ -357,7 +357,11 @@ export default function AssetLookupPage() {
           <Card
             title={`${t("hr.assets.lookup.recentDamageReports")} (${result.recent_damage_reports.length})`}
           >
-            <Table
+            <ResponsiveTable
+              mobileCard={{
+                titleKey: "reported_at",
+                extraKey: "status",
+              }}
               rowKey="id"
               size="small"
               columns={damageColumns}
@@ -376,7 +380,11 @@ export default function AssetLookupPage() {
           <Card
             title={`${t("hr.assets.lookup.recentReturnRequests")} (${result.recent_return_requests.length})`}
           >
-            <Table
+            <ResponsiveTable
+              mobileCard={{
+                titleKey: "requested_at",
+                extraKey: "status",
+              }}
               rowKey="id"
               size="small"
               columns={returnColumns}

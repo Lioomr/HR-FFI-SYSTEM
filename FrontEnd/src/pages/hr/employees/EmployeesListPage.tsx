@@ -9,7 +9,6 @@ import {
   Modal,
   Segmented,
   Select,
-  Table,
   Tag,
   Dropdown,
   Typography,
@@ -58,6 +57,7 @@ function useDebounce<T extends (...args: any[]) => any>(
 }
 
 import LoadingState from "../../../components/ui/LoadingState";
+import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import ErrorState from "../../../components/ui/ErrorState";
 import Unauthorized403Page from "../../Unauthorized403Page";
 
@@ -1260,7 +1260,12 @@ export default function EmployeesListPage() {
             />
           </div>
         ) : (
-          <Table
+          <ResponsiveTable
+            mobileCard={{
+              titleKey: "full_name",
+              extraKey: "employment_status",
+              actionsKey: "action",
+            }}
             dataSource={employees}
             columns={columns}
             rowKey="id"

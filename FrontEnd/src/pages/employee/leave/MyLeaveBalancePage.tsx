@@ -1,18 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import {
-  Alert,
-  Button,
-  Card,
-  Progress,
-  Table,
-  Tag,
-  Tooltip,
-  Typography,
-} from "antd";
+import { Alert, Button, Card, Progress, Tag, Tooltip, Typography } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 
 import PageHeader from "../../../components/ui/PageHeader";
+import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import LoadingState from "../../../components/ui/LoadingState";
 import { useI18n } from "../../../i18n/useI18n";
 import {
@@ -204,7 +196,8 @@ export default function MyLeaveBalancePage() {
       )}
 
       <Card style={{ borderRadius: 16 }}>
-        <Table
+        <ResponsiveTable
+          mobileCard={{ titleKey: "leave_type" }}
           dataSource={balances}
           columns={columns}
           rowKey="leave_type_id"

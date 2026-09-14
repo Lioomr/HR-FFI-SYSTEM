@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   render,
   screen,
@@ -41,6 +41,10 @@ import * as preferencesApi from "../../../services/api/preferencesApi";
 import { useI18nStore } from "../../../i18n/i18nStore";
 import { useAuthStore } from "../../../auth/authStore";
 import { useHrEmployeeListStore } from "../../../stores/hrEmployeeListStore";
+import {
+  restorePhoneViewport,
+  setDesktopViewport,
+} from "../../../test/viewport";
 
 const listEmployees = employeesApi.listEmployees as unknown as ReturnType<
   typeof vi.fn
@@ -144,6 +148,13 @@ beforeEach(() => {
     isAuthenticated: true,
     user: { id: "1", email: "hr@ffi.test", role: "HRManager" },
   });
+  // Rows and column headers are desktop table markup; the phone card layout
+  // is covered by ResponsiveTable.
+  setDesktopViewport();
+});
+
+afterEach(() => {
+  restorePhoneViewport();
 });
 
 describe("EmployeesListPage archive modal", () => {

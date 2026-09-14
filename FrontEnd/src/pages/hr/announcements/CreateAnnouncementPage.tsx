@@ -103,6 +103,8 @@ export default function CreateAnnouncementPage() {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
+          flexWrap: "wrap",
+          gap: 12,
         }}
       >
         <Title level={2} style={{ margin: 0 }}>
