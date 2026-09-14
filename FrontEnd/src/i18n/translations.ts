@@ -4527,6 +4527,7 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "contractDecisions.reason.noActionInvalidContract":
       "HR took no action before contract expiry, but the original contract was invalid.",
     "contractDecisions.milestone.90_DAY": "90-day reminder",
+    "contractDecisions.milestone.65_DAY": "65-day action reminder",
     "contractDecisions.milestone.45_DAY": "45-day reminder",
     "contractDecisions.milestone.31_DAY": "31-day reminder",
     "contractDecisions.milestone.17_DAY": "17-day reminder",
@@ -8992,6 +8993,7 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "contractDecisions.reason.noActionInvalidContract":
       "لم تتخذ الموارد البشرية أي إجراء قبل انتهاء العقد، لكن العقد الأصلي كان غير صالح.",
     "contractDecisions.milestone.90_DAY": "تذكير قبل 90 يومًا",
+    "contractDecisions.milestone.65_DAY": "تذكير باتخاذ إجراء قبل 65 يومًا",
     "contractDecisions.milestone.45_DAY": "تذكير قبل 45 يومًا",
     "contractDecisions.milestone.31_DAY": "تذكير قبل 31 يومًا",
     "contractDecisions.milestone.17_DAY": "تذكير قبل 17 يومًا",

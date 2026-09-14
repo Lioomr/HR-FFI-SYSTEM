@@ -16,6 +16,7 @@ from .contract_expiry import (
     ensure_contract_decision,
     finalize_decision,
     notify_hr_final,
+    notify_hr_milestone,
     notify_manual_resolution,
     process_contract_expiry,
     submit_decision,
@@ -100,6 +101,52 @@ class ContractExpiryWorkflowTests(TestCase):
 
         self.assertEqual(notify.call_count, 1)
         self.assertNotIn("90_DAY", decision.notification_milestones)
+
+    @patch("employees.contract_expiry.notify_hr_milestone")
+    def test_only_90_and_65_day_reminders_are_sent_before_auto_renewal(self, notify):
+        notify.return_value = 0
+        for days_left in range(90, 59, -1):
+            process_contract_expiry(today=self.profile.contract_expiry - timedelta(days=days_left), now=timezone.now())
+
+        decision = ContractDecision.objects.get(employee_profile=self.profile)
+        self.assertEqual([call.args[1:] for call in notify.call_args_list], [("90_DAY", 90), ("65_DAY", 65)])
+        self.assertEqual(decision.status, ContractDecision.Status.PENDING_HR)
+
+    @patch("employees.contract_expiry._dispatch")
+    def test_65_day_reminder_asks_hr_to_act_before_the_auto_renewal_date(self, dispatch):
+        dispatch.return_value = {"notification": object(), "created": True}
+        decision, _ = ensure_contract_decision(self.profile)
+
+        notify_hr_milestone(decision, "90_DAY", 90)
+        notify_hr_milestone(decision, "65_DAY", 65)
+
+        info, action = (call.kwargs for call in dispatch.call_args_list)
+        self.assertFalse(info["metadata"]["requires_action"])
+        self.assertEqual(info["i18n"]["key"], "contract.expiry_milestone")
+        self.assertTrue(action["metadata"]["requires_action"])
+        self.assertEqual(action["i18n"]["key"], "contract.expiry_action_required")
+        deadline = (self.profile.contract_expiry - timedelta(days=59)).isoformat()
+        self.assertIn(f"before {deadline}", action["message"])
+
+    @patch("employees.contract_expiry.notify_hr_final")
+    def test_no_hr_action_auto_renews_59_days_before_expiry_and_notifies_hr(self, notify):
+        notify.return_value = 1
+        expiry = self.profile.contract_expiry
+
+        process_contract_expiry(today=expiry - timedelta(days=60), now=timezone.now())
+        decision = ContractDecision.objects.get(employee_profile=self.profile)
+        self.assertEqual(decision.status, ContractDecision.Status.PENDING_HR)
+        notify.assert_not_called()
+
+        summary = process_contract_expiry(today=expiry - timedelta(days=59), now=timezone.now())
+        decision.refresh_from_db()
+        self.profile.refresh_from_db()
+        self.assertEqual(summary["auto_renewed"], 1)
+        self.assertEqual(decision.status, ContractDecision.Status.AUTO_RENEWED)
+        self.assertEqual(self.profile.contract_date, expiry + timedelta(days=1))
+        notify.assert_called_once()
+        self.assertEqual(notify.call_args.args[0].pk, decision.pk)
+        self.assertTrue(notify.call_args.kwargs["automatic"])
 
     @patch("employees.contract_expiry.notify_ceo_pending")
     def test_hr_submission_enters_ceo_workflow_and_can_be_approved(self, notify):

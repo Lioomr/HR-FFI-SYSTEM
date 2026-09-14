@@ -26,7 +26,10 @@ from .models import ContractDecision, EmployeeProfile
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
-CONTRACT_MILESTONES = {90: "90_DAY", 45: "45_DAY", 31: "31_DAY", 17: "17_DAY"}
+CONTRACT_MILESTONES = {90: "90_DAY", 65: "65_DAY"}
+ACTION_REQUIRED_DAYS = 65
+# A contract still awaiting HR this many days before expiry renews automatically.
+AUTO_RENEWAL_DAYS_BEFORE_EXPIRY = 59
 CEO_REMINDER_INTERVAL = timedelta(hours=10)
 CEO_APPROVAL_WINDOW = timedelta(hours=48)
 FINAL_NOTIFICATION_RETRY_INTERVAL = timedelta(hours=1)
@@ -124,12 +127,20 @@ def notify_hr_milestone(decision: ContractDecision, milestone: str, days_left: i
     attempted = False
     failed = False
     profile = decision.employee_profile
-    text = notification_text(
-        "contract.expiry_milestone",
-        employee_name=profile_name(profile),
-        date=decision.original_contract_expiry,
-        days_left=days_left,
-    )
+    requires_action = days_left <= ACTION_REQUIRED_DAYS
+    params = {
+        "employee_name": profile_name(profile),
+        "date": decision.original_contract_expiry,
+        "days_left": days_left,
+    }
+    if requires_action:
+        text = notification_text(
+            "contract.expiry_action_required",
+            **params,
+            deadline=decision.original_contract_expiry - timedelta(days=AUTO_RENEWAL_DAYS_BEFORE_EXPIRY),
+        )
+    else:
+        text = notification_text("contract.expiry_milestone", **params)
     for recipient in _company_hr_recipients(decision.company_id):
         result = _dispatch(
             recipient=recipient,
@@ -143,7 +154,7 @@ def notify_hr_milestone(decision: ContractDecision, milestone: str, days_left: i
                 "employee_profile_id": profile.id,
                 "milestone": milestone,
                 "days_left": days_left,
-                "requires_action": days_left <= 45,
+                "requires_action": requires_action,
             },
         )
         attempted = True
@@ -783,7 +794,7 @@ def process_contract_expiry(*, today=None, now=None) -> dict:
 
     pending_hr = ContractDecision.objects.filter(
         status=ContractDecision.Status.PENDING_HR,
-        original_contract_expiry__lte=today,
+        original_contract_expiry__lte=today + timedelta(days=AUTO_RENEWAL_DAYS_BEFORE_EXPIRY),
     )
     for decision in pending_hr.values_list("id", flat=True).iterator():
         try:
