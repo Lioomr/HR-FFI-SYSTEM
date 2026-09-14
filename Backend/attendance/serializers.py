@@ -6,6 +6,7 @@ from rest_framework import serializers
 from core.services import get_workflow_snapshot
 
 from .models import (
+    AttendanceAdjustment,
     AttendanceCorrectionRequest,
     AttendanceDailyResult,
     AttendanceLateNotice,
