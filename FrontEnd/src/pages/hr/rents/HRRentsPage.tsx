@@ -15,7 +15,6 @@ import {
   Select,
   Space,
   Switch,
-  Table,
   Tabs,
   Tag,
   Tooltip,
@@ -32,6 +31,7 @@ import {
 } from "@ant-design/icons";
 
 import Unauthorized403Page from "../../Unauthorized403Page";
+import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import { isApiError } from "../../../services/api/apiTypes";
 import { isForbidden } from "../../../services/api/httpErrors";
 import { listAssets, type Asset } from "../../../services/api/assetsApi";
@@ -690,6 +690,8 @@ export default function HRRentsPage() {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
+          flexWrap: "wrap",
+          gap: 12,
           marginBottom: 16,
         }}
       >
@@ -753,7 +755,11 @@ export default function HRRentsPage() {
       </div>
 
       <Card bordered={false} style={{ borderRadius: 8 }}>
-        <Table
+        <ResponsiveTable
+          mobileCard={{
+            titleKey: "name",
+            extraKey: "status",
+          }}
           rowKey="id"
           size="middle"
           columns={columns}
@@ -925,7 +931,11 @@ export default function HRRentsPage() {
                   key: "payment-records",
                   label: `${t("hr.rents.payments.title", "Payment Records")} (${viewing.payment_records?.length || 0})`,
                   children: (
-                    <Table
+                    <ResponsiveTable
+                      mobileCard={{
+                        titleKey: "category",
+                        extraKey: "status",
+                      }}
                       rowKey="id"
                       size="small"
                       pagination={false}

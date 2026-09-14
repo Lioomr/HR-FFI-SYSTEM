@@ -161,13 +161,14 @@ describe("MyLeaveBalancePage — Annual Leave accrual figures", () => {
   it("shows pending days as reserved and the requestable limit", async () => {
     render(<MyLeaveBalancePage />);
 
-    const row = (await screen.findByText("Annual Leave", {}, FIND)).closest(
-      "tr",
+    // The test viewport is a phone, so each balance renders as a card.
+    const card = (await screen.findByText("Annual Leave", {}, FIND)).closest(
+      "li",
     )!;
-    expect(within(row).getByText("3")).toBeInTheDocument(); // reserved (pending_days)
-    expect(within(row).getByText("7")).toBeInTheDocument(); // requestable_days
+    expect(within(card).getByText("3")).toBeInTheDocument(); // reserved (pending_days)
+    expect(within(card).getByText("7")).toBeInTheDocument(); // requestable_days
 
-    // antd renders the header twice for a horizontally scrolling table.
+    // Column titles become the card's field labels.
     expect(screen.getAllByText("Reserved (Pending)").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Requestable Days").length).toBeGreaterThan(0);
   });
@@ -175,10 +176,10 @@ describe("MyLeaveBalancePage — Annual Leave accrual figures", () => {
   it("shows the fractional remainder and explains that it cannot be booked", async () => {
     render(<MyLeaveBalancePage />);
 
-    const row = (await screen.findByText("Annual Leave", {}, FIND)).closest(
-      "tr",
+    const card = (await screen.findByText("Annual Leave", {}, FIND)).closest(
+      "li",
     )!;
-    expect(within(row).getByText("0.25")).toBeInTheDocument();
+    expect(within(card).getByText("0.25")).toBeInTheDocument();
     expect(
       screen.getByText(
         "Requestable days are calculated by the system: whole remaining days minus days already reserved by pending requests.",

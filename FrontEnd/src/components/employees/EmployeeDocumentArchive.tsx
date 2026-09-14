@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Table,
   Button,
   Tag,
   Space,
@@ -15,6 +14,7 @@ import {
   Typography,
   Spin,
 } from "antd";
+import ResponsiveTable from "../ui/ResponsiveTable";
 import {
   UploadOutlined,
   DownloadOutlined,
@@ -1327,7 +1327,11 @@ export default function EmployeeDocumentArchive({
       </div>
 
       {groups.length === 0 ? (
-        <Table
+        <ResponsiveTable
+          mobileCard={{
+            titleKey: "display_name",
+            extraKey: "extraction_status",
+          }}
           dataSource={[]}
           columns={buildColumns("OTHER", [])}
           rowKey="id"
@@ -1350,7 +1354,11 @@ export default function EmployeeDocumentArchive({
               <Text strong style={{ display: "block", marginBottom: 6 }}>
                 {documentTypeLabel(t, type)} ({items.length})
               </Text>
-              <Table
+              <ResponsiveTable
+                mobileCard={{
+                  titleKey: "display_name",
+                  extraKey: "extraction_status",
+                }}
                 dataSource={items}
                 columns={buildColumns(type, items)}
                 rowKey="id"

@@ -14,7 +14,6 @@ import {
   Select,
   Space,
   Statistic,
-  Table,
   Tag,
   Typography,
   notification,
@@ -32,6 +31,7 @@ import {
 } from "@ant-design/icons";
 
 import PageHeader from "../../components/ui/PageHeader";
+import ResponsiveTable from "../../components/ui/ResponsiveTable";
 import {
   getPendingRequests,
   type PendingRequestItem,
@@ -434,11 +434,16 @@ export default function PendingInboxPage() {
           </Space>
         }
       >
-        <Table
+        <ResponsiveTable
+          mobileCard={{
+            titleKey: "employee",
+            extraKey: "request_type",
+          }}
           dataSource={data}
           columns={columns}
           rowKey={(r) => `${r.request_type}-${r.id}`}
           loading={loading}
+          scroll={{ x: "max-content" }}
           locale={{
             emptyText: (
               <Empty

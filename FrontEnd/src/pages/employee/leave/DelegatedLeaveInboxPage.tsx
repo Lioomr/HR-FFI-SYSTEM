@@ -13,7 +13,6 @@ import {
   Input,
   Modal,
   Space,
-  Table,
   Tag,
   Tooltip,
   Typography,
@@ -23,6 +22,7 @@ import type { ColumnsType } from "antd/es/table";
 
 import LeaveApprovalMap from "../../../components/leaves/LeaveApprovalMap";
 import PageHeader from "../../../components/ui/PageHeader";
+import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import { useI18n } from "../../../i18n/useI18n";
 import { isApiError } from "../../../services/api/apiTypes";
 import {
@@ -313,7 +313,12 @@ export default function DelegatedLeaveInboxPage() {
       />
 
       <Card style={{ borderRadius: 16 }}>
-        <Table
+        <ResponsiveTable
+          mobileCard={{
+            titleKey: "employee",
+            extraKey: "status",
+            expandLabel: t("leave.approvalMap.title"),
+          }}
           dataSource={data}
           columns={columns}
           rowKey="id"

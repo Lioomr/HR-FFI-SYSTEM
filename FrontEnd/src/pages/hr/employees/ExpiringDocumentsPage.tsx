@@ -7,10 +7,10 @@ import {
   InputNumber,
   message,
   Space,
-  Table,
   Tag,
   Typography,
 } from "antd";
+import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import {
   BellOutlined,
   MailOutlined,
@@ -323,13 +323,15 @@ export default function ExpiringDocumentsPage() {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
+          flexWrap: "wrap",
+          gap: 12,
           marginBottom: 16,
         }}
       >
         <Title level={2} style={{ margin: 0 }}>
           {t("hr.expiringDocs.title")}
         </Title>
-        <Space>
+        <Space wrap>
           <Text>{t("hr.expiringDocs.windowDays")}</Text>
           <InputNumber min={1} max={365} value={days} onChange={updateDays} />
           <Button
@@ -352,7 +354,8 @@ export default function ExpiringDocumentsPage() {
       />
 
       <Card bordered={false} style={{ borderRadius: 12 }}>
-        <Table
+        <ResponsiveTable
+          mobileCard={{ titleKey: "employee" }}
           rowKey="id"
           loading={loading}
           columns={columns}
