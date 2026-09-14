@@ -124,10 +124,12 @@ export default function ManagerAttendancePage() {
               dataIndex: "status",
               render: (rawValue: string, record: AttendanceRecord) => (
                 <Tag>
-                  {t(
-                    `attendancePreview.status.${(record.effective_status || rawValue).toLowerCase()}`,
-                    record.effective_status || rawValue,
-                  )}
+                  {record.effective_status === "EXCUSED" && rawValue === "LATE"
+                    ? t("attendancePreview.status.lateExcused")
+                    : t(
+                        `attendancePreview.status.${(record.effective_status || rawValue).toLowerCase()}`,
+                        record.effective_status || rawValue,
+                      )}
                 </Tag>
               ),
             },

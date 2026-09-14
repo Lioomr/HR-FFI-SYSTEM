@@ -110,7 +110,9 @@ const EmployeeAttendancePage: React.FC = () => {
             style={{ marginInlineEnd: 0 }}
           >
             {record.effective_status === "EXCUSED"
-              ? t("attendancePreview.status.excused")
+              ? record.status === "LATE"
+                ? t("attendancePreview.status.lateExcused")
+                : t("attendancePreview.status.excused")
               : status}
           </Tag>
           {/* `is_late_flagged` is the stable "was late" signal for a row still
