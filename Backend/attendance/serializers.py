@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.db.models import Q
 from rest_framework import serializers
 
 from core.services import get_workflow_snapshot
@@ -198,6 +199,16 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
 
     def get_effective_status(self, obj):
         resolved = self._leave_resolution(obj)
+        if resolved and resolved.effective_status == "EXCUSED":
+            return resolved.effective_status
+        # BioTime remains the immutable source for the raw LATE row. A final
+        # Late Permission creates this separate auditable marker, which is the
+        # effective attendance outcome shown to the employee.
+        if AttendanceAdjustment.objects.filter(
+            employee_profile_id=obj.employee_profile_id,
+            kind=AttendanceAdjustment.Kind.LATE_PERMISSION,
+        ).filter(Q(date=obj.date) | Q(effective_date=obj.date)).exists():
+            return "EXCUSED"
         return resolved.effective_status if resolved else obj.status
 
     def get_excused_by_leave_id(self, obj):
