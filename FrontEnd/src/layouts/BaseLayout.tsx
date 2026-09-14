@@ -174,6 +174,8 @@ function getTitle(
     return t("layout.delegationRules", "Delegation Rules");
   if (pathname.startsWith("/hr/permission-requests"))
     return t("permissionRequests.list.hrTitle");
+  if (pathname.startsWith("/hr/attendance-policy"))
+    return t("hr.attendancePolicy.title");
   if (pathname.startsWith("/hr")) return t("layout.hrManagement");
   if (pathname.startsWith("/manager/dashboard"))
     return t("layout.teamDashboard", "Team Dashboard");
@@ -770,6 +772,14 @@ export default function BaseLayout() {
               label: (
                 <Link to="/hr/attendance">
                   {t("layout.attendanceRecords", "Records")}
+                </Link>
+              ),
+            },
+            {
+              key: "/hr/attendance-policy",
+              label: (
+                <Link to="/hr/attendance-policy">
+                  {t("layout.attendancePolicy", "Attendance Policy")}
                 </Link>
               ),
             },
