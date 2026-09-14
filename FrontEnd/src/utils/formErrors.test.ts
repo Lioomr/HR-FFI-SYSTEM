@@ -1,6 +1,124 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { FormInstance } from "antd";
 
-import { collectApiErrorMessages } from "./formErrors";
+import {
+  apply422ToForm,
+  collectApiErrorMessages,
+  toAntdFieldErrors,
+  toAntdNamePath,
+} from "./formErrors";
+
+describe("toAntdNamePath", () => {
+  it("splits a dotted nested field into an Ant Design name path", () => {
+    expect(toAntdNamePath("attendance.grace_window_minutes")).toEqual([
+      "attendance",
+      "grace_window_minutes",
+    ]);
+  });
+
+  it("keeps a plain field name as a single segment", () => {
+    expect(toAntdNamePath("email")).toEqual(["email"]);
+    expect(toAntdNamePath("non_field_errors")).toEqual(["non_field_errors"]);
+  });
+
+  it("turns numeric segments into list indexes", () => {
+    expect(toAntdNamePath("items.1.qty")).toEqual(["items", 1, "qty"]);
+  });
+});
+
+describe("toAntdFieldErrors", () => {
+  it("maps dotted contract-array fields to nested name paths", () => {
+    expect(
+      toAntdFieldErrors({
+        status: "error",
+        message: "Ensure this value is less than or equal to 240.",
+        errors: [
+          {
+            field: "attendance.grace_window_minutes",
+            message: "Ensure this value is less than or equal to 240.",
+          },
+          { field: "email", message: "Enter a valid email address." },
+        ],
+      }),
+    ).toEqual([
+      {
+        name: ["attendance", "grace_window_minutes"],
+        errors: ["Ensure this value is less than or equal to 240."],
+      },
+      { name: ["email"], errors: ["Enter a valid email address."] },
+    ]);
+  });
+
+  it("maps dotted keys of the legacy object map the same way", () => {
+    expect(
+      toAntdFieldErrors({
+        status: "error",
+        message: "Validation error",
+        errors: {
+          "attendance.grace_window_minutes": [
+            "Ensure this value is less than or equal to 240.",
+          ],
+          name: "This field is required.",
+        } as never,
+      }),
+    ).toEqual([
+      {
+        name: ["attendance", "grace_window_minutes"],
+        errors: ["Ensure this value is less than or equal to 240."],
+      },
+      { name: ["name"], errors: ["This field is required."] },
+    ]);
+  });
+
+  it("keeps non-field errors at the form level", () => {
+    expect(
+      toAntdFieldErrors({
+        status: "error",
+        message: "Validation error",
+        errors: [
+          { message: "The contract has already been finalized." },
+          "Another general problem.",
+        ],
+      }),
+    ).toEqual([
+      {
+        name: ["_error"],
+        errors: ["The contract has already been finalized."],
+      },
+      { name: ["_error"], errors: ["Another general problem."] },
+    ]);
+  });
+});
+
+describe("apply422ToForm", () => {
+  it("sets the nested attendance field from an Axios 422", () => {
+    const setFields = vi.fn();
+    const form = { setFields } as unknown as FormInstance;
+
+    apply422ToForm(form, {
+      response: {
+        status: 422,
+        data: {
+          status: "error",
+          message: "Ensure this value is less than or equal to 240.",
+          errors: [
+            {
+              field: "attendance.grace_window_minutes",
+              message: "Ensure this value is less than or equal to 240.",
+            },
+          ],
+        },
+      },
+    });
+
+    expect(setFields).toHaveBeenCalledWith([
+      {
+        name: ["attendance", "grace_window_minutes"],
+        errors: ["Ensure this value is less than or equal to 240."],
+      },
+    ]);
+  });
+});
 
 /**
  * The backend emits validation errors in two shapes and both are contractual:

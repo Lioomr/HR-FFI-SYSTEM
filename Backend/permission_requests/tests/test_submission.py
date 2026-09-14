@@ -1,7 +1,6 @@
-from datetime import timedelta
+from datetime import time, timedelta
 
 import pytest
-from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from audit.models import AuditLog
@@ -190,14 +189,14 @@ def test_unknown_exit_type_is_rejected(team, client_for):
 
 
 @pytest.mark.parametrize("existing", [Status.PENDING_MANAGER, Status.PENDING_HR, Status.APPROVED])
-def test_active_request_for_the_same_day_blocks_a_new_one(existing, team, client_for, make_request):
-    make_request(team.employee, status=existing)
+def test_active_overlapping_exit_request_blocks_a_new_one(existing, team, client_for, make_request):
+    make_request(team.employee, status=existing, from_time=time(9, 0), to_time=time(10, 0))
 
-    response = _post(client_for, team.employee, from_time="14:00", to_time="15:00")
+    response = _post(client_for, team.employee, from_time="09:30", to_time="10:30")
 
     assert response.status_code == 422
     assert response.data["status"] == "error"
-    assert field_errors(response) == {"request_date": ["You already have an active permission request for this date."]}
+    assert "from_time" in field_errors(response)
     assert PermissionRequest.objects.count() == 1
 
 
@@ -211,11 +210,16 @@ def test_closed_request_does_not_block_a_new_one(closed, team, client_for, make_
     assert PermissionRequest.objects.count() == 2
 
 
-def test_database_constraint_backs_up_the_one_active_request_rule(team, make_request):
+def test_non_overlapping_active_exit_requests_can_coexist(team, make_request):
     make_request(team.employee, status=Status.APPROVED)
+    second = make_request(
+        team.employee,
+        status=Status.PENDING_HR,
+        from_time=time(11, 0),
+        to_time=time(12, 0),
+    )
 
-    with pytest.raises(IntegrityError), transaction.atomic():
-        make_request(team.employee, status=Status.PENDING_HR)
+    assert second.pk
 
 
 def test_reference_numbers_are_unique_and_sequential(team, make_user, client_for):

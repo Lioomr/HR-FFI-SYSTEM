@@ -57,7 +57,10 @@ def get_work_schedule() -> WorkSchedule:
         days = tuple(DEFAULT_WORK_WEEK_DAYS)
     return WorkSchedule(
         start_time=settings_obj.work_day_start_time,
-        grace_minutes=int(settings_obj.late_grace_minutes or 0),
+        # grace_window_minutes is canonical. late_grace_minutes remains a
+        # response/request alias for legacy clients and is synchronized by the
+        # settings serializer.
+        grace_minutes=int(settings_obj.grace_window_minutes or 0),
         work_week_days=days,
         absence_detection_enabled=bool(settings_obj.absence_detection_enabled),
     )

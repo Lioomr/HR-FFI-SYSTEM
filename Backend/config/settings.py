@@ -181,6 +181,9 @@ MAX_ASSET_INVOICE_SIZE_BYTES = int(os.environ.get("MAX_ASSET_INVOICE_SIZE_BYTES"
 MAX_ANNOUNCEMENT_ATTACHMENT_SIZE_BYTES = int(
     os.environ.get("MAX_ANNOUNCEMENT_ATTACHMENT_SIZE_BYTES", str(5 * 1024 * 1024))
 )
+MAX_PERMISSION_REQUEST_ATTACHMENT_SIZE_BYTES = int(
+    os.environ.get("MAX_PERMISSION_REQUEST_ATTACHMENT_SIZE_BYTES", str(10 * 1024 * 1024))
+)
 
 # Bird (MessageBird) Channels API for email. SMS uses TextBee; WhatsApp uses Evolution.
 MESSAGING_SMS_PROVIDER = os.environ.get("MESSAGING_SMS_PROVIDER", "textbee").strip().lower()

@@ -24,9 +24,16 @@ class SecuritySerializer(serializers.Serializer):
 
 
 class AttendanceSettingsSerializer(serializers.Serializer):
-    geofence_enabled = serializers.BooleanField()
+    geofence_enabled = serializers.BooleanField(required=False)
     work_day_start_time = serializers.TimeField(required=False)
+    default_shift_end_time = serializers.TimeField(required=False)
     late_grace_minutes = serializers.IntegerField(required=False, min_value=0, max_value=240)
+    grace_window_minutes = serializers.IntegerField(required=False, min_value=0, max_value=240)
+    grace_use_limit_per_month = serializers.IntegerField(required=False, min_value=0, max_value=31)
+    post_grace_tolerance_minutes = serializers.IntegerField(required=False, min_value=0, max_value=240)
+    approved_late_permission_limit_per_month = serializers.IntegerField(required=False, min_value=0, max_value=31)
+    during_shift_permission_max_minutes = serializers.IntegerField(required=False, min_value=1, max_value=1440)
+    permission_request_advance_limit_days = serializers.IntegerField(required=False, min_value=0, max_value=365)
     absence_detection_enabled = serializers.BooleanField(required=False)
     work_week_days = serializers.ListField(
         child=serializers.IntegerField(min_value=0, max_value=6),
@@ -37,6 +44,82 @@ class AttendanceSettingsSerializer(serializers.Serializer):
 
     def validate_work_week_days(self, value):
         return sorted(set(value))
+
+    def validate(self, attrs):
+        legacy_value = attrs.get("late_grace_minutes")
+        canonical_value = attrs.get("grace_window_minutes")
+        if legacy_value is not None and canonical_value is not None and legacy_value != canonical_value:
+            raise serializers.ValidationError(
+                {"grace_window_minutes": "Must match late_grace_minutes when both fields are supplied."}
+            )
+        grace_value = canonical_value if canonical_value is not None else legacy_value
+        if grace_value is not None:
+            # The wire contract accepts the legacy alias, but internal policy
+            # always stores/uses the canonical grace_window_minutes value.
+            attrs["grace_window_minutes"] = grace_value
+            attrs["late_grace_minutes"] = grace_value
+        return attrs
+
+
+def _attendance_snapshot(settings_obj: SystemSettings):
+    return {
+        "geofence_attendance_enabled": settings_obj.geofence_attendance_enabled,
+        "work_day_start_time": settings_obj.work_day_start_time.isoformat(),
+        "default_shift_end_time": settings_obj.default_shift_end_time.isoformat(),
+        "late_grace_minutes": settings_obj.late_grace_minutes,
+        "grace_window_minutes": settings_obj.grace_window_minutes,
+        "grace_use_limit_per_month": settings_obj.grace_use_limit_per_month,
+        "post_grace_tolerance_minutes": settings_obj.post_grace_tolerance_minutes,
+        "approved_late_permission_limit_per_month": settings_obj.approved_late_permission_limit_per_month,
+        "during_shift_permission_max_minutes": settings_obj.during_shift_permission_max_minutes,
+        "permission_request_advance_limit_days": settings_obj.permission_request_advance_limit_days,
+        "absence_detection_enabled": settings_obj.absence_detection_enabled,
+        "work_week_days": list(settings_obj.work_week_days or []),
+    }
+
+
+def _apply_attendance_settings(settings_obj: SystemSettings, attendance: dict):
+    field_map = {
+        "geofence_enabled": "geofence_attendance_enabled",
+        "work_day_start_time": "work_day_start_time",
+        "default_shift_end_time": "default_shift_end_time",
+        "grace_use_limit_per_month": "grace_use_limit_per_month",
+        "post_grace_tolerance_minutes": "post_grace_tolerance_minutes",
+        "approved_late_permission_limit_per_month": "approved_late_permission_limit_per_month",
+        "during_shift_permission_max_minutes": "during_shift_permission_max_minutes",
+        "permission_request_advance_limit_days": "permission_request_advance_limit_days",
+        "absence_detection_enabled": "absence_detection_enabled",
+        "work_week_days": "work_week_days",
+    }
+    for payload_field, model_field in field_map.items():
+        if payload_field in attendance:
+            setattr(settings_obj, model_field, attendance[payload_field])
+    if "grace_window_minutes" in attendance:
+        settings_obj.grace_window_minutes = attendance["grace_window_minutes"]
+        settings_obj.late_grace_minutes = attendance["grace_window_minutes"]
+
+
+class AttendanceSettingsUpdateSerializer(serializers.Serializer):
+    """Attendance-only payload used by HR Manager and System Admin."""
+
+    attendance = AttendanceSettingsSerializer()
+
+    def validate(self, attrs):
+        unknown = set(self.initial_data.keys()) - {"attendance"}
+        if unknown:
+            raise serializers.ValidationError({key: ["Unknown field."] for key in sorted(unknown)})
+        if not attrs["attendance"]:
+            raise serializers.ValidationError({"attendance": "At least one attendance setting is required."})
+        return attrs
+
+    def save(self):
+        settings_obj = SystemSettings.get_solo()
+        before = _attendance_snapshot(settings_obj)
+        _apply_attendance_settings(settings_obj, self.validated_data["attendance"])
+        settings_obj.save()
+        after = _attendance_snapshot(settings_obj)
+        changed = {key: {"from": before[key], "to": after[key]} for key in before if before[key] != after[key]}
+        return settings_obj, changed
 
 
 class SettingsResponseSerializer(serializers.Serializer):
@@ -76,7 +159,14 @@ class SettingsUpdateSerializer(serializers.Serializer):
             "default_invite_expiry_hours": settings_obj.default_invite_expiry_hours,
             "geofence_attendance_enabled": settings_obj.geofence_attendance_enabled,
             "work_day_start_time": settings_obj.work_day_start_time.isoformat(),
+            "default_shift_end_time": settings_obj.default_shift_end_time.isoformat(),
             "late_grace_minutes": settings_obj.late_grace_minutes,
+            "grace_window_minutes": settings_obj.grace_window_minutes,
+            "grace_use_limit_per_month": settings_obj.grace_use_limit_per_month,
+            "post_grace_tolerance_minutes": settings_obj.post_grace_tolerance_minutes,
+            "approved_late_permission_limit_per_month": settings_obj.approved_late_permission_limit_per_month,
+            "during_shift_permission_max_minutes": settings_obj.during_shift_permission_max_minutes,
+            "permission_request_advance_limit_days": settings_obj.permission_request_advance_limit_days,
             "absence_detection_enabled": settings_obj.absence_detection_enabled,
             "work_week_days": list(settings_obj.work_week_days or []),
         }
@@ -97,15 +187,7 @@ class SettingsUpdateSerializer(serializers.Serializer):
         settings_obj.default_invite_expiry_hours = inv["default_expiry_hours"]
         settings_obj.max_login_attempts = sec["max_login_attempts"]
         if attendance is not None:
-            settings_obj.geofence_attendance_enabled = attendance["geofence_enabled"]
-            if "work_day_start_time" in attendance:
-                settings_obj.work_day_start_time = attendance["work_day_start_time"]
-            if "late_grace_minutes" in attendance:
-                settings_obj.late_grace_minutes = attendance["late_grace_minutes"]
-            if "absence_detection_enabled" in attendance:
-                settings_obj.absence_detection_enabled = attendance["absence_detection_enabled"]
-            if "work_week_days" in attendance:
-                settings_obj.work_week_days = attendance["work_week_days"]
+            _apply_attendance_settings(settings_obj, attendance)
 
         settings_obj.save()
 
@@ -120,7 +202,14 @@ class SettingsUpdateSerializer(serializers.Serializer):
             "default_invite_expiry_hours": settings_obj.default_invite_expiry_hours,
             "geofence_attendance_enabled": settings_obj.geofence_attendance_enabled,
             "work_day_start_time": settings_obj.work_day_start_time.isoformat(),
+            "default_shift_end_time": settings_obj.default_shift_end_time.isoformat(),
             "late_grace_minutes": settings_obj.late_grace_minutes,
+            "grace_window_minutes": settings_obj.grace_window_minutes,
+            "grace_use_limit_per_month": settings_obj.grace_use_limit_per_month,
+            "post_grace_tolerance_minutes": settings_obj.post_grace_tolerance_minutes,
+            "approved_late_permission_limit_per_month": settings_obj.approved_late_permission_limit_per_month,
+            "during_shift_permission_max_minutes": settings_obj.during_shift_permission_max_minutes,
+            "permission_request_advance_limit_days": settings_obj.permission_request_advance_limit_days,
             "absence_detection_enabled": settings_obj.absence_detection_enabled,
             "work_week_days": list(settings_obj.work_week_days or []),
         }
@@ -150,7 +239,14 @@ def to_settings_response(settings_obj: SystemSettings):
         "attendance": {
             "geofence_enabled": settings_obj.geofence_attendance_enabled,
             "work_day_start_time": settings_obj.work_day_start_time.strftime("%H:%M"),
+            "default_shift_end_time": settings_obj.default_shift_end_time.strftime("%H:%M"),
             "late_grace_minutes": settings_obj.late_grace_minutes,
+            "grace_window_minutes": settings_obj.grace_window_minutes,
+            "grace_use_limit_per_month": settings_obj.grace_use_limit_per_month,
+            "post_grace_tolerance_minutes": settings_obj.post_grace_tolerance_minutes,
+            "approved_late_permission_limit_per_month": settings_obj.approved_late_permission_limit_per_month,
+            "during_shift_permission_max_minutes": settings_obj.during_shift_permission_max_minutes,
+            "permission_request_advance_limit_days": settings_obj.permission_request_advance_limit_days,
             "absence_detection_enabled": settings_obj.absence_detection_enabled,
             "work_week_days": list(settings_obj.work_week_days or []),
         },

@@ -583,6 +583,60 @@ The starting work acknowledgment for {{ employee_name }} is waiting for BioTime 
 
 _FFI HR · الموارد البشرية_""",
     ),
+    "late_attendance_notice_v1": WhatsAppTemplateDefinition(
+        key="late_attendance_notice_v1",
+        title="Late Attendance Notice (Employee)",
+        description="Sent to the employee with their private late-attendance notice PDF attached as a WhatsApp document.",
+        variables=(
+            "employee_name",
+            "notice_level",
+            "notice_level_ar",
+            "violation_date",
+            "occurrence_number",
+            "reference_number",
+            "policy_result",
+            "policy_result_ar",
+            "action_url",
+        ),
+        sample_variables={
+            "employee_name": "Sara Ali",
+            "notice_level": "Formal Caution",
+            "notice_level_ar": "تنبيه رسمي",
+            "violation_date": "2026-09-14",
+            "occurrence_number": "2",
+            "reference_number": "LAN-FFI-000041",
+            "policy_result": "Formal caution - 5% daily-rate deduction.",
+            "policy_result_ar": "تنبيه رسمي - خصم بنسبة ٥٪ من الأجر اليومي.",
+            "action_url": "https://app.asecopro.com/employee/attendance",
+        },
+        default_body="""⚠️ *إنذار التأخر في الحضور*
+
+مرحباً {{ employee_name }}،
+صدر لك إنذار تأخر في الحضور. نسختك الخاصة من الإنذار بصيغة PDF مرفقة بهذه الرسالة.
+
+• *نوع الإنذار:* {{ notice_level_ar }}
+• *تاريخ المخالفة:* {{ violation_date }}
+• *رقم التكرار:* {{ occurrence_number }}
+• *الرقم المرجعي:* {{ reference_number }}
+• *نتيجة السياسة:* {{ policy_result_ar }}
+
+━━━━━━━━━━━━
+
+⚠️ *Late attendance notice*
+
+Hi {{ employee_name }},
+A late attendance notice has been issued to you. Your private PDF copy of the notice is attached to this message.
+
+• *Notice type:* {{ notice_level }}
+• *Violation date:* {{ violation_date }}
+• *Occurrence:* {{ occurrence_number }}
+• *Reference:* {{ reference_number }}
+• *Policy result:* {{ policy_result }}
+
+🔗 {{ action_url }}
+
+_FFI HR · الموارد البشرية_""",
+    ),
     "whatsapp_provider_test": WhatsAppTemplateDefinition(
         key="whatsapp_provider_test",
         title="WhatsApp Provider Test",
@@ -633,6 +687,7 @@ def list_template_definitions() -> list[WhatsAppTemplateDefinition]:
         "document_expiry_reminder",
         "work_license_expiry_hr_v1",
         "starting_work_acknowledgment_v1",
+        "late_attendance_notice_v1",
         "whatsapp_provider_test",
     ]
     return [DEFAULT_WHATSAPP_TEMPLATES[key] for key in ordered_keys if key in DEFAULT_WHATSAPP_TEMPLATES]

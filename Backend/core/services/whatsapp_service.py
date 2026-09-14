@@ -112,6 +112,20 @@ WHATSAPP_TEMPLATE_REGISTRY: dict[str, WhatsAppTemplateSpec] = {
         template_name="starting_work_acknowledgment_v1",
         variable_order=("employee_name", "employee_id", "start_date"),
     ),
+    "late_attendance_notice_v1": WhatsAppTemplateSpec(
+        template_name="late_attendance_notice_v1",
+        variable_order=(
+            "employee_name",
+            "notice_level",
+            "notice_level_ar",
+            "violation_date",
+            "occurrence_number",
+            "reference_number",
+            "policy_result",
+            "policy_result_ar",
+            "action_url",
+        ),
+    ),
     "whatsapp_provider_test": WhatsAppTemplateSpec(
         template_name="whatsapp_provider_test",
         variable_order=("provider_name",),

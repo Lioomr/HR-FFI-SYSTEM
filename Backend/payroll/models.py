@@ -88,3 +88,34 @@ class Payslip(models.Model):
 
     class Meta:
         ordering = ["-year", "-month", "-id"]
+
+
+class AttendancePayrollDeduction(models.Model):
+    """One claimable payroll deduction for a late violation, never rewrites a locked run.
+
+    ``pending`` is unclaimed; ``claimed`` is inside a DRAFT run, with
+    ``claimed_amount`` recording exactly what was added to its totals;
+    ``applied`` is locked in a COMPLETED/PAID run; ``manual_review`` is an
+    applied deduction later invalidated by attendance policy; ``void`` was
+    invalidated before any payroll lock.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", _("Pending")
+        CLAIMED = "claimed", _("Claimed by draft payroll")
+        APPLIED = "applied", _("Applied")
+        MANUAL_REVIEW = "manual_review", _("Manual review")
+        VOID = "void", _("Void")
+
+    violation = models.OneToOneField("attendance.AttendanceLateViolation", on_delete=models.PROTECT, related_name="payroll_deduction")
+    employee_profile = models.ForeignKey("employees.EmployeeProfile", on_delete=models.PROTECT, related_name="attendance_payroll_deductions")
+    company = models.ForeignKey(OrganizationNode, on_delete=models.PROTECT, related_name="attendance_payroll_deductions")
+    intended_year = models.PositiveIntegerField()
+    intended_month = models.PositiveIntegerField()
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    claimed_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    status = models.CharField(max_length=24, choices=Status.choices, default=Status.PENDING)
+    payroll_run = models.ForeignKey(PayrollRun, null=True, blank=True, on_delete=models.PROTECT, related_name="attendance_deductions")
+    payroll_run_item = models.ForeignKey(PayrollRunItem, null=True, blank=True, on_delete=models.PROTECT, related_name="attendance_deductions")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)

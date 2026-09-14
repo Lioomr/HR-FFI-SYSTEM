@@ -3,12 +3,16 @@ from datetime import date as date_type
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.db.models import Count, Q
+from django.http import FileResponse
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
 
 from audit.utils import audit
 from core.pagination import StandardPagination
@@ -28,6 +32,7 @@ from organization.services import (
     filter_queryset_by_company_scope,
     get_active_company_for_request,
 )
+from payroll.models import AttendancePayrollDeduction
 
 from .biotime_policy import (
     attendance_unavailable_unmapped,
@@ -35,16 +40,233 @@ from .biotime_policy import (
     limit_to_mapped_employees,
     manual_attendance_gone,
 )
+from .calculation import AttendanceCalculationService
+from .late_notices import notice_filename
 from .leave_resolution import filter_effective_status, with_leave_resolution
-from .models import AttendanceCorrectionRequest, AttendanceRecord, WorkLocation
+from .models import (
+    AttendanceCorrectionRequest,
+    AttendanceDailyResult,
+    AttendanceLateNotice,
+    AttendanceLateViolation,
+    AttendanceRecord,
+    WorkLocation,
+)
 from .permissions import IsAttendanceSelfServiceRole
 from .serializers import (
     AttendanceCorrectionRequestSerializer,
+    AttendanceDailyResultSerializer,
+    AttendanceLateNoticeSerializer,
+    AttendanceLateViolationSerializer,
     AttendanceRecordSerializer,
     WorkLocationSerializer,
 )
 
 logger = logging.getLogger(__name__)
+
+
+class TodayAttendanceSummaryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # A user has at most one profile.  It is visible only while the selected
+        # active company is that profile's company; head-office context is 403.
+        profile = filter_queryset_by_company_scope(
+            EmployeeProfile.objects.select_related("company", "user").filter(user=request.user, is_archived=False),
+            request,
+        ).first()
+        if profile is None:
+            return error("Not found.", status=status.HTTP_404_NOT_FOUND)
+        # BioTime mapping is the only attendance eligibility marker; never
+        # calculate a projection for an employee who cannot have punches.
+        if not has_active_biotime_mapping(profile):
+            return attendance_unavailable_unmapped()
+        today = timezone.localdate()
+        result = AttendanceDailyResult.objects.select_related("employee_profile__user", "grace_use", "late_violation").filter(
+            employee_profile=profile, date=today
+        ).first()
+        if result is None:
+            result = AttendanceCalculationService.recalculate(profile, today)
+        return success(AttendanceDailyResultSerializer(result).data)
+
+
+class HRAttendanceRecalculateView(APIView):
+    permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
+
+    def post(self, request):
+        ensure_company_write_allowed(request)
+        try:
+            profile_id = int(request.data.get("employee_profile_id"))
+        except (TypeError, ValueError):
+            return error("employee_profile_id is required.", errors={"employee_profile_id": ["A valid id is required."]}, status=422)
+        date_value = request.data.get("date")
+        date_from = request.data.get("date_from", date_value)
+        date_to = request.data.get("date_to", date_value)
+        try:
+            start = date_type.fromisoformat(date_from)
+            end = date_type.fromisoformat(date_to)
+        except (TypeError, ValueError):
+            return error("A valid date or bounded date range is required.", errors={"date": ["Use YYYY-MM-DD."]}, status=422)
+        if end < start or (end - start).days > 31:
+            return error("Range must be between 0 and 31 days.", errors={"date_to": ["Range exceeds 31 days."]}, status=422)
+        results = []
+        with transaction.atomic():
+            # Out-of-company profiles are indistinguishable from unknown ids.
+            profile = filter_queryset_by_company_scope(
+                EmployeeProfile.objects.select_for_update().filter(pk=profile_id, is_archived=False), request
+            ).first()
+            if profile is None:
+                return error("Not found.", status=status.HTTP_404_NOT_FOUND)
+            # Same eligibility rule as the employee endpoints: without a BioTime
+            # mapping there is no evidence to calculate, so nothing is written.
+            if not has_active_biotime_mapping(profile):
+                message = "This employee has no active BioTime mapping."
+                return error(message, errors={"employee_profile_id": [message]}, status=422)
+            for offset in range((end - start).days + 1):
+                results.append(AttendanceCalculationService.recalculate(profile, start + timedelta(days=offset)))
+        audit(request, "attendance_policy_recalculated", "EmployeeProfile", profile.id, {"date_from": str(start), "date_to": str(end)})
+        return success({"results": AttendanceDailyResultSerializer(results, many=True).data})
+
+
+class AttendanceViolationViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = AttendanceLateViolationSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = StandardPagination
+
+    def get_queryset(self):
+        qs = AttendanceLateViolation.objects.select_related("employee_profile", "result", "payroll_deduction").order_by(
+            "-date", "-id"
+        )
+        if get_role(self.request.user) not in {"HRManager", "SystemAdmin"}:
+            qs = qs.filter(employee_profile__user=self.request.user)
+        # Every role sees only the selected active company, so a detail id from
+        # another company is a 404 rather than a disclosure.
+        return filter_queryset_by_company_scope(qs, self.request)
+
+    def filter_queryset(self, queryset):
+        """Validated server-side filters; filters never widen the role/company scope."""
+        params = self.request.query_params
+        errors = {}
+        for param, lookup, allowed in (
+            ("lifecycle", "lifecycle__in", AttendanceLateViolation.Lifecycle.values),
+            ("payroll_status", "payroll_deduction__status__in", AttendancePayrollDeduction.Status.values),
+        ):
+            raw = params.get(param)
+            if raw is None:
+                continue
+            values = [value.strip() for value in raw.split(",") if value.strip()]
+            if not values or set(values) - set(allowed):
+                errors[param] = [f"Use one or more comma-separated values: {', '.join(allowed)}."]
+            else:
+                queryset = queryset.filter(**{lookup: values})
+
+        queryset = _apply_employee_and_date_filters(queryset, params, errors, date_field="date")
+        if errors:
+            raise ValidationError(errors)
+        return queryset
+
+    def list(self, request, *args, **kwargs):
+        response = super().list(request, *args, **kwargs)
+        return response if response.data.get("status") == "success" else success(response.data)
+
+    def retrieve(self, request, *args, **kwargs):
+        return success(self.get_serializer(self.get_object()).data)
+
+
+def _apply_employee_and_date_filters(queryset, params, errors, *, date_field):
+    """Shared validated filters for policy histories; they never widen role or company scope."""
+    raw_profile_id = params.get("employee_profile_id")
+    if raw_profile_id is not None:
+        if raw_profile_id.isdigit() and int(raw_profile_id) > 0:
+            queryset = queryset.filter(employee_profile_id=int(raw_profile_id))
+        else:
+            errors["employee_profile_id"] = ["Use a positive integer id."]
+
+    dates = {}
+    for param, lookup in (("date_from", f"{date_field}__gte"), ("date_to", f"{date_field}__lte")):
+        raw = params.get(param)
+        if raw is None:
+            continue
+        try:
+            dates[param] = date_type.fromisoformat(raw)
+        except ValueError:
+            errors[param] = ["Use the YYYY-MM-DD date format."]
+            continue
+        queryset = queryset.filter(**{lookup: dates[param]})
+    if len(dates) == 2 and dates["date_from"] > dates["date_to"]:
+        errors["date_to"] = ["date_to must not be before date_from."]
+
+    search = (params.get("search") or "").strip()
+    if search:
+        queryset = queryset.filter(
+            Q(employee_profile__full_name__icontains=search)
+            | Q(employee_profile__full_name_en__icontains=search)
+            | Q(employee_profile__full_name_ar__icontains=search)
+            | Q(employee_profile__employee_id__icontains=search)
+        )
+    return queryset
+
+
+class AttendanceNoticeViewSet(viewsets.ReadOnlyModelViewSet):
+    """Private late-attendance notices: own notices for employees, the active company for HR."""
+
+    serializer_class = AttendanceLateNoticeSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = StandardPagination
+
+    def get_queryset(self):
+        qs = (
+            AttendanceLateNotice.objects.select_related("employee_profile", "violation", "notification")
+            .prefetch_related("notification__deliveries")
+            .order_by("-issued_at", "-id")
+        )
+        if get_role(self.request.user) not in {"HRManager", "SystemAdmin"}:
+            qs = qs.filter(employee_profile__user=self.request.user)
+        # Another company's or employee's notice is a 404, never a disclosure.
+        return filter_queryset_by_company_scope(qs, self.request)
+
+    def filter_queryset(self, queryset):
+        params = self.request.query_params
+        errors = {}
+        raw_levels = params.get("notice_level")
+        if raw_levels is not None:
+            values = [value.strip() for value in raw_levels.split(",") if value.strip()]
+            if not values or set(values) - {"1", "2", "3", "4"}:
+                errors["notice_level"] = ["Use one or more comma-separated values: 1, 2, 3, 4."]
+            else:
+                queryset = queryset.filter(level__in=[int(value) for value in values])
+        queryset = _apply_employee_and_date_filters(queryset, params, errors, date_field="violation__date")
+        if errors:
+            raise ValidationError(errors)
+        return queryset
+
+    def list(self, request, *args, **kwargs):
+        response = super().list(request, *args, **kwargs)
+        return response if response.data.get("status") == "success" else success(response.data)
+
+    def retrieve(self, request, *args, **kwargs):
+        return success(self.get_serializer(self.get_object()).data)
+
+    @action(detail=True, methods=["get"], url_path="download")
+    def download(self, request, pk=None):
+        notice = self.get_object()
+        if not notice.document:
+            return error("Notice not found.", status=status.HTTP_404_NOT_FOUND)
+        try:
+            handle = notice.document.open("rb")
+        except (FileNotFoundError, OSError, ValueError):
+            return error("Notice not found.", status=status.HTTP_404_NOT_FOUND)
+        response = FileResponse(handle, content_type="application/octet-stream")
+        response["Content-Disposition"] = f'attachment; filename="{notice_filename(notice)}"'
+        response["Cache-Control"] = "private, no-store"
+        response["X-Content-Type-Options"] = "nosniff"
+        audit(
+            request,
+            "attendance_late_notice_downloaded",
+            "AttendanceLateNotice",
+            notice.id,
+            {"violation_id": notice.violation_id, "level": notice.level},
+        )
+        return response
 
 
 def _log_notification_failure(event_name, *, entity_id, notification_type, actor_id=None, channel=None):

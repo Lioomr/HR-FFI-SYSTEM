@@ -5,6 +5,7 @@ import { routes } from "./routes";
 import EmployeeAttendancePage from "../pages/employee/AttendancePage";
 import ManagerAttendancePage from "../pages/manager/ManagerAttendancePage";
 import AttendancePreviewPage from "../pages/shared/AttendancePreviewPage";
+import AttendancePolicyPage from "../pages/hr/AttendancePolicyPage";
 function collect(
   nodes: RouteObject[],
   found = new Map<
@@ -44,5 +45,8 @@ describe("BioTime attendance routes", () => {
   it.each(["hr", "ceo"])("%s keeps its scoped read-only preview", (role) => {
     expect(paths.get(`${role}/attendance`)?.type).toBe(AttendancePreviewPage);
     expect(paths.get(`${role}/attendance`)?.props.role).toBe(role);
+  });
+  it("gives HR an attendance policy screen", () => {
+    expect(paths.get("hr/attendance-policy")?.type).toBe(AttendancePolicyPage);
   });
 });
