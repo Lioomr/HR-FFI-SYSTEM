@@ -300,6 +300,8 @@ class InvitesPagination(PageNumberPagination):
     page_query_param = "page"
     max_page_size = 200
 
+    pending_count = 0
+
     def get_paginated_response(self, data):
         """
         Matches your global envelope and provides page meta.
@@ -311,6 +313,7 @@ class InvitesPagination(PageNumberPagination):
                 "page_size": self.get_page_size(self.request),
                 "count": self.page.paginator.count,
                 "total_pages": self.page.paginator.num_pages,
+                "pending_count": self.pending_count,
             }
         )
 
@@ -331,7 +334,9 @@ class InvitesListCreateView(APIView):
     def get(self, request):
         normalize_expired_invites()
 
-        qs = filter_queryset_by_company_scope(Invite.objects.all(), request)
+        scoped_qs = filter_queryset_by_company_scope(Invite.objects.all(), request)
+        pending_count = scoped_qs.filter(status=Invite.Status.SENT).count()
+        qs = scoped_qs
 
         # Optional filters
         status_param = request.query_params.get("status")
@@ -340,9 +345,12 @@ class InvitesListCreateView(APIView):
 
         search = request.query_params.get("search", "").strip()
         if search:
-            qs = qs.filter(Q(email__icontains=search) | Q(role__icontains=search))
+            qs = qs.filter(
+                Q(email__icontains=search) | Q(phone_number__icontains=search) | Q(role__icontains=search)
+            )
 
         paginator = InvitesPagination()
+        paginator.pending_count = pending_count
         page = paginator.paginate_queryset(qs, request)
         data = InviteSerializer(page, many=True).data
         return paginator.get_paginated_response(data)

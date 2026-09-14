@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
   Button,
@@ -247,6 +247,7 @@ export default function AdminInvitesPage() {
   const [unauthorized, setUnauthorized] = useState(false);
 
   const [rows, setRows] = useState<InviteRow[]>([]);
+  const [pendingCount, setPendingCount] = useState(0);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"All" | InviteStatus>("All");
   const [pagination, setPagination] = useState<TablePaginationConfig>({
@@ -254,11 +255,6 @@ export default function AdminInvitesPage() {
     pageSize: 8,
     total: 0,
   });
-
-  const pendingCount = useMemo(
-    () => rows.filter((r) => r.status === "sent").length,
-    [rows],
-  );
 
   const loadInvites = useCallback(
     async (page = 1, pageSize = 8) => {
@@ -282,6 +278,7 @@ export default function AdminInvitesPage() {
 
         const items = res.data.items || [];
         setRows(items.map(toInviteRow));
+        setPendingCount(res.data.pending_count);
         setPagination((prev) => ({
           ...prev,
           current: res.data.page ?? page,
