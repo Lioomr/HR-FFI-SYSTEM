@@ -135,6 +135,11 @@ def _load_whatsapp_document(document: dict) -> dict | None:
             if stored is None:
                 return None
             return _file_attachment(stored.file, stored.original_filename or f"starting-work-{acknowledgment.id}.pdf")
+        if document.get("attendance_late_notice_id"):
+            from attendance.models import AttendanceLateNotice
+
+            notice = AttendanceLateNotice.objects.filter(pk=document["attendance_late_notice_id"]).first()
+            return _file_attachment(notice.document, f"late_attendance_notice_{notice.reference_number}.pdf") if notice else None
     except (TypeError, ValueError):
         return None
     return None

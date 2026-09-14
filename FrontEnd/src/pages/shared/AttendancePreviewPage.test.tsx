@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   render,
   screen,
@@ -20,6 +20,15 @@ vi.mock("../../utils/download", () => ({
   downloadBlob: vi.fn(),
 }));
 
+// The notice history has its own suite; a stand-in proves the tab mounts it.
+vi.mock("../../components/attendance/HrAttendanceNoticesPanel", async () => {
+  const { createElement } = await import("react");
+  return {
+    default: () =>
+      createElement("section", { "data-testid": "hr-notice-history" }),
+  };
+});
+
 import AttendancePreviewPage from "./AttendancePreviewPage";
 import {
   getCEOAttendance,
@@ -31,6 +40,16 @@ import { downloadBlob } from "../../utils/download";
 import type { AttendanceRecord } from "../../types/attendance";
 import { useI18nStore } from "../../i18n/i18nStore";
 import { useAuthStore } from "../../auth/authStore";
+import { restorePhoneViewport, setDesktopViewport } from "../../test/viewport";
+import { MemoryRouter } from "react-router-dom";
+
+/** The HR page keeps its tab in the URL, so the page renders inside a router. */
+const renderPreview = (role: "hr" | "ceo") =>
+  render(
+    <MemoryRouter>
+      <AttendancePreviewPage role={role} />
+    </MemoryRouter>,
+  );
 
 const getGlobal = getGlobalAttendance as unknown as ReturnType<typeof vi.fn>;
 const getCEO = getCEOAttendance as unknown as ReturnType<typeof vi.fn>;
@@ -115,6 +134,13 @@ beforeEach(() => {
     status: "success",
     data: { results: [employee()], count: 1 },
   });
+  // Column headers and cells are desktop table markup; the phone card layout
+  // is covered by ResponsiveTable.
+  setDesktopViewport();
+});
+
+afterEach(() => {
+  restorePhoneViewport();
 });
 
 describe("AttendancePreviewPage BioTime fields", () => {
@@ -136,7 +162,7 @@ describe("AttendancePreviewPage BioTime fields", () => {
         effective_summary: { EXCUSED: 1 },
       },
     });
-    render(<AttendancePreviewPage role="hr" />);
+    renderPreview("hr");
     expect(await screen.findByText("Sara Ali")).toBeInTheDocument();
     const table = screen.getByRole("table");
     expect(within(table).getByText("Excused absence")).toBeInTheDocument();
@@ -150,7 +176,7 @@ describe("AttendancePreviewPage BioTime fields", () => {
   });
 
   it("renders the device code, terminal serial, duration and source", async () => {
-    render(<AttendancePreviewPage role="hr" />);
+    renderPreview("hr");
 
     expect(await screen.findByText("Sara Ali")).toBeInTheDocument();
     expect(screen.getByText("100001")).toBeInTheDocument();
@@ -176,7 +202,7 @@ describe("AttendancePreviewPage BioTime fields", () => {
       ]),
     );
 
-    render(<AttendancePreviewPage role="hr" />);
+    renderPreview("hr");
 
     expect(await screen.findByText("Sara Ali")).toBeInTheDocument();
     const table = screen.getByRole("table");
@@ -185,7 +211,7 @@ describe("AttendancePreviewPage BioTime fields", () => {
   });
 
   it("exposes columns for the BioTime identifiers", async () => {
-    render(<AttendancePreviewPage role="hr" />);
+    renderPreview("hr");
 
     await screen.findByText("Sara Ali");
     expect(
@@ -205,7 +231,7 @@ describe("AttendancePreviewPage BioTime fields", () => {
 
 describe("AttendancePreviewPage filters", () => {
   it("sends the default date range and pagination", async () => {
-    render(<AttendancePreviewPage role="hr" />);
+    renderPreview("hr");
 
     await waitFor(() => expect(getGlobal).toHaveBeenCalled());
     const params = lastGlobalParams();
@@ -218,7 +244,7 @@ describe("AttendancePreviewPage filters", () => {
   });
 
   it("filters by status", async () => {
-    render(<AttendancePreviewPage role="hr" />);
+    renderPreview("hr");
     await screen.findByText("Sara Ali");
 
     fireEvent.click(statusChip("Absent"));
@@ -229,7 +255,7 @@ describe("AttendancePreviewPage filters", () => {
   });
 
   it("filters by source so SYSTEM/BioTime records can be isolated", async () => {
-    render(<AttendancePreviewPage role="hr" />);
+    renderPreview("hr");
     await screen.findByText("Sara Ali");
 
     fireEvent.mouseDown(screen.getByRole("combobox", { name: "All sources" }));
@@ -240,7 +266,7 @@ describe("AttendancePreviewPage filters", () => {
   });
 
   it("filters by employee", async () => {
-    render(<AttendancePreviewPage role="hr" />);
+    renderPreview("hr");
     await screen.findByText("Sara Ali");
 
     fireEvent.mouseDown(
@@ -252,7 +278,7 @@ describe("AttendancePreviewPage filters", () => {
   });
 
   it("debounces the free-text employee search", async () => {
-    render(<AttendancePreviewPage role="hr" />);
+    renderPreview("hr");
     await screen.findByText("Sara Ali");
 
     fireEvent.change(
@@ -266,7 +292,7 @@ describe("AttendancePreviewPage filters", () => {
   });
 
   it("resets every filter back to the defaults", async () => {
-    render(<AttendancePreviewPage role="hr" />);
+    renderPreview("hr");
     await screen.findByText("Sara Ali");
 
     fireEvent.click(statusChip("Absent"));
@@ -284,7 +310,7 @@ describe("AttendancePreviewPage filters", () => {
   });
 
   it("hides the source and employee filters for the CEO endpoint, which does not support them", async () => {
-    render(<AttendancePreviewPage role="ceo" />);
+    renderPreview("ceo");
 
     await waitFor(() => expect(getCEO).toHaveBeenCalled());
     expect(
@@ -299,7 +325,7 @@ describe("AttendancePreviewPage filters", () => {
   it("keeps pagination working across pages", async () => {
     getGlobal.mockResolvedValue(listResponse([record()], 60));
 
-    render(<AttendancePreviewPage role="hr" />);
+    renderPreview("hr");
     await screen.findByText("Sara Ali");
 
     fireEvent.click(screen.getByTitle("2"));
@@ -312,7 +338,7 @@ describe("AttendancePreviewPage states", () => {
   it("shows the empty state when no records match", async () => {
     getGlobal.mockResolvedValue(listResponse([]));
 
-    render(<AttendancePreviewPage role="hr" />);
+    renderPreview("hr");
 
     expect(
       await screen.findByText("No attendance records"),
@@ -324,7 +350,7 @@ describe("AttendancePreviewPage states", () => {
       new Error("Invalid attendance filter: bad date"),
     );
 
-    render(<AttendancePreviewPage role="hr" />);
+    renderPreview("hr");
 
     expect(
       await screen.findByText("Couldn't load attendance records"),
@@ -345,7 +371,7 @@ describe("AttendancePreviewPage states", () => {
       message: "Invalid attendance filter: source",
     });
 
-    render(<AttendancePreviewPage role="hr" />);
+    renderPreview("hr");
 
     expect(
       await screen.findByText("Invalid attendance filter: source"),
@@ -362,7 +388,7 @@ describe("AttendancePreviewPage late + absence surfacing", () => {
       ]),
     );
 
-    render(<AttendancePreviewPage role="hr" />);
+    renderPreview("hr");
 
     expect(await screen.findByText("+23m")).toBeInTheDocument();
     expect(
@@ -383,7 +409,7 @@ describe("AttendancePreviewPage late + absence surfacing", () => {
       ]),
     );
 
-    render(<AttendancePreviewPage role="hr" />);
+    renderPreview("hr");
 
     const table = await screen.findByRole("table");
     expect(await within(table).findByText("Late arrival")).toBeInTheDocument();
@@ -394,7 +420,7 @@ describe("AttendancePreviewPage late + absence surfacing", () => {
       listResponse([record({ id: 4, status: "LATE", is_late_flagged: true })]),
     );
 
-    render(<AttendancePreviewPage role="hr" />);
+    renderPreview("hr");
 
     await screen.findByText("Sara Ali");
     expect(screen.queryByText("Late arrival")).not.toBeInTheDocument();
@@ -410,7 +436,7 @@ describe("AttendancePreviewPage late + absence surfacing", () => {
       },
     });
 
-    render(<AttendancePreviewPage role="hr" />);
+    renderPreview("hr");
 
     await screen.findByText("Sara Ali");
     // (8 present + 2 late) / (8 + 2 + 5 accountable) = 67%. Pending is excluded.
@@ -423,7 +449,7 @@ describe("AttendancePreviewPage late + absence surfacing", () => {
       listResponse([record({ id: 9, status: "LATE", late_minutes: 12 })]),
     );
 
-    render(<AttendancePreviewPage role="hr" />);
+    renderPreview("hr");
     await screen.findByText("Sara Ali");
 
     fireEvent.click(screen.getByRole("button", { name: /export/i }));
@@ -432,5 +458,34 @@ describe("AttendancePreviewPage late + absence surfacing", () => {
     const [blob, filename] = downloadBlobMock.mock.calls[0];
     expect(blob).toBeInstanceOf(Blob);
     expect(filename).toMatch(/^attendance-\d{4}-\d{2}-\d{2}\.csv$/);
+  });
+});
+
+describe("AttendancePreviewPage notice history tab", () => {
+  it("opens the late attendance notices tab from the URL for HR", async () => {
+    render(
+      <MemoryRouter initialEntries={["/hr/attendance?tab=notices"]}>
+        <AttendancePreviewPage role="hr" />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByTestId("hr-notice-history")).toBeInTheDocument();
+    expect(
+      screen.getByRole("tab", { name: "Late attendance notices" }),
+    ).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("gives the CEO no notice tab", async () => {
+    render(
+      <MemoryRouter initialEntries={["/ceo/attendance?tab=notices"]}>
+        <AttendancePreviewPage role="ceo" />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(getCEO).toHaveBeenCalled());
+    expect(screen.queryByTestId("hr-notice-history")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("tab", { name: "Late attendance notices" }),
+    ).not.toBeInTheDocument();
   });
 });

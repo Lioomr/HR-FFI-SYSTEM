@@ -3,6 +3,8 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
+from employees.storage import PrivateUploadStorage
+
 
 class OrganizationNode(models.Model):
     class NodeType(models.TextChoices):
@@ -21,6 +23,12 @@ class OrganizationNode(models.Model):
     node_type = models.CharField(max_length=20, choices=NodeType.choices)
     is_active = models.BooleanField(default=True)
     employee_id_prefix = models.CharField(max_length=20, blank=True, default="")
+    logo = models.FileField(
+        storage=PrivateUploadStorage(),
+        upload_to="organization_logos/",
+        blank=True,
+        help_text=_("Optional company logo used on company-specific private documents."),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

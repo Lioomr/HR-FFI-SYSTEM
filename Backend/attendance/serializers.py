@@ -4,8 +4,117 @@ from rest_framework import serializers
 
 from core.services import get_workflow_snapshot
 
-from .models import AttendanceCorrectionRequest, AttendanceRecord, BioTimeConfig, BioTimeEmployeeMap, WorkLocation
+from .models import (
+    AttendanceCorrectionRequest,
+    AttendanceDailyResult,
+    AttendanceLateNotice,
+    AttendanceLateViolation,
+    AttendanceRecord,
+    BioTimeConfig,
+    BioTimeEmployeeMap,
+    WorkLocation,
+)
 from .schedule import get_work_schedule
+
+
+class AttendanceDailyResultSerializer(serializers.ModelSerializer):
+    shift = serializers.SerializerMethodField()
+    is_attendance_exempt = serializers.SerializerMethodField()
+    grace = serializers.SerializerMethodField()
+    violation = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AttendanceDailyResult
+        fields = [
+            "date", "shift", "shift_start_at", "shift_end_at", "scheduled_minutes", "first_check_in_at", "final_check_out_at",
+            "physical_work_minutes", "unpaid_break_minutes", "approved_permission_minutes", "accounted_attendance_minutes",
+            "missing_minutes", "status_input", "is_attendance_exempt", "grace", "violation",
+        ]
+
+    def get_shift(self, obj):
+        return {
+            "start_at": obj.shift_start_at,
+            "end_at": obj.shift_end_at,
+            "scheduled_minutes": obj.scheduled_minutes,
+        }
+
+    def get_is_attendance_exempt(self, obj):
+        from .biotime_policy import is_attendance_exempt
+
+        return is_attendance_exempt(obj.employee_profile)
+
+    def get_grace(self, obj):
+        grace = getattr(obj, "grace_use", None)
+        return {"consumed": bool(grace and grace.consumed), "reason": grace.reason if grace else None}
+
+    def get_violation(self, obj):
+        violation = getattr(obj, "late_violation", None)
+        if not violation:
+            return None
+        return AttendanceLateViolationSerializer(violation).data
+
+
+class AttendanceLateViolationSerializer(serializers.ModelSerializer):
+    employee_profile_id = serializers.IntegerField(read_only=True)
+    employee_code = serializers.CharField(source="employee_profile.employee_id", read_only=True)
+    employee_name = serializers.CharField(source="employee_profile.full_name", read_only=True)
+    employee_name_en = serializers.CharField(source="employee_profile.full_name_en", read_only=True, allow_null=True)
+    employee_name_ar = serializers.CharField(source="employee_profile.full_name_ar", read_only=True, allow_null=True)
+    payroll_status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AttendanceLateViolation
+        fields = [
+            "id", "employee_profile_id", "employee_code", "employee_name", "employee_name_en", "employee_name_ar",
+            "date", "occurrence_number", "daily_rate", "penalty_percent",
+            "penalty_amount", "lifecycle", "reason", "void_reason", "payroll_status", "created_at", "updated_at",
+        ]
+
+    def get_payroll_status(self, obj):
+        deduction = getattr(obj, "payroll_deduction", None)
+        return deduction.status if deduction else None
+
+
+class AttendanceLateNoticeSerializer(serializers.ModelSerializer):
+    """Frontend contract for private notices: never a storage path, URL, or punch payload."""
+
+    violation_id = serializers.IntegerField(read_only=True)
+    employee_profile_id = serializers.IntegerField(read_only=True)
+    employee_name = serializers.SerializerMethodField()
+    employee_code = serializers.CharField(source="employee_profile.employee_id", read_only=True)
+    violation_date = serializers.DateField(source="violation.date", read_only=True)
+    notice_level = serializers.IntegerField(source="level", read_only=True)
+    delivery_status = serializers.SerializerMethodField()
+    delivery_message = serializers.SerializerMethodField()
+    filename = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AttendanceLateNotice
+        fields = [
+            "id", "violation_id", "employee_profile_id", "employee_name", "employee_code", "violation_date",
+            "occurrence_number", "notice_level", "reference_number", "issued_at", "delivery_status",
+            "delivery_message", "filename",
+        ]
+
+    def get_employee_name(self, obj):
+        from core.pdf_signers import display_name
+
+        return display_name(profile=obj.employee_profile)
+
+    def get_delivery_status(self, obj):
+        from .late_notices import delivery_state
+
+        return delivery_state(obj)[0]
+
+    def get_delivery_message(self, obj):
+        from .late_notices import delivery_state
+
+        return delivery_state(obj)[1] or None
+
+    def get_filename(self, obj):
+        from .late_notices import notice_filename
+
+        return notice_filename(obj) if obj.document else None
 
 
 class AttendanceRecordSerializer(serializers.ModelSerializer):

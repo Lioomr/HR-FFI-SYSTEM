@@ -138,6 +138,36 @@ Backend/static/pdf_templates/*
 !Backend/static/pdf_templates/starting_work_acknowledgment_blank.pdf
 !Backend/static/pdf_templates/starting_work_acknowledgment_blank_field_map.json
 
+# Late attendance notice pairs (approved version 1, one pair per level)
+!Backend/static/pdf_templates/late_attendance_level_1_blank.pdf
+!Backend/static/pdf_templates/late_attendance_level_1_blank_field_map.json
+!Backend/static/pdf_templates/late_attendance_level_2_blank.pdf
+!Backend/static/pdf_templates/late_attendance_level_2_blank_field_map.json
+!Backend/static/pdf_templates/late_attendance_level_3_blank.pdf
+!Backend/static/pdf_templates/late_attendance_level_3_blank_field_map.json
+!Backend/static/pdf_templates/late_attendance_level_4_blank.pdf
+!Backend/static/pdf_templates/late_attendance_level_4_blank_field_map.json
+
+# Late attendance notice pairs (approved version 3, one pair per level; used for new notices)
+!Backend/static/pdf_templates/late_attendance_level_1_blank_v3.pdf
+!Backend/static/pdf_templates/late_attendance_level_1_field_map_v3.json
+!Backend/static/pdf_templates/late_attendance_level_2_blank_v3.pdf
+!Backend/static/pdf_templates/late_attendance_level_2_field_map_v3.json
+!Backend/static/pdf_templates/late_attendance_level_3_blank_v3.pdf
+!Backend/static/pdf_templates/late_attendance_level_3_field_map_v3.json
+!Backend/static/pdf_templates/late_attendance_level_4_blank_v3.pdf
+!Backend/static/pdf_templates/late_attendance_level_4_field_map_v3.json
+
+# Late attendance notice pairs (approved version 2, one pair per level; retained historical version)
+!Backend/static/pdf_templates/late_attendance_level_1_blank_v2.pdf
+!Backend/static/pdf_templates/late_attendance_level_1_field_map_v2.json
+!Backend/static/pdf_templates/late_attendance_level_2_blank_v2.pdf
+!Backend/static/pdf_templates/late_attendance_level_2_field_map_v2.json
+!Backend/static/pdf_templates/late_attendance_level_3_blank_v2.pdf
+!Backend/static/pdf_templates/late_attendance_level_3_field_map_v2.json
+!Backend/static/pdf_templates/late_attendance_level_4_blank_v2.pdf
+!Backend/static/pdf_templates/late_attendance_level_4_field_map_v2.json
+
 # Blank forms served by the template library that have no field map yet
 !Backend/static/pdf_templates/asset_damage_report_blank.pdf
 !Backend/static/pdf_templates/asset_return_request_blank.pdf

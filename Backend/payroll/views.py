@@ -48,6 +48,7 @@ from .serializers import (
     PayslipDetailSerializer,
     PayslipListSerializer,
 )
+from .services import finalize_attendance_deductions, sync_attendance_deductions
 from .throttles import (
     PayrollExportThrottle,
     PayrollFinalizeThrottle,
@@ -633,6 +634,10 @@ def _generate_payroll_items(run, request=None):
     run.total_employees = count
     run.save(update_fields=["total_net", "total_employees"])
 
+    # Attendance penalties are claimed by the draft after its items exist; the
+    # same sync runs again at finalization for penalties that arrive later.
+    sync_attendance_deductions(run, request=request)
+
 
 class PayrollRunViewSet(
     mixins.ListModelMixin,
@@ -795,6 +800,9 @@ class PayrollRunViewSet(
                     status.HTTP_422_UNPROCESSABLE_ENTITY,
                 )
 
+            # Include penalties that became pending after draft creation, then
+            # lock every claim together with the run.
+            finalize_attendance_deductions(run, request=request)
             run.status = PayrollRun.Status.COMPLETED
             run.save(update_fields=["status", "updated_at"])
         audit(request, "payroll_run_finalized", entity="PayrollRun", entity_id=run.id)

@@ -358,6 +358,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "common.tryAgain": "Please try again later",
     "common.success": "Success",
     "common.noData": "No data",
+    "table.card.showMore": "Show more",
+    "table.card.showLess": "Show less",
     "common.actions": "Actions",
     "common.unlink": "Unlink",
     "common.link": "Link",
@@ -597,8 +599,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "employee.dashboard.permissionDesc":
       "Request and track a short workday exit",
     "employee.dashboard.permissionAction": "Request Permission",
-    "permissionRequests.title": "Exit Permissions",
-    "permissionRequests.newTitle": "New Exit Permission",
+    "permissionRequests.title": "Permission Requests",
+    "permissionRequests.newTitle": "New Permission Request",
     "permissionRequests.formSubtitle":
       "Request permission to leave during today’s workday.",
     "permissionRequests.form.fromTime": "From time",
@@ -608,13 +610,12 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "permissionRequests.form.reasonRequired": "Please enter a reason.",
     "permissionRequests.form.timeRequired": "Please choose a time.",
     "permissionRequests.form.duration": "Duration: {minutes} minutes",
-    "permissionRequests.form.chooseWindow":
-      "Choose a time window of 1–120 minutes.",
+    "permissionRequests.form.chooseWindow": "Choose a start and end time.",
     "permissionRequests.form.business": "Business",
     "permissionRequests.form.personal": "Personal",
     "permissionRequests.form.emergency": "Emergency",
     "permissionRequests.form.submit": "Submit request",
-    "permissionRequests.list.mineTitle": "My Exit Permissions",
+    "permissionRequests.list.mineTitle": "My Permission Requests",
     "permissionRequests.list.managerTitle": "Manager Permission Inbox",
     "permissionRequests.list.hrTitle": "HR Permission Inbox",
     "permissionRequests.list.new": "New request",
@@ -683,6 +684,285 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "permissionRequests.success.pdf": "PDF downloaded.",
     "permissionRequests.error.stale":
       "This request has already changed. The latest details are shown.",
+    "permissionRequests.error.companyRequired":
+      "Select your employee company to submit a permission request.",
+    "permissionRequests.type.label": "Permission type",
+    "permissionRequests.type.exit": "Exit",
+    "permissionRequests.type.late": "Late arrival",
+    "permissionRequests.type.duringShift": "During shift",
+    "permissionRequests.type.exitHint":
+      "Leave work today for up to 120 minutes.",
+    "permissionRequests.type.lateHint":
+      "Excuse a late arrival on a work day. Evidence is required.",
+    "permissionRequests.type.duringShiftHint":
+      "Step away during your shift for a set time window.",
+    "permissionRequests.list.permissionType": "Permission",
+    "permissionRequests.list.typeFilter": "Type (this page only)",
+    "permissionRequests.list.allTypes": "All types",
+    "permissionRequests.list.typeFilterNote":
+      "The type filter only applies to the requests loaded on this page.",
+    "permissionRequests.form.requestDate": "Date",
+    "permissionRequests.form.dateRequired": "Please choose a date.",
+    "permissionRequests.form.dateWindow":
+      "Choose a date from today up to {days} days ahead.",
+    "permissionRequests.form.maxDuration": "Maximum {minutes} minutes.",
+    "permissionRequests.form.durationTooLong":
+      "The duration cannot exceed {minutes} minutes.",
+    "permissionRequests.form.lateUsage":
+      "Approved Late Permissions this month: {usage} of {limit}",
+    "permissionRequests.form.lateLimitReached":
+      "This month's Late Permission allowance is used up, so a new request will be refused.",
+    "permissionRequests.form.lateNoTimes":
+      "Late Permission has no times. Attach evidence for the late arrival.",
+    "permissionRequests.form.fixErrors": "The request could not be submitted:",
+    "permissionRequests.evidence.title": "Evidence",
+    "permissionRequests.evidence.optional": "Evidence (optional)",
+    "permissionRequests.evidence.required":
+      "Attach at least one evidence file.",
+    "permissionRequests.evidence.help":
+      "PDF, JPEG, PNG, WebP, HEIC or HEIF, up to 10 MB each.",
+    "permissionRequests.evidence.choose": "Choose files",
+    "permissionRequests.evidence.camera": "Take a photo",
+    "permissionRequests.evidence.cameraTag": "Camera",
+    "permissionRequests.evidence.invalidType":
+      "{name} is not a supported file type.",
+    "permissionRequests.evidence.tooLarge": "{name} is larger than 10 MB.",
+    "permissionRequests.evidence.remove": "Remove {name}",
+    "permissionRequests.evidence.download": "Download",
+    "permissionRequests.evidence.downloadFailed":
+      "Unable to download the evidence file.",
+    "permissionRequests.evidence.empty": "No evidence attached.",
+    "permissionRequests.evidence.add": "Add evidence",
+    "permissionRequests.evidence.addSelected": "Upload selected files",
+    "permissionRequests.evidence.added": "Evidence added.",
+    "permissionRequests.evidence.addFailed": "Unable to add evidence.",
+    "permissionRequests.evidence.capturedAt": "Captured {time}",
+    "permissionRequests.detail.permissionType": "Permission type",
+    "permissionRequests.detail.attachments": "Evidence ({count})",
+    "permissionRequests.detail.lateUsageLabel": "Late Permission usage",
+    "permissionRequests.detail.lateUsage":
+      "{usage} of {limit} approved this month",
+
+    // Attendance policy: today summary, late violations, HR recalculation
+    "attendancePolicy.minutes": "{minutes} min",
+    "attendancePolicy.hoursMinutes": "{hours} h {minutes} min",
+    "attendancePolicy.companyRequiredHint":
+      "Choose your company in the company selector at the top of the page, then refresh.",
+    "attendancePolicy.status.PRESENT": "Present",
+    "attendancePolicy.status.LATE": "Late",
+    "attendancePolicy.grace.consumed": "Monthly grace used",
+    "attendancePolicy.graceReason.attendanceExempt":
+      "Exempt from attendance rules",
+    "attendancePolicy.graceReason.latePermission":
+      "Excused by an approved Late Permission",
+    "attendancePolicy.graceReason.noCheckIn": "No check-in recorded",
+    "attendancePolicy.graceReason.onTime": "On time",
+    "attendancePolicy.graceReason.monthlyGrace": "Within the grace window",
+    "attendancePolicy.graceReason.outsideGrace": "Late: after the grace window",
+    "attendancePolicy.graceReason.postGraceTolerance":
+      "On time, within the tolerance after grace ran out",
+    "attendancePolicy.graceReason.postGraceLate":
+      "Late: this month's grace is used up",
+    "attendancePolicy.graceReason.unknown": "Not evaluated yet",
+    "attendancePolicy.lifecycle.active": "Active",
+    "attendancePolicy.lifecycle.void": "Void",
+    "attendancePolicy.lifecycle.applied": "Applied",
+    "attendancePolicy.lifecycle.manualReview": "Manual review",
+    "attendancePolicy.lifecycleHint.active": "Recorded, awaiting payroll",
+    "attendancePolicy.lifecycleHint.warningOnly":
+      "Warning only — no payroll deduction",
+    "attendancePolicy.lifecycleHint.void": "Excused or corrected, not charged",
+    "attendancePolicy.lifecycleHint.applied": "Deducted in payroll",
+    "attendancePolicy.lifecycleHint.manualReview":
+      "Under HR review, no automatic refund",
+    "attendancePolicy.payrollStatus.pending": "Pending",
+    "attendancePolicy.payrollStatus.claimed": "In draft payroll",
+    "attendancePolicy.payrollStatus.applied": "Applied in payroll",
+    "attendancePolicy.payrollStatus.manualReview": "Manual review",
+    "attendancePolicy.payrollStatus.void": "Void",
+    "attendancePolicy.payrollStatus.none": "No payroll deduction",
+    "attendancePolicy.violation.title": "Late violation",
+    "attendancePolicy.violation.titleWithOccurrence":
+      "Late violation, occurrence #{number}",
+    "attendancePolicy.violation.occurrence": "Occurrence",
+    "attendancePolicy.violation.occurrenceNumber": "Occurrence #{number}",
+    "attendancePolicy.violation.penalty": "Penalty",
+    "attendancePolicy.violation.percentOfDailyRate":
+      "{percent} of the daily rate",
+    "attendancePolicy.violation.warningTag": "Warning",
+    "attendancePolicy.violation.warningOnly":
+      "First occurrence: a warning only, with no deduction.",
+    "attendancePolicy.violation.noDeduction":
+      "No deduction for this occurrence.",
+    "attendancePolicy.violation.lifecycle": "Lifecycle",
+    "attendancePolicy.violation.meaning": "What this means",
+    "attendancePolicy.violation.payrollStatus": "Payroll status",
+    "attendancePolicy.violation.reason": "Reason",
+    "attendancePolicy.violation.voidedBy": "Invalidated by: {reason}",
+    "attendancePolicy.today.title": "Today's attendance",
+    "attendancePolicy.today.shift": "Shift",
+    "attendancePolicy.today.firstCheckIn": "First check-in",
+    "attendancePolicy.today.finalCheckOut": "Final check-out",
+    "attendancePolicy.today.worked": "Worked",
+    "attendancePolicy.today.unpaidBreak": "Unpaid break",
+    "attendancePolicy.today.approvedPermission": "Approved permission",
+    "attendancePolicy.today.accounted": "Accounted attendance",
+    "attendancePolicy.today.missing": "Missing",
+    "attendancePolicy.today.notRecorded": "Not recorded",
+    "attendancePolicy.today.exempt": "Attendance exempt",
+    "attendancePolicy.today.companyRequired":
+      "Select your employee company to see today's attendance.",
+    "attendancePolicy.today.notFound":
+      "No attendance summary is available for you in the selected company.",
+    "attendancePolicy.today.loadFailed": "Couldn't load today's attendance.",
+    "attendancePolicy.history.title": "Late violation history",
+    "attendancePolicy.history.hint":
+      "Newest first. Every late day counts toward your lifetime occurrences.",
+    "attendancePolicy.history.filterLifecycle": "Filter by lifecycle",
+    "attendancePolicy.history.empty": "No late violations found.",
+    "attendancePolicy.history.loadFailed": "Couldn't load late violations.",
+    "attendancePolicy.history.companyRequired":
+      "Select a company to see late violations.",
+    "attendancePolicy.hr.tabRecords": "Records",
+    "attendancePolicy.hr.tabViolations": "Late violations",
+    "attendancePolicy.hr.search": "Search",
+    "attendancePolicy.hr.searchPlaceholder": "Employee name or code",
+    "attendancePolicy.hr.dateRange": "Violation dates",
+    "attendancePolicy.hr.needsReview": "Needs HR review",
+    "attendancePolicy.hr.clearFilters": "Clear filters",
+    "attendancePolicy.hr.resultCount": "{count} violations",
+    "attendancePolicy.hr.fixFilters":
+      "Correct the highlighted filters to see results.",
+    "attendancePolicy.hr.tabNotices": "Late attendance notices",
+    "attendancePolicy.notices.title": "Late attendance notices",
+    "attendancePolicy.notices.hint":
+      "A notice is issued and delivered to you automatically for each new late violation. Download the PDF to keep a copy.",
+    "attendancePolicy.notices.hrHint":
+      "Notices are issued and delivered automatically for each new late violation in the selected company.",
+    "attendancePolicy.notices.violationDate": "Violation date",
+    "attendancePolicy.notices.level": "Level",
+    "attendancePolicy.notices.level.1": "Informational warning",
+    "attendancePolicy.notices.level.2": "Formal caution",
+    "attendancePolicy.notices.level.3": "Serious warning",
+    "attendancePolicy.notices.level.4": "Critical final warning",
+    "attendancePolicy.notices.level.other": "Level {level}",
+    "attendancePolicy.notices.policy.1": "Warning only - no payroll deduction.",
+    "attendancePolicy.notices.policy.2":
+      "Formal caution - 5% daily-rate deduction.",
+    "attendancePolicy.notices.policy.3":
+      "Serious warning - 10% daily-rate deduction.",
+    "attendancePolicy.notices.policy.4":
+      "Critical final warning - 50% daily-rate deduction.",
+    "attendancePolicy.notices.filterLevel": "Notice level",
+    "attendancePolicy.notices.occurrence": "Occurrence #{number}",
+    "attendancePolicy.notices.reference": "Reference",
+    "attendancePolicy.notices.delivery": "Delivery status",
+    "attendancePolicy.notices.delivery.scheduled": "Delivery scheduled",
+    "attendancePolicy.notices.delivery.sent": "Sent",
+    "attendancePolicy.notices.delivery.failed": "Delivery failed",
+    "attendancePolicy.notices.delivery.skipped": "Not sent",
+    "attendancePolicy.notices.delivery.none": "Not recorded",
+    "attendancePolicy.notices.delivery.unknown": "Unknown delivery status",
+    "attendancePolicy.notices.deliveryHint.scheduled":
+      "In-app notice created; WhatsApp or email delivery is scheduled.",
+    "attendancePolicy.notices.deliveryHint.sent":
+      "Delivered through WhatsApp or email.",
+    "attendancePolicy.notices.deliveryHint.failed":
+      "Delivery could not be completed.",
+    "attendancePolicy.notices.deliveryHint.skipped":
+      "Not sent: no active account or no configured delivery channel.",
+    "attendancePolicy.notices.pdfUnavailable": "PDF not available",
+    "attendancePolicy.notices.download": "Download PDF",
+    "attendancePolicy.notices.downloadAria": "Download PDF: {reference}",
+    "attendancePolicy.notices.downloadNotFound":
+      "This notice PDF is not available.",
+    "attendancePolicy.notices.downloadForbidden":
+      "You don't have access to this notice.",
+    "attendancePolicy.notices.downloadFailed":
+      "Couldn't download the notice PDF.",
+    "attendancePolicy.notices.empty": "No late attendance notices yet.",
+    "attendancePolicy.notices.notFound":
+      "No late attendance notices are available in the selected company.",
+    "attendancePolicy.notices.loadFailed":
+      "Couldn't load late attendance notices.",
+    "attendancePolicy.notices.forbidden":
+      "You don't have access to late attendance notices in the selected company.",
+    "attendancePolicy.notices.resultCount": "{count} notices",
+    "attendancePolicy.recalc.button": "Recalculate attendance",
+    "attendancePolicy.recalc.title": "Recalculate attendance",
+    "attendancePolicy.recalc.intro":
+      "Rebuilds daily results, grace use and late violations from BioTime punches for one employee in the selected company. Raw punches are never changed.",
+    "attendancePolicy.recalc.employee": "Employee",
+    "attendancePolicy.recalc.employeeRequired": "Select an employee.",
+    "attendancePolicy.recalc.period": "Period",
+    "attendancePolicy.recalc.single": "Single date",
+    "attendancePolicy.recalc.range": "Date range",
+    "attendancePolicy.recalc.rangeHelp":
+      "The end date can be up to 31 days after the start date.",
+    "attendancePolicy.recalc.dateRequired": "Select a date.",
+    "attendancePolicy.recalc.rangeRequired": "Select a start and end date.",
+    "attendancePolicy.recalc.rangeReversed":
+      "The end date cannot be before the start date.",
+    "attendancePolicy.recalc.rangeTooLong":
+      "The end date can be at most 31 days after the start date.",
+    "attendancePolicy.recalc.submit": "Recalculate",
+    "attendancePolicy.recalc.confirmTitle": "Recalculate attendance?",
+    "attendancePolicy.recalc.confirmBody":
+      "Recalculate {employee} from {from} to {to}? Late violations and pending penalties may change.",
+    "attendancePolicy.recalc.confirmOk": "Yes, recalculate",
+    "attendancePolicy.recalc.success": "Recalculated {count} day(s).",
+    "attendancePolicy.recalc.notFound":
+      "This employee is not in the selected company.",
+    "attendancePolicy.recalc.companyRequired":
+      "Select an active company before recalculating attendance.",
+    "attendancePolicy.recalc.resultsTitle": "Recalculated days",
+    "attendancePolicy.recalc.grace": "Grace",
+    "attendancePolicy.recalc.noViolation": "No violation",
+
+    // Attendance policy settings
+    "admin.settings.secAttendancePolicy": "Late arrival and permission policy",
+    "admin.settings.lblGraceWindow": "Grace window (minutes)",
+    "admin.settings.helpGraceWindow":
+      "Minutes after shift start that a monthly grace use can forgive (0–240).",
+    "admin.settings.lblDefaultShiftEnd": "Default shift end",
+    "admin.settings.helpDefaultShiftEnd":
+      "Shift end for employees without a shift of their own.",
+    "admin.settings.lblGraceUseLimit": "Grace uses per month",
+    "admin.settings.helpGraceUseLimit":
+      "Late arrivals within the grace window forgiven each month (0–31).",
+    "admin.settings.lblPostGraceTolerance":
+      "Tolerance after grace runs out (minutes)",
+    "admin.settings.helpPostGraceTolerance":
+      "Once monthly grace is used up, arrivals within this many minutes still count as on time (0–240).",
+    "admin.settings.lblLatePermissionLimit":
+      "Approved Late Permissions per month",
+    "admin.settings.helpLatePermissionLimit":
+      "Final-approved Late Permissions allowed per employee each month (0–31).",
+    "admin.settings.lblDuringShiftMax":
+      "During Shift permission limit (minutes)",
+    "admin.settings.helpDuringShiftMax":
+      "Longest During Shift permission an employee can request (1–1440).",
+    "admin.settings.lblAdvanceLimit": "Advance request limit (days)",
+    "admin.settings.helpAdvanceLimit":
+      "How many days ahead Late and During Shift permissions can be dated (0–365).",
+    "admin.settings.rangeError": "Enter a whole number from {min} to {max}.",
+    "layout.attendancePolicy": "Attendance Policy",
+    "hr.attendancePolicy.title": "Attendance Policy",
+    "hr.attendancePolicy.subtitle":
+      "Grace, tolerance and permission limits used for late arrivals.",
+    "hr.attendancePolicy.globalNotice":
+      "This policy applies to every company, not only the one selected.",
+    "hr.attendancePolicy.loading": "Loading attendance policy...",
+    "hr.attendancePolicy.loadError": "Couldn't load the attendance policy.",
+    "hr.attendancePolicy.saved": "Attendance policy saved.",
+    "hr.attendancePolicy.saveError": "Couldn't save the attendance policy.",
+    "hr.attendancePolicy.discard": "Discard changes",
+    "hr.attendancePolicy.invalid":
+      "Some values are outside the allowed range. Check the fields and try again.",
+    "payroll.runDetails.finalizeAttendanceNote":
+      "Attendance penalties recorded since this draft was created are included at finalization, so deductions and totals may change.",
+    "payroll.runDetails.deductionsIncludeAttendance":
+      "Deductions include the attendance penalties claimed by this run.",
 
     // HR Dashboard
     "hr.dashboard.title": "Dashboard Overview",
@@ -4606,6 +4886,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "common.tryAgain": "يرجى المحاولة مرة أخرى لاحقاً",
     "common.success": "نجاح",
     "common.noData": "لا توجد بيانات",
+    "table.card.showMore": "عرض المزيد",
+    "table.card.showLess": "عرض أقل",
     "common.actions": "الإجراءات",
     "common.unlink": "إلغاء الربط",
     "common.link": "ربط",
@@ -4843,8 +5125,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "employee.dashboard.permissionDesc":
       "اطلب وتابع إذن خروج قصير خلال يوم العمل",
     "employee.dashboard.permissionAction": "طلب إذن خروج",
-    "permissionRequests.title": "أذونات الخروج",
-    "permissionRequests.newTitle": "طلب إذن خروج جديد",
+    "permissionRequests.title": "طلبات الإذن",
+    "permissionRequests.newTitle": "طلب إذن جديد",
     "permissionRequests.formSubtitle":
       "اطلب إذناً للخروج خلال يوم العمل الحالي.",
     "permissionRequests.form.fromTime": "وقت البداية",
@@ -4854,12 +5136,12 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "permissionRequests.form.reasonRequired": "يرجى إدخال السبب.",
     "permissionRequests.form.timeRequired": "يرجى اختيار الوقت.",
     "permissionRequests.form.duration": "المدة: {minutes} دقيقة",
-    "permissionRequests.form.chooseWindow": "اختر فترة من دقيقة إلى 120 دقيقة.",
+    "permissionRequests.form.chooseWindow": "اختر وقت البداية ووقت النهاية.",
     "permissionRequests.form.business": "عمل",
     "permissionRequests.form.personal": "شخصي",
     "permissionRequests.form.emergency": "طارئ",
     "permissionRequests.form.submit": "إرسال الطلب",
-    "permissionRequests.list.mineTitle": "أذونات خروجي",
+    "permissionRequests.list.mineTitle": "طلبات الإذن الخاصة بي",
     "permissionRequests.list.managerTitle": "صندوق أذونات المدير",
     "permissionRequests.list.hrTitle": "صندوق أذونات الموارد البشرية",
     "permissionRequests.list.new": "طلب جديد",
@@ -4927,6 +5209,272 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "permissionRequests.success.pdf": "تم تنزيل ملف PDF.",
     "permissionRequests.error.stale":
       "تغير الطلب بالفعل. تم عرض أحدث التفاصيل.",
+    "permissionRequests.error.companyRequired": "اختر شركتك لإرسال طلب إذن.",
+    "permissionRequests.type.label": "نوع الإذن",
+    "permissionRequests.type.exit": "خروج",
+    "permissionRequests.type.late": "تأخير",
+    "permissionRequests.type.duringShift": "أثناء الدوام",
+    "permissionRequests.type.exitHint":
+      "مغادرة العمل اليوم لمدة تصل إلى 120 دقيقة.",
+    "permissionRequests.type.lateHint":
+      "تبرير الوصول المتأخر في يوم عمل، ويلزم إرفاق إثبات.",
+    "permissionRequests.type.duringShiftHint":
+      "الخروج أثناء الدوام لفترة زمنية محددة.",
+    "permissionRequests.list.permissionType": "الإذن",
+    "permissionRequests.list.typeFilter": "النوع (هذه الصفحة فقط)",
+    "permissionRequests.list.allTypes": "كل الأنواع",
+    "permissionRequests.list.typeFilterNote":
+      "تصفية النوع تنطبق فقط على الطلبات المحمّلة في هذه الصفحة.",
+    "permissionRequests.form.requestDate": "التاريخ",
+    "permissionRequests.form.dateRequired": "يرجى اختيار التاريخ.",
+    "permissionRequests.form.dateWindow":
+      "اختر تاريخًا من اليوم حتى {days} يومًا قادمًا.",
+    "permissionRequests.form.maxDuration": "الحد الأقصى {minutes} دقيقة.",
+    "permissionRequests.form.durationTooLong":
+      "لا يمكن أن تتجاوز المدة {minutes} دقيقة.",
+    "permissionRequests.form.lateUsage":
+      "أذونات التأخير المعتمدة هذا الشهر: {usage} من {limit}",
+    "permissionRequests.form.lateLimitReached":
+      "استُنفد رصيد أذونات التأخير لهذا الشهر، لذا سيُرفض الطلب الجديد.",
+    "permissionRequests.form.lateNoTimes":
+      "إذن التأخير لا يتضمن أوقاتًا. أرفق إثباتًا للوصول المتأخر.",
+    "permissionRequests.form.fixErrors": "تعذر إرسال الطلب:",
+    "permissionRequests.evidence.title": "الإثبات",
+    "permissionRequests.evidence.optional": "الإثبات (اختياري)",
+    "permissionRequests.evidence.required": "أرفق ملف إثبات واحدًا على الأقل.",
+    "permissionRequests.evidence.help":
+      "PDF أو JPEG أو PNG أو WebP أو HEIC أو HEIF، بحد أقصى 10 ميجابايت لكل ملف.",
+    "permissionRequests.evidence.choose": "اختيار ملفات",
+    "permissionRequests.evidence.camera": "التقاط صورة",
+    "permissionRequests.evidence.cameraTag": "كاميرا",
+    "permissionRequests.evidence.invalidType": "نوع الملف {name} غير مدعوم.",
+    "permissionRequests.evidence.tooLarge":
+      "حجم الملف {name} أكبر من 10 ميجابايت.",
+    "permissionRequests.evidence.remove": "إزالة {name}",
+    "permissionRequests.evidence.download": "تنزيل",
+    "permissionRequests.evidence.downloadFailed": "تعذر تنزيل ملف الإثبات.",
+    "permissionRequests.evidence.empty": "لا توجد ملفات إثبات مرفقة.",
+    "permissionRequests.evidence.add": "إضافة إثبات",
+    "permissionRequests.evidence.addSelected": "رفع الملفات المحددة",
+    "permissionRequests.evidence.added": "تمت إضافة الإثبات.",
+    "permissionRequests.evidence.addFailed": "تعذر إضافة الإثبات.",
+    "permissionRequests.evidence.capturedAt": "التُقطت في {time}",
+    "permissionRequests.detail.permissionType": "نوع الإذن",
+    "permissionRequests.detail.attachments": "الإثبات ({count})",
+    "permissionRequests.detail.lateUsageLabel": "استخدام أذونات التأخير",
+    "permissionRequests.detail.lateUsage":
+      "{usage} من {limit} معتمدة هذا الشهر",
+
+    // Attendance policy: today summary, late violations, HR recalculation
+    "attendancePolicy.minutes": "{minutes} دقيقة",
+    "attendancePolicy.hoursMinutes": "{hours} س {minutes} د",
+    "attendancePolicy.companyRequiredHint":
+      "اختر شركتك من محدد الشركة أعلى الصفحة ثم حدّث الصفحة.",
+    "attendancePolicy.status.PRESENT": "حاضر",
+    "attendancePolicy.status.LATE": "متأخر",
+    "attendancePolicy.grace.consumed": "استُخدمت مهلة شهرية",
+    "attendancePolicy.graceReason.attendanceExempt": "معفى من قواعد الحضور",
+    "attendancePolicy.graceReason.latePermission": "معذور بإذن تأخير معتمد",
+    "attendancePolicy.graceReason.noCheckIn": "لا يوجد تسجيل دخول",
+    "attendancePolicy.graceReason.onTime": "في الموعد",
+    "attendancePolicy.graceReason.monthlyGrace": "ضمن نافذة المهلة",
+    "attendancePolicy.graceReason.outsideGrace": "متأخر: بعد نافذة المهلة",
+    "attendancePolicy.graceReason.postGraceTolerance":
+      "في الموعد ضمن السماحية بعد نفاد المهلة",
+    "attendancePolicy.graceReason.postGraceLate": "متأخر: نفدت مهلة هذا الشهر",
+    "attendancePolicy.graceReason.unknown": "لم يُقيَّم بعد",
+    "attendancePolicy.lifecycle.active": "قائمة",
+    "attendancePolicy.lifecycle.void": "ملغاة",
+    "attendancePolicy.lifecycle.applied": "مطبّقة",
+    "attendancePolicy.lifecycle.manualReview": "مراجعة يدوية",
+    "attendancePolicy.lifecycleHint.active": "مسجلة بانتظار الرواتب",
+    "attendancePolicy.lifecycleHint.warningOnly":
+      "إنذار فقط — دون خصم من الرواتب",
+    "attendancePolicy.lifecycleHint.void": "معذورة أو مصححة ولن تُخصم",
+    "attendancePolicy.lifecycleHint.applied": "خُصمت في الرواتب",
+    "attendancePolicy.lifecycleHint.manualReview":
+      "قيد مراجعة الموارد البشرية دون استرداد تلقائي",
+    "attendancePolicy.payrollStatus.pending": "معلّقة",
+    "attendancePolicy.payrollStatus.claimed": "في مسودة الرواتب",
+    "attendancePolicy.payrollStatus.applied": "مطبّقة في الرواتب",
+    "attendancePolicy.payrollStatus.manualReview": "مراجعة يدوية",
+    "attendancePolicy.payrollStatus.void": "ملغاة",
+    "attendancePolicy.payrollStatus.none": "بدون خصم من الرواتب",
+    "attendancePolicy.violation.title": "مخالفة تأخير",
+    "attendancePolicy.violation.titleWithOccurrence":
+      "مخالفة تأخير، المرة رقم {number}",
+    "attendancePolicy.violation.occurrence": "رقم المرة",
+    "attendancePolicy.violation.occurrenceNumber": "المرة رقم {number}",
+    "attendancePolicy.violation.penalty": "الخصم",
+    "attendancePolicy.violation.percentOfDailyRate":
+      "{percent} من الأجر اليومي",
+    "attendancePolicy.violation.warningTag": "إنذار",
+    "attendancePolicy.violation.warningOnly":
+      "المرة الأولى: إنذار فقط دون أي خصم.",
+    "attendancePolicy.violation.noDeduction": "لا يوجد خصم لهذه المرة.",
+    "attendancePolicy.violation.lifecycle": "حالة المخالفة",
+    "attendancePolicy.violation.meaning": "المعنى",
+    "attendancePolicy.violation.payrollStatus": "حالة الرواتب",
+    "attendancePolicy.violation.reason": "السبب",
+    "attendancePolicy.violation.voidedBy": "أُلغيت بسبب: {reason}",
+    "attendancePolicy.today.title": "حضور اليوم",
+    "attendancePolicy.today.shift": "الوردية",
+    "attendancePolicy.today.firstCheckIn": "أول تسجيل دخول",
+    "attendancePolicy.today.finalCheckOut": "آخر تسجيل خروج",
+    "attendancePolicy.today.worked": "مدة العمل",
+    "attendancePolicy.today.unpaidBreak": "استراحة غير مدفوعة",
+    "attendancePolicy.today.approvedPermission": "استئذان معتمد",
+    "attendancePolicy.today.accounted": "الحضور المحتسب",
+    "attendancePolicy.today.missing": "النقص",
+    "attendancePolicy.today.notRecorded": "غير مسجل",
+    "attendancePolicy.today.exempt": "معفى من الحضور",
+    "attendancePolicy.today.companyRequired": "اختر شركتك لعرض حضور اليوم.",
+    "attendancePolicy.today.notFound":
+      "لا يتوفر ملخص حضور لك في الشركة المحددة.",
+    "attendancePolicy.today.loadFailed": "تعذر تحميل حضور اليوم.",
+    "attendancePolicy.history.title": "سجل مخالفات التأخير",
+    "attendancePolicy.history.hint":
+      "الأحدث أولًا. يُحتسب كل يوم تأخير ضمن إجمالي مرات التأخير لديك.",
+    "attendancePolicy.history.filterLifecycle": "التصفية حسب حالة المخالفة",
+    "attendancePolicy.history.empty": "لا توجد مخالفات تأخير.",
+    "attendancePolicy.history.loadFailed": "تعذر تحميل مخالفات التأخير.",
+    "attendancePolicy.history.companyRequired":
+      "اختر شركة لعرض مخالفات التأخير.",
+    "attendancePolicy.hr.tabRecords": "السجلات",
+    "attendancePolicy.hr.tabViolations": "مخالفات التأخير",
+    "attendancePolicy.hr.search": "بحث",
+    "attendancePolicy.hr.searchPlaceholder": "اسم الموظف أو رقمه",
+    "attendancePolicy.hr.dateRange": "تواريخ المخالفات",
+    "attendancePolicy.hr.needsReview": "تحتاج مراجعة الموارد البشرية",
+    "attendancePolicy.hr.clearFilters": "مسح عوامل التصفية",
+    "attendancePolicy.hr.resultCount": "{count} مخالفة",
+    "attendancePolicy.hr.fixFilters":
+      "صحّح عوامل التصفية المحددة لعرض النتائج.",
+    "attendancePolicy.hr.tabNotices": "إشعارات التأخر",
+    "attendancePolicy.notices.title": "إشعارات التأخر عن العمل",
+    "attendancePolicy.notices.hint":
+      "يُصدر إشعار ويُرسل إليك تلقائيًا عند كل مخالفة تأخير جديدة. نزّل ملف PDF للاحتفاظ بنسخة.",
+    "attendancePolicy.notices.hrHint":
+      "تُصدر الإشعارات وتُرسل تلقائيًا عند كل مخالفة تأخير جديدة في الشركة المحددة.",
+    "attendancePolicy.notices.violationDate": "تاريخ المخالفة",
+    "attendancePolicy.notices.level": "المستوى",
+    "attendancePolicy.notices.level.1": "إنذار توعوي",
+    "attendancePolicy.notices.level.2": "تنبيه رسمي",
+    "attendancePolicy.notices.level.3": "تحذير جاد",
+    "attendancePolicy.notices.level.4": "إنذار نهائي حرج",
+    "attendancePolicy.notices.level.other": "المستوى {level}",
+    "attendancePolicy.notices.policy.1": "تحذير فقط - لا يوجد خصم من الراتب.",
+    "attendancePolicy.notices.policy.2":
+      "تنبيه رسمي - خصم بنسبة ٥٪ من الأجر اليومي.",
+    "attendancePolicy.notices.policy.3":
+      "تحذير جاد - خصم بنسبة ١٠٪ من الأجر اليومي.",
+    "attendancePolicy.notices.policy.4":
+      "إنذار نهائي حرج - خصم بنسبة ٥٠٪ من الأجر اليومي.",
+    "attendancePolicy.notices.filterLevel": "مستوى الإشعار",
+    "attendancePolicy.notices.occurrence": "المرة رقم {number}",
+    "attendancePolicy.notices.reference": "المرجع",
+    "attendancePolicy.notices.delivery": "حالة الإرسال",
+    "attendancePolicy.notices.delivery.scheduled": "الإرسال مجدول",
+    "attendancePolicy.notices.delivery.sent": "أُرسل",
+    "attendancePolicy.notices.delivery.failed": "تعذر الإرسال",
+    "attendancePolicy.notices.delivery.skipped": "لم يُرسل",
+    "attendancePolicy.notices.delivery.none": "غير مسجلة",
+    "attendancePolicy.notices.delivery.unknown": "حالة إرسال غير معروفة",
+    "attendancePolicy.notices.deliveryHint.scheduled":
+      "تم إنشاء الإشعار داخل النظام، والإرسال عبر واتساب أو البريد الإلكتروني مجدول.",
+    "attendancePolicy.notices.deliveryHint.sent":
+      "تم التسليم عبر واتساب أو البريد الإلكتروني.",
+    "attendancePolicy.notices.deliveryHint.failed": "تعذر إكمال إرسال الإشعار.",
+    "attendancePolicy.notices.deliveryHint.skipped":
+      "لم يُرسل: لا يوجد حساب نشط أو قناة إرسال مهيأة.",
+    "attendancePolicy.notices.pdfUnavailable": "ملف PDF غير متاح",
+    "attendancePolicy.notices.download": "تنزيل PDF",
+    "attendancePolicy.notices.downloadAria": "تنزيل PDF: {reference}",
+    "attendancePolicy.notices.downloadNotFound": "ملف هذا الإشعار غير متاح.",
+    "attendancePolicy.notices.downloadForbidden":
+      "ليست لديك صلاحية الوصول إلى هذا الإشعار.",
+    "attendancePolicy.notices.downloadFailed": "تعذر تنزيل ملف الإشعار.",
+    "attendancePolicy.notices.empty": "لا توجد إشعارات تأخر حتى الآن.",
+    "attendancePolicy.notices.notFound":
+      "لا تتوفر إشعارات تأخر في الشركة المحددة.",
+    "attendancePolicy.notices.loadFailed": "تعذر تحميل إشعارات التأخر.",
+    "attendancePolicy.notices.forbidden":
+      "ليست لديك صلاحية عرض إشعارات التأخر في الشركة المحددة.",
+    "attendancePolicy.notices.resultCount": "{count} إشعار",
+    "attendancePolicy.recalc.button": "إعادة احتساب الحضور",
+    "attendancePolicy.recalc.title": "إعادة احتساب الحضور",
+    "attendancePolicy.recalc.intro":
+      "يعيد بناء النتائج اليومية واستخدام المهلة ومخالفات التأخير من بصمات BioTime لموظف واحد في الشركة المحددة، دون تعديل البصمات الأصلية.",
+    "attendancePolicy.recalc.employee": "الموظف",
+    "attendancePolicy.recalc.employeeRequired": "اختر موظفًا.",
+    "attendancePolicy.recalc.period": "الفترة",
+    "attendancePolicy.recalc.single": "يوم واحد",
+    "attendancePolicy.recalc.range": "نطاق تواريخ",
+    "attendancePolicy.recalc.rangeHelp":
+      "يمكن أن يكون تاريخ النهاية بعد تاريخ البداية بما يصل إلى 31 يومًا.",
+    "attendancePolicy.recalc.dateRequired": "اختر تاريخًا.",
+    "attendancePolicy.recalc.rangeRequired":
+      "اختر تاريخ البداية وتاريخ النهاية.",
+    "attendancePolicy.recalc.rangeReversed":
+      "لا يمكن أن يسبق تاريخ النهاية تاريخ البداية.",
+    "attendancePolicy.recalc.rangeTooLong":
+      "يجب ألا يتجاوز تاريخ النهاية 31 يومًا بعد تاريخ البداية.",
+    "attendancePolicy.recalc.submit": "إعادة الاحتساب",
+    "attendancePolicy.recalc.confirmTitle": "إعادة احتساب الحضور؟",
+    "attendancePolicy.recalc.confirmBody":
+      "إعادة احتساب حضور {employee} من {from} إلى {to}؟ قد تتغير مخالفات التأخير والخصومات المعلّقة.",
+    "attendancePolicy.recalc.confirmOk": "نعم، أعد الاحتساب",
+    "attendancePolicy.recalc.success": "أُعيد احتساب {count} يوم.",
+    "attendancePolicy.recalc.notFound": "هذا الموظف ليس ضمن الشركة المحددة.",
+    "attendancePolicy.recalc.companyRequired":
+      "اختر شركة نشطة قبل إعادة احتساب الحضور.",
+    "attendancePolicy.recalc.resultsTitle": "الأيام المعاد احتسابها",
+    "attendancePolicy.recalc.grace": "المهلة",
+    "attendancePolicy.recalc.noViolation": "لا توجد مخالفة",
+
+    // Attendance policy settings
+    "admin.settings.secAttendancePolicy": "سياسة التأخير والأذونات",
+    "admin.settings.lblGraceWindow": "نافذة المهلة (بالدقائق)",
+    "admin.settings.helpGraceWindow":
+      "الدقائق بعد بداية الوردية التي يمكن التجاوز عنها باستخدام مهلة شهرية (0–240).",
+    "admin.settings.lblDefaultShiftEnd": "نهاية الوردية الافتراضية",
+    "admin.settings.helpDefaultShiftEnd":
+      "نهاية الوردية للموظفين الذين ليست لهم وردية خاصة.",
+    "admin.settings.lblGraceUseLimit": "مرات استخدام المهلة شهريًا",
+    "admin.settings.helpGraceUseLimit":
+      "عدد مرات التأخير ضمن نافذة المهلة التي يُتجاوز عنها كل شهر (0–31).",
+    "admin.settings.lblPostGraceTolerance":
+      "السماحية بعد نفاد المهلة (بالدقائق)",
+    "admin.settings.helpPostGraceTolerance":
+      "بعد نفاد المهلة الشهرية، يُعد الوصول خلال هذه الدقائق في الموعد (0–240).",
+    "admin.settings.lblLatePermissionLimit": "أذونات التأخير المعتمدة شهريًا",
+    "admin.settings.helpLatePermissionLimit":
+      "عدد أذونات التأخير المعتمدة نهائيًا المسموح بها لكل موظف شهريًا (0–31).",
+    "admin.settings.lblDuringShiftMax":
+      "الحد الأقصى لإذن أثناء الدوام (بالدقائق)",
+    "admin.settings.helpDuringShiftMax":
+      "أطول مدة يمكن طلبها لإذن أثناء الدوام (1–1440).",
+    "admin.settings.lblAdvanceLimit": "حد الطلب المسبق (بالأيام)",
+    "admin.settings.helpAdvanceLimit":
+      "عدد الأيام المقبلة التي يمكن تحديدها لأذونات التأخير وأثناء الدوام (0–365).",
+    "admin.settings.rangeError": "أدخل رقمًا صحيحًا من {min} إلى {max}.",
+    "layout.attendancePolicy": "سياسة الحضور",
+    "hr.attendancePolicy.title": "سياسة الحضور",
+    "hr.attendancePolicy.subtitle":
+      "المهلة والسماحية وحدود الأذونات المستخدمة لاحتساب التأخير.",
+    "hr.attendancePolicy.globalNotice":
+      "تنطبق هذه السياسة على جميع الشركات، وليس على الشركة المحددة فقط.",
+    "hr.attendancePolicy.loading": "جارٍ تحميل سياسة الحضور...",
+    "hr.attendancePolicy.loadError": "تعذر تحميل سياسة الحضور.",
+    "hr.attendancePolicy.saved": "تم حفظ سياسة الحضور.",
+    "hr.attendancePolicy.saveError": "تعذر حفظ سياسة الحضور.",
+    "hr.attendancePolicy.discard": "تجاهل التغييرات",
+    "hr.attendancePolicy.invalid":
+      "بعض القيم خارج النطاق المسموح. راجع الحقول ثم حاول مرة أخرى.",
+    "payroll.runDetails.finalizeAttendanceNote":
+      "تُضمَّن عند الاعتماد النهائي غرامات الحضور المسجلة منذ إنشاء هذه المسودة، لذا قد تتغير الخصومات والإجماليات.",
+    "payroll.runDetails.deductionsIncludeAttendance":
+      "تشمل الخصومات غرامات الحضور المحتسبة في مسيرة الرواتب هذه.",
 
     // HR Dashboard
     "hr.dashboard.title": "نظرة عامة على لوحة التحكم",

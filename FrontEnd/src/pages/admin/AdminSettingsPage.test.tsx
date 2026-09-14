@@ -1,10 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-vi.mock("../../services/api/settingsApi", () => ({
-  getSettings: vi.fn(),
-  updateSettings: vi.fn(),
-}));
+vi.mock("../../services/api/settingsApi", async () => {
+  const actual = await vi.importActual<
+    typeof import("../../services/api/settingsApi")
+  >("../../services/api/settingsApi");
+  return {
+    ...actual,
+    getSettings: vi.fn(),
+    updateSettings: vi.fn(),
+  };
+});
 
 import AdminSettingsPage from "./AdminSettingsPage";
 import { getSettings, updateSettings } from "../../services/api/settingsApi";
@@ -17,10 +23,33 @@ const put = updateSettings as unknown as ReturnType<typeof vi.fn>;
 /** antd + jsdom are slow under a full-suite run; the 1s waitFor default is tight. */
 const FIND = { timeout: 8000 };
 
+/** GET returns both grace fields; the legacy alias mirrors the canonical one. */
 const DEFAULT_ATTENDANCE = {
   geofence_enabled: false,
   work_day_start_time: "09:00",
+  default_shift_end_time: "18:00",
   late_grace_minutes: 15,
+  grace_window_minutes: 15,
+  grace_use_limit_per_month: 3,
+  post_grace_tolerance_minutes: 5,
+  approved_late_permission_limit_per_month: 3,
+  during_shift_permission_max_minutes: 120,
+  permission_request_advance_limit_days: 7,
+  absence_detection_enabled: true,
+  work_week_days: [6, 0, 1, 2, 3],
+};
+
+/** What the page PUTs: the canonical grace field, never the legacy alias. */
+const CANONICAL_ATTENDANCE = {
+  geofence_enabled: false,
+  work_day_start_time: "09:00",
+  default_shift_end_time: "18:00",
+  grace_window_minutes: 15,
+  grace_use_limit_per_month: 3,
+  post_grace_tolerance_minutes: 5,
+  approved_late_permission_limit_per_month: 3,
+  during_shift_permission_max_minutes: 120,
+  permission_request_advance_limit_days: 7,
   absence_detection_enabled: true,
   work_week_days: [6, 0, 1, 2, 3],
 };
@@ -51,6 +80,12 @@ async function renderLoaded() {
   // The GPS toggle is the first attendance control; its presence means the
   // settings GET has resolved and the form is populated.
   await screen.findByLabelText("Require GPS location for check-in", {}, FIND);
+}
+
+function changeNumber(label: string, value: string) {
+  const input = screen.getByLabelText(label);
+  fireEvent.change(input, { target: { value } });
+  fireEvent.blur(input);
 }
 
 beforeEach(() => {
@@ -105,11 +140,8 @@ describe("geofence attendance toggle", () => {
     await waitFor(() => expect(put).toHaveBeenCalled(), FIND);
     const payload = put.mock.calls[0][0];
     expect(payload.attendance).toEqual({
+      ...CANONICAL_ATTENDANCE,
       geofence_enabled: true,
-      work_day_start_time: "09:00",
-      late_grace_minutes: 15,
-      absence_detection_enabled: true,
-      work_week_days: [6, 0, 1, 2, 3],
     });
     // The backend still requires every legacy section on PUT.
     expect(payload.password_policy).toBeDefined();
@@ -142,6 +174,7 @@ describe("work schedule controls", () => {
       status: "success",
       data: makeSettings({
         late_grace_minutes: 20,
+        grace_window_minutes: 20,
         absence_detection_enabled: false,
         work_week_days: [0, 1, 2, 3, 4],
       }),
@@ -149,9 +182,7 @@ describe("work schedule controls", () => {
 
     await renderLoaded();
 
-    expect(screen.getByLabelText("Late grace period (minutes)")).toHaveValue(
-      "20",
-    );
+    expect(screen.getByLabelText("Grace window (minutes)")).toHaveValue("20");
     expect(
       screen.getByLabelText("Automatic absence detection"),
     ).not.toBeChecked();
@@ -170,25 +201,19 @@ describe("work schedule controls", () => {
     fireEvent.click(save());
 
     await waitFor(() => expect(put).toHaveBeenCalled(), FIND);
-    expect(put.mock.calls[0][0].attendance).toEqual({
-      geofence_enabled: false,
-      work_day_start_time: "09:00",
-      late_grace_minutes: 15,
-      absence_detection_enabled: true,
-      work_week_days: [6, 0, 1, 2, 3],
-    });
+    expect(put.mock.calls[0][0].attendance).toEqual(CANONICAL_ATTENDANCE);
   });
 
-  it("submits an edited grace period", async () => {
+  it("submits an edited grace period as grace_window_minutes only", async () => {
     await renderLoaded();
 
-    const grace = screen.getByLabelText("Late grace period (minutes)");
-    fireEvent.change(grace, { target: { value: "30" } });
-    fireEvent.blur(grace);
+    changeNumber("Grace window (minutes)", "30");
     fireEvent.click(save());
 
     await waitFor(() => expect(put).toHaveBeenCalled(), FIND);
-    expect(put.mock.calls[0][0].attendance.late_grace_minutes).toBe(30);
+    const attendance = put.mock.calls[0][0].attendance;
+    expect(attendance.grace_window_minutes).toBe(30);
+    expect(attendance).not.toHaveProperty("late_grace_minutes");
   });
 
   it("submits the working-day numbers the user leaves checked", async () => {
@@ -215,5 +240,28 @@ describe("work schedule controls", () => {
     expect(put.mock.calls[0][0].attendance.absence_detection_enabled).toBe(
       false,
     );
+  });
+});
+
+describe("attendance policy controls", () => {
+  it("hydrates and submits the late-arrival and permission policy", async () => {
+    await renderLoaded();
+
+    expect(screen.getByLabelText("Default shift end")).toHaveValue("18:00");
+    expect(screen.getByLabelText("Grace uses per month")).toHaveValue("3");
+    changeNumber("Tolerance after grace runs out (minutes)", "10");
+    changeNumber("Approved Late Permissions per month", "4");
+    changeNumber("During Shift permission limit (minutes)", "90");
+    changeNumber("Advance request limit (days)", "14");
+    fireEvent.click(save());
+
+    await waitFor(() => expect(put).toHaveBeenCalled(), FIND);
+    expect(put.mock.calls[0][0].attendance).toEqual({
+      ...CANONICAL_ATTENDANCE,
+      post_grace_tolerance_minutes: 10,
+      approved_late_permission_limit_per_month: 4,
+      during_shift_permission_max_minutes: 90,
+      permission_request_advance_limit_days: 14,
+    });
   });
 });

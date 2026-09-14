@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo } from "react";
 import {
-  Table,
   Button,
   Card,
   DatePicker,
@@ -14,6 +13,10 @@ import {
 } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
+import ResponsiveTable from "../../components/ui/ResponsiveTable";
+import TodayAttendanceSummaryCard from "../../components/attendance/TodayAttendanceSummaryCard";
+import MyAttendanceViolations from "../../components/attendance/MyAttendanceViolations";
+import MyAttendanceNotices from "../../components/attendance/MyAttendanceNotices";
 import { useEmployeeAttendanceStore } from "../../stores/attendanceStore";
 import type {
   AttendanceRecord,
@@ -188,6 +191,7 @@ const EmployeeAttendancePage: React.FC = () => {
         <Alert type="info" showIcon title={t("attendance.unmapped")} />
       ) : (
         <>
+          <TodayAttendanceSummaryCard />
           <Card style={{ marginBottom: 16 }}>
             <Row justify="space-between" align="middle" gutter={[16, 16]}>
               <Col xs={24} md={12}>
@@ -205,7 +209,8 @@ const EmployeeAttendancePage: React.FC = () => {
             </Row>
           </Card>
 
-          <Table
+          <ResponsiveTable
+            mobileCard={{ titleKey: "date", extraKey: "status" }}
             dataSource={records}
             columns={columns}
             rowKey="id"
@@ -220,6 +225,8 @@ const EmployeeAttendancePage: React.FC = () => {
                 setPagination({ current: page, pageSize }),
             }}
           />
+          <MyAttendanceViolations />
+          <MyAttendanceNotices />
         </>
       )}
     </div>

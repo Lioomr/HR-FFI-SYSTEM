@@ -14,20 +14,26 @@ import {
   Select,
   Space,
   Spin,
-  Table,
+  Tabs,
   Tag,
   Typography,
   message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
+  CalculatorOutlined,
   DownloadOutlined,
   ReloadOutlined,
   SearchOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
+import { useSearchParams } from "react-router-dom";
+import HrAttendanceNoticesPanel from "../../components/attendance/HrAttendanceNoticesPanel";
+import HrAttendanceViolationsPanel from "../../components/attendance/HrAttendanceViolationsPanel";
+import RecalculateAttendanceModal from "../../components/attendance/RecalculateAttendanceModal";
 
 import PageHeader from "../../components/ui/PageHeader";
+import ResponsiveTable from "../../components/ui/ResponsiveTable";
 import EmptyState from "../../components/ui/EmptyState";
 import ErrorState from "../../components/ui/ErrorState";
 import {
@@ -120,6 +126,16 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
   translateRef.current = t;
   // The CEO endpoint only supports date_from/date_to, status and search.
   const supportsAdvancedFilters = role === "hr";
+  // HR also gets the late-violation and notice histories and recalculation; the
+  // tab lives in the URL so a filtered view can be shared or reloaded.
+  const isHr = role === "hr";
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const activeTab =
+    isHr && (tabParam === "violations" || tabParam === "notices")
+      ? tabParam
+      : "records";
+  const [recalcOpen, setRecalcOpen] = useState(false);
 
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [summary, setSummary] = useState<
@@ -656,36 +672,28 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
     },
   ];
 
-  return (
-    <div>
-      <PageHeader
-        title={
-          role === "ceo"
-            ? t("ceo.attendance.title")
-            : t("hr.attendance.recordsTitle")
-        }
-        subtitle={t("attendance.biotimeNotice")}
-        actions={
-          <Space>
-            <Button
-              icon={<DownloadOutlined />}
-              onClick={handleExport}
-              loading={exporting}
-              disabled={loading || records.length === 0}
-            >
-              {t("attendancePreview.export.button")}
-            </Button>
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={fetchRecords}
-              loading={loading}
-            >
-              {t("common.refresh")}
-            </Button>
-          </Space>
-        }
-      />
+  const recordsActions = (
+    <>
+      <Button
+        icon={<DownloadOutlined />}
+        onClick={handleExport}
+        loading={exporting}
+        disabled={loading || records.length === 0}
+      >
+        {t("attendancePreview.export.button")}
+      </Button>
+      <Button
+        icon={<ReloadOutlined />}
+        onClick={fetchRecords}
+        loading={loading}
+      >
+        {t("common.refresh")}
+      </Button>
+    </>
+  );
 
+  const recordsView = (
+    <>
       <Card size="small" style={{ marginBottom: 16, borderRadius: 12 }}>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 20 }}>
           {summaryItems.map((item, idx) => (
@@ -840,7 +848,11 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
         />
       ) : (
         <Card size="small" style={{ borderRadius: 12 }}>
-          <Table
+          <ResponsiveTable
+            mobileCard={{
+              titleKey: "employee",
+              extraKey: "status",
+            }}
             dataSource={records}
             columns={columns}
             rowKey="id"
@@ -857,6 +869,72 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
             }}
           />
         </Card>
+      )}
+    </>
+  );
+
+  return (
+    <div>
+      <PageHeader
+        title={
+          role === "ceo"
+            ? t("ceo.attendance.title")
+            : t("hr.attendance.recordsTitle")
+        }
+        subtitle={t("attendance.biotimeNotice")}
+        actions={
+          <Space wrap>
+            {isHr && (
+              <Button
+                icon={<CalculatorOutlined />}
+                onClick={() => setRecalcOpen(true)}
+              >
+                {t("attendancePolicy.recalc.button")}
+              </Button>
+            )}
+            {activeTab === "records" && recordsActions}
+          </Space>
+        }
+      />
+
+      {isHr ? (
+        <Tabs
+          activeKey={activeTab}
+          onChange={(key) =>
+            setSearchParams(key === "records" ? {} : { tab: key }, {
+              replace: true,
+            })
+          }
+          items={[
+            {
+              key: "records",
+              label: t("attendancePolicy.hr.tabRecords"),
+              children: recordsView,
+            },
+            {
+              key: "violations",
+              label: t("attendancePolicy.hr.tabViolations"),
+              children: <HrAttendanceViolationsPanel />,
+            },
+            {
+              key: "notices",
+              label: t("attendancePolicy.hr.tabNotices"),
+              children: <HrAttendanceNoticesPanel />,
+            },
+          ]}
+        />
+      ) : (
+        recordsView
+      )}
+
+      {isHr && (
+        <RecalculateAttendanceModal
+          open={recalcOpen}
+          onClose={() => setRecalcOpen(false)}
+          onRecalculated={() => {
+            if (activeTab === "records") void fetchRecords();
+          }}
+        />
       )}
     </div>
   );

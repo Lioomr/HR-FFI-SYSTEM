@@ -193,6 +193,7 @@ def _audit_snapshot(instance: EmployeeProfile) -> dict:
         "task_group_id": instance.task_group_ref.id if instance.task_group_ref else None,
         "sponsor_id": instance.sponsor_ref.id if instance.sponsor_ref else None,
         "employment_status": instance.employment_status,
+        "attendance_exempt": instance.attendance_exempt,
         "is_archived": instance.is_archived,
         "archived_at": instance.archived_at.isoformat() if instance.archived_at else None,
         "archived_by_id": instance.archived_by_id,

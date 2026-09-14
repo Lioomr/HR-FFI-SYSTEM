@@ -118,6 +118,7 @@ import CFOLoanRequestDetailsPage from "../pages/cfo/CFOLoanRequestDetailsPage";
 import EmployeeAttendancePage from "../pages/employee/AttendancePage";
 import ManagerAttendancePage from "../pages/manager/ManagerAttendancePage";
 import AttendancePreviewPage from "../pages/shared/AttendancePreviewPage";
+import AttendancePolicyPage from "../pages/hr/AttendancePolicyPage";
 
 import RouteErrorBoundary from "./RouteErrorBoundary";
 import PendingInboxPage from "../pages/shared/PendingInboxPage";
@@ -216,6 +217,10 @@ export const routes = [
               {
                 path: "hr/attendance",
                 element: <AttendancePreviewPage role="hr" />,
+              },
+              {
+                path: "hr/attendance-policy",
+                element: <AttendancePolicyPage />,
               },
               { path: "hr/invites", element: <AdminInvitesPage /> },
 

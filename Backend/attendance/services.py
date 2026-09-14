@@ -1,13 +1,15 @@
+import hashlib
+import json
 import logging
-from collections import defaultdict
 from datetime import datetime, timedelta
+from datetime import timezone as datetime_timezone
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from .biotime_client import BioTimeClient
-from .models import AttendanceRecord, BioTimeConfig, BioTimeEmployeeMap
-from .schedule import classify_check_in, get_work_schedule
+from .calculation import AttendanceCalculationService, provider_punch_type
+from .models import AttendanceDailyResult, AttendanceRecord, BioTimeConfig, BioTimeEmployeeMap, BioTimeRawPunch
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +30,8 @@ class SyncBioTimeService:
             "skipped": 0,
             "unmapped": 0,
             "invalid": 0,
+            "raw_created": 0,
+            "raw_duplicates": 0,
         }
         result.update(overrides)
         return result
@@ -96,20 +100,22 @@ class SyncBioTimeService:
 
     @classmethod
     def ingest_transactions(cls, transactions):
-        """Process transactions fetched by either AWS or the office-side agent."""
+        """Persist immutable punches, then recalculate deterministic projections.
+
+        This deliberately never updates a pre-existing AttendanceRecord. A new
+        compatibility record is created only when no legacy row exists, so old
+        HR override and Exit Permission anchors retain their original values.
+        """
         counts = cls._result()
-        grouped = defaultdict(lambda: defaultdict(list))
-        terminal_codes = defaultdict(set)
+        parsed_transactions = []
         for raw_transaction in transactions:
             emp_code = str(raw_transaction.get("emp_code") or "").strip()
             punch_time = cls._parse_punch_time(raw_transaction.get("punch_time"))
             if not emp_code or not punch_time or raw_transaction.get("is_attendance", True) in (False, 0, "0"):
                 counts["invalid"] += 1
                 continue
-            grouped[emp_code][punch_time.date()].append(punch_time)
-            terminal_sn = str(raw_transaction.get("terminal_sn") or "").strip()
-            if terminal_sn:
-                terminal_codes[(emp_code, punch_time.date())].add(terminal_sn)
+            local_time = timezone.localtime(punch_time)
+            parsed_transactions.append((emp_code, punch_time, local_time.date(), raw_transaction))
 
         mappings = {
             mapping.biotime_emp_code: mapping.employee_profile
@@ -121,117 +127,121 @@ class SyncBioTimeService:
             )
         }
 
-        schedule = get_work_schedule()
         with transaction.atomic():
-            for emp_code, dates in grouped.items():
+            affected_days = set()
+            for emp_code, punch_time, attendance_date, raw_transaction in parsed_transactions:
                 employee_profile = mappings.get(emp_code)
                 if not employee_profile:
-                    counts["unmapped"] += len(dates)
-                    logger.warning(
-                        "BioTime employee code %s is not mapped; skipped %s day(s).", emp_code, len(dates)
-                    )
+                    counts["unmapped"] += 1
+                    logger.warning("BioTime employee code %s is not mapped; skipped punch.", emp_code)
                     continue
-
-                for record_date, punches in dates.items():
-                    counts["processed"] += 1
-                    check_in_at = min(punches)
-                    check_out_at = max(punches) if len(punches) > 1 else None
-                    terminal_sn = ",".join(sorted(terminal_codes[(emp_code, record_date)]))
-                    system_status = classify_check_in(check_in_at, record_date, schedule)
-
-                    record, created = AttendanceRecord.objects.get_or_create(
-                        employee_profile=employee_profile,
-                        date=record_date,
-                        defaults={
-                            "check_in_at": check_in_at,
-                            "check_out_at": check_out_at,
-                            "source": AttendanceRecord.Source.SYSTEM,
-                            "status": system_status,
-                            "is_late_flagged": system_status == AttendanceRecord.Status.LATE,
-                            "biotime_emp_code": emp_code,
-                            "biotime_terminal_sn": terminal_sn,
+                terminal_sn = str(raw_transaction.get("terminal_sn") or "").strip()
+                raw_type = provider_punch_type(raw_transaction)
+                provider_id = str(
+                    raw_transaction.get("id")
+                    or raw_transaction.get("transaction_id")
+                    or raw_transaction.get("punch_id")
+                    or ""
+                ).strip()
+                identity = (
+                    f"provider:{emp_code}:{provider_id}"
+                    if provider_id
+                    else json.dumps(
+                        {
+                            "emp_code": emp_code,
+                            "occurred_at": punch_time.astimezone(datetime_timezone.utc).isoformat(),
+                            "raw_punch_type": raw_type,
+                            "terminal_sn": terminal_sn,
                         },
+                        sort_keys=True,
+                        separators=(",", ":"),
                     )
-                    if created:
-                        counts["created"] += 1
-                        try:
-                            from job_offers.starting_work_service import generate_starting_work_acknowledgment
+                )
+                deduplication_key = hashlib.sha256(identity.encode("utf-8")).hexdigest()
+                try:
+                    with transaction.atomic():
+                        _, created = BioTimeRawPunch.objects.get_or_create(
+                            deduplication_key=deduplication_key,
+                            defaults={
+                                "company": employee_profile.company,
+                                "employee_profile": employee_profile,
+                                "attendance_date": attendance_date,
+                                "occurred_at": punch_time,
+                                "biotime_emp_code": emp_code,
+                                "provider_punch_id": provider_id,
+                                "raw_punch_type": raw_type,
+                                "terminal_sn": terminal_sn,
+                                "provider_payload": raw_transaction,
+                            },
+                        )
+                except IntegrityError:
+                    # A concurrent sync inserted the same unique evidence.
+                    created = False
+                if created:
+                    counts["raw_created"] += 1
+                    affected_days.add((employee_profile.pk, attendance_date))
+                else:
+                    counts["raw_duplicates"] += 1
 
-                            generate_starting_work_acknowledgment(record, received_from_biotime=True)
-                        except Exception:
-                            logger.exception(
-                                "starting_work_acknowledgment_generation_failed",
-                                extra={"attendance_record_id": record.id},
-                            )
-                        continue
+            # ``mappings`` is keyed by BioTime code and already holds the profiles.
+            profiles = {profile.pk: profile for profile in mappings.values()}
+            codes_by_profile = {profile.pk: emp_code for emp_code, profile in mappings.items()}
+            for profile_id, work_date in sorted(affected_days, key=lambda value: (value[0], value[1])):
+                profile = profiles[profile_id]
+                result_existed = AttendanceDailyResult.objects.filter(employee_profile=profile, date=work_date).exists()
+                result = AttendanceCalculationService.recalculate(profile, work_date)
+                counts["processed"] += 1
+                counts["updated" if result_existed else "created"] += 1
+                terminal_sn = ",".join(
+                    sorted(
+                        set(
+                            BioTimeRawPunch.objects.filter(employee_profile=profile, attendance_date=work_date)
+                            .exclude(terminal_sn="")
+                            .values_list("terminal_sn", flat=True)
+                        )
+                    )
+                )
 
-                    if record.source != AttendanceRecord.Source.SYSTEM:
-                        counts["skipped"] += 1
-                        logger.info("BioTime skipped non-system attendance record %s.", record.pk)
-                        continue
-
-                    update_fields = []
-                    if not record.check_in_at or check_in_at < record.check_in_at:
-                        record.check_in_at = check_in_at
-                        update_fields.append("check_in_at")
-                    if check_out_at and (not record.check_out_at or check_out_at > record.check_out_at):
-                        record.check_out_at = check_out_at
-                        update_fields.append("check_out_at")
-                    if record.biotime_emp_code != emp_code:
-                        record.biotime_emp_code = emp_code
-                        update_fields.append("biotime_emp_code")
-                    if terminal_sn and record.biotime_terminal_sn != terminal_sn:
-                        record.biotime_terminal_sn = terminal_sn
-                        update_fields.append("biotime_terminal_sn")
-
-                    if update_fields:
-                        record.save(update_fields=[*update_fields, "updated_at"])
-                        counts["updated"] += 1
-
-                    acknowledgment = None
+                # Compatibility projection: create a new public legacy-shaped
+                # row once, but never overwrite a historical row.
+                record, record_created = AttendanceRecord.objects.get_or_create(
+                    employee_profile=profile,
+                    date=work_date,
+                    defaults={
+                        "check_in_at": result.first_check_in_at,
+                        "check_out_at": result.final_check_out_at,
+                        "source": AttendanceRecord.Source.SYSTEM,
+                        "status": result.status_input,
+                        "is_late_flagged": result.status_input == AttendanceRecord.Status.LATE,
+                        "biotime_emp_code": codes_by_profile[profile_id],
+                        "biotime_terminal_sn": terminal_sn,
+                        "is_biotime_projection": True,
+                    },
+                )
+                if record_created:
                     try:
                         from job_offers.starting_work_service import generate_starting_work_acknowledgment
 
-                        acknowledgment = generate_starting_work_acknowledgment(record, received_from_biotime=True)
+                        generate_starting_work_acknowledgment(record, received_from_biotime=True)
                     except Exception:
                         logger.exception(
-                            "starting_work_acknowledgment_verification_hold_failed",
-                            extra={"attendance_record_id": record.id},
+                            "starting_work_acknowledgment_generation_failed", extra={"attendance_record_id": record.id}
                         )
-                    if acknowledgment is None:
-                        from job_offers.models import StartingWorkAcknowledgment
-
-                        acknowledgment = StartingWorkAcknowledgment.objects.filter(
-                            employee_profile=record.employee_profile
-                        ).first()
-                    record.refresh_from_db(fields=["status", "source", "is_overridden"])
-                    promotable = {
-                        AttendanceRecord.Status.PENDING,
-                        AttendanceRecord.Status.PENDING_MANAGER,
-                        AttendanceRecord.Status.PENDING_HR,
-                        AttendanceRecord.Status.PENDING_CEO,
-                        AttendanceRecord.Status.ABSENT,
-                        AttendanceRecord.Status.LATE,
-                        AttendanceRecord.Status.PRESENT,
-                    }
-                    resolved_status = classify_check_in(record.check_in_at, record.date, schedule)
-                    if (
-                        record.source == AttendanceRecord.Source.SYSTEM
-                        and not record.is_overridden
-                        and (acknowledgment is None or acknowledgment.status == "approved")
-                        and record.status in promotable
-                        and (
-                            record.status != resolved_status
-                            or record.is_late_flagged != (resolved_status == AttendanceRecord.Status.LATE)
-                        )
-                    ):
-                        record.status = resolved_status
-                        record.is_late_flagged = resolved_status == AttendanceRecord.Status.LATE
-                        record.save(update_fields=["status", "is_late_flagged", "updated_at"])
-                        if not update_fields:
-                            counts["updated"] += 1
-                    elif not update_fields:
-                        counts["skipped"] += 1
+                elif record.is_biotime_projection and record.source == AttendanceRecord.Source.SYSTEM:
+                    # We may refresh only the compatibility rows introduced by
+                    # this foundation, and only while they are still SYSTEM
+                    # rows. Historical SYSTEM rows are legacy data too and
+                    # therefore remain untouched.
+                    record.check_in_at = result.first_check_in_at
+                    record.check_out_at = result.final_check_out_at
+                    record.biotime_emp_code = codes_by_profile[profile_id]
+                    record.biotime_terminal_sn = terminal_sn
+                    record.save(
+                        update_fields=["check_in_at", "check_out_at", "biotime_emp_code", "biotime_terminal_sn", "updated_at"]
+                    )
+                    counts["updated"] += 1
+                else:
+                    counts["skipped"] += 1
 
         logger.info("BioTime sync completed: %s", counts)
         return counts

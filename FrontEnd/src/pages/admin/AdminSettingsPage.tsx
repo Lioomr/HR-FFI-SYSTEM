@@ -9,17 +9,20 @@ import {
   InputNumber,
   Space,
   Switch,
-  TimePicker,
   Typography,
   message,
 } from "antd";
 import { SaveOutlined } from "@ant-design/icons";
-import dayjs from "dayjs";
 import PageHeader from "../../components/ui/PageHeader";
 import LoadingState from "../../components/ui/LoadingState";
 import ErrorState from "../../components/ui/ErrorState";
 import Unauthorized403Page from "../Unauthorized403Page";
-import { getSettings, updateSettings } from "../../services/api/settingsApi";
+import AttendancePolicyFields from "./AttendancePolicyFields";
+import {
+  getSettings,
+  updateSettings,
+  withoutLegacyGraceAlias,
+} from "../../services/api/settingsApi";
 import { isApiError } from "../../services/api/apiTypes";
 import type { SettingsDto } from "../../services/api/apiTypes";
 import { getFirstApiErrorMessage } from "../../utils/formErrors";
@@ -29,29 +32,6 @@ import { WORK_WEEK_DAY_OPTIONS } from "./workWeekDays";
 type FormValues = SettingsDto;
 
 type UiMode = "loading" | "error" | "ok";
-
-const HHMM_RE = /^(\d{1,2}):(\d{2})/;
-
-/**
- * `attendance.work_day_start_time` travels as an "HH:MM" string, but antd's
- * TimePicker works in dayjs. Parsing is done by hand rather than
- * `dayjs(value, "HH:mm")` so this does not depend on the customParseFormat
- * plugin being registered.
- */
-function toClock(value: unknown): dayjs.Dayjs | undefined {
-  if (dayjs.isDayjs(value)) return value;
-  if (typeof value === "string") {
-    const match = HHMM_RE.exec(value);
-    if (match) {
-      return dayjs()
-        .hour(Number(match[1]))
-        .minute(Number(match[2]))
-        .second(0)
-        .millisecond(0);
-    }
-  }
-  return undefined;
-}
 
 export default function AdminSettingsPage() {
   const [form] = Form.useForm<FormValues>();
@@ -95,7 +75,16 @@ export default function AdminSettingsPage() {
     setSaving(true);
 
     try {
-      const res = await updateSettings(values);
+      // Send only the canonical grace_window_minutes; the server keeps the
+      // legacy late_grace_minutes alias in sync.
+      const res = await updateSettings(
+        values.attendance
+          ? {
+              ...values,
+              attendance: withoutLegacyGraceAlias(values.attendance),
+            }
+          : values,
+      );
       if (isApiError(res)) {
         // `errors` is contractually an array of {field, message}; render the
         // backend's own wording rather than stringifying the objects.
@@ -310,38 +299,6 @@ export default function AdminSettingsPage() {
             </Form.Item>
 
             <Form.Item
-              label={t("admin.settings.lblWorkDayStart")}
-              name={["attendance", "work_day_start_time"]}
-              getValueProps={(value) => ({ value: toClock(value) })}
-              getValueFromEvent={(_time, timeString) => timeString || undefined}
-              extra={t("admin.settings.helpWorkDayStart")}
-              style={{ minWidth: 260 }}
-            >
-              <TimePicker
-                style={{ width: "100%" }}
-                format="HH:mm"
-                minuteStep={5}
-                allowClear={false}
-                aria-label={t("admin.settings.lblWorkDayStart")}
-              />
-            </Form.Item>
-
-            <Form.Item
-              label={t("admin.settings.lblLateGraceMinutes")}
-              name={["attendance", "late_grace_minutes"]}
-              extra={t("admin.settings.helpLateGraceMinutes")}
-              style={{ minWidth: 260 }}
-            >
-              <InputNumber
-                min={0}
-                max={240}
-                style={{ width: "100%" }}
-                placeholder="e.g. 15"
-                aria-label={t("admin.settings.lblLateGraceMinutes")}
-              />
-            </Form.Item>
-
-            <Form.Item
               label={t("admin.settings.lblAbsenceDetection")}
               name={["attendance", "absence_detection_enabled"]}
               valuePropName="checked"
@@ -365,6 +322,11 @@ export default function AdminSettingsPage() {
               }))}
             />
           </Form.Item>
+
+          <Typography.Title level={5}>
+            {t("admin.settings.secAttendancePolicy")}
+          </Typography.Title>
+          <AttendancePolicyFields />
 
           <Divider />
 

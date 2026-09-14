@@ -4,21 +4,48 @@ from rest_framework.response import Response
 
 from core.error_translations import ARABIC_ERRORS
 
+# DRF reports errors for a serializer as a whole under these keys.
+NON_FIELD_ERROR_KEYS = {"non_field_errors", "__all__"}
+
+
+def _error_item(field, message):
+    return {"field": field, "message": str(message)} if field else {"message": str(message)}
+
+
+def _flatten_error_items(errors, path=""):
+    """Yield ``{field, message}`` items, joining nested serializer paths with dots.
+
+    ``{"attendance": {"grace_window_minutes": [...]}}`` becomes the field
+    ``attendance.grace_window_minutes`` and ``{"items": [{}, {"qty": [...]}]}``
+    becomes ``items.1.qty``.  A nested ``non_field_errors`` belongs to its parent
+    path; flat field errors keep exactly their previous shape.
+    """
+    if isinstance(errors, dict):
+        for key, value in errors.items():
+            key = str(key)
+            if path and key in NON_FIELD_ERROR_KEYS:
+                child = path
+            else:
+                child = f"{path}.{key}" if path else key
+            yield from _flatten_error_items(value, child)
+    elif isinstance(errors, (list, tuple)):
+        for index, item in enumerate(errors):
+            if isinstance(item, (dict, list, tuple)):
+                yield from _flatten_error_items(item, f"{path}.{index}" if path else str(index))
+            else:
+                yield _error_item(path, item)
+    else:
+        yield _error_item(path, errors)
+
 
 def _normalize_422_errors(errors):
     if errors is None:
         return None
     if isinstance(errors, list):
+        # Already contract-shaped by the view.
         return errors
     if isinstance(errors, dict):
-        normalized = []
-        for field, messages in errors.items():
-            if isinstance(messages, (list, tuple)):
-                for msg in messages:
-                    normalized.append({"field": field, "message": str(msg)})
-            else:
-                normalized.append({"field": field, "message": str(messages)})
-        return normalized
+        return list(_flatten_error_items(errors))
     if isinstance(errors, str):
         return [{"message": errors}]
     return [{"message": str(errors)}]

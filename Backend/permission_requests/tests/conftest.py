@@ -29,6 +29,9 @@ def notifications():
     with (
         patch("permission_requests.services.notify_users_for_pending_status") as pending,
         patch("permission_requests.services.notify_profile_request_status_whatsapp") as status_update,
+        # pytest-django's transaction wrapper otherwise discards callbacks at
+        # teardown. Exercise our production on_commit scheduling immediately.
+        patch("permission_requests.services.transaction.on_commit", side_effect=lambda callback: callback()),
     ):
         yield SimpleNamespace(pending=pending, status=status_update)
 

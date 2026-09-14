@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   fireEvent,
   render,
@@ -12,6 +12,29 @@ vi.mock("../../services/api/attendanceApi", () => ({
   getMyAttendance: vi.fn(),
   getGlobalAttendance: vi.fn(),
 }));
+// The today card and violation history have their own suites. Stand-ins keep
+// these tests about the records while still proving the page mounts them.
+vi.mock("../../components/attendance/TodayAttendanceSummaryCard", async () => {
+  const { createElement } = await import("react");
+  return {
+    default: () =>
+      createElement("section", { "data-testid": "today-summary-card" }),
+  };
+});
+vi.mock("../../components/attendance/MyAttendanceViolations", async () => {
+  const { createElement } = await import("react");
+  return {
+    default: () =>
+      createElement("section", { "data-testid": "violation-history" }),
+  };
+});
+vi.mock("../../components/attendance/MyAttendanceNotices", async () => {
+  const { createElement } = await import("react");
+  return {
+    default: () =>
+      createElement("section", { "data-testid": "notice-history" }),
+  };
+});
 
 import EmployeeAttendancePage from "./AttendancePage";
 import { getMyAttendance } from "../../services/api/attendanceApi";
@@ -46,9 +69,17 @@ const listPayload = (items: AttendanceRecord[]) => ({
 
 /**
  * The shared jsdom shim answers every media query with `matches: false`, which
- * is the phone layout: antd then hides the columns marked `responsive: ["sm"]`.
- * Call this to exercise the desktop layout instead.
+ * is the phone layout: the attendance table renders as a list of cards.
+ * Call this to exercise the desktop table instead.
  */
+const phoneMatchMedia = window.matchMedia;
+
+/** The phone layout's card list, once at least one card has rendered. */
+async function findCardList() {
+  const [card] = await screen.findAllByRole("listitem");
+  return card.closest("ul") as HTMLElement;
+}
+
 function useDesktopViewport() {
   window.matchMedia = ((query: string) => ({
     matches: true,
@@ -67,6 +98,10 @@ beforeEach(() => {
   useI18nStore.getState().setLanguage("en");
   useEmployeeAttendanceStore.getState().reset();
   getMock.mockResolvedValue(listPayload([record()]));
+});
+
+afterEach(() => {
+  window.matchMedia = phoneMatchMedia;
 });
 
 describe("EmployeeAttendancePage status display", () => {
@@ -92,11 +127,11 @@ describe("EmployeeAttendancePage status display", () => {
 
     render(<EmployeeAttendancePage />);
 
-    const table = await screen.findByRole("table");
+    const list = await findCardList();
     // Three separate states, never collapsed into one another.
-    expect(within(table).getByText("LATE")).toBeInTheDocument();
-    expect(within(table).getByText("ABSENT")).toBeInTheDocument();
-    expect(within(table).getByText("PENDING_HR")).toBeInTheDocument();
+    expect(within(list).getByText("LATE")).toBeInTheDocument();
+    expect(within(list).getByText("ABSENT")).toBeInTheDocument();
+    expect(within(list).getByText("PENDING_HR")).toBeInTheDocument();
   });
 
   it("shows the backend late minutes and flags a late arrival still awaiting approval", async () => {
@@ -132,8 +167,8 @@ describe("EmployeeAttendancePage status display", () => {
   });
 
   it("keeps the late-arrival flag visible on the phone layout", async () => {
-    // The late-minutes column is `responsive: ["sm"]`, so on a phone the flag in
-    // the always-visible status column is the only late signal left.
+    // On a phone the status sits in the card heading, so the flag must travel
+    // with it rather than live in a separate field.
     getMock.mockResolvedValue(
       listPayload([
         record({
@@ -147,9 +182,9 @@ describe("EmployeeAttendancePage status display", () => {
 
     render(<EmployeeAttendancePage />);
 
-    const table = await screen.findByRole("table");
-    expect(within(table).getByText("PENDING_HR")).toBeInTheDocument();
-    expect(within(table).getByText("Late arrival")).toBeInTheDocument();
+    const list = await findCardList();
+    expect(within(list).getByText("PENDING_HR")).toBeInTheDocument();
+    expect(within(list).getByText("Late arrival")).toBeInTheDocument();
   });
 
   it("does not invent rows the backend did not send", async () => {
@@ -160,8 +195,10 @@ describe("EmployeeAttendancePage status display", () => {
     render(<EmployeeAttendancePage />);
 
     await waitFor(() => expect(getMock).toHaveBeenCalled());
-    const table = await screen.findByRole("table");
-    expect(within(table).queryByText("ABSENT")).toBeNull();
+    // antd's empty illustration repeats the text in its SVG <title>.
+    expect((await screen.findAllByText("No data")).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("listitem")).toBeNull();
+    expect(screen.queryByText("ABSENT")).toBeNull();
   });
 });
 
@@ -190,8 +227,44 @@ describe("BioTime-only attendance", () => {
     render(<EmployeeAttendancePage />);
     expect(await screen.findByText(text)).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(screen.queryByRole("listitem")).not.toBeInTheDocument();
     expect(toast).not.toHaveBeenCalled();
     expect(useEmployeeAttendanceStore.getState().error).toBeNull();
     toast.mockRestore();
+  });
+});
+
+describe("attendance policy sections", () => {
+  it("mounts today's summary, the late violation history and notices", async () => {
+    render(<EmployeeAttendancePage />);
+
+    expect(await screen.findByTestId("today-summary-card")).toBeInTheDocument();
+    expect(screen.getByTestId("violation-history")).toBeInTheDocument();
+    expect(screen.getByTestId("notice-history")).toBeInTheDocument();
+  });
+
+  it("hides both when attendance is unavailable for an unmapped employee", async () => {
+    getMock.mockRejectedValue({
+      response: {
+        status: 403,
+        data: {
+          message:
+            "Attendance is unavailable until your BioTime mapping is completed. Contact HR to be registered on a BioTime device.",
+        },
+      },
+    });
+
+    render(<EmployeeAttendancePage />);
+
+    expect(
+      await screen.findByText(/BioTime mapping is completed/),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        screen.queryByTestId("today-summary-card"),
+      ).not.toBeInTheDocument(),
+    );
+    expect(screen.queryByTestId("violation-history")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("notice-history")).not.toBeInTheDocument();
   });
 });

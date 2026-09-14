@@ -337,6 +337,40 @@ MESSAGES: dict[str, dict[str, tuple[str, str]]] = {
             "تنتهي رخصة عمل {employee_name} في {date}.",
         ),
     },
+    # Late-attendance notice titles use the canonical v3 PDF/UI severity taxonomy, and the
+    # messages mirror each approved template map's preprinted policy copy
+    # (attendance/test_late_notice_delivery.py keeps them identical).
+    "attendance.late_notice_level_1": {
+        "title": (
+            "Late Attendance Notice - Informational Warning",
+            "إنذار التأخر في الحضور - إنذار توعوي",
+        ),
+        "message": ("Warning only - no payroll deduction.", "تحذير فقط - لا يوجد خصم من الراتب."),
+    },
+    "attendance.late_notice_level_2": {
+        "title": (
+            "Late Attendance Notice - Formal Caution",
+            "إنذار التأخر في الحضور - تنبيه رسمي",
+        ),
+        "message": ("Formal caution - 5% daily-rate deduction.", "تنبيه رسمي - خصم بنسبة ٥٪ من الأجر اليومي."),
+    },
+    "attendance.late_notice_level_3": {
+        "title": (
+            "Late Attendance Notice - Serious Warning",
+            "إنذار التأخر في الحضور - تحذير جاد",
+        ),
+        "message": ("Serious warning - 10% daily-rate deduction.", "تحذير جاد - خصم بنسبة ١٠٪ من الأجر اليومي."),
+    },
+    "attendance.late_notice_level_4": {
+        "title": (
+            "Late Attendance Notice - Critical Final Warning",
+            "إنذار التأخر في الحضور - إنذار نهائي حرج",
+        ),
+        "message": (
+            "Critical final warning - 50% daily-rate deduction.",
+            "إنذار نهائي حرج - خصم بنسبة ٥٠٪ من الأجر اليومي.",
+        ),
+    },
     "job_offer.submitted": {
         "title": ("Job offer {reference} requires CEO review", "عرض العمل {reference} بانتظار مراجعة الرئيس التنفيذي"),
         "message": (
