@@ -388,6 +388,58 @@ class InvitePermissionTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["data"]["count"], 1)
 
+    def test_hr_manager_can_search_invites_by_phone_and_receives_company_pending_total(self):
+        now = timezone.now()
+        Invite.objects.create(
+            phone_number="+96651234567",
+            channel=Invite.Channel.WHATSAPP,
+            role="Employee",
+            token=Invite.generate_token(),
+            status=Invite.Status.SENT,
+            sent_at=now,
+            expires_at=now + timedelta(hours=72),
+            created_by=self.hr_user,
+            company=self.company,
+        )
+        Invite.objects.create(
+            email="another-pending@test.com",
+            role="Employee",
+            token=Invite.generate_token(),
+            status=Invite.Status.SENT,
+            sent_at=now,
+            expires_at=now + timedelta(hours=72),
+            created_by=self.hr_user,
+            company=self.company,
+        )
+        other_company = OrganizationNode.objects.create(
+            code="INVITE_OTHER_COMPANY",
+            name="Other Invite Company",
+            node_type=OrganizationNode.NodeType.COMPANY,
+        )
+        Invite.objects.create(
+            phone_number="+96651234567",
+            channel=Invite.Channel.WHATSAPP,
+            role="Employee",
+            token=Invite.generate_token(),
+            status=Invite.Status.SENT,
+            sent_at=now,
+            expires_at=now + timedelta(hours=72),
+            created_by=self.hr_user,
+            company=other_company,
+        )
+        self.client.force_authenticate(user=self.hr_user)
+
+        response = self.client.get(
+            "/invites/",
+            {"search": "+96651234567"},
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"]["count"], 1)
+        self.assertEqual(response.data["data"]["items"][0]["phone_number"], "+96651234567")
+        self.assertEqual(response.data["data"]["pending_count"], 2)
+
     def test_existing_manager_invite_rows_serialize_safely(self):
         now = timezone.now()
         invite = Invite.objects.create(
