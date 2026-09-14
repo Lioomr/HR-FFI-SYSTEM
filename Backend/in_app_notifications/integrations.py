@@ -40,7 +40,7 @@ def _company_for_request(request_type: str, request_id):
             from loans.models import LoanRequest
 
             return LoanRequest.objects.filter(pk=request_id).values_list("company", flat=True).first()
-        if request_type == "Permission Request":
+        if request_type in {"Permission Request", "Exit Permission", "Late Permission", "During Shift Permission"}:
             from permission_requests.models import PermissionRequest
 
             return PermissionRequest.objects.filter(pk=request_id).values_list("company", flat=True).first()
