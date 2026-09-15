@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import RequireManagerAccess from "./RequireManagerAccess";
 import { useAuthStore, type Role } from "../auth/authStore";
@@ -49,6 +49,16 @@ function signIn(role: Role) {
   });
 }
 
+function UnauthorizedStub() {
+  const reason = (useLocation().state as { reason?: string } | null)?.reason;
+  return (
+    <>
+      <div>Unauthorized page</div>
+      <div>{`reason: ${reason ?? "none"}`}</div>
+    </>
+  );
+}
+
 function renderGuard() {
   return render(
     <MemoryRouter initialEntries={["/manager/dashboard"]}>
@@ -63,7 +73,7 @@ function renderGuard() {
             element={<div>Team dashboard content</div>}
           />
         </Route>
-        <Route path="/unauthorized" element={<div>Unauthorized page</div>} />
+        <Route path="/unauthorized" element={<UnauthorizedStub />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -110,9 +120,8 @@ describe("RequireManagerAccess", () => {
 
     renderGuard();
 
-    expect(
-      await screen.findByText("Manager access not available"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Unauthorized page")).toBeInTheDocument();
+    expect(screen.getByText("reason: no_direct_reports")).toBeInTheDocument();
     expect(
       screen.queryByText("Team dashboard content"),
     ).not.toBeInTheDocument();
@@ -124,9 +133,8 @@ describe("RequireManagerAccess", () => {
 
     renderGuard();
 
-    expect(
-      await screen.findByText("Manager access not available"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Unauthorized page")).toBeInTheDocument();
+    expect(screen.getByText("reason: no_direct_reports")).toBeInTheDocument();
     expect(
       screen.queryByText("Team dashboard content"),
     ).not.toBeInTheDocument();
@@ -164,9 +172,8 @@ describe("RequireManagerAccess", () => {
 
     renderGuard();
 
-    expect(
-      await screen.findByText("Manager access not available"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Unauthorized page")).toBeInTheDocument();
+    expect(screen.getByText("reason: none")).toBeInTheDocument();
   });
 
   it("redirects to /unauthorized when there is no signed-in user", () => {

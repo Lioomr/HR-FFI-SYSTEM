@@ -1,11 +1,37 @@
+import { useEffect, useState } from "react";
 import { useI18n } from "../i18n/useI18n";
 import { Button } from "antd";
 import { LockOutlined } from "@ant-design/icons";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+
+const AUTO_REDIRECT_SECONDS = 10;
+
+/** Why a guard sent the user here, passed as router state `{ reason }`. */
+export type UnauthorizedReason = "no_direct_reports";
 
 export default function Unauthorized403Page() {
   const { t, direction } = useI18n();
   const navigate = useNavigate();
+  const location = useLocation();
+  const reason = (location.state as { reason?: UnauthorizedReason } | null)
+    ?.reason;
+  const noDirectReports = reason === "no_direct_reports";
+  const [secondsLeft, setSecondsLeft] = useState(AUTO_REDIRECT_SECONDS);
+
+  useEffect(() => {
+    const timer = setTimeout(
+      () => navigate("/", { replace: true }),
+      AUTO_REDIRECT_SECONDS * 1000,
+    );
+    const ticker = setInterval(
+      () => setSecondsLeft((seconds) => Math.max(seconds - 1, 1)),
+      1000,
+    );
+    return () => {
+      clearTimeout(timer);
+      clearInterval(ticker);
+    };
+  }, [navigate]);
 
   return (
     <div
@@ -114,17 +140,32 @@ export default function Unauthorized403Page() {
             marginTop: 12,
           }}
         >
-          {t("error.unauthorized.title")}
+          {noDirectReports
+            ? t("manager.access.forbiddenTitle")
+            : t("error.unauthorized.title")}
         </div>
 
         <div
           style={{
             color: "rgba(255,255,255,0.6)",
             fontSize: 16,
+            marginBottom: 12,
+          }}
+        >
+          {noDirectReports
+            ? t("manager.access.forbiddenDesc")
+            : t("error.unauthorized.desc")}
+        </div>
+
+        <div
+          role="status"
+          style={{
+            color: "rgba(255,255,255,0.45)",
+            fontSize: 13,
             marginBottom: 32,
           }}
         >
-          {t("error.unauthorized.desc")}
+          {t("error.unauthorized.redirecting", { seconds: secondsLeft })}
         </div>
 
         <Button
