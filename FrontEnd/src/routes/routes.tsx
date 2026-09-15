@@ -11,6 +11,7 @@ import LoginPage from "../pages/LoginPage";
 import RegisterInvitePage from "../pages/RegisterInvitePage";
 import JobOfferResponsePage from "../pages/public/JobOfferResponsePage";
 import ChangePasswordPage from "../pages/ChangePasswordPage";
+import ResetPasswordPage from "../pages/ResetPasswordPage";
 import Unauthorized403Page from "../pages/Unauthorized403Page";
 import NotFound404Page from "../pages/NotFound404Page";
 import AdminDashboardPage from "../pages/admin/AdminDashboardPage";
@@ -142,6 +143,13 @@ export const routes = [
   {
     path: "/register",
     element: <RegisterInvitePage />,
+    errorElement: <RouteErrorBoundary />,
+  },
+  // Public: landing page for the one-time link an admin-triggered password
+  // reset emails out. No auth — the token in the URL is the credential.
+  {
+    path: "/reset-password",
+    element: <ResetPasswordPage />,
     errorElement: <RouteErrorBoundary />,
   },
   // Candidate-facing offer response. No auth, no app chrome: the recipient has

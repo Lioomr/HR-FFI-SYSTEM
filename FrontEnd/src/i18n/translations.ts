@@ -223,6 +223,28 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "changePassword.enterNew": "Enter new password",
     "changePassword.enterConfirm": "Confirm new password",
 
+    // Reset Password (link from a password-reset email)
+    "resetPassword.title": "Reset Password",
+    "resetPassword.subtitle": "Choose a new password for your account",
+    "resetPassword.newPassword": "New Password",
+    "resetPassword.confirmPassword": "Confirm New Password",
+    "resetPassword.newRequired": "Please enter a new password",
+    "resetPassword.confirmRequired": "Please confirm your new password",
+    "resetPassword.mismatch":
+      "The two passwords that you entered do not match!",
+    "resetPassword.strengthError":
+      "Password must be at least 8 characters and contain both letters and numbers",
+    "resetPassword.enterNew": "Enter new password",
+    "resetPassword.enterConfirm": "Confirm new password",
+    "resetPassword.success":
+      "Password reset successfully! Please log in with your new password.",
+    "resetPassword.invalidLinkTitle": "Invalid or expired link",
+    "resetPassword.invalidLinkDesc":
+      "This password reset link is invalid or has expired. Ask an administrator to send you a new one.",
+    "resetPassword.missingToken": "This reset link is missing required information.",
+    "resetPassword.backToLogin": "Back to Login",
+    "resetPassword.submit": "Reset Password",
+
     // Layout / Navigation
     "layout.adminDashboard": "Admin Dashboard",
     "layout.createUser": "Create User",
@@ -4782,6 +4804,27 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "changePassword.enterCurrent": "أدخل كلمة المرور الحالية",
     "changePassword.enterNew": "أدخل كلمة المرور الجديدة",
     "changePassword.enterConfirm": "تأكيد كلمة المرور الجديدة",
+
+    // Reset Password (link from a password-reset email)
+    "resetPassword.title": "إعادة تعيين كلمة المرور",
+    "resetPassword.subtitle": "اختر كلمة مرور جديدة لحسابك",
+    "resetPassword.newPassword": "كلمة المرور الجديدة",
+    "resetPassword.confirmPassword": "تأكيد كلمة المرور الجديدة",
+    "resetPassword.newRequired": "يرجى إدخال كلمة مرور جديدة",
+    "resetPassword.confirmRequired": "يرجى تأكيد كلمة المرور الجديدة",
+    "resetPassword.mismatch": "كلمتا المرور اللتان أدخلتهما غير متطابقتين!",
+    "resetPassword.strengthError":
+      "يجب أن تتكون كلمة المرور من 8 أحرف على الأقل وأن تحتوي على أحرف وأرقام",
+    "resetPassword.enterNew": "أدخل كلمة المرور الجديدة",
+    "resetPassword.enterConfirm": "تأكيد كلمة المرور الجديدة",
+    "resetPassword.success":
+      "تمت إعادة تعيين كلمة المرور بنجاح! يرجى تسجيل الدخول بكلمة المرور الجديدة.",
+    "resetPassword.invalidLinkTitle": "رابط غير صالح أو منتهي الصلاحية",
+    "resetPassword.invalidLinkDesc":
+      "رابط إعادة تعيين كلمة المرور هذا غير صالح أو منتهي الصلاحية. اطلب من المسؤول إرسال رابط جديد.",
+    "resetPassword.missingToken": "رابط إعادة التعيين هذا يفتقد إلى معلومات مطلوبة.",
+    "resetPassword.backToLogin": "العودة لتسجيل الدخول",
+    "resetPassword.submit": "إعادة تعيين كلمة المرور",
 
     // Layout / Navigation
     "layout.adminDashboard": "لوحة تحكم النظام",

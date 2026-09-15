@@ -45,3 +45,24 @@ export async function changePasswordApi(payload: ChangePasswordRequest) {
   );
   return data;
 }
+
+/**
+ * Consumes the one-time token from an emailed password-reset link. Unlike
+ * `changePasswordApi`, this does not require an authenticated session — the
+ * token itself is the credential.
+ */
+export type ResetPasswordConfirmRequest = {
+  uid: string;
+  token: string;
+  new_password: string;
+};
+
+export async function resetPasswordConfirmApi(
+  payload: ResetPasswordConfirmRequest,
+) {
+  const { data } = await api.post<ApiResponse<{}>>(
+    "/auth/reset-password/confirm",
+    payload,
+  );
+  return data;
+}

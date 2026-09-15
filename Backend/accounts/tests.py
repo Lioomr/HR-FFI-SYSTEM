@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -13,6 +14,8 @@ from admin_portal.models import SystemSettings
 from audit.models import AuditLog
 from employees.models import EmployeeProfile
 from organization.models import OrganizationNode
+
+from .security import ResetTokenUnavailable, store_hashed_reset_token
 
 User = get_user_model()
 
@@ -391,3 +394,118 @@ class AuthenticationLifecycleTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(response.data["detail"], "Token is invalid or expired.")
         self.assertNotIn("not-a-token", str(response.data))
+
+
+@override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["testserver", "localhost", "127.0.0.1"])
+class PasswordResetConfirmTests(TestCase):
+    """Covers the unauthenticated `reset_link` flow: an admin-issued token from
+    `UserResetPasswordView` must be consumable here without any existing session
+    or known password — this is what the emailed reset link points to.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+        self.password = "OldStrongPass123!"
+        self.user = User.objects.create_user(email="reset-target@ffi.com", password=self.password)
+
+    def test_valid_token_resets_password_and_revokes_sessions(self):
+        old_refresh = RefreshToken.for_user(self.user)
+        store_hashed_reset_token(self.user.id, "a-valid-token")
+
+        response = self.client.post(
+            "/auth/reset-password/confirm",
+            {"uid": self.user.id, "token": "a-valid-token", "new_password": "BrandNewPass456!"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("BrandNewPass456!"))
+        self.assertFalse(self.user.check_password(self.password))
+
+        old_outstanding = OutstandingToken.objects.get(jti=old_refresh["jti"])
+        self.assertTrue(BlacklistedToken.objects.filter(token=old_outstanding).exists())
+
+        audit_log = AuditLog.objects.get(action="password_reset_completed", actor=self.user)
+        self.assertEqual(audit_log.metadata, {"revoked_all_sessions": True})
+
+    def test_token_is_single_use(self):
+        store_hashed_reset_token(self.user.id, "single-use-token")
+
+        first = self.client.post(
+            "/auth/reset-password/confirm",
+            {"uid": self.user.id, "token": "single-use-token", "new_password": "FirstNewPass456!"},
+        )
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+
+        replay = self.client.post(
+            "/auth/reset-password/confirm",
+            {"uid": self.user.id, "token": "single-use-token", "new_password": "SecondNewPass789!"},
+        )
+        self.assertEqual(replay.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("FirstNewPass456!"))
+
+    def test_wrong_token_is_rejected_without_revealing_user_existence(self):
+        store_hashed_reset_token(self.user.id, "the-real-token")
+
+        wrong_token = self.client.post(
+            "/auth/reset-password/confirm",
+            {"uid": self.user.id, "token": "not-the-token", "new_password": "BrandNewPass456!"},
+        )
+        unknown_user = self.client.post(
+            "/auth/reset-password/confirm",
+            {"uid": self.user.id + 999, "token": "the-real-token", "new_password": "BrandNewPass456!"},
+        )
+
+        self.assertEqual(wrong_token.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(unknown_user.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(wrong_token.data["message"], unknown_user.data["message"])
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password(self.password))
+
+    def test_weak_password_is_rejected_without_burning_the_token(self):
+        store_hashed_reset_token(self.user.id, "retryable-token")
+
+        weak_attempt = self.client.post(
+            "/auth/reset-password/confirm",
+            {"uid": self.user.id, "token": "retryable-token", "new_password": "weak"},
+        )
+        self.assertEqual(weak_attempt.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+        # The token must still be usable after a rejected password: a user should
+        # not have to request a brand-new reset link just because their first
+        # attempt failed the strength check.
+        retry = self.client.post(
+            "/auth/reset-password/confirm",
+            {"uid": self.user.id, "token": "retryable-token", "new_password": "StrongEnoughPass123!"},
+        )
+        self.assertEqual(retry.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("StrongEnoughPass123!"))
+
+    def test_invalid_link_message_is_translated_to_arabic(self):
+        response = self.client.post(
+            "/auth/reset-password/confirm",
+            {"uid": self.user.id, "token": "never-issued", "new_password": "BrandNewPass456!"},
+            HTTP_ACCEPT_LANGUAGE="ar",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(response.data["message"], "رابط إعادة التعيين هذا غير صالح أو منتهي الصلاحية.")
+
+    def test_storing_a_token_fails_loudly_when_the_cache_does_not_keep_it(self):
+        # With Redis down the cache fails open and silently drops writes.
+        with patch("accounts.security.cache.get", return_value=None):
+            with self.assertRaises(ResetTokenUnavailable):
+                store_hashed_reset_token(self.user.id, "dropped-token")
+
+    def test_expired_or_missing_token_is_rejected(self):
+        response = self.client.post(
+            "/auth/reset-password/confirm",
+            {"uid": self.user.id, "token": "never-issued", "new_password": "BrandNewPass456!"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password(self.password))

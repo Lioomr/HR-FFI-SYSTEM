@@ -9,3 +9,11 @@ class LoginRateThrottle(SimpleRateThrottle):
     def get_cache_key(self, request, view):
         ident = get_client_ip(request)
         return self.cache_format % {"scope": self.scope, "ident": ident}
+
+
+class PasswordResetConfirmRateThrottle(SimpleRateThrottle):
+    scope = "password_reset_confirm"
+
+    def get_cache_key(self, request, view):
+        ident = get_client_ip(request)
+        return self.cache_format % {"scope": self.scope, "ident": ident}

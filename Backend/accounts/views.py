@@ -1,3 +1,4 @@
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from rest_framework.permissions import AllowAny
@@ -17,9 +18,14 @@ from organization.services import (
 from .authentication import RefreshEndpointAuthentication
 from .password_policy import validate_password_against_policy
 from .permissions import get_role
-from .security import blacklist_outstanding_refresh_tokens
-from .serializers import ChangePasswordSerializer, LoginSerializer, VersionedTokenRefreshSerializer
-from .throttles import LoginRateThrottle
+from .security import blacklist_outstanding_refresh_tokens, consume_reset_token, verify_reset_token
+from .serializers import (
+    ChangePasswordSerializer,
+    LoginSerializer,
+    PasswordResetConfirmSerializer,
+    VersionedTokenRefreshSerializer,
+)
+from .throttles import LoginRateThrottle, PasswordResetConfirmRateThrottle
 
 
 class LoginView(APIView):
@@ -97,6 +103,56 @@ class ChangePasswordView(APIView):
         audit(
             request,
             action="password_changed",
+            entity="User",
+            entity_id=user.pk,
+            metadata={"revoked_all_sessions": True},
+            actor=user,
+        )
+
+        return success({})
+
+
+class PasswordResetConfirmView(APIView):
+    """Consumes the one-time token from an emailed `reset_link` and sets a new
+    password. Unauthenticated by design: the token itself is the credential —
+    the user reaching this link cannot be assumed to know any existing password.
+    """
+
+    permission_classes = [AllowAny]
+    throttle_classes = [PasswordResetConfirmRateThrottle]
+
+    def post(self, request):
+        s = PasswordResetConfirmSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+
+        uid = s.validated_data["uid"]
+        token = s.validated_data["token"]
+        invalid_response = error("This reset link is invalid or has expired.", status=422)
+
+        with transaction.atomic():
+            user = get_user_model().objects.select_for_update().filter(pk=uid).first()
+            if not user or not user.is_active or not verify_reset_token(uid, token):
+                return invalid_response
+
+            try:
+                validate_password_against_policy(s.validated_data["new_password"], user=user)
+            except DjangoValidationError as e:
+                return error("Validation error", {"new_password": list(e.messages)}, status=422)
+
+            # Re-check-and-delete right before committing: consume_reset_token is
+            # the single-use gate, closing the window between the peek above and
+            # the write below without letting a slow client keep the token alive.
+            if not consume_reset_token(uid, token):
+                return invalid_response
+
+            user.set_password(s.validated_data["new_password"])
+            user.auth_token_version += 1
+            user.save(update_fields=["password", "auth_token_version"])
+            blacklist_outstanding_refresh_tokens(user)
+
+        audit(
+            request,
+            action="password_reset_completed",
             entity="User",
             entity_id=user.pk,
             metadata={"revoked_all_sessions": True},

@@ -49,6 +49,7 @@ services:
       FRONTEND_URL: http://localhost:5173
       HR_TEMPLATES_DIR: /hr/templates
       REDIS_URL: redis://redis:6379/0
+      CACHE_URL: redis://redis:6379/1
       CELERY_BROKER_URL: redis://redis:6379/2
       CELERY_RESULT_BACKEND: redis://redis:6379/3
     depends_on:
@@ -87,6 +88,7 @@ services:
       DB_HOST: db
       DB_PORT: 5432
       REDIS_URL: redis://redis:6379/0
+      CACHE_URL: redis://redis:6379/1
       CELERY_BROKER_URL: redis://redis:6379/2
       CELERY_RESULT_BACKEND: redis://redis:6379/3
       EVOLUTION_API_BASE_URL: http://evolution-api:${EVOLUTION_API_PORT:-8080}
@@ -127,6 +129,7 @@ services:
       DB_HOST: db
       DB_PORT: 5432
       REDIS_URL: redis://redis:6379/0
+      CACHE_URL: redis://redis:6379/1
       CELERY_BROKER_URL: redis://redis:6379/2
       CELERY_RESULT_BACKEND: redis://redis:6379/3
       EVOLUTION_API_BASE_URL: http://evolution-api:${EVOLUTION_API_PORT:-8080}

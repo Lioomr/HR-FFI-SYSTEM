@@ -1,6 +1,9 @@
+import hashlib
+import secrets
 from datetime import timedelta
 
 from django.conf import settings
+from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
@@ -12,6 +15,58 @@ def blacklist_outstanding_refresh_tokens(user):
     outstanding_tokens = OutstandingToken.objects.select_for_update().filter(user=user)
     for token in outstanding_tokens.iterator():
         BlacklistedToken.objects.get_or_create(token=token)
+
+
+def password_reset_cache_key(user_id) -> str:
+    return f"password_reset_token:{user_id}"
+
+
+class ResetTokenUnavailable(Exception):
+    """The reset token could not be stored, so an emailed link would never work."""
+
+
+def store_hashed_reset_token(user_id, token: str) -> None:
+    """Cache a one-time password-reset token for `user_id`, hashed at rest.
+
+    Consumed (and deleted) by `consume_reset_token`, which backs the
+    unauthenticated reset-confirmation endpoint the emailed reset link points to.
+    Raises `ResetTokenUnavailable` when the cache did not keep the token.
+    """
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    ttl_seconds = int(getattr(settings, "PASSWORD_RESET_TOKEN_TTL_SECONDS", 3600))
+    key = password_reset_cache_key(user_id)
+    entry = {"token_hash": token_hash}
+    cache.set(key, entry, ttl_seconds)
+    # The cache fails open when Redis is down (config/settings.py), so confirm the
+    # write rather than email a link that can never be redeemed.
+    if cache.get(key) != entry:
+        raise ResetTokenUnavailable("Password reset token could not be stored.")
+
+
+def verify_reset_token(user_id, token: str) -> bool:
+    """Check `token` against the cached hash for `user_id` without consuming it.
+
+    Use this to gate a reset attempt before doing other validation (e.g. the
+    new password's strength) so a rejected attempt doesn't burn the token.
+    """
+    entry = cache.get(password_reset_cache_key(user_id))
+    if not entry:
+        return False
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    return secrets.compare_digest(token_hash, entry.get("token_hash", ""))
+
+
+def consume_reset_token(user_id, token: str) -> bool:
+    """Validate `token` against the cached hash for `user_id` and delete it.
+
+    Single-use by design: a valid check always consumes the token, so the same
+    reset link cannot be replayed even within its TTL. Call this only once the
+    reset is actually going to succeed.
+    """
+    if not verify_reset_token(user_id, token):
+        return False
+    cache.delete(password_reset_cache_key(user_id))
+    return True
 
 
 def get_client_ip(request):

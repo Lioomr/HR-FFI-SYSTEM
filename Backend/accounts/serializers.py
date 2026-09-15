@@ -21,7 +21,9 @@ User = get_user_model()
 
 INVALID_CREDENTIALS_MESSAGE = "Unable to authenticate with the provided credentials."
 INVALID_TOKEN_MESSAGE = "Token is invalid or expired."
-AMBIGUOUS_PHONE_MESSAGE = "Phone number matches more than one account. Use full international format including country code."
+AMBIGUOUS_PHONE_MESSAGE = (
+    "Phone number matches more than one account. Use full international format including country code."
+)
 
 
 def _phone_digits(value: str) -> str:
@@ -122,6 +124,12 @@ class LoginSerializer(serializers.Serializer):
 
 class ChangePasswordSerializer(serializers.Serializer):
     current_password = serializers.CharField()
+    new_password = serializers.CharField()
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    uid = serializers.IntegerField()
+    token = serializers.CharField()
     new_password = serializers.CharField()
 
 
