@@ -129,7 +129,8 @@ describe("Late Permission form", () => {
 
     const pdf = new File(["%PDF"], "evidence.pdf", { type: "application/pdf" });
     const photo = new File(["img"], "photo.jpg", {
-      type: "image/jpeg",
+      // Several phone camera implementations label an ordinary JPEG as image/jpg.
+      type: "image/jpg",
       lastModified: Date.parse("2026-09-13T06:00:00Z"),
     });
     await addFiles("evidence-file-input", [pdf]);
@@ -143,7 +144,13 @@ describe("Late Permission form", () => {
       permission_type: "late",
       request_date: today(),
       reason: "Clinic appointment",
-      attachments: [pdf, photo],
+      attachments: [
+        pdf,
+        expect.objectContaining({
+          name: "photo.jpg",
+          type: "image/jpeg",
+        }),
+      ],
       attachment_metadata: [
         undefined,
         { source: "camera", captured_at: "2026-09-13T06:00:00.000Z" },
