@@ -26,6 +26,13 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   heic: "image/heic",
   heif: "image/heif",
 };
+// Camera apps sometimes report a standard JPEG using one of these legacy MIME
+// aliases. Canonicalize them before the client and server evidence checks.
+const CANONICAL_MIME_ALIASES: Record<string, string> = {
+  "image/jpg": "image/jpeg",
+  "image/pjpeg": "image/jpeg",
+  "image/jfif": "image/jpeg",
+};
 export const EVIDENCE_ACCEPT = [
   ...Object.keys(MIME_BY_EXTENSION).map((extension) => `.${extension}`),
   ...EVIDENCE_MIME_TYPES,
@@ -60,7 +67,14 @@ export function permissionTypeLabel(t: Translate, type: PermissionType) {
  */
 export function normalizeEvidenceFile(file: File): File {
   const type = file.type.toLowerCase();
-  if (EVIDENCE_MIME_TYPES.includes(type)) return file;
+  const canonicalType = CANONICAL_MIME_ALIASES[type] ?? type;
+  if (EVIDENCE_MIME_TYPES.includes(canonicalType)) {
+    if (canonicalType === type) return file;
+    return new File([file], file.name, {
+      type: canonicalType,
+      lastModified: file.lastModified,
+    });
+  }
   const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
   const inferred = MIME_BY_EXTENSION[extension];
   if (inferred && (type === "" || type === "application/octet-stream")) {

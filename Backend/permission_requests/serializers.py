@@ -111,10 +111,17 @@ class PermissionRequestCreateSerializer(serializers.Serializer):
     @staticmethod
     def _validate_attachment(value):
         max_size = int(getattr(settings, "MAX_PERMISSION_REQUEST_ATTACHMENT_SIZE_BYTES", 10 * 1024 * 1024))
-        content_type = (getattr(value, "content_type", "") or "").lower()
+        submitted_content_type = (getattr(value, "content_type", "") or "").lower()
+        content_type = {
+            "image/jpg": "image/jpeg",
+            "image/pjpeg": "image/jpeg",
+            "image/jfif": "image/jpeg",
+        }.get(submitted_content_type, submitted_content_type)
         allowed = {"application/pdf", "image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"}
         if content_type not in allowed:
             raise serializers.ValidationError("Evidence must be a PDF or supported image file.")
+        if content_type != submitted_content_type:
+            value.content_type = content_type
         if value.size > max_size:
             raise serializers.ValidationError(
                 f"Evidence file is too large. Maximum size is {max_size // (1024 * 1024)} MB."
