@@ -2,10 +2,15 @@ import { describe, expect, it } from "vitest";
 import type { ReactElement } from "react";
 import { Navigate, type RouteObject } from "react-router-dom";
 import { routes } from "./routes";
-import EmployeeAttendancePage from "../pages/employee/AttendancePage";
-import ManagerAttendancePage from "../pages/manager/ManagerAttendancePage";
-import AttendancePreviewPage from "../pages/shared/AttendancePreviewPage";
-import AttendancePolicyPage from "../pages/hr/AttendancePolicyPage";
+// Attendance pages are code-split with React.lazy (see ./lazyPages). Compare
+// against the same lazy-wrapped reference the routes use, rather than the
+// raw page module, since a lazy() wrapper is not `===` its inner component.
+import {
+  EmployeeAttendancePage,
+  ManagerAttendancePage,
+  AttendancePreviewPage,
+  AttendancePolicyPage,
+} from "./lazyPages";
 function collect(
   nodes: RouteObject[],
   found = new Map<

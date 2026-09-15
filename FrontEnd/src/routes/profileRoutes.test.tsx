@@ -3,8 +3,10 @@ import type { ReactElement } from "react";
 import type { RouteObject } from "react-router-dom";
 
 import { routes } from "./routes";
-import UserProfilePage from "../pages/shared/UserProfilePage";
-import MyProfilePage from "../pages/employee/MyProfilePage";
+// Profile pages are code-split with React.lazy (see ./lazyPages). Compare
+// against the same lazy-wrapped reference the routes use, rather than the
+// raw page module, since a lazy() wrapper is not `===` its inner component.
+import { UserProfilePage, MyProfilePage } from "./lazyPages";
 
 type AnyRoute = RouteObject & { children?: AnyRoute[] };
 

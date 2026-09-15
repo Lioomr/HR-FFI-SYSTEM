@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import {
   Layout,
   Menu,
@@ -55,6 +55,7 @@ import { isFinanceApproverEmployee } from "../utils/financeApprover";
 import { isCFOApproverEmployee } from "../utils/cfoApprover";
 import { isCEOApproverEmployee } from "../utils/ceoApprover";
 import { isHeadOfficeOrganization } from "../utils/organizationContext";
+import LoadingState from "../components/ui/LoadingState";
 import NotificationBell from "../components/notifications/NotificationBell";
 import { useNotificationsRuntime } from "../hooks/useNotificationsRuntime";
 import { buildCeoMenuItems, getCeoOpenKeysForPath } from "./ceoNav";
@@ -2095,7 +2096,12 @@ export default function BaseLayout() {
               </div>
             </div>
           )}
-          <Outlet />
+          {/* Route pages are code-split (React.lazy); this Suspense boundary
+              keeps the sidebar/header mounted while a page chunk loads
+              instead of blanking the whole app shell. */}
+          <Suspense fallback={<LoadingState title={t("common.loading")} />}>
+            <Outlet />
+          </Suspense>
         </Content>
       </Layout>
     </Layout>
