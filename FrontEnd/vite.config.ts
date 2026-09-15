@@ -28,10 +28,12 @@ export default defineConfig({
           if (id.includes("react-router")) {
             return "vendor-router";
           }
-          if (id.includes("@ant-design/icons")) {
-            return "vendor-antd-icons";
-          }
-          if (id.includes("antd") || id.includes("rc-") || id.includes("@rc-component")) {
+          if (
+            id.includes("antd") ||
+            id.includes("rc-") ||
+            id.includes("@rc-component") ||
+            id.includes("@ant-design")
+          ) {
             return "vendor-antd";
           }
           if (id.includes("dayjs")) {
