@@ -7,7 +7,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("employees", "0024_employeedocument_deletion_state"),
+        ("employees", "0025_employeeprofile_attendance_exempt"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
