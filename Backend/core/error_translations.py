@@ -48,4 +48,6 @@ ARABIC_ERRORS = {
     "Validation error": "خطأ في التحقق من صحة البيانات",
     "This account cannot be unlinked because leave records reference it.": "لا يمكن إلغاء ربط هذا الحساب لأن سجلات الإجازات مرتبطة به.",
     "Reassign or preserve the leave relationships before changing the linked account.": "أعد تعيين علاقات الإجازات أو حافظ عليها قبل تغيير الحساب المرتبط.",
+    "This reset link is invalid or has expired.": "رابط إعادة التعيين هذا غير صالح أو منتهي الصلاحية.",
+    "Reset links are temporarily unavailable. Try again shortly or send a temporary password instead.": "روابط إعادة تعيين كلمة المرور غير متاحة مؤقتاً. حاول مرة أخرى بعد قليل أو أرسل كلمة مرور مؤقتة بدلاً من ذلك.",
 }

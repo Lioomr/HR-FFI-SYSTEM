@@ -1,4 +1,3 @@
-import hashlib
 import logging
 import secrets
 import string
@@ -6,7 +5,6 @@ import string
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.core.cache import cache
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
@@ -15,6 +13,7 @@ from rest_framework import status
 from rest_framework.views import APIView
 
 from accounts.password_policy import get_password_policy
+from accounts.security import ResetTokenUnavailable, store_hashed_reset_token
 from audit.utils import audit
 from core.pagination import StandardPagination
 from core.permissions import IsHRManagerOrAdmin, IsSystemAdmin, get_role
@@ -70,16 +69,6 @@ def generate_temp_password(length=12):
 
     secrets.SystemRandom().shuffle(password_chars)
     return "".join(password_chars)
-
-
-def _password_reset_cache_key(user_id: int) -> str:
-    return f"password_reset_token:{user_id}"
-
-
-def _store_hashed_reset_token(user_id: int, token: str) -> None:
-    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
-    ttl_seconds = int(getattr(settings, "PASSWORD_RESET_TOKEN_TTL_SECONDS", 3600))
-    cache.set(_password_reset_cache_key(user_id), {"token_hash": token_hash}, ttl_seconds)
 
 
 def _send_password_reset_material(user: User, *, subject: str, html_content: str, fallback_text: str) -> None:
@@ -180,8 +169,9 @@ class UserDetailView(APIView):
 
     def get(self, request, user_id):
         user = get_object_or_404(
-            User.objects.select_related("employee_profile")
-            .prefetch_related("groups", "organization_access_entries__organization"),
+            User.objects.select_related("employee_profile").prefetch_related(
+                "groups", "organization_access_entries__organization"
+            ),
             pk=user_id,
         )
         return success(UserListSerializer(user, context={"request": request}).data)
@@ -290,8 +280,12 @@ class UserResetPasswordView(APIView):
                 "status_label_ar": "أمان",
                 "status_color": "#C2410C",
                 "rows": [
-                    {"label": "Temporary password", "label_ar": "كلمة المرور المؤقتة", "value": temp_password,
-                     "value_html": f"<span style='font-family:Consolas,\"Courier New\",monospace;font-size:16px;letter-spacing:2px;color:#1c1f24;'>{temp_password}</span>"},
+                    {
+                        "label": "Temporary password",
+                        "label_ar": "كلمة المرور المؤقتة",
+                        "value": temp_password,
+                        "value_html": f"<span style='font-family:Consolas,\"Courier New\",monospace;font-size:16px;letter-spacing:2px;color:#1c1f24;'>{temp_password}</span>",
+                    },
                     {"label": "Issued at", "label_ar": "وقت الإصدار", "value": requested_at},
                 ],
                 "details_title": "Sign-in details",
@@ -314,8 +308,15 @@ class UserResetPasswordView(APIView):
 
         # mode == reset_link
         token = secrets.token_urlsafe(32)
-        _store_hashed_reset_token(user.id, token)
-        reset_link = f"{settings.FRONTEND_URL.rstrip('/')}/change-password?token={token}&uid={user.id}"
+        try:
+            store_hashed_reset_token(user.id, token)
+        except ResetTokenUnavailable:
+            logger.error("password_reset_link_token_store_failed", extra={"user_id": user.id})
+            return error(
+                "Reset links are temporarily unavailable. Try again shortly or send a temporary password instead.",
+                status=503,
+            )
+        reset_link = f"{settings.FRONTEND_URL.rstrip('/')}/reset-password?token={token}&uid={user.id}"
 
         context = {
             "logo_url": _resolve_logo_source(),

@@ -1,4 +1,5 @@
 import os
+import sys
 from datetime import timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -262,6 +263,34 @@ CHANNEL_LAYERS = {
     }
 }
 
+# Shared across every worker/container, unlike Django's LocMemCache default —
+# required for anything cache-backed that must be correct across processes,
+# such as the password-reset token (accounts/security.py) and the Celery
+# absence-detection overlap lock (attendance/tasks.py).
+#
+# If Redis is unreachable, cache calls log the error and fail open instead of
+# raising, so rate-limited endpoints such as login keep working (unthrottled).
+# Issuing a reset link verifies its write and refuses instead (accounts/security.py).
+CACHE_URL = os.environ.get("CACHE_URL", "redis://localhost:6379/1")
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": CACHE_URL,
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "SOCKET_CONNECT_TIMEOUT": 1,
+            "SOCKET_TIMEOUT": 1,
+            "IGNORE_EXCEPTIONS": True,
+        },
+    }
+}
+DJANGO_REDIS_LOG_IGNORED_EXCEPTIONS = True
+
+# Tests use an in-process cache: they must not need Redis, and concurrent local
+# test runs must not share throttle counters or reset tokens.
+if "pytest" in sys.modules:
+    CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+
 CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/2")
 CELERY_RESULT_BACKEND = os.environ.get("CELERY_RESULT_BACKEND", "redis://localhost:6379/3")
 CELERY_TASK_ALWAYS_EAGER = _env_bool("CELERY_TASK_ALWAYS_EAGER", False)
@@ -404,6 +433,7 @@ LOGIN_FAILURE_LIMIT = 5
 LOGIN_FAILURE_WINDOW_SECONDS = 900
 LOGIN_LOCKOUT_SECONDS = 900
 LOGIN_THROTTLE_RATE = "10/min"
+PASSWORD_RESET_CONFIRM_THROTTLE_RATE = "10/min"
 EMPLOYEE_IMPORT_THROTTLE_RATE = "5/min"
 JOB_OFFER_RESPONSE_THROTTLE_RATE = "30/min"
 PAYROLL_FINALIZE_THROTTLE_RATE = "5/min"
@@ -437,6 +467,7 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 25,
     "DEFAULT_THROTTLE_RATES": {
         "login": LOGIN_THROTTLE_RATE,
+        "password_reset_confirm": PASSWORD_RESET_CONFIRM_THROTTLE_RATE,
         "employee_import": EMPLOYEE_IMPORT_THROTTLE_RATE,
         "job_offer_response": JOB_OFFER_RESPONSE_THROTTLE_RATE,
         "payroll_finalize": PAYROLL_FINALIZE_THROTTLE_RATE,

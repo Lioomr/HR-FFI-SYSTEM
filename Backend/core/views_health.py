@@ -94,6 +94,7 @@ def _collect_components() -> dict[str, str]:
         "database_migrations": _check_database_migrations(),
         "redis": _check_redis(getattr(settings, "REDIS_URL", "redis://localhost:6379/0")),
         "celery_broker": _check_redis(getattr(settings, "CELERY_BROKER_URL", "redis://localhost:6379/2")),
+        "cache": _check_redis(getattr(settings, "CACHE_URL", "redis://localhost:6379/1")),
         "celery_worker": _check_celery_worker(),
         "evolution_api": _check_evolution_api(),
         "email_provider": _check_email_provider(),
