@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { Navigate, useParams } from "react-router-dom";
 import RequireAuth from "./RequireAuth";
 import RequireRole from "./RequireRole";
@@ -6,125 +7,147 @@ import RequireFinanceApprover from "./RequireFinanceApprover";
 import RequireCFOApprover from "./RequireCFOApprover";
 import RequireCEOApprover from "./RequireCEOApprover";
 import HomeRedirect from "./HomeRedirect";
+import LoadingState from "../components/ui/LoadingState";
 
+// Small, always-needed entry/exit screens stay eagerly bundled: they are on
+// the critical path for every unauthenticated visitor (or are the fallback
+// error/404 screens), so lazy-loading them would only add a network
+// round-trip with no benefit.
 import LoginPage from "../pages/LoginPage";
-import RegisterInvitePage from "../pages/RegisterInvitePage";
-import JobOfferResponsePage from "../pages/public/JobOfferResponsePage";
 import ChangePasswordPage from "../pages/ChangePasswordPage";
 import ResetPasswordPage from "../pages/ResetPasswordPage";
-import Unauthorized403Page from "../pages/Unauthorized403Page";
 import NotFound404Page from "../pages/NotFound404Page";
-import AdminDashboardPage from "../pages/admin/AdminDashboardPage";
-import AdminUsersListPage from "../pages/admin/AdminUsersListPage";
-import AdminUserCreatePage from "../pages/admin/AdminUserCreatePage";
-import AdminInvitesPage from "../pages/admin/AdminInvitesPage";
-import AdminAuditLogsPage from "../pages/admin/AdminAuditLogsPage";
-import AdminWhatsAppIntegrationPage from "../pages/admin/AdminWhatsAppIntegrationPage";
 
-import AdminSettingsPage from "../pages/admin/AdminSettingsPage";
-import AdminWorkLocationsPage from "../pages/admin/AdminWorkLocationsPage";
-import BioTimeSettingsPage from "../pages/admin/BioTimeSettingsPage";
-import DelegationRulesPage from "../pages/hr/DelegationRulesPage";
-import EmployeeLeavesPage from "../pages/employee/EmployeeLeavesPage";
-import HrLeaveBalancesPage from "../pages/hr/HrLeaveBalancesPage";
-import DepartmentsPage from "../pages/hr/reference/DepartmentsPage";
-import PositionsPage from "../pages/hr/reference/PositionsPage";
-import TaskGroupsPage from "../pages/hr/reference/TaskGroupsPage";
-import SponsorsPage from "../pages/hr/reference/SponsorsPage";
-import RentTypesPage from "../pages/hr/reference/RentTypesPage";
-import EmployeesListPage from "../pages/hr/employees/EmployeesListPage";
-import CreateEmployeePage from "../pages/hr/employees/CreateEmployeePage";
-import ViewEmployeePage from "../pages/hr/employees/ViewEmployeePage";
-import EditEmployeePage from "../pages/hr/employees/EditEmployeePage";
-import ExpiringDocumentsPage from "../pages/hr/employees/ExpiringDocumentsPage";
-import HRDashboardPage from "../pages/hr/dashboard/HRDashboardPage";
-import RecentActivityPage from "../pages/hr/dashboard/RecentActivityPage";
-import ImportEmployeesEntryPage from "../pages/hr/import/ImportEmployeesEntryPage";
-import ImportResultPage from "../pages/hr/import/ImportResultPage";
-
-import ImportHistoryPage from "../pages/hr/import/ImportHistoryPage";
-import PayrollDashboardPage from "../pages/hr/payroll/PayrollDashboardPage";
-import CreatePayrollRunPage from "../pages/hr/payroll/CreatePayrollRunPage";
-import PayrollRunDetailsPage from "../pages/hr/payroll/PayrollRunDetailsPage";
-import HRAssetsPage from "../pages/hr/assets/HRAssetsPage";
-import AssetLookupPage from "../pages/hr/assets/AssetLookupPage";
-import LabelJobsHistoryPage from "../pages/hr/assets/LabelJobsHistoryPage";
-import HRRentsPage from "../pages/hr/rents/HRRentsPage";
-import TemplateLibraryPage from "../pages/hr/templates/TemplateLibraryPage";
-import JobOffersListPage from "../pages/hr/job-offers/JobOffersListPage";
-import JobOfferFormPage from "../pages/hr/job-offers/JobOfferFormPage";
-import JobOfferDetailPage from "../pages/hr/job-offers/JobOfferDetailPage";
-import StartingWorkAcknowledgmentsListPage from "../pages/hr/starting-work-acknowledgments/StartingWorkAcknowledgmentsListPage";
-import StartingWorkAcknowledgmentDetailPage from "../pages/hr/starting-work-acknowledgments/StartingWorkAcknowledgmentDetailPage";
-import EmployeePayslipsListPage from "../pages/employee/payslips/EmployeePayslipsListPage";
-import EmployeePayslipDetailsPage from "../pages/employee/payslips/EmployeePayslipDetailsPage";
-
-import RequestLeavePage from "../pages/employee/leave/RequestLeavePage";
-import MyLeaveRequestsPage from "../pages/employee/leave/MyLeaveRequestsPage";
-import MyLeaveBalancePage from "../pages/employee/leave/MyLeaveBalancePage";
-import EmployeeLeaveRequestDetailsPage from "../pages/employee/leave/EmployeeLeaveRequestDetailsPage";
-import DelegatedLeaveInboxPage from "../pages/employee/leave/DelegatedLeaveInboxPage";
-import RequestLoanPage from "../pages/employee/loan/RequestLoanPage";
-import MyLoanRequestsPage from "../pages/employee/loan/MyLoanRequestsPage";
-import EmployeeLoanRequestDetailsPage from "../pages/employee/loan/LoanRequestDetailsPage";
-import MyAssetsPage from "../pages/employee/assets/MyAssetsPage";
-
-import LeaveInboxPage from "../pages/hr/leave/LeaveInboxPage";
-import AnnualLeaveSettlementsPage from "../pages/hr/leave/AnnualLeaveSettlementsPage";
-import LeaveRequestDetailsPage from "../pages/hr/leave/LeaveRequestDetailsPage";
-import LoanInboxPage from "../pages/hr/loan/LoanInboxPage";
-import HrLoanRequestDetailsPage from "../pages/hr/loan/LoanRequestDetailsPage";
-import ManagerDashboardPage from "../pages/manager/ManagerDashboardPage";
-import ManagerTeamRequestsPage from "../pages/manager/ManagerTeamRequestsPage";
-import ManagerLeaveRequestDetailsPage from "../pages/manager/ManagerLeaveRequestDetailsPage";
-import ManagerTeamPage from "../pages/manager/ManagerTeamPage";
-import CreateTeamAnnouncementPage from "../pages/manager/CreateTeamAnnouncementPage";
-import ManagerLoanRequestsPage from "../pages/manager/ManagerLoanRequestsPage";
-import ManagerLoanRequestDetailsPage from "../pages/manager/ManagerLoanRequestDetailsPage";
-import ManagerEmployeeProfilePage from "../pages/manager/ManagerEmployeeProfilePage";
-
-import MyProfilePage from "../pages/employee/MyProfilePage";
-import UserProfilePage from "../pages/shared/UserProfilePage";
-import DashboardPage from "../pages/employee/DashboardPage";
+// Everything else is a route-level page split into its own chunk. See
+// ./lazyPages.tsx for the React.lazy() definitions — route tests that assert
+// route -> component identity import the same lazy-wrapped references from
+// there instead of the raw page modules.
 import {
+  AdminDashboardPage,
+  AdminUsersListPage,
+  AdminUserCreatePage,
+  AdminInvitesPage,
+  AdminAuditLogsPage,
+  AdminWhatsAppIntegrationPage,
+  AdminSettingsPage,
+  AdminWorkLocationsPage,
+  BioTimeSettingsPage,
+  DelegationRulesPage,
+  UserProfilePage,
+  MyProfilePage,
+  DepartmentsPage,
+  PositionsPage,
+  TaskGroupsPage,
+  SponsorsPage,
+  RentTypesPage,
+  EmployeesListPage,
+  CreateEmployeePage,
+  ViewEmployeePage,
+  EditEmployeePage,
+  ExpiringDocumentsPage,
+  HRDashboardPage,
+  RecentActivityPage,
+  ImportEmployeesEntryPage,
+  ImportResultPage,
+  ImportHistoryPage,
+  PayrollDashboardPage,
+  CreatePayrollRunPage,
+  PayrollRunDetailsPage,
+  HRAssetsPage,
+  AssetLookupPage,
+  LabelJobsHistoryPage,
+  HRRentsPage,
+  TemplateLibraryPage,
+  JobOffersListPage,
+  JobOfferFormPage,
+  JobOfferDetailPage,
+  StartingWorkAcknowledgmentsListPage,
+  StartingWorkAcknowledgmentDetailPage,
+  EmployeePayslipsListPage,
+  EmployeePayslipDetailsPage,
+  EmployeeLeavesPage,
+  RequestLeavePage,
+  MyLeaveRequestsPage,
+  MyLeaveBalancePage,
+  EmployeeLeaveRequestDetailsPage,
+  DelegatedLeaveInboxPage,
+  RequestLoanPage,
+  MyLoanRequestsPage,
+  EmployeeLoanRequestDetailsPage,
+  MyAssetsPage,
+  EmployeeAttendancePage,
+  DashboardPage,
+  LeaveInboxPage,
+  AnnualLeaveSettlementsPage,
+  LeaveRequestDetailsPage,
+  LoanInboxPage,
+  HrLoanRequestDetailsPage,
+  HrLeaveBalancesPage,
+  AttendancePolicyPage,
+  ManagerDashboardPage,
+  ManagerTeamRequestsPage,
+  ManagerLeaveRequestDetailsPage,
+  ManagerTeamPage,
+  CreateTeamAnnouncementPage,
+  ManagerLoanRequestsPage,
+  ManagerLoanRequestDetailsPage,
+  ManagerEmployeeProfilePage,
+  ManagerAttendancePage,
   PermissionRequestDetailPage,
   PermissionRequestFormPage,
   HrPermissionRequestsPage,
   ManagerPermissionRequestsPage,
   MyPermissionRequestsPage,
-} from "../pages/shared/permission/PermissionRequestPages";
+  AnnouncementsManagementPage,
+  CreateAnnouncementPage,
+  EditAnnouncementPage,
+  AnnouncementsPage,
+  CEODashboardPage,
+  CEOLeaveInboxPage,
+  CEOAnnualLeaveSettlementsPage,
+  CEOTeamPage,
+  CEOLoanRequestsPage,
+  CEOLoanRequestDetailsPage,
+  CEOAssetDamageReportsPage,
+  CEOAssetReturnRequestsPage,
+  CEOEmployeeDeletionInboxPage,
+  CEOEmployeeDeletionDetailPage,
+  CEOJobOffersInboxPage,
+  CEOJobOfferDetailPage,
+  CFODashboardPage,
+  CFOLoanRequestsPage,
+  CFOLoanRequestDetailsPage,
+  AttendancePreviewPage,
+  PendingInboxPage,
+  NotificationsPage,
+  ContractDecisionsPage,
+  RegisterInvitePage,
+  JobOfferResponsePage,
+  Unauthorized403Page,
+} from "./lazyPages";
 
-// Announcements
-import AnnouncementsManagementPage from "../pages/hr/announcements/AnnouncementsManagementPage";
-import CreateAnnouncementPage from "../pages/hr/announcements/CreateAnnouncementPage";
-import EditAnnouncementPage from "../pages/hr/announcements/EditAnnouncementPage";
-import AnnouncementsPage from "../pages/announcements/AnnouncementsPage";
-
-// CEO
-import CEODashboardPage from "../pages/ceo/CEODashboardPage";
-import CEOLeaveInboxPage from "../pages/ceo/CEOLeaveInboxPage";
-import CEOAnnualLeaveSettlementsPage from "../pages/ceo/CEOAnnualLeaveSettlementsPage";
-import CEOTeamPage from "../pages/ceo/CEOTeamPage";
-import CEOLoanRequestsPage from "../pages/ceo/CEOLoanRequestsPage";
-import CEOLoanRequestDetailsPage from "../pages/ceo/CEOLoanRequestDetailsPage";
-import CEOAssetDamageReportsPage from "../pages/ceo/CEOAssetDamageReportsPage";
-import CEOAssetReturnRequestsPage from "../pages/ceo/CEOAssetReturnRequestsPage";
-import CEOEmployeeDeletionInboxPage from "../pages/ceo/CEOEmployeeDeletionInboxPage";
-import CEOEmployeeDeletionDetailPage from "../pages/ceo/CEOEmployeeDeletionDetailPage";
-import CEOJobOffersInboxPage from "../pages/ceo/CEOJobOffersInboxPage";
-import CEOJobOfferDetailPage from "../pages/ceo/CEOJobOfferDetailPage";
-import CFODashboardPage from "../pages/cfo/CFODashboardPage";
-import CFOLoanRequestsPage from "../pages/cfo/CFOLoanRequestsPage";
-import CFOLoanRequestDetailsPage from "../pages/cfo/CFOLoanRequestDetailsPage";
-import EmployeeAttendancePage from "../pages/employee/AttendancePage";
-import ManagerAttendancePage from "../pages/manager/ManagerAttendancePage";
-import AttendancePreviewPage from "../pages/shared/AttendancePreviewPage";
-import AttendancePolicyPage from "../pages/hr/AttendancePolicyPage";
+// Public, unauthenticated flows accessed only via an emailed/WhatsApp'd
+// link. They are lazy-loaded (see ./lazyPages) but sit outside BaseLayout's
+// Suspense boundary, so each gets its own inline fallback here.
+const LazyRegisterInvitePage = (
+  <Suspense fallback={<LoadingState />}>
+    <RegisterInvitePage />
+  </Suspense>
+);
+const LazyJobOfferResponsePage = (
+  <Suspense fallback={<LoadingState />}>
+    <JobOfferResponsePage />
+  </Suspense>
+);
+// Unauthorized403Page is nested directly under RequireAuth's <Outlet/>
+// (not under BaseLayout), which also carries its own Suspense boundary.
+const LazyUnauthorized403Page = (
+  <Suspense fallback={<LoadingState />}>
+    <Unauthorized403Page />
+  </Suspense>
+);
 
 import RouteErrorBoundary from "./RouteErrorBoundary";
-import PendingInboxPage from "../pages/shared/PendingInboxPage";
-import NotificationsPage from "../pages/shared/NotificationsPage";
-import ContractDecisionsPage from "../pages/shared/ContractDecisionsPage";
 
 import BaseLayout from "../layouts/BaseLayout";
 
@@ -142,7 +165,7 @@ export const routes = [
   },
   {
     path: "/register",
-    element: <RegisterInvitePage />,
+    element: LazyRegisterInvitePage,
     errorElement: <RouteErrorBoundary />,
   },
   // Public: landing page for the one-time link an admin-triggered password
@@ -156,7 +179,7 @@ export const routes = [
   // only the tokenized link from their WhatsApp/email message.
   {
     path: "/job-offers/respond",
-    element: <JobOfferResponsePage />,
+    element: LazyJobOfferResponsePage,
     errorElement: <RouteErrorBoundary />,
   },
 
@@ -169,7 +192,7 @@ export const routes = [
   {
     path: "/unauthorized",
     element: <RequireAuth />,
-    children: [{ index: true, element: <Unauthorized403Page /> }],
+    children: [{ index: true, element: LazyUnauthorized403Page }],
   },
 
   // Protected area + layout

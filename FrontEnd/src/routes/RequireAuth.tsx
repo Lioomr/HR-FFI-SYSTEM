@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuthStore } from "../auth/authStore";
 import { getToken } from "../services/api/tokenStorage";
@@ -35,5 +36,20 @@ export default function RequireAuth() {
     );
   }
 
-  return <Outlet />;
+  // Fallback for lazy-loaded route pages that render directly under this
+  // guard (e.g. /change-password, /unauthorized) rather than through
+  // BaseLayout, which has its own nested Suspense boundary around <Outlet/>.
+  return (
+    <Suspense
+      fallback={
+        <div
+          style={{ display: "grid", placeItems: "center", minHeight: "50vh" }}
+        >
+          <LoadingState lines={2} />
+        </div>
+      }
+    >
+      <Outlet />
+    </Suspense>
+  );
 }
