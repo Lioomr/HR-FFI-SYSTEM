@@ -433,6 +433,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
 
         base_qs = EmployeeProfile.objects.select_related(
             "user",
+            "company",
             "archived_by",
             "manager",
             "manager_profile",
@@ -1373,6 +1374,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
 
         base_qs = EmployeeProfile.objects.select_related(
             "user",
+            "company",
             "archived_by",
             "manager",
             "manager_profile",

@@ -5,8 +5,9 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db import IntegrityError
+from django.db import IntegrityError, connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from openpyxl import Workbook, load_workbook
 from rest_framework import status
@@ -112,6 +113,35 @@ class EmployeeProfileTests(TestCase):
 
         self.assertIsNone(data["archived_by"])
         self.assertIsNone(data["archived_by_name"])
+
+    def test_list_endpoint_does_not_n_plus_one_on_company(self):
+        # Regression test: the "company" FK (used for company_name in the read
+        # serializer) must be select_related, or each row triggers its own
+        # organization lookup and the query count grows with the employee count.
+        self.client.force_authenticate(user=self.hr_user)
+        self.client.defaults["HTTP_X_ACTIVE_COMPANY_ID"] = str(self.company.id)
+
+        def make_employees(n, prefix):
+            for i in range(n):
+                user = User.objects.create_user(email=f"{prefix}-{i}@ffi.com", password="password")
+                EmployeeProfile.objects.create(
+                    user=user,
+                    company=self.company,
+                    employee_id=f"EMP-{prefix.upper()}-{i}",
+                )
+
+        make_employees(3, "n1-small")
+        with CaptureQueriesContext(connection) as small_ctx:
+            response = self.client.get("/api/employees/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        make_employees(10, "n1-large")
+        with CaptureQueriesContext(connection) as large_ctx:
+            response = self.client.get("/api/employees/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        # Query count must not grow with the number of employees returned.
+        self.assertEqual(len(small_ctx.captured_queries), len(large_ctx.captured_queries))
 
     def test_hr_update_profile(self):
         # Create profile first
