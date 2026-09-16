@@ -107,18 +107,6 @@ export default function EmployeeForm({
     }
   }, [form]);
 
-  const nationality = Form.useWatch("nationality", form);
-
-  useEffect(() => {
-    const currentCode = form.getFieldValue("mobile_country_code");
-    const autoCode = isSaudi
-      ? "+966"
-      : getDialCodeByNationality(nationality) || "+966";
-    if (!currentCode || currentCode !== autoCode) {
-      form.setFieldValue("mobile_country_code", autoCode);
-    }
-  }, [form, nationality, isSaudi]);
-
   const countryCodeOptions = COUNTRIES.flatMap((c) => {
     const dial = getDialCodeByCountryCode(c.code);
     if (!dial) return [];
@@ -195,11 +183,29 @@ export default function EmployeeForm({
                               onChange={(val) => {
                                 setIsSaudi(val);
                                 if (val) {
-                                  // Clear passport fields for Saudi employees
+                                  // Clear passport and nationality fields for Saudi
+                                  // employees: the backend stores is_saudi and
+                                  // nationality independently with no cross-check,
+                                  // so a stale foreign nationality would otherwise
+                                  // be saved alongside is_saudi=true. toPayload()
+                                  // drops undefined/null keys from the PATCH body,
+                                  // so nationality must be an explicit "" to
+                                  // actually clear it server-side rather than
+                                  // leaving the old value untouched.
                                   form.setFieldsValue({
                                     passport_no: undefined,
                                     passport_expiry: undefined,
+                                    nationality: "",
                                   });
+                                  form.setFieldValue("mobile_country_code", "+966");
+                                } else {
+                                  const nationalityValue =
+                                    form.getFieldValue("nationality");
+                                  form.setFieldValue(
+                                    "mobile_country_code",
+                                    getDialCodeByNationality(nationalityValue) ||
+                                      "+966",
+                                  );
                                 }
                               }}
                             />
@@ -276,6 +282,12 @@ export default function EmployeeForm({
                                     `${(option as any)?.value || ""} ${(option as any)?.label || ""}`.toLowerCase();
                                   return labelText.includes(
                                     input.toLowerCase(),
+                                  );
+                                }}
+                                onChange={(val) => {
+                                  form.setFieldValue(
+                                    "mobile_country_code",
+                                    getDialCodeByNationality(val) || "+966",
                                   );
                                 }}
                               >

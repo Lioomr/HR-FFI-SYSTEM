@@ -3,6 +3,15 @@ import dayjs from "dayjs";
 import type { Employee } from "../../../services/api/employeesApi";
 import { getDialCodeByNationality } from "../../../utils/countries";
 
+// Preserves a real 0 (e.g. an allowance intentionally set to zero); only
+// missing/empty values map to null. A truthy check (`value ? Number(value) : null`)
+// would wrongly treat 0 as "not set".
+function toNumberOrNull(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const num = Number(value);
+  return Number.isNaN(num) ? null : num;
+}
+
 function splitPhoneNumber(raw: string | undefined | null): {
   code: string;
   local: string;
@@ -189,9 +198,9 @@ export function fromEmployeeToFormValues(employee: Employee): any {
   formValues.contract_expiry = (employee as any).contract_expiry
     ? dayjs((employee as any).contract_expiry)
     : null;
-  formValues.allowed_overtime = (employee as any).allowed_overtime
-    ? Number((employee as any).allowed_overtime)
-    : null;
+  formValues.allowed_overtime = toNumberOrNull(
+    (employee as any).allowed_overtime,
+  );
 
   // Documents
   formValues.health_card = (employee as any).health_card || "";
@@ -203,28 +212,23 @@ export function fromEmployeeToFormValues(employee: Employee): any {
     : null;
 
   // Salary & Allowances
-  formValues.basic_salary = (employee as any).basic_salary
-    ? Number((employee as any).basic_salary)
-    : null;
-  formValues.transportation_allowance = (employee as any)
-    .transportation_allowance
-    ? Number((employee as any).transportation_allowance)
-    : null;
-  formValues.accommodation_allowance = (employee as any).accommodation_allowance
-    ? Number((employee as any).accommodation_allowance)
-    : null;
-  formValues.telephone_allowance = (employee as any).telephone_allowance
-    ? Number((employee as any).telephone_allowance)
-    : null;
-  formValues.petrol_allowance = (employee as any).petrol_allowance
-    ? Number((employee as any).petrol_allowance)
-    : null;
-  formValues.other_allowance = (employee as any).other_allowance
-    ? Number((employee as any).other_allowance)
-    : null;
-  formValues.total_salary = (employee as any).total_salary
-    ? Number((employee as any).total_salary)
-    : null;
+  formValues.basic_salary = toNumberOrNull((employee as any).basic_salary);
+  formValues.transportation_allowance = toNumberOrNull(
+    (employee as any).transportation_allowance,
+  );
+  formValues.accommodation_allowance = toNumberOrNull(
+    (employee as any).accommodation_allowance,
+  );
+  formValues.telephone_allowance = toNumberOrNull(
+    (employee as any).telephone_allowance,
+  );
+  formValues.petrol_allowance = toNumberOrNull(
+    (employee as any).petrol_allowance,
+  );
+  formValues.other_allowance = toNumberOrNull(
+    (employee as any).other_allowance,
+  );
+  formValues.total_salary = toNumberOrNull((employee as any).total_salary);
 
   return formValues;
 }
