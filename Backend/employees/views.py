@@ -8,6 +8,7 @@ import string
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
+from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Case, CharField, Exists, F, OuterRef, Q, Value, When
@@ -24,6 +25,12 @@ from audit.utils import audit
 from core.exporting import audit_export, xlsx_response
 from core.pagination import EmployeePagination, StandardPagination
 from core.permissions import get_role, is_department_ceo_approver_user
+from core.response_cache import (
+    build_cache_key,
+    canonical_query_string,
+    get_cached_response_data,
+    set_cached_response_data,
+)
 from core.responses import error, success
 from core.services import (
     get_ceo_approver_users,
@@ -50,6 +57,7 @@ from .archive_request_services import (
     apply_archive_rejection,
     record_archive_request_submission,
 )
+from .cache import employee_list_cache_version
 from .contract_expiry import (
     ensure_contract_decision,
     finalize_decision,
@@ -590,14 +598,55 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         return qs
 
     def list(self, request, *args, **kwargs):
+        # Only the SystemAdmin/HRManager branch of get_queryset() is scoped
+        # purely by company -- identical for every such user of that company
+        # at the same moment. Every other role (Manager, Employee, delegated
+        # cross-company scopes) is scoped by
+        # _cross_company_employee_scope_for_request(), which depends on the
+        # specific requesting user's delegations/manager assignments, so that
+        # branch must NEVER read or write this cache: doing so risks leaking
+        # one user's visible employees to a different user with different
+        # visibility.
+        role = get_role(request.user)
+        cache_key = None
+        if role in ["SystemAdmin", "HRManager"]:
+            active_company = get_active_company_for_request(request)
+            if active_company is not None:
+                scope = get_requested_organization_scope(request)
+                scope_id = scope.id if scope is not None else "none"
+                version = employee_list_cache_version(active_company.id)
+                cache_key = build_cache_key(
+                    "employee_list",
+                    "v",
+                    version,
+                    "company",
+                    active_company.id,
+                    "scope",
+                    scope_id,
+                    "q",
+                    canonical_query_string(request.query_params),
+                )
+                cached = get_cached_response_data(cache_key)
+                if cached is not None:
+                    return Response(cached["data"], status=cached["status"])
+
         qs = self._apply_filters(self.get_queryset())
         page = self.paginate_queryset(qs)
         serializer = self.get_serializer(page if page is not None else qs, many=True)
 
         if page is not None:
-            return self.get_paginated_response(serializer.data)
+            response = self.get_paginated_response(serializer.data)
+        else:
+            response = success({"results": serializer.data, "count": qs.count()})
 
-        return success({"results": serializer.data, "count": qs.count()})
+        if cache_key is not None:
+            set_cached_response_data(
+                cache_key,
+                {"data": response.data, "status": response.status_code},
+                settings.EMPLOYEE_LIST_CACHE_SECONDS,
+            )
+
+        return response
 
     @action(detail=False, methods=["get"], url_path="export")
     def export(self, request):
