@@ -295,6 +295,23 @@ def ensure_prehire_profile_for_offer(offer: JobOffer) -> tuple[EmployeeProfile, 
         update_employee_profile_from_offer(offer)
         return profile, False
 
+    national_id = (offer.id_passport_iqama_number or "").strip()
+    phone_number = (offer.candidate_phone_number or "").strip()
+    existing_profile = None
+    if national_id:
+        existing_profile = (
+            EmployeeProfile.objects.filter(company=offer.company, national_id=national_id).order_by("id").first()
+        )
+    if existing_profile is None and phone_number:
+        existing_profile = (
+            EmployeeProfile.objects.filter(company=offer.company, mobile=phone_number).order_by("id").first()
+        )
+    if existing_profile is not None:
+        offer.employee_profile = existing_profile
+        offer.save(update_fields=["employee_profile", "updated_at"])
+        update_employee_profile_from_offer(offer)
+        return existing_profile, False
+
     for _ in range(20):
         try:
             with transaction.atomic():
