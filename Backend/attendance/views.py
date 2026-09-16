@@ -547,7 +547,10 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         if not has_active_biotime_mapping(profile):
             return attendance_unavailable_unmapped()
 
-        queryset = self.filter_queryset(self.get_queryset())
+        # get_queryset() returns the full company list for SystemAdmin/HRManager
+        # roles (used by the HR global attendance list). This action must always
+        # be scoped to the caller's own profile, regardless of role.
+        queryset = self.filter_queryset(self.get_queryset()).filter(employee_profile=profile)
 
         page = self.paginate_queryset(queryset)
         if page is not None:
