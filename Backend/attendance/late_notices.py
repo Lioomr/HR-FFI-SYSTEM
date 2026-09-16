@@ -45,7 +45,7 @@ from .models import AttendanceLateNotice, AttendanceLateViolation
 logger = logging.getLogger(__name__)
 
 TEMPLATE_VERSION = 3
-ASSET_REVISION = 3
+ASSET_REVISION = 4
 NOTICE_EVENT_KEY = "attendance.late_notice"
 NOTICE_ACTION_URL = "/employee/attendance"
 WHATSAPP_TEMPLATE = "late_attendance_notice_v1"
@@ -79,6 +79,7 @@ MAPPED_TEXT_FIELDS = (
     "company_address",
     "company_website",
     "company_email",
+    "hr_signer_name",
 )
 REQUIRED_FIELD_KEYS = frozenset({*MAPPED_TEXT_FIELDS, LOGO_FIELD, HR_SIGNATURE_FIELD})
 
@@ -234,6 +235,7 @@ def build_notice_values(notice: AttendanceLateNotice) -> dict[str, str]:
         "company_address": "",
         "company_website": "",
         "company_email": "",
+        "hr_signer_name": display_name(profile=getattr(company, "late_notice_signer", None)),
     }
 
 
