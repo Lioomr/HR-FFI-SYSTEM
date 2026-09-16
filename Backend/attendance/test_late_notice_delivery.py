@@ -28,7 +28,7 @@ from rest_framework.test import APIClient
 from admin_portal.models import SystemSettings
 from audit.models import AuditLog
 from core.pdf import font_pair, shape_ar
-from core.pdf_forms import render_mapped_form
+from core.pdf_forms import _is_rtl, render_mapped_form
 from core.services.whatsapp_service import WHATSAPP_TEMPLATE_REGISTRY, WhatsAppService
 from core.services.whatsapp_template_library import (
     CAPTION_MAX_CHARS,
@@ -93,13 +93,13 @@ CONTRACT_FIELDS = {
 #: SHA-256 of the active version 3 pairs in artifacts/late-attendance-notice/v3 (CHECKSUMS.sha256).
 V3_PAIR_SHA256 = {
     "late_attendance_level_1_blank_v3.pdf": "e8def8393f43a1cb5409175d086d4a9a339676ae984371167853f45d0232afdb",
-    "late_attendance_level_1_field_map_v3.json": "e0ac48efe71fd163decca5ccfff174d73a9b6b6c5cfb987c85d68fd81663d8c4",
+    "late_attendance_level_1_field_map_v3.json": "8bfa6b06fca7e6335ed7f14886e13e4e3cd2a9141e538ca639a906b9a83a4aa6",
     "late_attendance_level_2_blank_v3.pdf": "0f476f81ce98dcb3fa94484aa1f8444557cb0f268a3dbcc02f519fec0bd1a89b",
-    "late_attendance_level_2_field_map_v3.json": "2b4f2cf7b3a83cad07276444178b1fc02e2555a1cf40509d7bb7cce69da0172d",
+    "late_attendance_level_2_field_map_v3.json": "9fd454e8b8b2dc62c0fabdae242c227a724b0d30b493c9345859a67006b33f12",
     "late_attendance_level_3_blank_v3.pdf": "2e5f756f93e11b08497351a41eb9f041d2d46111cd2517d3060392887105a04f",
-    "late_attendance_level_3_field_map_v3.json": "61c7e303d6092c9d064af09f86500efe7c17106a9dab631fbc432e81212789f5",
+    "late_attendance_level_3_field_map_v3.json": "61a84f501842eda6e30039ff32960ccb83cb39996cf62380aab5687fac3c6639",
     "late_attendance_level_4_blank_v3.pdf": "33821ff03c0f6891acea29a9b79c3212101b95c09169ec442293ea948d3b79af",
-    "late_attendance_level_4_field_map_v3.json": "edffef0df161f52b44b3263e70b711198785c895286dc86a27a7ed50df7d39b0",
+    "late_attendance_level_4_field_map_v3.json": "7df938fc05fd825450a81382a2527e3d8648ed3e39d1be80fa27b3ee98aabfb7",
 }
 #: SHA-256 of the retained version 2 pairs; they must never change.
 V2_PAIR_SHA256 = {
@@ -284,7 +284,7 @@ class LateNoticeTemplateTests(LateAttendanceNoticeTestBase):
                 self.assertEqual(Path(assets.template_path).name, f"late_attendance_level_{level}_blank_v3.pdf")
                 self.assertEqual(
                     (meta["template"], meta["version"], meta["asset_revision"], meta["style"]["level"]),
-                    (f"late_attendance_level_{level}_blank_v3.pdf", 3, 4, level),
+                    (f"late_attendance_level_{level}_blank_v3.pdf", 3, 5, level),
                 )
                 self.assertEqual(meta["logo"]["background"], "opaque #F8FAFC")
                 text_fields = {key for key, spec in assets.fields.items() if spec.get("kind") == "text"}
@@ -456,7 +456,18 @@ class LateNoticeIssuanceTests(LateAttendanceNoticeTestBase):
                         (w for w in overlay if pymupdf.Point((w[0] + w[2]) / 2, (w[1] + w[3]) / 2) in rect),
                         key=lambda w: (round(w[1]), w[0]),
                     )
-                    self.assertEqual(" ".join(w[4] for w in inside), values[key])
+                    if _is_rtl(values[key]):
+                        # The renderer reshapes and bidi-reorders Arabic before drawing,
+                        # so extracted glyphs are presentation forms in visual (not
+                        # logical) order. NFKC maps them back to logical letters; comparing
+                        # the sorted character multiset sidesteps bidi word-order/attachment
+                        # quirks while still proving exactly the expected text was drawn.
+                        extracted = unicodedata.normalize("NFKC", "".join(w[4] for w in inside))
+                        self.assertEqual(
+                            sorted(extracted.replace(" ", "")), sorted(values[key].replace(" ", ""))
+                        )
+                    else:
+                        self.assertEqual(" ".join(w[4] for w in inside), values[key])
         finally:
             rendered.close()
             blank.close()

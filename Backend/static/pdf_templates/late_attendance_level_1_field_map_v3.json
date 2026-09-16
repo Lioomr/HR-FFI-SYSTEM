@@ -43,7 +43,7 @@
     "penalty_amount",
     "reason"
   ],
-  "asset_revision": 4,
+  "asset_revision": 5,
   "layout_treatment": "minimal_open_signature",
   "manual_only_fields": [
     "hr_signature_image"
@@ -421,10 +421,10 @@
     "hr_signature_image": {
       "page": 1,
       "kind": "image",
-      "x": 205,
-      "y": 218,
-      "width": 185,
-      "height": 42,
+      "x": 187,
+      "y": 216,
+      "width": 220,
+      "height": 48,
       "font": "DejaVuSans",
       "font_size": 7.4,
       "align": "center",

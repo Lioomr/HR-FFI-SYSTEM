@@ -45,7 +45,7 @@ from .models import AttendanceLateNotice, AttendanceLateViolation
 logger = logging.getLogger(__name__)
 
 TEMPLATE_VERSION = 3
-ASSET_REVISION = 4
+ASSET_REVISION = 5
 NOTICE_EVENT_KEY = "attendance.late_notice"
 NOTICE_ACTION_URL = "/employee/attendance"
 WHATSAPP_TEMPLATE = "late_attendance_notice_v1"
@@ -96,12 +96,14 @@ WHATSAPP_VARIABLES = (
     "action_url",
 )
 
-#: Human-readable text for the reasons ``AttendancePolicyService.classify_arrival`` charges.
+#: Arabic text for the reasons ``AttendancePolicyService.classify_arrival`` charges.
+#: Printed in the notice's single "reason" field, whose preprinted label is already
+#: bilingual; the reason value itself is Arabic-only by design.
 REASON_TEXT = {
-    "outside_grace": "Checked in after the scheduled shift start, beyond the monthly grace window.",
-    "post_grace_late": "Checked in after the scheduled shift start after the monthly grace allowance was used.",
+    "outside_grace": "تسجيل الحضور بعد بداية الدوام الرسمي، متجاوزًا فترة السماح الشهرية.",
+    "post_grace_late": "تسجيل الحضور بعد بداية الدوام الرسمي بعد استنفاد فترة السماح الشهرية المسموح بها.",
 }
-DEFAULT_REASON_TEXT = "Checked in after the scheduled shift start."
+DEFAULT_REASON_TEXT = "تسجيل الحضور بعد بداية الدوام الرسمي."
 
 # Safe, path-free outcomes of rendering the company logo.
 LOGO_PLACED = "placed"
@@ -202,9 +204,10 @@ def reason_text(code: str) -> str:
 def build_notice_values(notice: AttendanceLateNotice) -> dict[str, str]:
     """Values for the approved map's text fields only, from real system data.
 
-    ``OrganizationNode`` has a canonical name and logo but no Arabic name or
-    contact details, so ``company_name_ar`` repeats the canonical name and the
-    optional contact fields stay empty rather than holding invented data.
+    ``OrganizationNode`` has a canonical name but no Arabic name, so
+    ``company_name_ar`` repeats the canonical name. Contact fields come from
+    the company's own configured ``phone``/``address``/``website``/``email``
+    and stay empty when a company has not set them.
     """
     from core.pdf_signers import display_name
     from permission_requests.labels import profile_department, profile_job_title
@@ -231,10 +234,10 @@ def build_notice_values(notice: AttendanceLateNotice) -> dict[str, str]:
         "policy_result": policy_result(notice.level)[0],
         "penalty_amount": format_amount(notice.penalty_amount),
         "reason": reason_text(violation.reason),
-        "company_phone": "",
-        "company_address": "",
-        "company_website": "",
-        "company_email": "",
+        "company_phone": company.phone,
+        "company_address": company.address,
+        "company_website": company.website,
+        "company_email": company.email,
         "hr_signer_name": display_name(profile=getattr(company, "late_notice_signer", None)),
     }
 
