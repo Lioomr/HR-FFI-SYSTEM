@@ -21,6 +21,7 @@ from audit.models import AuditLog
 from audit.utils import audit
 from audit.views import AuditPagination, apply_filters
 from core.permissions import IsDepartmentCEOApprover, IsHRManagerOrAdmin
+from core.response_cache import build_cache_key, get_cached_response_data, set_cached_response_data
 from core.responses import error, success
 from core.serializers import (
     CrossCompanyManagerAssignmentSerializer,
@@ -300,9 +301,22 @@ class HrSummaryView(APIView):
     permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
 
     def get(self, request):
+        active_company = get_active_company_for_request(request)
+
+        # Identical for every HRManager/SystemAdmin viewing the same active
+        # company at the same moment (see module docstring in
+        # core/response_cache.py) -- so a company-scoped cache key is safe.
+        # No active company selected -> nothing consistent to key on, so
+        # always compute fresh rather than risk a wrong/shared cache entry.
+        cache_key = None
+        if active_company is not None:
+            cache_key = build_cache_key("hr_summary", "company", active_company.id)
+            cached = get_cached_response_data(cache_key)
+            if cached is not None:
+                return success(cached)
+
         today = timezone.now().date()
         warning_date = today + timedelta(days=30)
-        active_company = get_active_company_for_request(request)
 
         employee_qs = filter_queryset_by_company_scope(EmployeeProfile.objects.all(), request)
         leave_qs = filter_queryset_by_company_scope(LeaveRequest.objects.all(), request)
@@ -426,6 +440,8 @@ class HrSummaryView(APIView):
             "recent_activity": recent_activity,
             "latest_payroll": payroll_data,
         }
+        if cache_key is not None:
+            set_cached_response_data(cache_key, data, settings.HR_SUMMARY_CACHE_SECONDS)
         return success(data)
 
 

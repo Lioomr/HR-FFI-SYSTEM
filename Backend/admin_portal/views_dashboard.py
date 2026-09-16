@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated
@@ -8,16 +9,27 @@ from rest_framework.views import APIView
 from audit.models import AuditLog
 from audit.serializers import AuditLogSerializer
 from core.permissions import IsSystemAdmin
+from core.response_cache import build_cache_key, get_cached_response_data, set_cached_response_data
 from core.responses import success
 from invites.models import Invite
 
 User = get_user_model()
+
+# This view aggregates globally (all users, all invites, all audit logs) --
+# it is not scoped to a company and its response does not vary by requesting
+# user (confirmed by reading the full view body), so a single global cache
+# key is safe: every SystemAdmin sees the same answer for the same moment.
+_ADMIN_SUMMARY_CACHE_KEY = build_cache_key("admin_summary", "global")
 
 
 class AdminSummaryView(APIView):
     permission_classes = [IsAuthenticated, IsSystemAdmin]
 
     def get(self, request):
+        cached = get_cached_response_data(_ADMIN_SUMMARY_CACHE_KEY)
+        if cached is not None:
+            return success(cached)
+
         now = timezone.now()
         start_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
         start_7d = now - timedelta(days=7)
@@ -87,4 +99,5 @@ class AdminSummaryView(APIView):
             "server_time": now.isoformat(),
         }
 
+        set_cached_response_data(_ADMIN_SUMMARY_CACHE_KEY, data, settings.ADMIN_SUMMARY_CACHE_SECONDS)
         return success(data)

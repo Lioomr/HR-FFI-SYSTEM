@@ -1,6 +1,11 @@
+import time
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.test import TestCase
+from django.core.cache import cache
+from django.db import connection
+from django.test import TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from rest_framework import status
 from rest_framework.test import APIClient, APIRequestFactory
 
@@ -175,3 +180,48 @@ class OrganizationAccessScopeTests(TestCase):
         )
         self.assertFalse(serializer.is_valid())
         self.assertIn("organization_ids", serializer.errors)
+
+
+class AdminSummaryViewCacheTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+        self.system_admin_group = Group.objects.create(name="SystemAdmin")
+        self.system_admin = User.objects.create_user(
+            email="cache-sysadmin@test.com", password="password", full_name="Cache Sys Admin"
+        )
+        self.system_admin.groups.add(self.system_admin_group)
+        self.client.force_authenticate(user=self.system_admin)
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_second_call_is_served_from_cache_without_hitting_the_db(self):
+        with CaptureQueriesContext(connection) as first_ctx:
+            first_response = self.client.get("/admin/summary/")
+        self.assertEqual(first_response.status_code, status.HTTP_200_OK)
+        self.assertGreater(len(first_ctx.captured_queries), 0)
+
+        with CaptureQueriesContext(connection) as second_ctx:
+            second_response = self.client.get("/admin/summary/")
+        self.assertEqual(second_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(second_response.data["data"]["users"], first_response.data["data"]["users"])
+        # Permission/role resolution still runs before the cache lookup, so a
+        # hit isn't literally zero queries -- but it must skip the expensive
+        # aggregation work entirely, so the count drops dramatically.
+        self.assertLess(len(second_ctx.captured_queries), len(first_ctx.captured_queries) / 2)
+
+    @override_settings(ADMIN_SUMMARY_CACHE_SECONDS=3)
+    def test_cache_expires_after_ttl_and_reflects_new_data(self):
+        first_response = self.client.get("/admin/summary/")
+        first_total = first_response.data["data"]["users"]["total"]
+
+        # A write that lands inside the TTL window should not be visible yet.
+        User.objects.create_user(email="new-user-during-ttl@test.com", password="password")
+        still_cached_response = self.client.get("/admin/summary/")
+        self.assertEqual(still_cached_response.data["data"]["users"]["total"], first_total)
+
+        time.sleep(3.5)
+
+        fresh_response = self.client.get("/admin/summary/")
+        self.assertEqual(fresh_response.data["data"]["users"]["total"], first_total + 1)

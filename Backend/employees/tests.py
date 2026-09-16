@@ -1,12 +1,14 @@
+import time
 from datetime import date, timedelta
 from io import BytesIO
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, connection
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from openpyxl import Workbook, load_workbook
@@ -28,6 +30,12 @@ User = get_user_model()
 
 class EmployeeProfileTests(TestCase):
     def setUp(self):
+        # EmployeeProfileViewSet.list() now caches HR/Admin responses (see
+        # core/response_cache.py); LocMemCache is process-global across test
+        # methods, so clear it defensively even though each test's company
+        # id is a fresh row (Postgres sequences aren't rolled back), which
+        # already keeps cache keys from colliding across test methods here.
+        cache.clear()
         self.client = APIClient()
         self.company = get_default_company()
         self.client.defaults["HTTP_X_ACTIVE_COMPANY_ID"] = str(self.company.id)
@@ -1132,6 +1140,7 @@ class EmployeeProfileTests(TestCase):
 
 class EmployeeDeletionWorkflowTests(TestCase):
     def setUp(self):
+        cache.clear()
         self.client = APIClient()
         self.hr_group = Group.objects.create(name="HRManager")
         self.ceo_group = Group.objects.create(name="CEO")
@@ -1597,3 +1606,138 @@ class EmployeeDeletionWorkflowTests(TestCase):
         from loans.permissions import is_cfo_approver_user
 
         self.assertTrue(is_cfo_approver_user(self.cfo_user))
+
+
+class EmployeeListCacheTests(TestCase):
+    """Covers the response cache added to EmployeeProfileViewSet.list().
+
+    Only the SystemAdmin/HRManager branch of get_queryset() may be cached
+    (it is scoped purely by company); every other role must always compute
+    fresh (see employees/views.py::list and core/response_cache.py).
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+        self.hr_group, _ = Group.objects.get_or_create(name="HRManager")
+        self.manager_group, _ = Group.objects.get_or_create(name="Manager")
+
+        self.company_a = OrganizationNode.objects.create(
+            code="CACHEA", name="Cache Co A", node_type=OrganizationNode.NodeType.COMPANY, employee_id_prefix="CA"
+        )
+        self.company_b = OrganizationNode.objects.create(
+            code="CACHEB", name="Cache Co B", node_type=OrganizationNode.NodeType.COMPANY, employee_id_prefix="CB"
+        )
+
+        self.hr_user_a = User.objects.create_user(email="hr-a@cache.test", password="password")
+        self.hr_user_a.groups.add(self.hr_group)
+        UserOrganizationAccess.objects.create(user=self.hr_user_a, organization=self.company_a)
+
+        self.hr_user_b = User.objects.create_user(email="hr-b@cache.test", password="password")
+        self.hr_user_b.groups.add(self.hr_group)
+        UserOrganizationAccess.objects.create(user=self.hr_user_b, organization=self.company_b)
+
+        self.employee_a = EmployeeProfile.objects.create(
+            employee_id="EMP-A-1",
+            full_name="Employee A",
+            company=self.company_a,
+        )
+        self.employee_b = EmployeeProfile.objects.create(
+            employee_id="EMP-B-1",
+            full_name="Employee B",
+            company=self.company_b,
+        )
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_second_call_is_served_from_cache_without_hitting_the_db(self):
+        self.client.force_authenticate(user=self.hr_user_a)
+
+        with CaptureQueriesContext(connection) as first_ctx:
+            first_response = self.client.get("/api/employees/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company_a.id))
+        self.assertEqual(first_response.status_code, status.HTTP_200_OK)
+        self.assertGreater(len(first_ctx.captured_queries), 0)
+
+        with CaptureQueriesContext(connection) as second_ctx:
+            second_response = self.client.get("/api/employees/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company_a.id))
+        self.assertEqual(second_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(second_response.data, first_response.data)
+        # Permission/role/active-company resolution still runs before the
+        # cache lookup, so a hit isn't literally zero queries -- but it must
+        # skip the expensive queryset/serialization work entirely, so the
+        # count drops dramatically.
+        self.assertLess(len(second_ctx.captured_queries), len(first_ctx.captured_queries) / 2)
+
+    def test_two_companies_never_see_each_others_cached_employee_list(self):
+        # HR of company A, then HR of company B, hitting the same endpoint
+        # within the same TTL window -- neither may ever see the other's data.
+        self.client.force_authenticate(user=self.hr_user_a)
+        response_a = self.client.get("/api/employees/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company_a.id))
+        self.assertEqual(response_a.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            {item["employee_id"] for item in response_a.data["data"]["results"]},
+            {"EMP-A-1"},
+        )
+
+        self.client.force_authenticate(user=self.hr_user_b)
+        response_b = self.client.get("/api/employees/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company_b.id))
+        self.assertEqual(response_b.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            {item["employee_id"] for item in response_b.data["data"]["results"]},
+            {"EMP-B-1"},
+        )
+
+        # Re-request company A again: must still be A-only -- never B's
+        # cached payload, and vice versa.
+        self.client.force_authenticate(user=self.hr_user_a)
+        response_a_again = self.client.get("/api/employees/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company_a.id))
+        self.assertEqual(
+            {item["employee_id"] for item in response_a_again.data["data"]["results"]},
+            {"EMP-A-1"},
+        )
+
+    def test_manager_role_branch_is_never_cached(self):
+        manager_user = User.objects.create_user(email="manager-a@cache.test", password="password")
+        manager_user.groups.add(self.manager_group)
+        manager_profile = EmployeeProfile.objects.create(
+            user=manager_user,
+            employee_id="MGR-A-1",
+            full_name="Manager A",
+            company=self.company_a,
+        )
+
+        self.client.force_authenticate(user=manager_user)
+        first_response = self.client.get("/api/employees/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company_a.id))
+        self.assertEqual(first_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(first_response.data["data"]["results"][0]["full_name"], "Manager A")
+
+        # A plain queryset .update() bypasses save()/signals entirely, so
+        # nothing could have bumped a cache-version counter here -- if this
+        # non-HR/Admin branch were (incorrectly) cached, the request below
+        # would still return the old name.
+        EmployeeProfile.objects.filter(pk=manager_profile.pk).update(full_name="Manager A Renamed")
+
+        second_response = self.client.get("/api/employees/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company_a.id))
+        self.assertEqual(second_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(second_response.data["data"]["results"][0]["full_name"], "Manager A Renamed")
+
+    @override_settings(EMPLOYEE_LIST_CACHE_SECONDS=3)
+    def test_cache_expires_after_ttl_and_reflects_new_data(self):
+        self.client.force_authenticate(user=self.hr_user_a)
+
+        first_response = self.client.get("/api/employees/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company_a.id))
+        self.assertEqual(first_response.data["data"]["results"][0]["full_name"], "Employee A")
+
+        # Bypass the post_save signal on purpose (.update() skips it), so
+        # only the TTL elapsing -- not the best-effort write invalidation --
+        # can explain the renamed employee becoming visible below.
+        EmployeeProfile.objects.filter(pk=self.employee_a.pk).update(full_name="Employee A Renamed")
+
+        still_cached_response = self.client.get("/api/employees/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company_a.id))
+        self.assertEqual(still_cached_response.data["data"]["results"][0]["full_name"], "Employee A")
+
+        time.sleep(3.5)
+
+        fresh_response = self.client.get("/api/employees/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company_a.id))
+        self.assertEqual(fresh_response.data["data"]["results"][0]["full_name"], "Employee A Renamed")

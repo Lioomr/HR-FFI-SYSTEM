@@ -3,6 +3,7 @@ from io import BytesIO
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.core.cache import cache
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
@@ -28,6 +29,7 @@ User = get_user_model()
 
 class TenantScopeRegressionTests(APITestCase):
     def setUp(self):
+        cache.clear()
         self.client.defaults["HTTP_X_FORWARDED_PROTO"] = "https"
         self.hr_group, _ = Group.objects.get_or_create(name="HRManager")
         self.employee_group, _ = Group.objects.get_or_create(name="Employee")

@@ -1,9 +1,13 @@
+import time
 from datetime import date
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.test import TestCase
+from django.core.cache import cache
+from django.db import connection
+from django.test import TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from django.utils.translation import override
 from rest_framework.test import APITestCase
@@ -58,6 +62,11 @@ class RoleResolutionTests(TestCase):
 
 class HrSummaryViewTests(APITestCase):
     def setUp(self):
+        # HrSummaryView responses are now cached per active-company (see
+        # core/response_cache.py); LocMemCache is process-global across test
+        # methods, so clear it or another test's cached response for the same
+        # default company would leak in here.
+        cache.clear()
         self.user_model = get_user_model()
         self.hr_group, _ = Group.objects.get_or_create(name="HRManager")
         self.admin_group, _ = Group.objects.get_or_create(name="SystemAdmin")
@@ -159,6 +168,82 @@ class HrSummaryViewTests(APITestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["data"]["total_employees"], 3)
+
+
+class HrSummaryViewCacheTests(APITestCase):
+    def setUp(self):
+        cache.clear()
+        self.user_model = get_user_model()
+        self.hr_group, _ = Group.objects.get_or_create(name="HRManager")
+        self.company = get_default_company()
+        self.department = Department.objects.create(
+            code="HRSUMCACHE", name="HR Summary Cache Department", company=self.company
+        )
+        self.position = Position.objects.create(
+            code="HRSUMCACHEPOS", name="HR Summary Cache Position", company=self.company
+        )
+
+        self.hr_user = self.user_model.objects.create_user(
+            email="hr-cache@test.com",
+            password="StrongPass123!",
+            full_name="HR Cache Manager",
+        )
+        self.hr_user.groups.add(self.hr_group)
+        UserOrganizationAccess.objects.create(user=self.hr_user, organization=self.company)
+        EmployeeProfile.objects.create(
+            user=self.hr_user,
+            employee_id="EMP-HR-CACHE",
+            full_name="HR Cache Manager",
+            basic_salary=Decimal("9000.00"),
+            department_ref=self.department,
+            position_ref=self.position,
+            hire_date=date(2024, 1, 1),
+            company=self.company,
+        )
+        self.client.force_authenticate(user=self.hr_user)
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_second_call_is_served_from_cache_without_hitting_the_db(self):
+        with CaptureQueriesContext(connection) as first_ctx:
+            first_response = self.client.get("/api/hr/summary/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id))
+        self.assertEqual(first_response.status_code, 200)
+        self.assertGreater(len(first_ctx.captured_queries), 0)
+
+        with CaptureQueriesContext(connection) as second_ctx:
+            second_response = self.client.get("/api/hr/summary/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id))
+        self.assertEqual(second_response.status_code, 200)
+        self.assertEqual(second_response.data, first_response.data)
+        # Permission/role/active-company resolution still runs before the
+        # cache lookup, so a hit isn't literally zero queries -- but it must
+        # skip the expensive aggregation work entirely, so the count drops
+        # dramatically.
+        self.assertLess(len(second_ctx.captured_queries), len(first_ctx.captured_queries) / 2)
+
+    @override_settings(HR_SUMMARY_CACHE_SECONDS=3)
+    def test_cache_expires_after_ttl_and_reflects_new_data(self):
+        first_response = self.client.get("/api/hr/summary/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id))
+        self.assertEqual(first_response.data["data"]["total_employees"], 1)
+
+        # A write that lands inside the TTL window: the cached response
+        # should still be served (proves the cache, not just recomputation).
+        EmployeeProfile.objects.create(
+            employee_id="EMP-HR-CACHE-2",
+            full_name="New Hire",
+            basic_salary=Decimal("5000.00"),
+            department_ref=self.department,
+            position_ref=self.position,
+            hire_date=date(2024, 3, 1),
+            company=self.company,
+        )
+        still_cached_response = self.client.get("/api/hr/summary/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id))
+        self.assertEqual(still_cached_response.data["data"]["total_employees"], 1)
+
+        time.sleep(3.5)
+
+        fresh_response = self.client.get("/api/hr/summary/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id))
+        self.assertEqual(fresh_response.data["data"]["total_employees"], 2)
 
 
 class ErrorResponseTests(TestCase):

@@ -454,6 +454,13 @@ HEALTH_CHECK_TOKEN = os.environ.get("HEALTH_CHECK_TOKEN", "")
 # Dependency probes (DB, Redis, Celery ping, Evolution API) are expensive, so
 # results are reused for this many seconds instead of running on every request.
 HEALTH_CHECK_CACHE_SECONDS = int(os.environ.get("HEALTH_CHECK_CACHE_SECONDS", "15"))
+# Short TTLs for expensive, frequently-hit read endpoints (core/response_cache.py).
+# These bound staleness by time alone -- e.g. the employee list's
+# active_leave_today/effective_employment_status annotations can flip at
+# midnight with zero writes -- on top of any best-effort write invalidation.
+HR_SUMMARY_CACHE_SECONDS = int(os.environ.get("HR_SUMMARY_CACHE_SECONDS", "45"))
+ADMIN_SUMMARY_CACHE_SECONDS = int(os.environ.get("ADMIN_SUMMARY_CACHE_SECONDS", "45"))
+EMPLOYEE_LIST_CACHE_SECONDS = int(os.environ.get("EMPLOYEE_LIST_CACHE_SECONDS", "30"))
 # Optional Healthchecks.io heartbeat for Celery Beat. Leave empty to disable.
 HEALTHCHECKS_PING_URL = os.environ.get("HEALTHCHECKS_PING_URL", "").strip()
 HEALTHCHECKS_PING_TIMEOUT_SECONDS = int(os.environ.get("HEALTHCHECKS_PING_TIMEOUT_SECONDS", "10"))
