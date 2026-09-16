@@ -29,6 +29,10 @@ class OrganizationNode(models.Model):
         blank=True,
         help_text=_("Optional company logo used on company-specific private documents."),
     )
+    phone = models.CharField(max_length=32, blank=True, default="")
+    address = models.CharField(max_length=255, blank=True, default="")
+    website = models.CharField(max_length=255, blank=True, default="")
+    email = models.EmailField(blank=True, default="")
     late_notice_signer = models.ForeignKey(
         "employees.EmployeeProfile",
         on_delete=models.SET_NULL,
