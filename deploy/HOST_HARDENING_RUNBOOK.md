@@ -20,8 +20,10 @@ Script: `deploy/backup-db.sh` (in this repo).
 ### 1.1 One-time setup on the host
 
 ```bash
-sudo mkdir -p /opt/hr-ffi/backups
-sudo chown ubuntu:ubuntu /opt/hr-ffi/backups
+# /home/ubuntu/backups already exists on this host and holds the two prior
+# manual backups (ffi_hr_db_2026-08-26_*.dump.enc) -- reuse it rather than
+# splitting backup history across two directories.
+mkdir -p /home/ubuntu/backups
 cp deploy/backup-db.sh /opt/hr-ffi/backup-db.sh
 chmod +x /opt/hr-ffi/backup-db.sh
 ```
@@ -49,13 +51,13 @@ sourced from `/opt/hr-ffi/.env.prod.compose`.
 ```bash
 set -a; source /etc/hr-ffi-backup.env; set +a
 /opt/hr-ffi/backup-db.sh
-ls -la /opt/hr-ffi/backups
+ls -la /home/ubuntu/backups
 ```
 
 Verify the checksum:
 
 ```bash
-cd /opt/hr-ffi/backups
+cd /home/ubuntu/backups
 sha256sum -c ffi_hr_db_<timestamp>.dump.enc.sha256
 ```
 
@@ -86,7 +88,7 @@ The script has a `S3_BACKUP_BUCKET` hook but does **not** upload anywhere.
 **[YOU RUN]** once a destination is decided, e.g.:
 
 ```bash
-aws s3 cp /opt/hr-ffi/backups/ffi_hr_db_<timestamp>.dump.enc \
+aws s3 cp /home/ubuntu/backups/ffi_hr_db_<timestamp>.dump.enc \
   s3://<bucket>/ffi_hr_db_<timestamp>.dump.enc
 ```
 
