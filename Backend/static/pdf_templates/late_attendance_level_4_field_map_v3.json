@@ -43,7 +43,7 @@
     "penalty_amount",
     "reason"
   ],
-  "asset_revision": 3,
+  "asset_revision": 4,
   "layout_treatment": "minimal_open_signature",
   "manual_only_fields": [
     "hr_signature_image"
@@ -440,6 +440,26 @@
       "source": "manual_hr_signature_only",
       "auto_sign": false,
       "image_mode": "contain"
+    },
+    "hr_signer_name": {
+      "page": 1,
+      "kind": "text",
+      "x": 205,
+      "y": 196,
+      "width": 185,
+      "height": 14,
+      "font": "DejaVuSans",
+      "font_size": 7,
+      "align": "center",
+      "direction": "auto",
+      "padding": 2,
+      "shrink": true,
+      "multiline": false,
+      "max_lines": 1,
+      "required": false,
+      "manual_only": false,
+      "label_en": "HR signer name",
+      "label_ar": "اسم الموقع"
     },
     "company_phone": {
       "page": 1,

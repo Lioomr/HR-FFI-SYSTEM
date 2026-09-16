@@ -93,13 +93,13 @@ CONTRACT_FIELDS = {
 #: SHA-256 of the active version 3 pairs in artifacts/late-attendance-notice/v3 (CHECKSUMS.sha256).
 V3_PAIR_SHA256 = {
     "late_attendance_level_1_blank_v3.pdf": "e8def8393f43a1cb5409175d086d4a9a339676ae984371167853f45d0232afdb",
-    "late_attendance_level_1_field_map_v3.json": "0b6f09e218c550b47ff0667d01b0f463134c9386a488a6b1fd0c4fbfe5a2f8ef",
+    "late_attendance_level_1_field_map_v3.json": "e0ac48efe71fd163decca5ccfff174d73a9b6b6c5cfb987c85d68fd81663d8c4",
     "late_attendance_level_2_blank_v3.pdf": "0f476f81ce98dcb3fa94484aa1f8444557cb0f268a3dbcc02f519fec0bd1a89b",
-    "late_attendance_level_2_field_map_v3.json": "9f9b442ba58fed8edeea42045a2814b9795848e1b0c7fed1e45b8a2477c57bb9",
+    "late_attendance_level_2_field_map_v3.json": "2b4f2cf7b3a83cad07276444178b1fc02e2555a1cf40509d7bb7cce69da0172d",
     "late_attendance_level_3_blank_v3.pdf": "2e5f756f93e11b08497351a41eb9f041d2d46111cd2517d3060392887105a04f",
-    "late_attendance_level_3_field_map_v3.json": "8944b3392859f804c2d8fcd2c22eca9ad77cdc9a398062ef509aafc2614ab6e7",
+    "late_attendance_level_3_field_map_v3.json": "61c7e303d6092c9d064af09f86500efe7c17106a9dab631fbc432e81212789f5",
     "late_attendance_level_4_blank_v3.pdf": "33821ff03c0f6891acea29a9b79c3212101b95c09169ec442293ea948d3b79af",
-    "late_attendance_level_4_field_map_v3.json": "d464fdfe385469ca569d9aee0e6c079edf3886854dcb7ed7a631685822c0c519",
+    "late_attendance_level_4_field_map_v3.json": "edffef0df161f52b44b3263e70b711198785c895286dc86a27a7ed50df7d39b0",
 }
 #: SHA-256 of the retained version 2 pairs; they must never change.
 V2_PAIR_SHA256 = {
@@ -284,7 +284,7 @@ class LateNoticeTemplateTests(LateAttendanceNoticeTestBase):
                 self.assertEqual(Path(assets.template_path).name, f"late_attendance_level_{level}_blank_v3.pdf")
                 self.assertEqual(
                     (meta["template"], meta["version"], meta["asset_revision"], meta["style"]["level"]),
-                    (f"late_attendance_level_{level}_blank_v3.pdf", 3, 3, level),
+                    (f"late_attendance_level_{level}_blank_v3.pdf", 3, 4, level),
                 )
                 self.assertEqual(meta["logo"]["background"], "opaque #F8FAFC")
                 text_fields = {key for key, spec in assets.fields.items() if spec.get("kind") == "text"}
