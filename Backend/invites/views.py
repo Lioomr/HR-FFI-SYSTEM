@@ -272,6 +272,22 @@ def _ensure_invited_employee_profile(
         employee_profile.save(update_fields=update_fields)
         return employee_profile
 
+    if phone_number:
+        matched_profile = (
+            EmployeeProfile.objects.filter(company=company, mobile=phone_number, user__isnull=True)
+            .order_by("id")
+            .first()
+        )
+        if matched_profile is not None:
+            matched_profile.user = user
+            matched_profile.full_name = matched_profile.full_name or full_name or getattr(user, "full_name", "") or ""
+            update_fields = ["user", "full_name", "updated_at"]
+            if matched_profile.employment_status == EmployeeProfile.EmploymentStatus.PREHIRE:
+                matched_profile.employment_status = EmployeeProfile.EmploymentStatus.ACTIVE
+                update_fields.append("employment_status")
+            matched_profile.save(update_fields=update_fields)
+            return matched_profile
+
     profile, created = EmployeeProfile.objects.get_or_create(
         user=user,
         defaults={
