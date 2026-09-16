@@ -25,7 +25,8 @@
 #
 # Optional environment:
 #   DB_CONTAINER_NAME      Default: ffi_hr_db_prod
-#   BACKUP_DIR             Default: /opt/hr-ffi/backups
+#   BACKUP_DIR             Default: /home/ubuntu/backups (matches the existing
+#                          manual backups already on the host)
 #   BACKUP_RETENTION_DAYS  Default: 14
 #   S3_BACKUP_BUCKET       TODO (see below) — off-host shipping destination
 #
@@ -38,7 +39,7 @@ set -euo pipefail
 # Configuration (override via environment)
 # ---------------------------------------------------------------------------
 DB_CONTAINER_NAME="${DB_CONTAINER_NAME:-ffi_hr_db_prod}"
-BACKUP_DIR="${BACKUP_DIR:-/opt/hr-ffi/backups}"
+BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
 BACKUP_RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-14}"
 TIMESTAMP="$(date +%Y-%m-%d_%H%M%S)"
 DUMP_NAME="ffi_hr_db_${TIMESTAMP}.dump"
