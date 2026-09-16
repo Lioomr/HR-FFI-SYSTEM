@@ -51,8 +51,6 @@ class OrganizationNode(models.Model):
         signer = self.late_notice_signer
         if signer is None:
             return
-        if self.pk and signer.company_id != self.pk:
-            raise ValidationError({"late_notice_signer": _("The notice signer must belong to this company.")})
         if not signer.user.groups.filter(name__in=["HRManager", "SystemAdmin"]).exists():
             raise ValidationError({"late_notice_signer": _("The notice signer must be an HR Manager or System Admin.")})
 
