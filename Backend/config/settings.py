@@ -119,6 +119,7 @@ if SENTRY_DSN:
     )
 
 INSTALLED_APPS = [
+    "contract_ratings",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",

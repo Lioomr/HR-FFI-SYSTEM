@@ -133,6 +133,21 @@ const axiosError = (data: unknown) => ({
 });
 
 describe("collectApiErrorMessages", () => {
+  it.each(["non_field_errors", "__all__"])(
+    "hides the %s form-level key in every supported shape",
+    (key) => {
+      const message =
+        "total_salary must equal the sum of the salary components.";
+      for (const payload of [
+        { status: "error", errors: [{ field: key, message }] },
+        { status: "error", errors: { [key]: [message] } },
+        { [key]: [message] },
+      ]) {
+        expect(collectApiErrorMessages(axiosError(payload))).toEqual([message]);
+      }
+    },
+  );
+
   it("returns every entry of a plain string array", () => {
     const error = axiosError({
       status: "error",

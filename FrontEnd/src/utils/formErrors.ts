@@ -267,7 +267,11 @@ export function collectApiErrorMessages(error: unknown): string[] {
   ].filter((candidate) => candidate && typeof candidate === "object");
 
   for (const candidate of candidates) {
-    const errors = candidate.errors;
+    const errors =
+      candidate.errors ??
+      (candidate.non_field_errors || candidate.__all__ ? candidate : undefined);
+    const displayField = (field?: string) =>
+      field && !["non_field_errors", "__all__"].includes(field) ? field : "";
     const messages: string[] = [];
 
     if (Array.isArray(errors)) {
@@ -281,7 +285,9 @@ export function collectApiErrorMessages(error: unknown): string[] {
           item.message.trim()
         ) {
           messages.push(
-            item.field ? `${item.field}: ${item.message}` : item.message,
+            displayField(item.field)
+              ? `${item.field}: ${item.message}`
+              : item.message,
           );
         }
       }
@@ -290,7 +296,7 @@ export function collectApiErrorMessages(error: unknown): string[] {
         const list = Array.isArray(value) ? value : [value];
         for (const entry of list) {
           if (typeof entry === "string" && entry.trim()) {
-            messages.push(`${field}: ${entry}`);
+            messages.push(displayField(field) ? `${field}: ${entry}` : entry);
           }
         }
       }

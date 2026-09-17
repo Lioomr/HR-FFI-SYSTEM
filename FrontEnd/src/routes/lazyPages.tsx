@@ -347,6 +347,15 @@ export const NotificationsPage = lazy(
 export const ContractDecisionsPage = lazy(
   () => import("../pages/shared/ContractDecisionsPage"),
 );
+export const ContractRatingsPage = lazy(
+  () => import("../pages/shared/ContractRatingsPage"),
+);
+export const ManagerRatingFormPage = lazy(
+  () => import("../pages/manager/ManagerRatingFormPage"),
+);
+export const EmployeeRatingFormPage = lazy(
+  () => import("../pages/employee/EmployeeRatingFormPage"),
+);
 
 // ─── Public / rarely-visited entry points ──────────────────────────────────
 export const RegisterInvitePage = lazy(

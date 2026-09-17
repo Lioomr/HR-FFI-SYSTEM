@@ -18,6 +18,10 @@ app.conf.beat_schedule = {
         "task": "employees.tasks.process_contract_expiry_notifications",
         "schedule": crontab(minute=0),
     },
+    "process-contract-ratings-hourly": {
+        "task": "contract_ratings.tasks.process_contract_ratings",
+        "schedule": crontab(minute=0),
+    },
     "send-work-license-expiry-reminders-daily": {
         "task": "employees.tasks.send_work_license_expiry_reminders",
         "schedule": crontab(

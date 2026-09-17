@@ -58,6 +58,17 @@ def contract_terms_snapshot(profile: EmployeeProfile) -> dict:
     }
 
 
+def apply_contract_terms(
+    profile: EmployeeProfile, terms: dict, *, extra_update_fields: list[str] | None = None
+) -> None:
+    """Apply resolved salary terms together with any pending contract-field changes."""
+    update_fields = list(extra_update_fields or [])
+    for field, value in terms.items():
+        setattr(profile, field, Decimal(value) if value is not None else None)
+        update_fields.append(field)
+    profile.save(update_fields=list(dict.fromkeys(update_fields + ["updated_at"])))
+
+
 @transaction.atomic
 def ensure_contract_decision(profile: EmployeeProfile) -> tuple[ContractDecision, bool]:
     decision, created = ContractDecision.objects.get_or_create(
@@ -521,13 +532,9 @@ def finalize_decision(decision_id: int, *, actor=None, automatic: bool = False, 
     }:
         start, expiry = _renewal_dates(decision)
         terms = _resolved_renewal_terms(profile, decision.proposed_terms)
-        update_fields = ["contract_date", "contract_expiry", "updated_at"]
         profile.contract_date = start
         profile.contract_expiry = expiry
-        for field, value in terms.items():
-            setattr(profile, field, Decimal(value) if value is not None else None)
-            update_fields.append(field)
-        profile.save(update_fields=list(dict.fromkeys(update_fields)))
+        apply_contract_terms(profile, terms, extra_update_fields=["contract_date", "contract_expiry"])
     elif decision.decision_type == ContractDecision.DecisionType.TERMINATE:
         try:
             retire_biotime_mapping_and_archive_profile(

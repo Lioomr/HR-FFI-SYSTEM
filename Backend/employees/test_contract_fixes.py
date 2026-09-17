@@ -4,6 +4,7 @@ from unittest.mock import patch
 import pytest
 from django.contrib.contenttypes.models import ContentType
 from django.db import IntegrityError
+from django.db.models import QuerySet
 
 from attendance.models import AttendanceRecord, BioTimeEmployeeMap
 from audit.models import AuditLog
@@ -56,7 +57,14 @@ def test_archive_integrity_failure_returns_422_and_restores_mapping(contract):
     decision, _ = ensure_contract_decision(contract.profile)
     submit_decision(decision.id, actor=contract.hr, decision_type="TERMINATE")
     contract.client.force_authenticate(contract.ceo)
-    with patch("employees.models.EmployeeProfile.save", side_effect=IntegrityError("archive guard")):
+    original_update = QuerySet.update
+
+    def fail_archive(queryset, **kwargs):
+        if queryset.model is EmployeeProfile and kwargs.get("is_archived"):
+            raise IntegrityError("archive guard")
+        return original_update(queryset, **kwargs)
+
+    with patch.object(QuerySet, "update", fail_archive):
         response = contract.client.post(f"/api/employees/contract-decisions/{decision.id}/approve/", {}, secure=True)
     assert response.status_code == 422
     contract.profile.refresh_from_db()

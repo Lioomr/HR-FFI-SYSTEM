@@ -456,6 +456,48 @@ export default function ContractDecisionsPage() {
     );
   }
 
+  /**
+   * The linked contract rating is context only. The summary carries no rating
+   * id, so the link opens the ratings queue rather than the exact record.
+   */
+  function renderRatingSummary(item: ContractDecision) {
+    const rating = item.rating;
+    const ratingsPath = isCeo ? "/ceo/contract-ratings" : "/hr/contract-ratings";
+    if (!rating) {
+      return (
+        <Typography.Text type="secondary">
+          {t("contractDecisions.ratingNone")}
+        </Typography.Text>
+      );
+    }
+    return (
+      <Space wrap>
+        <Tag>{t(`contractRatings.status.${rating.status}`, rating.status)}</Tag>
+        {rating.manager_recommendation ? (
+          <Tag color={rating.manager_recommendation === "TERMINATE" ? "red" : "blue"}>
+            {t(
+              `contractRatings.recommendationLabel.${rating.manager_recommendation}`,
+            )}
+          </Tag>
+        ) : null}
+        <Tag color={rating.hr_approved ? "green" : "default"}>
+          {rating.hr_approved
+            ? t("contractDecisions.ratingHrApproved")
+            : t("contractDecisions.ratingHrNotApproved")}
+        </Tag>
+        {rating.ceo_action ? (
+          <Tag color="purple">
+            {t(`contractRatings.ceoActionLabel.${rating.ceo_action}`, rating.ceo_action)}
+            {rating.ceo_selected_option
+              ? ` → ${t(`contractRatings.alternative.${rating.ceo_selected_option}`)}`
+              : ""}
+          </Tag>
+        ) : null}
+        <Link to={ratingsPath}>{t("contractDecisions.ratingOpen")}</Link>
+      </Space>
+    );
+  }
+
   function renderDetail(item: ContractDecision) {
     const canSubmit = isHr && HR_ACTIONABLE_STATUSES.includes(item.status);
     const canApprove = Boolean(
@@ -567,6 +609,12 @@ export default function ContractDecisionsPage() {
               span={2}
             >
               {renderTerms(item.proposed_terms)}
+            </Descriptions.Item>
+            <Descriptions.Item
+              label={t("contractDecisions.ratingSummary")}
+              span={2}
+            >
+              {renderRatingSummary(item)}
             </Descriptions.Item>
             {item.finalized_at ? (
               <Descriptions.Item
