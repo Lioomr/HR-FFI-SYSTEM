@@ -14,7 +14,7 @@ from contract_ratings.services import (
 )
 from contract_ratings.tasks import process_contract_ratings
 
-from .conftest import answers
+from .conftest import answers, rated_cycle
 from .test_final_phase2 import pending_ceo
 
 pytestmark = pytest.mark.django_db
@@ -24,13 +24,14 @@ def calls_for(notifications, event):
     return [call.kwargs for call in notifications.call_args_list if call.kwargs["metadata"]["event"] == event]
 
 
-def test_scheduler_opens_current_cycle_once_and_notifies_both_raters(world, notifications):
+def test_scheduler_opens_current_cycle_once_and_notifies_hr_gate(world, notifications):
     assert process_contract_ratings()["created"] == 1
     assert process_contract_ratings()["created"] == 0
     assert ContractRating.objects.count() == 1
-    opened = calls_for(notifications, "opened")
-    assert {call["recipient"].pk for call in opened} == {world.manager.pk, world.employee.pk}
-    assert len(opened) == 2
+    awaiting = calls_for(notifications, "awaiting_routing")
+    assert {call["recipient"].pk for call in awaiting} == {world.hr.pk}
+    assert len(awaiting) == 1
+    assert not calls_for(notifications, "opened")
 
 
 @pytest.mark.parametrize("days_left", [0, 1, 45, 65, 89, 90])
@@ -42,11 +43,12 @@ def test_scheduler_catches_up_eligible_current_contracts(world, days_left):
     assert process_contract_ratings(today=today)["created"] == 0
 
 
-@pytest.mark.parametrize("submitted,expected_pending", [("none", {"manager", "employee"}), ("manager", {"employee"}), ("employee", {"manager"})])
-def test_65_day_incomplete_breakdown_goes_to_ceo_and_pending_raters(
-    world, notifications, submitted, expected_pending
-):
-    rating, _ = ensure_contract_rating(world.profile)
+@pytest.mark.parametrize(
+    "submitted,expected_pending",
+    [("none", {"manager", "employee"}), ("manager", {"employee"}), ("employee", {"manager"})],
+)
+def test_65_day_incomplete_breakdown_goes_to_ceo_and_pending_raters(world, notifications, submitted, expected_pending):
+    rating = rated_cycle(world)
     if submitted == "manager":
         submit_manager_response(rating.pk, actor=world.manager, criterion_ratings=answers())
     elif submitted == "employee":
@@ -121,7 +123,7 @@ def test_failed_notification_is_persisted_and_retried(world, notifications):
 
 
 def test_stalled_pending_ceo_receives_periodic_nudge(world, notifications):
-    rating = pending_ceo(world)
+    pending_ceo(world)
     notifications.reset_mock()
     now = timezone.now() + timedelta(hours=10)
     process_contract_ratings(now=now)

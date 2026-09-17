@@ -2,7 +2,6 @@ from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
-from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied
 
 from audit.models import AuditLog
@@ -12,7 +11,7 @@ from contract_ratings.tasks import execute_scheduled_termination, process_contra
 from employees.contract_expiry import finalize_decision, submit_decision
 from employees.models import EmployeeProfile
 
-from .conftest import answers
+from .conftest import answers, rated_cycle
 from .test_final_phase2 import pending_ceo
 from .test_final_phase3 import calls_for
 
@@ -53,7 +52,9 @@ def test_scheduled_termination_waits_until_expiry_then_processes_exactly_once(wo
     assert world.profile.is_archived is True
     assert world.profile.archive_reason == EmployeeProfile.ArchiveReason.END_OF_CONTRACT
     assert world.employee.is_active is False
-    assert AuditLog.objects.filter(action="contract_rating_termination_processed", entity_id=str(rating.pk)).count() == 1
+    assert (
+        AuditLog.objects.filter(action="contract_rating_termination_processed", entity_id=str(rating.pk)).count() == 1
+    )
 
 
 def test_acknowledgment_is_hr_only_idempotent_and_never_gates_execution(world):
@@ -82,9 +83,9 @@ def scheduled_termination_for_outsider(world):
 
 
 def pending_ceo_for_outsider(world):
-    from contract_ratings.services import ensure_contract_rating, submit_manager_response
+    from contract_ratings.services import submit_manager_response
 
-    rating, _ = ensure_contract_rating(world.outsider.employee_profile)
+    rating = rated_cycle(world, world.outsider.employee_profile)
     submit_manager_response(rating.pk, actor=world.manager, criterion_ratings=answers())
     submit_employee_response(rating.pk, actor=world.outsider, criterion_ratings=answers())
     return ContractRating.objects.get(pk=rating.pk)

@@ -19,6 +19,16 @@ def answers(score=85, grade="VERY_GOOD"):
     return {item["code"]: {"grade": grade, "score": score, "remark": "private answer"} for item in CRITERIA}
 
 
+def rated_cycle(world, profile=None):
+    from contract_ratings.services import ensure_contract_rating, submit_hr_gate_decision
+
+    profile = profile or world.profile
+    rating, _ = ensure_contract_rating(profile)
+    if rating.status == rating.Status.PENDING_HR_GATE:
+        rating = submit_hr_gate_decision(rating.pk, actor=world.hr, rating_mode=rating.RatingMode.RATE)
+    return rating
+
+
 @pytest.fixture(autouse=True)
 def notifications():
     with patch(

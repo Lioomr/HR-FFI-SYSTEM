@@ -9,7 +9,7 @@ from contract_ratings.models import ContractRating, ContractRatingResponse
 from contract_ratings.scoring import compute_average_and_grade, validate_criterion_ratings
 from contract_ratings.services import ensure_contract_rating, submit_employee_response, submit_manager_response
 
-from .conftest import answers
+from .conftest import answers, rated_cycle
 
 pytestmark = pytest.mark.django_db
 
@@ -87,7 +87,7 @@ def test_rating_creation_is_idempotent_and_snapshots_the_cycle(world):
     assert created is True
     assert created_again is False
     assert first.pk == second.pk
-    assert first.status == ContractRating.Status.PENDING_RESPONSES
+    assert first.status == ContractRating.Status.PENDING_HR_GATE
     assert first.employee_profile == world.profile
     assert first.company == world.company
     assert first.evaluation_period_from == world.profile.contract_date
@@ -97,7 +97,7 @@ def test_rating_creation_is_idempotent_and_snapshots_the_cycle(world):
 
 @pytest.mark.parametrize("employee_first", [True, False])
 def test_responses_are_independent_and_go_straight_to_ceo(world, employee_first):
-    rating, _ = ensure_contract_rating(world.profile)
+    rating = rated_cycle(world)
     if employee_first:
         submit_employee_response(
             rating.pk,
@@ -130,7 +130,7 @@ def test_responses_are_independent_and_go_straight_to_ceo(world, employee_first)
 
 
 def test_response_payload_ignores_computed_fields(world):
-    rating, _ = ensure_contract_rating(world.profile)
+    rating = rated_cycle(world)
     result = submit_manager_response(
         rating.pk,
         actor=world.manager,
@@ -153,7 +153,7 @@ def test_response_payload_ignores_computed_fields(world):
     ],
 )
 def test_response_payload_rejects_decision_fields(world, forbidden):
-    rating, _ = ensure_contract_rating(world.profile)
+    rating = rated_cycle(world)
     with pytest.raises(ValidationError):
         submit_employee_response(
             rating.pk,
@@ -164,7 +164,7 @@ def test_response_payload_rejects_decision_fields(world, forbidden):
 
 
 def test_live_manager_and_employee_permissions_are_enforced(world):
-    rating, _ = ensure_contract_rating(world.profile)
+    rating = rated_cycle(world)
     with pytest.raises(PermissionDenied):
         submit_manager_response(rating.pk, actor=world.outsider, criterion_ratings=answers())
     with pytest.raises(PermissionDenied):
@@ -172,14 +172,14 @@ def test_live_manager_and_employee_permissions_are_enforced(world):
 
 
 def test_submitted_response_is_locked_until_a_ceo_return(world):
-    rating, _ = ensure_contract_rating(world.profile)
+    rating = rated_cycle(world)
     submit_manager_response(rating.pk, actor=world.manager, criterion_ratings=answers())
     with pytest.raises(ValueError, match="locked"):
         submit_manager_response(rating.pk, actor=world.manager, criterion_ratings=answers())
 
 
 def test_response_api_rejects_recommendation_and_salary_fields(world):
-    rating, _ = ensure_contract_rating(world.profile)
+    rating = rated_cycle(world)
     world.client.force_authenticate(world.manager)
     url = f"/contract-ratings/{rating.pk}/manager-response/"
     for forbidden in (

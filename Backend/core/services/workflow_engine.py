@@ -27,8 +27,9 @@ WORKFLOW_TEMPLATES = {
         "name": "Employee Contract Rating",
         "module_key": "contract_ratings",
         "stages": [
-            {"key": "responses", "title": "Independent evaluations", "approver_role": "", "order": 0},
-            {"key": "ceo", "title": "CEO Decision", "approver_role": "ceo", "order": 1},
+            {"key": "hr_gate", "title": "HR Rating Route", "approver_role": "hr", "order": 0},
+            {"key": "responses", "title": "Independent evaluations", "approver_role": "", "order": 1},
+            {"key": "ceo", "title": "CEO Decision", "approver_role": "ceo", "order": 2},
         ],
     },
     "leave_request": {

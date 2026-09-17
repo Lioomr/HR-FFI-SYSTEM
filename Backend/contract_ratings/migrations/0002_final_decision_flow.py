@@ -2,7 +2,6 @@ import django.db.models.deletion
 from django.conf import settings
 from django.db import migrations, models
 
-
 FINAL_DECISIONS = {"RENEW", "RENEW_WITH_CHANGES", "TERMINATE"}
 RECOMMENDATION_TO_DECISION = {
     "CONTINUE_CONTRACT": "RENEW",

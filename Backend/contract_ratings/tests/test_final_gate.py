@@ -1,7 +1,6 @@
 from datetime import timedelta
 
 import pytest
-from django.contrib.auth.models import Group
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
@@ -15,6 +14,7 @@ from contract_ratings.services import (
     submit_manager_response,
 )
 from contract_ratings.tasks import process_contract_ratings
+from core.models import DelegationRule
 
 from .conftest import answers
 from .test_final_phase3 import calls_for
@@ -59,6 +59,20 @@ def test_hr_gate_validates_mode(world):
     rating, _ = ensure_contract_rating(world.profile)
     with pytest.raises(ValidationError):
         submit_hr_gate_decision(rating.pk, actor=world.hr, rating_mode="UNKNOWN")
+
+
+def test_hr_delegate_can_make_the_one_time_gate_decision(world):
+    DelegationRule.objects.create(
+        from_user=world.hr,
+        to_user=world.outsider,
+        start_at=timezone.now() - timedelta(hours=1),
+        end_at=timezone.now() + timedelta(days=1),
+        capabilities=[DelegationRule.Capability.WORKFLOW_APPROVE],
+    )
+    rating, _ = ensure_contract_rating(world.profile)
+    result = submit_hr_gate_decision(rating.pk, actor=world.outsider, rating_mode="RATE")
+    assert result.hr_gate_decided_by == world.outsider
+    assert result.status == ContractRating.Status.PENDING_RESPONSES
 
 
 def test_skip_to_ceo_collects_no_responses_and_never_exposes_cycle_to_raters(world, notifications):

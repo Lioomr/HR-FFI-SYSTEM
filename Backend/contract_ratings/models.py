@@ -9,12 +9,17 @@ from .criteria import RatingGrade
 
 class ContractRating(models.Model):
     class Status(models.TextChoices):
+        PENDING_HR_GATE = "PENDING_HR_GATE", _("Awaiting HR: rate or send to CEO")
         PENDING_RESPONSES = "PENDING_RESPONSES", _("Awaiting both responses")
         WAITING_MANAGER = "WAITING_MANAGER", _("Awaiting manager response")
         WAITING_EMPLOYEE = "WAITING_EMPLOYEE", _("Awaiting employee response")
         PENDING_CEO = "PENDING_CEO", _("Pending CEO decision")
         DECIDED = "DECIDED", _("Decided")
         MANUAL_RESOLUTION_REQUIRED = "MANUAL_RESOLUTION_REQUIRED", _("Manual resolution required")
+
+    class RatingMode(models.TextChoices):
+        RATE = "RATE", _("Full rating - manager and employee evaluate")
+        SKIP_TO_CEO = "SKIP_TO_CEO", _("Skip rating - CEO decides directly")
 
     contract_decision = models.OneToOneField(
         "employees.ContractDecision", on_delete=models.PROTECT, related_name="rating"
@@ -25,7 +30,13 @@ class ContractRating(models.Model):
     company = models.ForeignKey(
         "organization.OrganizationNode", on_delete=models.PROTECT, related_name="contract_ratings"
     )
-    status = models.CharField(max_length=32, choices=Status.choices, default=Status.PENDING_RESPONSES, db_index=True)
+    status = models.CharField(max_length=32, choices=Status.choices, default=Status.PENDING_HR_GATE, db_index=True)
+
+    rating_mode = models.CharField(max_length=16, choices=RatingMode.choices, blank=True)
+    hr_gate_decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    hr_gate_decided_at = models.DateTimeField(null=True, blank=True)
 
     manager_response = models.OneToOneField(
         "ContractRatingResponse", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"

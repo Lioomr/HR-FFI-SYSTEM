@@ -36,7 +36,6 @@ def build_contract_rating_pdf(rating, *, response=_DEFAULT_RESPONSE, include_dec
         raise ValueError("The approved employee evaluation PDF template is unavailable.")
 
     profile = rating.employee_profile
-    response = rating.manager_response
     values = {
         "reference_no": f"CR-{rating.id}",
         "document_date": rating.created_at.date().isoformat(),
