@@ -4,7 +4,7 @@ from django.utils.translation import gettext_lazy as _
 
 from employees.models import ContractDecision
 
-from .criteria import RatingGrade, Recommendation
+from .criteria import RatingGrade
 
 
 class ContractRating(models.Model):
@@ -12,10 +12,8 @@ class ContractRating(models.Model):
         PENDING_RESPONSES = "PENDING_RESPONSES", _("Awaiting both responses")
         WAITING_MANAGER = "WAITING_MANAGER", _("Awaiting manager response")
         WAITING_EMPLOYEE = "WAITING_EMPLOYEE", _("Awaiting employee response")
-        PENDING_HR = "PENDING_HR", _("Pending HR review")
-        PENDING_CEO = "PENDING_CEO", _("Pending CEO approval")
-        APPROVED = "APPROVED", _("Approved")
-        REJECTED = "REJECTED", _("Rejected")
+        PENDING_CEO = "PENDING_CEO", _("Pending CEO decision")
+        DECIDED = "DECIDED", _("Decided")
         MANUAL_RESOLUTION_REQUIRED = "MANUAL_RESOLUTION_REQUIRED", _("Manual resolution required")
 
     contract_decision = models.OneToOneField(
@@ -47,30 +45,25 @@ class ContractRating(models.Model):
 
     comparison_summary = models.JSONField(default=dict, blank=True)
 
-    hr_reviewed_by = models.ForeignKey(
+    hr_comment_requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    hr_comment_requested_at = models.DateTimeField(null=True, blank=True)
+    hr_comment_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
     hr_comment = models.TextField(blank=True)
-    hr_decided_at = models.DateTimeField(null=True, blank=True)
+    hr_comment_submitted_at = models.DateTimeField(null=True, blank=True)
 
-    class CeoAction(models.TextChoices):
-        ACCEPT = "ACCEPT", _("Accept")
-        RETURN_TO_HR = "RETURN_TO_HR", _("Return to HR")
-        DECLINE = "DECLINE", _("Decline")
-        DECLINE_WITH_ALTERNATIVE = "DECLINE_WITH_ALTERNATIVE", _("Decline and select alternative")
-
-    ceo_action = models.CharField(max_length=32, choices=CeoAction.choices, blank=True)
-    ceo_selected_option = models.CharField(max_length=32, choices=ContractDecision.DecisionType.choices, blank=True)
+    ceo_decision = models.CharField(max_length=32, choices=ContractDecision.DecisionType.choices, blank=True)
     ceo_decided_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
     ceo_comment = models.TextField(blank=True)
     ceo_decided_at = models.DateTimeField(null=True, blank=True)
 
-    salary_change_proposed = models.BooleanField(default=False)
     salary_before_snapshot = models.JSONField(default=dict, blank=True)
     ceo_approved_terms = models.JSONField(default=dict, blank=True)
-    ceo_salary_override_reason = models.TextField(blank=True)
     salary_effective_date = models.DateField(null=True, blank=True)
     salary_change_applied_at = models.DateTimeField(null=True, blank=True)
     salary_after_snapshot = models.JSONField(default=dict, blank=True)
@@ -108,13 +101,6 @@ class ContractRatingResponse(models.Model):
     average_score = models.DecimalField(max_digits=5, decimal_places=2, editable=False)
     overall_grade = models.CharField(max_length=32, choices=RatingGrade.choices, editable=False)
     overall_remark = models.TextField(blank=True)
-
-    recommendation = models.CharField(max_length=32, choices=Recommendation.choices, blank=True)
-    recommended_change_types = models.JSONField(default=list, blank=True)
-    proposed_terms = models.JSONField(default=dict, blank=True)
-    proposed_job_title = models.CharField(max_length=100, blank=True)
-    proposed_position_id = models.IntegerField(null=True, blank=True)
-    other_change_notes = models.TextField(blank=True)
 
     submitted_at = models.DateTimeField(null=True, blank=True)
     returned_at = models.DateTimeField(null=True, blank=True)

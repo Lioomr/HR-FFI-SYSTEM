@@ -7,24 +7,26 @@ from core.services import get_workflow_snapshot_read_only
 from employees.contract_expiry import contract_terms_snapshot
 from employees.models import ContractDecision
 
-from .criteria import ChangeType, Recommendation
 from .models import ContractRating, ContractRatingResponse
 from .permissions import viewer_role
 from .scoring import validate_criterion_ratings
+
+RETURN_TO_MANAGER = "RETURN_TO_MANAGER"
+RETURN_TO_EMPLOYEE = "RETURN_TO_EMPLOYEE"
+RETURN_TO_BOTH = "RETURN_TO_BOTH"
+CEO_DECISION_CHOICES = [
+    *ContractDecision.DecisionType.choices,
+    (RETURN_TO_MANAGER, "Return to manager"),
+    (RETURN_TO_EMPLOYEE, "Return to employee"),
+    (RETURN_TO_BOTH, "Return to both"),
+]
 
 
 class ContractRatingResponseWriteSerializer(serializers.Serializer):
     criterion_ratings = serializers.JSONField()
     overall_remark = serializers.CharField(required=False, allow_blank=True, default="")
-    recommendation = serializers.ChoiceField(choices=Recommendation.choices, required=False)
-    recommended_change_types = serializers.ListField(
-        child=serializers.ChoiceField(choices=ChangeType.choices), required=False, default=list
-    )
-    proposed_terms = serializers.JSONField(required=False, default=dict)
-    proposed_job_title = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
-    proposed_position_id = serializers.IntegerField(required=False, allow_null=True, default=None)
-    other_change_notes = serializers.CharField(required=False, allow_blank=True, default="")
-    salary_effective_date = serializers.DateField(required=False)
+
+    ignored_computed_fields = {"average_score", "overall_grade"}
 
     def validate_criterion_ratings(self, value):
         try:
@@ -33,53 +35,35 @@ class ContractRatingResponseWriteSerializer(serializers.Serializer):
             raise serializers.ValidationError(str(exc)) from None
 
     def validate(self, attrs):
-        manager_fields = {
-            "recommendation",
-            "recommended_change_types",
-            "proposed_terms",
-            "proposed_job_title",
-            "proposed_position_id",
-            "other_change_notes",
-            "salary_effective_date",
-        }
-        if not self.context.get("is_manager"):
-            if manager_fields & set(self.initial_data):
-                raise serializers.ValidationError("Employee responses cannot contain manager recommendation fields.")
-            return {key: value for key, value in attrs.items() if key not in manager_fields}
-        from .services import validate_manager_proposal
-
-        try:
-            attrs.update(validate_manager_proposal(attrs, self.context["profile"]))
-        except ValueError as exc:
-            raise serializers.ValidationError(str(exc)) from None
-        if "salary_effective_date" in attrs and ChangeType.SALARY_INCREASE not in attrs["recommended_change_types"]:
-            raise serializers.ValidationError("A salary effective date requires a salary proposal.")
+        allowed = {"criterion_ratings", "overall_remark"} | self.ignored_computed_fields
+        unexpected = sorted(set(self.initial_data) - allowed)
+        if unexpected:
+            raise serializers.ValidationError({field: "This field is not accepted." for field in unexpected})
         return attrs
 
 
 class CeoDecisionWriteSerializer(serializers.Serializer):
-    action = serializers.ChoiceField(choices=ContractRating.CeoAction.choices)
+    ceo_decision = serializers.ChoiceField(choices=CEO_DECISION_CHOICES)
     comment = serializers.CharField(required=False, allow_blank=True, default="")
-    ceo_selected_option = serializers.ChoiceField(
-        choices=ContractDecision.DecisionType.choices, required=False, allow_blank=True, default=""
-    )
-    ceo_approved_terms = serializers.JSONField(required=False, allow_null=True)
-    ceo_salary_override_reason = serializers.CharField(required=False, allow_blank=True, default="")
+    ceo_approved_terms = serializers.JSONField(required=False)
+    salary_effective_date = serializers.DateField(required=False)
 
     def validate(self, attrs):
-        action = attrs["action"]
-        if (
-            action == "DECLINE_WITH_ALTERNATIVE"
-            and attrs["ceo_selected_option"] == "RENEW_WITH_CHANGES"
-            and attrs.get("ceo_approved_terms") is not None
-            and not isinstance(attrs["ceo_approved_terms"], dict)
-        ):
+        decision = attrs["ceo_decision"]
+        terms_supplied = "ceo_approved_terms" in self.initial_data
+        date_supplied = "salary_effective_date" in self.initial_data
+        if terms_supplied and not isinstance(attrs.get("ceo_approved_terms"), dict):
             raise serializers.ValidationError({"ceo_approved_terms": "Expected an object."})
-        if action != "ACCEPT" and not attrs["comment"].strip():
+        if decision in {RETURN_TO_MANAGER, RETURN_TO_EMPLOYEE, RETURN_TO_BOTH} and not attrs["comment"].strip():
             raise serializers.ValidationError({"comment": "A reason is required."})
-        if (action == "DECLINE_WITH_ALTERNATIVE") != bool(attrs["ceo_selected_option"]):
+        if decision == ContractDecision.DecisionType.RENEW_WITH_CHANGES:
+            if not attrs.get("ceo_approved_terms"):
+                raise serializers.ValidationError({"ceo_approved_terms": "Salary terms are required."})
+            if not attrs.get("salary_effective_date"):
+                raise serializers.ValidationError({"salary_effective_date": "An effective date is required."})
+        elif terms_supplied or date_supplied:
             raise serializers.ValidationError(
-                {"ceo_selected_option": "Select an option only for DECLINE_WITH_ALTERNATIVE."}
+                {"ceo_approved_terms": "Salary terms are accepted only for RENEW_WITH_CHANGES."}
             )
         return attrs
 

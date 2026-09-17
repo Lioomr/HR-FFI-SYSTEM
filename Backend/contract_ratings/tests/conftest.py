@@ -9,6 +9,7 @@ from django.contrib.auth.models import Group
 from django.utils import timezone
 from rest_framework.test import APIClient
 
+from contract_ratings import tasks as contract_rating_tasks  # noqa: F401
 from contract_ratings.criteria import CRITERIA
 from employees.models import EmployeeProfile
 from organization.models import OrganizationNode, UserOrganizationAccess
