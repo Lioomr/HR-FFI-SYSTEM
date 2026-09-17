@@ -1,0 +1,891 @@
+<!doctype html>
+<html lang="ar" data-resolution="landscape">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>نظام FFI للموارد البشرية — الإجازة المرضية</title>
+    <script src="vendor/gsap.min.js"></script>
+    <style>
+      /* Readex Pro is the app's Arabic face (FrontEnd/src/index.css --font-ar) */
+      @font-face {
+        font-family: "Readex Pro";
+        src: url("assets/fonts/readexpro-arabic.woff2") format("woff2");
+        font-weight: 160 700;
+        font-style: normal;
+        font-display: block;
+        unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891,
+          U+0898-08E1, U+08E3-08FF, U+FB50-FDFF, U+FE70-FEFF;
+      }
+
+      @font-face {
+        font-family: "Readex Pro";
+        src: url("assets/fonts/readexpro-latin.woff2") format("woff2");
+        font-weight: 160 700;
+        font-style: normal;
+        font-display: block;
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+2000-206F,
+          U+2070-209F, U+20A0-20AB, U+20AD-20CF, U+2212, U+2215;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #0d1117;
+      }
+
+      :root {
+        /* Pulled verbatim from FrontEnd/src/index.css :root tokens */
+        --brand-primary: #f97316;
+        --brand-primary-dark: #ea580c;
+        --brand-on-light: #c2410c; /* AA-safe orange for text on white */
+        --brand-accent: #94a3b8;
+        --sidebar-bg: #0d1117;
+        --surface-0: #ffffff;
+        --surface-1: #f8faff;
+        --surface-3: #e2e8f0;
+        --text-primary: #0f172a;
+        --text-secondary: #64748b;
+      }
+
+      #root {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        direction: rtl;
+        font-family: "Readex Pro", system-ui, sans-serif;
+        background: var(--surface-1);
+      }
+
+      .clip {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+      }
+
+      /* Latin runs (dates, filenames) stay LTR inside RTL text */
+      .ltr {
+        direction: ltr;
+        unicode-bidi: isolate;
+      }
+
+      /* ---------- dark frames ---------- */
+      .dark {
+        background: var(--sidebar-bg);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .hook-kicker {
+        font-size: 28px;
+        font-weight: 500;
+        color: var(--brand-primary);
+        margin-bottom: 30px;
+      }
+
+      .hook-title {
+        font-size: 128px;
+        font-weight: 700;
+        color: #ffffff;
+        line-height: 1.15;
+      }
+
+      .hook-sub {
+        margin-top: 34px;
+        font-size: 44px;
+        font-weight: 400;
+        color: #cbd5e1;
+      }
+
+      .hook-sub b {
+        color: var(--brand-primary);
+        font-weight: 600;
+      }
+
+      /* ---------- app chrome (light frames) ---------- */
+      .app {
+        display: flex;
+        width: 100%;
+        height: 100%;
+        background: var(--surface-1);
+      }
+
+      /* dir=rtl already flips the flex row, so the sidebar sits on the right */
+      .sidebar {
+        width: 132px;
+        height: 100%;
+        background: var(--sidebar-bg);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding-top: 46px;
+        gap: 26px;
+        flex: 0 0 132px;
+      }
+
+      .sidebar .mark {
+        font-size: 25px;
+        font-weight: 700;
+        color: var(--brand-primary);
+      }
+
+      .nav-dot {
+        width: 56px;
+        height: 10px;
+        border-radius: 5px;
+        background: rgba(255, 255, 255, 0.14);
+      }
+
+      .nav-dot.active {
+        background: var(--brand-primary);
+      }
+
+      .stage {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 0 70px;
+      }
+
+      .card {
+        width: 1180px;
+        background: var(--surface-0);
+        border-radius: 16px;
+        box-shadow: 0 24px 60px rgba(15, 23, 42, 0.13);
+        padding: 52px 62px 58px;
+      }
+
+      .card-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        margin-bottom: 44px;
+      }
+
+      .card-title {
+        font-size: 44px;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+
+      .card-sub {
+        margin-top: 10px;
+        font-size: 25px;
+        color: var(--text-secondary);
+      }
+
+      .step-pill {
+        background: var(--sidebar-bg);
+        color: var(--brand-primary);
+        font-size: 24px;
+        font-weight: 600;
+        padding: 14px 28px;
+        border-radius: 999px;
+        white-space: nowrap;
+      }
+
+      .field-label {
+        font-size: 26px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        margin-bottom: 14px;
+      }
+
+      .field-label.req {
+        color: var(--brand-on-light);
+        font-weight: 600;
+      }
+
+      .control {
+        height: 78px;
+        border: 2px solid var(--surface-3);
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        padding: 0 26px;
+        font-size: 28px;
+        color: var(--text-primary);
+        background: #ffffff;
+        position: relative;
+      }
+
+      .control.muted {
+        color: #9aa4b2;
+      }
+
+      .caret {
+        margin-inline-start: auto;
+        color: #6c7786; /* WCAG AA on white; --brand-accent is too light here */
+        font-size: 22px;
+      }
+
+      /* dropdown */
+      .dropdown {
+        position: absolute;
+        top: 90px;
+        inset-inline-start: 0;
+        width: 100%;
+        background: #ffffff;
+        border: 2px solid var(--surface-3);
+        border-radius: 10px;
+        box-shadow: 0 18px 44px rgba(15, 23, 42, 0.16);
+        padding: 10px;
+        z-index: 5;
+        transform-origin: top center;
+      }
+
+      .opt {
+        height: 62px;
+        display: flex;
+        align-items: center;
+        padding: 0 18px;
+        font-size: 26px;
+        color: var(--text-primary);
+        border-radius: 8px;
+      }
+
+      /* panels copied from RequestLeavePage.tsx */
+      .balance-panel {
+        margin-top: 26px;
+        background: #f0f7ff;
+        border: 2px solid #91caff;
+        border-radius: 8px;
+        padding: 24px 28px;
+      }
+
+      .panel-head {
+        font-size: 24px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 18px;
+      }
+
+      .stat-row {
+        display: flex;
+        gap: 18px;
+      }
+
+      .stat {
+        flex: 1;
+        background: #ffffff;
+        border-radius: 8px;
+        padding: 18px 22px;
+      }
+
+      .stat-k {
+        font-size: 21px;
+        color: var(--text-secondary);
+        margin-bottom: 6px;
+      }
+
+      .stat-v {
+        font-size: 34px;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+
+      .total-panel {
+        margin-top: 26px;
+        background: #f6ffed;
+        border: 2px solid #b7eb8f;
+        border-radius: 8px;
+        padding: 24px 28px;
+        font-size: 30px;
+        color: var(--text-primary);
+      }
+
+      .total-panel b {
+        font-weight: 600;
+      }
+
+      .summary-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        font-size: 25px;
+        color: var(--text-secondary);
+        margin-bottom: 34px;
+      }
+
+      .summary-row .val {
+        color: var(--text-primary);
+        font-weight: 600;
+      }
+
+      /* document scene */
+      .note {
+        margin-top: 22px;
+        border-inline-start: 6px solid var(--brand-primary);
+        background: #fff7ed;
+        border-radius: 8px;
+        padding: 20px 26px;
+        font-size: 25px;
+        color: #7c2d12;
+      }
+
+      .btn-ghost {
+        display: inline-flex;
+        align-items: center;
+        height: 72px;
+        padding: 0 34px;
+        border: 2px solid var(--surface-3);
+        border-radius: 8px;
+        font-size: 27px;
+        color: var(--text-primary);
+        background: #ffffff;
+      }
+
+      .file-row {
+        margin-top: 20px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        font-size: 26px;
+        color: var(--text-primary);
+      }
+
+      .tick {
+        width: 34px;
+        height: 34px;
+        border-radius: 999px;
+        background: #135200;
+        color: #ffffff;
+        font-size: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 34px;
+      }
+
+      /* submit + chain scene */
+      .chain-wrap {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 56px;
+      }
+
+      .btn-primary {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 92px;
+        padding: 0 58px;
+        border-radius: 10px;
+        background: var(--brand-on-light);
+        color: #ffffff;
+        font-size: 34px;
+        font-weight: 600;
+      }
+
+      .chain-caption {
+        font-size: 30px;
+        color: var(--text-secondary);
+      }
+
+      .chain {
+        display: flex;
+        align-items: center;
+        gap: 22px;
+      }
+
+      .chip {
+        padding: 20px 32px;
+        border-radius: 999px;
+        font-size: 28px;
+        font-weight: 600;
+        border: 2px solid;
+        white-space: nowrap;
+      }
+
+      .chip.wait-mgr {
+        background: #fff7e6;
+        border-color: #ffd591;
+        color: #ad4e00;
+      }
+
+      .chip.wait-hr {
+        background: #f0f7ff;
+        border-color: #91caff;
+        color: #0050b3;
+      }
+
+      .chip.done {
+        background: #f6ffed;
+        border-color: #b7eb8f;
+        color: #135200;
+      }
+
+      /* progression runs right-to-left, so the arrows point left */
+      .arrow {
+        font-size: 34px;
+        color: #64748b; /* WCAG AA on the light stage */
+      }
+
+      /* pay tier scene */
+      .tier-head {
+        font-size: 54px;
+        font-weight: 600;
+        color: #ffffff;
+        margin-bottom: 14px;
+      }
+
+      .tier-sub {
+        font-size: 28px;
+        color: #94a3b8;
+        margin-bottom: 58px;
+      }
+
+      .tiers {
+        display: flex;
+        gap: 34px;
+      }
+
+      .tier {
+        width: 430px;
+        background: #161b22;
+        border: 2px solid rgba(255, 255, 255, 0.09);
+        border-radius: 16px;
+        padding: 42px 40px;
+      }
+
+      .tier-days {
+        font-size: 27px;
+        color: #94a3b8;
+        margin-bottom: 16px;
+      }
+
+      .tier-pay {
+        font-size: 50px;
+        font-weight: 700;
+        color: var(--brand-primary);
+      }
+
+      .tier-pct {
+        margin-top: 10px;
+        font-size: 25px;
+        color: #94a3b8;
+      }
+
+      .tier.unpaid .tier-pay {
+        color: #94a3b8;
+      }
+
+      .outro {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 96px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 20px;
+      }
+
+      .logo-plate {
+        background: #ffffff;
+        border-radius: 14px;
+        padding: 20px 32px;
+        display: flex;
+        align-items: center;
+      }
+
+      .logo-plate img {
+        width: 360px;
+        height: auto;
+        display: block;
+      }
+
+      .outro-line {
+        font-size: 32px;
+        font-weight: 500;
+        color: #ffffff;
+      }
+
+      /* simulated cursor */
+      .cursor {
+        position: absolute;
+        width: 40px;
+        height: 40px;
+        z-index: 40;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="24.8"
+      data-width="1920"
+      data-height="1080"
+    >
+      <!-- ============ SCENE 1 — HOOK (0.0 – 3.3) ============ -->
+      <section id="s1" class="clip dark" data-start="0" data-duration="3.3" data-track-index="0">
+        <div id="s1-kicker" class="hook-kicker">دليل الموظف &mdash; الموارد البشرية</div>
+        <h1 id="s1-title" class="hook-title">الإجازة المرضية</h1>
+        <div id="s1-sub" class="hook-sub"><b>120 يوماً</b> في السنة. إليك طريقة طلبها.</div>
+      </section>
+
+      <!-- ============ SCENE 2 — STEP 1: CHOOSE THE TYPE (3.3 – 7.5) ============ -->
+      <section id="s2" class="clip" data-start="3.3" data-duration="4.2" data-track-index="1">
+        <div class="app">
+          <div class="sidebar">
+            <div class="mark">FFI</div>
+            <div class="nav-dot"></div>
+            <div class="nav-dot active"></div>
+            <div class="nav-dot"></div>
+            <div class="nav-dot"></div>
+          </div>
+          <div class="stage">
+            <div id="s2-card" class="card">
+              <div class="card-head">
+                <div>
+                  <div class="card-title">طلب إجازة</div>
+                  <div class="card-sub">تقديم طلب إجازة جديد</div>
+                </div>
+                <div class="step-pill">الخطوة 1 من 4</div>
+              </div>
+
+              <div class="field-label">نوع الإجازة</div>
+              <div id="s2-select" class="control muted">
+                <span id="s2-placeholder">اختر نوع الإجازة</span>
+                <span id="s2-value" style="position: absolute; inset-inline-start: 26px; color: #0f172a"
+                  >إجازة مرضية</span
+                >
+                <span class="caret">&#9662;</span>
+
+                <div id="s2-dropdown" class="dropdown">
+                  <div class="opt">إجازة سنوية</div>
+                  <div id="s2-opt-sick" class="opt">إجازة مرضية</div>
+                  <div class="opt">إجازة طارئة</div>
+                  <div class="opt">إجازة بدون راتب</div>
+                </div>
+              </div>
+
+              <div id="s2-balance" class="balance-panel">
+                <div class="panel-head">رصيد الإجازات &mdash; إجازة مرضية</div>
+                <div class="stat-row">
+                  <div class="stat">
+                    <div class="stat-k">المتبقي</div>
+                    <div class="stat-v">120 يوماً</div>
+                  </div>
+                  <div class="stat">
+                    <div class="stat-k">المستخدم</div>
+                    <div class="stat-v">0 يوم</div>
+                  </div>
+                  <div class="stat">
+                    <div class="stat-k">المسموح</div>
+                    <div class="stat-v">120 يوماً</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <svg id="s2-cursor" class="cursor" viewBox="0 0 24 24" style="left: 940px; top: 470px">
+          <path d="M20 2 L20 20 L15 15.5 L12 22 L9 20.5 L12 14.5 L5 14 Z" fill="#0f172a" stroke="#fff" stroke-width="1.2" />
+        </svg>
+      </section>
+
+      <!-- ============ SCENE 3 — STEP 2: PICK THE DATES (7.5 – 10.9) ============ -->
+      <section id="s3" class="clip" data-start="7.5" data-duration="3.4" data-track-index="2">
+        <div class="app">
+          <div class="sidebar">
+            <div class="mark">FFI</div>
+            <div class="nav-dot"></div>
+            <div class="nav-dot active"></div>
+            <div class="nav-dot"></div>
+            <div class="nav-dot"></div>
+          </div>
+          <div class="stage">
+            <div id="s3-card" class="card">
+              <div class="card-head">
+                <div>
+                  <div class="card-title">طلب إجازة</div>
+                  <div class="card-sub">تقديم طلب إجازة جديد</div>
+                </div>
+                <div class="step-pill">الخطوة 2 من 4</div>
+              </div>
+
+              <div class="summary-row">
+                نوع الإجازة: <span class="val">إجازة مرضية</span>
+              </div>
+
+              <div class="field-label">التاريخ</div>
+              <div id="s3-dates" class="control">
+                <span id="s3-range"><span class="ltr">2026-09-20</span> &nbsp;&larr;&nbsp; <span class="ltr">2026-09-24</span></span>
+                <span class="caret">&#128197;</span>
+              </div>
+
+              <div id="s3-total" class="total-panel"><b>إجمالي الأيام:</b> 5</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ SCENE 4 — STEP 3: ATTACH THE REPORT (10.9 – 15.2) ============ -->
+      <section id="s4" class="clip" data-start="10.9" data-duration="4.3" data-track-index="3">
+        <div class="app">
+          <div class="sidebar">
+            <div class="mark">FFI</div>
+            <div class="nav-dot"></div>
+            <div class="nav-dot active"></div>
+            <div class="nav-dot"></div>
+            <div class="nav-dot"></div>
+          </div>
+          <div class="stage">
+            <div id="s4-card" class="card">
+              <div class="card-head">
+                <div>
+                  <div class="card-title">طلب إجازة</div>
+                  <div class="card-sub">تقديم طلب إجازة جديد</div>
+                </div>
+                <div class="step-pill">الخطوة 3 من 4</div>
+              </div>
+
+              <div id="s4-label" class="field-label req">المستند (مطلوب)</div>
+              <div id="s4-btn" class="btn-ghost">اختر ملفاً</div>
+
+              <div id="s4-file" class="file-row">
+                <span class="tick">&#10003;</span>
+                <span class="ltr">medical-report.pdf</span>
+              </div>
+
+              <div id="s4-note" class="note">
+                لن يتم تقديم طلب الإجازة المرضية بدون تقرير طبي.
+              </div>
+            </div>
+          </div>
+        </div>
+        <svg id="s4-cursor" class="cursor" viewBox="0 0 24 24" style="left: 1020px; top: 640px">
+          <path d="M20 2 L20 20 L15 15.5 L12 22 L9 20.5 L12 14.5 L5 14 Z" fill="#0f172a" stroke="#fff" stroke-width="1.2" />
+        </svg>
+      </section>
+
+      <!-- ============ SCENE 5 — STEP 4: SUBMIT AND TRACK (15.2 – 20.3) ============ -->
+      <section id="s5" class="clip" data-start="15.2" data-duration="5.1" data-track-index="4">
+        <div class="app">
+          <div class="sidebar">
+            <div class="mark">FFI</div>
+            <div class="nav-dot"></div>
+            <div class="nav-dot active"></div>
+            <div class="nav-dot"></div>
+            <div class="nav-dot"></div>
+          </div>
+          <div class="stage">
+            <div class="chain-wrap">
+              <div id="s5-btn" class="btn-primary">تقديم الطلب</div>
+              <div id="s5-caption" class="chain-caption">ثم ينتقل الطلب عبر سلسلة الاعتماد</div>
+              <div class="chain">
+                <div id="s5-c1" class="chip wait-mgr">بانتظار المدير المباشر</div>
+                <div id="s5-a1" class="arrow">&larr;</div>
+                <div id="s5-c2" class="chip wait-hr">بانتظار الموارد البشرية</div>
+                <div id="s5-a2" class="arrow">&larr;</div>
+                <div id="s5-c3" class="chip done">معتمدة</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <svg id="s5-cursor" class="cursor" viewBox="0 0 24 24" style="left: 830px; top: 320px">
+          <path d="M20 2 L20 20 L15 15.5 L12 22 L9 20.5 L12 14.5 L5 14 Z" fill="#0f172a" stroke="#fff" stroke-width="1.2" />
+        </svg>
+      </section>
+
+      <!-- ============ SCENE 6 — HOW IT'S PAID + OUTRO (20.3 – 24.8) ============ -->
+      <section id="s6" class="clip dark" data-start="20.3" data-duration="4.5" data-track-index="5">
+        <div id="s6-head" class="tier-head">كيف تُحتسب أجور الإجازة المرضية</div>
+        <div id="s6-sub" class="tier-sub">حتى 120 يوماً في السنة</div>
+        <div class="tiers">
+          <div id="s6-t1" class="tier">
+            <div class="tier-days">الأيام 1 &ndash; 30</div>
+            <div class="tier-pay">أجر كامل</div>
+            <div class="tier-pct"><span class="ltr">100%</span> من الأجر</div>
+          </div>
+          <div id="s6-t2" class="tier">
+            <div class="tier-days">الأيام 31 &ndash; 90</div>
+            <div class="tier-pay">نصف الأجر</div>
+            <div class="tier-pct"><span class="ltr">50%</span> من الأجر</div>
+          </div>
+          <div id="s6-t3" class="tier unpaid">
+            <div class="tier-days">الأيام 91 &ndash; 120</div>
+            <div class="tier-pay">بدون أجر</div>
+            <div class="tier-pct"><span class="ltr">0%</span> من الأجر</div>
+          </div>
+        </div>
+        <div id="s6-outro" class="outro">
+          <div class="logo-plate">
+            <img src="assets/img/ffi-logo.png" alt="شركة فتحي فؤاد عيتاني للمقاولات" />
+          </div>
+          <div class="outro-line">إجازتك المرضية، بخطوات واضحة.</div>
+        </div>
+      </section>
+
+      <!-- ============ AUDIO ============ -->
+      <audio
+        id="bgm"
+        src="assets/music/happy-beats-business-moves-vol-10-by-ende-dot-app.mp3"
+        data-start="0"
+        data-duration="24.8"
+        data-track-index="10"
+        data-volume="0.9"
+      ></audio>
+
+      <!-- scene 2: dropdown select -->
+      <audio id="sfx-click-type" src="assets/sfx/interface/click_003.ogg" data-start="4.64" data-track-index="11" data-volume="0.84"></audio>
+      <!-- scene 3: total days panel -->
+      <audio id="sfx-total" src="assets/sfx/interface/bong_001.ogg" data-start="8.73" data-track-index="12" data-volume="0.75"></audio>
+      <!-- scene 4: choose file press + attach confirm -->
+      <audio id="sfx-click-file" src="assets/sfx/interface/click_002.ogg" data-start="12.56" data-track-index="13" data-volume="0.84"></audio>
+      <audio id="sfx-attach" src="assets/sfx/impact/impactSoft_medium_001.ogg" data-start="13.11" data-track-index="14" data-volume="0.90"></audio>
+      <!-- scene 5: submit press, chain ticks, approved payoff -->
+      <audio id="sfx-submit" src="assets/sfx/ui/click2.ogg" data-start="15.6" data-track-index="15" data-volume="0.84"></audio>
+      <audio id="sfx-chip1" src="assets/sfx/impact/impactSoft_medium_003.ogg" data-start="16.38" data-track-index="16" data-volume="0.60"></audio>
+      <audio id="sfx-chip2" src="assets/sfx/impact/impactSoft_medium_004.ogg" data-start="17.47" data-track-index="17" data-volume="0.60"></audio>
+      <audio id="sfx-approved" src="assets/sfx/impact/impactBell_heavy_000.ogg" data-start="18.55" data-track-index="18" data-volume="0.84"></audio>
+      <!-- scene 6: tier cards + logo -->
+      <audio id="sfx-t1" src="assets/sfx/impact/impactSoft_medium_002.ogg" data-start="20.74" data-track-index="19" data-volume="0.66"></audio>
+      <audio id="sfx-t2" src="assets/sfx/impact/impactSoft_medium_003.ogg" data-start="21.83" data-track-index="20" data-volume="0.66"></audio>
+      <audio id="sfx-t3" src="assets/sfx/impact/impactSoft_medium_004.ogg" data-start="22.92" data-track-index="21" data-volume="0.66"></audio>
+      <audio id="sfx-logo" src="assets/sfx/impact/impactSoft_medium_000.ogg" data-start="23.6" data-track-index="22" data-volume="0.75"></audio>
+    </div>
+
+    <script>
+      /*
+       * FFI HR — Sick Leave tutorial, Arabic (RTL).
+       * Same timeline as the English cut so the two stay in sync; the only
+       * directional change is that cursor moves run right-to-left and press
+       * transforms originate from the right edge.
+       * Beat/cue source: brag skill preset for
+       * happy-beats-business-moves-vol-10 (109.96 BPM, beat grid ~0.545s).
+       */
+      const build = () => {
+        const tl = gsap.timeline({ paused: true });
+        const EASE = "power3.out";
+
+        /* ---------- Scene 1 — hook (0.0 – 3.3) ---------- */
+        // beat-locked: 0.27s (strong cue) — title lands on the first downbeat
+        tl.fromTo("#s1-kicker", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.45, ease: EASE }, 0.05);
+        tl.fromTo("#s1-title", { opacity: 0, y: 46 }, { opacity: 1, y: 0, duration: 0.5, ease: EASE }, 0.27);
+        tl.fromTo("#s1-sub", { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: 0.45, ease: EASE }, 0.82);
+        tl.to(["#s1-kicker", "#s1-title", "#s1-sub"], { opacity: 0, duration: 0.25 }, 3.05);
+
+        /* ---------- Scene 2 — step 1: choose the type (3.3 – 7.5) ---------- */
+        tl.fromTo("#s2-card", { opacity: 0, y: 44 }, { opacity: 1, y: 0, duration: 0.45, ease: EASE }, 3.3);
+        gsap.set("#s2-dropdown", { opacity: 0, scaleY: 0.6 });
+        gsap.set("#s2-value", { opacity: 0 });
+        gsap.set("#s2-balance", { opacity: 0 });
+        gsap.set("#s2-opt-sick", { backgroundColor: "rgba(249,115,22,0)" });
+
+        // cursor drifts to the select, then the dropdown opens on a strong cue (4.10s)
+        tl.fromTo("#s2-cursor", { x: 0, y: 0 }, { x: 110, y: -40, duration: 0.55, ease: "power2.inOut" }, 3.5);
+        tl.to("#s2-select", { borderColor: "#f97316", duration: 0.2 }, 4.05);
+        // beat-locked: 4.10s (strong cue)
+        tl.to("#s2-dropdown", { opacity: 1, scaleY: 1, duration: 0.28, ease: EASE }, 4.1);
+        tl.to("#s2-cursor", { x: 150, y: 95, duration: 0.4, ease: "power2.inOut" }, 4.2);
+        // selection lands on the next beat (4.64s) with the click SFX
+        tl.to("#s2-opt-sick", { backgroundColor: "rgba(249,115,22,0.12)", color: "#c2410c", duration: 0.15 }, 4.55);
+        tl.to("#s2-cursor", { scale: 0.82, duration: 0.09, yoyo: true, repeat: 1 }, 4.64);
+        tl.to("#s2-dropdown", { opacity: 0, scaleY: 0.7, duration: 0.22 }, 4.78);
+        tl.to("#s2-placeholder", { opacity: 0, duration: 0.18 }, 4.78);
+        tl.to("#s2-value", { opacity: 1, duration: 0.22 }, 4.84);
+        tl.to("#s2-cursor", { opacity: 0, duration: 0.25 }, 4.95);
+        // balance panel arrives as a consequence, on the next beat (5.19s)
+        tl.fromTo("#s2-balance", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4, ease: EASE }, 5.19);
+        tl.to("#s2-card", { opacity: 0, y: -26, duration: 0.3 }, 7.2);
+
+        /* ---------- Scene 3 — step 2: pick the dates (7.5 – 10.9) ---------- */
+        gsap.set("#s3-range", { opacity: 0 });
+        gsap.set("#s3-total", { opacity: 0 });
+        tl.fromTo("#s3-card", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.4, ease: EASE }, 7.5);
+        // beat: 7.79s — the range fills in
+        tl.to("#s3-dates", { borderColor: "#f97316", duration: 0.2 }, 7.7);
+        tl.to("#s3-range", { opacity: 1, duration: 0.3, ease: EASE }, 7.79);
+        tl.to("#s3-dates", { borderColor: "#e2e8f0", duration: 0.3 }, 8.4);
+        // beat: 8.73s — the green total-days panel is the result
+        tl.fromTo("#s3-total", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.35, ease: EASE }, 8.73);
+        tl.to("#s3-card", { opacity: 0, y: -26, duration: 0.3 }, 10.6);
+
+        /* ---------- Scene 4 — step 3: attach the report (10.9 – 15.2) ---------- */
+        gsap.set("#s4-file", { opacity: 0 });
+        gsap.set("#s4-note", { opacity: 0 });
+        tl.fromTo("#s4-card", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.4, ease: EASE }, 10.9);
+        // beat: 11.47s — the label is the whole point of this scene, so it gets the emphasis
+        tl.fromTo("#s4-label", { scale: 1 }, { scale: 1.06, duration: 0.22, yoyo: true, repeat: 1, transformOrigin: "right center" }, 11.47);
+        // beat: 12.02s — the rule, in words
+        tl.fromTo("#s4-note", { opacity: 0, x: 16 }, { opacity: 1, x: 0, duration: 0.35, ease: EASE }, 12.02);
+        // beat-locked: 12.56s (strong cue) — the press
+        tl.fromTo("#s4-cursor", { x: 0, y: 0 }, { x: 120, y: -55, duration: 0.5, ease: "power2.inOut" }, 12.0);
+        tl.to("#s4-btn", { scale: 0.96, duration: 0.1, yoyo: true, repeat: 1, transformOrigin: "right center" }, 12.56);
+        tl.to("#s4-cursor", { scale: 0.82, duration: 0.09, yoyo: true, repeat: 1 }, 12.56);
+        tl.to("#s4-cursor", { opacity: 0, duration: 0.25 }, 12.8);
+        // beat: 13.11s — the attached file
+        tl.fromTo("#s4-file", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.32, ease: EASE }, 13.11);
+        tl.to("#s4-card", { opacity: 0, y: -26, duration: 0.3 }, 14.9);
+
+        /* ---------- Scene 5 — step 4: submit and track (15.2 – 20.3) ---------- */
+        gsap.set(["#s5-c1", "#s5-c2", "#s5-c3", "#s5-a1", "#s5-a2"], { opacity: 0 });
+        gsap.set("#s5-caption", { opacity: 0 });
+        tl.fromTo("#s5-btn", { opacity: 0, y: 34 }, { opacity: 1, y: 0, duration: 0.4, ease: EASE }, 15.2);
+        tl.fromTo("#s5-cursor", { x: 0, y: 0 }, { x: 70, y: 30, duration: 0.4, ease: "power2.inOut" }, 15.25);
+        // the press
+        tl.to("#s5-btn", { scale: 0.96, duration: 0.1, yoyo: true, repeat: 1 }, 15.6);
+        tl.to("#s5-cursor", { scale: 0.82, duration: 0.09, yoyo: true, repeat: 1 }, 15.6);
+        tl.to("#s5-cursor", { opacity: 0, duration: 0.2 }, 15.8);
+        tl.to("#s5-caption", { opacity: 1, duration: 0.3, ease: EASE }, 15.9);
+        // beat-grid, every OTHER beat so each chip clears the reading floor:
+        // chip 1 at 16.38s, chip 2 at 17.47s, chip 3 at 18.55s (~1.09s apart)
+        tl.fromTo("#s5-c1", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.32, ease: EASE }, 16.38);
+        tl.to("#s5-a1", { opacity: 1, duration: 0.25 }, 17.1);
+        tl.fromTo("#s5-c2", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.32, ease: EASE }, 17.47);
+        tl.to("#s5-a2", { opacity: 1, duration: 0.25 }, 18.2);
+        // beat-locked: 18.55s (strong cue) — the payoff
+        tl.fromTo("#s5-c3", { opacity: 0, y: 20, scale: 0.9 }, { opacity: 1, y: 0, scale: 1, duration: 0.38, ease: "back.out(1.7)" }, 18.55);
+        tl.to(["#s5-btn", "#s5-caption", "#s5-c1", "#s5-c2", "#s5-c3", "#s5-a1", "#s5-a2"], { opacity: 0, duration: 0.3 }, 20.0);
+
+        /* ---------- Scene 6 — how it's paid + outro (20.3 – 24.8) ---------- */
+        gsap.set(["#s6-t1", "#s6-t2", "#s6-t3"], { opacity: 0 });
+        gsap.set("#s6-outro", { opacity: 0 });
+        tl.fromTo("#s6-head", { opacity: 0, y: 26 }, { opacity: 1, y: 0, duration: 0.4, ease: EASE }, 20.3);
+        tl.fromTo("#s6-sub", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.35, ease: EASE }, 20.45);
+        // beat-grid, every OTHER beat: 20.74s / 21.83s / 22.92s — all three hold to the end
+        tl.fromTo("#s6-t1", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.38, ease: EASE }, 20.74);
+        tl.fromTo("#s6-t2", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.38, ease: EASE }, 21.83);
+        tl.fromTo("#s6-t3", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.38, ease: EASE }, 22.92);
+        // the outro rides in under the cards; nothing is pulled off screen
+        tl.fromTo("#s6-outro", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4, ease: EASE }, 23.6);
+
+        /* ---------- Audio-reactive: subtle accent breathing ---------- */
+        tl.to("#s6-t1 .tier-pay", { textShadow: "0 0 22px rgba(249,115,22,0.28)", duration: 0.6 }, 23.0);
+        tl.to("#s6-t2 .tier-pay", { textShadow: "0 0 22px rgba(249,115,22,0.28)", duration: 0.6 }, 23.15);
+
+        /* ---------- Music bed ---------- */
+        tl.fromTo("#bgm", { volume: 0 }, { volume: 0.9, duration: 0.9 }, 0);
+        tl.to("#bgm", { volume: 1.0, duration: 0.7 }, 20.3); // small lift for the outro
+        tl.to("#bgm", { volume: 0, duration: 1.1 }, 23.65); // fade under the logo
+
+        window.__timelines["main"] = tl;
+        tl.seek(0);
+      };
+
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(build);
+      } else {
+        build();
+      }
+    </script>
+  </body>
+</html>

@@ -6,19 +6,22 @@ the [`/brag`](https://github.com/latent-spaces/brag) skill and rendered by
 
 | File | What it is |
 |---|---|
-| `brag.mp4` | The rendered video (1920x1080, 24.8s, music + UI sound). Its first frame is the poster, so link previews land on the closing card. |
-| `brag.jpg` | Poster still — use as `poster=` on a `<video>`, or as the custom thumbnail on platforms that accept one. |
+| `brag.mp4` | English cut (1920x1080, 24.8s, music + UI sound). Its first frame is the poster, so link previews land on the closing card. |
+| `brag.jpg` | English poster still — use as `poster=` on a `<video>`, or as the custom thumbnail on platforms that accept one. |
+| `brag-ar.mp4` | Arabic RTL cut — same timeline and audio, mirrored layout, Readex Pro. |
+| `brag-ar.jpg` | Arabic poster still. |
 | `brag-plan.md` | Creative plan, storyboard, beat map, and the source references every on-screen fact came from. |
 | `composition-brief.md` | The handoff brief given to Hyperframes. |
 | `share-copy.txt` | One-paragraph caption for posting the video internally. |
-| `composition/` | The Hyperframes project (HTML + assets) the video renders from. |
+| `composition/` | The Hyperframes project for the English cut. |
+| `composition-ar/` | The Hyperframes project for the Arabic cut. |
 
 ## Re-rendering
 
 ```bash
-cd brag-output/composition
+cd brag-output/composition        # or composition-ar
 npx hyperframes check                              # lint + runtime + layout + contrast
-npx hyperframes render --quality high --output ../brag.mp4
+npx hyperframes render --quality high --output ../brag.mp4      # ../brag-ar.mp4 for Arabic
 ```
 
 After re-rendering, re-bake the poster as frame 0 so idle thumbnails stay correct:
@@ -49,7 +52,19 @@ Every on-screen claim was read out of the code rather than the docs:
   validator) and again server-side at `utils.py:1270-1272`
 - Approval chain Pending Manager -> Pending HR -> Approved — `Backend/leaves/views.py`
 - All UI strings and colors are verbatim from `FrontEnd/src/i18n/translations.ts` and
-  the `:root` tokens in `FrontEnd/src/index.css`
+  the `:root` tokens in `FrontEnd/src/index.css` — the Arabic cut uses the `ar` half of
+  that same file, with Readex Pro (the app's `--font-ar`)
+
+## Arabic cut notes
+
+The two cuts share one timeline, so a timestamp in one lands on the same beat in the other.
+RTL differences are layout-only: the sidebar moves to the right, the approval chain reads
+right-to-left with `←` arrows, the date range puts the start date on the right, and press
+animations originate from the right edge.
+
+One deviation from `translations.ts`: it spells the unpaid leave type
+`"اجازه بدون راتب"`. The video uses the correct `"إجازة بدون راتب"`. The app string looks
+like a typo worth fixing.
 
 > Note: `.agents/skills/leave_management.md` describes the sick pay tiers as
 > "30/30/60", which does not match the code (30 full / 60 half / 30 unpaid). The video
