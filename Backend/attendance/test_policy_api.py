@@ -23,6 +23,7 @@ User = get_user_model()
 RECALCULATE_URL = "/api/attendance/hr/recalculate/"
 SUMMARY_URL = "/api/attendance/me/today-summary/"
 VIOLATIONS_URL = "/api/attendance/violations/"
+NOTICES_URL = "/api/attendance/notices/"
 
 
 class AttendancePolicyApiTests(TestCase):
@@ -197,6 +198,20 @@ class AttendancePolicyApiTests(TestCase):
         )
         self.assertEqual(
             self._get(self.foreign, VIOLATIONS_URL, self.company_a).status_code, status.HTTP_403_FORBIDDEN
+        )
+
+    def test_hr_can_explicitly_request_only_their_own_violations_and_notices(self):
+        hr_profile = self._profile(self.hr, self.company_a, "ATTAPI-HR01", "HR Self Service")
+        BioTimeEmployeeMap.objects.create(employee_profile=hr_profile, biotime_emp_code=hr_profile.employee_id)
+        own = self._late_violation(hr_profile)
+        self._late_violation(self.coworker_profile)
+
+        violations = self._get(self.hr, f"{VIOLATIONS_URL}?mine=true", self.company_a)
+        notices = self._get(self.hr, f"{NOTICES_URL}?mine=true", self.company_a)
+
+        self.assertEqual(self._ids(violations), {own.id})
+        self.assertEqual(
+            {row["employee_profile_id"] for row in notices.data["data"]["items"]}, {hr_profile.id}
         )
 
     def test_today_summary_serializes_the_policy_result_for_the_own_company(self):
