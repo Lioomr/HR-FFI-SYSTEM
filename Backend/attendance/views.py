@@ -136,7 +136,8 @@ class AttendanceViolationViewSet(viewsets.ReadOnlyModelViewSet):
         qs = AttendanceLateViolation.objects.select_related("employee_profile", "result", "payroll_deduction").order_by(
             "-date", "-id"
         )
-        if get_role(self.request.user) not in {"HRManager", "SystemAdmin"}:
+        mine = self.request.query_params.get("mine", "").lower() in {"1", "true"}
+        if mine or get_role(self.request.user) not in {"HRManager", "SystemAdmin"}:
             qs = qs.filter(employee_profile__user=self.request.user)
         # Every role sees only the selected active company, so a detail id from
         # another company is a 404 rather than a disclosure.
@@ -219,7 +220,8 @@ class AttendanceNoticeViewSet(viewsets.ReadOnlyModelViewSet):
             .prefetch_related("notification__deliveries")
             .order_by("-issued_at", "-id")
         )
-        if get_role(self.request.user) not in {"HRManager", "SystemAdmin"}:
+        mine = self.request.query_params.get("mine", "").lower() in {"1", "true"}
+        if mine or get_role(self.request.user) not in {"HRManager", "SystemAdmin"}:
             qs = qs.filter(employee_profile__user=self.request.user)
         # Another company's or employee's notice is a 404, never a disclosure.
         return filter_queryset_by_company_scope(qs, self.request)

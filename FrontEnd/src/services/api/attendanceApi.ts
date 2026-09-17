@@ -97,6 +97,7 @@ export function toViolationQueryParams(
   filters: AttendanceViolationFilters = {},
 ): Record<string, string | number> {
   const params: Record<string, string | number> = {};
+  if (filters.mine) params.mine = "true";
   if (filters.page) params.page = filters.page;
   if (filters.page_size) params.page_size = filters.page_size;
   const lifecycle = filters.lifecycle?.filter(Boolean) ?? [];
@@ -142,6 +143,7 @@ export function toNoticeQueryParams(
   filters: AttendanceNoticeFilters = {},
 ): Record<string, string | number> {
   const params: Record<string, string | number> = {};
+  if (filters.mine) params.mine = "true";
   if (filters.page) params.page = filters.page;
   if (filters.page_size) params.page_size = filters.page_size;
   const levels = filters.notice_level?.filter(Boolean) ?? [];
