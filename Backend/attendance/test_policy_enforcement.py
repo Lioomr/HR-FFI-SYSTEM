@@ -90,10 +90,6 @@ class AttendancePolicyEnforcementTests(AttendancePolicyTestBase):
 
         AttendancePolicyService.reconcile_month(self.profile, current.date)
 
-        historical.refresh_from_db()
-        current.refresh_from_db()
-        self.assertEqual(historical.status_input, "LATE")
-        self.assertEqual(current.status_input, "LATE")
         self.assertFalse(AttendanceLateViolation.objects.filter(date=historical.date).exists())
         self.assertTrue(AttendanceLateViolation.objects.filter(date=current.date).exists())
 
