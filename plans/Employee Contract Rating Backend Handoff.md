@@ -1,110 +1,118 @@
-# Employee Contract Rating backend
+# Employee Contract Rating backend handoff
 
-Implementation follows `C:/Users/Asus/.claude/plans/new-feature-employee-soft-sparkle.md`, sections 1–29, excluding frontend work. The 18 bilingual criterion codes, labels, and order were supplied by the product owner during implementation and are defined only in `Backend/contract_ratings/criteria.py`.
+Implemented from `C:/Users/Asus/.claude/plans/new-feature-employee-soft-sparkle.md`. This handoff describes the final backend-only design. The frontend was intentionally not changed.
+
+## Final workflow
+
+1. The hourly task creates one rating per current contract cycle when expiry is within 90 days. It starts in `PENDING_HR_GATE` and notifies HR only.
+2. HR makes one irreversible routing choice: `RATE` opens the parallel evaluation cycle and notifies the manager and employee; `SKIP_TO_CEO` notifies CEO approvers and never exposes the cycle to either rater.
+3. On the `RATE` path, the current manager (or delegate) and employee independently submit the same 18 bilingual criteria plus an overall remark. Responses contain no recommendation, proposed change, salary, title, or position fields. After both responses, the rating moves directly to `PENDING_CEO`.
+4. On the `SKIP_TO_CEO` path, the rating moves directly to `PENDING_CEO` with no response rows. Return-for-correction actions are invalid because there is nothing to return.
+5. The CEO approver (or delegate) may request one advisory HR comment, return collected responses, or make the final decision.
+6. Final decisions are `RENEW`, `RENEW_WITH_CHANGES`, and `TERMINATE`. `RENEW_WITH_CHANGES` requires CEO-approved salary terms and an effective date and applies exactly once after snapshot validation.
+7. `TERMINATE` records a scheduled outcome. The hourly task archives/deactivates the employee atomically at contract expiry. HR acknowledgement is record-only and never gates execution.
+
+The independent `ContractDecision` workflow remains available and unchanged. A finalized or changed standalone decision makes a linked rating require manual resolution rather than silently rewriting either workflow.
 
 ## API contract
 
-All routes require authentication and use the existing response/error envelope. Rating records are restricted to the active authorized company. List pagination uses the existing `StandardPagination` envelope (`data.items`, `page`, `page_size`, `count`, `total_pages`).
+All routes require authentication, the authorized active-company header, and the existing success/error envelopes. Lists use `StandardPagination` (`data.items`).
 
 | Method | Route | Payload / behavior |
 |---|---|---|
-| GET | `/contract-ratings/criteria/` | Authoritative criteria with `code`, `label_en`, `label_ar`, `display_order`, and `grade_ranges`. |
-| GET | `/contract-ratings/` | Role-shaped list; optional `status` filter. |
-| GET | `/contract-ratings/{id}/` | Role-shaped detail. |
-| POST | `/contract-ratings/{id}/manager-response/` | `criterion_ratings`, `overall_remark`, `recommendation`, `recommended_change_types`, relevant proposal fields, optional `salary_effective_date`. |
-| POST | `/contract-ratings/{id}/employee-response/` | `criterion_ratings`, optional `overall_remark`. Manager-only fields are rejected. |
-| POST | `/contract-ratings/{id}/hr-review/` | `action`: `approve`, `return-manager`, `return-employee`, `return-both`; `comment` required for returns. Also supports `return` with `targets: ["MANAGER", "EMPLOYEE"]`. |
-| POST | `/contract-ratings/{id}/ceo-decision/` | `action`: plan's uppercase four actions; `comment`, `ceo_selected_option`, `ceo_approved_terms`, `ceo_salary_override_reason` as applicable. |
-| POST | `/contract-ratings/{id}/acknowledge-termination-notice/` | Empty body; HR only; idempotent. |
+| GET | `/contract-ratings/criteria/` | Returns the authoritative 18 criteria and grade ranges. |
+| GET | `/contract-ratings/` | Company-scoped, role-shaped list; optional `status` filter. |
+| GET | `/contract-ratings/{id}/` | Company-scoped, role-shaped detail. |
+| GET | `/contract-ratings/{id}/pdf/` | Privacy-shaped PDF; coarse HR access is denied until a CEO requests HR input. |
+| POST | `/contract-ratings/{id}/hr-gate/` | `{rating_mode: "RATE" | "SKIP_TO_CEO"}`; HR-only, one-time routing decision. |
+| POST | `/contract-ratings/{id}/manager-response/` | `{criterion_ratings, overall_remark?}`. |
+| POST | `/contract-ratings/{id}/employee-response/` | `{criterion_ratings, overall_remark?}`. |
+| POST | `/contract-ratings/{id}/request-hr-comment/` | Empty body; CEO approver only; idempotent. |
+| POST | `/contract-ratings/{id}/hr-comment/` | `{comment}`; HR approver only and only after the rating-specific request. A late advisory comment is accepted after `DECIDED`. |
+| POST | `/contract-ratings/{id}/ceo-decision/` | `{ceo_decision, comment?, ceo_approved_terms?, salary_effective_date?}`. |
+| POST | `/contract-ratings/{id}/acknowledge-termination-notice/` | Empty body; HR only; idempotent record keeping. |
 
-Each criterion value is exactly `{grade, score, remark}`. Remark may be empty. Integer scores must match the selected grade's inclusive range. Client averages and grades are ignored. Both responses are recalculated on resubmission. HR cannot edit response fields through HR review.
+CEO return values are `RETURN_TO_MANAGER`, `RETURN_TO_EMPLOYEE`, and `RETURN_TO_BOTH`; each requires a reason in `comment`. Final values are `RENEW`, `RENEW_WITH_CHANGES`, and `TERMINATE`. Salary fields are rejected for all other actions.
 
-Employee and manager payloads are built from a restricted allowlist: safe header, status, and the caller's response only. No other response, comparison, approval comments, salary snapshots, termination decision, notification metadata, or workflow history is serialized. Privileged users who are also a rater retain this restriction on that employee's rating. HR/CEO views include the full package and recorded workflow history. CEO visibility is pending CEO plus their own decided ratings.
+Each criterion value must be exactly `{grade, score, remark}`. Scores are integers from 0 through 100 and must fall within the selected grade range. Server code calculates averages and grades; submitted computed values are ignored. Unknown decision/proposal fields are rejected with the standard 422 envelope.
 
-## Decisions and clarification of plan ambiguities
+## Privacy and authorization
 
-- Individual scores keep the specified integer ranges. Fractional averages use lower-bound thresholds, avoiding gaps in the sample formula: 89.50 is VERY_GOOD, 79.50 GOOD, 69.50 ACCEPTABLE, and 59.50 POOR. The product owner should confirm this interpretation.
-- Sections 17/19 and the service specification govern notice acknowledgment: HR/SystemAdmin (including valid HR delegates), despite section 22's contradictory manager-only row.
-- Sections 3/6/8 govern salary proposals: the current manager or valid manager delegate may propose salary changes. Section 22's SystemAdmin-only proposal row conflicts with that workflow and is not followed.
-- Existing `is_department_ceo_approver_user` and workflow authorization admit SystemAdmin as a CEO approver; preserved as explicitly requested rather than replacing the shared permission rules. Self-approval is blocked for the rated employee and the manager-response author.
-- `salary_effective_date` is captured from the manager payload and defaults to day after expiry. It is descriptive metadata; salary applies immediately on CEO approval, as specified. No minimum increase is imposed; existing nonnegative money validation remains in effect. Non-salary proposals are informational only.
-- `section_snapshot` uses `task_group_ref`; `EmployeeProfile` has no section field. Evaluation period uses the contract's start and expiry. These snapshots additionally detect contract-cycle changes even if the linked decision's original dates are edited.
-- Termination rechecks the original cycle and archive status before deciding whether it is due. A changed expiry is flagged for manual resolution rather than terminating a renewed contract later. Missing acknowledgment never blocks execution. A late acknowledgment after this rating's completed termination remains allowed as record-keeping.
-- The plan's statement that `finalize_decision` was the sole existing salary writer is not literally true: `auto_renew_decision` and profile editing already write salary data. Those independent existing paths remain unchanged. Every new rating salary write uses the extracted helper.
-- Existing standalone auto-renewal and snapshot checks are preserved. An independent renewal can invalidate a scheduled rating termination; an applied rating salary change can cause an older standalone decision's salary snapshot to need manual resolution. No cross-workflow decision or original snapshot is silently rewritten.
-- Notifications persist dispatch attempts and retry unsent events through the same hourly task. CEO reminders begin ten hours after HR approval. No extra termination scheduler or deadline was added.
-- Notification helpers are consolidated as `notify_event`/`_dispatch` rather than separate per-event functions such as the plan's schematic `notify_termination_finalized`; the specified recipient behavior is tested for each event.
-- A small `workflow.py` holds the adapter projection, in addition to the files named in the plan. A criteria endpoint is added per the product owner's clarification. Admin registrations are read-only to prevent bypassing service transitions and deleting rating history.
+- Employees and managers have no access before HR chooses `RATE`, and no access at any time on `SKIP_TO_CEO`. On a rated cycle they receive only the safe header plus their own response. The other response, comparison, HR/CEO content, salary data, termination result, notifications, and workflow history are structurally absent.
+- A rater who also has a privileged group still receives the rater-shaped payload for that employee.
+- HR receives a coarse record by default. While the gate is pending it additionally sees the fresh `account_connected` signal and gate fields. Full responses and comparison unlock only for the rating for which a CEO requested input. After a final decision, HR also receives the final operational outcome.
+- CEO visibility is pending CEO work plus ratings decided by that CEO actor. CEO sees both responses and comparison.
+- Company scope, workflow authorization, live manager relationships, delegation, and active-company write checks are enforced server-side.
+- An HR/CEO actor cannot review or decide a rating when that actor authored its manager response.
 
-## Validation and environment
+## Safety, audit, and notifications
 
-- Phase 1.5 full employee run: `1 failed, 374 passed, 3 warnings, 16 subtests passed in 326.58s (0:05:26)`. The single failure was reproduced against unchanged HEAD (`1 failed in 3.58s`): its archive rollback test patched `EmployeeProfile.save`, although the existing archive helper uses `QuerySet.update`. Corrected the failure injection; focused rerun: `1 passed in 2.86s`. No production archive behavior changed.
-- Tests run inside an isolated `/tmp/contract-rating-review` source copy in the existing development backend container, using its configured PostgreSQL connection and `SECURE_SSL_REDIRECT=false`. Local system Python lacked Django; local venv lacked database credentials. No credentials were read or emitted.
-- `contract_ratings.0001_initial` was generated and applied successfully to `test_ffi_hr_db`. The local development database migration attempt first applied existing dependency `organization.0005`, then stopped at existing `employees.0026` because `ocr_reviewed_at` already exists. No migration history was faked, and the unrelated schema mismatch was not repaired. The rating migration is not applied to that development database.
-- The existing container lacks `django_redis` for non-test management commands. Migration commands used `--skip-checks`; separate system checks use the existing test cache configuration. Application settings were not weakened.
+All workflow mutations lock the rating, employee profile, and linked standalone decision and recheck company, contract-cycle, archive, and standalone-decision snapshots. Conflicts move the rating to `MANUAL_RESOLUTION_REQUIRED` and notify HR. Salary and termination writes are transactionally coupled to workflow/audit history.
 
-Final verification (no failing or skipped tests):
+Milestones are persisted and retried by the hourly task:
+
+- Creation: HR only, for the routing decision.
+- Gate `RATE`: manager and employee; gate `SKIP_TO_CEO`: CEO approvers only.
+- 65-day pending gate: HR. On a rated incomplete cycle: CEO approvers plus only the missing raters.
+- Both responses submitted and periodic pending reminder: CEO approvers.
+- HR comment requested: HR; HR comment submitted: requesting CEO.
+- Final decision: HR and, only for `RATE`, the manager; never the employee.
+- Termination executed: HR and, only for `RATE`, the manager.
+
+Audit/history covers creation, response submission/resubmission, HR request/comment, CEO return/final decision, salary application, termination acknowledgement/execution, and manual-resolution conflicts.
+
+## Migrations and compatibility
+
+`contract_ratings.0002_final_decision_flow` removes manager proposal/recommendation and mandatory HR-review columns and adds advisory HR and CEO-decision columns. `contract_ratings.0003_hr_rating_gate` adds the one-time gate fields and safely marks every pre-gate historical row as `RATE` because `SKIP_TO_CEO` did not exist when those rows were created. Existing public `/contract-ratings/` paths remain stable. Removed endpoints intentionally return 404:
+
+- `/contract-ratings/{id}/hr-review/`
+- `/contract-ratings/{id}/positions/`
+
+The employee contract-decision endpoint exposes only the authorized rating summary `{status, ceo_decision, ceo_comment}`.
+
+## Verification evidence
+
+See `docs/testing/employee-contract-rating-final.tdd.md` for red/green evidence. Current focused results:
 
 ```text
 pytest contract_ratings -q --tb=short
-109 passed in 34.71s
+134 passed
+
+pytest contract_ratings -q --cov=contract_ratings --cov-report=term-missing
+134 passed, 95% total coverage
 
 pytest employees -q --tb=short
-375 passed, 3 warnings, 16 subtests passed in 297.91s (0:04:57)
-
-pytest core/test_route_contract.py -q --tb=short
-2 passed in 1.03s
+375 passed, 3 third-party deprecation warnings, 16 subtests passed
 ```
 
-The three employee warnings are third-party deprecations (`google._upb` and `astor`). Django check: `System check identified no issues (0 silenced).` Migration consistency: `No changes detected in app 'contract_ratings'`. Ruff lint and formatting checks and `git diff --check` pass. Notifications are mocked in the rating suite. PostgreSQL transaction tests exercise simultaneous cycle creation and scheduled termination. No real notifications were sent by the rating tests.
+The suite covers all states and both HR-gate branches, role-shaped list/detail privacy, permissions and delegation, self-dealing, returns/resubmission, salary success/mismatch/rollback/idempotency, scheduled termination success/conflict/rollback/idempotency, notification routing/retry, scheduler boundaries, and coexistence with standalone `ContractDecision`. Six authenticated direct-API walkthroughs cover the plan's backend end-to-end scenarios.
 
-## Complete source file inventory
+## File inventory
 
-| File | Change |
+| File | Purpose |
 |---|---|
-| `Backend/contract_ratings/__init__.py` | New app package. |
-| `Backend/contract_ratings/apps.py` | Django app configuration. |
-| `Backend/contract_ratings/models.py` | Exact rating/response model fields, relationships, enums, index and uniqueness constraint. |
-| `Backend/contract_ratings/criteria.py` | Single authoritative bilingual criterion list, grade ranges, recommendation/change enums. |
-| `Backend/contract_ratings/scoring.py` | Strict grade/score validation, Decimal averages and comparison builder. |
-| `Backend/contract_ratings/permissions.py` | Company access and role-shaped visibility resolution. |
-| `Backend/contract_ratings/services.py` | Locked transitions, audit/history, response/review/CEO services, shared-helper salary application and acknowledgment. |
-| `Backend/contract_ratings/workflow.py` | Workflow status projection and recorded-history adapter support. |
-| `Backend/contract_ratings/serializers.py` | Input validation and privacy-preserving read representations. |
-| `Backend/contract_ratings/views.py` | Company-scoped read/actions and criteria endpoint with existing envelopes. |
-| `Backend/contract_ratings/urls.py` | Single-prefix DRF router. |
-| `Backend/contract_ratings/tasks.py` | Notification dispatch/retry, 90/65-day processing, CEO reminders and scheduled termination. |
-| `Backend/contract_ratings/admin.py` | Read-only historical admin registrations. |
-| `Backend/contract_ratings/migrations/__init__.py` | Migration package. |
-| `Backend/contract_ratings/migrations/0001_initial.py` | Creates the two models and required constraints/index. |
-| `Backend/contract_ratings/tests/__init__.py` | Test package. |
-| `Backend/contract_ratings/tests/conftest.py` | Company/user fixtures, criterion answer builder and notification mock. |
-| `Backend/contract_ratings/tests/test_ratings.py` | Main scoring, workflow, privacy, salary, termination, API and milestone regression tests. |
-| `Backend/contract_ratings/tests/test_edges.py` | Delegation, role overlap, invalid changes, rollback, concurrency and per-event recipient tests. |
-| `Backend/config/settings.py` | Registers the app. |
-| `Backend/config/urls.py` | Mounts its router. |
-| `Backend/config/celery.py` | Adds the hourly rating task. |
-| `Backend/core/services/workflow_engine.py` | Registers template/adapter and approval-inbox label/link. |
-| `Backend/employees/contract_expiry.py` | Extracts `apply_contract_terms` and routes existing renewal finalization through it. |
-| `Backend/employees/serializers.py` | Adds optional authorized contract-rating summary. |
-| `Backend/employees/test_contract_fixes.py` | Repairs the pre-existing archive rollback failure injection. |
-| `plans/API Route Status Matrix.md` | Documents the new prefix and links this contract. |
-| `plans/Employee Contract Rating Backend Handoff.md` | This API contract, decisions, environment/test evidence and file inventory. |
+| `Backend/contract_ratings/criteria.py` | Authoritative bilingual criteria and grade ranges. |
+| `Backend/contract_ratings/models.py` | Final response, HR advisory, CEO outcome, salary, termination, and notification state. |
+| `Backend/contract_ratings/scoring.py` | Strict validation and server-side scoring/comparison. |
+| `Backend/contract_ratings/permissions.py` | Company access and privacy role selection. |
+| `Backend/contract_ratings/serializers.py` | Final write contracts and structural read shaping. |
+| `Backend/contract_ratings/services.py` | Locked transitions, guards, audit, salary application, and acknowledgement. |
+| `Backend/contract_ratings/tasks.py` | Opening/reminder/retry processing and scheduled termination. |
+| `Backend/contract_ratings/views.py` | Final REST actions and PDF/criteria endpoints. |
+| `Backend/contract_ratings/pdf.py` | Role-aware printable representation. |
+| `Backend/contract_ratings/workflow.py` | Workflow template projection. |
+| `Backend/contract_ratings/migrations/0002_final_decision_flow.py` | Legacy final-decision schema transition. |
+| `Backend/contract_ratings/migrations/0003_hr_rating_gate.py` | One-time HR gate fields and safe legacy mode backfill. |
+| `Backend/contract_ratings/tests/test_final_gate.py` | Both gate branches, access, account signal, skip decisions, and notifications. |
+| `Backend/contract_ratings/tests/test_final_api_walks.py` | Authenticated end-to-end REST walkthroughs for the final scenarios. |
+| `Backend/contract_ratings/tests/test_final_phase1.py` | Response/scoring/state tests. |
+| `Backend/contract_ratings/tests/test_final_phase2.py` | CEO, HR advisory, privacy, salary, API tests. |
+| `Backend/contract_ratings/tests/test_final_phase3.py` | Scheduler and notification tests. |
+| `Backend/contract_ratings/tests/test_final_phase45.py` | Scheduled termination tests. |
+| `Backend/contract_ratings/tests/test_final_hardening.py` | Delegation, list privacy, boundaries, and conflict hardening. |
+| `Backend/employees/contract_expiry.py` | Shared contract-term writer; standalone flow remains unchanged. |
+| `Backend/employees/serializers.py` | Minimal authorized rating summary on contract decisions. |
+| `Backend/core/services/workflow_engine.py` | Workflow template registration and inbox metadata. |
+| `Backend/config/celery.py` | Hourly rating processing schedule. |
 
-`graphify update .` refreshed ignored generated graph outputs (`graphify-out/graph.json`, `graph.html`, `GRAPH_REPORT.md`, `manifest.json`, `.graphify_labels.json`, `.graphify_labels.json.sig`, `.graphify_root`) and tool-managed cache/backups. Graphify reported pre-existing parsing issues in five MobileApp barrel files; no mobile or frontend source was edited.
-
-All requested backend phases are implemented. Frontend Phase 4 and frontend Phase 4.5 were deliberately excluded. No commits or pushes were made. `Backend/employees/services/archiving.py` was not changed. Unrelated existing PDF artifacts and concurrent PDF work were left untouched. Applying the rating migration to the local development database remains blocked by the pre-existing employees migration mismatch described above; the migration itself was successfully executed on the test database.
-
-### Catch-up creation follow-up
-
-The hourly task now creates missing ratings for active, unarchived employees in active companies whose current contract expires between today and 90 days ahead, inclusive. This recovers missed creation days and contracts imported or activated within the window. Existing ratings are checked against the current contract cycle, so historical ratings do not prevent a new cycle. Expired contracts are excluded. The service rechecks eligibility after locking the decision and profile, excluding finalized, closed or mismatched decisions and profiles that became ineligible after selection. Reminder timing is unchanged.
-
-Validation: `python -m pytest contract_ratings -q --tb=short` passed **129 tests in 43.22s**, including 20 new regression cases for catch-up boundaries, idempotency, historical cycles, closed/finalized decisions and stale candidate eligibility. Ruff lint and format checks passed. No schema migration is needed for this follow-up.
-
-### Manager form follow-ups
-
-The shared frontend `collectApiErrorMessages` now displays `non_field_errors` and `__all__` as form-level messages without exposing those internal keys. The configured backend exception handler already converts service-raised DRF validation errors to the standard 422 envelope; its existing normalizer intentionally retains the top-level field key. The frontend supports both that envelope and bare DRF form-error objects, while preserving genuine field labels. The backend error contract is unchanged.
-
-`GET /contract-ratings/{id}/positions/` provides the current manager or delegate with active positions from the rating's company, returning only `{id, name}` entries inside the standard success envelope. Rating visibility and active-company scope are enforced before lookup. General HR reference CRUD permissions remain unchanged. The manager form uses a searchable name picker and sends the selected numeric ID; load failures show a retry action instead of accepting a raw ID. No migration is required.
-
-Validation: `pytest contract_ratings core/test_responses.py -q --tb=short` passed **144 tests in 50.98s**. Focused Vitest coverage for form errors, the rating API, rating components, and employee/shared rating pages passed **33 tests across 6 files**. TypeScript project compilation, targeted ESLint, Ruff lint/format and whitespace checks passed. New regression files are `Backend/contract_ratings/tests/test_form_api.py` and `FrontEnd/src/components/ratings/RatingPositionPicker.test.tsx`; existing form-error and API tests were extended.
+No frontend files are part of this backend delivery.
