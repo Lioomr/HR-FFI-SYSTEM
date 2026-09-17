@@ -9,6 +9,7 @@ from django.test.utils import CaptureQueriesContext
 from rest_framework import status
 from rest_framework.test import APIClient, APIRequestFactory
 
+from employees.models import EmployeeProfile
 from organization.models import OrganizationNode, UserOrganizationAccess
 
 from .serializers import CreateUserSerializer, UpdateUserOrganizationsSerializer
@@ -180,6 +181,61 @@ class OrganizationAccessScopeTests(TestCase):
         )
         self.assertFalse(serializer.is_valid())
         self.assertIn("organization_ids", serializer.errors)
+
+    def test_link_candidates_are_fast_company_scoped_unlinked_accounts(self):
+        candidate = User.objects.create_user(
+            email="candidate@company-a.test", password="password", full_name="Company A Candidate"
+        )
+        UserOrganizationAccess.objects.create(user=candidate, organization=self.company_a)
+
+        other_company_candidate = User.objects.create_user(
+            email="candidate@company-b.test", password="password", full_name="Company B Candidate"
+        )
+        UserOrganizationAccess.objects.create(user=other_company_candidate, organization=self.company_b)
+
+        linked_user = User.objects.create_user(
+            email="already-linked@company-a.test", password="password", full_name="Already Linked"
+        )
+        UserOrganizationAccess.objects.create(user=linked_user, organization=self.company_a)
+        EmployeeProfile.objects.create(
+            user=linked_user,
+            company=self.company_a,
+            employee_id="COA-LINKED-USER",
+            full_name="Already Linked",
+        )
+
+        self.client.force_authenticate(user=self.scoped_hr)
+        response = self.client.get(
+            "/users/link-candidates/?search=Candidate",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company_a.id),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["data"]["items"], [{"id": candidate.id, "full_name": candidate.full_name, "email": candidate.email}])
+
+    def test_unlink_keeps_account_available_to_its_company(self):
+        linked_user = User.objects.create_user(
+            email="relink-me@company-a.test", password="password", full_name="Relink Me"
+        )
+        profile = EmployeeProfile.objects.create(
+            user=linked_user,
+            company=self.company_a,
+            employee_id="COA-RELINK-ME",
+            full_name="Relink Me",
+        )
+
+        self.client.force_authenticate(user=self.scoped_hr)
+        response = self.client.patch(
+            f"/api/employees/{profile.id}/",
+            {"user_id": None},
+            format="json",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company_a.id),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertTrue(
+            UserOrganizationAccess.objects.filter(user=linked_user, organization=self.company_a).exists()
+        )
 
 
 class AdminSummaryViewCacheTests(TestCase):

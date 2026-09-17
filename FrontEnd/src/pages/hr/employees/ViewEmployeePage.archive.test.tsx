@@ -22,6 +22,9 @@ vi.mock("../../../services/api/usersApi", () => ({
   listUsers: vi
     .fn()
     .mockResolvedValue({ status: "success", data: { results: [] } }),
+  listLinkCandidates: vi
+    .fn()
+    .mockResolvedValue({ status: "success", data: { items: [] } }),
 }));
 
 vi.mock("../../../services/api/apiClient", () => ({
@@ -46,11 +49,15 @@ import * as employeesApi from "../../../services/api/employeesApi";
 import type { Employee } from "../../../services/api/employeesApi";
 import { useI18nStore } from "../../../i18n/i18nStore";
 import { useAuthStore } from "../../../auth/authStore";
+import * as usersApi from "../../../services/api/usersApi";
 
 const getEmployee = employeesApi.getEmployee as unknown as ReturnType<
   typeof vi.fn
 >;
 const restoreEmployee = employeesApi.restoreEmployee as unknown as ReturnType<
+  typeof vi.fn
+>;
+const listLinkCandidates = usersApi.listLinkCandidates as unknown as ReturnType<
   typeof vi.fn
 >;
 
@@ -80,6 +87,8 @@ beforeEach(() => {
   navigateMock.mockClear();
   getEmployee.mockReset();
   restoreEmployee.mockReset();
+  listLinkCandidates.mockReset();
+  listLinkCandidates.mockResolvedValue({ status: "success", data: { items: [] } });
   getEmployee.mockResolvedValue({ status: "success", data: ARCHIVED });
 
   useI18nStore.getState().setLanguage("en");
@@ -90,6 +99,15 @@ beforeEach(() => {
 });
 
 describe("ViewEmployeePage archived employee", () => {
+  it("loads a small server-side candidate list when opening account linking", async () => {
+    getEmployee.mockResolvedValue({ status: "success", data: makeEmployee() });
+
+    render(<ViewEmployeePage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Connect User" }));
+
+    await waitFor(() => expect(listLinkCandidates).toHaveBeenCalledWith({ limit: 20 }));
+  });
+
   it("renders the work license expiry on the employee profile", async () => {
     getEmployee.mockResolvedValue({
       status: "success",
