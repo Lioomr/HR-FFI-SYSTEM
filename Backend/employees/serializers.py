@@ -108,11 +108,8 @@ class ContractDecisionReadSerializer(serializers.ModelSerializer):
             return None
         return {
             "status": rating.status,
-            "manager_recommendation": rating.manager_response.recommendation if rating.manager_response else None,
-            "hr_approved": rating.status in {"PENDING_CEO", "APPROVED", "REJECTED"}
-            and rating.hr_decided_at is not None,
-            "ceo_action": rating.ceo_action,
-            "ceo_selected_option": rating.ceo_selected_option,
+            "ceo_decision": rating.ceo_decision,
+            "ceo_comment": rating.ceo_comment,
         }
 
     def get_employee(self, obj):

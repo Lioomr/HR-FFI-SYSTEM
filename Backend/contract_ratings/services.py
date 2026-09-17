@@ -23,6 +23,7 @@ from employees.contract_expiry import (
 )
 from employees.models import ContractDecision, EmployeeProfile
 from employees.services.manager_relationships import get_valid_direct_manager_user, manager_approval_actor_source
+
 from .models import ContractRating, ContractRatingResponse
 from .permissions import require_company_access
 from .scoring import build_comparison_summary, compute_average_and_grade
@@ -238,63 +239,67 @@ def submit_employee_response(rating_id, *, actor, **data):
     return _submit_response(rating_id, actor, data, R.RaterType.EMPLOYEE)
 
 
+def _reject_self_dealing(rating, profile, actor):
+    if actor.id == profile.user_id or (rating.manager_response and actor.id == rating.manager_response.submitted_by_id):
+        raise PermissionDenied("A manager-rater cannot also act as HR or CEO on the same rating.")
+
+
 @transaction.atomic
-def submit_hr_review(rating_id, *, actor, action, comment="", targets=None):
+def request_hr_comment(rating_id, *, actor):
+    rating, profile = _locked(rating_id)
+    require_company_access(actor, rating)
+    if not is_department_ceo_approver_user(actor):
+        raise PermissionDenied("Only CEO approvers may request an HR comment.")
+    _reject_self_dealing(rating, profile, actor)
+    if rating.status != S.PENDING_CEO:
+        raise ValueError("HR comments may be requested only while a CEO decision is pending.")
+    workflow = sync_workflow(rating, actor=actor)
+    if not can_user_act_on_instance(actor, rating, workflow):
+        raise PermissionDenied("You cannot act on this rating.")
+    if _guard(rating, profile, actor):
+        return rating
+    if rating.hr_comment_requested_at:
+        return rating
+    start = begin_recorded_transition(rating, actor=actor)
+    rating.hr_comment_requested_by = actor
+    rating.hr_comment_requested_at = timezone.now()
+    rating.save(update_fields=["hr_comment_requested_by", "hr_comment_requested_at", "updated_at"])
+    _record(rating, "contract_rating_hr_comment_requested", actor, start=start)
+    _notify(rating, "hr_comment_requested", ["hr"])
+    return rating
+
+
+@transaction.atomic
+def submit_hr_comment(rating_id, *, actor, comment):
     rating, profile = _locked(rating_id)
     require_company_access(actor, rating)
     if not is_hr_workflow_approver_user(actor):
-        raise PermissionDenied("Only HR approvers may review ratings.")
-    if rating.status != S.PENDING_HR:
-        raise ValueError("This rating is not pending HR review.")
-    if _guard(rating, profile, actor):
+        raise PermissionDenied("Only HR approvers may submit an advisory comment.")
+    _reject_self_dealing(rating, profile, actor)
+    if not rating.hr_comment_requested_at:
+        raise ValueError("The CEO has not requested an HR comment for this rating.")
+    if not isinstance(comment, str) or not comment.strip():
+        raise ValueError("An HR comment is required.")
+    if rating.status != S.DECIDED and _guard(rating, profile, actor):
         return rating
-    if action not in {"approve", "return", "return-manager", "return-employee", "return-both"}:
-        raise ValueError("Invalid HR action.")
     start = begin_recorded_transition(rating, actor=actor)
-    if action == "approve":
-        if not all(r and r.status == R.Status.SUBMITTED for r in (rating.manager_response, rating.employee_response)):
-            raise ValueError("Both submitted responses are required.")
-        rating.status = S.PENDING_CEO
-        rating.hr_reviewed_by, rating.hr_decided_at, rating.hr_comment = actor, timezone.now(), comment
-        rating.salary_before_snapshot = contract_terms_snapshot(profile)
-        rating.notification_milestones = {
-            **rating.notification_milestones,
-            "ceo_reminder_at": timezone.now().isoformat(),
-        }
-        rating.save()
-        _record(rating, "contract_rating_hr_approved", actor, start=start, metadata={"comment": comment})
-        _notify(rating, "hr_approved", ["ceo"])
-    else:
-        targets = {
-            "return-manager": ["MANAGER"],
-            "return-employee": ["EMPLOYEE"],
-            "return-both": ["MANAGER", "EMPLOYEE"],
-        }.get(action, targets)
-        if (
-            not isinstance(targets, list)
-            or not targets
-            or any(t not in R.RaterType.values for t in targets)
-            or not comment.strip()
-        ):
-            raise ValueError("Return requires valid target(s) and a reason.")
-        for target in set(targets):
-            response = R.objects.select_for_update().get(rating=rating, rater_type=target)
-            response.status, response.returned_by = R.Status.RETURNED, actor
-            response.returned_at, response.return_reason = timezone.now(), comment
-            response.save()
-        rating.refresh_from_db()
-        _recompute_status(rating)
-        rating.save()
-        _record(
-            rating,
-            "contract_rating_hr_returned",
-            actor,
-            start=start,
-            action=WorkflowAction.Action.REQUEST_CHANGES,
-            metadata={"targets": targets, "reason": comment},
-        )
-        _notify(rating, "hr_returned", [t.lower() for t in targets], comment)
+    rating.hr_comment = comment.strip()
+    rating.hr_comment_by = actor
+    rating.hr_comment_submitted_at = timezone.now()
+    rating.save(update_fields=["hr_comment", "hr_comment_by", "hr_comment_submitted_at", "updated_at"])
+    _record(rating, "contract_rating_hr_comment_submitted", actor, start=start)
+    _notify(rating, "hr_comment_submitted", ["requesting_ceo"])
     return rating
+
+
+def _return_targets(decision):
+    from .serializers import RETURN_TO_BOTH, RETURN_TO_EMPLOYEE, RETURN_TO_MANAGER
+
+    return {
+        RETURN_TO_MANAGER: [R.RaterType.MANAGER],
+        RETURN_TO_EMPLOYEE: [R.RaterType.EMPLOYEE],
+        RETURN_TO_BOTH: [R.RaterType.MANAGER, R.RaterType.EMPLOYEE],
+    }.get(decision)
 
 
 @transaction.atomic
@@ -302,108 +307,105 @@ def submit_ceo_decision(
     rating_id,
     *,
     actor,
-    action,
+    ceo_decision,
     comment="",
-    ceo_selected_option="",
     ceo_approved_terms=None,
-    ceo_salary_override_reason="",
+    salary_effective_date=None,
 ):
     rating, profile = _locked(rating_id)
     require_company_access(actor, rating)
     if not is_department_ceo_approver_user(actor):
         raise PermissionDenied("Only CEO approvers may decide ratings.")
-    if actor.id == profile.user_id or (rating.manager_response and actor.id == rating.manager_response.submitted_by_id):
-        raise PermissionDenied(
-            "You cannot approve your own evaluation. Use a different approver through core/delegation.py."
-        )
-    if (
-        rating.status == S.APPROVED
-        and rating.salary_change_applied_at
-        and rating.ceo_decided_by_id == actor.id
-        and rating.ceo_action == action
-    ):
+    _reject_self_dealing(rating, profile, actor)
+    if rating.status == S.DECIDED and rating.ceo_decided_by_id == actor.id and rating.ceo_decision == ceo_decision:
         return rating
     if rating.status != S.PENDING_CEO:
-        raise ValueError("This rating is not pending CEO review.")
+        raise ValueError("This rating is not pending a CEO decision.")
     workflow = sync_workflow(rating, actor=actor)
     if not can_user_act_on_instance(actor, rating, workflow):
         raise PermissionDenied("You cannot act on this rating.")
     if _guard(rating, profile, actor):
         return rating
+
     from .serializers import CeoDecisionWriteSerializer
 
-    serializer = CeoDecisionWriteSerializer(
-        data={
-            "action": action,
-            "comment": comment,
-            "ceo_selected_option": ceo_selected_option,
-            "ceo_approved_terms": ceo_approved_terms,
-            "ceo_salary_override_reason": ceo_salary_override_reason,
-        }
-    )
+    payload = {"ceo_decision": ceo_decision, "comment": comment}
+    if ceo_approved_terms is not None:
+        payload["ceo_approved_terms"] = ceo_approved_terms
+    if salary_effective_date is not None:
+        payload["salary_effective_date"] = salary_effective_date
+    serializer = CeoDecisionWriteSerializer(data=payload)
     serializer.is_valid(raise_exception=True)
-    A = ContractRating.CeoAction
-    response = rating.manager_response
-    outcome = (
-        {
-            Recommendation.CONTINUE_CONTRACT: "RENEW",
-            Recommendation.CONTINUE_WITH_CHANGES: "RENEW_WITH_CHANGES",
-            Recommendation.TERMINATE: "TERMINATE",
-        }[response.recommendation]
-        if action == A.ACCEPT
-        else ceo_selected_option
-    )
-    approved_terms = None
-    if action in {A.ACCEPT, A.DECLINE_WITH_ALTERNATIVE} and outcome == "RENEW_WITH_CHANGES":
-        approved_terms = (
-            response.proposed_terms if action == A.ACCEPT or ceo_approved_terms is None else ceo_approved_terms
-        )
-        if approved_terms:
-            approved_terms = _resolved_renewal_terms(profile, approved_terms)
-        if approved_terms != response.proposed_terms and not ceo_salary_override_reason.strip():
-            raise ValueError("A salary override reason is required.")
+    data = serializer.validated_data
+    targets = _return_targets(ceo_decision)
     start = begin_recorded_transition(rating, actor=actor)
-    rating.ceo_action, rating.ceo_comment = action, comment
-    rating.ceo_selected_option = ceo_selected_option if action == A.DECLINE_WITH_ALTERNATIVE else ""
-    rating.ceo_decided_by, rating.ceo_decided_at = actor, timezone.now()
-    rating.status = S.PENDING_HR if action == A.RETURN_TO_HR else S.REJECTED if action == A.DECLINE else S.APPROVED
-    if rating.status == S.APPROVED:
-        rating.ceo_approved_terms = approved_terms or {}
-        rating.ceo_salary_override_reason = ceo_salary_override_reason if approved_terms else ""
-        rating.scheduled_termination = outcome == "TERMINATE"
-        if approved_terms:
-            rating.salary_change_proposed = True
-            rating.salary_effective_date = rating.salary_effective_date or profile.contract_expiry + timedelta(days=1)
-    rating.save()
-    event = {
-        A.ACCEPT: "accepted",
-        A.RETURN_TO_HR: "returned_to_hr",
-        A.DECLINE: "declined",
-        A.DECLINE_WITH_ALTERNATIVE: "declined_with_alternative",
-    }[action]
-    _record(
-        rating,
-        f"contract_rating_ceo_{event}",
-        actor,
-        start=start,
-        metadata={"ceo_selected_option": rating.ceo_selected_option, "comment": comment},
-        action=WorkflowAction.Action.REQUEST_CHANGES
-        if action == A.RETURN_TO_HR
-        else WorkflowAction.Action.REJECT
-        if action == A.DECLINE
-        else WorkflowAction.Action.APPROVE,
-    )
-    if rating.status == S.APPROVED and approved_terms:
+
+    if targets:
+        for target in targets:
+            response = R.objects.select_for_update().get(rating=rating, rater_type=target)
+            response.status = R.Status.RETURNED
+            response.returned_by = actor
+            response.returned_at = timezone.now()
+            response.return_reason = data["comment"].strip()
+            response.save(update_fields=["status", "returned_by", "returned_at", "return_reason", "updated_at"])
+            if target == R.RaterType.MANAGER:
+                rating.manager_response = response
+            else:
+                rating.employee_response = response
+        _recompute_status(rating)
+        rating.save(update_fields=["status", "comparison_summary", "updated_at"])
+        suffix = {
+            (R.RaterType.MANAGER,): "manager",
+            (R.RaterType.EMPLOYEE,): "employee",
+            (R.RaterType.MANAGER, R.RaterType.EMPLOYEE): "both",
+        }[tuple(targets)]
         _record(
             rating,
-            "contract_rating_ceo_salary_accepted"
-            if approved_terms == response.proposed_terms
-            else "contract_rating_ceo_salary_overridden",
+            f"contract_rating_ceo_returned_to_{suffix}",
             actor,
-            metadata={"terms": approved_terms, "reason": ceo_salary_override_reason},
+            start=start,
+            action=WorkflowAction.Action.REQUEST_CHANGES,
+            metadata={"targets": targets, "reason": data["comment"].strip()},
         )
+        _notify(rating, "ceo_returned", [target.lower() for target in targets], data["comment"].strip())
+        return rating
+
+    approved_terms = {}
+    if ceo_decision == ContractDecision.DecisionType.RENEW_WITH_CHANGES:
+        approved_terms = _resolved_renewal_terms(profile, data["ceo_approved_terms"])
+
+    rating.status = S.DECIDED
+    rating.ceo_decision = ceo_decision
+    rating.ceo_decided_by = actor
+    rating.ceo_comment = data["comment"].strip()
+    rating.ceo_decided_at = timezone.now()
+    rating.ceo_approved_terms = approved_terms
+    rating.salary_effective_date = data.get("salary_effective_date")
+    rating.scheduled_termination = ceo_decision == ContractDecision.DecisionType.TERMINATE
+    rating.save()
+
+    event_suffix = {
+        ContractDecision.DecisionType.RENEW: "renew",
+        ContractDecision.DecisionType.RENEW_WITH_CHANGES: "renew_with_increase",
+        ContractDecision.DecisionType.TERMINATE: "terminate",
+    }[ceo_decision]
+    _record(
+        rating,
+        f"contract_rating_ceo_decided_{event_suffix}",
+        actor,
+        start=start,
+        action=WorkflowAction.Action.APPROVE,
+        metadata={
+            "ceo_decision": ceo_decision,
+            "comment": rating.ceo_comment,
+            "ceo_approved_terms": approved_terms,
+        },
+    )
+    if approved_terms:
         apply_approved_salary_change(rating.id, actor=actor)
         rating.refresh_from_db()
+        if rating.status == S.MANUAL_RESOLUTION_REQUIRED:
+            return rating
     if rating.scheduled_termination:
         _record(
             rating,
@@ -411,34 +413,26 @@ def submit_ceo_decision(
             actor,
             metadata={"contract_expiry": str(profile.contract_expiry)},
         )
-    _notify(
-        rating,
-        f"ceo_{event}",
-        ["hr"] if action == A.RETURN_TO_HR else ["hr", "manager"],
-        f"Recommendation: {response.recommendation}; outcome: {outcome}; {comment}",
-    )
+    _notify(rating, f"ceo_decided_{event_suffix}", ["hr", "manager"], rating.ceo_comment)
     return rating
 
 
 @transaction.atomic
 def apply_approved_salary_change(rating_id, *, actor):
     rating, profile = _locked(rating_id)
-    if rating.salary_change_applied_at or not rating.salary_change_proposed:
+    if rating.ceo_decision != ContractDecision.DecisionType.RENEW_WITH_CHANGES:
         return rating
-    if (
-        rating.status != S.APPROVED
-        or rating.ceo_action not in {"ACCEPT", "DECLINE_WITH_ALTERNATIVE"}
-        or not rating.ceo_approved_terms
-        or rating.scheduled_termination
-    ):
-        raise ValueError("An approved salary decision is required.")
+    if rating.salary_change_applied_at:
+        return rating
+    if rating.status != S.DECIDED or not rating.ceo_approved_terms or rating.scheduled_termination:
+        raise ValueError("A decided renew-with-increase outcome is required.")
     if _guard(rating, profile, actor):
         return rating
     current = contract_terms_snapshot(profile)
     if current != rating.salary_before_snapshot:
         return _manual_resolution(
             rating,
-            "Salary changed after HR approval.",
+            "Salary changed after both evaluations were submitted.",
             actor,
             "contract_rating_salary_manual_resolution_required",
             {"expected": rating.salary_before_snapshot, "actual": current},

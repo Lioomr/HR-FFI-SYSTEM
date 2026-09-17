@@ -9,6 +9,7 @@ from .criteria import CRITERIA
 
 TEMPLATE_FILENAME = "employee_evaluation_blank.pdf"
 FIELD_MAP_FILENAME = "employee_evaluation_blank_field_map.json"
+_DEFAULT_RESPONSE = object()
 
 
 def _range_key(score):
@@ -24,12 +25,8 @@ def _range_key(score):
     return "90_to_100"
 
 
-def build_contract_rating_pdf(rating) -> bytes:
-    """Fill the HR-approved template with the manager evaluation only.
-
-    A manager may download their own report without exposing the employee's
-    confidential self-evaluation. HR/CEO see the same authoritative document.
-    """
+def build_contract_rating_pdf(rating, *, response=_DEFAULT_RESPONSE, include_decision=False) -> bytes:
+    """Fill one confidential evaluation without exposing the other rater's answers."""
     assets = load_form_assets(
         TEMPLATE_FILENAME,
         FIELD_MAP_FILENAME,
@@ -51,9 +48,12 @@ def build_contract_rating_pdf(rating) -> bytes:
         "evaluation_from": rating.evaluation_period_from.isoformat() if rating.evaluation_period_from else "",
         "evaluation_to": rating.evaluation_period_to.isoformat() if rating.evaluation_period_to else "",
         "direct_manager_name": rating.manager_at_creation.full_name if rating.manager_at_creation else "",
-        "hr_name": rating.hr_reviewed_by.full_name if rating.hr_reviewed_by else "",
+        "hr_name": rating.hr_comment_by.full_name if rating.hr_comment_by else "",
         "ceo_name": rating.ceo_decided_by.full_name if rating.ceo_decided_by else "",
+        "recommendation": "",
     }
+    if response is _DEFAULT_RESPONSE:
+        response = rating.manager_response
     if response:
         for index, criterion in enumerate(CRITERIA, start=1):
             answer = response.criterion_ratings.get(criterion["code"], {})
@@ -61,17 +61,16 @@ def build_contract_rating_pdf(rating) -> bytes:
                 values[f"rating_{index}"] = _range_key(answer.get("score"))
                 values[f"remark_{index}"] = answer.get("remark", "")
         values["average"] = str(response.average_score)
-        values["recommendation"] = (
-            "terminate"
-            if response.recommendation == "TERMINATE"
-            else "renew_with_salary_increase"
-            if "SALARY_INCREASE" in (response.recommended_change_types or [])
-            else "proceed"
-        )
+    if include_decision:
+        values["recommendation"] = {
+            "TERMINATE": "terminate",
+            "RENEW_WITH_CHANGES": "renew_with_salary_increase",
+            "RENEW": "proceed",
+        }.get(rating.ceo_decision, "")
 
     signatures = {
         "direct_manager_signature_image": signature_for_user(rating.manager_at_creation),
-        "hr_signature_image": signature_for_user(rating.hr_reviewed_by),
+        "hr_signature_image": signature_for_user(rating.hr_comment_by),
         "ceo_signature_image": signature_for_user(rating.ceo_decided_by),
     }
     pdf_bytes, _ = render_mapped_form(assets, values, signatures=signatures)

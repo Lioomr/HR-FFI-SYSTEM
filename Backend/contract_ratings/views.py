@@ -1,22 +1,22 @@
 from django.db.models import Q
+from django.http import HttpResponse
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
-from django.http import HttpResponse
 
 from core.pagination import StandardPagination
 from core.permissions import is_department_ceo_approver_user, is_hr_workflow_approver_user
 from core.responses import error, success
-from employees.services.manager_relationships import manager_approval_actor_source, manager_scope_q
-from hr_reference.models import Position
+from employees.services.manager_relationships import manager_scope_q
 from organization.services import ensure_company_write_allowed, filter_queryset_by_company_scope
 
 from . import services
 from .criteria import CRITERIA, GRADE_RANGES
 from .models import ContractRating
 from .pdf import build_contract_rating_pdf
-from .serializers import CeoDecisionWriteSerializer, ContractRatingReadSerializer, HrReviewWriteSerializer
+from .permissions import viewer_role
+from .serializers import CeoDecisionWriteSerializer, ContractRatingReadSerializer, HrCommentWriteSerializer
 
 
 class ContractRatingViewSet(viewsets.ReadOnlyModelViewSet):
@@ -65,8 +65,16 @@ class ContractRatingViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=True, methods=["get"])
     def pdf(self, request, pk=None):
         rating = self.get_object()
+        role = viewer_role(request.user, rating)
+        if role == "hr" and not rating.hr_comment_requested_at:
+            raise PermissionDenied("HR detail access requires a CEO comment request for this rating.")
+        response_row = rating.employee_response if role == "employee" else rating.manager_response
         try:
-            pdf_bytes = build_contract_rating_pdf(rating)
+            pdf_bytes = build_contract_rating_pdf(
+                rating,
+                response=response_row,
+                include_decision=role in {"hr", "ceo"},
+            )
         except ValueError as exc:
             return error("PDF unavailable", errors=[str(exc)], status=503)
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
@@ -76,16 +84,6 @@ class ContractRatingViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=["get"])
     def criteria(self, request):
         return success({"criteria": CRITERIA, "grade_ranges": GRADE_RANGES})
-
-    @action(detail=True, methods=["get"])
-    def positions(self, request, pk=None):
-        rating = self.get_object()
-        if not manager_approval_actor_source(request.user, rating.employee_profile):
-            raise PermissionDenied("Only the current manager or their delegate may look up proposed positions.")
-        positions = filter_queryset_by_company_scope(
-            Position.objects.filter(company_id=rating.company_id, is_active=True), request
-        ).order_by("name", "id")
-        return success(list(positions.values("id", "name")))
 
     def _mutate(self, request, service, serializer_class=None):
         ensure_company_write_allowed(request)
@@ -112,9 +110,18 @@ class ContractRatingViewSet(viewsets.ReadOnlyModelViewSet):
     def employee_response(self, request, pk=None):
         return self._mutate(request, services.submit_employee_response)
 
-    @action(detail=True, methods=["post"], url_path="hr-review")
-    def hr_review(self, request, pk=None):
-        return self._mutate(request, services.submit_hr_review, HrReviewWriteSerializer)
+    @action(detail=True, methods=["post"], url_path="request-hr-comment")
+    def request_hr_comment(self, request, pk=None):
+        ensure_company_write_allowed(request)
+        try:
+            rating = services.request_hr_comment(self.get_object().id, actor=request.user)
+        except ValueError as exc:
+            return error("Validation error", errors=[str(exc)], status=422)
+        return success(self.get_serializer(rating).data)
+
+    @action(detail=True, methods=["post"], url_path="hr-comment")
+    def hr_comment(self, request, pk=None):
+        return self._mutate(request, services.submit_hr_comment, HrCommentWriteSerializer)
 
     @action(detail=True, methods=["post"], url_path="ceo-decision")
     def ceo_decision(self, request, pk=None):
