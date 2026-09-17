@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 def _dispatch(rating, recipient, audience, key, event, message):
+    route_audience = "ceo" if audience == "requesting_ceo" else audience
     return dispatch_notification_channels(
         recipient=recipient,
         company=rating.company,
@@ -31,7 +32,7 @@ def _dispatch(rating, recipient, audience, key, event, message):
             message=contract_rating_message(message),
         ),
         category=Notification.Category.APPROVAL,
-        action_url=f"/{audience}/contract-ratings/{rating.id}",
+        action_url=f"/{route_audience}/contract-ratings/{rating.id}",
         related_object=rating,
         metadata={"rating_id": rating.id, "event": event},
         deduplication_key=f"contract.rating:{rating.id}:{key}:{audience}",
@@ -48,6 +49,8 @@ def _deliver(rating, key, entry):
             recipients = _company_hr_recipients(rating.company_id)
         elif audience == "ceo":
             recipients = _company_ceo_recipients(rating.company_id)
+        elif audience == "requesting_ceo":
+            recipients = [rating.hr_comment_requested_by] if rating.hr_comment_requested_by_id else []
         else:
             recipient = get_valid_direct_manager_user(profile) if audience == "manager" else profile.user
             recipients = [recipient] if recipient else []

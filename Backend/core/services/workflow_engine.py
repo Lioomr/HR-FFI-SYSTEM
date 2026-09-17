@@ -28,8 +28,7 @@ WORKFLOW_TEMPLATES = {
         "module_key": "contract_ratings",
         "stages": [
             {"key": "responses", "title": "Independent evaluations", "approver_role": "", "order": 0},
-            {"key": "hr", "title": "HR Review", "approver_role": "hr", "order": 1},
-            {"key": "ceo", "title": "CEO Decision", "approver_role": "ceo", "order": 2},
+            {"key": "ceo", "title": "CEO Decision", "approver_role": "ceo", "order": 1},
         ],
     },
     "leave_request": {
@@ -220,6 +219,10 @@ def get_or_create_workflow_definition(workflow_key: str) -> WorkflowDefinition:
         definition.save(update_fields=["name", "module_key", "is_active", "updated_at"])
 
     existing = {stage.key: stage for stage in definition.stages.all()}
+    if workflow_key == "contract_rating":
+        valid_keys = {stage["key"] for stage in template["stages"]}
+        definition.stages.exclude(key__in=valid_keys).delete()
+        existing = {key: stage for key, stage in existing.items() if key in valid_keys}
     for stage_data in template["stages"]:
         stage = existing.get(stage_data["key"])
         if stage is None:

@@ -2,9 +2,8 @@ from core.models import WorkflowInstance
 
 
 def status_snapshot(instance):
-    terminal = instance.status in {"APPROVED", "REJECTED"}
+    terminal = instance.status == "DECIDED"
     stage, role = {
-        "PENDING_HR": ("hr", "hr"),
         "PENDING_CEO": ("ceo", "ceo"),
         "PENDING_RESPONSES": ("responses", ""),
         "WAITING_MANAGER": ("responses", ""),
@@ -12,7 +11,7 @@ def status_snapshot(instance):
         "MANUAL_RESOLUTION_REQUIRED": ("manual_resolution", ""),
     }.get(instance.status, ("", ""))
     return {
-        "status": instance.status.lower() if terminal else WorkflowInstance.Status.IN_REVIEW,
+        "status": WorkflowInstance.Status.APPROVED if terminal else WorkflowInstance.Status.IN_REVIEW,
         "current_stage": stage,
         "current_role": role,
         "current_actor_user": None,

@@ -68,12 +68,8 @@ class CeoDecisionWriteSerializer(serializers.Serializer):
         return attrs
 
 
-class HrReviewWriteSerializer(serializers.Serializer):
-    action = serializers.ChoiceField(choices=["approve", "return", "return-manager", "return-employee", "return-both"])
-    comment = serializers.CharField(required=False, allow_blank=True, default="")
-    targets = serializers.ListField(
-        child=serializers.ChoiceField(choices=ContractRatingResponse.RaterType.choices), required=False
-    )
+class HrCommentWriteSerializer(serializers.Serializer):
+    comment = serializers.CharField(allow_blank=False, trim_whitespace=True)
 
 
 class ContractRatingResponseReadSerializer(serializers.ModelSerializer):
@@ -81,7 +77,23 @@ class ContractRatingResponseReadSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ContractRatingResponse
-        fields = "__all__"
+        fields = (
+            "id",
+            "rater_type",
+            "status",
+            "submitted_by",
+            "submitted_by_name",
+            "criterion_ratings",
+            "average_score",
+            "overall_grade",
+            "overall_remark",
+            "submitted_at",
+            "returned_at",
+            "returned_by",
+            "return_reason",
+            "created_at",
+            "updated_at",
+        )
 
 
 class ContractRatingReadSerializer(serializers.ModelSerializer):
@@ -90,7 +102,41 @@ class ContractRatingReadSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ContractRating
-        fields = "__all__"
+        fields = (
+            "id",
+            "contract_decision",
+            "company",
+            "status",
+            "manager_response",
+            "employee_response",
+            "manager_at_creation",
+            "department_snapshot",
+            "section_snapshot",
+            "job_title_snapshot",
+            "evaluation_period_from",
+            "evaluation_period_to",
+            "comparison_summary",
+            "hr_comment_requested_by",
+            "hr_comment_requested_at",
+            "hr_comment_by",
+            "hr_comment",
+            "hr_comment_submitted_at",
+            "ceo_decision",
+            "ceo_decided_by",
+            "ceo_comment",
+            "ceo_decided_at",
+            "salary_before_snapshot",
+            "ceo_approved_terms",
+            "salary_effective_date",
+            "salary_change_applied_at",
+            "salary_after_snapshot",
+            "scheduled_termination",
+            "employee_notified_of_termination_at",
+            "employee_notified_of_termination_by",
+            "termination_processed_at",
+            "created_at",
+            "updated_at",
+        )
 
     def to_representation(self, obj):
         request = self.context.get("request")
@@ -122,17 +168,26 @@ class ContractRatingReadSerializer(serializers.ModelSerializer):
         if role in {"employee", "manager"}:
             response = getattr(obj, f"{role}_response")
             payload = ContractRatingResponseReadSerializer(response).data if response else None
-            if role == "employee" and payload:
-                for field in (
-                    "recommendation",
-                    "recommended_change_types",
-                    "proposed_terms",
-                    "proposed_job_title",
-                    "proposed_position_id",
-                    "other_change_notes",
-                ):
-                    payload.pop(field, None)
             return {**header, f"{role}_response": payload}
+        if role == "hr" and not obj.hr_comment_requested_at:
+            result = dict(header)
+            result["hr_comment_requested_at"] = None
+            if obj.ceo_decision:
+                result.update(
+                    {
+                        "ceo_decision": obj.ceo_decision,
+                        "ceo_comment": obj.ceo_comment,
+                        "ceo_decided_at": obj.ceo_decided_at,
+                        "ceo_decided_by": obj.ceo_decided_by_id,
+                        "ceo_approved_terms": obj.ceo_approved_terms,
+                        "salary_effective_date": obj.salary_effective_date,
+                        "salary_change_applied_at": obj.salary_change_applied_at,
+                        "salary_after_snapshot": obj.salary_after_snapshot,
+                        "scheduled_termination": obj.scheduled_termination,
+                        "termination_processed_at": obj.termination_processed_at,
+                    }
+                )
+            return result
         result = {**super().to_representation(obj), **header}
         result["workflow"] = get_workflow_snapshot_read_only(obj, actor=actor)
         result["current_terms"] = contract_terms_snapshot(profile)
@@ -144,10 +199,13 @@ class ContractRatingReadSerializer(serializers.ModelSerializer):
         result["employment_status"] = profile.employment_status
         result["is_archived"] = profile.is_archived
         result["archive_reason"] = profile.archive_reason
-        result["hr_reviewed_by_name"] = obj.hr_reviewed_by.full_name if obj.hr_reviewed_by else ""
+        result["hr_comment_requested_by_name"] = (
+            obj.hr_comment_requested_by.full_name if obj.hr_comment_requested_by else ""
+        )
+        result["hr_comment_by_name"] = obj.hr_comment_by.full_name if obj.hr_comment_by else ""
         result["ceo_decided_by_name"] = obj.ceo_decided_by.full_name if obj.ceo_decided_by else ""
         before = obj.salary_before_snapshot or result["current_terms"]
-        proposal = obj.ceo_approved_terms or (obj.manager_response.proposed_terms if obj.manager_response else {})
+        proposal = obj.ceo_approved_terms or {}
         base = Decimal(before.get("total_salary") or "0")
         proposed_total = Decimal(proposal.get("total_salary") or base)
         difference = proposed_total - base
