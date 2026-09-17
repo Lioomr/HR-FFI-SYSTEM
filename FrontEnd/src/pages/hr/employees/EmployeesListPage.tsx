@@ -866,7 +866,7 @@ export default function EmployeesListPage() {
       render: (_, record) => (
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <FlagBadge nationality={record.nationality} />
-          <Text>{record.nationality || t("employees.list.saudiArabia")}</Text>
+          <Text>{record.nationality || "-"}</Text>
         </div>
       ),
     },
