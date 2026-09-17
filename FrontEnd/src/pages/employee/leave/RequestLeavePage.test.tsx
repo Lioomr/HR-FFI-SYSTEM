@@ -15,7 +15,10 @@ vi.mock("../../../services/api/employeesApi", () => ({
     .mockResolvedValue({ status: "success", data: [] }),
 }));
 
-import RequestLeavePage, { LeaveSubmissionError } from "./RequestLeavePage";
+import RequestLeavePage, {
+  getLeavePageLoadErrorMessage,
+  LeaveSubmissionError,
+} from "./RequestLeavePage";
 import {
   getLeaveValidationErrors,
   isEmployeeLeaveDateDisabled,
@@ -81,5 +84,20 @@ describe("employee leave backdated dates", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Leave can be submitted up to 7 calendar days after it starts.",
     );
+  });
+
+  it("keeps the server's actionable profile error instead of replacing it with a generic retry message", () => {
+    expect(
+      getLeavePageLoadErrorMessage({
+        isAxiosError: true,
+        response: {
+          status: 404,
+          data: {
+            status: "error",
+            message: "No employee profile is linked to your account in the selected company.",
+          },
+        },
+      }),
+    ).toBe("No employee profile is linked to your account in the selected company.");
   });
 });
