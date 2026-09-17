@@ -257,6 +257,8 @@ def _ensure_invited_employee_profile(
     *, user, company, full_name: str, phone_number: str, employee_profile: EmployeeProfile | None = None
 ) -> EmployeeProfile:
     if employee_profile is not None:
+        if employee_profile.is_archived:
+            raise IntegrityError("The invited employee profile has been archived.")
         if employee_profile.user_id and employee_profile.user_id != user.id:
             raise IntegrityError("The invited employee profile already has a user account.")
         if company and employee_profile.company_id != company.id:
@@ -274,7 +276,9 @@ def _ensure_invited_employee_profile(
 
     if phone_number:
         matched_profile = (
-            EmployeeProfile.objects.filter(company=company, mobile=phone_number, user__isnull=True)
+            EmployeeProfile.objects.filter(
+                company=company, mobile=phone_number, user__isnull=True, is_archived=False
+            )
             .order_by("id")
             .first()
         )
@@ -640,18 +644,20 @@ class InviteAcceptView(APIView):
                     full_name=full_name,
                     is_active=True,
                 )
-        except IntegrityError:
-            return error("Validation error", errors={"email": ["Email is already registered."]}, status=422)
-        group, _ = Group.objects.get_or_create(name=invite.role)
-        user.groups.clear()
-        user.groups.add(group)
-        profile = _ensure_invited_employee_profile(
-            user=user,
-            company=invite.company,
-            full_name=full_name,
-            phone_number=phone_number,
-            employee_profile=invite.employee_profile,
-        )
+                group, _ = Group.objects.get_or_create(name=invite.role)
+                user.groups.clear()
+                user.groups.add(group)
+                profile = _ensure_invited_employee_profile(
+                    user=user,
+                    company=invite.company,
+                    full_name=full_name,
+                    phone_number=phone_number,
+                    employee_profile=invite.employee_profile,
+                )
+        except IntegrityError as exc:
+            if User.objects.filter(email__iexact=email).exists():
+                return error("Validation error", errors={"email": ["Email is already registered."]}, status=422)
+            return error("Validation error", errors={"employee_profile": [str(exc)]}, status=422)
 
         invite.status = Invite.Status.ACCEPTED
         update_fields = ["status"]
