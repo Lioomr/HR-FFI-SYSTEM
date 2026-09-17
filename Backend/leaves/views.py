@@ -2116,7 +2116,11 @@ class EmployeeLeaveBalanceView(APIView):
             filter_queryset_by_company_scope(EmployeeProfile.objects.all(), request).filter(user=request.user).first()
         )
         if profile is None:
-            return error("Not found", errors=["Not found."], status=404)
+            return error(
+                "No employee profile is linked to your account in the selected company.",
+                errors=["No employee profile is linked to your account in the selected company."],
+                status=404,
+            )
         balances = calculate_leave_balance(request.user, year, profile=profile)
 
         # Audit
