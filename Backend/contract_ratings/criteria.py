@@ -19,19 +19,6 @@ GRADE_RANGES = {
 }
 
 
-class Recommendation(models.TextChoices):
-    CONTINUE_CONTRACT = "CONTINUE_CONTRACT", _("Continue the contract")
-    CONTINUE_WITH_CHANGES = "CONTINUE_WITH_CHANGES", _("Continue with changes")
-    TERMINATE = "TERMINATE", _("Terminate")
-
-
-class ChangeType(models.TextChoices):
-    SALARY_INCREASE = "SALARY_INCREASE", _("Salary increase")
-    JOB_TITLE_CHANGE = "JOB_TITLE_CHANGE", _("Job title change")
-    POSITION_CHANGE = "POSITION_CHANGE", _("Position change")
-    OTHER = "OTHER", _("Other")
-
-
 CRITERIA = tuple(
     {"code": code, "label_en": en, "label_ar": ar, "display_order": order}
     for order, (code, en, ar) in enumerate(

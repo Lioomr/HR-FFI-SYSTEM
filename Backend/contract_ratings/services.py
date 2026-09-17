@@ -23,9 +23,6 @@ from employees.contract_expiry import (
 )
 from employees.models import ContractDecision, EmployeeProfile
 from employees.services.manager_relationships import get_valid_direct_manager_user, manager_approval_actor_source
-from hr_reference.models import Position
-
-from .criteria import ChangeType, Recommendation
 from .models import ContractRating, ContractRatingResponse
 from .permissions import require_company_access
 from .scoring import build_comparison_summary, compute_average_and_grade
@@ -157,53 +154,13 @@ def _recompute_status(rating):
     manager_done = manager and manager.status == R.Status.SUBMITTED
     employee_done = employee and employee.status == R.Status.SUBMITTED
     if manager_done and employee_done:
-        rating.status = S.PENDING_HR
+        rating.status = S.PENDING_CEO
         rating.comparison_summary = build_comparison_summary(manager, employee)
     else:
         rating.status = (
             S.WAITING_EMPLOYEE if manager_done else S.WAITING_MANAGER if employee_done else S.PENDING_RESPONSES
         )
         rating.comparison_summary = {}
-
-
-def validate_manager_proposal(data, profile):
-    recommendation = data.get("recommendation")
-    if recommendation not in Recommendation.values:
-        raise ValueError("A valid manager recommendation is required.")
-    changes = data.get("recommended_change_types", [])
-    if (
-        not isinstance(changes, list)
-        or any(not isinstance(c, str) or c not in ChangeType.values for c in changes)
-        or len(set(changes)) != len(changes)
-    ):
-        raise ValueError("Invalid or duplicate change types.")
-    if recommendation == Recommendation.CONTINUE_WITH_CHANGES:
-        if not changes:
-            raise ValueError("Select at least one change type.")
-    elif changes:
-        raise ValueError("Change types require CONTINUE_WITH_CHANGES.")
-    fields = {
-        ChangeType.SALARY_INCREASE: "proposed_terms",
-        ChangeType.JOB_TITLE_CHANGE: "proposed_job_title",
-        ChangeType.POSITION_CHANGE: "proposed_position_id",
-        ChangeType.OTHER: "other_change_notes",
-    }
-    result = {"recommendation": recommendation, "recommended_change_types": changes}
-    for change, field in fields.items():
-        value = data.get(field)
-        if change in changes and not value:
-            raise ValueError(f"{field} is required for {change}.")
-        if change not in changes and value:
-            raise ValueError(f"{field} requires {change}.")
-        result[field] = value or ({} if field == "proposed_terms" else None if field == "proposed_position_id" else "")
-    if ChangeType.SALARY_INCREASE in changes:
-        result["proposed_terms"] = _resolved_renewal_terms(profile, result["proposed_terms"])
-    if (
-        ChangeType.POSITION_CHANGE in changes
-        and not Position.objects.filter(pk=result["proposed_position_id"], company_id=profile.company_id).exists()
-    ):
-        raise ValueError("Proposed position must belong to the employee's company.")
-    return result
 
 
 def _submit_response(rating_id, actor, data, rater_type):
@@ -221,14 +178,13 @@ def _submit_response(rating_id, actor, data, rater_type):
         return rating
     from .serializers import ContractRatingResponseWriteSerializer
 
-    serializer = ContractRatingResponseWriteSerializer(data=data, context={"is_manager": manager, "profile": profile})
+    serializer = ContractRatingResponseWriteSerializer(data=data)
     serializer.is_valid(raise_exception=True)
     values = dict(serializer.validated_data)
-    effective_date = values.pop("salary_effective_date", None)
     average, grade = compute_average_and_grade(values["criterion_ratings"])
     response = R.objects.select_for_update().filter(rating=rating, rater_type=rater_type).first()
     if response and response.status != R.Status.RETURNED:
-        raise ValueError("A submitted response is locked until HR returns it.")
+        raise ValueError("A submitted response is locked until the CEO returns it.")
     start = begin_recorded_transition(rating, actor=actor)
     previous = None
     if response:
@@ -246,12 +202,9 @@ def _submit_response(rating_id, actor, data, rater_type):
     response.status, response.submitted_by, response.submitted_at = R.Status.SUBMITTED, actor, timezone.now()
     response.save()
     setattr(rating, "manager_response" if manager else "employee_response", response)
-    if manager:
-        rating.salary_change_proposed = ChangeType.SALARY_INCREASE in response.recommended_change_types
-        rating.salary_effective_date = (
-            (effective_date or profile.contract_expiry + timedelta(days=1)) if rating.salary_change_proposed else None
-        )
     _recompute_status(rating)
+    if rating.status == S.PENDING_CEO:
+        rating.salary_before_snapshot = contract_terms_snapshot(profile)
     rating.save()
     event = "contract_rating_manager_submitted" if manager else "contract_rating_employee_submitted"
     _record(rating, event, actor, start=start, action=WorkflowAction.Action.SUBMIT)
@@ -270,15 +223,8 @@ def _submit_response(rating_id, actor, data, rater_type):
                 },
             },
         )
-    if manager and rating.salary_change_proposed:
-        _record(
-            rating,
-            "contract_rating_salary_proposed",
-            actor,
-            metadata={"proposed_terms": response.proposed_terms, "effective_date": str(rating.salary_effective_date)},
-        )
-    if rating.status == S.PENDING_HR:
-        _notify(rating, "both_submitted", ["hr"])
+    if rating.status == S.PENDING_CEO:
+        _notify(rating, "both_submitted", ["ceo"])
     return rating
 
 
