@@ -143,7 +143,7 @@ def _process_rating(rating_id, today, now):
     for key, entry in list(rating.notification_milestones.items()):
         if isinstance(entry, dict) and "audiences" in entry and not entry.get("sent_at"):
             _deliver(rating, key, entry)
-    if rating.status in RESPONSE_STATES | {"PENDING_HR", "PENDING_CEO"} and _guard(rating, profile):
+    if rating.status in RESPONSE_STATES | {"PENDING_CEO"} and _guard(rating, profile):
         return
     days_left = (rating.evaluation_period_to - today).days
     if days_left == 65:
@@ -153,11 +153,15 @@ def _process_rating(rating_id, today, now):
                 for name in ("manager", "employee")
                 if not getattr(rating, f"{name}_response") or getattr(rating, f"{name}_response").status != "SUBMITTED"
             ]
-            notify_event(rating, "incomplete", ["hr"], "Pending responses: " + ", ".join(pending), key="65_DAY_HR")
+            notify_event(
+                rating,
+                "incomplete",
+                ["ceo"],
+                "Pending responses: " + ", ".join(pending),
+                key="65_DAY_CEO",
+            )
             for audience in pending:
                 notify_event(rating, "reminder", [audience], key=f"65_DAY_{audience}")
-        elif rating.status == "PENDING_HR":
-            notify_event(rating, "awaiting_hr_review", ["hr"], key="65_DAY_HR")
     if rating.status == "PENDING_CEO":
         last = rating.notification_milestones.get("ceo_reminder_at")
         if not last or now - datetime.fromisoformat(last) >= CEO_REMINDER_INTERVAL:
