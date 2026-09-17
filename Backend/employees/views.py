@@ -189,6 +189,28 @@ def generate_employee_id(prefix="FFI"):
     return f"{prefix}-{suffix}"
 
 
+def _find_duplicate_employee(company, *, national_id, mobile):
+    """Find an existing active profile in ``company`` matching by national ID or mobile.
+
+    National ID is the stronger signal and is checked first; mobile is a
+    fallback for records without one. Blank values never match (a shared
+    blank national_id/mobile is not evidence of the same person).
+    """
+    national_id = (national_id or "").strip()
+    if national_id:
+        match = EmployeeProfile.objects.filter(
+            company=company, national_id=national_id, is_archived=False
+        ).first()
+        if match is not None:
+            return match
+
+    mobile = (mobile or "").strip()
+    if mobile:
+        return EmployeeProfile.objects.filter(company=company, mobile=mobile, is_archived=False).first()
+
+    return None
+
+
 def _audit_snapshot(instance: EmployeeProfile) -> dict:
     return {
         "id": instance.id,
@@ -1477,6 +1499,34 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+
+        # Neither invite acceptance nor job-offer creation could silently
+        # overwrite HR intent here, so a match is reported rather than
+        # auto-linked: HR either picks the existing record or resubmits with
+        # confirm_duplicate to create a second one deliberately.
+        confirm_duplicate = str(request.data.get("confirm_duplicate", "")).strip().lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+        company = get_active_company_for_request(self.request)
+        if company is not None and not confirm_duplicate:
+            duplicate = _find_duplicate_employee(
+                company,
+                national_id=serializer.validated_data.get("national_id"),
+                mobile=serializer.validated_data.get("mobile"),
+            )
+            if duplicate is not None:
+                return error(
+                    "Possible duplicate employee",
+                    errors=[
+                        f"An active employee with this national ID or mobile number already "
+                        f"exists: {duplicate.full_name} ({duplicate.employee_id}). Resubmit "
+                        "with confirm_duplicate=true to create a new record anyway."
+                    ],
+                    status=status.HTTP_409_CONFLICT,
+                )
+
         self.perform_create(serializer)
         read_serializer = EmployeeProfileReadSerializer(serializer.instance)
         return success(read_serializer.data, status=status.HTTP_201_CREATED)
