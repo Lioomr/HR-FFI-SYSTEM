@@ -3,7 +3,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 from django.contrib.auth import get_user_model
-from django.test import SimpleTestCase, TestCase
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 
 from admin_portal.models import SystemSettings
@@ -79,6 +79,24 @@ class AttendancePolicyTestBase(TestCase):
 
 
 class AttendancePolicyEnforcementTests(AttendancePolicyTestBase):
+    @override_settings(LATE_POLICY_EFFECTIVE_FROM="2026-09-17")
+    def test_policy_ignores_late_attendance_before_the_effective_date(self):
+        settings_obj = SystemSettings.get_solo()
+        settings_obj.grace_use_limit_per_month = 0
+        settings_obj.save(update_fields=["grace_use_limit_per_month"])
+
+        historical = self._result(date(2026, 9, 16), 30)
+        current = self._result(date(2026, 9, 17), 30)
+
+        AttendancePolicyService.reconcile_month(self.profile, current.date)
+
+        historical.refresh_from_db()
+        current.refresh_from_db()
+        self.assertEqual(historical.status_input, "LATE")
+        self.assertEqual(current.status_input, "LATE")
+        self.assertFalse(AttendanceLateViolation.objects.filter(date=historical.date).exists())
+        self.assertTrue(AttendanceLateViolation.objects.filter(date=current.date).exists())
+
     def test_three_grace_arrivals_succeed_then_0906_is_late_and_penalized(self):
         for day in (date(2026, 5, 1), date(2026, 5, 2), date(2026, 5, 3)):
             self._result(day, 10)
