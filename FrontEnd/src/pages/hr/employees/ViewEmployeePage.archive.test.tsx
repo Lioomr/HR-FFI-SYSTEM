@@ -103,7 +103,7 @@ describe("ViewEmployeePage archived employee", () => {
     getEmployee.mockResolvedValue({ status: "success", data: makeEmployee() });
 
     render(<ViewEmployeePage />);
-    fireEvent.click(await screen.findByRole("button", { name: "Connect User" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Connect User/ }));
 
     await waitFor(() => expect(listLinkCandidates).toHaveBeenCalledWith({ limit: 20 }));
   });

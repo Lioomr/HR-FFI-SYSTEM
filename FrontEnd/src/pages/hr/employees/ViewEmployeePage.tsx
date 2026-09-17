@@ -45,9 +45,11 @@ import {
   restoreEmployee,
 } from "../../../services/api/employeesApi";
 import type { Employee } from "../../../services/api/employeesApi";
-import { listUsers } from "../../../services/api/usersApi";
+import {
+  listLinkCandidates,
+  type LinkCandidateDto,
+} from "../../../services/api/usersApi";
 import { api } from "../../../services/api/apiClient";
-import type { UserDto } from "../../../services/api/apiTypes";
 import { isApiError } from "../../../services/api/apiTypes";
 import { isForbidden } from "../../../services/api/httpErrors";
 import AmountWithSAR from "../../../components/ui/AmountWithSAR";
@@ -198,7 +200,8 @@ export default function ViewEmployeePage() {
 
   // Linking User State
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
-  const [users, setUsers] = useState<UserDto[]>([]);
+  const [linkCandidates, setLinkCandidates] = useState<LinkCandidateDto[]>([]);
+  const [linkSearch, setLinkSearch] = useState("");
   const [usersLoading, setUsersLoading] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [linking, setLinking] = useState(false);
@@ -275,33 +278,33 @@ export default function ViewEmployeePage() {
     }
   }, [activeOrganizationId, employee, navigate, t]);
 
-  /**
-   * Load Users for Linking
-   */
+  /** Load a small, company-scoped candidate list instead of the full user directory. */
   useEffect(() => {
-    if (isLinkModalOpen) {
-      const fetchUsers = async () => {
-        setUsersLoading(true);
-        try {
-          const response = await listUsers({ page_size: 1000 });
-          // Response structure is { status: "success", data: { items: [...] } }
-          // listUsers returns the body.
-          // So response.data.items is the array.
-          // However, we need to be safe.
-          const userList =
-            (response as any).data?.items ||
-            (response as any).data?.results ||
-            [];
-          setUsers(userList as any[]);
-        } catch {
-          message.error(t("hr.employees.loadUsersFailed"));
-        } finally {
-          setUsersLoading(false);
+    if (!isLinkModalOpen) return;
+
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      setUsersLoading(true);
+      try {
+        const response = await listLinkCandidates({
+          ...(linkSearch.trim() ? { search: linkSearch.trim() } : {}),
+          limit: 20,
+        });
+        if (!cancelled) {
+          setLinkCandidates(isApiError(response) ? [] : response.data.items);
         }
-      };
-      fetchUsers();
-    }
-  }, [isLinkModalOpen]);
+      } catch {
+        if (!cancelled) message.error(t("hr.employees.loadUsersFailed"));
+      } finally {
+        if (!cancelled) setUsersLoading(false);
+      }
+    }, linkSearch ? 250 : 0);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [isLinkModalOpen, linkSearch, t]);
 
   /**
    * Handle Linking User
@@ -314,6 +317,8 @@ export default function ViewEmployeePage() {
 
       message.success(t("hr.employees.linkSuccess"));
       setIsLinkModalOpen(false);
+      setSelectedUserId(null);
+      setLinkSearch("");
       loadEmployee();
     } catch (err: any) {
       message.error(
@@ -336,6 +341,8 @@ export default function ViewEmployeePage() {
         try {
           await api.patch(`/employees/${id}`, { user_id: null });
           message.success(t("hr.employees.unlinkSuccess"));
+          setLinkCandidates([]);
+          setLinkSearch("");
           loadEmployee();
         } catch (err: any) {
           message.error(
@@ -460,7 +467,11 @@ export default function ViewEmployeePage() {
             ) : (
               <Button
                 icon={<UserAddOutlined />}
-                onClick={() => setIsLinkModalOpen(true)}
+                onClick={() => {
+                  setSelectedUserId(null);
+                  setLinkSearch("");
+                  setIsLinkModalOpen(true);
+                }}
               >
                 {t("hr.employees.connectUser")}
               </Button>
@@ -913,7 +924,11 @@ export default function ViewEmployeePage() {
         title={t("hr.employees.connectUserTitle")}
         open={isLinkModalOpen}
         onOk={handleLinkUser}
-        onCancel={() => setIsLinkModalOpen(false)}
+        onCancel={() => {
+          setIsLinkModalOpen(false);
+          setSelectedUserId(null);
+          setLinkSearch("");
+        }}
         confirmLoading={linking}
         okText={t("hr.employees.connectUser")}
         okButtonProps={{ disabled: !selectedUserId }}
@@ -923,21 +938,14 @@ export default function ViewEmployeePage() {
           showSearch
           style={{ width: "100%" }}
           placeholder={t("hr.employees.searchUserPlaceholder")}
-          optionFilterProp="children"
           onChange={(value) => setSelectedUserId(value)}
+          onSearch={setLinkSearch}
           loading={usersLoading}
-          filterOption={(input, option) => {
-            const label = (option?.label ?? "").toString().toLowerCase();
-            return label.includes(input.toLowerCase());
-          }}
-          options={users.map((u: any) => {
-            const isLinked = !!u.linked_employee_id;
-            return {
-              value: u.id,
-              label: `${u.full_name} (${u.email}) ${isLinked ? `[${t("hr.employees.linkedAccount")}: ${u.linked_employee_name}]` : ""}`,
-              disabled: isLinked,
-            };
-          })}
+          filterOption={false}
+          options={linkCandidates.map((user) => ({
+            value: user.id,
+            label: `${user.full_name || user.email} (${user.email})`,
+          }))}
         />
       </Modal>
 
