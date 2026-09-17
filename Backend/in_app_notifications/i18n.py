@@ -149,6 +149,21 @@ ROLE_LABELS: dict[str, tuple[str, str]] = {
     "systemadmin": ("System Administrator", "مسؤول النظام"),
 }
 
+CONTRACT_RATING_EVENT_LABELS: dict[str, tuple[str, str]] = {
+    "opened": ("Opened", "تم فتحه"),
+    "missing_rater": ("Rater missing", "المُقيِّم غير متوفر"),
+    "both_submitted": ("Ready for HR review", "جاهز لمراجعة الموارد البشرية"),
+    "hr_approved": ("Ready for CEO decision", "جاهز لقرار الرئيس التنفيذي"),
+    "hr_returned": ("Returned for changes", "أُعيد لإجراء التعديلات"),
+    "incomplete": ("Responses incomplete", "التقييمات غير مكتملة"),
+    "reminder": ("Reminder", "تذكير"),
+    "awaiting_hr_review": ("Awaiting HR review", "بانتظار مراجعة الموارد البشرية"),
+    "ceo_reminder": ("CEO reminder", "تذكير للرئيس التنفيذي"),
+    "termination_finalized": ("Termination finalized", "تم اعتماد الإنهاء"),
+}
+
+_CONTRACT_RATING_DEFAULT_MESSAGE = "Please review the employee contract rating."
+
 
 def _looks_like_code(text: str) -> bool:
     return " " not in text and ("_" in text or text.isupper() or text.islower())
@@ -192,6 +207,21 @@ def document_label(label: Any, document_type: Any = None) -> Localized:
 def role_label(value: Any) -> Localized:
     known = ROLE_LABELS.get(_code_key(value).replace("_", ""))
     return pair(*known) if known else pair(value)
+
+
+def contract_rating_event_label(value: Any) -> Localized:
+    """Human bilingual label for a contract-rating notification event."""
+    text = str(value or "").strip()
+    known = CONTRACT_RATING_EVENT_LABELS.get(_code_key(text))
+    return pair(*known) if known else pair(_code_key(text).replace("_", " ").capitalize() or text)
+
+
+def contract_rating_message(value: Any) -> Localized:
+    """Translate the standard rating prompt while preserving entered free text."""
+    text = str(value or "").strip() or _CONTRACT_RATING_DEFAULT_MESSAGE
+    if text == _CONTRACT_RATING_DEFAULT_MESSAGE:
+        return pair(text, "يرجى مراجعة تقييم عقد الموظف.")
+    return pair(text)
 
 
 def profile_name(profile: Any, fallback: Any = "") -> Localized:
@@ -337,6 +367,10 @@ MESSAGES: dict[str, dict[str, tuple[str, str]]] = {
             "Contract processing requires manual resolution for {employee_name}. Manual resolution is required: {reason}",
             "معالجة عقد {employee_name} تتطلب إجراءً يدوياً. السبب: {reason}",
         ),
+    },
+    "contract.rating": {
+        "title": ("Contract Rating: {event}", "تقييم العقد: {event}"),
+        "message": ("{message}", "{message}"),
     },
     "document.expiring": {
         "title": ("Document expiry reminder", "تذكير بانتهاء مستند"),
@@ -584,6 +618,10 @@ def _localize_legacy_param(name: str, value: str) -> Any:
         return document_label(value, value)
     if name == "role":
         return role_label(value)
+    if name == "event":
+        return contract_rating_event_label(value)
+    if name == "message":
+        return contract_rating_message(value)
     return value
 
 

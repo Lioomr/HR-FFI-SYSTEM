@@ -12,6 +12,7 @@ from employees.models import EmployeeProfile
 from employees.services.archiving import retire_biotime_mapping_and_archive_profile
 from employees.services.manager_relationships import get_valid_direct_manager_user
 from in_app_notifications.dispatcher import dispatch_notification_channels
+from in_app_notifications.i18n import contract_rating_event_label, contract_rating_message, notification_text
 from in_app_notifications.models import Notification
 
 from .models import ContractRating
@@ -24,8 +25,11 @@ def _dispatch(rating, recipient, audience, key, event, message):
         recipient=recipient,
         company=rating.company,
         event_key="contract.rating",
-        title="Contract Rating: " + event.replace("_", " ").title(),
-        message=message or "Please review the employee contract rating.",
+        **notification_text(
+            "contract.rating",
+            event=contract_rating_event_label(event),
+            message=contract_rating_message(message),
+        ),
         category=Notification.Category.APPROVAL,
         action_url=f"/{audience}/contract-ratings/{rating.id}",
         related_object=rating,
