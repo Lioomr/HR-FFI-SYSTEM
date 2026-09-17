@@ -41,6 +41,7 @@ from core.services import (
 )
 from in_app_notifications.models import Notification
 from leaves.models import LeaveRequest
+from organization.models import UserOrganizationAccess
 from organization.services import (
     ensure_company_write_allowed,
     filter_queryset_by_accessible_companies,
@@ -1589,6 +1590,8 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         before = _audit_snapshot(serializer.instance)
         previous_manager = serializer.instance.manager_profile
         instance = serializer.instance
+        unlinked_user = instance.user if serializer.validated_data == {"user": None} else None
+        unlinked_company = instance.company if unlinked_user else None
 
         # EmployeeProfile.save() validates the whole manager relationship even
         # when the request only unlinks the employee's user. Legacy data can
@@ -1609,6 +1612,8 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         else:
             instance = serializer.save()
             _sync_legacy_fields(instance)
+        if unlinked_user and unlinked_company:
+            UserOrganizationAccess.objects.get_or_create(user=unlinked_user, organization=unlinked_company)
         log_manager_assignment_change(
             employee=instance,
             previous_manager=previous_manager,

@@ -3,6 +3,13 @@ import type { ApiResponse, Role, UserDto } from "./apiTypes";
 
 export type UsersListResponse = { items: UserDto[] };
 
+export type LinkCandidateDto = Pick<UserDto, "id" | "full_name" | "email">;
+
+export type LinkCandidatesParams = {
+  search?: string;
+  limit?: number;
+};
+
 export type UsersListParams = {
   search?: string;
   role?: Role;
@@ -43,6 +50,14 @@ export async function listUsers(params: UsersListParams = {}) {
   const { data } = await api.get<ApiResponse<UsersListResponse>>("/users/", {
     params,
   });
+  return data;
+}
+
+export async function listLinkCandidates(params: LinkCandidatesParams = {}) {
+  const { data } = await api.get<ApiResponse<{ items: LinkCandidateDto[] }>>(
+    "/users/link-candidates/",
+    { params },
+  );
   return data;
 }
 

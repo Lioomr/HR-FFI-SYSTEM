@@ -20,7 +20,7 @@ from core.permissions import IsHRManagerOrAdmin, IsSystemAdmin, get_role
 from core.responses import error, success
 from core.services.bird_email_service import _resolve_logo_source
 from core.services.email_service import EmailService
-from organization.services import get_user_accessible_company_ids, user_has_all_company_access
+from organization.services import get_active_company_for_request, get_user_accessible_company_ids, user_has_all_company_access
 
 from .serializers import (
     CreateUserSerializer,
@@ -162,6 +162,35 @@ class UsersListCreateView(APIView):
         )
 
         return success(UserListSerializer(user, context={"request": request}).data, status=status.HTTP_201_CREATED)
+
+
+class UserLinkCandidatesView(APIView):
+    """Return a small, selected-company list for the employee account-link picker."""
+
+    permission_classes = [IsHRManagerOrAdmin]
+
+    def get(self, request):
+        active_company = get_active_company_for_request(request)
+        if active_company is None:
+            return success({"items": []})
+
+        search = request.query_params.get("search", "").strip()
+        try:
+            limit = int(request.query_params.get("limit", 20))
+        except (TypeError, ValueError):
+            limit = 20
+        limit = max(1, min(limit, 50))
+
+        candidates = User.objects.filter(
+            is_active=True,
+            organization_access_entries__organization_id=active_company.id,
+            employee_profile__isnull=True,
+        )
+        if search:
+            candidates = candidates.filter(Q(email__icontains=search) | Q(full_name__icontains=search))
+
+        items = list(candidates.order_by("full_name", "email", "id").values("id", "full_name", "email")[:limit])
+        return success({"items": items})
 
 
 class UserDetailView(APIView):

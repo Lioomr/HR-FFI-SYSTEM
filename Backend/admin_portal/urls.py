@@ -2,10 +2,18 @@ from django.urls import path
 
 from .views_dashboard import AdminSummaryView
 from .views_settings import SettingsView
-from .views_users import UserDetailView, UserResetPasswordView, UserRoleView, UsersListCreateView, UserStatusView
+from .views_users import (
+    UserDetailView,
+    UserLinkCandidatesView,
+    UserResetPasswordView,
+    UserRoleView,
+    UsersListCreateView,
+    UserStatusView,
+)
 
 urlpatterns = [
     path("users/", UsersListCreateView.as_view()),
+    path("users/link-candidates/", UserLinkCandidatesView.as_view()),
     path("users/<int:user_id>/", UserDetailView.as_view()),
     path("users/<int:user_id>/status/", UserStatusView.as_view()),
     path("users/<int:user_id>/role/", UserRoleView.as_view()),
