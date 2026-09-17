@@ -206,6 +206,10 @@ def _submit_response(rating_id, actor, data, rater_type):
     _recompute_status(rating)
     if rating.status == S.PENDING_CEO:
         rating.salary_before_snapshot = contract_terms_snapshot(profile)
+        rating.notification_milestones = {
+            **rating.notification_milestones,
+            "ceo_reminder_at": timezone.now().isoformat(),
+        }
     rating.save()
     event = "contract_rating_manager_submitted" if manager else "contract_rating_employee_submitted"
     _record(rating, event, actor, start=start, action=WorkflowAction.Action.SUBMIT)
