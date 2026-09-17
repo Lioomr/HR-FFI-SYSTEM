@@ -67,3 +67,20 @@ class EmployeeLeaveBalanceScopeTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["status"], "success")
         self.assertTrue(isinstance(response.data["data"], list))
+
+    def test_employee_without_profile_gets_actionable_balance_error(self):
+        user_without_profile = User.objects.create_user(email="no-profile@test.com", password="password")
+        user_without_profile.groups.add(self.employee_group)
+        UserOrganizationAccess.objects.create(user=user_without_profile, organization=self.ffi)
+        self.client.force_authenticate(user=user_without_profile)
+
+        response = self.client.get(
+            "/api/leaves/employee/leave-balance/",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.ffi.id),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(
+            response.data["message"],
+            "No employee profile is linked to your account in the selected company.",
+        )
