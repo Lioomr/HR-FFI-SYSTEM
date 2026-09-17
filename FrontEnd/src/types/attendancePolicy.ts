@@ -96,6 +96,8 @@ export interface AttendanceDailyResult {
  * answers 422 per field, so callers pass through what the user chose.
  */
 export interface AttendanceViolationFilters {
+  /** Force the employee's own records even when they also hold an HR role. */
+  mine?: boolean;
   page?: number;
   page_size?: number;
   lifecycle?: readonly string[];
@@ -165,6 +167,8 @@ export interface AttendanceLateNotice {
  * Multi-value filters are sent comma-separated; the server validates them.
  */
 export interface AttendanceNoticeFilters {
+  /** Force the employee's own records even when they also hold an HR role. */
+  mine?: boolean;
   page?: number;
   page_size?: number;
   notice_level?: readonly string[];

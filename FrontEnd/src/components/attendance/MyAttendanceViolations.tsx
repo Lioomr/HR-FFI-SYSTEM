@@ -32,6 +32,7 @@ export default function MyAttendanceViolations() {
     setLoading(true);
     try {
       const response = await getAttendanceViolations({
+        mine: true,
         page,
         page_size: PAGE_SIZE,
         lifecycle,

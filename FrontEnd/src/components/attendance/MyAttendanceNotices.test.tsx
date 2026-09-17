@@ -139,7 +139,7 @@ describe("employee late attendance notices", () => {
       expect(screen.getByText(item.reference_number)).toBeInTheDocument();
     }
     expect(get).toHaveBeenCalledWith("/api/attendance/notices/", {
-      params: { page: 1, page_size: 10 },
+      params: { mine: "true", page: 1, page_size: 10 },
     });
     // The server scopes the list; the client never picks a company or employee.
     expect(JSON.stringify(get.mock.calls)).not.toMatch(

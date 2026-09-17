@@ -37,6 +37,7 @@ export default function MyAttendanceNotices() {
     setLoading(true);
     try {
       const response = await getAttendanceNotices({
+        mine: true,
         page,
         page_size: PAGE_SIZE,
       });
