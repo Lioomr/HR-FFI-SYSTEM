@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from core.services.workflow_engine import begin_recorded_transition
 from employees.contract_expiry import CEO_REMINDER_INTERVAL, _company_ceo_recipients, _company_hr_recipients
-from employees.models import EmployeeProfile
+from employees.models import ContractDecision, EmployeeProfile
 from employees.services.archiving import retire_biotime_mapping_and_archive_profile
 from employees.services.manager_relationships import get_valid_direct_manager_user
 from in_app_notifications.dispatcher import dispatch_notification_channels
@@ -91,7 +91,12 @@ def execute_scheduled_termination(rating_id, *, today=None):
     from .services import _locked, _manual_resolution, _notify, _record, _snapshot_mismatch_reason
 
     rating, profile = _locked(rating_id)
-    if rating.termination_processed_at or not rating.scheduled_termination or rating.status != "APPROVED":
+    if (
+        rating.termination_processed_at
+        or not rating.scheduled_termination
+        or rating.status != ContractRating.Status.DECIDED
+        or rating.ceo_decision != ContractDecision.DecisionType.TERMINATE
+    ):
         return rating
     reason = _snapshot_mismatch_reason(rating, profile)
     if reason:

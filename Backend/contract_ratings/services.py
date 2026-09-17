@@ -468,8 +468,12 @@ def acknowledge_termination_notice(rating_id, *, actor):
     require_company_access(actor, rating)
     if not is_hr_workflow_approver_user(actor):
         raise PermissionDenied("Only HR may acknowledge termination notice.")
-    if rating.status != S.APPROVED or not rating.scheduled_termination:
-        raise ValueError("This rating has no approved scheduled termination.")
+    if (
+        rating.status != S.DECIDED
+        or rating.ceo_decision != ContractDecision.DecisionType.TERMINATE
+        or not rating.scheduled_termination
+    ):
+        raise ValueError("This rating has no decided scheduled termination.")
     if rating.employee_notified_of_termination_at:
         return rating
     if not rating.termination_processed_at and _guard(rating, profile, actor):

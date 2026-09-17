@@ -18,7 +18,8 @@ Source plan: `C:/Users/Asus/.claude/plans/new-feature-employee-soft-sparkle.md`.
 | 1.5 - shared term writer | Existing extraction already present; no production change required | `pytest employees -q --tb=short`: 375 passed, 3 third-party warnings, 16 subtests passed | `finalize_decision()` behavior, including standalone immediate termination, remains unchanged. |
 | 2 - CEO and optional HR input | `pytest contract_ratings/tests/test_final_phase2.py -q --tb=short`: collection failed because `request_hr_comment` was absent | Phase 1 + 2 command: 55 passed | HR is coarse by default and advisory only after a CEO request; rater privacy is structural; CEO returns are per-side; salary application is validated, atomic, exactly once, and mismatch-safe. |
 | 3 - milestones and notifications | `pytest contract_ratings/tests/test_final_phase3.py -q --tb=short`: 3 failed, 14 passed | Phase 1 + 2 + 3 command: 72 passed | 90-day creation is idempotent; 65-day incomplete notices go to CEO approvers, pending-rater reminders are targeted, HR is excluded until requested/final, and failed dispatches retry. |
+| 4.5 - scheduled termination | `pytest contract_ratings/tests/test_final_phase45.py -q`: 8 failed, 1 passed | Same command: 9 passed | Termination is delayed until expiry, atomic, idempotent, conflict-safe, and independent from the record-only HR acknowledgement and standalone contract-decision flow. |
 
 ## Coverage and remaining phases
 
-Phase 4.5, full-app coverage, manual API walks, and final hardening evidence will be appended as they complete.
+Full-app coverage, manual API walks, and final hardening evidence will be appended as they complete.
