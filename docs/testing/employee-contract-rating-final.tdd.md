@@ -22,4 +22,8 @@ Source plan: `C:/Users/Asus/.claude/plans/new-feature-employee-soft-sparkle.md`.
 
 ## Coverage and remaining phases
 
-Full-app coverage, manual API walks, and final hardening evidence will be appended as they complete.
+- Final contract-rating suite: `pytest contract_ratings -q --tb=short`: **105 passed**.
+- Coverage gate: `pytest contract_ratings -q --cov=contract_ratings --cov-report=term-missing`: **105 passed, 93% total coverage**.
+- Hardening matrix: delegated manager/HR/CEO actions, HR self-dealing, list privacy, salary validation/decrease, snapshot conflicts, scheduler boundaries, historical cycles, and unauthorized routes: **24 passed**.
+
+Full employee-app regression and final API-walk evidence will be appended after the remaining documentation and migration checks.
