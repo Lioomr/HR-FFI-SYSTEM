@@ -15,6 +15,7 @@ from leaves.models import LeaveRequest, LeaveType
 
 from .i18n import (
     MESSAGES,
+    contract_rating_event_label,
     localized_notification_field,
     notification_text,
     render,
@@ -62,6 +63,9 @@ class NotificationCatalogTests(SimpleTestCase):
         self.assertEqual(render(text["i18n"], "message", "ar-SA"), "الطلب رقم 7 من Sara: بانتظار الموارد البشرية.")
         self.assertIsNone(render({"key": "not.a.key", "params": {}}, "title", "ar"))
         self.assertIsNone(render(None, "title", "ar"))
+
+    def test_contract_rating_event_uses_a_human_arabic_label(self):
+        self.assertEqual(contract_rating_event_label("opened"), {"en": "Opened", "ar": "تم فتحه"})
 
     def test_whatsapp_variables_get_arabic_labels(self):
         variables = with_arabic_request_labels({"request_type": "Loan Request", "status_label": "pending_cfo"})
@@ -120,6 +124,15 @@ class LegacyNotificationTranslationTests(SimpleTestCase):
         self.assertLocalized(
             milestone, "message", "ar", "ينتهي عقد SALHA ALGHAMDI في 2026-10-13 (الأيام المتبقية: 31)."
         )
+
+    def test_legacy_contract_rating_notification_is_translated(self):
+        row = legacy_row(
+            "contract.rating",
+            "Contract Rating: Opened",
+            "Please review the employee contract rating.",
+        )
+        self.assertLocalized(row, "title", "ar", "تقييم العقد: تم فتحه")
+        self.assertLocalized(row, "message", "ar", "يرجى مراجعة تقييم عقد الموظف.")
 
     def test_job_offer_decision_keeps_reason_and_recommendation(self):
         row = legacy_row(
