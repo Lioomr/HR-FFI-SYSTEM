@@ -6,6 +6,8 @@ from datetime import date as date_type
 from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
+from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from django.db import transaction
 
 from admin_portal.models import SystemSettings
@@ -40,6 +42,17 @@ def _month_start(value: date_type) -> date_type:
 
 def _next_month_start(month: date_type) -> date_type:
     return (month.replace(day=28) + timedelta(days=4)).replace(day=1)
+
+
+def _late_policy_effective_from() -> date_type | None:
+    """Return the optional date from which late-policy actions are allowed."""
+    configured = str(getattr(settings, "LATE_POLICY_EFFECTIVE_FROM", "") or "").strip()
+    if not configured:
+        return None
+    try:
+        return date_type.fromisoformat(configured)
+    except ValueError as exc:
+        raise ImproperlyConfigured("LATE_POLICY_EFFECTIVE_FROM must use YYYY-MM-DD.") from exc
 
 
 def penalty_percent(occurrence: int) -> Decimal:
@@ -258,11 +271,20 @@ class AttendancePolicyService:
                 for day in pair
                 if day
             }
-            occurrences = AttendanceLateViolation.objects.filter(
+            effective_from = _late_policy_effective_from()
+            historical_violations = AttendanceLateViolation.objects.filter(
                 employee_profile=profile, date__lt=month, lifecycle__in=COUNTED_LIFECYCLES
-            ).count()
+            )
+            if effective_from is not None:
+                historical_violations = historical_violations.filter(date__gte=effective_from)
+            occurrences = historical_violations.count()
             grace_used = 0
             for result in results:
+                # Attendance remains visible, but late-policy actions begin only
+                # on the configured cutover date. This covers sync and manual
+                # recalculation because both call this central reconciliation.
+                if effective_from is not None and result.date < effective_from:
+                    continue
                 excused = result.date in late_marker_days
                 late, reason, consumes_grace = cls.classify_arrival(
                     result, settings_obj, grace_used, exempt=exempt, excused=excused
