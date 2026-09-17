@@ -1,0 +1,802 @@
+{
+  "reference_no": {
+    "page": 1,
+    "x": 89,
+    "y": 737.89,
+    "width": 78,
+    "height": 18,
+    "font_size": 8
+  },
+  "document_date": {
+    "page": 1,
+    "x": 390,
+    "y": 737.89,
+    "width": 120,
+    "height": 18,
+    "font_size": 7.4
+  },
+  "employee_name": {
+    "page": 1,
+    "x": 90,
+    "y": 680.89,
+    "width": 425,
+    "height": 18,
+    "font_size": 7.2,
+    "shrink": true
+  },
+  "position": {
+    "page": 1,
+    "x": 90,
+    "y": 658.89,
+    "width": 425,
+    "height": 18,
+    "font_size": 7.2,
+    "shrink": true
+  },
+  "employee_no": {
+    "page": 1,
+    "x": 90,
+    "y": 636.89,
+    "width": 425,
+    "height": 18,
+    "font_size": 7.2,
+    "shrink": true
+  },
+  "department": {
+    "page": 1,
+    "x": 90,
+    "y": 614.89,
+    "width": 425,
+    "height": 18,
+    "font_size": 7.2,
+    "shrink": true
+  },
+  "section": {
+    "page": 1,
+    "x": 90,
+    "y": 592.89,
+    "width": 425,
+    "height": 18,
+    "font_size": 7.2,
+    "shrink": true
+  },
+  "evaluation_to": {
+    "page": 1,
+    "x": 150,
+    "y": 568.89,
+    "width": 105,
+    "height": 20,
+    "font_size": 6.5,
+    "shrink": true
+  },
+  "evaluation_from": {
+    "page": 1,
+    "x": 335,
+    "y": 568.89,
+    "width": 105,
+    "height": 20,
+    "font_size": 6.5,
+    "shrink": true
+  },
+  "rating_1": {
+    "page": 1,
+    "checkboxes": {
+      "0_to_60": [
+        279,
+        492.64
+      ],
+      "61_to_69": [
+        319,
+        492.64
+      ],
+      "70_to_79": [
+        359,
+        492.64
+      ],
+      "80_to_89": [
+        399,
+        492.64
+      ],
+      "90_to_100": [
+        439,
+        492.64
+      ]
+    }
+  },
+  "remark_1": {
+    "page": 1,
+    "x": 462,
+    "y": 486.39,
+    "width": 115,
+    "height": 12.5,
+    "font_size": 5.5,
+    "shrink": true
+  },
+  "rating_2": {
+    "page": 1,
+    "checkboxes": {
+      "0_to_60": [
+        279,
+        476.14
+      ],
+      "61_to_69": [
+        319,
+        476.14
+      ],
+      "70_to_79": [
+        359,
+        476.14
+      ],
+      "80_to_89": [
+        399,
+        476.14
+      ],
+      "90_to_100": [
+        439,
+        476.14
+      ]
+    }
+  },
+  "remark_2": {
+    "page": 1,
+    "x": 462,
+    "y": 469.89,
+    "width": 115,
+    "height": 12.5,
+    "font_size": 5.5,
+    "shrink": true
+  },
+  "rating_3": {
+    "page": 1,
+    "checkboxes": {
+      "0_to_60": [
+        279,
+        459.64
+      ],
+      "61_to_69": [
+        319,
+        459.64
+      ],
+      "70_to_79": [
+        359,
+        459.64
+      ],
+      "80_to_89": [
+        399,
+        459.64
+      ],
+      "90_to_100": [
+        439,
+        459.64
+      ]
+    }
+  },
+  "remark_3": {
+    "page": 1,
+    "x": 462,
+    "y": 453.39,
+    "width": 115,
+    "height": 12.5,
+    "font_size": 5.5,
+    "shrink": true
+  },
+  "rating_4": {
+    "page": 1,
+    "checkboxes": {
+      "0_to_60": [
+        279,
+        443.14
+      ],
+      "61_to_69": [
+        319,
+        443.14
+      ],
+      "70_to_79": [
+        359,
+        443.14
+      ],
+      "80_to_89": [
+        399,
+        443.14
+      ],
+      "90_to_100": [
+        439,
+        443.14
+      ]
+    }
+  },
+  "remark_4": {
+    "page": 1,
+    "x": 462,
+    "y": 436.89,
+    "width": 115,
+    "height": 12.5,
+    "font_size": 5.5,
+    "shrink": true
+  },
+  "rating_5": {
+    "page": 1,
+    "checkboxes": {
+      "0_to_60": [
+        279,
+        426.64
+      ],
+      "61_to_69": [
+        319,
+        426.64
+      ],
+      "70_to_79": [
+        359,
+        426.64
+      ],
+      "80_to_89": [
+        399,
+        426.64
+      ],
+      "90_to_100": [
+        439,
+        426.64
+      ]
+    }
+  },
+  "remark_5": {
+    "page": 1,
+    "x": 462,
+    "y": 420.39,
+    "width": 115,
+    "height": 12.5,
+    "font_size": 5.5,
+    "shrink": true
+  },
+  "rating_6": {
+    "page": 1,
+    "checkboxes": {
+      "0_to_60": [
+        279,
+        410.14
+      ],
+      "61_to_69": [
+        319,
+        410.14
+      ],
+      "70_to_79": [
+        359,
+        410.14
+      ],
+      "80_to_89": [
+        399,
+        410.14
+      ],
+      "90_to_100": [
+        439,
+        410.14
+      ]
+    }
+  },
+  "remark_6": {
+    "page": 1,
+    "x": 462,
+    "y": 403.89,
+    "width": 115,
+    "height": 12.5,
+    "font_size": 5.5,
+    "shrink": true
+  },
+  "rating_7": {
+    "page": 1,
+    "checkboxes": {
+      "0_to_60": [
+        279,
+        393.64
+      ],
+      "61_to_69": [
+        319,
+        393.64
+      ],
+      "70_to_79": [
+        359,
+        393.64
+      ],
+      "80_to_89": [
+        399,
+        393.64
+      ],
+      "90_to_100": [
+        439,
+        393.64
+      ]
+    }
+  },
+  "remark_7": {
+    "page": 1,
+    "x": 462,
+    "y": 387.39,
+    "width": 115,
+    "height": 12.5,
+    "font_size": 5.5,
+    "shrink": true
+  },
+  "rating_8": {
+    "page": 1,
+    "checkboxes": {
+      "0_to_60": [
+        279,
+        377.14
+      ],
+      "61_to_69": [
+        319,
+        377.14
+      ],
+      "70_to_79": [
+        359,
+        377.14
+      ],
+      "80_to_89": [
+        399,
+        377.14
+      ],
+      "90_to_100": [
+        439,
+        377.14
+      ]
+    }
+  },
+  "remark_8": {
+    "page": 1,
+    "x": 462,
+    "y": 370.89,
+    "width": 115,
+    "height": 12.5,
+    "font_size": 5.5,
+    "shrink": true
+  },
+  "rating_9": {
+    "page": 1,
+    "checkboxes": {
+      "0_to_60": [
+        279,
+        360.64
+      ],
+      "61_to_69": [
+        319,
+        360.64
+      ],
+      "70_to_79": [
+        359,
+        360.64
+      ],
+      "80_to_89": [
+        399,
+        360.64
+      ],
+      "90_to_100": [
+        439,
+        360.64
+      ]
+    }
+  },
+  "remark_9": {
+    "page": 1,
+    "x": 462,
+    "y": 354.39,
+    "width": 115,
+    "height": 12.5,
+    "font_size": 5.5,
+    "shrink": true
+  },
+  "rating_10": {
+    "page": 1,
+    "checkboxes": {
+      "0_to_60": [
+        279,
+        344.14
+      ],
+      "61_to_69": [
+        319,
+        344.14
+      ],
+      "70_to_79": [
+        359,
+        344.14
+      ],
+      "80_to_89": [
+        399,
+        344.14
+      ],
+      "90_to_100": [
+        439,
+        344.14
+      ]
+    }
+  },
+  "remark_10": {
+    "page": 1,
+    "x": 462,
+    "y": 337.89,
+    "width": 115,
+    "height": 12.5,
+    "font_size": 5.5,
+    "shrink": true
+  },
+  "rating_11": {
+    "page": 1,
+    "checkboxes": {
+      "0_to_60": [
+        279,
+        327.64
+      ],
+      "61_to_69": [
+        319,
+        327.64
+      ],
+      "70_to_79": [
+        359,
+        327.64
+      ],
+      "80_to_89": [
+        399,
+        327.64
+      ],
+      "90_to_100": [
+        439,
+        327.64
+      ]
+    }
+  },
+  "remark_11": {
+    "page": 1,
+    "x": 462,
+    "y": 321.39,
+    "width": 115,
+    "height": 12.5,
+    "font_size": 5.5,
+    "shrink": true
+  },
+  "rating_12": {
+    "page": 1,
+    "checkboxes": {
+      "0_to_60": [
+        279,
+        311.14
+      ],
+      "61_to_69": [
+        319,
+        311.14
+      ],
+      "70_to_79": [
+        359,
+        311.14
+      ],
+      "80_to_89": [
+        399,
+        311.14
+      ],
+      "90_to_100": [
+        439,
+        311.14
+      ]
+    }
+  },
+  "remark_12": {
+    "page": 1,
+    "x": 462,
+    "y": 304.89,
+    "width": 115,
+    "height": 12.5,
+    "font_size": 5.5,
+    "shrink": true
+  },
+  "rating_13": {
+    "page": 1,
+    "checkboxes": {
+      "0_to_60": [
+        279,
+        294.64
+      ],
+      "61_to_69": [
+        319,
+        294.64
+      ],
+      "70_to_79": [
+        359,
+        294.64
+      ],
+      "80_to_89": [
+        399,
+        294.64
+      ],
+      "90_to_100": [
+        439,
+        294.64
+      ]
+    }
+  },
+  "remark_13": {
+    "page": 1,
+    "x": 462,
+    "y": 288.39,
+    "width": 115,
+    "height": 12.5,
+    "font_size": 5.5,
+    "shrink": true
+  },
+  "rating_14": {
+    "page": 1,
+    "checkboxes": {
+      "0_to_60": [
+        279,
+        278.14
+      ],
+      "61_to_69": [
+        319,
+        278.14
+      ],
+      "70_to_79": [
+        359,
+        278.14
+      ],
+      "80_to_89": [
+        399,
+        278.14
+      ],
+      "90_to_100": [
+        439,
+        278.14
+      ]
+    }
+  },
+  "remark_14": {
+    "page": 1,
+    "x": 462,
+    "y": 271.89,
+    "width": 115,
+    "height": 12.5,
+    "font_size": 5.5,
+    "shrink": true
+  },
+  "rating_15": {
+    "page": 1,
+    "checkboxes": {
+      "0_to_60": [
+        279,
+        261.64
+      ],
+      "61_to_69": [
+        319,
+        261.64
+      ],
+      "70_to_79": [
+        359,
+        261.64
+      ],
+      "80_to_89": [
+        399,
+        261.64
+      ],
+      "90_to_100": [
+        439,
+        261.64
+      ]
+    }
+  },
+  "remark_15": {
+    "page": 1,
+    "x": 462,
+    "y": 255.39,
+    "width": 115,
+    "height": 12.5,
+    "font_size": 5.5,
+    "shrink": true
+  },
+  "rating_16": {
+    "page": 1,
+    "checkboxes": {
+      "0_to_60": [
+        279,
+        245.14
+      ],
+      "61_to_69": [
+        319,
+        245.14
+      ],
+      "70_to_79": [
+        359,
+        245.14
+      ],
+      "80_to_89": [
+        399,
+        245.14
+      ],
+      "90_to_100": [
+        439,
+        245.14
+      ]
+    }
+  },
+  "remark_16": {
+    "page": 1,
+    "x": 462,
+    "y": 238.89,
+    "width": 115,
+    "height": 12.5,
+    "font_size": 5.5,
+    "shrink": true
+  },
+  "rating_17": {
+    "page": 1,
+    "checkboxes": {
+      "0_to_60": [
+        279,
+        228.64
+      ],
+      "61_to_69": [
+        319,
+        228.64
+      ],
+      "70_to_79": [
+        359,
+        228.64
+      ],
+      "80_to_89": [
+        399,
+        228.64
+      ],
+      "90_to_100": [
+        439,
+        228.64
+      ]
+    }
+  },
+  "remark_17": {
+    "page": 1,
+    "x": 462,
+    "y": 222.39,
+    "width": 115,
+    "height": 12.5,
+    "font_size": 5.5,
+    "shrink": true
+  },
+  "rating_18": {
+    "page": 1,
+    "checkboxes": {
+      "0_to_60": [
+        279,
+        212.14
+      ],
+      "61_to_69": [
+        319,
+        212.14
+      ],
+      "70_to_79": [
+        359,
+        212.14
+      ],
+      "80_to_89": [
+        399,
+        212.14
+      ],
+      "90_to_100": [
+        439,
+        212.14
+      ]
+    }
+  },
+  "remark_18": {
+    "page": 1,
+    "x": 462,
+    "y": 205.89,
+    "width": 115,
+    "height": 12.5,
+    "font_size": 5.5,
+    "shrink": true
+  },
+  "average": {
+    "page": 1,
+    "x": 259,
+    "y": 185.89,
+    "width": 200,
+    "height": 16,
+    "font_size": 7.2
+  },
+  "recommendation": {
+    "page": 1,
+    "checkboxes": {
+      "terminate": [
+        60,
+        113.8897637795277
+      ],
+      "proceed": [
+        250,
+        113.8897637795277
+      ],
+      "renew_with_salary_increase": [
+        440,
+        113.8897637795277
+      ]
+    }
+  },
+  "direct_manager_name": {
+    "page": 1,
+    "x": 58,
+    "y": 56.89,
+    "width": 126,
+    "height": 11,
+    "font_size": 6.3,
+    "shrink": true
+  },
+  "direct_manager_signature_image": {
+    "page": 1,
+    "x": 58,
+    "y": 30.89,
+    "width": 126,
+    "height": 21,
+    "kind": "image",
+    "padding": 2,
+    "source": "evaluation.signers.direct_manager.signature"
+  },
+  "direct_manager_date": {
+    "page": 1,
+    "x": 58,
+    "y": 17.89,
+    "width": 126,
+    "height": 8,
+    "font_size": 5.8,
+    "shrink": true
+  },
+  "hr_name": {
+    "page": 1,
+    "x": 252,
+    "y": 56.89,
+    "width": 126,
+    "height": 11,
+    "font_size": 6.3,
+    "shrink": true
+  },
+  "hr_signature_image": {
+    "page": 1,
+    "x": 252,
+    "y": 30.89,
+    "width": 126,
+    "height": 21,
+    "kind": "image",
+    "padding": 2,
+    "source": "evaluation.signers.hr.signature"
+  },
+  "hr_date": {
+    "page": 1,
+    "x": 252,
+    "y": 17.89,
+    "width": 126,
+    "height": 8,
+    "font_size": 5.8,
+    "shrink": true
+  },
+  "ceo_name": {
+    "page": 1,
+    "x": 446,
+    "y": 56.89,
+    "width": 126,
+    "height": 11,
+    "font_size": 6.3,
+    "shrink": true
+  },
+  "ceo_signature_image": {
+    "page": 1,
+    "x": 446,
+    "y": 30.89,
+    "width": 126,
+    "height": 21,
+    "kind": "image",
+    "padding": 2,
+    "source": "evaluation.signers.ceo.signature"
+  },
+  "ceo_date": {
+    "page": 1,
+    "x": 446,
+    "y": 17.89,
+    "width": 126,
+    "height": 8,
+    "font_size": 5.8,
+    "shrink": true
+  }
+}

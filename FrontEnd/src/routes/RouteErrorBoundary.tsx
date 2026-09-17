@@ -5,7 +5,7 @@ import {
   ReloadOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useRouteError } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { reportErrorApi } from "../services/api/errorApi";
 import { useI18n } from "../i18n/useI18n";
 
@@ -15,9 +15,25 @@ export default function RouteErrorBoundary() {
   const { t } = useI18n();
   const [reporting, setReporting] = useState(false);
 
+  // A deployment replaces Vite's content-hashed lazy chunks. If a tab that
+  // predates that deployment later navigates to a lazy route, its old shell
+  // can request a chunk that no longer exists. Reload once to fetch the new
+  // shell; the session marker prevents a genuine import defect looping forever.
+  useEffect(() => {
+    const text = String(err?.message || err?.stack || err || "");
+    const isStaleChunk =
+      /failed to fetch dynamically imported module|importing a module script failed/i.test(
+        text,
+      );
+    const marker = "ffi-recovered-stale-lazy-chunk";
+    if (isStaleChunk && sessionStorage.getItem(marker) !== text) {
+      sessionStorage.setItem(marker, text);
+      window.location.reload();
+    }
+  }, [err]);
+
   const title = t("error.generic");
-  const subtitle =
-    err?.statusText || err?.message || t("error.renderFailed");
+  const subtitle = err?.statusText || err?.message || t("error.renderFailed");
 
   const handleReport = async () => {
     setReporting(true);

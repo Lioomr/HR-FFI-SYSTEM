@@ -23,6 +23,7 @@ def empty_no_content(_request):
 
 
 urlpatterns = [
+    path("", include("contract_ratings.urls")),
     path("favicon.ico", empty_no_content),
     path("healthz/", HealthCheckView.as_view(), name="healthz"),
     path("iclock/cdata", empty_ok),

@@ -97,6 +97,26 @@ export interface ContractDecision {
    * are opaque per the backend contract — render them, never parse them.
    */
   workflow?: WorkflowSnapshot;
+  /**
+   * Summary of the linked Employee Contract Rating, present only for HR/CEO
+   * viewers and only once a rating exists for this cycle. Display-only: it
+   * never drives `decision_type`. The backend sends no rating id.
+   */
+  rating?: ContractDecisionRatingSummary | null;
+}
+
+export interface ContractDecisionRatingSummary {
+  /** A `ContractRatingStatus` value (see contractRatingsApi.ts). */
+  status: string;
+  manager_recommendation:
+    | "CONTINUE_CONTRACT"
+    | "CONTINUE_WITH_CHANGES"
+    | "TERMINATE"
+    | ""
+    | null;
+  hr_approved: boolean;
+  ceo_action: string;
+  ceo_selected_option: ContractDecisionType | "";
 }
 
 export interface ContractDecisionSubmitPayload {

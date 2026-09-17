@@ -23,6 +23,15 @@ from core.permissions import get_role
 from .pending_approval_email import get_direct_manager_user
 
 WORKFLOW_TEMPLATES = {
+    "contract_rating": {
+        "name": "Employee Contract Rating",
+        "module_key": "contract_ratings",
+        "stages": [
+            {"key": "responses", "title": "Independent evaluations", "approver_role": "", "order": 0},
+            {"key": "hr", "title": "HR Review", "approver_role": "hr", "order": 1},
+            {"key": "ceo", "title": "CEO Decision", "approver_role": "ceo", "order": 2},
+        ],
+    },
     "leave_request": {
         "name": "Leave Request Workflow",
         "module_key": "leaves",
@@ -145,6 +154,9 @@ class WorkflowEvent:
 
 
 def _build_action_url_path(workflow_key: str, role: str, object_id: int) -> str:
+    if workflow_key == "contract_rating":
+        audience = "ceo" if role == "ceo" else "hr"
+        return f"{settings.FRONTEND_URL.rstrip('/')}/{audience}/contract-ratings/{object_id}"
     if workflow_key == "job_offer":
         audience = "ceo" if role == "ceo" else "hr"
         path = f"/{audience}/job-offers/{object_id}"
@@ -1660,6 +1672,10 @@ def _legacy_events_for_annual_leave_payment(instance) -> list[WorkflowEvent]:
 
 def _adapter_for_instance(instance):
     class_name = instance.__class__.__name__
+    if class_name == "ContractRating":
+        from contract_ratings.workflow import legacy_events, status_snapshot
+
+        return "contract_rating", status_snapshot, legacy_events
     if class_name == "AnnualLeavePaymentRequest":
         return (
             "annual_leave_payment_request",
@@ -2132,6 +2148,7 @@ def build_pending_approval_item(workflow: WorkflowInstance) -> dict[str, Any] | 
         "asset_return_request": "Asset Return",
         "employee_deletion_request": "Employee Deletion",
         "contract_decision": "Contract Decision",
+        "contract_rating": "Employee Contract Rating",
         "permission_request": "Exit Permission",
         "annual_leave_payment_request": "Annual Leave Settlement",
     }
@@ -2180,6 +2197,11 @@ def build_pending_approval_item(workflow: WorkflowInstance) -> dict[str, Any] | 
         name = snapshot.get("full_name") or snapshot.get("employee_id") or f"Request #{obj.pk}"
         action = "Employee hard delete request"
         request_type = "EMPLOYEE_DELETION"
+    elif workflow_key == "contract_rating":
+        profile = obj.employee_profile
+        name = profile.full_name or profile.employee_id
+        action = "Employee Contract Rating"
+        request_type = "CONTRACT_RATING"
     elif workflow_key == "contract_decision":
         profile = getattr(obj, "employee_profile", None)
         name = getattr(profile, "full_name", "") or getattr(profile, "employee_id", f"Request #{obj.pk}")

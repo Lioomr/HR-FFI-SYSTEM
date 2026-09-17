@@ -51,6 +51,7 @@ class UserMinimalSerializer(serializers.ModelSerializer):
 
 
 class ContractDecisionReadSerializer(serializers.ModelSerializer):
+    rating = serializers.SerializerMethodField()
     employee = serializers.SerializerMethodField()
     decision_type_label = serializers.CharField(source="get_decision_type_display", read_only=True)
     status_label = serializers.CharField(source="get_status_display", read_only=True)
@@ -60,6 +61,7 @@ class ContractDecisionReadSerializer(serializers.ModelSerializer):
     class Meta:
         model = ContractDecision
         fields = [
+            "rating",
             "id",
             "company",
             "employee",
@@ -96,6 +98,22 @@ class ContractDecisionReadSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+    def get_rating(self, obj):
+        from contract_ratings.permissions import viewer_role
+
+        rating = getattr(obj, "rating", None)
+        request = self.context.get("request")
+        if rating is None or request is None or viewer_role(request.user, rating) not in {"hr", "ceo"}:
+            return None
+        return {
+            "status": rating.status,
+            "manager_recommendation": rating.manager_response.recommendation if rating.manager_response else None,
+            "hr_approved": rating.status in {"PENDING_CEO", "APPROVED", "REJECTED"}
+            and rating.hr_decided_at is not None,
+            "ceo_action": rating.ceo_action,
+            "ceo_selected_option": rating.ceo_selected_option,
+        }
 
     def get_employee(self, obj):
         profile = obj.employee_profile

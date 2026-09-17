@@ -762,6 +762,14 @@ export default function BaseLayout() {
                 </Link>
               ),
             },
+            {
+              key: "/hr/contract-ratings",
+              label: (
+                <Link to="/hr/contract-ratings">
+                  {t("layout.contractRatings", "Contract Ratings")}
+                </Link>
+              ),
+            },
           ],
         },
         {
@@ -1289,6 +1297,15 @@ export default function BaseLayout() {
                 label: (
                   <Link to="/ceo/contract-decisions">
                     {t("layout.contractDecisions", "Contract Decisions")}
+                  </Link>
+                ),
+              },
+              {
+                key: "/ceo/contract-ratings",
+                icon: <FileTextOutlined />,
+                label: (
+                  <Link to="/ceo/contract-ratings">
+                    {t("layout.contractRatings", "Contract Ratings")}
                   </Link>
                 ),
               },

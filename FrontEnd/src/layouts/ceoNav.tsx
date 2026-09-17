@@ -150,6 +150,15 @@ export function buildCeoMenuItems(t: TranslateFn): MenuProps["items"] {
           ),
         },
         {
+          key: "/ceo/contract-ratings",
+          icon: <FileTextOutlined />,
+          label: (
+            <Link to="/ceo/contract-ratings">
+              {t("layout.contractRatings", "Contract Ratings")}
+            </Link>
+          ),
+        },
+        {
           key: "ceo-assets-sub",
           icon: <AppstoreOutlined />,
           label: t("layout.assetReviews", "Asset Reviews"),

@@ -3,6 +3,8 @@ import { Navigate, useParams } from "react-router-dom";
 import RequireAuth from "./RequireAuth";
 import RequireRole from "./RequireRole";
 import RequireManagerAccess from "./RequireManagerAccess";
+import RequireCompletedSelfRating from "./RequireCompletedSelfRating";
+import RequireCompletedManagerRating from "./RequireCompletedManagerRating";
 import RequireFinanceApprover from "./RequireFinanceApprover";
 import RequireCFOApprover from "./RequireCFOApprover";
 import RequireCEOApprover from "./RequireCEOApprover";
@@ -121,6 +123,9 @@ import {
   PendingInboxPage,
   NotificationsPage,
   ContractDecisionsPage,
+  ContractRatingsPage,
+  ManagerRatingFormPage,
+  EmployeeRatingFormPage,
   RegisterInvitePage,
   JobOfferResponsePage,
   Unauthorized403Page,
@@ -358,6 +363,14 @@ export const routes = [
                 element: <ContractDecisionsPage />,
               },
               {
+                path: "hr/contract-ratings",
+                element: <ContractRatingsPage />,
+              },
+              {
+                path: "hr/contract-ratings/:id",
+                element: <ContractRatingsPage />,
+              },
+              {
                 path: "hr/workflow/delegations",
                 element: <DelegationRulesPage />,
               },
@@ -405,79 +418,97 @@ export const routes = [
             ),
             children: [
               {
-                path: "employee",
-                element: <Navigate to="/employee/dashboard" replace />,
-              },
-              {
-                path: "employee/home",
-                element: <Navigate to="/employee/dashboard" replace />,
-              },
-              { path: "employee/dashboard", element: <DashboardPage /> },
-              {
-                path: "employee/permission-requests/new",
-                element: <PermissionRequestFormPage />,
-              },
-              {
-                path: "employee/permission-requests",
-                element: <MyPermissionRequestsPage />,
-              },
-              {
-                path: "employee/permission-requests/:id",
-                element: <PermissionRequestDetailPage role="employee" />,
-              },
-              { path: "employee/profile", element: <MyProfilePage /> },
-              {
-                path: "employee/attendance",
-                element: <EmployeeAttendancePage />,
-              },
-              {
-                path: "employee/attendance-corrections",
-                element: <Navigate to="/employee/attendance" replace />,
-              },
-              { path: "employee/leaves", element: <EmployeeLeavesPage /> },
-              {
-                path: "employee/payslips",
-                element: <EmployeePayslipsListPage />,
-              },
-              {
-                path: "employee/payslips/:id",
-                element: <EmployeePayslipDetailsPage />,
-              },
+                // Blocks the whole employee self-service surface behind an
+                // outstanding self-rating (see RequireCompletedSelfRating's
+                // own docstring for why the scope stops at /employee/*).
+                element: <RequireCompletedSelfRating />,
+                children: [
+                  {
+                    path: "employee",
+                    element: <Navigate to="/employee/dashboard" replace />,
+                  },
+                  {
+                    path: "employee/home",
+                    element: <Navigate to="/employee/dashboard" replace />,
+                  },
+                  { path: "employee/dashboard", element: <DashboardPage /> },
+                  {
+                    path: "employee/permission-requests/new",
+                    element: <PermissionRequestFormPage />,
+                  },
+                  {
+                    path: "employee/contract-ratings/:id",
+                    element: <EmployeeRatingFormPage />,
+                  },
+                  {
+                    path: "employee/permission-requests",
+                    element: <MyPermissionRequestsPage />,
+                  },
+                  {
+                    path: "employee/permission-requests/:id",
+                    element: <PermissionRequestDetailPage role="employee" />,
+                  },
+                  { path: "employee/profile", element: <MyProfilePage /> },
+                  {
+                    path: "employee/attendance",
+                    element: <EmployeeAttendancePage />,
+                  },
+                  {
+                    path: "employee/attendance-corrections",
+                    element: <Navigate to="/employee/attendance" replace />,
+                  },
+                  { path: "employee/leaves", element: <EmployeeLeavesPage /> },
+                  {
+                    path: "employee/payslips",
+                    element: <EmployeePayslipsListPage />,
+                  },
+                  {
+                    path: "employee/payslips/:id",
+                    element: <EmployeePayslipDetailsPage />,
+                  },
 
-              // Employee Leave
-              { path: "employee/leave/request", element: <RequestLeavePage /> },
-              {
-                path: "employee/leave/requests",
-                element: <MyLeaveRequestsPage />,
-              },
-              {
-                path: "employee/leave/requests/:id",
-                element: <EmployeeLeaveRequestDetailsPage />,
-              },
-              {
-                path: "employee/delegated-approvals",
-                element: <DelegatedLeaveInboxPage />,
-              },
-              {
-                path: "employee/delegated-approvals/:id",
-                element: <EmployeeLeaveRequestDetailsPage />,
-              },
-              {
-                path: "employee/leave/balance",
-                element: <MyLeaveBalancePage />,
-              },
-              { path: "employee/loans/request", element: <RequestLoanPage /> },
-              { path: "employee/loans", element: <MyLoanRequestsPage /> },
-              {
-                path: "employee/loans/:id",
-                element: <EmployeeLoanRequestDetailsPage />,
-              },
-              { path: "employee/assets", element: <MyAssetsPage /> },
+                  // Employee Leave
+                  {
+                    path: "employee/leave/request",
+                    element: <RequestLeavePage />,
+                  },
+                  {
+                    path: "employee/leave/requests",
+                    element: <MyLeaveRequestsPage />,
+                  },
+                  {
+                    path: "employee/leave/requests/:id",
+                    element: <EmployeeLeaveRequestDetailsPage />,
+                  },
+                  {
+                    path: "employee/delegated-approvals",
+                    element: <DelegatedLeaveInboxPage />,
+                  },
+                  {
+                    path: "employee/delegated-approvals/:id",
+                    element: <EmployeeLeaveRequestDetailsPage />,
+                  },
+                  {
+                    path: "employee/leave/balance",
+                    element: <MyLeaveBalancePage />,
+                  },
+                  {
+                    path: "employee/loans/request",
+                    element: <RequestLoanPage />,
+                  },
+                  { path: "employee/loans", element: <MyLoanRequestsPage /> },
+                  {
+                    path: "employee/loans/:id",
+                    element: <EmployeeLoanRequestDetailsPage />,
+                  },
+                  { path: "employee/assets", element: <MyAssetsPage /> },
 
-              // Announcements
-              {
-                path: "employee/announcements",
-                element: <AnnouncementsPage />,
+                  // Announcements
+                  {
+                    path: "employee/announcements",
+                    element: <AnnouncementsPage />,
+                  },
+                ],
               },
             ],
           },
@@ -492,51 +523,74 @@ export const routes = [
             ),
             children: [
               {
-                path: "manager",
-                element: <Navigate to="/manager/dashboard" replace />,
-              },
-              { path: "manager/dashboard", element: <ManagerDashboardPage /> },
-              {
-                path: "manager/team-requests",
-                element: <ManagerTeamRequestsPage />,
-              },
-              {
-                path: "manager/permission-requests",
-                element: <ManagerPermissionRequestsPage />,
-              },
-              {
-                path: "manager/permission-requests/:id",
-                element: <PermissionRequestDetailPage role="manager" />,
-              },
-              {
-                path: "manager/attendance",
-                element: <ManagerAttendancePage />,
-              },
-              {
-                path: "manager/attendance-corrections",
-                element: <Navigate to="/manager/attendance" replace />,
-              },
-              { path: "manager/team", element: <ManagerTeamPage /> },
-              {
-                path: "manager/team/:id",
-                element: <ManagerEmployeeProfilePage />,
-              },
-              {
-                path: "manager/leave/requests/:id",
-                element: <ManagerLeaveRequestDetailsPage />,
-              },
-              {
-                path: "manager/loan-requests",
-                element: <ManagerLoanRequestsPage />,
-              },
-              {
-                path: "manager/loan-requests/:id",
-                element: <ManagerLoanRequestDetailsPage />,
-              },
-              { path: "manager/announcements", element: <AnnouncementsPage /> },
-              {
-                path: "manager/announcements/create",
-                element: <CreateTeamAnnouncementPage />,
+                // A manager is still an employee. Their own self-rating must
+                // be completed before their manager privileges, followed by
+                // any pending direct-report evaluation.
+                element: <RequireCompletedSelfRating />,
+                children: [
+                  {
+                    element: <RequireCompletedManagerRating />,
+                    children: [
+                      {
+                        path: "manager",
+                        element: <Navigate to="/manager/dashboard" replace />,
+                      },
+                      {
+                        path: "manager/dashboard",
+                        element: <ManagerDashboardPage />,
+                      },
+                      {
+                        path: "manager/team-requests",
+                        element: <ManagerTeamRequestsPage />,
+                      },
+                      {
+                        path: "manager/permission-requests",
+                        element: <ManagerPermissionRequestsPage />,
+                      },
+                      {
+                        path: "manager/permission-requests/:id",
+                        element: <PermissionRequestDetailPage role="manager" />,
+                      },
+                      {
+                        path: "manager/attendance",
+                        element: <ManagerAttendancePage />,
+                      },
+                      {
+                        path: "manager/attendance-corrections",
+                        element: <Navigate to="/manager/attendance" replace />,
+                      },
+                      { path: "manager/team", element: <ManagerTeamPage /> },
+                      {
+                        path: "manager/team/:id",
+                        element: <ManagerEmployeeProfilePage />,
+                      },
+                      {
+                        path: "manager/contract-ratings/:id",
+                        element: <ManagerRatingFormPage />,
+                      },
+                      {
+                        path: "manager/leave/requests/:id",
+                        element: <ManagerLeaveRequestDetailsPage />,
+                      },
+                      {
+                        path: "manager/loan-requests",
+                        element: <ManagerLoanRequestsPage />,
+                      },
+                      {
+                        path: "manager/loan-requests/:id",
+                        element: <ManagerLoanRequestDetailsPage />,
+                      },
+                      {
+                        path: "manager/announcements",
+                        element: <AnnouncementsPage />,
+                      },
+                      {
+                        path: "manager/announcements/create",
+                        element: <CreateTeamAnnouncementPage />,
+                      },
+                    ],
+                  },
+                ],
               },
             ],
           },
@@ -623,6 +677,14 @@ export const routes = [
               {
                 path: "ceo/contract-decisions/:id",
                 element: <ContractDecisionsPage />,
+              },
+              {
+                path: "ceo/contract-ratings",
+                element: <ContractRatingsPage />,
+              },
+              {
+                path: "ceo/contract-ratings/:id",
+                element: <ContractRatingsPage />,
               },
               // Job Offers — the CEO approval gate before a candidate is told
               {
