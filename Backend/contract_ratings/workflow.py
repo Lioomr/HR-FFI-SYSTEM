@@ -4,6 +4,7 @@ from core.models import WorkflowInstance
 def status_snapshot(instance):
     terminal = instance.status == "DECIDED"
     stage, role = {
+        "PENDING_HR_GATE": ("hr_gate", "hr"),
         "PENDING_CEO": ("ceo", "ceo"),
         "PENDING_RESPONSES": ("responses", ""),
         "WAITING_MANAGER": ("responses", ""),

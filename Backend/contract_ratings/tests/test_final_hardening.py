@@ -19,7 +19,7 @@ from core.models import DelegationRule
 from employees.contract_expiry import ensure_contract_decision
 from employees.models import ContractDecision, EmployeeProfile
 
-from .conftest import answers
+from .conftest import answers, rated_cycle
 from .test_final_phase2 import pending_ceo
 
 pytestmark = pytest.mark.django_db
@@ -39,7 +39,7 @@ def delegate(world, role):
 def test_workflow_delegates_can_perform_the_delegated_action(world, role):
     delegate(world, role)
     if role == "manager":
-        rating, _ = ensure_contract_rating(world.profile)
+        rating = rated_cycle(world)
         result = submit_manager_response(rating.pk, actor=world.outsider, criterion_ratings=answers())
         assert result.manager_response.submitted_by == world.outsider
     elif role == "hr":
@@ -54,7 +54,7 @@ def test_workflow_delegates_can_perform_the_delegated_action(world, role):
 
 
 def test_hr_self_dealing_is_blocked_when_hr_authored_manager_response(world):
-    rating, _ = ensure_contract_rating(world.profile)
+    rating = rated_cycle(world)
     submit_manager_response(rating.pk, actor=world.manager, criterion_ratings=answers())
     rating.refresh_from_db()
     rating.manager_response.submitted_by = world.hr
@@ -123,7 +123,7 @@ def test_salary_decrease_is_allowed_when_ceo_explicitly_decides_it(world):
 @pytest.mark.parametrize("action", ["manager_response", "request_hr", "ceo_decision"])
 def test_contract_snapshot_is_checked_before_mutating_actions(world, action):
     if action == "manager_response":
-        rating, _ = ensure_contract_rating(world.profile)
+        rating = rated_cycle(world)
     else:
         rating = pending_ceo(world)
     EmployeeProfile.objects.filter(pk=world.profile.pk).update(
@@ -169,7 +169,7 @@ def test_historical_rating_does_not_block_a_new_contract_cycle(world):
 
 
 def test_unauthenticated_and_unrelated_users_cannot_use_action_routes(world):
-    rating, _ = ensure_contract_rating(world.profile)
+    rating = rated_cycle(world)
     url = f"/contract-ratings/{rating.pk}/manager-response/"
     assert world.client.post(url, {"criterion_ratings": answers()}, format="json").status_code == 401
     world.client.force_authenticate(world.outsider)

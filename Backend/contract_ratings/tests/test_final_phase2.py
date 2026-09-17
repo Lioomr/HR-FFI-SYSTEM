@@ -4,11 +4,12 @@ from unittest.mock import patch
 
 import pytest
 from django.contrib.auth.models import Group
-from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from audit.models import AuditLog
+from contract_ratings.criteria import CRITERIA
 from contract_ratings.models import ContractRating, ContractRatingResponse
+from contract_ratings.pdf import build_contract_rating_pdf
 from contract_ratings.serializers import RETURN_TO_BOTH, RETURN_TO_EMPLOYEE, RETURN_TO_MANAGER
 from contract_ratings.services import (
     apply_approved_salary_change,
@@ -22,13 +23,13 @@ from contract_ratings.services import (
 from core.models import WorkflowAction
 from employees.models import EmployeeProfile
 
-from .conftest import answers
+from .conftest import answers, rated_cycle
 
 pytestmark = pytest.mark.django_db
 
 
 def pending_ceo(world, *, manager_score=85, employee_score=94):
-    rating, _ = ensure_contract_rating(world.profile)
+    rating = rated_cycle(world)
     submit_manager_response(
         rating.pk,
         actor=world.manager,
@@ -107,7 +108,7 @@ def test_hr_is_coarse_by_default_and_unlocks_only_requested_rating(world):
 
 
 def pending_ceo_for_profile(world, profile, employee):
-    rating, _ = ensure_contract_rating(profile)
+    rating = rated_cycle(world, profile)
     submit_manager_response(rating.pk, actor=world.manager, criterion_ratings=answers())
     submit_employee_response(rating.pk, actor=employee, criterion_ratings=answers())
     return ContractRating.objects.get(pk=rating.pk)
@@ -310,6 +311,23 @@ def test_privileged_rater_still_gets_rater_shaped_payload(world):
     assert "manager_response" in payload
     assert "employee_response" not in payload
     assert "comparison_summary" not in payload
+
+
+def test_pdf_uses_the_requested_confidential_response(world):
+    rating = pending_ceo(world)
+    employee_response = rating.employee_response
+    first_code = CRITERIA[0]["code"]
+    employee_response.criterion_ratings[first_code]["remark"] = "employee-only-pdf"
+    employee_response.save(update_fields=["criterion_ratings"])
+    with (
+        patch("contract_ratings.pdf.load_form_assets", return_value=object()),
+        patch("contract_ratings.pdf.signature_for_user", return_value=None),
+        patch("contract_ratings.pdf.render_mapped_form", return_value=(b"pdf", {})) as render,
+    ):
+        assert build_contract_rating_pdf(rating, response=employee_response) == b"pdf"
+    values = render.call_args.args[1]
+    assert values["remark_1"] == "employee-only-pdf"
+    assert values["average"] == str(employee_response.average_score)
 
 
 def test_final_api_routes_replace_hr_review_and_return_contract_summary(world):

@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.utils import timezone
 from rest_framework import serializers
 
+from core.permissions import get_role
 from core.services import get_workflow_snapshot_read_only
 from employees.contract_expiry import contract_terms_snapshot
 from employees.models import ContractDecision
@@ -20,6 +21,10 @@ CEO_DECISION_CHOICES = [
     (RETURN_TO_EMPLOYEE, "Return to employee"),
     (RETURN_TO_BOTH, "Return to both"),
 ]
+
+
+class HrGateWriteSerializer(serializers.Serializer):
+    rating_mode = serializers.ChoiceField(choices=ContractRating.RatingMode.choices)
 
 
 class ContractRatingResponseWriteSerializer(serializers.Serializer):
@@ -107,6 +112,9 @@ class ContractRatingReadSerializer(serializers.ModelSerializer):
             "contract_decision",
             "company",
             "status",
+            "rating_mode",
+            "hr_gate_decided_by",
+            "hr_gate_decided_at",
             "manager_response",
             "employee_response",
             "manager_at_creation",
@@ -148,6 +156,7 @@ class ContractRatingReadSerializer(serializers.ModelSerializer):
         header = {
             "id": obj.id,
             "status": obj.status,
+            "rating_mode": obj.rating_mode,
             "company": obj.company_id,
             "employee": {
                 "id": profile.id,
@@ -172,6 +181,14 @@ class ContractRatingReadSerializer(serializers.ModelSerializer):
         if role == "hr" and not obj.hr_comment_requested_at:
             result = dict(header)
             result["hr_comment_requested_at"] = None
+            if obj.status == ContractRating.Status.PENDING_HR_GATE and get_role(actor) != "SystemAdmin":
+                result.update(
+                    {
+                        "account_connected": bool(profile.user_id),
+                        "hr_gate_decided_by": obj.hr_gate_decided_by_id,
+                        "hr_gate_decided_at": obj.hr_gate_decided_at,
+                    }
+                )
             if obj.ceo_decision:
                 result.update(
                     {
@@ -189,6 +206,10 @@ class ContractRatingReadSerializer(serializers.ModelSerializer):
                 )
             return result
         result = {**super().to_representation(obj), **header}
+        if obj.rating_mode == ContractRating.RatingMode.SKIP_TO_CEO:
+            result.pop("manager_response", None)
+            result.pop("employee_response", None)
+            result.pop("comparison_summary", None)
         result["workflow"] = get_workflow_snapshot_read_only(obj, actor=actor)
         result["current_terms"] = contract_terms_snapshot(profile)
         result["contract_date"] = profile.contract_date.isoformat() if profile.contract_date else None

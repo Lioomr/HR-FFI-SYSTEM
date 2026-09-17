@@ -16,7 +16,12 @@ from .criteria import CRITERIA, GRADE_RANGES
 from .models import ContractRating
 from .pdf import build_contract_rating_pdf
 from .permissions import viewer_role
-from .serializers import CeoDecisionWriteSerializer, ContractRatingReadSerializer, HrCommentWriteSerializer
+from .serializers import (
+    CeoDecisionWriteSerializer,
+    ContractRatingReadSerializer,
+    HrCommentWriteSerializer,
+    HrGateWriteSerializer,
+)
 
 
 class ContractRatingViewSet(viewsets.ReadOnlyModelViewSet):
@@ -41,7 +46,9 @@ class ContractRatingViewSet(viewsets.ReadOnlyModelViewSet):
             ),
             self.request,
         )
-        scope = Q(employee_profile__user=user) | manager_scope_q(user, employee_prefix="employee_profile__")
+        scope = (Q(employee_profile__user=user) | manager_scope_q(user, employee_prefix="employee_profile__")) & Q(
+            rating_mode=ContractRating.RatingMode.RATE
+        )
         if is_hr_workflow_approver_user(user):
             return qs
         if is_department_ceo_approver_user(user):
@@ -109,6 +116,10 @@ class ContractRatingViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=True, methods=["post"], url_path="employee-response")
     def employee_response(self, request, pk=None):
         return self._mutate(request, services.submit_employee_response)
+
+    @action(detail=True, methods=["post"], url_path="hr-gate")
+    def hr_gate(self, request, pk=None):
+        return self._mutate(request, services.submit_hr_gate_decision, HrGateWriteSerializer)
 
     @action(detail=True, methods=["post"], url_path="request-hr-comment")
     def request_hr_comment(self, request, pk=None):

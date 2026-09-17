@@ -136,7 +136,10 @@ def execute_scheduled_termination(rating_id, *, today=None):
             **execution_snapshot,
         },
     )
-    _notify(rating, "termination_finalized", ["hr", "manager"])
+    audiences = ["hr"]
+    if rating.rating_mode == ContractRating.RatingMode.RATE:
+        audiences.append("manager")
+    _notify(rating, "termination_finalized", audiences)
     return rating
 
 
@@ -148,11 +151,13 @@ def _process_rating(rating_id, today, now):
     for key, entry in list(rating.notification_milestones.items()):
         if isinstance(entry, dict) and "audiences" in entry and not entry.get("sent_at"):
             _deliver(rating, key, entry)
-    if rating.status in RESPONSE_STATES | {"PENDING_CEO"} and _guard(rating, profile):
+    if rating.status in RESPONSE_STATES | {"PENDING_HR_GATE", "PENDING_CEO"} and _guard(rating, profile):
         return
     days_left = (rating.evaluation_period_to - today).days
     if days_left == 65:
-        if rating.status in RESPONSE_STATES:
+        if rating.status == ContractRating.Status.PENDING_HR_GATE:
+            notify_event(rating, "hr_gate_reminder", ["hr"], key="65_DAY_HR_GATE")
+        elif rating.rating_mode == ContractRating.RatingMode.RATE and rating.status in RESPONSE_STATES:
             pending = [
                 name
                 for name in ("manager", "employee")

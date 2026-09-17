@@ -8,7 +8,7 @@ from rest_framework.exceptions import PermissionDenied
 
 from audit.utils import audit
 from core.models import WorkflowAction
-from core.permissions import is_department_ceo_approver_user, is_hr_workflow_approver_user
+from core.permissions import get_role, is_department_ceo_approver_user, is_hr_workflow_approver_user
 from core.services.workflow_engine import (
     begin_recorded_transition,
     can_user_act_on_instance,
@@ -143,10 +143,58 @@ def ensure_contract_rating(profile, *, actor=None, only_if_due_on=None):
         start = begin_recorded_transition(rating, actor=actor, new_instance=True)
         _record(rating, "contract_rating_created", actor, start=start, action=WorkflowAction.Action.SUBMIT)
         if not _guard(rating, profile, actor):
-            _notify(rating, "opened", ["manager", "employee"])
-            if not get_valid_direct_manager_user(profile) or not profile.user_id:
-                _notify(rating, "missing_rater", ["hr"], "A valid manager or linked employee account is missing.")
+            _notify(rating, "awaiting_routing", ["hr"])
     return rating, created
+
+
+@transaction.atomic
+def submit_hr_gate_decision(rating_id, *, actor, rating_mode):
+    rating, profile = _locked(rating_id)
+    require_company_access(actor, rating)
+    if not is_hr_workflow_approver_user(actor) or get_role(actor) == "SystemAdmin":
+        raise PermissionDenied("Only HR approvers may route a rating.")
+    _reject_self_dealing(rating, profile, actor)
+    if rating.status != S.PENDING_HR_GATE or rating.rating_mode:
+        raise ValueError("The HR routing decision has already been made.")
+    workflow = sync_workflow(rating, actor=actor)
+    if not can_user_act_on_instance(actor, rating, workflow):
+        raise PermissionDenied("You cannot act on this rating.")
+    if _guard(rating, profile, actor):
+        return rating
+
+    from .serializers import HrGateWriteSerializer
+
+    serializer = HrGateWriteSerializer(data={"rating_mode": rating_mode})
+    serializer.is_valid(raise_exception=True)
+    mode = serializer.validated_data["rating_mode"]
+    start = begin_recorded_transition(rating, actor=actor)
+    rating.rating_mode = mode
+    rating.hr_gate_decided_by = actor
+    rating.hr_gate_decided_at = timezone.now()
+    if mode == ContractRating.RatingMode.RATE:
+        rating.status = S.PENDING_RESPONSES
+    else:
+        rating.status = S.PENDING_CEO
+        rating.salary_before_snapshot = contract_terms_snapshot(profile)
+        rating.notification_milestones = {
+            **rating.notification_milestones,
+            "ceo_reminder_at": timezone.now().isoformat(),
+        }
+    rating.save()
+    _record(
+        rating,
+        "contract_rating_hr_gate_decided",
+        actor,
+        start=start,
+        metadata={"rating_mode": mode, "account_connected": bool(profile.user_id)},
+    )
+    if mode == ContractRating.RatingMode.RATE:
+        _notify(rating, "opened", ["manager", "employee"])
+        if not get_valid_direct_manager_user(profile) or not profile.user_id:
+            _notify(rating, "missing_rater", ["hr"], "A valid manager or linked employee account is missing.")
+    else:
+        _notify(rating, "sent_directly_to_ceo", ["ceo"])
+    return rating
 
 
 def _recompute_status(rating):
@@ -173,6 +221,8 @@ def _submit_response(rating_id, actor, data, rater_type):
             raise PermissionDenied("Only the current manager or their delegate may submit.")
     elif profile.user_id != actor.id:
         raise PermissionDenied("Only the rated employee may submit.")
+    if rating.rating_mode != ContractRating.RatingMode.RATE:
+        raise ValueError("This rating was not routed for manager and employee evaluation.")
     if rating.status not in RESPONSE_STATES:
         raise ValueError("This rating is not accepting responses.")
     if _guard(rating, profile, actor):
@@ -342,6 +392,8 @@ def submit_ceo_decision(
     serializer.is_valid(raise_exception=True)
     data = serializer.validated_data
     targets = _return_targets(ceo_decision)
+    if targets and rating.rating_mode == ContractRating.RatingMode.SKIP_TO_CEO:
+        raise ValueError("A rating sent directly to the CEO has no responses to return.")
     start = begin_recorded_transition(rating, actor=actor)
 
     if targets:
@@ -417,7 +469,10 @@ def submit_ceo_decision(
             actor,
             metadata={"contract_expiry": str(profile.contract_expiry)},
         )
-    _notify(rating, f"ceo_decided_{event_suffix}", ["hr", "manager"], rating.ceo_comment)
+    audiences = ["hr"]
+    if rating.rating_mode == ContractRating.RatingMode.RATE:
+        audiences.append("manager")
+    _notify(rating, f"ceo_decided_{event_suffix}", audiences, rating.ceo_comment)
     return rating
 
 
