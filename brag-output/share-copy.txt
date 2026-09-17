@@ -1,0 +1,1 @@
+Filing sick leave in FFI HR, start to finish: pick Sick Leave, pick your dates, attach the medical report (it will not submit without one), hit Submit. 120 days a year — 30 at full pay, 60 at half, 30 unpaid.

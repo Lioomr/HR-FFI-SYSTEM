@@ -1,0 +1,3 @@
+# Local render scratch — regenerate with `npx hyperframes` inside composition/
+composition/node_modules/
+composition/snapshots/
