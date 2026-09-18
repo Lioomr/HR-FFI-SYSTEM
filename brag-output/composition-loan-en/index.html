@@ -1,0 +1,844 @@
+<!doctype html>
+<html lang="en" data-resolution="landscape">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>FFI HR — Request a Loan</title>
+    <script src="vendor/gsap.min.js"></script>
+    <style>
+      /* Rubik is the app's Latin face (FrontEnd/src/index.css --font-en) */
+      @font-face {
+        font-family: "Rubik";
+        src: url("assets/fonts/rubik-latin.woff2") format("woff2");
+        font-weight: 300 900;
+        font-style: normal;
+        font-display: block;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #0d1117;
+      }
+
+      :root {
+        /* Pulled verbatim from FrontEnd/src/index.css :root tokens */
+        --brand-primary: #f97316;
+        --brand-on-light: #c2410c; /* AA-safe orange for text on white */
+        --sidebar-bg: #0d1117;
+        --surface-0: #ffffff;
+        --surface-1: #f8faff;
+        --surface-3: #e2e8f0;
+        --text-primary: #0f172a;
+        --text-secondary: #64748b;
+      }
+
+      #root {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        font-family: "Rubik", system-ui, sans-serif;
+        background: var(--surface-1);
+      }
+
+      .clip {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+      }
+
+      /* ---------- dark frames ---------- */
+      .dark {
+        background: var(--sidebar-bg);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .hook-kicker {
+        font-size: 28px;
+        font-weight: 500;
+        color: var(--brand-primary);
+        margin-bottom: 30px;
+      }
+
+      .hook-title {
+        font-size: 128px;
+        font-weight: 700;
+        color: #ffffff;
+        line-height: 1.15;
+      }
+
+      .hook-sub {
+        margin-top: 34px;
+        font-size: 44px;
+        font-weight: 400;
+        color: #cbd5e1;
+      }
+
+      .hook-sub b {
+        color: var(--brand-primary);
+        font-weight: 600;
+      }
+
+      /* ---------- app chrome (light frames) ---------- */
+      .app {
+        display: flex;
+        width: 100%;
+        height: 100%;
+        background: var(--surface-1);
+      }
+
+      .sidebar {
+        width: 132px;
+        height: 100%;
+        background: var(--sidebar-bg);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding-top: 46px;
+        gap: 26px;
+        flex: 0 0 132px;
+      }
+
+      .sidebar .mark {
+        font-size: 25px;
+        font-weight: 700;
+        color: var(--brand-primary);
+      }
+
+      .nav-dot {
+        width: 56px;
+        height: 10px;
+        border-radius: 5px;
+        background: rgba(255, 255, 255, 0.14);
+      }
+
+      .nav-dot.active {
+        background: var(--brand-primary);
+      }
+
+      .stage {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 0 70px;
+      }
+
+      .card {
+        width: 1180px;
+        background: var(--surface-0);
+        border-radius: 16px;
+        box-shadow: 0 24px 60px rgba(15, 23, 42, 0.13);
+        padding: 52px 62px 58px;
+      }
+
+      .card-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        margin-bottom: 36px;
+      }
+
+      .card-title {
+        font-size: 44px;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+
+      .card-sub {
+        margin-top: 10px;
+        font-size: 25px;
+        color: var(--text-secondary);
+      }
+
+      .step-pill {
+        background: var(--sidebar-bg);
+        color: var(--brand-primary);
+        font-size: 24px;
+        font-weight: 600;
+        padding: 14px 28px;
+        border-radius: 999px;
+        white-space: nowrap;
+      }
+
+      /* the two limit lines the real form prints above the fields */
+      .limits {
+        display: flex;
+        gap: 18px;
+        margin-bottom: 34px;
+      }
+
+      .limit {
+        flex: 1;
+        background: var(--surface-1);
+        border: 2px solid var(--surface-3);
+        border-radius: 8px;
+        padding: 18px 24px;
+      }
+
+      .limit-k {
+        font-size: 21px;
+        color: var(--text-secondary);
+        margin-bottom: 6px;
+      }
+
+      .limit-v {
+        font-size: 33px;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+
+      .field-label {
+        font-size: 26px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        margin-bottom: 14px;
+      }
+
+      .control {
+        height: 78px;
+        border: 2px solid var(--surface-3);
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        padding: 0 26px;
+        font-size: 28px;
+        color: var(--text-primary);
+        background: #ffffff;
+        position: relative;
+      }
+
+      .control.muted {
+        color: #9aa4b2;
+      }
+
+      .caret {
+        margin-inline-start: auto;
+        color: #6c7786; /* WCAG AA on white */
+        font-size: 22px;
+      }
+
+      .dropdown {
+        position: absolute;
+        top: 90px;
+        inset-inline-start: 0;
+        width: 100%;
+        background: #ffffff;
+        border: 2px solid var(--surface-3);
+        border-radius: 10px;
+        box-shadow: 0 18px 44px rgba(15, 23, 42, 0.16);
+        padding: 10px;
+        z-index: 5;
+        transform-origin: top center;
+      }
+
+      .opt {
+        height: 62px;
+        display: flex;
+        align-items: center;
+        padding: 0 18px;
+        font-size: 26px;
+        color: var(--text-primary);
+        border-radius: 8px;
+      }
+
+      .two-fields {
+        display: flex;
+        gap: 22px;
+      }
+
+      .two-fields > div {
+        flex: 1;
+      }
+
+      /* the monthly deduction result — the number people actually care about */
+      .result-panel {
+        margin-top: 28px;
+        background: #f6ffed;
+        border: 2px solid #b7eb8f;
+        border-radius: 8px;
+        padding: 26px 30px;
+        display: flex;
+        align-items: baseline;
+        gap: 16px;
+      }
+
+      .result-k {
+        font-size: 28px;
+        color: var(--text-primary);
+        font-weight: 600;
+      }
+
+      .result-v {
+        font-size: 40px;
+        font-weight: 700;
+        color: #135200;
+      }
+
+      /* ---------- scene 4: the two loan types ---------- */
+      .compare-head {
+        font-size: 52px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 46px;
+        text-align: center;
+      }
+
+      .compare {
+        display: flex;
+        gap: 34px;
+      }
+
+      .type-card {
+        width: 560px;
+        background: var(--surface-0);
+        border: 2px solid var(--surface-3);
+        border-radius: 16px;
+        box-shadow: 0 18px 44px rgba(15, 23, 42, 0.1);
+        padding: 40px 42px 44px;
+      }
+
+      .type-card.accent {
+        border-color: var(--brand-primary);
+      }
+
+      .type-name {
+        font-size: 38px;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 8px;
+      }
+
+      .type-cap {
+        font-size: 29px;
+        font-weight: 600;
+        color: var(--brand-on-light);
+        margin-bottom: 26px;
+      }
+
+      .type-list {
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+
+      .type-list li {
+        font-size: 25px;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+      }
+
+      .bullet {
+        color: var(--brand-on-light); /* --brand-primary is under 3:1 on white here */
+        font-size: 25px;
+        line-height: 1.4;
+      }
+
+      /* ---------- scene 5: submit + chain ---------- */
+      .chain-wrap {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 44px;
+      }
+
+      .btn-primary {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 92px;
+        padding: 0 58px;
+        border-radius: 10px;
+        background: var(--brand-on-light);
+        color: #ffffff;
+        font-size: 34px;
+        font-weight: 600;
+      }
+
+      .chain {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+      }
+
+      .chip {
+        padding: 18px 28px;
+        border-radius: 999px;
+        font-size: 26px;
+        font-weight: 600;
+        border: 2px solid;
+        white-space: nowrap;
+      }
+
+      .chip.stage {
+        background: #f0f7ff;
+        border-color: #91caff;
+        color: #0050b3;
+      }
+
+      .chip.decide {
+        background: #fff7e6;
+        border-color: #ffd591;
+        color: #ad4e00;
+      }
+
+      .chip.done {
+        background: #f6ffed;
+        border-color: #b7eb8f;
+        color: #135200;
+      }
+
+      .arrow {
+        font-size: 30px;
+        color: #64748b;
+      }
+
+      .chain-note {
+        font-size: 29px;
+        color: var(--text-primary);
+        background: #fff7ed;
+        border-inline-start: 6px solid var(--brand-primary);
+        border-radius: 8px;
+        padding: 18px 26px;
+      }
+
+      .chain-note b {
+        color: var(--brand-on-light);
+        font-weight: 600;
+      }
+
+      /* ---------- scene 6: outro ---------- */
+      .outro-head {
+        font-size: 54px;
+        font-weight: 600;
+        color: #ffffff;
+        margin-bottom: 18px;
+        text-align: center;
+      }
+
+      .outro-sub {
+        font-size: 30px;
+        color: #94a3b8;
+        margin-bottom: 54px;
+        text-align: center;
+      }
+
+      /* what the employee sees on the request once it is approved */
+      .outro-facts {
+        display: flex;
+        gap: 26px;
+      }
+
+      .fact-card {
+        background: #161b22;
+        border: 2px solid rgba(255, 255, 255, 0.09);
+        border-radius: 14px;
+        padding: 26px 34px;
+      }
+
+      .fact-k {
+        font-size: 23px;
+        color: #94a3b8;
+        margin-bottom: 10px;
+      }
+
+      .fact-v {
+        font-size: 36px;
+        font-weight: 700;
+        color: var(--brand-primary);
+      }
+
+      .outro {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 96px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 20px;
+      }
+
+      .logo-plate {
+        background: #ffffff;
+        border-radius: 14px;
+        padding: 20px 32px;
+        display: flex;
+        align-items: center;
+      }
+
+      .logo-plate img {
+        width: 360px;
+        height: auto;
+        display: block;
+      }
+
+      .outro-line {
+        font-size: 32px;
+        font-weight: 500;
+        color: #ffffff;
+      }
+
+      .cursor {
+        position: absolute;
+        width: 40px;
+        height: 40px;
+        z-index: 40;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="24.8"
+      data-width="1920"
+      data-height="1080"
+    >
+      <!-- ============ SCENE 1 — HOOK (0.0 – 3.3) ============ -->
+      <section id="s1" class="clip dark" data-start="0" data-duration="3.3" data-track-index="0">
+        <div id="s1-kicker" class="hook-kicker">FFI HR &middot; Employee Guide</div>
+        <h1 id="s1-title" class="hook-title">Request Loan</h1>
+        <div id="s1-sub" class="hook-sub"><b>Two</b> loan types. Two different limits.</div>
+      </section>
+
+      <!-- ============ SCENE 2 — STEP 1: TYPE + LIMITS (3.3 – 7.5) ============ -->
+      <section id="s2" class="clip" data-start="3.3" data-duration="4.2" data-track-index="1">
+        <div class="app">
+          <div class="sidebar">
+            <div class="mark">FFI</div>
+            <div class="nav-dot"></div>
+            <div class="nav-dot"></div>
+            <div class="nav-dot active"></div>
+            <div class="nav-dot"></div>
+          </div>
+          <div class="stage">
+            <div id="s2-card" class="card">
+              <div class="card-head">
+                <div>
+                  <div class="card-title">Request Loan</div>
+                  <div class="card-sub">Submit a loan request up to your basic salary limit.</div>
+                </div>
+                <div class="step-pill">Step 1 of 3</div>
+              </div>
+
+              <div id="s2-limits" class="limits">
+                <div class="limit">
+                  <div class="limit-k">Basic Salary Limit</div>
+                  <div class="limit-v">SAR 8,000</div>
+                </div>
+                <div class="limit">
+                  <div class="limit-k">Open Loan Limit (25% of basic salary)</div>
+                  <div class="limit-v">SAR 2,000</div>
+                </div>
+              </div>
+
+              <div class="field-label">Loan Type</div>
+              <div id="s2-select" class="control muted">
+                <span id="s2-placeholder">Please select loan type</span>
+                <span id="s2-value" style="position: absolute; inset-inline-start: 26px; color: #0f172a"
+                  >Installment Loan</span
+                >
+                <span class="caret">&#9662;</span>
+
+                <div id="s2-dropdown" class="dropdown">
+                  <div class="opt">Open Loan</div>
+                  <div id="s2-opt-inst" class="opt">Installment Loan</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <svg id="s2-cursor" class="cursor" viewBox="0 0 24 24" style="left: 980px; top: 620px">
+          <path d="M4 2 L4 20 L9 15.5 L12 22 L15 20.5 L12 14.5 L19 14 Z" fill="#0f172a" stroke="#fff" stroke-width="1.2" />
+        </svg>
+      </section>
+
+      <!-- ============ SCENE 3 — STEP 2: AMOUNT + MONTHS (7.5 – 11.0) ============ -->
+      <section id="s3" class="clip" data-start="7.5" data-duration="3.5" data-track-index="2">
+        <div class="app">
+          <div class="sidebar">
+            <div class="mark">FFI</div>
+            <div class="nav-dot"></div>
+            <div class="nav-dot"></div>
+            <div class="nav-dot active"></div>
+            <div class="nav-dot"></div>
+          </div>
+          <div class="stage">
+            <div id="s3-card" class="card">
+              <div class="card-head">
+                <div>
+                  <div class="card-title">Request Loan</div>
+                  <div class="card-sub">Installment Loan</div>
+                </div>
+                <div class="step-pill">Step 2 of 3</div>
+              </div>
+
+              <div class="two-fields">
+                <div>
+                  <div class="field-label">Loan Amount</div>
+                  <div class="control"><span id="s3-amount">SAR 6,000</span></div>
+                </div>
+                <div>
+                  <div class="field-label">Installment Months</div>
+                  <div class="control"><span id="s3-months">6 months</span></div>
+                </div>
+              </div>
+
+              <div id="s3-result" class="result-panel">
+                <span class="result-k">Monthly payroll deduction:</span>
+                <span class="result-v">SAR 1,000</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ SCENE 4 — THE TWO TYPES (11.0 – 15.8) ============ -->
+      <section id="s4" class="clip" data-start="11" data-duration="4.8" data-track-index="3">
+        <div class="app">
+          <div class="sidebar">
+            <div class="mark">FFI</div>
+            <div class="nav-dot"></div>
+            <div class="nav-dot"></div>
+            <div class="nav-dot active"></div>
+            <div class="nav-dot"></div>
+          </div>
+          <div class="stage">
+            <div id="s4-head" class="compare-head">Which one fits you?</div>
+            <div class="compare">
+              <div id="s4-open" class="type-card">
+                <div class="type-name">Open Loan</div>
+                <div class="type-cap">Up to 25% of basic salary</div>
+                <ul class="type-list">
+                  <li><span class="bullet">&bull;</span><span>Deducted in a single payroll run</span></li>
+                  <li><span class="bullet">&bull;</span><span>No installments</span></li>
+                </ul>
+              </div>
+              <div id="s4-inst" class="type-card accent">
+                <div class="type-name">Installment Loan</div>
+                <div class="type-cap">Up to one full basic salary</div>
+                <ul class="type-list">
+                  <li><span class="bullet">&bull;</span><span>Repaid over 1 to 10 months</span></li>
+                  <li><span class="bullet">&bull;</span><span>After 6 months of service</span></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ SCENE 5 — SUBMIT + APPROVAL CHAIN (15.8 – 21.4) ============ -->
+      <section id="s5" class="clip" data-start="15.8" data-duration="5.6" data-track-index="4">
+        <div class="app">
+          <div class="sidebar">
+            <div class="mark">FFI</div>
+            <div class="nav-dot"></div>
+            <div class="nav-dot"></div>
+            <div class="nav-dot active"></div>
+            <div class="nav-dot"></div>
+          </div>
+          <div class="stage">
+            <div class="chain-wrap">
+              <div id="s5-btn" class="btn-primary">Submit Request</div>
+              <div class="chain">
+                <div id="s5-c1" class="chip stage">Manager Review</div>
+                <div id="s5-a1" class="arrow">&rarr;</div>
+                <div id="s5-c2" class="chip stage">HR Review</div>
+                <div id="s5-a2" class="arrow">&rarr;</div>
+                <div id="s5-c3" class="chip decide">CFO Review</div>
+                <div id="s5-a3" class="arrow">&rarr;</div>
+                <div id="s5-c4" class="chip done">Disbursement</div>
+              </div>
+              <div id="s5-note" class="chain-note">
+                HR only <b>recommends</b> &mdash; the CFO makes the final decision.
+              </div>
+            </div>
+          </div>
+        </div>
+        <svg id="s5-cursor" class="cursor" viewBox="0 0 24 24" style="left: 1090px; top: 300px">
+          <path d="M4 2 L4 20 L9 15.5 L12 22 L15 20.5 L12 14.5 L19 14 Z" fill="#0f172a" stroke="#fff" stroke-width="1.2" />
+        </svg>
+      </section>
+
+      <!-- ============ SCENE 6 — REPAYMENT + OUTRO (21.4 – 24.8) ============ -->
+      <section id="s6" class="clip dark" data-start="21.4" data-duration="3.4" data-track-index="5">
+        <div id="s6-head" class="outro-head">Repayment is automatic</div>
+        <div id="s6-sub" class="outro-sub">The amount is deducted from your payroll in the target period.</div>
+        <div class="outro-facts">
+          <div id="s6-f1" class="fact-card">
+            <div class="fact-k">Approved Amount</div>
+            <div class="fact-v">SAR 6,000</div>
+          </div>
+          <div id="s6-f2" class="fact-card">
+            <div class="fact-k">Target Deduction Period</div>
+            <div class="fact-v">10 / 2026</div>
+          </div>
+        </div>
+        <div id="s6-outro" class="outro">
+          <div class="logo-plate">
+            <img src="assets/img/ffi-logo.png" alt="Fathi Fouad Itani Contracting Co." />
+          </div>
+          <div class="outro-line">Loans, handled.</div>
+        </div>
+      </section>
+
+      <!-- ============ AUDIO ============ -->
+      <audio
+        id="bgm"
+        src="assets/music/happy-beats-business-moves-vol-10-by-ende-dot-app.mp3"
+        data-start="0"
+        data-duration="24.8"
+        data-track-index="10"
+        data-volume="0.9"
+      ></audio>
+
+      <!-- scene 2: dropdown select -->
+      <audio id="sfx-click-type" src="assets/sfx/interface/click_003.ogg" data-start="5.19" data-track-index="11" data-volume="0.84"></audio>
+      <!-- scene 3: monthly deduction result -->
+      <audio id="sfx-result" src="assets/sfx/impact/impactSoft_medium_001.ogg" data-start="9.29" data-track-index="12" data-volume="0.75"></audio>
+      <!-- scene 4: the two type cards -->
+      <audio id="sfx-card1" src="assets/sfx/impact/impactSoft_medium_002.ogg" data-start="11.47" data-track-index="13" data-volume="0.62"></audio>
+      <audio id="sfx-card2" src="assets/sfx/impact/impactSoft_medium_003.ogg" data-start="12.56" data-track-index="14" data-volume="0.62"></audio>
+      <!-- scene 5: submit press, then the four chain stages -->
+      <audio id="sfx-submit" src="assets/sfx/ui/click2.ogg" data-start="16.38" data-track-index="15" data-volume="0.84"></audio>
+      <audio id="sfx-chip1" src="assets/sfx/impact/impactSoft_medium_004.ogg" data-start="16.93" data-track-index="16" data-volume="0.55"></audio>
+      <audio id="sfx-chip2" src="assets/sfx/impact/impactSoft_medium_003.ogg" data-start="18.01" data-track-index="17" data-volume="0.55"></audio>
+      <audio id="sfx-chip3" src="assets/sfx/impact/impactSoft_medium_002.ogg" data-start="19.1" data-track-index="18" data-volume="0.55"></audio>
+      <audio id="sfx-chip4" src="assets/sfx/impact/impactBell_heavy_000.ogg" data-start="20.19" data-track-index="19" data-volume="0.8"></audio>
+      <!-- scene 6: logo -->
+      <audio id="sfx-logo" src="assets/sfx/impact/impactSoft_medium_000.ogg" data-start="23.46" data-track-index="20" data-volume="0.75"></audio>
+    </div>
+
+    <script>
+      /*
+       * FFI HR — Loan request tutorial, English.
+       * Beat/cue source: brag skill preset for
+       * happy-beats-business-moves-vol-10 (109.96 BPM, beat grid ~0.545s).
+       * Readable sequences snap to EVERY OTHER beat (~1.09s apart) so each line
+       * clears the reading floor; only major payoffs lock to strong cues.
+       */
+      const build = () => {
+        const tl = gsap.timeline({ paused: true });
+        const EASE = "power3.out";
+
+        /* ---------- Scene 1 — hook (0.0 – 3.3) ---------- */
+        // beat-locked: 0.27s (strong cue)
+        tl.fromTo("#s1-kicker", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.45, ease: EASE }, 0.05);
+        tl.fromTo("#s1-title", { opacity: 0, y: 46 }, { opacity: 1, y: 0, duration: 0.5, ease: EASE }, 0.27);
+        tl.fromTo("#s1-sub", { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: 0.45, ease: EASE }, 0.82);
+        tl.to(["#s1-kicker", "#s1-title", "#s1-sub"], { opacity: 0, duration: 0.25 }, 3.05);
+
+        /* ---------- Scene 2 — step 1: type + limits (3.3 – 7.5) ---------- */
+        gsap.set("#s2-dropdown", { opacity: 0, scaleY: 0.6 });
+        gsap.set("#s2-value", { opacity: 0 });
+        gsap.set("#s2-limits", { opacity: 0 });
+        gsap.set("#s2-opt-inst", { backgroundColor: "rgba(249,115,22,0)" });
+
+        tl.fromTo("#s2-card", { opacity: 0, y: 44 }, { opacity: 1, y: 0, duration: 0.45, ease: EASE }, 3.3);
+        // the two limits are the first thing the real form shows — settled 3.55 → 7.5
+        tl.fromTo("#s2-limits", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.4, ease: EASE }, 3.55);
+        // cursor to the select; dropdown opens on a strong cue (4.64s)
+        tl.fromTo("#s2-cursor", { x: 0, y: 0 }, { x: -110, y: -40, duration: 0.55, ease: "power2.inOut" }, 4.0);
+        tl.to("#s2-select", { borderColor: "#f97316", duration: 0.2 }, 4.55);
+        tl.to("#s2-dropdown", { opacity: 1, scaleY: 1, duration: 0.28, ease: EASE }, 4.64);
+        tl.to("#s2-cursor", { x: -150, y: 95, duration: 0.4, ease: "power2.inOut" }, 4.75);
+        // selection lands on the next beat (5.19s)
+        tl.to("#s2-opt-inst", { backgroundColor: "rgba(249,115,22,0.12)", color: "#c2410c", duration: 0.15 }, 5.1);
+        tl.to("#s2-cursor", { scale: 0.82, duration: 0.09, yoyo: true, repeat: 1 }, 5.19);
+        tl.to("#s2-dropdown", { opacity: 0, scaleY: 0.7, duration: 0.22 }, 5.33);
+        tl.to("#s2-placeholder", { opacity: 0, duration: 0.18 }, 5.33);
+        tl.to("#s2-value", { opacity: 1, duration: 0.22 }, 5.39);
+        tl.to("#s2-cursor", { opacity: 0, duration: 0.25 }, 5.5);
+        tl.to("#s2-card", { opacity: 0, y: -26, duration: 0.3 }, 7.2);
+
+        /* ---------- Scene 3 — step 2: amount + months (7.5 – 11.0) ---------- */
+        gsap.set(["#s3-amount", "#s3-months"], { opacity: 0 });
+        gsap.set("#s3-result", { opacity: 0 });
+        tl.fromTo("#s3-card", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.4, ease: EASE }, 7.5);
+        // beat: 7.79s / 8.22s — the two inputs fill in
+        tl.to("#s3-amount", { opacity: 1, duration: 0.3, ease: EASE }, 7.79);
+        tl.to("#s3-months", { opacity: 1, duration: 0.3, ease: EASE }, 8.22);
+        // beat-locked: 9.29s — the monthly deduction is the payoff of this scene
+        // settled 9.29 → 11.0 = 1.71s
+        tl.fromTo("#s3-result", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.38, ease: EASE }, 9.29);
+        tl.to("#s3-card", { opacity: 0, y: -26, duration: 0.3 }, 10.7);
+
+        /* ---------- Scene 4 — the two loan types (11.0 – 15.8) ---------- */
+        gsap.set(["#s4-open", "#s4-inst"], { opacity: 0 });
+        tl.fromTo("#s4-head", { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: 0.38, ease: EASE }, 11.02);
+        // beat-grid, every OTHER beat — each card carries three readable lines,
+        // so the pair holds together from 12.56 to 15.8 (3.24s)
+        tl.fromTo("#s4-open", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.4, ease: EASE }, 11.47);
+        tl.fromTo("#s4-inst", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.4, ease: EASE }, 12.56);
+        tl.to(["#s4-head", "#s4-open", "#s4-inst"], { opacity: 0, duration: 0.3 }, 15.5);
+
+        /* ---------- Scene 5 — submit + approval chain (15.8 – 21.4) ---------- */
+        gsap.set(["#s5-c1", "#s5-c2", "#s5-c3", "#s5-c4", "#s5-a1", "#s5-a2", "#s5-a3"], { opacity: 0 });
+        gsap.set("#s5-note", { opacity: 0 });
+        tl.fromTo("#s5-btn", { opacity: 0, y: 34 }, { opacity: 1, y: 0, duration: 0.4, ease: EASE }, 15.82);
+        tl.fromTo("#s5-cursor", { x: 0, y: 0 }, { x: -70, y: 30, duration: 0.4, ease: "power2.inOut" }, 15.9);
+        // the press
+        tl.to("#s5-btn", { scale: 0.96, duration: 0.1, yoyo: true, repeat: 1 }, 16.38);
+        tl.to("#s5-cursor", { scale: 0.82, duration: 0.09, yoyo: true, repeat: 1 }, 16.38);
+        tl.to("#s5-cursor", { opacity: 0, duration: 0.2 }, 16.6);
+        // beat-grid, every OTHER beat: 16.93 / 18.01 / 19.10 / 20.19 (~1.09s apart)
+        tl.fromTo("#s5-c1", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.3, ease: EASE }, 16.93);
+        tl.to("#s5-a1", { opacity: 1, duration: 0.22 }, 17.6);
+        tl.fromTo("#s5-c2", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.3, ease: EASE }, 18.01);
+        tl.to("#s5-a2", { opacity: 1, duration: 0.22 }, 18.7);
+        tl.fromTo("#s5-c3", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.3, ease: EASE }, 19.1);
+        tl.to("#s5-a3", { opacity: 1, duration: 0.22 }, 19.8);
+        // beat-locked: 20.19s (strong cue) — disbursement is the payoff
+        tl.fromTo("#s5-c4", { opacity: 0, y: 18, scale: 0.9 }, { opacity: 1, y: 0, scale: 1, duration: 0.36, ease: "back.out(1.7)" }, 20.19);
+        // the correction most employees need, held to the end of the scene
+        tl.fromTo("#s5-note", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.32, ease: EASE }, 17.47);
+        tl.to(["#s5-btn", "#s5-note", "#s5-c1", "#s5-c2", "#s5-c3", "#s5-c4", "#s5-a1", "#s5-a2", "#s5-a3"], { opacity: 0, duration: 0.3 }, 21.1);
+
+        /* ---------- Scene 6 — repayment + outro (21.4 – 24.8) ---------- */
+        gsap.set("#s6-outro", { opacity: 0 });
+        tl.fromTo("#s6-head", { opacity: 0, y: 26 }, { opacity: 1, y: 0, duration: 0.4, ease: EASE }, 21.83);
+        tl.fromTo("#s6-sub", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.35, ease: EASE }, 22.37);
+        // beat: 22.92s — the two fields the approved request actually shows.
+        // settled 22.92 → 24.8 = 1.88s, and they hold under the logo as the final frame
+        gsap.set(["#s6-f1", "#s6-f2"], { opacity: 0 });
+        tl.fromTo("#s6-f1", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.36, ease: EASE }, 22.92);
+        tl.fromTo("#s6-f2", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.36, ease: EASE }, 23.1);
+        // beat: 23.46s — logo rides in, everything holds to the end
+        tl.fromTo("#s6-outro", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4, ease: EASE }, 23.46);
+
+        /* ---------- Music bed ---------- */
+        tl.fromTo("#bgm", { volume: 0 }, { volume: 0.9, duration: 0.9 }, 0);
+        tl.to("#bgm", { volume: 1.0, duration: 0.7 }, 21.4); // small lift for the outro
+        tl.to("#bgm", { volume: 0, duration: 1.1 }, 23.5); // fade under the logo
+
+        window.__timelines["main"] = tl;
+        tl.seek(0);
+      };
+
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(build);
+      } else {
+        build();
+      }
+    </script>
+  </body>
+</html>

@@ -1,8 +1,12 @@
-# Sick Leave tutorial video
+# FFI HR tutorial videos
 
-A 24.8s employee-facing walkthrough of the Sick Leave request flow, generated with
-the [`/brag`](https://github.com/latent-spaces/brag) skill and rendered by
-[Hyperframes](https://hyperframes.heygen.com/).
+Short employee-facing walkthroughs, generated with the
+[`/brag`](https://github.com/latent-spaces/brag) skill and rendered by
+[Hyperframes](https://hyperframes.heygen.com/). Each topic ships an English and an
+Arabic (RTL) cut that share one timeline, so a timestamp in one lands on the same
+beat in the other.
+
+## Sick leave
 
 | File | What it is |
 |---|---|
@@ -15,6 +19,37 @@ the [`/brag`](https://github.com/latent-spaces/brag) skill and rendered by
 | `share-copy.txt` | One-paragraph caption for posting the video internally. |
 | `composition/` | The Hyperframes project for the English cut. |
 | `composition-ar/` | The Hyperframes project for the Arabic cut. |
+
+## Loans
+
+| File | What it is |
+|---|---|
+| `brag-loan.mp4` / `brag-loan.jpg` | English cut (24.8s) and its poster. |
+| `brag-loan-ar.mp4` / `brag-loan-ar.jpg` | Arabic RTL cut and its poster. |
+| `composition-loan-en/` | Hyperframes project for the English loan cut. |
+| `composition-loan-ar/` | Hyperframes project for the Arabic loan cut. |
+
+Covers both loan types in one video: the limits, amount and months with the monthly
+deduction preview, an Open vs Installment comparison, the approval chain, and
+automatic payroll repayment.
+
+Verified against code, not the docs:
+
+- Open loan capped at 25% of basic salary — `Backend/loans/serializers.py:203`
+- Installment capped at one basic salary — `serializers.py:234`
+- Installment term 1–10 months — `serializers.py:177`
+- Requires 6 months of service — `serializers.py:229`
+- Monthly deduction = amount ÷ months — `RequestLoanPage.tsx:75`
+- HR only recommends; the CFO decides — `Backend/loans/views.py`
+
+> **Two open questions on the loan videos.**
+> 1. `.agents/skills/loan_management.md` says an open loan "can only be requested in
+>    the last 10 days of the month". **No such check exists in the backend** — only an
+>    unused error string, `loans.request.error.openLoanWindow`, in `translations.ts`.
+>    The rule is left out of the videos rather than teach a restriction that is not
+>    enforced. Either the check is missing or the doc line is stale.
+> 2. The CFO's `refer_to_ceo` path adds a CEO stage. It is conditional, so the videos
+>    show the common four-stage chain instead.
 
 ## Re-rendering
 
