@@ -131,3 +131,37 @@ Verified against code, not the docs:
 > leave type sets `allow_carry_over`, capped by `max_carry_over` (null = unlimited).
 > Both are per-leave-type configuration, so no fixed number could be shown truthfully.
 > Add a carry-over scene once the real settings are confirmed.
+
+## Annual leave settlements
+
+| File | What it is |
+|---|---|
+| `brag-settle.mp4` / `brag-settle.jpg` | English cut (24.8s) and its poster. |
+| `brag-settle-ar.mp4` / `brag-settle-ar.jpg` | Arabic RTL cut and its poster. |
+| `composition-settle-en/` | Hyperframes project for the English settlement cut. |
+| `composition-settle-ar/` | Hyperframes project for the Arabic settlement cut. |
+
+Covers the request window, how the payment is calculated, the pay-vs-carry-forward
+choice, the HR → CEO approval path, and the one-per-contract-year limit.
+
+Verified against code, not the docs:
+
+- Window is the final 5 days of the contract year —
+  `cycle_end - timedelta(days=4) <= today <= cycle_end`, `leaves/utils.py:584`
+- Payment = eligible whole days × salary ÷ 30 — `utils.py:664`
+- Eligible days = floor(accrued − used), fractions excluded — `utils.py:662`
+- Salary basis is `total_salary`, falling back to `basic_salary` — `utils.py:627`
+- Cannot request while an annual leave request is pending — `utils.py:618`
+- Statuses `pending_hr → pending_ceo → approved / rejected / carried_forward`,
+  resolution `pay` or `carry_forward` — `leaves/models.py:399-408`
+- One active settlement per contract year — `has_active_annual_leave_settlement`
+
+> **Two conventions worth confirming.** The daily rate divides by a flat 30, and the
+> salary it uses is `total_salary` when set and `basic_salary` otherwise. The video
+> states these as the system behaves, not as policy — check they match how payroll
+> actually settles.
+>
+> **Termination settlements are out of scope of the video.** For a terminated
+> employee the window is always open and the 6-month condition is waived
+> (`is_terminated` in `build_annual_leave_eligibility`). The cut targets current
+> employees; an end-of-service version would need its own scene.
