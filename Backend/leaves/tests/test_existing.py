@@ -471,7 +471,7 @@ class LeaveManagementTests(TestCase):
         english, arabic = _leave_type_labels(LeaveType(name="Unpaid Leave", code="UNPAID"))
 
         self.assertEqual(english, "Unpaid Leave")
-        self.assertEqual(arabic, "اجازه بدون راتب")
+        self.assertEqual(arabic, "إجازة بدون راتب")
 
     def test_approval_path_rows_include_stage_actor_names(self):
         self.emp1.full_name = "Employee One"

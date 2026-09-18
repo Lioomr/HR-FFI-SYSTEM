@@ -70,12 +70,23 @@ remaining = opening_balance + annual_quota + adjustments - used_days
 
 **Emergency Leave**: deducted from the employee's remaining Annual Leave balance; not an independent quota.
 
+**Sick Leave pay tiers** (`SICK_FULL_PAY_DAYS` / `SICK_HALF_PAY_DAYS` / `SICK_UNPAID_DAYS`
+in `leaves/utils.py`, applied in order by `_is_sick` in the pay-segment builder):
+
+| Days in the leave year | Pay |
+|---|---|
+| 1–30 | 100% |
+| 31–90 | 50% |
+| 91–120 | unpaid |
+
+That is **30 full / 60 half / 30 unpaid**, not 30/30/60. The 60 is the half-pay band.
+
 ## Leave Type Policy Defaults
 
 | Code | Days | Paid | Carry-over | Notes |
 |---|---|---|---|---|
 | ANNUAL | 21 (1.75 × completed calendar months) | Yes | Configurable | Accrues per calendar month; emergency deducted here |
-| SICK | 120 | Tiered (100%/50%/0%) | No | Requires attachment; 30/30/60 day pay tiers |
+| SICK | 120 | Tiered (100%/50%/0%) | No | Requires attachment; 30/60/30 day pay tiers (see below) |
 | EMERGENCY | 10 | Yes | No | Deducted from ANNUAL balance |
 | UNPAID | 60 | No | No | Annual overflow flows here |
 | MARRIAGE | 5 | Yes | No | Once per lifetime |

@@ -43,11 +43,11 @@ Verified against code, not the docs:
 - HR only recommends; the CFO decides — `Backend/loans/views.py`
 
 > **Two open questions on the loan videos.**
-> 1. `.agents/skills/loan_management.md` says an open loan "can only be requested in
->    the last 10 days of the month". **No such check exists in the backend** — only an
->    unused error string, `loans.request.error.openLoanWindow`, in `translations.ts`.
->    The rule is left out of the videos rather than teach a restriction that is not
->    enforced. Either the check is missing or the doc line is stale.
+> 1. `.agents/skills/loan_management.md` claimed an open loan "can only be requested in
+>    the last 10 days of the month". **No such check exists in the backend.** The doc now
+>    records the rule as unenforced instead of asserting it, and the videos leave it out.
+>    Still open: either add the check to `LoanRequestCreateSerializer.validate()`, or
+>    delete the orphaned `loans.request.error.openLoanWindow` translation keys.
 > 2. The CFO's `refer_to_ceo` path adds a CEO stage. It is conditional, so the videos
 >    show the common four-stage chain instead.
 
@@ -97,9 +97,9 @@ RTL differences are layout-only: the sidebar moves to the right, the approval ch
 right-to-left with `←` arrows, the date range puts the start date on the right, and press
 animations originate from the right edge.
 
-One deviation from `translations.ts`: it spells the unpaid leave type
-`"اجازه بدون راتب"`. The video uses the correct `"إجازة بدون راتب"`. The app string looks
-like a typo worth fixing.
+The unpaid leave type was previously misspelled `"اجازه بدون راتب"` across the app;
+the videos used the correct `"إجازة بدون راتب"` and the app strings have since been
+corrected to match (frontend translations, `leaves/views.py`, `core/error_translations.py`).
 
 > Note: `.agents/skills/leave_management.md` describes the sick pay tiers as
 > "30/30/60", which does not match the code (30 full / 60 half / 30 unpaid). The video

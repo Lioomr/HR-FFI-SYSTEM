@@ -26,7 +26,7 @@ ARABIC_ERRORS = {
     "Medical report document is required for sick leave.": "التقرير الطبي مطلوب للإجازة المرضية.",
     "Sick leave request exceeds annual maximum of 120 days.": "يتجاوز طلب الإجازة المرضية الحد الأقصى السنوي البالغ 120 يومًا.",
     "Sick leave exceeds annual maximum. Remaining: ": "تتجاوز الإجازة المرضية الحد الأقصى السنوي. المتبقي: ",
-    "Unpaid leave exceeds annual maximum. Remaining: ": "تتجاوز اجازه بدون راتب الحد الأقصى السنوي. المتبقي: ",
+    "Unpaid leave exceeds annual maximum. Remaining: ": "تتجاوز الإجازة بدون راتب الحد الأقصى السنوي. المتبقي: ",
     "Emergency leave exceeds remaining balance ": "تتجاوز إجازة الطوارئ الرصيد المتبقي ",
     "Marriage leave maximum is 5 days.": "الحد الأقصى لإجازة الزواج هو 5 أيام.",
     "Marriage leave is allowed once during service.": "يسمح بإجازة الزواج مرة واحدة فقط خلال فترة الخدمة.",

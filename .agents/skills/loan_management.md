@@ -63,8 +63,7 @@ approved              pending_disbursement
 ## Loan Types & Validation Rules
 
 **OPEN**:
-- Can only be requested in last 10 days of the month
-- Max amount: 25% of basic salary
+- Max amount: 25% of basic salary (`serializers.py`, `open_limit = basic_salary * 0.25`)
 - Deducted from current payroll run (or next if current is COMPLETED/PAID)
 - No `installment_months`
 
@@ -73,6 +72,18 @@ approved              pending_disbursement
 - Minimum 6 months service required
 - Max amount: 1× basic salary
 - Employee must have `hire_date` or `contract_date` set
+
+> **Unenforced rule — decide before relying on it.** This file previously documented
+> "OPEN loans can only be requested in the last 10 days of the month". **No such check
+> exists.** `LoanRequestCreateSerializer.validate()` enforces only the 25% cap for OPEN
+> loans, and nothing in `loans/` inspects the day of the month. The only trace of the
+> rule is an orphaned error string, `loans.request.error.openLoanWindow`, in
+> `FrontEnd/src/i18n/translations.ts` (both locales), which no code path can produce.
+>
+> Either the validation was never implemented or it was removed and its message left
+> behind. If the rule is real, it needs a check in the serializer next to the 25% cap;
+> if it is not, the orphaned translation keys should be deleted. Do not document it as
+> active behaviour until one of those happens.
 
 ## Decision Tracking Fields
 
