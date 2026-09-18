@@ -104,3 +104,30 @@ corrected to match (frontend translations, `leaves/views.py`, `core/error_transl
 > Note: `.agents/skills/leave_management.md` describes the sick pay tiers as
 > "30/30/60", which does not match the code (30 full / 60 half / 30 unpaid). The video
 > follows the code.
+
+
+## Annual leave
+
+| File | What it is |
+|---|---|
+| `brag-annual.mp4` / `brag-annual.jpg` | English cut (24.8s) and its poster. |
+| `brag-annual-ar.mp4` / `brag-annual-ar.jpg` | Arabic RTL cut and its poster. |
+| `composition-annual-en/` | Hyperframes project for the English annual cut. |
+| `composition-annual-ar/` | Hyperframes project for the Arabic annual cut. |
+
+Covers how the balance accrues, the balance panel, why "requestable" differs from
+"remaining", the approval chain, and the six-month eligibility rule.
+
+Verified against code, not the docs:
+
+- Accrual 1.75 days per completed calendar month — `leaves/utils.py:13`
+- Capped at 21 days per contract year (12 × 1.75) — `utils.py:683`
+- Usable only after 6 completed months — `ANNUAL_MINIMUM_PERIODS`, `utils.py:14`
+- `requestable_days = max(0, floor(remaining) − pending)` — `utils.py:1055`
+- Fractional remainder cannot be requested as whole days — `utils.py:1059`
+- Accrual anchored to contract date — `get_annual_accrual_details`, `utils.py:392`
+
+> **Carry-over is deliberately absent.** Unused days can roll over, but only when the
+> leave type sets `allow_carry_over`, capped by `max_carry_over` (null = unlimited).
+> Both are per-leave-type configuration, so no fixed number could be shown truthfully.
+> Add a carry-over scene once the real settings are confirmed.

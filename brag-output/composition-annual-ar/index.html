@@ -1,0 +1,850 @@
+<!doctype html>
+<html lang="ar" data-resolution="landscape">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>نظام FFI للموارد البشرية — الإجازة السنوية</title>
+    <script src="vendor/gsap.min.js"></script>
+    <style>
+      /* Readex Pro is the app's Arabic face (FrontEnd/src/index.css --font-ar) */
+      @font-face {
+        font-family: "Readex Pro";
+        src: url("assets/fonts/readexpro-arabic.woff2") format("woff2");
+        font-weight: 160 700;
+        font-style: normal;
+        font-display: block;
+        unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891,
+          U+0898-08E1, U+08E3-08FF, U+FB50-FDFF, U+FE70-FEFF;
+      }
+
+      @font-face {
+        font-family: "Readex Pro";
+        src: url("assets/fonts/readexpro-latin.woff2") format("woff2");
+        font-weight: 160 700;
+        font-style: normal;
+        font-display: block;
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+2000-206F,
+          U+2070-209F, U+20A0-20AB, U+20AD-20CF, U+2212, U+2215;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #0d1117;
+      }
+
+      :root {
+        /* Pulled verbatim from FrontEnd/src/index.css :root tokens */
+        --brand-primary: #f97316;
+        --brand-on-light: #c2410c; /* AA-safe orange for text on white */
+        --sidebar-bg: #0d1117;
+        --surface-0: #ffffff;
+        --surface-1: #f8faff;
+        --surface-3: #e2e8f0;
+        --text-primary: #0f172a;
+        --text-secondary: #64748b;
+      }
+
+      #root {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        direction: rtl;
+        font-family: "Readex Pro", system-ui, sans-serif;
+        background: var(--surface-1);
+      }
+
+      .clip {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+      }
+
+      /* Numbers stay LTR inside RTL text */
+      .ltr {
+        direction: ltr;
+        unicode-bidi: isolate;
+      }
+
+      /* ---------- dark frames ---------- */
+      .dark {
+        background: var(--sidebar-bg);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .hook-kicker {
+        font-size: 28px;
+        font-weight: 500;
+        color: var(--brand-primary);
+        margin-bottom: 30px;
+      }
+
+      .hook-title {
+        font-size: 128px;
+        font-weight: 700;
+        color: #ffffff;
+        line-height: 1.15;
+      }
+
+      .hook-sub {
+        margin-top: 34px;
+        font-size: 44px;
+        font-weight: 400;
+        color: #cbd5e1;
+      }
+
+      .hook-sub b {
+        color: var(--brand-primary);
+        font-weight: 600;
+      }
+
+      /* ---------- app chrome (light frames) ---------- */
+      .app {
+        display: flex;
+        width: 100%;
+        height: 100%;
+        background: var(--surface-1);
+      }
+
+      /* dir=rtl already flips the flex row, so the sidebar sits on the right */
+      .sidebar {
+        width: 132px;
+        height: 100%;
+        background: var(--sidebar-bg);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding-top: 46px;
+        gap: 26px;
+        flex: 0 0 132px;
+      }
+
+      .sidebar .mark {
+        font-size: 25px;
+        font-weight: 700;
+        color: var(--brand-primary);
+      }
+
+      .nav-dot {
+        width: 56px;
+        height: 10px;
+        border-radius: 5px;
+        background: rgba(255, 255, 255, 0.14);
+      }
+
+      .nav-dot.active {
+        background: var(--brand-primary);
+      }
+
+      .stage {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 0 70px;
+      }
+
+      .card {
+        width: 1180px;
+        background: var(--surface-0);
+        border-radius: 16px;
+        box-shadow: 0 24px 60px rgba(15, 23, 42, 0.13);
+        padding: 52px 62px 58px;
+      }
+
+      .card-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        margin-bottom: 36px;
+      }
+
+      .card-title {
+        font-size: 44px;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+
+      .card-sub {
+        margin-top: 10px;
+        font-size: 25px;
+        color: var(--text-secondary);
+      }
+
+      .step-pill {
+        background: var(--sidebar-bg);
+        color: var(--brand-primary);
+        font-size: 24px;
+        font-weight: 600;
+        padding: 14px 28px;
+        border-radius: 999px;
+        white-space: nowrap;
+      }
+
+      /* ---------- scene 2: how it accrues ---------- */
+      .accrual-head {
+        font-size: 54px;
+        font-weight: 600;
+        color: #ffffff;
+        margin-bottom: 52px;
+        text-align: center;
+      }
+
+      .accrual {
+        display: flex;
+        align-items: center;
+        gap: 30px;
+      }
+
+      .acc-card {
+        width: 400px;
+        /* fixed height so a label that wraps to two lines does not make one
+           card taller than its siblings */
+        min-height: 210px;
+        background: #161b22;
+        border: 2px solid rgba(255, 255, 255, 0.09);
+        border-radius: 16px;
+        padding: 38px 36px;
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .acc-v {
+        font-size: 62px;
+        font-weight: 700;
+        color: var(--brand-primary);
+        line-height: 1.1;
+        margin-bottom: 12px;
+      }
+
+      .acc-k {
+        font-size: 26px;
+        color: #94a3b8;
+        line-height: 1.45;
+      }
+
+      .acc-op {
+        font-size: 44px;
+        color: #64748b;
+        font-weight: 300;
+      }
+
+      /* ---------- form ---------- */
+      .field-label {
+        font-size: 26px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        margin-bottom: 14px;
+      }
+
+      .control {
+        height: 78px;
+        border: 2px solid var(--surface-3);
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        padding: 0 26px;
+        font-size: 28px;
+        color: var(--text-primary);
+        background: #ffffff;
+        position: relative;
+      }
+
+      .control.muted {
+        color: #9aa4b2;
+      }
+
+      .caret {
+        margin-inline-start: auto;
+        color: #6c7786; /* WCAG AA on white */
+        font-size: 22px;
+      }
+
+      .dropdown {
+        position: absolute;
+        top: 90px;
+        inset-inline-start: 0;
+        width: 100%;
+        background: #ffffff;
+        border: 2px solid var(--surface-3);
+        border-radius: 10px;
+        box-shadow: 0 18px 44px rgba(15, 23, 42, 0.16);
+        padding: 10px;
+        z-index: 5;
+        transform-origin: top center;
+      }
+
+      .opt {
+        height: 62px;
+        display: flex;
+        align-items: center;
+        padding: 0 18px;
+        font-size: 26px;
+        color: var(--text-primary);
+        border-radius: 8px;
+      }
+
+      /* the blue balance panel, verbatim from RequestLeavePage.tsx */
+      .balance-panel {
+        margin-top: 26px;
+        background: #f0f7ff;
+        border: 2px solid #91caff;
+        border-radius: 8px;
+        padding: 24px 28px;
+      }
+
+      .panel-head {
+        font-size: 24px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 18px;
+      }
+
+      .stat-row {
+        display: flex;
+        gap: 18px;
+      }
+
+      .stat {
+        flex: 1;
+        background: #ffffff;
+        border-radius: 8px;
+        padding: 18px 22px;
+      }
+
+      .stat.hi {
+        background: #fff7ed;
+        border: 2px solid #fdba74;
+      }
+
+      .stat-k {
+        font-size: 21px;
+        color: var(--text-secondary);
+        margin-bottom: 6px;
+      }
+
+      .stat-v {
+        font-size: 34px;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+
+      .stat.hi .stat-v {
+        color: var(--brand-on-light);
+      }
+
+      /* ---------- scene 4: requestable vs remaining ---------- */
+      .why-head {
+        font-size: 50px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 14px;
+        text-align: center;
+      }
+
+      .why-sub {
+        font-size: 27px;
+        color: var(--text-secondary);
+        margin-bottom: 46px;
+        text-align: center;
+      }
+
+      .math {
+        display: flex;
+        align-items: center;
+        gap: 22px;
+        margin-bottom: 34px;
+      }
+
+      .term {
+        background: var(--surface-0);
+        border: 2px solid var(--surface-3);
+        border-radius: 14px;
+        padding: 26px 34px;
+        text-align: center;
+        min-width: 250px;
+      }
+
+      .term.out {
+        border-color: var(--brand-primary);
+        background: #fff7ed;
+      }
+
+      .term-v {
+        font-size: 46px;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 8px;
+      }
+
+      .term.out .term-v {
+        color: var(--brand-on-light);
+      }
+
+      .term-k {
+        font-size: 22px;
+        color: var(--text-secondary);
+      }
+
+      .op {
+        font-size: 40px;
+        color: #64748b;
+        font-weight: 300;
+      }
+
+      .why-note {
+        font-size: 26px;
+        color: var(--text-primary);
+        background: #fff7ed;
+        border-inline-start: 6px solid var(--brand-primary);
+        border-radius: 8px;
+        padding: 18px 26px;
+        max-width: 1100px;
+      }
+
+      /* ---------- scene 5: submit + chain ---------- */
+      .chain-wrap {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 52px;
+      }
+
+      .btn-primary {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 92px;
+        padding: 0 58px;
+        border-radius: 10px;
+        background: var(--brand-on-light);
+        color: #ffffff;
+        font-size: 34px;
+        font-weight: 600;
+      }
+
+      .chain {
+        display: flex;
+        align-items: center;
+        gap: 24px;
+      }
+
+      .chip {
+        padding: 20px 32px;
+        border-radius: 999px;
+        font-size: 28px;
+        font-weight: 600;
+        border: 2px solid;
+        white-space: nowrap;
+      }
+
+      .chip.wait-mgr {
+        background: #fff7e6;
+        border-color: #ffd591;
+        color: #ad4e00;
+      }
+
+      .chip.wait-hr {
+        background: #f0f7ff;
+        border-color: #91caff;
+        color: #0050b3;
+      }
+
+      .chip.done {
+        background: #f6ffed;
+        border-color: #b7eb8f;
+        color: #135200;
+      }
+
+      /* progression runs right-to-left, so the arrows point left */
+      .arrow {
+        font-size: 32px;
+        color: #64748b;
+      }
+
+      /* ---------- scene 6: outro ---------- */
+      .outro-head {
+        font-size: 54px;
+        font-weight: 600;
+        color: #ffffff;
+        margin-bottom: 18px;
+        text-align: center;
+      }
+
+      .outro-sub {
+        font-size: 30px;
+        color: #94a3b8;
+        margin-bottom: 50px;
+        text-align: center;
+      }
+
+      .outro {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 96px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 20px;
+      }
+
+      .logo-plate {
+        background: #ffffff;
+        border-radius: 14px;
+        padding: 20px 32px;
+        display: flex;
+        align-items: center;
+      }
+
+      .logo-plate img {
+        width: 360px;
+        height: auto;
+        display: block;
+      }
+
+      .outro-line {
+        font-size: 32px;
+        font-weight: 500;
+        color: #ffffff;
+      }
+
+      .cursor {
+        position: absolute;
+        width: 40px;
+        height: 40px;
+        z-index: 40;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="24.8"
+      data-width="1920"
+      data-height="1080"
+    >
+      <!-- ============ SCENE 1 — HOOK (0.0 – 3.3) ============ -->
+      <section id="s1" class="clip dark" data-start="0" data-duration="3.3" data-track-index="0">
+        <div id="s1-kicker" class="hook-kicker">دليل الموظف &mdash; الموارد البشرية</div>
+        <h1 id="s1-title" class="hook-title">الإجازة السنوية</h1>
+        <div id="s1-sub" class="hook-sub"><b>21 يوماً</b> في السنة، تتراكم شهراً بشهر.</div>
+      </section>
+
+      <!-- ============ SCENE 2 — HOW IT ACCRUES (3.3 – 8.0) ============ -->
+      <section id="s2" class="clip dark" data-start="3.3" data-duration="4.7" data-track-index="1">
+        <div id="s2-head" class="accrual-head">كيف يتراكم رصيدك</div>
+        <div class="accrual">
+          <div id="s2-c1" class="acc-card">
+            <div class="acc-v"><span class="ltr">1.75</span></div>
+            <div class="acc-k">يوم عن كل شهر كامل</div>
+          </div>
+          <div id="s2-op1" class="acc-op">&times;</div>
+          <div id="s2-c2" class="acc-card">
+            <div class="acc-v"><span class="ltr">12</span></div>
+            <div class="acc-k">شهراً في سنة العقد</div>
+          </div>
+          <div id="s2-op2" class="acc-op">=</div>
+          <div id="s2-c3" class="acc-card">
+            <div class="acc-v"><span class="ltr">21</span></div>
+            <div class="acc-k">يوماً كحد أقصى</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ SCENE 3 — THE FORM + BALANCE (8.0 – 12.2) ============ -->
+      <section id="s3" class="clip" data-start="8" data-duration="4.2" data-track-index="2">
+        <div class="app">
+          <div class="sidebar">
+            <div class="mark">FFI</div>
+            <div class="nav-dot"></div>
+            <div class="nav-dot active"></div>
+            <div class="nav-dot"></div>
+            <div class="nav-dot"></div>
+          </div>
+          <div class="stage">
+            <div id="s3-card" class="card">
+              <div class="card-head">
+                <div>
+                  <div class="card-title">طلب إجازة</div>
+                  <div class="card-sub">تقديم طلب إجازة جديد</div>
+                </div>
+                <div class="step-pill">الخطوة 1 من 2</div>
+              </div>
+
+              <div class="field-label">نوع الإجازة</div>
+              <div id="s3-select" class="control muted">
+                <span id="s3-placeholder">اختر نوع الإجازة</span>
+                <span id="s3-value" style="position: absolute; inset-inline-start: 26px; color: #0f172a"
+                  >إجازة سنوية</span
+                >
+                <span class="caret">&#9662;</span>
+
+                <div id="s3-dropdown" class="dropdown">
+                  <div id="s3-opt-annual" class="opt">إجازة سنوية</div>
+                  <div class="opt">إجازة مرضية</div>
+                  <div class="opt">إجازة طارئة</div>
+                </div>
+              </div>
+
+              <div id="s3-balance" class="balance-panel">
+                <div class="panel-head">رصيد الإجازات &mdash; إجازة سنوية</div>
+                <div class="stat-row">
+                  <div class="stat">
+                    <div class="stat-k">المتبقي</div>
+                    <div class="stat-v"><span class="ltr">14.75</span></div>
+                  </div>
+                  <div class="stat">
+                    <div class="stat-k">المستخدم</div>
+                    <div class="stat-v"><span class="ltr">6</span></div>
+                  </div>
+                  <div class="stat hi">
+                    <div class="stat-k">الأيام القابلة للطلب</div>
+                    <div class="stat-v"><span class="ltr">12</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <svg id="s3-cursor" class="cursor" viewBox="0 0 24 24" style="left: 940px; top: 470px">
+          <path d="M20 2 L20 20 L15 15.5 L12 22 L9 20.5 L12 14.5 L5 14 Z" fill="#0f172a" stroke="#fff" stroke-width="1.2" />
+        </svg>
+      </section>
+
+      <!-- ============ SCENE 4 — WHY THE TWO NUMBERS DIFFER (12.2 – 17.0) ============ -->
+      <section id="s4" class="clip" data-start="12.2" data-duration="4.8" data-track-index="3">
+        <div class="app">
+          <div class="sidebar">
+            <div class="mark">FFI</div>
+            <div class="nav-dot"></div>
+            <div class="nav-dot active"></div>
+            <div class="nav-dot"></div>
+            <div class="nav-dot"></div>
+          </div>
+          <div class="stage">
+            <div id="s4-head" class="why-head">لماذا الرقمان مختلفان؟</div>
+            <div id="s4-sub" class="why-sub">لا تُطلب الأيام الجزئية، والطلبات المعلّقة تحجز رصيدها.</div>
+            <div class="math">
+              <div id="s4-t1" class="term">
+                <div class="term-v"><span class="ltr">14</span></div>
+                <div class="term-k">المتبقي بعد تقريب الكسر</div>
+              </div>
+              <div id="s4-op" class="op">&minus;</div>
+              <div id="s4-t2" class="term">
+                <div class="term-v"><span class="ltr">2</span></div>
+                <div class="term-k">الأيام المحجوزة</div>
+              </div>
+              <div id="s4-eq" class="op">=</div>
+              <div id="s4-t3" class="term out">
+                <div class="term-v"><span class="ltr">12</span></div>
+                <div class="term-k">الأيام القابلة للطلب</div>
+              </div>
+            </div>
+            <div id="s4-note" class="why-note">
+              الرصيد <span class="ltr">14.75</span> &mdash; لكن <span class="ltr">0.75</span> يوم جزئي لا يُطلب، و<span class="ltr">2</span> محجوزان بطلب معلّق.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ SCENE 5 — SUBMIT + APPROVAL CHAIN (17.0 – 21.4) ============ -->
+      <section id="s5" class="clip" data-start="17" data-duration="4.4" data-track-index="4">
+        <div class="app">
+          <div class="sidebar">
+            <div class="mark">FFI</div>
+            <div class="nav-dot"></div>
+            <div class="nav-dot active"></div>
+            <div class="nav-dot"></div>
+            <div class="nav-dot"></div>
+          </div>
+          <div class="stage">
+            <div class="chain-wrap">
+              <div id="s5-btn" class="btn-primary">تقديم الطلب</div>
+              <div class="chain">
+                <div id="s5-c1" class="chip wait-mgr">بانتظار المدير المباشر</div>
+                <div id="s5-a1" class="arrow">&larr;</div>
+                <div id="s5-c2" class="chip wait-hr">بانتظار الموارد البشرية</div>
+                <div id="s5-a2" class="arrow">&larr;</div>
+                <div id="s5-c3" class="chip done">معتمدة</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <svg id="s5-cursor" class="cursor" viewBox="0 0 24 24" style="left: 830px; top: 330px">
+          <path d="M20 2 L20 20 L15 15.5 L12 22 L9 20.5 L12 14.5 L5 14 Z" fill="#0f172a" stroke="#fff" stroke-width="1.2" />
+        </svg>
+      </section>
+
+      <!-- ============ SCENE 6 — ELIGIBILITY + OUTRO (21.4 – 24.8) ============ -->
+      <section id="s6" class="clip dark" data-start="21.4" data-duration="3.4" data-track-index="5">
+        <div id="s6-head" class="outro-head">تبدأ بعد <span class="ltr">6</span> أشهر خدمة</div>
+        <div id="s6-sub" class="outro-sub">قبل ذلك يتراكم الرصيد ولا يمكن استخدامه.</div>
+        <div id="s6-outro" class="outro">
+          <div class="logo-plate">
+            <img src="assets/img/ffi-logo.png" alt="شركة فتحي فؤاد عيتاني للمقاولات" />
+          </div>
+          <div class="outro-line">إجازتك السنوية، بخطوات واضحة.</div>
+        </div>
+      </section>
+
+      <!-- ============ AUDIO ============ -->
+      <audio
+        id="bgm"
+        src="assets/music/happy-beats-business-moves-vol-10-by-ende-dot-app.mp3"
+        data-start="0"
+        data-duration="24.8"
+        data-track-index="10"
+        data-volume="0.9"
+      ></audio>
+
+      <!-- scene 2: the three accrual cards -->
+      <audio id="sfx-a1" src="assets/sfx/impact/impactSoft_medium_002.ogg" data-start="3.55" data-track-index="11" data-volume="0.6"></audio>
+      <audio id="sfx-a2" src="assets/sfx/impact/impactSoft_medium_003.ogg" data-start="4.64" data-track-index="12" data-volume="0.6"></audio>
+      <audio id="sfx-a3" src="assets/sfx/impact/impactBell_heavy_000.ogg" data-start="5.74" data-track-index="13" data-volume="0.75"></audio>
+      <!-- scene 3: dropdown select + balance panel -->
+      <audio id="sfx-click-type" src="assets/sfx/interface/click_003.ogg" data-start="9.29" data-track-index="14" data-volume="0.84"></audio>
+      <audio id="sfx-balance" src="assets/sfx/interface/bong_001.ogg" data-start="10.38" data-track-index="15" data-volume="0.7"></audio>
+      <!-- scene 4: the subtraction lands -->
+      <audio id="sfx-m1" src="assets/sfx/impact/impactSoft_medium_004.ogg" data-start="12.56" data-track-index="16" data-volume="0.55"></audio>
+      <audio id="sfx-m2" src="assets/sfx/impact/impactSoft_medium_002.ogg" data-start="13.64" data-track-index="17" data-volume="0.55"></audio>
+      <audio id="sfx-m3" src="assets/sfx/impact/impactSoft_medium_001.ogg" data-start="14.73" data-track-index="18" data-volume="0.7"></audio>
+      <!-- scene 5: submit press, then the chain -->
+      <audio id="sfx-submit" src="assets/sfx/ui/click2.ogg" data-start="17.47" data-track-index="19" data-volume="0.84"></audio>
+      <audio id="sfx-chip1" src="assets/sfx/impact/impactSoft_medium_003.ogg" data-start="18.01" data-track-index="20" data-volume="0.55"></audio>
+      <audio id="sfx-chip2" src="assets/sfx/impact/impactSoft_medium_004.ogg" data-start="19.1" data-track-index="21" data-volume="0.55"></audio>
+      <audio id="sfx-approved" src="assets/sfx/impact/impactBell_heavy_000.ogg" data-start="20.19" data-track-index="22" data-volume="0.8"></audio>
+      <!-- scene 6: logo -->
+      <audio id="sfx-logo" src="assets/sfx/impact/impactSoft_medium_000.ogg" data-start="23.46" data-track-index="23" data-volume="0.75"></audio>
+    </div>
+
+    <script>
+      /*
+       * FFI HR — Annual leave tutorial, Arabic (RTL).
+       * Beat/cue source: brag skill preset for
+       * happy-beats-business-moves-vol-10 (109.96 BPM, beat grid ~0.545s).
+       * Readable sequences snap to EVERY OTHER beat (~1.09s apart) so each line
+       * clears the reading floor; only major payoffs lock to strong cues.
+       */
+      const build = () => {
+        const tl = gsap.timeline({ paused: true });
+        const EASE = "power3.out";
+
+        /* ---------- Scene 1 — hook (0.0 – 3.3) ---------- */
+        // beat-locked: 0.27s (strong cue)
+        tl.fromTo("#s1-kicker", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.45, ease: EASE }, 0.05);
+        tl.fromTo("#s1-title", { opacity: 0, y: 46 }, { opacity: 1, y: 0, duration: 0.5, ease: EASE }, 0.27);
+        tl.fromTo("#s1-sub", { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: 0.45, ease: EASE }, 0.82);
+        tl.to(["#s1-kicker", "#s1-title", "#s1-sub"], { opacity: 0, duration: 0.25 }, 3.05);
+
+        /* ---------- Scene 2 — how it accrues (3.3 – 8.0) ---------- */
+        gsap.set(["#s2-c1", "#s2-c2", "#s2-c3", "#s2-op1", "#s2-op2"], { opacity: 0 });
+        tl.fromTo("#s2-head", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.38, ease: EASE }, 3.32);
+        // beat-grid, every OTHER beat: 3.55 / 4.64 / 5.74 — the equation builds up
+        tl.fromTo("#s2-c1", { opacity: 0, y: 28 }, { opacity: 1, y: 0, duration: 0.38, ease: EASE }, 3.55);
+        tl.to("#s2-op1", { opacity: 1, duration: 0.22 }, 4.3);
+        tl.fromTo("#s2-c2", { opacity: 0, y: 28 }, { opacity: 1, y: 0, duration: 0.38, ease: EASE }, 4.64);
+        tl.to("#s2-op2", { opacity: 1, duration: 0.22 }, 5.4);
+        // beat-locked: 5.74s — the 21 is the number they came for
+        tl.fromTo("#s2-c3", { opacity: 0, y: 28, scale: 0.92 }, { opacity: 1, y: 0, scale: 1, duration: 0.42, ease: "back.out(1.6)" }, 5.74);
+        tl.to(["#s2-head", "#s2-c1", "#s2-c2", "#s2-c3", "#s2-op1", "#s2-op2"], { opacity: 0, duration: 0.3 }, 7.7);
+
+        /* ---------- Scene 3 — the form + balance (8.0 – 12.2) ---------- */
+        gsap.set("#s3-dropdown", { opacity: 0, scaleY: 0.6 });
+        gsap.set("#s3-value", { opacity: 0 });
+        gsap.set("#s3-balance", { opacity: 0 });
+        gsap.set("#s3-opt-annual", { backgroundColor: "rgba(249,115,22,0)" });
+
+        tl.fromTo("#s3-card", { opacity: 0, y: 44 }, { opacity: 1, y: 0, duration: 0.42, ease: EASE }, 8.0);
+        tl.fromTo("#s3-cursor", { x: 0, y: 0 }, { x: 110, y: -40, duration: 0.5, ease: "power2.inOut" }, 8.3);
+        tl.to("#s3-select", { borderColor: "#f97316", duration: 0.2 }, 8.7);
+        // beat: 8.73s — the dropdown opens
+        tl.to("#s3-dropdown", { opacity: 1, scaleY: 1, duration: 0.28, ease: EASE }, 8.73);
+        tl.to("#s3-cursor", { x: 150, y: 60, duration: 0.38, ease: "power2.inOut" }, 8.85);
+        // selection on the next beat (9.29s)
+        tl.to("#s3-opt-annual", { backgroundColor: "rgba(249,115,22,0.12)", color: "#c2410c", duration: 0.15 }, 9.2);
+        tl.to("#s3-cursor", { scale: 0.82, duration: 0.09, yoyo: true, repeat: 1 }, 9.29);
+        tl.to("#s3-dropdown", { opacity: 0, scaleY: 0.7, duration: 0.22 }, 9.43);
+        tl.to("#s3-placeholder", { opacity: 0, duration: 0.18 }, 9.43);
+        tl.to("#s3-value", { opacity: 1, duration: 0.22 }, 9.49);
+        tl.to("#s3-cursor", { opacity: 0, duration: 0.25 }, 9.6);
+        // balance panel arrives on the next beat (10.38s); settled 10.38 → 12.2 = 1.82s
+        tl.fromTo("#s3-balance", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4, ease: EASE }, 10.38);
+        tl.to("#s3-card", { opacity: 0, y: -26, duration: 0.3 }, 11.9);
+
+        /* ---------- Scene 4 — why the two numbers differ (12.2 – 17.0) ---------- */
+        gsap.set(["#s4-t1", "#s4-t2", "#s4-t3", "#s4-op", "#s4-eq"], { opacity: 0 });
+        gsap.set("#s4-note", { opacity: 0 });
+        tl.fromTo("#s4-head", { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: 0.36, ease: EASE }, 12.22);
+        tl.fromTo("#s4-sub", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.34, ease: EASE }, 12.4);
+        // beat-grid, every OTHER beat: 12.56 / 13.64 / 14.73 — the subtraction builds
+        tl.fromTo("#s4-t1", { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: 0.34, ease: EASE }, 12.56);
+        tl.to("#s4-op", { opacity: 1, duration: 0.2 }, 13.3);
+        tl.fromTo("#s4-t2", { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: 0.34, ease: EASE }, 13.64);
+        tl.to("#s4-eq", { opacity: 1, duration: 0.2 }, 14.4);
+        // beat-locked: 14.73s — the requestable figure is the payoff
+        tl.fromTo("#s4-t3", { opacity: 0, y: 22, scale: 0.92 }, { opacity: 1, y: 0, scale: 1, duration: 0.4, ease: "back.out(1.6)" }, 14.73);
+        // the sentence that explains it, held to the end of the scene
+        tl.fromTo("#s4-note", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.34, ease: EASE }, 15.28);
+        tl.to(["#s4-head", "#s4-sub", "#s4-t1", "#s4-t2", "#s4-t3", "#s4-op", "#s4-eq", "#s4-note"], { opacity: 0, duration: 0.3 }, 16.7);
+
+        /* ---------- Scene 5 — submit + approval chain (17.0 – 21.4) ---------- */
+        gsap.set(["#s5-c1", "#s5-c2", "#s5-c3", "#s5-a1", "#s5-a2"], { opacity: 0 });
+        tl.fromTo("#s5-btn", { opacity: 0, y: 32 }, { opacity: 1, y: 0, duration: 0.38, ease: EASE }, 17.02);
+        tl.fromTo("#s5-cursor", { x: 0, y: 0 }, { x: 70, y: 30, duration: 0.38, ease: "power2.inOut" }, 17.1);
+        // the press
+        tl.to("#s5-btn", { scale: 0.96, duration: 0.1, yoyo: true, repeat: 1 }, 17.47);
+        tl.to("#s5-cursor", { scale: 0.82, duration: 0.09, yoyo: true, repeat: 1 }, 17.47);
+        tl.to("#s5-cursor", { opacity: 0, duration: 0.2 }, 17.7);
+        // beat-grid, every OTHER beat: 18.01 / 19.10 / 20.19 (~1.09s apart)
+        tl.fromTo("#s5-c1", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.3, ease: EASE }, 18.01);
+        tl.to("#s5-a1", { opacity: 1, duration: 0.22 }, 18.7);
+        tl.fromTo("#s5-c2", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.3, ease: EASE }, 19.1);
+        tl.to("#s5-a2", { opacity: 1, duration: 0.22 }, 19.8);
+        // beat-locked: 20.19s (strong cue) — the payoff
+        tl.fromTo("#s5-c3", { opacity: 0, y: 18, scale: 0.9 }, { opacity: 1, y: 0, scale: 1, duration: 0.36, ease: "back.out(1.7)" }, 20.19);
+        tl.to(["#s5-btn", "#s5-c1", "#s5-c2", "#s5-c3", "#s5-a1", "#s5-a2"], { opacity: 0, duration: 0.3 }, 21.1);
+
+        /* ---------- Scene 6 — eligibility + outro (21.4 – 24.8) ---------- */
+        gsap.set("#s6-outro", { opacity: 0 });
+        tl.fromTo("#s6-head", { opacity: 0, y: 26 }, { opacity: 1, y: 0, duration: 0.4, ease: EASE }, 21.83);
+        tl.fromTo("#s6-sub", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.35, ease: EASE }, 22.37);
+        // beat: 23.46s — logo rides in, everything holds to the end
+        tl.fromTo("#s6-outro", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4, ease: EASE }, 23.46);
+
+        /* ---------- Music bed ---------- */
+        tl.fromTo("#bgm", { volume: 0 }, { volume: 0.9, duration: 0.9 }, 0);
+        tl.to("#bgm", { volume: 1.0, duration: 0.7 }, 21.4); // small lift for the outro
+        tl.to("#bgm", { volume: 0, duration: 1.1 }, 23.5); // fade under the logo
+
+        window.__timelines["main"] = tl;
+        tl.seek(0);
+      };
+
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(build);
+      } else {
+        build();
+      }
+    </script>
+  </body>
+</html>
