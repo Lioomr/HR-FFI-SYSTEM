@@ -6,11 +6,14 @@ from core.services.workflow_engine import get_or_create_workflow_definition
 
 @pytest.mark.django_db
 def test_reseeds_after_template_stages_change():
-    definition = WorkflowDefinition.objects.create(
+    definition, _ = WorkflowDefinition.objects.update_or_create(
         key="contract_rating",
-        name="Employee Contract Rating",
-        module_key="contract_ratings",
+        defaults={
+            "name": "Employee Contract Rating",
+            "module_key": "contract_ratings",
+        },
     )
+    definition.stages.all().delete()
     for key, order, role in (("responses", 0, ""), ("hr", 1, "hr"), ("ceo", 2, "ceo")):
         WorkflowStageDefinition.objects.create(
             definition=definition,
