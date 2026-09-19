@@ -8,7 +8,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
-from django.db.models import Prefetch, Q
+from django.db.models import F, Prefetch, Q
 from django.utils import timezone
 
 from audit.utils import audit
@@ -21,6 +21,8 @@ from core.models import WorkflowAction, WorkflowDefinition, WorkflowInstance, Wo
 from core.permissions import get_role
 
 from .pending_approval_email import get_direct_manager_user
+
+_ORDER_PARK_OFFSET = 1000
 
 WORKFLOW_TEMPLATES = {
     "contract_rating": {
@@ -219,23 +221,16 @@ def get_or_create_workflow_definition(workflow_key: str) -> WorkflowDefinition:
         definition.is_active = True
         definition.save(update_fields=["name", "module_key", "is_active", "updated_at"])
 
-    existing = {stage.key: stage for stage in definition.stages.all()}
-    if workflow_key == "contract_rating":
+    with transaction.atomic():
         valid_keys = {stage["key"] for stage in template["stages"]}
         definition.stages.exclude(key__in=valid_keys).delete()
-        existing = {key: stage for key, stage in existing.items() if key in valid_keys}
-    for stage_data in template["stages"]:
-        stage = existing.get(stage_data["key"])
-        if stage is None:
-            WorkflowStageDefinition.objects.create(definition=definition, **stage_data)
-            continue
-        changed = False
-        for field in ("title", "approver_role", "order", "is_optional"):
-            if getattr(stage, field) != stage_data.get(field, getattr(stage, field)):
-                setattr(stage, field, stage_data.get(field, getattr(stage, field)))
-                changed = True
-        if changed:
-            stage.save(update_fields=["title", "approver_role", "order", "is_optional", "updated_at"])
+        definition.stages.update(order=F("order") + _ORDER_PARK_OFFSET)
+        for stage_data in template["stages"]:
+            WorkflowStageDefinition.objects.update_or_create(
+                definition=definition,
+                key=stage_data["key"],
+                defaults=stage_data,
+            )
     return definition
 
 
