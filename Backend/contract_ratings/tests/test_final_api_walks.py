@@ -73,8 +73,8 @@ def test_api_walk_return_employee_hr_comment_then_renew(world):
         {"ceo_decision": "RETURN_TO_EMPLOYEE", "comment": "Please correct"},
     )
     assert returned.status_code == 200
-    rating.refresh_from_db()
-    assert rating.status == ContractRating.Status.WAITING_EMPLOYEE
+    assert returned.data["data"]["status"] == ContractRating.Status.WAITING_EMPLOYEE
+    assert returned.data["data"]["employee_response"]["status"] == "RETURNED"
     resubmitted = post_as(
         world,
         world.employee,
@@ -100,6 +100,9 @@ def test_api_walk_scheduled_termination(world):
     submit_both(world, rating)
     decided = post_as(world, world.ceo, f"/contract-ratings/{rating.pk}/ceo-decision/", {"ceo_decision": "TERMINATE"})
     assert decided.status_code == 200
+    acknowledged = post_as(world, world.hr, f"/contract-ratings/{rating.pk}/acknowledge-termination-notice/")
+    assert acknowledged.status_code == 200
+    assert acknowledged.data["data"]["employee_notified_of_termination_at"]
     world.profile.refresh_from_db()
     assert world.profile.employment_status == EmployeeProfile.EmploymentStatus.ACTIVE
     assert world.profile.is_archived is False
@@ -145,6 +148,7 @@ def test_api_walk_skip_to_ceo_has_no_rater_trace_and_rejects_return(world):
     world.client.force_authenticate(world.ceo)
     payload = world.client.get(f"/contract-ratings/{rating.pk}/").data["data"]
     assert payload["rating_mode"] == "SKIP_TO_CEO"
+    assert payload["hr_gate_decided_by_name"] == world.hr.full_name
     assert {"manager_response", "employee_response", "comparison_summary"}.isdisjoint(payload)
     rejected = post_as(
         world,
