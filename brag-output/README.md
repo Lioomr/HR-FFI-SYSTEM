@@ -165,3 +165,39 @@ Verified against code, not the docs:
 > employee the window is always open and the 6-month condition is waived
 > (`is_terminated` in `build_annual_leave_eligibility`). The cut targets current
 > employees; an end-of-service version would need its own scene.
+
+## All four requests — phone view
+
+| File | What it is |
+|---|---|
+| `brag-phone.mp4` / `brag-phone.jpg` | English cut, **vertical 1080x1920**, 24.8s. |
+| `brag-phone-ar.mp4` / `brag-phone-ar.jpg` | Arabic RTL cut and its poster. |
+| `composition-phone-en/` | Hyperframes project for the English phone cut. |
+| `composition-phone-ar/` | Hyperframes project for the Arabic phone cut. |
+
+One clip covering all four employee requests — sick leave, annual leave, loan, annual
+leave settlement — each as a phone screen with the one rule that matters, then a recap.
+The frame *is* the phone screen (no device mockup), so the footage stays legible at the
+size people actually watch it.
+
+### Which "phone" this is
+
+These screens are the **responsive web app below its `md` breakpoint**: hamburger in
+place of the sidebar, matching what `FrontEnd/src/layouts/BaseLayout.tsx` renders when
+`isMobile = !screens.md` is true (Drawer placement flips to `right` under RTL).
+
+That distinction is load-bearing, because the React Native app in `MobileApp/` **cannot
+raise three of these four requests**:
+
+| Request | Web app (phone width) | Native app (`MobileApp/`) |
+|---|---|---|
+| Sick leave | yes | yes — `features/leave/` |
+| Annual leave | yes | yes — `features/leave/` |
+| Loan | yes | **no** — `features/approvals/` is approving *someone else's* loan |
+| Annual settlement | yes | **no** — no code at all |
+
+`.agents/context/mobile_app.md` states the MVP scope as leave-only with approval consoles
+out of scope, and the tab bar in `src/app/(protected)/(tabs)/_layout.tsx` confirms it:
+home, attendance, leave, notifications, more. So employees must use the browser for loans
+and settlements. A video showing those inside the native app would teach a flow that does
+not exist.

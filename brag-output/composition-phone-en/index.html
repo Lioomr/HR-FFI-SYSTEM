@@ -1,0 +1,753 @@
+<!doctype html>
+<html lang="en" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <title>FFI HR — Requests On Your Phone</title>
+    <script src="vendor/gsap.min.js"></script>
+    <style>
+      /* Rubik is the app's Latin face (FrontEnd/src/index.css --font-en) */
+      @font-face {
+        font-family: "Rubik";
+        src: url("assets/fonts/rubik-latin.woff2") format("woff2");
+        font-weight: 300 900;
+        font-style: normal;
+        font-display: block;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 1080px;
+        height: 1920px;
+        overflow: hidden;
+        background: #0d1117;
+      }
+
+      :root {
+        /* Pulled verbatim from FrontEnd/src/index.css :root tokens */
+        --brand-primary: #f97316;
+        --brand-on-light: #c2410c; /* AA-safe orange for text on white */
+        --sidebar-bg: #0d1117;
+        --surface-0: #ffffff;
+        --surface-1: #f8faff;
+        --surface-3: #e2e8f0;
+        --text-primary: #0f172a;
+        --text-secondary: #64748b;
+      }
+
+      #root {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        font-family: "Rubik", system-ui, sans-serif;
+        background: var(--surface-1);
+      }
+
+      .clip {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+      }
+
+      /* ---------- dark frames ---------- */
+      .dark {
+        background: var(--sidebar-bg);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 0 70px;
+      }
+
+      .hook-kicker {
+        font-size: 30px;
+        font-weight: 500;
+        color: var(--brand-primary);
+        margin-bottom: 34px;
+        text-align: center;
+      }
+
+      .hook-title {
+        font-size: 104px;
+        font-weight: 700;
+        color: #ffffff;
+        line-height: 1.18;
+        text-align: center;
+      }
+
+      .hook-sub {
+        margin-top: 40px;
+        font-size: 44px;
+        font-weight: 400;
+        color: #cbd5e1;
+        text-align: center;
+        line-height: 1.45;
+      }
+
+      .hook-sub b {
+        color: var(--brand-primary);
+        font-weight: 600;
+      }
+
+      /* ---------- the phone screen fills the frame ---------- */
+      .screen {
+        position: absolute;
+        inset: 0;
+        background: var(--surface-1);
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* status bar */
+      .statusbar {
+        height: 74px;
+        flex: 0 0 74px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 46px;
+        font-size: 28px;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+
+      .sb-icons {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .bar {
+        width: 8px;
+        border-radius: 2px;
+        background: var(--text-primary);
+      }
+
+      .battery {
+        width: 44px;
+        height: 22px;
+        border: 3px solid var(--text-primary);
+        border-radius: 6px;
+        position: relative;
+      }
+
+      .battery::after {
+        content: "";
+        position: absolute;
+        inset: 3px;
+        background: var(--text-primary);
+        border-radius: 2px;
+      }
+
+      /* the app header the web app shows below md: hamburger replaces the sidebar */
+      .appbar {
+        height: 118px;
+        flex: 0 0 118px;
+        background: var(--surface-0);
+        border-bottom: 2px solid var(--surface-3);
+        display: flex;
+        align-items: center;
+        gap: 26px;
+        padding: 0 40px;
+      }
+
+      .burger {
+        width: 46px;
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+        flex: 0 0 46px;
+      }
+
+      .burger i {
+        display: block;
+        height: 5px;
+        border-radius: 3px;
+        background: var(--text-primary);
+      }
+
+      .appbar-title {
+        font-size: 38px;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+
+      .avatar {
+        margin-inline-start: auto;
+        width: 62px;
+        height: 62px;
+        border-radius: 999px;
+        /* white on --brand-primary is 2.8:1; the darker brand orange clears AA */
+        background: var(--brand-on-light);
+        color: #ffffff;
+        font-size: 26px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 62px;
+      }
+
+      /* Centre the step + card between the app bar and the caption, so the
+         content sits in the middle of the phone rather than leaving the lower
+         half of a 1920-tall frame empty. The bottom padding reserves the
+         caption zone. */
+      .body {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: 0 40px 230px;
+      }
+
+      .step-row {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        margin-bottom: 30px;
+      }
+
+      .step-num {
+        width: 58px;
+        height: 58px;
+        border-radius: 999px;
+        background: var(--sidebar-bg);
+        color: var(--brand-primary);
+        font-size: 30px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 58px;
+      }
+
+      .step-name {
+        font-size: 42px;
+        font-weight: 700;
+        color: var(--text-primary);
+      }
+
+      .card {
+        background: var(--surface-0);
+        border-radius: 20px;
+        box-shadow: 0 16px 44px rgba(15, 23, 42, 0.1);
+        padding: 38px 36px 42px;
+      }
+
+      .field-label {
+        font-size: 28px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        margin-bottom: 14px;
+      }
+
+      .field-label.req {
+        color: var(--brand-on-light);
+        font-weight: 600;
+      }
+
+      .control {
+        height: 92px;
+        border: 2px solid var(--surface-3);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        padding: 0 28px;
+        font-size: 32px;
+        color: var(--text-primary);
+        background: #ffffff;
+      }
+
+      .control.filled {
+        border-color: var(--brand-primary);
+      }
+
+      .caret {
+        margin-inline-start: auto;
+        color: #6c7786; /* WCAG AA on white */
+        font-size: 24px;
+      }
+
+      .gap {
+        height: 30px;
+      }
+
+      /* the highlighted figure in each screen */
+      .figure {
+        margin-top: 32px;
+        border-radius: 12px;
+        padding: 28px 30px;
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 18px;
+      }
+
+      .figure.blue {
+        background: #f0f7ff;
+        border: 2px solid #91caff;
+      }
+
+      .figure.green {
+        background: #f6ffed;
+        border: 2px solid #b7eb8f;
+      }
+
+      .figure.orange {
+        background: #fff7ed;
+        border: 2px solid #fdba74;
+      }
+
+      .fig-k {
+        font-size: 28px;
+        color: var(--text-primary);
+        font-weight: 600;
+      }
+
+      .fig-v {
+        font-size: 44px;
+        font-weight: 700;
+        color: var(--text-primary);
+        white-space: nowrap;
+      }
+
+      .figure.green .fig-v {
+        color: #135200;
+      }
+
+      .figure.orange .fig-v {
+        color: var(--brand-on-light);
+      }
+
+      .file-row {
+        margin-top: 24px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        font-size: 30px;
+        color: var(--text-primary);
+      }
+
+      .tick {
+        width: 40px;
+        height: 40px;
+        border-radius: 999px;
+        background: #135200;
+        color: #ffffff;
+        font-size: 22px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 40px;
+      }
+
+      /* the teaching line, floating over the bottom of the screen */
+      .caption {
+        position: absolute;
+        left: 40px;
+        right: 40px;
+        bottom: 56px;
+        background: var(--sidebar-bg);
+        border-radius: 18px;
+        padding: 30px 34px;
+        font-size: 31px;
+        line-height: 1.45;
+        color: #ffffff;
+        box-shadow: 0 18px 50px rgba(15, 23, 42, 0.32);
+      }
+
+      .caption b {
+        color: var(--brand-primary);
+        font-weight: 600;
+      }
+
+      /* ---------- outro ---------- */
+      .recap {
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+        width: 100%;
+        margin-bottom: 64px;
+      }
+
+      .recap-row {
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        background: #161b22;
+        border: 2px solid rgba(255, 255, 255, 0.09);
+        border-radius: 16px;
+        padding: 28px 32px;
+      }
+
+      .recap-num {
+        width: 54px;
+        height: 54px;
+        border-radius: 999px;
+        background: rgba(249, 115, 22, 0.16);
+        color: var(--brand-primary);
+        font-size: 28px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 54px;
+      }
+
+      .recap-name {
+        font-size: 36px;
+        font-weight: 600;
+        color: #ffffff;
+      }
+
+      .outro-head {
+        font-size: 56px;
+        font-weight: 600;
+        color: #ffffff;
+        margin-bottom: 48px;
+        text-align: center;
+      }
+
+      .logo-plate {
+        background: #ffffff;
+        border-radius: 16px;
+        padding: 22px 34px;
+        display: flex;
+        align-items: center;
+      }
+
+      .logo-plate img {
+        width: 380px;
+        height: auto;
+        display: block;
+      }
+
+      .outro-line {
+        margin-top: 24px;
+        font-size: 34px;
+        font-weight: 500;
+        color: #ffffff;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="24.8"
+      data-width="1080"
+      data-height="1920"
+    >
+      <!-- ============ SCENE 1 — HOOK (0.0 – 3.0) ============ -->
+      <section id="s1" class="clip dark" data-start="0" data-duration="3" data-track-index="0">
+        <div id="s1-kicker" class="hook-kicker">FFI HR &middot; Employee Guide</div>
+        <h1 id="s1-title" class="hook-title">All your requests<br />from your phone</h1>
+        <div id="s1-sub" class="hook-sub"><b>Four</b> requests, the same steps.</div>
+      </section>
+
+      <!-- ============ SCENE 2 — SICK LEAVE (3.0 – 7.4) ============ -->
+      <section id="s2" class="clip" data-start="3" data-duration="4.4" data-track-index="1">
+        <div class="screen">
+          <div class="statusbar">
+            <span>9:41</span>
+            <span class="sb-icons">
+              <i class="bar" style="height: 12px"></i>
+              <i class="bar" style="height: 18px"></i>
+              <i class="bar" style="height: 24px"></i>
+              <i class="battery"></i>
+            </span>
+          </div>
+          <div class="appbar">
+            <span class="burger"><i></i><i></i><i></i></span>
+            <span class="appbar-title">Request Leave</span>
+            <span class="avatar">FI</span>
+          </div>
+          <div class="body">
+            <div id="s2-step" class="step-row">
+              <span class="step-num"><span>1</span></span>
+              <span class="step-name">Sick Leave</span>
+            </div>
+            <div id="s2-card" class="card">
+              <div class="field-label">Leave Type</div>
+              <div class="control filled">Sick Leave <span class="caret">&#9662;</span></div>
+              <div class="gap"></div>
+              <div id="s2-doc" class="field-label req">Document (Required)</div>
+              <div id="s2-file" class="file-row">
+                <span class="tick">&#10003;</span>
+                <span>medical-report.pdf</span>
+              </div>
+              <div id="s2-fig" class="figure blue">
+                <span class="fig-k">Remaining</span>
+                <span class="fig-v">120 days</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="s2-cap" class="caption">Without a <b>medical report</b> the request will not submit.</div>
+      </section>
+
+      <!-- ============ SCENE 3 — ANNUAL LEAVE (7.4 – 11.8) ============ -->
+      <section id="s3" class="clip" data-start="7.4" data-duration="4.4" data-track-index="2">
+        <div class="screen">
+          <div class="statusbar">
+            <span>9:41</span>
+            <span class="sb-icons">
+              <i class="bar" style="height: 12px"></i>
+              <i class="bar" style="height: 18px"></i>
+              <i class="bar" style="height: 24px"></i>
+              <i class="battery"></i>
+            </span>
+          </div>
+          <div class="appbar">
+            <span class="burger"><i></i><i></i><i></i></span>
+            <span class="appbar-title">Request Leave</span>
+            <span class="avatar">FI</span>
+          </div>
+          <div class="body">
+            <div id="s3-step" class="step-row">
+              <span class="step-num"><span>2</span></span>
+              <span class="step-name">Annual Leave</span>
+            </div>
+            <div id="s3-card" class="card">
+              <div class="field-label">Leave Type</div>
+              <div class="control filled">Annual Leave <span class="caret">&#9662;</span></div>
+              <div id="s3-fig1" class="figure blue">
+                <span class="fig-k">Remaining</span>
+                <span class="fig-v"><span>14.75</span></span>
+              </div>
+              <div id="s3-fig2" class="figure orange">
+                <span class="fig-k">Requestable Days</span>
+                <span class="fig-v"><span>12</span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="s3-cap" class="caption"><b>Fractional</b> and <b>reserved</b> days cannot be requested.</div>
+      </section>
+
+      <!-- ============ SCENE 4 — LOAN (11.8 – 16.2) ============ -->
+      <section id="s4" class="clip" data-start="11.8" data-duration="4.4" data-track-index="3">
+        <div class="screen">
+          <div class="statusbar">
+            <span>9:41</span>
+            <span class="sb-icons">
+              <i class="bar" style="height: 12px"></i>
+              <i class="bar" style="height: 18px"></i>
+              <i class="bar" style="height: 24px"></i>
+              <i class="battery"></i>
+            </span>
+          </div>
+          <div class="appbar">
+            <span class="burger"><i></i><i></i><i></i></span>
+            <span class="appbar-title">Request Loan</span>
+            <span class="avatar">FI</span>
+          </div>
+          <div class="body">
+            <div id="s4-step" class="step-row">
+              <span class="step-num"><span>3</span></span>
+              <span class="step-name">Loan</span>
+            </div>
+            <div id="s4-card" class="card">
+              <div class="field-label">Loan Type</div>
+              <div class="control filled">Installment Loan <span class="caret">&#9662;</span></div>
+              <div class="gap"></div>
+              <div class="field-label">Loan amount &mdash; months</div>
+              <div class="control">SAR 6,000 &nbsp;&middot;&nbsp; 6 months</div>
+              <div id="s4-fig" class="figure green">
+                <span class="fig-k">Monthly deduction</span>
+                <span class="fig-v">SAR 1,000</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="s4-cap" class="caption">Open: <b>25%</b> of salary &middot; Installment: up to a <b>full salary</b>.</div>
+      </section>
+
+      <!-- ============ SCENE 5 — SETTLEMENT (16.2 – 20.6) ============ -->
+      <section id="s5" class="clip" data-start="16.2" data-duration="4.4" data-track-index="4">
+        <div class="screen">
+          <div class="statusbar">
+            <span>9:41</span>
+            <span class="sb-icons">
+              <i class="bar" style="height: 12px"></i>
+              <i class="bar" style="height: 18px"></i>
+              <i class="bar" style="height: 24px"></i>
+              <i class="battery"></i>
+            </span>
+          </div>
+          <div class="appbar">
+            <span class="burger"><i></i><i></i><i></i></span>
+            <span class="appbar-title">Annual Leave Payment</span>
+            <span class="avatar">FI</span>
+          </div>
+          <div class="body">
+            <div id="s5-step" class="step-row">
+              <span class="step-num"><span>4</span></span>
+              <span class="step-name">Settlement</span>
+            </div>
+            <div id="s5-card" class="card">
+              <div id="s5-fig1" class="figure blue">
+                <span class="fig-k">Eligible whole days</span>
+                <span class="fig-v"><span>8</span></span>
+              </div>
+              <div id="s5-fig2" class="figure orange">
+                <span class="fig-k">Estimated payment</span>
+                <span class="fig-v">SAR 2,400</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="s5-cap" class="caption">The window: only the <b>final 5 days</b> of the contract year.</div>
+      </section>
+
+      <!-- ============ SCENE 6 — RECAP + OUTRO (20.6 – 24.8) ============ -->
+      <section id="s6" class="clip dark" data-start="20.6" data-duration="4.2" data-track-index="5">
+        <div id="s6-head" class="outro-head">Four requests, one place</div>
+        <div class="recap">
+          <div id="s6-r1" class="recap-row">
+            <span class="recap-num"><span>1</span></span>
+            <span class="recap-name">Sick Leave</span>
+          </div>
+          <div id="s6-r2" class="recap-row">
+            <span class="recap-num"><span>2</span></span>
+            <span class="recap-name">Annual Leave</span>
+          </div>
+          <div id="s6-r3" class="recap-row">
+            <span class="recap-num"><span>3</span></span>
+            <span class="recap-name">Loan</span>
+          </div>
+          <div id="s6-r4" class="recap-row">
+            <span class="recap-num"><span>4</span></span>
+            <span class="recap-name">Annual Leave Settlement</span>
+          </div>
+        </div>
+        <div id="s6-outro">
+          <div class="logo-plate">
+            <img src="assets/img/ffi-logo.png" alt="Fathi Fouad Itani Contracting Co." />
+          </div>
+          <div class="outro-line">Requests, from your phone.</div>
+        </div>
+      </section>
+
+      <!-- ============ AUDIO ============ -->
+      <audio
+        id="bgm"
+        src="assets/music/happy-beats-business-moves-vol-10-by-ende-dot-app.mp3"
+        data-start="0"
+        data-duration="24.8"
+        data-track-index="10"
+        data-volume="0.9"
+      ></audio>
+
+      <!-- one soft arrival per phone screen, one payoff per highlighted figure -->
+      <audio id="sfx-s2" src="assets/sfx/impact/impactSoft_medium_002.ogg" data-start="3.01" data-track-index="11" data-volume="0.6"></audio>
+      <audio id="sfx-s2b" src="assets/sfx/interface/bong_001.ogg" data-start="4.64" data-track-index="12" data-volume="0.55"></audio>
+      <audio id="sfx-s3" src="assets/sfx/impact/impactSoft_medium_003.ogg" data-start="7.79" data-track-index="13" data-volume="0.6"></audio>
+      <audio id="sfx-s3b" src="assets/sfx/interface/bong_001.ogg" data-start="9.29" data-track-index="14" data-volume="0.55"></audio>
+      <audio id="sfx-s4" src="assets/sfx/impact/impactSoft_medium_004.ogg" data-start="12.02" data-track-index="15" data-volume="0.6"></audio>
+      <audio id="sfx-s4b" src="assets/sfx/interface/bong_001.ogg" data-start="13.64" data-track-index="16" data-volume="0.55"></audio>
+      <audio id="sfx-s5" src="assets/sfx/impact/impactSoft_medium_001.ogg" data-start="16.38" data-track-index="17" data-volume="0.6"></audio>
+      <audio id="sfx-s5b" src="assets/sfx/interface/bong_001.ogg" data-start="18.01" data-track-index="18" data-volume="0.55"></audio>
+      <!-- recap rows + logo -->
+      <audio id="sfx-r1" src="assets/sfx/ui/click2.ogg" data-start="20.74" data-track-index="19" data-volume="0.5"></audio>
+      <audio id="sfx-r2" src="assets/sfx/ui/click2.ogg" data-start="21.28" data-track-index="20" data-volume="0.5"></audio>
+      <audio id="sfx-r3" src="assets/sfx/ui/click2.ogg" data-start="21.83" data-track-index="21" data-volume="0.5"></audio>
+      <audio id="sfx-r4" src="assets/sfx/impact/impactBell_heavy_000.ogg" data-start="22.37" data-track-index="22" data-volume="0.75"></audio>
+      <audio id="sfx-logo" src="assets/sfx/impact/impactSoft_medium_000.ogg" data-start="23.46" data-track-index="23" data-volume="0.75"></audio>
+    </div>
+
+    <script>
+      /*
+       * FFI HR — all four employee requests, phone view, English.
+       * 1080x1920. The frame IS the phone screen, so the app chrome is the
+       * web app's sub-md layout: hamburger in place of the sidebar (see
+       * FrontEnd/src/layouts/BaseLayout.tsx, isMobile = !screens.md).
+       *
+       * Beat/cue source: brag skill preset for
+       * happy-beats-business-moves-vol-10 (109.96 BPM, beat grid ~0.545s).
+       * Each request screen arrives on a beat; its highlighted figure lands on
+       * the beat after, leaving the rest of the slot as settled reading time.
+       */
+      const build = () => {
+        const tl = gsap.timeline({ paused: true });
+        const EASE = "power3.out";
+
+        /* ---------- Scene 1 — hook (0.0 – 3.0) ---------- */
+        // beat-locked: 0.27s (strong cue)
+        tl.fromTo("#s1-kicker", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.42, ease: EASE }, 0.05);
+        tl.fromTo("#s1-title", { opacity: 0, y: 44 }, { opacity: 1, y: 0, duration: 0.5, ease: EASE }, 0.27);
+        tl.fromTo("#s1-sub", { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: 0.42, ease: EASE }, 0.82);
+        tl.to(["#s1-kicker", "#s1-title", "#s1-sub"], { opacity: 0, duration: 0.22 }, 2.78);
+
+        /* Each request scene shares one shape, so one helper keeps the timing
+           identical across all four and the code short. */
+        const requestScene = (n, at, figures, cueAt) => {
+          gsap.set(["#s" + n + "-card"].concat(figures), { opacity: 0 });
+          gsap.set("#s" + n + "-cap", { opacity: 0 });
+          tl.fromTo("#s" + n + "-step", { opacity: 0, x: -26 }, { opacity: 1, x: 0, duration: 0.34, ease: EASE }, at);
+          tl.fromTo("#s" + n + "-card", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.42, ease: EASE }, at + 0.12);
+          // the figures land on the next beat, one after another
+          figures.forEach((sel, i) => {
+            tl.fromTo(sel, { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.34, ease: EASE }, cueAt + i * 0.3);
+          });
+          // the teaching line rides in last and holds to the end of the slot
+          tl.fromTo("#s" + n + "-cap", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.36, ease: EASE }, cueAt + 0.55);
+        };
+
+        /* ---------- Scene 2 — sick leave (3.0 – 7.4) ---------- */
+        // beat: 3.01 arrival, 4.64 figure; caption settles 5.19 → 7.4 = 2.21s
+        gsap.set(["#s2-doc", "#s2-file"], { opacity: 0 });
+        requestScene(2, 3.01, ["#s2-fig"], 4.64);
+        tl.fromTo("#s2-doc", { opacity: 0 }, { opacity: 1, duration: 0.3 }, 3.9);
+        tl.fromTo("#s2-file", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.3, ease: EASE }, 4.1);
+
+        /* ---------- Scene 3 — annual leave (7.4 – 11.8) ---------- */
+        // two figures, because the gap between them is the whole point
+        requestScene(3, 7.79, ["#s3-fig1", "#s3-fig2"], 9.29);
+
+        /* ---------- Scene 4 — loan (11.8 – 16.2) ---------- */
+        requestScene(4, 12.02, ["#s4-fig"], 13.64);
+
+        /* ---------- Scene 5 — settlement (16.2 – 20.6) ---------- */
+        requestScene(5, 16.38, ["#s5-fig1", "#s5-fig2"], 18.01);
+
+        /* ---------- Scene 6 — recap + outro (20.6 – 24.8) ---------- */
+        gsap.set(["#s6-r1", "#s6-r2", "#s6-r3", "#s6-r4"], { opacity: 0 });
+        gsap.set("#s6-outro", { opacity: 0 });
+        tl.fromTo("#s6-head", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.38, ease: EASE }, 20.62);
+        // beat-grid: the four rows tick in on consecutive beats. They are two
+        // words each, so a single beat apart still clears the reading floor,
+        // and all four hold together from 22.37s to the end.
+        tl.fromTo("#s6-r1", { opacity: 0, x: -26 }, { opacity: 1, x: 0, duration: 0.3, ease: EASE }, 20.74);
+        tl.fromTo("#s6-r2", { opacity: 0, x: -26 }, { opacity: 1, x: 0, duration: 0.3, ease: EASE }, 21.28);
+        tl.fromTo("#s6-r3", { opacity: 0, x: -26 }, { opacity: 1, x: 0, duration: 0.3, ease: EASE }, 21.83);
+        tl.fromTo("#s6-r4", { opacity: 0, x: -26 }, { opacity: 1, x: 0, duration: 0.3, ease: EASE }, 22.37);
+        // beat: 23.46s — logo rides in under the recap, everything holds
+        tl.fromTo("#s6-outro", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4, ease: EASE }, 23.46);
+
+        /* ---------- Music bed ---------- */
+        tl.fromTo("#bgm", { volume: 0 }, { volume: 0.9, duration: 0.9 }, 0);
+        tl.to("#bgm", { volume: 1.0, duration: 0.7 }, 20.6); // small lift for the outro
+        tl.to("#bgm", { volume: 0, duration: 1.1 }, 23.5); // fade under the logo
+
+        window.__timelines["main"] = tl;
+        tl.seek(0);
+      };
+
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(build);
+      } else {
+        build();
+      }
+    </script>
+  </body>
+</html>
