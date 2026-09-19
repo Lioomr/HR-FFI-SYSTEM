@@ -1,0 +1,971 @@
+<!doctype html>
+<html lang="ar" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <title>نظام FFI للموارد البشرية — دليل الطلبات من القائمة</title>
+    <script src="vendor/gsap.min.js"></script>
+    <style>
+      /* Readex Pro is the app's Arabic face (FrontEnd/src/index.css --font-ar) */
+      @font-face {
+        font-family: "Readex Pro";
+        src: url("assets/fonts/readexpro-arabic.woff2") format("woff2");
+        font-weight: 160 700;
+        font-style: normal;
+        font-display: block;
+        unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891,
+          U+0898-08E1, U+08E3-08FF, U+FB50-FDFF, U+FE70-FEFF;
+      }
+
+      @font-face {
+        font-family: "Readex Pro";
+        src: url("assets/fonts/readexpro-latin.woff2") format("woff2");
+        font-weight: 160 700;
+        font-style: normal;
+        font-display: block;
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+2000-206F,
+          U+2070-209F, U+20A0-20AB, U+20AD-20CF, U+2212, U+2215;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 1080px;
+        height: 1920px;
+        overflow: hidden;
+        background: #0d1117;
+      }
+
+      :root {
+        /* Pulled verbatim from FrontEnd/src/index.css :root tokens */
+        --brand-primary: #f97316;
+        --brand-on-light: #c2410c; /* AA-safe orange for text on white */
+        --sidebar-bg: #0d1117;
+        --sidebar-text: rgba(255, 255, 255, 0.72);
+        --sidebar-text-active: #fb923c;
+        --sidebar-item-active-bg: rgba(249, 115, 22, 0.13);
+        /* the app token is rgba(255,255,255,0.25), which is ~1.9:1 on the
+           sidebar and fails WCAG AA; lifted here so the label is readable */
+        --sidebar-section-color: rgba(255, 255, 255, 0.58);
+        --surface-0: #ffffff;
+        --surface-1: #f8faff;
+        --surface-3: #e2e8f0;
+        --text-primary: #0f172a;
+        --text-secondary: #64748b;
+      }
+
+      #root {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        direction: rtl;
+        font-family: "Readex Pro", system-ui, sans-serif;
+        background: var(--surface-1);
+      }
+
+      .clip {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+      }
+
+      .ltr {
+        direction: ltr;
+        unicode-bidi: isolate;
+      }
+
+      /* ---------- dark frames ---------- */
+      .dark {
+        background: var(--sidebar-bg);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 0 70px;
+      }
+
+      .hook-kicker {
+        font-size: 30px;
+        font-weight: 500;
+        color: var(--brand-primary);
+        margin-bottom: 34px;
+        text-align: center;
+      }
+
+      .hook-title {
+        font-size: 100px;
+        font-weight: 700;
+        color: #ffffff;
+        line-height: 1.2;
+        text-align: center;
+      }
+
+      .hook-sub {
+        margin-top: 40px;
+        font-size: 44px;
+        font-weight: 400;
+        color: #cbd5e1;
+        text-align: center;
+        line-height: 1.45;
+      }
+
+      .hook-sub b {
+        color: var(--brand-primary);
+        font-weight: 600;
+      }
+
+      /* ---------- the phone screen fills the frame ---------- */
+      .screen {
+        position: absolute;
+        inset: 0;
+        background: var(--surface-1);
+        display: flex;
+        flex-direction: column;
+      }
+
+      .statusbar {
+        height: 74px;
+        flex: 0 0 74px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 46px;
+        font-size: 28px;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+
+      .sb-icons {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .bar {
+        width: 8px;
+        border-radius: 2px;
+        background: var(--text-primary);
+      }
+
+      .battery {
+        width: 44px;
+        height: 22px;
+        border: 3px solid var(--text-primary);
+        border-radius: 6px;
+        position: relative;
+      }
+
+      .battery::after {
+        content: "";
+        position: absolute;
+        inset: 3px;
+        background: var(--text-primary);
+        border-radius: 2px;
+      }
+
+      /* below md the web app swaps the sidebar for a hamburger + Drawer
+         (FrontEnd/src/layouts/BaseLayout.tsx, isMobile = !screens.md) */
+      .appbar {
+        height: 118px;
+        flex: 0 0 118px;
+        background: var(--surface-0);
+        border-bottom: 2px solid var(--surface-3);
+        display: flex;
+        align-items: center;
+        gap: 26px;
+        padding: 0 40px;
+        position: relative;
+        z-index: 2;
+      }
+
+      .burger {
+        width: 46px;
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+        flex: 0 0 46px;
+      }
+
+      .burger i {
+        display: block;
+        height: 5px;
+        border-radius: 3px;
+        background: var(--text-primary);
+      }
+
+      .appbar-title {
+        font-size: 38px;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+
+      .avatar {
+        margin-inline-start: auto;
+        width: 62px;
+        height: 62px;
+        border-radius: 999px;
+        background: var(--brand-on-light);
+        color: #ffffff;
+        font-size: 26px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 62px;
+      }
+
+      .body {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: 0 40px 230px;
+      }
+
+      /* ---------- the Drawer ---------- */
+      .scrim {
+        position: absolute;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.55);
+        z-index: 8;
+      }
+
+      /* Ant Design places the Drawer at `right` under RTL and `left` otherwise
+         — both are the inline-start edge, so one logical rule covers both. */
+      .drawer {
+        position: absolute;
+        inset-inline-start: 0;
+        top: 0;
+        bottom: 0;
+        width: 660px;
+        background: var(--sidebar-bg);
+        z-index: 9;
+        padding: 60px 0 0;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .drawer-brand {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        padding: 0 36px 38px;
+      }
+
+      .brand-mark {
+        width: 62px;
+        height: 62px;
+        border-radius: 14px;
+        background: var(--brand-primary);
+        color: #0d1117;
+        font-size: 26px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 62px;
+      }
+
+      .brand-name {
+        font-size: 32px;
+        font-weight: 600;
+        color: #ffffff;
+      }
+
+      .menu-group {
+        font-size: 24px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        color: var(--sidebar-section-color);
+        padding: 0 36px 20px;
+      }
+
+      .menu-item {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        margin: 0 20px 10px;
+        padding: 22px 26px;
+        border-radius: 12px;
+        font-size: 31px;
+        color: var(--sidebar-text);
+      }
+
+      .menu-item.parent {
+        font-weight: 600;
+        color: #ffffff;
+      }
+
+      .menu-item.child {
+        margin-inline-start: 56px;
+        font-size: 29px;
+      }
+
+      .menu-item.active {
+        background: var(--sidebar-item-active-bg);
+        color: var(--sidebar-text-active);
+        font-weight: 600;
+      }
+
+      .mi-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.16);
+        flex: 0 0 34px;
+      }
+
+      .menu-item.active .mi-icon {
+        background: var(--brand-primary);
+      }
+
+      /* ---------- page content ---------- */
+      .card {
+        background: var(--surface-0);
+        border-radius: 20px;
+        box-shadow: 0 16px 44px rgba(15, 23, 42, 0.1);
+        padding: 38px 36px 42px;
+      }
+
+      .field-label {
+        font-size: 28px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        margin-bottom: 14px;
+      }
+
+      .field-label.req {
+        color: var(--brand-on-light);
+        font-weight: 600;
+      }
+
+      .control {
+        height: 92px;
+        border: 2px solid var(--surface-3);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        padding: 0 28px;
+        font-size: 32px;
+        color: var(--text-primary);
+        background: #ffffff;
+      }
+
+      .control.filled {
+        border-color: var(--brand-primary);
+      }
+
+      .caret {
+        margin-inline-start: auto;
+        color: #6c7786;
+        font-size: 24px;
+      }
+
+      .gap {
+        height: 30px;
+      }
+
+      .figure {
+        margin-top: 30px;
+        border-radius: 12px;
+        padding: 26px 30px;
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 18px;
+      }
+
+      .figure.blue {
+        background: #f0f7ff;
+        border: 2px solid #91caff;
+      }
+
+      .figure.green {
+        background: #f6ffed;
+        border: 2px solid #b7eb8f;
+      }
+
+      .figure.orange {
+        background: #fff7ed;
+        border: 2px solid #fdba74;
+      }
+
+      .fig-k {
+        font-size: 27px;
+        color: var(--text-primary);
+        font-weight: 600;
+      }
+
+      .fig-v {
+        font-size: 42px;
+        font-weight: 700;
+        color: var(--text-primary);
+        white-space: nowrap;
+      }
+
+      .figure.green .fig-v {
+        color: #135200;
+      }
+
+      .figure.orange .fig-v {
+        color: var(--brand-on-light);
+      }
+
+      .file-row {
+        margin-top: 22px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        font-size: 29px;
+        color: var(--text-primary);
+      }
+
+      .tick {
+        width: 38px;
+        height: 38px;
+        border-radius: 999px;
+        background: #135200;
+        color: #ffffff;
+        font-size: 21px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 38px;
+      }
+
+      .btn-primary {
+        margin-top: 32px;
+        height: 92px;
+        border-radius: 12px;
+        background: var(--brand-on-light);
+        color: #ffffff;
+        font-size: 32px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      /* the teaching line */
+      .caption {
+        position: absolute;
+        left: 40px;
+        right: 40px;
+        bottom: 56px;
+        background: var(--sidebar-bg);
+        border-radius: 18px;
+        padding: 28px 34px;
+        font-size: 30px;
+        line-height: 1.45;
+        color: #ffffff;
+        box-shadow: 0 18px 50px rgba(15, 23, 42, 0.32);
+        z-index: 12;
+      }
+
+      .caption b {
+        color: var(--brand-primary);
+        font-weight: 600;
+      }
+
+      /* the tap indicator */
+      .tap {
+        position: absolute;
+        width: 96px;
+        height: 96px;
+        border-radius: 999px;
+        border: 6px solid var(--brand-primary);
+        background: rgba(249, 115, 22, 0.24);
+        z-index: 11;
+      }
+
+      /* ---------- outro ---------- */
+      .outro-head {
+        font-size: 54px;
+        font-weight: 600;
+        color: #ffffff;
+        margin-bottom: 46px;
+        text-align: center;
+      }
+
+      .paths {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        width: 100%;
+        margin-bottom: 58px;
+      }
+
+      .path-row {
+        background: #161b22;
+        border: 2px solid rgba(255, 255, 255, 0.09);
+        border-radius: 16px;
+        padding: 26px 30px;
+      }
+
+      .path-name {
+        font-size: 33px;
+        font-weight: 600;
+        color: #ffffff;
+        margin-bottom: 8px;
+      }
+
+      .path-trail {
+        font-size: 26px;
+        color: var(--brand-primary);
+      }
+
+      .logo-plate {
+        background: #ffffff;
+        border-radius: 16px;
+        padding: 22px 34px;
+        display: flex;
+        align-items: center;
+      }
+
+      .logo-plate img {
+        width: 380px;
+        height: auto;
+        display: block;
+      }
+
+      .outro-line {
+        margin-top: 24px;
+        font-size: 34px;
+        font-weight: 500;
+        color: #ffffff;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="50.2"
+      data-width="1080"
+      data-height="1920"
+    >
+      <!-- ============ SCENE 1 — HOOK (0 – 3.55) ============ -->
+      <section id="s1" class="clip dark" data-start="0" data-duration="3.55" data-track-index="0">
+        <div id="s1-kicker" class="hook-kicker">دليل الموظف &mdash; الموارد البشرية</div>
+        <h1 id="s1-title" class="hook-title">كل طلباتك<br />تبدأ من القائمة</h1>
+        <div id="s1-sub" class="hook-sub">افتح القائمة الجانبية، واختر طلبك.</div>
+      </section>
+
+      <!-- ============ SCENE 2 — OPEN THE SIDEBAR (3.55 – 11.47) ============ -->
+      <section id="s2" class="clip" data-start="3.55" data-duration="7.92" data-track-index="1">
+        <div class="screen">
+          <div class="statusbar">
+            <span class="ltr">9:41</span>
+            <span class="sb-icons">
+              <i class="bar" style="height: 12px"></i>
+              <i class="bar" style="height: 18px"></i>
+              <i class="bar" style="height: 24px"></i>
+              <i class="battery"></i>
+            </span>
+          </div>
+          <div class="appbar">
+            <span class="burger"><i></i><i></i><i></i></span>
+            <span class="appbar-title">الرئيسية</span>
+            <span class="avatar">FI</span>
+          </div>
+          <div class="body"></div>
+        </div>
+        <div id="s2-scrim" class="scrim"></div>
+        <div id="s2-drawer" class="drawer" data-layout-allow-overflow="true">
+          <div class="drawer-brand">
+            <span class="brand-mark">FFI</span>
+            <span class="brand-name">نظام الموارد البشرية</span>
+          </div>
+          <div id="s2-group" class="menu-group">طلباتي &mdash; خدمة الموظف الذاتية</div>
+          <div id="s2-m1" class="menu-item parent"><span class="mi-icon"></span>الطلبات</div>
+          <div id="s2-m2" class="menu-item child"><span class="mi-icon"></span>طلب إجازة</div>
+          <div id="s2-m3" class="menu-item child"><span class="mi-icon"></span>طلب سلفة</div>
+          <div id="s2-m4" class="menu-item"><span class="mi-icon"></span>رصيد الإجازات</div>
+          <div id="s2-m5" class="menu-item"><span class="mi-icon"></span>قسائم رواتبي</div>
+        </div>
+        <div id="s2-tap" class="tap" style="inset-inline-start: 38px; top: 108px"></div>
+        <div id="s2-cap" class="caption">من هنا تبدأ <b>كل</b> الطلبات.</div>
+      </section>
+
+      <!-- ============ SCENE 3 — SICK LEAVE (11.47 – 20.19) ============ -->
+      <section id="s3" class="clip" data-start="11.47" data-duration="8.72" data-track-index="2">
+        <div class="screen">
+          <div class="statusbar">
+            <span class="ltr">9:41</span>
+            <span class="sb-icons">
+              <i class="bar" style="height: 12px"></i>
+              <i class="bar" style="height: 18px"></i>
+              <i class="bar" style="height: 24px"></i>
+              <i class="battery"></i>
+            </span>
+          </div>
+          <div class="appbar">
+            <span class="burger"><i></i><i></i><i></i></span>
+            <span class="appbar-title">طلب إجازة</span>
+            <span class="avatar">FI</span>
+          </div>
+          <div class="body">
+            <div id="s3-card" class="card">
+              <div class="field-label">نوع الإجازة</div>
+              <div class="control filled">إجازة مرضية <span class="caret">&#9662;</span></div>
+              <div class="gap"></div>
+              <div id="s3-doc" class="field-label req">المستند (مطلوب)</div>
+              <div id="s3-file" class="file-row">
+                <span class="tick">&#10003;</span>
+                <span class="ltr">medical-report.pdf</span>
+              </div>
+              <div id="s3-fig" class="figure blue">
+                <span class="fig-k">المتبقي</span>
+                <span class="fig-v"><span class="ltr">120</span> يوماً</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="s3-scrim" class="scrim"></div>
+        <div id="s3-drawer" class="drawer" data-layout-allow-overflow="true">
+          <div class="drawer-brand">
+            <span class="brand-mark">FFI</span>
+            <span class="brand-name">نظام الموارد البشرية</span>
+          </div>
+          <div class="menu-group">طلباتي &mdash; خدمة الموظف الذاتية</div>
+          <div class="menu-item parent"><span class="mi-icon"></span>الطلبات</div>
+          <div class="menu-item child active"><span class="mi-icon"></span>طلب إجازة</div>
+          <div class="menu-item child"><span class="mi-icon"></span>طلب سلفة</div>
+          <div class="menu-item"><span class="mi-icon"></span>رصيد الإجازات</div>
+          <div class="menu-item"><span class="mi-icon"></span>قسائم رواتبي</div>
+        </div>
+        <div id="s3-tap" class="tap" style="inset-inline-start: 120px; top: 291px"></div>
+        <div id="s3-cap" class="caption"><b>1</b> &middot; إجازة مرضية &mdash; بدون <b>تقرير طبي</b> لن يُقدَّم الطلب.</div>
+      </section>
+
+      <!-- ============ SCENE 4 — ANNUAL LEAVE (20.19 – 28.37) ============ -->
+      <section id="s4" class="clip" data-start="20.19" data-duration="8.18" data-track-index="3">
+        <div class="screen">
+          <div class="statusbar">
+            <span class="ltr">9:41</span>
+            <span class="sb-icons">
+              <i class="bar" style="height: 12px"></i>
+              <i class="bar" style="height: 18px"></i>
+              <i class="bar" style="height: 24px"></i>
+              <i class="battery"></i>
+            </span>
+          </div>
+          <div class="appbar">
+            <span class="burger"><i></i><i></i><i></i></span>
+            <span class="appbar-title">طلب إجازة</span>
+            <span class="avatar">FI</span>
+          </div>
+          <div class="body">
+            <div id="s4-card" class="card">
+              <div class="field-label">نوع الإجازة</div>
+              <div class="control filled">إجازة سنوية <span class="caret">&#9662;</span></div>
+              <div id="s4-fig1" class="figure blue">
+                <span class="fig-k">المتبقي</span>
+                <span class="fig-v"><span class="ltr">14.75</span></span>
+              </div>
+              <div id="s4-fig2" class="figure orange">
+                <span class="fig-k">الأيام القابلة للطلب</span>
+                <span class="fig-v"><span class="ltr">12</span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="s4-scrim" class="scrim"></div>
+        <div id="s4-drawer" class="drawer" data-layout-allow-overflow="true">
+          <div class="drawer-brand">
+            <span class="brand-mark">FFI</span>
+            <span class="brand-name">نظام الموارد البشرية</span>
+          </div>
+          <div class="menu-group">طلباتي &mdash; خدمة الموظف الذاتية</div>
+          <div class="menu-item parent"><span class="mi-icon"></span>الطلبات</div>
+          <div class="menu-item child active"><span class="mi-icon"></span>طلب إجازة</div>
+          <div class="menu-item child"><span class="mi-icon"></span>طلب سلفة</div>
+          <div class="menu-item"><span class="mi-icon"></span>رصيد الإجازات</div>
+          <div class="menu-item"><span class="mi-icon"></span>قسائم رواتبي</div>
+        </div>
+        <div id="s4-tap" class="tap" style="inset-inline-start: 120px; top: 291px"></div>
+        <div id="s4-cap" class="caption"><b>2</b> &middot; إجازة سنوية &mdash; نفس الشاشة، غيّر <b>النوع</b> فقط.</div>
+      </section>
+
+      <!-- ============ SCENE 5 — LOAN (28.37 – 36.56) ============ -->
+      <section id="s5" class="clip" data-start="28.37" data-duration="8.19" data-track-index="4">
+        <div class="screen">
+          <div class="statusbar">
+            <span class="ltr">9:41</span>
+            <span class="sb-icons">
+              <i class="bar" style="height: 12px"></i>
+              <i class="bar" style="height: 18px"></i>
+              <i class="bar" style="height: 24px"></i>
+              <i class="battery"></i>
+            </span>
+          </div>
+          <div class="appbar">
+            <span class="burger"><i></i><i></i><i></i></span>
+            <span class="appbar-title">طلب سلفة</span>
+            <span class="avatar">FI</span>
+          </div>
+          <div class="body">
+            <div id="s5-card" class="card">
+              <div class="field-label">نوع السلفة</div>
+              <div class="control filled">سلفة بالتقسيط <span class="caret">&#9662;</span></div>
+              <div class="gap"></div>
+              <div class="field-label">مبلغ السلفة &mdash; عدد الأشهر</div>
+              <div class="control"><span class="ltr">6,000</span> ر.س &nbsp;&middot;&nbsp; <span class="ltr">6</span> أشهر</div>
+              <div id="s5-fig" class="figure green">
+                <span class="fig-k">الاستقطاع الشهري</span>
+                <span class="fig-v"><span class="ltr">1,000</span> ر.س</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="s5-scrim" class="scrim"></div>
+        <div id="s5-drawer" class="drawer" data-layout-allow-overflow="true">
+          <div class="drawer-brand">
+            <span class="brand-mark">FFI</span>
+            <span class="brand-name">نظام الموارد البشرية</span>
+          </div>
+          <div class="menu-group">طلباتي &mdash; خدمة الموظف الذاتية</div>
+          <div class="menu-item parent"><span class="mi-icon"></span>الطلبات</div>
+          <div class="menu-item child"><span class="mi-icon"></span>طلب إجازة</div>
+          <div class="menu-item child active"><span class="mi-icon"></span>طلب سلفة</div>
+          <div class="menu-item"><span class="mi-icon"></span>رصيد الإجازات</div>
+          <div class="menu-item"><span class="mi-icon"></span>قسائم رواتبي</div>
+        </div>
+        <div id="s5-tap" class="tap" style="inset-inline-start: 120px; top: 380px"></div>
+        <div id="s5-cap" class="caption"><b>3</b> &middot; سلفة &mdash; مؤقتة <b>25%</b> من الراتب، بالتقسيط حتى <b>راتب كامل</b>.</div>
+      </section>
+
+      <!-- ============ SCENE 6 — SETTLEMENT (36.56 – 45.28) ============ -->
+      <section id="s6" class="clip" data-start="36.56" data-duration="8.72" data-track-index="5">
+        <div class="screen">
+          <div class="statusbar">
+            <span class="ltr">9:41</span>
+            <span class="sb-icons">
+              <i class="bar" style="height: 12px"></i>
+              <i class="bar" style="height: 18px"></i>
+              <i class="bar" style="height: 24px"></i>
+              <i class="battery"></i>
+            </span>
+          </div>
+          <div class="appbar">
+            <span class="burger"><i></i><i></i><i></i></span>
+            <span class="appbar-title">رصيد الإجازات</span>
+            <span class="avatar">FI</span>
+          </div>
+          <div class="body">
+            <div id="s6-card" class="card">
+              <div class="field-label">دفع الإجازة السنوية</div>
+              <div id="s6-fig1" class="figure blue">
+                <span class="fig-k">الأيام الكاملة المستحقة</span>
+                <span class="fig-v"><span class="ltr">8</span></span>
+              </div>
+              <div id="s6-fig2" class="figure orange">
+                <span class="fig-k">مبلغ الدفع التقديري</span>
+                <span class="fig-v"><span class="ltr">2,400</span> ر.س</span>
+              </div>
+              <div id="s6-btn" class="btn-primary">طلب دفع</div>
+            </div>
+          </div>
+        </div>
+        <div id="s6-scrim" class="scrim"></div>
+        <div id="s6-drawer" class="drawer" data-layout-allow-overflow="true">
+          <div class="drawer-brand">
+            <span class="brand-mark">FFI</span>
+            <span class="brand-name">نظام الموارد البشرية</span>
+          </div>
+          <div class="menu-group">طلباتي &mdash; خدمة الموظف الذاتية</div>
+          <div class="menu-item parent"><span class="mi-icon"></span>الطلبات</div>
+          <div class="menu-item child"><span class="mi-icon"></span>طلب إجازة</div>
+          <div class="menu-item child"><span class="mi-icon"></span>طلب سلفة</div>
+          <div class="menu-item active"><span class="mi-icon"></span>رصيد الإجازات</div>
+          <div class="menu-item"><span class="mi-icon"></span>قسائم رواتبي</div>
+        </div>
+        <div id="s6-tap" class="tap" style="inset-inline-start: 60px; top: 475px"></div>
+        <div id="s6-cap" class="caption"><b>4</b> &middot; التسوية ليست في &laquo;الطلبات&raquo; &mdash; بل في <b>رصيد الإجازات</b>.</div>
+      </section>
+
+      <!-- ============ SCENE 7 — THE FOUR PATHS + OUTRO (45.28 – 50.2) ============ -->
+      <section id="s7" class="clip dark" data-start="45.28" data-duration="4.92" data-track-index="6">
+        <div id="s7-head" class="outro-head">أربعة طلبات، ثلاثة مسارات</div>
+        <div class="paths">
+          <div id="s7-p1" class="path-row">
+            <div class="path-name">إجازة مرضية &middot; سنوية</div>
+            <div class="path-trail">الطلبات &rarr; طلب إجازة</div>
+          </div>
+          <div id="s7-p2" class="path-row">
+            <div class="path-name">سلفة</div>
+            <div class="path-trail">الطلبات &rarr; طلب سلفة</div>
+          </div>
+          <div id="s7-p3" class="path-row">
+            <div class="path-name">تسوية الإجازة السنوية</div>
+            <div class="path-trail">رصيد الإجازات &rarr; طلب دفع</div>
+          </div>
+        </div>
+        <div id="s7-outro">
+          <div class="logo-plate">
+            <img src="assets/img/ffi-logo.png" alt="شركة فتحي فؤاد عيتاني للمقاولات" />
+          </div>
+          <div class="outro-line">طلباتك، من جوالك.</div>
+        </div>
+      </section>
+
+      <!-- ============ AUDIO ============ -->
+      <audio
+        id="bgm"
+        src="assets/music/happy-beats-business-moves-vol-10-by-ende-dot-app.mp3"
+        data-start="0"
+        data-duration="50.2"
+        data-track-index="10"
+        data-volume="0.9"
+      ></audio>
+
+      <!-- scene 2: the hamburger tap and the menu building -->
+      <audio id="sfx-tap2" src="assets/sfx/ui/click2.ogg" data-start="4.64" data-track-index="11" data-volume="0.8"></audio>
+      <audio id="sfx-m1" src="assets/sfx/ui/click2.ogg" data-start="5.74" data-track-index="12" data-volume="0.4"></audio>
+      <audio id="sfx-m2" src="assets/sfx/ui/click2.ogg" data-start="6.28" data-track-index="13" data-volume="0.4"></audio>
+      <audio id="sfx-m3" src="assets/sfx/ui/click2.ogg" data-start="6.82" data-track-index="14" data-volume="0.4"></audio>
+      <audio id="sfx-m4" src="assets/sfx/ui/click2.ogg" data-start="7.35" data-track-index="15" data-volume="0.4"></audio>
+      <audio id="sfx-m5" src="assets/sfx/ui/click2.ogg" data-start="7.79" data-track-index="16" data-volume="0.4"></audio>
+      <!-- each request: the menu tap, then the figure payoff -->
+      <audio id="sfx-tap3" src="assets/sfx/interface/click_003.ogg" data-start="12.02" data-track-index="17" data-volume="0.8"></audio>
+      <audio id="sfx-fig3" src="assets/sfx/interface/bong_001.ogg" data-start="15.28" data-track-index="18" data-volume="0.55"></audio>
+      <audio id="sfx-tap4" src="assets/sfx/interface/click_003.ogg" data-start="20.74" data-track-index="19" data-volume="0.8"></audio>
+      <audio id="sfx-fig4" src="assets/sfx/interface/bong_001.ogg" data-start="22.92" data-track-index="20" data-volume="0.55"></audio>
+      <audio id="sfx-tap5" src="assets/sfx/interface/click_003.ogg" data-start="28.92" data-track-index="21" data-volume="0.8"></audio>
+      <audio id="sfx-fig5" src="assets/sfx/interface/bong_001.ogg" data-start="31.65" data-track-index="22" data-volume="0.55"></audio>
+      <audio id="sfx-tap6" src="assets/sfx/interface/click_003.ogg" data-start="37.11" data-track-index="23" data-volume="0.8"></audio>
+      <audio id="sfx-fig6" src="assets/sfx/interface/bong_001.ogg" data-start="39.29" data-track-index="24" data-volume="0.55"></audio>
+      <audio id="sfx-btn6" src="assets/sfx/impact/impactSoft_medium_001.ogg" data-start="40.93" data-track-index="25" data-volume="0.6"></audio>
+      <!-- outro -->
+      <audio id="sfx-p1" src="assets/sfx/impact/impactSoft_medium_002.ogg" data-start="45.82" data-track-index="26" data-volume="0.5"></audio>
+      <audio id="sfx-p2" src="assets/sfx/impact/impactSoft_medium_003.ogg" data-start="46.37" data-track-index="27" data-volume="0.5"></audio>
+      <audio id="sfx-p3" src="assets/sfx/impact/impactBell_heavy_000.ogg" data-start="46.92" data-track-index="28" data-volume="0.7"></audio>
+      <audio id="sfx-logo" src="assets/sfx/impact/impactSoft_medium_000.ogg" data-start="48.55" data-track-index="29" data-volume="0.7"></audio>
+    </div>
+
+    <script>
+      /*
+       * FFI HR — guided walkthrough of all four employee requests, starting
+       * from the sidebar. Arabic (RTL), 1080x1920.
+       *
+       * The chrome is the responsive WEB app below its md breakpoint, not the
+       * React Native app: hamburger + Drawer, per BaseLayout.tsx where
+       * isMobile = !screens.md. Ant Design puts the Drawer on `right` under RTL
+       * and `left` otherwise, which is the inline-start edge in both cases, so
+       * the CSS uses inset-inline-start and only the slide direction differs
+       * between the two language cuts.
+       *
+       * Beat/cue source: brag skill preset for
+       * happy-beats-business-moves-vol-10 (109.96 BPM, ~0.545s grid, 60s track).
+       * Every scene boundary and tap sits on a beat.
+       */
+      const build = () => {
+        const tl = gsap.timeline({ paused: true });
+        const EASE = "power3.out";
+        const OUT = 720; // how far the drawer travels off-screen (RTL: to the right)
+
+        /* ---------- Scene 1 — hook (0 – 3.55) ---------- */
+        tl.fromTo("#s1-kicker", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.42, ease: EASE }, 0.05);
+        tl.fromTo("#s1-title", { opacity: 0, y: 44 }, { opacity: 1, y: 0, duration: 0.5, ease: EASE }, 0.27);
+        tl.fromTo("#s1-sub", { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: 0.42, ease: EASE }, 0.82);
+        tl.to(["#s1-kicker", "#s1-title", "#s1-sub"], { opacity: 0, duration: 0.22 }, 3.3);
+
+        /* ---------- Scene 2 — open the sidebar (3.55 – 11.47) ---------- */
+        // The drawer starts closed here: this is the one scene that shows the
+        // gesture itself, so the rest can open already-open and just close.
+        gsap.set("#s2-drawer", { x: OUT });
+        gsap.set("#s2-scrim", { opacity: 0 });
+        gsap.set(["#s2-group", "#s2-m1", "#s2-m2", "#s2-m3", "#s2-m4", "#s2-m5"], { opacity: 0 });
+        gsap.set("#s2-cap", { opacity: 0 });
+        gsap.set("#s2-tap", { opacity: 0, scale: 0.4 });
+
+        // the tap on the hamburger, beat-locked at 4.64s
+        tl.to("#s2-tap", { opacity: 1, scale: 1, duration: 0.26, ease: "back.out(2)" }, 4.5);
+        tl.to("#s2-tap", { opacity: 0, scale: 1.5, duration: 0.34 }, 4.76);
+        // the drawer answers the tap
+        tl.to("#s2-scrim", { opacity: 1, duration: 0.3 }, 4.64);
+        tl.to("#s2-drawer", { x: 0, duration: 0.44, ease: "power3.out" }, 4.64);
+        tl.to("#s2-group", { opacity: 1, duration: 0.26 }, 5.19);
+        // the menu builds one row per beat; the rows are short and they all
+        // stay on screen until 11.47, so a single beat apart still reads
+        ["#s2-m1", "#s2-m2", "#s2-m3", "#s2-m4", "#s2-m5"].forEach((sel, i) => {
+          tl.fromTo(sel, { opacity: 0, x: 30 }, { opacity: 1, x: 0, duration: 0.3, ease: EASE }, 5.74 + i * 0.545);
+        });
+        tl.fromTo("#s2-cap", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.34, ease: EASE }, 8.73);
+
+        /* Every request scene has the same shape: the drawer is already open
+           with its item highlighted, a tap lands on that item, the drawer
+           closes, the page fills in, then the rule holds. */
+        const requestScene = (n, tapAt, fills, capAt) => {
+          const d = "#s" + n + "-drawer", sc = "#s" + n + "-scrim", tp = "#s" + n + "-tap";
+          gsap.set(d, { x: 0 });
+          gsap.set(sc, { opacity: 1 });
+          gsap.set(tp, { opacity: 0, scale: 0.4 });
+          gsap.set("#s" + n + "-card", { opacity: 0 });
+          gsap.set("#s" + n + "-cap", { opacity: 0 });
+          fills.forEach((sel) => gsap.set(sel, { opacity: 0 }));
+
+          // the tap on the highlighted menu row
+          tl.to(tp, { opacity: 1, scale: 1, duration: 0.26, ease: "back.out(2)" }, tapAt - 0.14);
+          tl.to(tp, { opacity: 0, scale: 1.5, duration: 0.34 }, tapAt + 0.12);
+          // the drawer closes and the page is revealed
+          tl.to(d, { x: OUT, duration: 0.42, ease: "power3.in" }, tapAt + 0.27);
+          tl.to(sc, { opacity: 0, duration: 0.36 }, tapAt + 0.33);
+          tl.fromTo("#s" + n + "-card", { opacity: 0, y: 34 }, { opacity: 1, y: 0, duration: 0.4, ease: EASE }, tapAt + 0.55);
+          // the fields and figures land on following beats
+          fills.forEach((sel, i) => {
+            tl.fromTo(sel, { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.32, ease: EASE }, tapAt + 1.09 + i * 0.545);
+          });
+          // the rule, held for the rest of the slot
+          tl.fromTo("#s" + n + "-cap", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.34, ease: EASE }, capAt);
+        };
+
+        /* ---------- Scene 3 — sick leave (11.47 – 20.19) ---------- */
+        // tap 12.02 · fields 13.11 / 13.64 · figure 14.20 · rule 16.38 → holds 3.8s
+        requestScene(3, 12.02, ["#s3-doc", "#s3-file", "#s3-fig"], 16.38);
+
+        /* ---------- Scene 4 — annual leave (20.19 – 28.37) ---------- */
+        // same menu row as sick leave, which is the point the caption makes
+        requestScene(4, 20.74, ["#s4-fig1", "#s4-fig2"], 24.56);
+
+        /* ---------- Scene 5 — loan (28.37 – 36.56) ---------- */
+        requestScene(5, 28.92, ["#s5-fig"], 32.74);
+
+        /* ---------- Scene 6 — settlement (36.56 – 45.28) ---------- */
+        // the one that is NOT under Requests; the button is the payoff
+        requestScene(6, 37.11, ["#s6-fig1", "#s6-fig2", "#s6-btn"], 42.02);
+
+        /* ---------- Scene 7 — the four paths + outro (45.28 – 50.2) ---------- */
+        gsap.set(["#s7-p1", "#s7-p2", "#s7-p3"], { opacity: 0 });
+        gsap.set("#s7-outro", { opacity: 0 });
+        tl.fromTo("#s7-head", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.38, ease: EASE }, 45.3);
+        tl.fromTo("#s7-p1", { opacity: 0, x: 30 }, { opacity: 1, x: 0, duration: 0.32, ease: EASE }, 45.82);
+        tl.fromTo("#s7-p2", { opacity: 0, x: 30 }, { opacity: 1, x: 0, duration: 0.32, ease: EASE }, 46.37);
+        tl.fromTo("#s7-p3", { opacity: 0, x: 30 }, { opacity: 1, x: 0, duration: 0.32, ease: EASE }, 46.92);
+        tl.fromTo("#s7-outro", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4, ease: EASE }, 48.55);
+
+        /* ---------- Music bed ---------- */
+        tl.fromTo("#bgm", { volume: 0 }, { volume: 0.9, duration: 0.9 }, 0);
+        tl.to("#bgm", { volume: 1.0, duration: 0.7 }, 45.28); // small lift for the outro
+        tl.to("#bgm", { volume: 0, duration: 1.2 }, 48.8); // fade under the logo
+
+        window.__timelines["main"] = tl;
+        tl.seek(0);
+      };
+
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(build);
+      } else {
+        build();
+      }
+    </script>
+  </body>
+</html>

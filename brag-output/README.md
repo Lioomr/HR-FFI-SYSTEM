@@ -201,3 +201,59 @@ out of scope, and the tab bar in `src/app/(protected)/(tabs)/_layout.tsx` confir
 home, attendance, leave, notifications, more. So employees must use the browser for loans
 and settlements. A video showing those inside the native app would teach a flow that does
 not exist.
+
+## Guided tour — from the sidebar
+
+| File | What it is |
+|---|---|
+| `brag-guide.mp4` / `brag-guide.jpg` | English cut, **vertical 1080x1920**, 50.2s. |
+| `brag-guide-ar.mp4` / `brag-guide-ar.jpg` | Arabic RTL cut and its poster. |
+| `composition-guide-en/` | Hyperframes project for the English guided cut. |
+| `composition-guide-ar/` | Hyperframes project for the Arabic guided cut. |
+
+The same four requests as the phone cut above, but taught as navigation rather than as
+four independent screens. It opens on the hamburger, builds the Drawer one row per beat,
+and then each request begins with the Drawer already open on its own highlighted row: the
+row is tapped, the Drawer slides away, the page fills in, and the rule lands. The closing
+card names the three navigation trails.
+
+It runs 50.2s rather than the 24.8s of the other cuts. The `/brag` "15–25 seconds" law
+holds for a single claim; this one has a menu to establish plus four destinations to
+reach, and cutting it to 25s would mean dropping either the sidebar (the thing being
+taught) or the rules. Scene boundaries and every tap still sit on the beat grid.
+
+### What it teaches that the short phone cut does not
+
+Three of the four requests live under **Requests**. The annual leave settlement does not:
+`AnnualLeavePaymentCard` is rendered from `FrontEnd/src/pages/employee/leave/MyLeaveBalancePage.tsx:217`,
+so it is reached through **Leave Balance**. Scene 4 and the closing card are both built
+around that, because it is the question HR will otherwise keep answering.
+
+| Request | Where it lives |
+|---|---|
+| Sick leave | Requests → Request Leave |
+| Annual leave | Requests → Request Leave |
+| Loan | Requests → New Loan |
+| Annual settlement | Leave Balance → Request Payment |
+
+Menu structure and Drawer behaviour come from `FrontEnd/src/layouts/BaseLayout.tsx`; the
+"which phone this is" note under the section above applies here unchanged.
+
+### One app token the video does not reproduce faithfully
+
+`FrontEnd/src/index.css` sets `--sidebar-section-color: rgba(255, 255, 255, 0.25)`. On
+`--sidebar-bg` (`#0d1117`) that computes to roughly **1.9:1**, which fails WCAG AA for the
+"My Requests — Employee Self-Service" group label. Both compositions lift it to `0.58`
+and carry a CSS comment saying so, otherwise `hyperframes check` fails the contrast gate.
+Worth fixing in the app itself.
+
+### Re-rendering
+
+```bash
+cd brag-output/composition-guide-ar   # or composition-guide-en
+npx hyperframes check
+npx hyperframes render --output ../brag-guide-ar.mp4
+```
+
+Then re-bake the poster as frame 0, exactly as documented for the sick leave cut above —
+including the `afade`, which is load-bearing for the same reason.

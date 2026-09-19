@@ -1,3 +1,5 @@
-# Local render scratch — regenerate with `npx hyperframes` inside composition/
-composition/node_modules/
-composition/snapshots/
+# Local render scratch — regenerate by running `npx hyperframes` inside the
+# composition directory (it re-fetches vendor/gsap.min.js on demand).
+composition*/node_modules/
+composition*/snapshots/
+composition*/vendor/
