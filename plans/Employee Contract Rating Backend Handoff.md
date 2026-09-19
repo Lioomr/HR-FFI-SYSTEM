@@ -41,7 +41,9 @@ Each criterion value must be exactly `{grade, score, remark}`. Scores are intege
 - Employees and managers have no access before HR chooses `RATE`, and no access at any time on `SKIP_TO_CEO`. On a rated cycle they receive only the safe header plus their own response. The other response, comparison, HR/CEO content, salary data, termination result, notifications, and workflow history are structurally absent.
 - A rater who also has a privileged group still receives the rater-shaped payload for that employee.
 - HR receives a coarse record by default. While the gate is pending it additionally sees the fresh `account_connected` signal and gate fields. Full responses and comparison unlock only for the rating for which a CEO requested input. After a final decision, HR also receives the final operational outcome.
-- CEO visibility is pending CEO work plus ratings decided by that CEO actor. CEO sees both responses and comparison.
+- HR's coarse final outcome includes scheduled/processed termination state and `employee_notified_of_termination_at`/`_by` so the acknowledgement action is immediately visible.
+- CEO visibility is pending CEO work plus ratings decided by that CEO actor. CEO sees both responses and comparison. A successful return action retains CEO-shaped data in that action response even though the rating then waits on a rater.
+- Skipped-cycle CEO detail includes `hr_gate_decided_by_name` for the no-rating banner.
 - Company scope, workflow authorization, live manager relationships, delegation, and active-company write checks are enforced server-side.
 - An HR/CEO actor cannot review or decide a rating when that actor authored its manager response.
 
