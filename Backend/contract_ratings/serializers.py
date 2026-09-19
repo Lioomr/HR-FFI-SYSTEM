@@ -149,7 +149,7 @@ class ContractRatingReadSerializer(serializers.ModelSerializer):
     def to_representation(self, obj):
         request = self.context.get("request")
         actor = request.user if request else None
-        role = viewer_role(actor, obj)
+        role = self.context.get("viewer_role_override") or viewer_role(actor, obj)
         if role is None:
             return {}
         profile = obj.employee_profile
@@ -186,6 +186,7 @@ class ContractRatingReadSerializer(serializers.ModelSerializer):
                     {
                         "account_connected": bool(profile.user_id),
                         "hr_gate_decided_by": obj.hr_gate_decided_by_id,
+                        "hr_gate_decided_by_name": obj.hr_gate_decided_by.full_name if obj.hr_gate_decided_by else "",
                         "hr_gate_decided_at": obj.hr_gate_decided_at,
                     }
                 )
@@ -201,6 +202,8 @@ class ContractRatingReadSerializer(serializers.ModelSerializer):
                         "salary_change_applied_at": obj.salary_change_applied_at,
                         "salary_after_snapshot": obj.salary_after_snapshot,
                         "scheduled_termination": obj.scheduled_termination,
+                        "employee_notified_of_termination_at": obj.employee_notified_of_termination_at,
+                        "employee_notified_of_termination_by": obj.employee_notified_of_termination_by_id,
                         "termination_processed_at": obj.termination_processed_at,
                     }
                 )
@@ -223,6 +226,7 @@ class ContractRatingReadSerializer(serializers.ModelSerializer):
         result["hr_comment_requested_by_name"] = (
             obj.hr_comment_requested_by.full_name if obj.hr_comment_requested_by else ""
         )
+        result["hr_gate_decided_by_name"] = obj.hr_gate_decided_by.full_name if obj.hr_gate_decided_by else ""
         result["hr_comment_by_name"] = obj.hr_comment_by.full_name if obj.hr_comment_by else ""
         result["ceo_decided_by_name"] = obj.ceo_decided_by.full_name if obj.ceo_decided_by else ""
         before = obj.salary_before_snapshot or result["current_terms"]

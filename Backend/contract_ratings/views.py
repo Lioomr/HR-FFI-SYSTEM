@@ -40,9 +40,11 @@ class ContractRatingViewSet(viewsets.ReadOnlyModelViewSet):
                 "employee_response__submitted_by",
                 "company",
                 "manager_at_creation",
+                "hr_gate_decided_by",
                 "hr_comment_requested_by",
                 "hr_comment_by",
                 "ceo_decided_by",
+                "employee_notified_of_termination_by",
             ),
             self.request,
         )
@@ -92,7 +94,7 @@ class ContractRatingViewSet(viewsets.ReadOnlyModelViewSet):
     def criteria(self, request):
         return success({"criteria": CRITERIA, "grade_ranges": GRADE_RANGES})
 
-    def _mutate(self, request, service, serializer_class=None):
+    def _mutate(self, request, service, serializer_class=None, *, response_viewer_role=None):
         ensure_company_write_allowed(request)
         rating = self.get_object()
         data = request.data
@@ -107,7 +109,10 @@ class ContractRatingViewSet(viewsets.ReadOnlyModelViewSet):
             result = service(rating.id, actor=request.user, **data)
         except ValueError as exc:
             return error("Validation error", errors=[str(exc)], status=422)
-        return success(self.get_serializer(result).data)
+        context = self.get_serializer_context()
+        if response_viewer_role:
+            context["viewer_role_override"] = response_viewer_role
+        return success(self.get_serializer(result, context=context).data)
 
     @action(detail=True, methods=["post"], url_path="manager-response")
     def manager_response(self, request, pk=None):
@@ -136,7 +141,12 @@ class ContractRatingViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="ceo-decision")
     def ceo_decision(self, request, pk=None):
-        return self._mutate(request, services.submit_ceo_decision, CeoDecisionWriteSerializer)
+        return self._mutate(
+            request,
+            services.submit_ceo_decision,
+            CeoDecisionWriteSerializer,
+            response_viewer_role="ceo",
+        )
 
     @action(detail=True, methods=["post"], url_path="acknowledge-termination-notice")
     def acknowledge_termination_notice(self, request, pk=None):
