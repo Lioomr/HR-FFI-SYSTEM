@@ -585,7 +585,8 @@ export default function EmployeeForm({
                                 >
                                   <Select
                                     size="large"
-                                    placeholder={t("employees.form.managerScopePlaceholder", "Select scope")}
+                                    placeholder={t("employees.form.managerScopePlaceholder")}
+                                    notFoundContent={t("employees.form.managerScopeEmpty")}
                                     options={organizationScopes
                                       .filter((scope) => scope.companies.some((company) => company.id === employeeCompanyId) && scope.companies.some((company) => company.id === selectedManager?.company_id))
                                       .map((scope) => ({ label: `${scope.code} - ${scope.name}`, value: scope.id }))}
@@ -594,7 +595,7 @@ export default function EmployeeForm({
                               </Col>
                               <Col xs={24} md={12}>
                                 <Form.Item
-                                  label={t("employees.form.managerAssignmentEnd", "Assignment expiry")}
+                                  label={t("employees.form.managerAssignmentEnd")}
                                   name="cross_company_end_at"
                                   rules={[{ required: true, message: t("common.required", "This field is required") }]}
                                 >

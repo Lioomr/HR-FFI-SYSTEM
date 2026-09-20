@@ -789,9 +789,11 @@ export const translations: Record<AppLanguage, TranslationMap> = {
       "Choose your company in the company selector at the top of the page, then refresh.",
     "attendancePolicy.status.PRESENT": "Present",
     "attendancePolicy.status.LATE": "Late",
-    "attendancePolicy.grace.consumed": "Monthly grace used",
+    "attendancePolicy.grace.consumed": "Grace window used",
     "attendancePolicy.graceReason.attendanceExempt":
       "Exempt from attendance rules",
+    "attendancePolicy.graceReason.nonWorkingDay":
+      "Day off: recorded but not counted",
     "attendancePolicy.graceReason.latePermission":
       "Excused by an approved Late Permission",
     "attendancePolicy.graceReason.noCheckIn": "No check-in recorded",
@@ -799,9 +801,9 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "attendancePolicy.graceReason.monthlyGrace": "Within the grace window",
     "attendancePolicy.graceReason.outsideGrace": "Late: after the grace window",
     "attendancePolicy.graceReason.postGraceTolerance":
-      "On time, within the tolerance after grace ran out",
+      "On time, within the tolerance that applies once the window is withdrawn",
     "attendancePolicy.graceReason.postGraceLate":
-      "Late: this month's grace is used up",
+      "Late: the grace window is withdrawn for the rest of this month",
     "attendancePolicy.graceReason.unknown": "Not evaluated yet",
     "attendancePolicy.lifecycle.active": "Active",
     "attendancePolicy.lifecycle.void": "Void",
@@ -962,17 +964,14 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "admin.settings.secAttendancePolicy": "Late arrival and permission policy",
     "admin.settings.lblGraceWindow": "Grace window (minutes)",
     "admin.settings.helpGraceWindow":
-      "Minutes after shift start that a monthly grace use can forgive (0–240).",
+      "Minutes after shift start still counted as on time, as often as needed, until the month reaches 3 late violations (0–240).",
     "admin.settings.lblDefaultShiftEnd": "Default shift end",
     "admin.settings.helpDefaultShiftEnd":
       "Shift end for employees without a shift of their own.",
-    "admin.settings.lblGraceUseLimit": "Grace uses per month",
-    "admin.settings.helpGraceUseLimit":
-      "Late arrivals within the grace window forgiven each month (0–31).",
     "admin.settings.lblPostGraceTolerance":
       "Tolerance after grace runs out (minutes)",
     "admin.settings.helpPostGraceTolerance":
-      "Once monthly grace is used up, arrivals within this many minutes still count as on time (0–240).",
+      "After the month's 3rd late violation the grace window is withdrawn; arrivals within this many minutes still count as on time (0–240).",
     "admin.settings.lblLatePermissionLimit":
       "Approved Late Permissions per month",
     "admin.settings.helpLatePermissionLimit":
@@ -1560,6 +1559,10 @@ export const translations: Record<AppLanguage, TranslationMap> = {
       "The selected manager must be an active employee with an active user account.",
     "employees.form.managerErrors.cycle":
       "Manager assignment cannot create a reporting cycle.",
+    "employees.form.managerScope": "Approved organization scope",
+    "employees.form.managerScopePlaceholder": "Select an approved scope",
+    "employees.form.managerAssignmentEnd": "Assignment expiry",
+    "employees.form.managerScopeEmpty": "No approved scope covers both companies.",
     "employees.form.joiningDate": "Joining Date",
     "employees.form.jobOffer": "Job Offer",
     "employees.form.jobOfferPlaceholder": "Job offer details",
@@ -2398,9 +2401,6 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "admin.settings.lblAbsenceDetection": "Automatic absence detection",
     "admin.settings.helpAbsenceDetection":
       "Each morning, employees with no attendance and no approved leave are marked Absent for the previous working day.",
-    "admin.settings.lblWorkingDays": "Working days",
-    "admin.settings.helpWorkingDays":
-      "Days the schedule applies to. Late and absence checks skip every other day.",
     "admin.settings.btnReset": "Reset to Defaults",
 
     // Admin - Work Locations (geofenced attendance)
@@ -5684,16 +5684,19 @@ export const translations: Record<AppLanguage, TranslationMap> = {
       "اختر شركتك من محدد الشركة أعلى الصفحة ثم حدّث الصفحة.",
     "attendancePolicy.status.PRESENT": "حاضر",
     "attendancePolicy.status.LATE": "متأخر",
-    "attendancePolicy.grace.consumed": "استُخدمت مهلة شهرية",
+    "attendancePolicy.grace.consumed": "استُخدمت نافذة المهلة",
     "attendancePolicy.graceReason.attendanceExempt": "معفى من قواعد الحضور",
+    "attendancePolicy.graceReason.nonWorkingDay":
+      "يوم إجازة: مُسجَّل ولا يُحتسب",
     "attendancePolicy.graceReason.latePermission": "معذور بإذن تأخير معتمد",
     "attendancePolicy.graceReason.noCheckIn": "لا يوجد تسجيل دخول",
     "attendancePolicy.graceReason.onTime": "في الموعد",
     "attendancePolicy.graceReason.monthlyGrace": "ضمن نافذة المهلة",
     "attendancePolicy.graceReason.outsideGrace": "متأخر: بعد نافذة المهلة",
     "attendancePolicy.graceReason.postGraceTolerance":
-      "في الموعد ضمن السماحية بعد نفاد المهلة",
-    "attendancePolicy.graceReason.postGraceLate": "متأخر: نفدت مهلة هذا الشهر",
+      "في الموعد ضمن السماحية المطبَّقة بعد سحب نافذة المهلة",
+    "attendancePolicy.graceReason.postGraceLate":
+      "متأخر: سُحبت نافذة المهلة لبقية هذا الشهر",
     "attendancePolicy.graceReason.unknown": "لم يُقيَّم بعد",
     "attendancePolicy.lifecycle.active": "قائمة",
     "attendancePolicy.lifecycle.void": "ملغاة",
@@ -5848,17 +5851,14 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "admin.settings.secAttendancePolicy": "سياسة التأخير والأذونات",
     "admin.settings.lblGraceWindow": "نافذة المهلة (بالدقائق)",
     "admin.settings.helpGraceWindow":
-      "الدقائق بعد بداية الوردية التي يمكن التجاوز عنها باستخدام مهلة شهرية (0–240).",
+      "الدقائق بعد بداية الوردية التي تُحتسب في الموعد، دون حد لعدد المرات، حتى يبلغ الشهر 3 مخالفات تأخير (0–240).",
     "admin.settings.lblDefaultShiftEnd": "نهاية الوردية الافتراضية",
     "admin.settings.helpDefaultShiftEnd":
       "نهاية الوردية للموظفين الذين ليست لهم وردية خاصة.",
-    "admin.settings.lblGraceUseLimit": "مرات استخدام المهلة شهريًا",
-    "admin.settings.helpGraceUseLimit":
-      "عدد مرات التأخير ضمن نافذة المهلة التي يُتجاوز عنها كل شهر (0–31).",
     "admin.settings.lblPostGraceTolerance":
       "السماحية بعد نفاد المهلة (بالدقائق)",
     "admin.settings.helpPostGraceTolerance":
-      "بعد نفاد المهلة الشهرية، يُعد الوصول خلال هذه الدقائق في الموعد (0–240).",
+      "بعد المخالفة الثالثة في الشهر تُسحب نافذة المهلة؛ ويظل الوصول خلال هذه الدقائق في الموعد (0–240).",
     "admin.settings.lblLatePermissionLimit": "أذونات التأخير المعتمدة شهريًا",
     "admin.settings.helpLatePermissionLimit":
       "عدد أذونات التأخير المعتمدة نهائيًا المسموح بها لكل موظف شهريًا (0–31).",
@@ -6435,6 +6435,10 @@ export const translations: Record<AppLanguage, TranslationMap> = {
       "يجب أن يكون المدير المختار موظفاً نشطاً بحساب مستخدم نشط.",
     "employees.form.managerErrors.cycle":
       "لا يمكن أن ينشئ تعيين المدير حلقة في التسلسل الإداري.",
+    "employees.form.managerScope": "النطاق التنظيمي المعتمد",
+    "employees.form.managerScopePlaceholder": "اختر نطاقاً معتمداً",
+    "employees.form.managerAssignmentEnd": "تاريخ انتهاء التعيين",
+    "employees.form.managerScopeEmpty": "لا يوجد نطاق معتمد يغطي الشركتين.",
     "employees.form.joiningDate": "تاريخ الانضمام",
     "employees.form.jobOffer": "عرض العمل",
     "employees.form.jobOfferPlaceholder": "تفاصيل عرض العمل",
@@ -7209,9 +7213,6 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "admin.settings.lblAbsenceDetection": "الكشف التلقائي عن الغياب",
     "admin.settings.helpAbsenceDetection":
       "كل صباح، يُسجَّل الموظفون بلا حضور وبلا إجازة معتمدة كغائبين عن يوم العمل السابق.",
-    "admin.settings.lblWorkingDays": "أيام العمل",
-    "admin.settings.helpWorkingDays":
-      "الأيام التي تنطبق عليها الجدولة. تتخطى فحوصات التأخير والغياب الأيام الأخرى.",
     "admin.settings.btnReset": "إعادة التعيين إلى الافتراضي",
 
     // Admin - Work Locations (geofenced attendance)
