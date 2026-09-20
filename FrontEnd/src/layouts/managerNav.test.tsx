@@ -48,10 +48,10 @@ const t = (
 
 const MANAGER_NAV_LINKS = [
   "Team Dashboard",
+  "Pending Requests",
   "My Team",
   "Team Requests",
   "Team Attendance",
-  "Loan Requests",
 ];
 
 function setManagerAccess(
@@ -115,10 +115,10 @@ describe("buildManagerNavGroups", () => {
     const children = (groups[0] as { children: { key: string }[] }).children;
     expect(children.map((child) => child.key)).toEqual([
       "/manager/dashboard",
+      "/pending-inbox",
       "/manager/team",
       "/manager/team-requests",
       "/manager/attendance",
-      "/manager/loan-requests",
     ]);
   });
 
@@ -157,44 +157,48 @@ describe("BaseLayout manager navigation", () => {
     useAuthStore.setState({ isAuthenticated: false, user: null });
   });
 
-  it.each([
-    ["Manager", "/manager/attendance", "Direct-report attendance"],
-    ["Employee", "/employee/attendance", "Personal attendance"],
-  ] as const)(
-    "%s attendance submenu navigates to %s",
-    async (role, target, content) => {
+  it.each(["Manager", "Employee"] as const)(
+    "%s sidebar links straight to their own attendance",
+    async (role) => {
       signIn(role);
       setManagerAccess(role === "Manager");
       await renderShell();
-      fireEvent.click(
-        screen.getByText("Attendance", { selector: ".ant-menu-title-content" }),
-      );
-      const records = await screen.findByRole("link", { name: "Records" });
-      expect(records).toHaveAttribute("href", target);
-      fireEvent.click(records);
-      expect(await screen.findByText(content)).toBeInTheDocument();
+      // A single destination is a plain link, not a one-item dropdown.
+      const link = screen.getByRole("link", { name: "My Attendance" });
+      expect(link).toHaveAttribute("href", "/employee/attendance");
+      expect(link.closest(".ant-menu-submenu")).toBeNull();
+      fireEvent.click(link);
+      expect(
+        await screen.findByText("Personal attendance"),
+      ).toBeInTheDocument();
     },
   );
 
-  it.each([
-    ["Manager", "/manager/attendance"],
-    ["Employee", "/employee/attendance"],
-  ] as const)(
-    "opens the %s attendance submenu on direct navigation",
-    async (role, path) => {
+  it.each(["Manager", "Employee"] as const)(
+    "highlights My Attendance for a %s on direct navigation",
+    async (role) => {
       signIn(role);
       setManagerAccess(role === "Manager");
-      await renderShell(path);
-      const records = await screen.findByRole("link", { name: "Records" });
-      expect(records).toHaveAttribute("href", path);
-      expect(records.closest(".ant-menu-submenu")).toHaveClass(
-        "ant-menu-submenu-open",
-      );
-      expect(records.closest(".ant-menu-item")).toHaveClass(
+      await renderShell("/employee/attendance");
+      const link = await screen.findByRole("link", { name: "My Attendance" });
+      expect(link.closest(".ant-menu-item")).toHaveClass(
         "ant-menu-item-selected",
       );
     },
   );
+
+  it("renders section headings as a single line", async () => {
+    signIn("Employee");
+    setManagerAccess(false);
+    await renderShell();
+    const headings = Array.from(
+      document.querySelectorAll(".ant-menu-item-group-title"),
+    );
+    expect(headings.length).toBeGreaterThan(0);
+    headings.forEach((heading) =>
+      expect(heading.querySelectorAll("span")).toHaveLength(1),
+    );
+  });
 
   it("shows manager navigation for an Employee with manager capability", async () => {
     signIn("Employee");
@@ -260,6 +264,36 @@ describe("BaseLayout manager navigation", () => {
     });
   });
 
+  it("keeps team pages out of a Manager's own requests", async () => {
+    signIn("Manager");
+    setManagerAccess(true);
+
+    await renderShell();
+
+    // Team pages are listed once, under My Team: loan and permission queues
+    // are tabs of Team Requests, and the Pending Inbox moves into the group.
+    const hrefs = screen
+      .getAllByRole("link")
+      .map((link) => link.getAttribute("href"));
+    ["/manager/attendance", "/manager/team-requests", "/pending-inbox"].forEach(
+      (target) =>
+        expect(hrefs.filter((href) => href === target)).toHaveLength(1),
+    );
+    expect(hrefs).not.toContain("/manager/permission-requests");
+    expect(hrefs).not.toContain("/manager/loan-requests");
+    expect(screen.queryByText("Work Inbox")).not.toBeInTheDocument();
+    // The manager's own permission requests stay reachable.
+    fireEvent.click(
+      screen.getByText("Requests", { selector: ".ant-menu-title-content" }),
+    );
+    expect(
+      await screen.findByRole("link", { name: "Request Permission" }),
+    ).toHaveAttribute("href", "/employee/permission-requests/new");
+    expect(
+      screen.getByRole("link", { name: "My Permissions" }),
+    ).toHaveAttribute("href", "/employee/permission-requests");
+  });
+
   it("keeps the CFO manager navigation regardless of the capability response", async () => {
     signIn("CFO");
     setManagerAccess(false);
@@ -276,9 +310,21 @@ describe("BaseLayout manager navigation", () => {
         "/manager/dashboard",
         "/manager/team",
         "/manager/team-requests",
-        "/manager/loan-requests",
       ]),
     );
+    expect(hrefs).not.toContain("/manager/loan-requests");
+  });
+
+  it("keeps the Work Inbox for a Manager-role user without direct reports", async () => {
+    signIn("Manager");
+    setManagerAccess(false);
+
+    await renderShell();
+
+    expect(
+      screen.getByRole("link", { name: "Pending Requests" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Work Inbox")).toBeInTheDocument();
   });
 
   it("keeps the CEO team navigation regardless of the capability response", async () => {
@@ -290,6 +336,63 @@ describe("BaseLayout manager navigation", () => {
     expect(
       screen.getByRole("link", { name: "Team Requests" }),
     ).toBeInTheDocument();
+  });
+
+  it.each([
+    ["HRManager", "/hr/dashboard"],
+    ["Employee", "/employee/dashboard"],
+    ["CEO", "/ceo/dashboard"],
+  ] as const)(
+    "links the whole %s brand block to %s",
+    async (role, dashboard) => {
+      signIn(role);
+      setManagerAccess(false);
+
+      await renderShell();
+
+      const brand = document.querySelector("a.sidebar-brand-link");
+      expect(brand).toHaveAttribute("href", dashboard);
+      // Logo, organisation name and subtitle all sit inside the one link.
+      expect(brand?.querySelector(".anticon-apartment")).not.toBeNull();
+      expect(brand).toHaveTextContent("FFISYS");
+    },
+  );
+
+  it("groups the HR menu by task, with no Operations catch-all", async () => {
+    signIn("HRManager");
+    setManagerAccess(false);
+
+    await renderShell();
+
+    const headings = Array.from(
+      document.querySelectorAll(".ant-menu-item-group-title"),
+    ).map((node) => node.textContent);
+    expect(headings).toEqual([
+      "Work Inbox",
+      "My Requests",
+      "People",
+      "Hiring",
+      "Payroll & Assets",
+      "Communication",
+      "Account",
+    ]);
+
+    const groupOf = (href: string) =>
+      document
+        .querySelector(`a[href="${href}"]`)
+        ?.closest(".ant-menu-item-group")
+        ?.querySelector(".ant-menu-item-group-title")?.textContent;
+    expect(groupOf("/hr/invites")).toBe("People");
+    expect(groupOf("/hr/import/employees")).toBe("People");
+    expect(groupOf("/hr/job-offers")).toBe("Hiring");
+    expect(groupOf("/hr/starting-work-acknowledgments")).toBe("Hiring");
+    expect(groupOf("/hr/templates")).toBe("Hiring");
+    expect(groupOf("/hr/payroll")).toBe("Payroll & Assets");
+    // "Inbox" read as a second copy of Pending Requests.
+    expect(screen.getByText("Request Queues")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Inbox", { selector: ".ant-menu-title-content" }),
+    ).not.toBeInTheDocument();
   });
 
   it("does not add manager navigation to the SystemAdmin menu", async () => {

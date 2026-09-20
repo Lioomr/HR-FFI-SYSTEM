@@ -294,7 +294,7 @@ export default function ManagerDashboardPage() {
             color={QUEUE_ACCENTS.loan.color}
             compact={isMobile}
             note={unavailableNote(queues?.loan.available)}
-            onClick={() => navigate("/manager/loan-requests")}
+            onClick={() => navigate("/manager/team-requests?tab=loans")}
             ariaLabel={`${t("manager.dashboard.queue.loan")}: ${statValue(queues?.loan)}`}
             animDelay={120}
           />

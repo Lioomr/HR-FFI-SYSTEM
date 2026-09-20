@@ -168,7 +168,16 @@ export default function PendingInboxPage() {
           >
             {!record.avatar ? record.name.charAt(0).toUpperCase() : undefined}
           </Avatar>
-          <span style={{ fontWeight: 500 }}>{record.name}</span>
+          <Button
+            type="link"
+            style={{ padding: 0, fontWeight: 500, height: "auto" }}
+            onClick={(event) => {
+              event.stopPropagation();
+              navigateToNotification(record.review_path);
+            }}
+          >
+            {record.name}
+          </Button>
         </div>
       ),
     },
@@ -442,6 +451,12 @@ export default function PendingInboxPage() {
           dataSource={data}
           columns={columns}
           rowKey={(r) => `${r.request_type}-${r.id}`}
+          // The whole row opens the request: the Review button sits behind a
+          // horizontal scroll on narrow screens, so it cannot be the only way in.
+          onRow={(record) => ({
+            style: { cursor: "pointer" },
+            onClick: () => navigateToNotification(record.review_path),
+          })}
           loading={loading}
           scroll={{ x: "max-content" }}
           locale={{

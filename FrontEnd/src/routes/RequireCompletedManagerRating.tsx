@@ -9,7 +9,6 @@ import {
   type PaginatedResponse,
 } from "../services/api/apiTypes";
 import {
-  isManagerRatingView,
   listContractRatings,
   type ContractRatingStatus,
   type ContractRatingView,
@@ -61,14 +60,11 @@ export default function RequireCompletedManagerRating() {
         const pending = successfulResponses
           .flatMap((response) => response.data.items ?? [])
           .find(
-            (item: ContractRatingView | Record<string, never>) =>
-              "id" in item &&
-              "status" in item &&
-              isManagerRatingView(item) &&
-              PENDING_FOR_MANAGER.has(item.status as ContractRatingStatus),
+            (item: ContractRatingView) =>
+              item.viewer === "manager" && PENDING_FOR_MANAGER.has(item.status),
           );
         setCheck(
-          pending && "id" in pending
+          pending
             ? { state: "pending", id: pending.id }
             : { state: "clear" },
         );

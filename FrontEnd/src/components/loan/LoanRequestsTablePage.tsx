@@ -30,6 +30,8 @@ type Props = {
   /** A role-safe destination for the employee profile shown in this inbox. */
   employeeProfilePath?: (employeeProfileId: number) => string;
   defaultStatus?: LoanStatus;
+  /** Rendered as a tab of another page, which owns the header. */
+  embedded?: boolean;
   fetcher: (params?: {
     status?: LoanStatus;
     page?: number;
@@ -65,6 +67,7 @@ export default function LoanRequestsTablePage({
   detailsBasePath,
   employeeProfilePath,
   defaultStatus,
+  embedded = false,
   fetcher,
 }: Props) {
   const navigate = useNavigate();
@@ -216,6 +219,7 @@ export default function LoanRequestsTablePage({
 
   return (
     <ApprovalQueuePage
+      embedded={embedded}
       title={title}
       subtitle={subtitle}
       pendingCount={total}

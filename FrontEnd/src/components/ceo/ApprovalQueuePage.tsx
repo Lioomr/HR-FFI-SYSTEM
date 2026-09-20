@@ -30,6 +30,7 @@ export default function ApprovalQueuePage({
   refreshing = false,
   filters,
   extraActions,
+  embedded = false,
   children,
 }: {
   title: string;
@@ -48,6 +49,8 @@ export default function ApprovalQueuePage({
   filters?: ReactNode;
   /** Buttons placed before the refresh control in the header. */
   extraActions?: ReactNode;
+  /** Rendered inside another page (e.g. a tab), which owns the header. */
+  embedded?: boolean;
   children: ReactNode;
 }) {
   const { t } = useI18n();
@@ -67,27 +70,29 @@ export default function ApprovalQueuePage({
 
   return (
     <div style={{ maxWidth: 1600, margin: "0 auto", paddingBottom: 24 }}>
-      <PageHeader
-        title={title}
-        subtitle={subtitle}
-        tags={countTag}
-        actions={
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {extraActions}
-            {onRefresh && (
-              <Button
-                icon={<ReloadOutlined aria-hidden />}
-                loading={refreshing}
-                onClick={onRefresh}
-                aria-label={t("common.refresh")}
-                style={{ borderRadius: 10, minHeight: 40 }}
-              >
-                {t("common.refresh")}
-              </Button>
-            )}
-          </div>
-        }
-      />
+      {!embedded && (
+        <PageHeader
+          title={title}
+          subtitle={subtitle}
+          tags={countTag}
+          actions={
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {extraActions}
+              {onRefresh && (
+                <Button
+                  icon={<ReloadOutlined aria-hidden />}
+                  loading={refreshing}
+                  onClick={onRefresh}
+                  aria-label={t("common.refresh")}
+                  style={{ borderRadius: 10, minHeight: 40 }}
+                >
+                  {t("common.refresh")}
+                </Button>
+              )}
+            </div>
+          }
+        />
+      )}
 
       {filters && (
         <ApprovalSurface padding={16} style={{ marginBottom: 16 }}>

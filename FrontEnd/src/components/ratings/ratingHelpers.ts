@@ -13,42 +13,26 @@ import {
   type CriterionRating,
   type CriterionRatings,
   type GradeRanges,
-  type RatingChangeType,
   type RatingCriteriaPayload,
   type RatingCriterion,
   type RatingGrade,
-  type RatingRecommendation,
-  type RatingResponseBase,
+  type RatingResponse,
 } from "../../services/api/contractRatingsApi";
 import { formatDateOnly } from "../../utils/dateTime";
 
 /** A criterion answer while it is being filled; the server requires all three. */
 export type CriterionDraft = Partial<CriterionRating>;
 
-export const RECOMMENDATIONS: RatingRecommendation[] = [
-  "CONTINUE_CONTRACT",
-  "CONTINUE_WITH_CHANGES",
-  "TERMINATE",
-];
-
-export const CHANGE_TYPES: RatingChangeType[] = [
-  "SALARY_INCREASE",
-  "JOB_TITLE_CHANGE",
-  "POSITION_CHANGE",
-  "OTHER",
-];
-
 /** Decimal(12,2), non-negative — mirrors the backend money fields. */
 export const SALARY_PATTERN = /^\d{1,10}(\.\d{1,2})?$/;
 
 export const RATING_STATUS_COLORS: Record<ContractRatingStatus, string> = {
+  PENDING_HR_GATE: "orange",
   PENDING_RESPONSES: "default",
   WAITING_MANAGER: "blue",
   WAITING_EMPLOYEE: "blue",
-  PENDING_HR: "orange",
   PENDING_CEO: "gold",
-  APPROVED: "green",
-  REJECTED: "red",
+  DECIDED: "green",
   MANUAL_RESOLUTION_REQUIRED: "volcano",
 };
 
@@ -60,17 +44,13 @@ export const GRADE_COLORS: Record<RatingGrade, string> = {
   POOR: "red",
 };
 
+/**
+ * The evaluation form's values. Identical for manager and employee: criteria
+ * and an overall remark, never a recommendation, change type or salary.
+ */
 export interface RatingFormValues {
   criterion_ratings: Record<string, CriterionDraft>;
   overall_remark?: string;
-  /* Manager-only fields — never read by the employee page. */
-  recommendation?: RatingRecommendation;
-  recommended_change_types?: RatingChangeType[];
-  proposed_terms?: Partial<Record<ContractSalaryComponent, string>>;
-  proposed_job_title?: string;
-  proposed_position_id?: number;
-  other_change_notes?: string;
-  salary_effective_date?: import("dayjs").Dayjs;
 }
 
 /** Grades ordered from the highest range down, derived from the server ranges. */
@@ -105,7 +85,7 @@ export function criterionLabel(
 
 /** Prefills the criterion rows from an existing (e.g. returned) response. */
 export function criterionDraftsFrom(
-  response: Pick<RatingResponseBase, "criterion_ratings"> | null | undefined,
+  response: Pick<RatingResponse, "criterion_ratings"> | null | undefined,
 ): Record<string, CriterionDraft> {
   const drafts: Record<string, CriterionDraft> = {};
   for (const [code, entry] of Object.entries(
@@ -136,8 +116,8 @@ export function toCriterionRatings(
   return result;
 }
 
-/** Only the salary components actually typed are proposed. */
-export function toProposedTerms(
+/** Only the salary components actually typed are sent. */
+export function toSalaryTerms(
   values: Partial<Record<ContractSalaryComponent, string>> | undefined,
 ): ContractSalaryTerms {
   const terms: ContractSalaryTerms = {};
@@ -173,6 +153,40 @@ export function estimateAverage(
     (candidate) => rounded >= ranges[candidate][0],
   );
   return { complete: scores.length, average: rounded, grade };
+}
+
+/** Day after the contract expiry, as the backend's documented default. */
+export function defaultSalaryEffectiveDate(
+  contractExpiry: string | null,
+): string | null {
+  if (!contractExpiry) return null;
+  const [year, month, day] = contractExpiry.split("-").map(Number);
+  const next = new Date(Date.UTC(year, month - 1, day + 1));
+  return next.toISOString().slice(0, 10);
+}
+
+/**
+ * Display-only increase preview for the CEO's salary entry: blank components
+ * keep their current value, mirroring the backend's term resolution.
+ */
+export function previewSalaryIncrease(
+  current: ContractSalaryTerms,
+  entered: Partial<Record<ContractSalaryComponent, string>> | undefined,
+): { currentTotal: number; newTotal: number; amount: number; percent: number | null } | null {
+  let currentTotal = 0;
+  let newTotal = 0;
+  for (const field of CONTRACT_SALARY_COMPONENTS) {
+    const base = Number(current?.[field] ?? 0) || 0;
+    const raw = (entered?.[field] ?? "").trim();
+    if (raw && !SALARY_PATTERN.test(raw)) return null;
+    currentTotal += base;
+    newTotal += raw ? Number(raw) : base;
+  }
+  const amount = Math.round((newTotal - currentTotal) * 100) / 100;
+  const percent = currentTotal
+    ? Math.round((amount * 10000) / currentTotal) / 100
+    : null;
+  return { currentTotal, newTotal, amount, percent };
 }
 
 export function formatPeriod(from: string | null, to: string | null) {

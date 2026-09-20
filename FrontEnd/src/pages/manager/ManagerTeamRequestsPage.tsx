@@ -42,10 +42,18 @@ import { managedCountLabel } from "../../utils/managerCapability";
 import { formatDateTime } from "../../utils/dateTime";
 import { isStaleRequest, requestAgeLabel } from "../../utils/requestAge";
 import { useI18n } from "../../i18n/useI18n";
+import ManagerLoanRequestsPage from "./ManagerLoanRequestsPage";
+import { ManagerPermissionRequestsPage } from "../shared/permission/PermissionRequestPages";
 
-type TabKey = "leave" | "asset-returns" | "team";
+type TabKey = "leave" | "loans" | "permissions" | "asset-returns" | "team";
 
-const TAB_KEYS: TabKey[] = ["leave", "asset-returns", "team"];
+const TAB_KEYS: TabKey[] = [
+  "leave",
+  "loans",
+  "permissions",
+  "asset-returns",
+  "team",
+];
 
 /** Leave statuses a manager is still the deciding approver for. */
 const LEAVE_ACTIONABLE = new Set(["pending_manager", "submitted"]);
@@ -155,6 +163,21 @@ export default function ManagerTeamRequestsPage() {
                 refreshToken={refreshToken}
                 onCount={reportCount}
               />
+            ),
+          },
+          {
+            // Loan and permission queues are their own lists, reused here so
+            // a manager has one place for every team request. Keyed by the
+            // refresh token so the header refresh reloads them too.
+            key: "loans",
+            label: t("manager.requests.loansTab"),
+            children: <ManagerLoanRequestsPage key={refreshToken} embedded />,
+          },
+          {
+            key: "permissions",
+            label: t("manager.requests.permissionsTab"),
+            children: (
+              <ManagerPermissionRequestsPage key={refreshToken} embedded />
             ),
           },
           {

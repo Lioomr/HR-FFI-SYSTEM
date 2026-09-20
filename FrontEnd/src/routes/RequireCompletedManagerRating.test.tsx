@@ -3,8 +3,6 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 vi.mock("../services/api/contractRatingsApi", () => ({
-  isManagerRatingView: (view: { manager_response?: unknown }) =>
-    "manager_response" in view,
   listContractRatings: vi.fn(),
 }));
 
@@ -26,6 +24,7 @@ describe("RequireCompletedManagerRating", () => {
           {
             id: 15,
             status: "PENDING_RESPONSES",
+            viewer: "manager",
             manager_response: null,
           } as never,
         ],

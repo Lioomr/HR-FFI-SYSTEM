@@ -233,9 +233,6 @@ export const ManagerTeamPage = lazy(
 export const CreateTeamAnnouncementPage = lazy(
   () => import("../pages/manager/CreateTeamAnnouncementPage"),
 );
-export const ManagerLoanRequestsPage = lazy(
-  () => import("../pages/manager/ManagerLoanRequestsPage"),
-);
 export const ManagerLoanRequestDetailsPage = lazy(
   () => import("../pages/manager/ManagerLoanRequestDetailsPage"),
 );
@@ -260,11 +257,6 @@ export const PermissionRequestFormPage = lazy(() =>
 export const HrPermissionRequestsPage = lazy(() =>
   import("../pages/shared/permission/PermissionRequestPages").then((m) => ({
     default: m.HrPermissionRequestsPage,
-  })),
-);
-export const ManagerPermissionRequestsPage = lazy(() =>
-  import("../pages/shared/permission/PermissionRequestPages").then((m) => ({
-    default: m.ManagerPermissionRequestsPage,
   })),
 );
 export const MyPermissionRequestsPage = lazy(() =>

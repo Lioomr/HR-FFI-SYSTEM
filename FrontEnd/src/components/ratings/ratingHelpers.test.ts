@@ -8,8 +8,10 @@ import {
   estimateAverage,
   isScoreInGradeRange,
   orderedGrades,
+  defaultSalaryEffectiveDate,
+  previewSalaryIncrease,
   toCriterionRatings,
-  toProposedTerms,
+  toSalaryTerms,
 } from "./ratingHelpers";
 
 const ranges: GradeRanges = {
@@ -70,9 +72,25 @@ describe("rating helpers", () => {
     });
   });
 
-  it("proposes only the salary components that were typed", () => {
+  it("sends only the salary components that were typed", () => {
     expect(
-      toProposedTerms({ basic_salary: " 5600 ", other_allowance: "" }),
+      toSalaryTerms({ basic_salary: " 5600 ", other_allowance: "" }),
     ).toEqual({ basic_salary: "5600" });
+  });
+
+  it("defaults the salary effective date to the day after expiry", () => {
+    expect(defaultSalaryEffectiveDate("2026-12-31")).toBe("2027-01-01");
+    expect(defaultSalaryEffectiveDate("2028-02-28")).toBe("2028-02-29");
+    expect(defaultSalaryEffectiveDate(null)).toBeNull();
+  });
+
+  it("previews the increase with blank components keeping current values", () => {
+    expect(
+      previewSalaryIncrease(
+        { basic_salary: "5000.00", transportation_allowance: "1000.00" },
+        { basic_salary: "5600", transportation_allowance: "" },
+      ),
+    ).toEqual({ currentTotal: 6000, newTotal: 6600, amount: 600, percent: 10 });
+    expect(previewSalaryIncrease({}, { basic_salary: "abc" })).toBeNull();
   });
 });

@@ -4,12 +4,9 @@ import {
   Alert,
   Button,
   Card,
-  Checkbox,
   Descriptions,
-  Form,
   Input,
   Modal,
-  Radio,
   Select,
   Space,
   Tabs,
@@ -21,9 +18,12 @@ import type { ColumnsType } from "antd/es/table";
 import {
   ArrowLeftOutlined,
   CheckOutlined,
+  EyeOutlined,
+  FilePdfOutlined,
+  MessageOutlined,
   ReloadOutlined,
-  RollbackOutlined,
-  SwapOutlined,
+  SendOutlined,
+  StarOutlined,
 } from "@ant-design/icons";
 
 import PageHeader from "../../components/ui/PageHeader";
@@ -33,24 +33,25 @@ import LoadingState from "../../components/ui/LoadingState";
 import ApprovalTimeline from "../../components/requests/ApprovalTimeline";
 import ApprovalQueuePage from "../../components/ceo/ApprovalQueuePage";
 import ApprovalSurface from "../../components/ceo/ApprovalSurface";
-import ApprovalActions from "../../components/ceo/ApprovalActions";
-import ApprovalStatusTag from "../../components/ceo/ApprovalStatusTag";
-import RejectReasonModal from "../../components/ceo/RejectReasonModal";
+import ApprovalStatusTag, {
+  type ApprovalStatusTone,
+} from "../../components/ceo/ApprovalStatusTag";
 import RatingComparisonView from "../../components/ratings/RatingComparisonView";
+import CeoRatingDecisionPanel from "../../components/ratings/CeoRatingDecisionPanel";
+import {
+  CeoOutcomeTag,
+  RatingActionErrors,
+  RatingOutcomeDetails,
+} from "../../components/ratings/RatingOutcomeDetails";
 import {
   RatingHeaderDetails,
   RatingResponseDetails,
-  RecommendationSummary,
   SalaryTermsTags,
 } from "../../components/ratings/RatingResponseDetails";
-import { useAuthStore } from "../../auth/authStore";
-import {
-  SALARY_PATTERN,
-  useRatingCriteria,
-} from "../../components/ratings/ratingHelpers";
+import { useRatingCriteria } from "../../components/ratings/ratingHelpers";
 import { useI18n } from "../../i18n/useI18n";
 import { formatDateOnly, formatDateTimeShort } from "../../utils/dateTime";
-import { isApiError } from "../../services/api/apiTypes";
+import { isApiError, type ApiResponse } from "../../services/api/apiTypes";
 import { collectApiErrorMessages } from "../../utils/formErrors";
 import {
   getHttpErrorMessage,
@@ -58,97 +59,90 @@ import {
   isNotFound,
   isValidationError,
 } from "../../services/api/httpErrors";
-import {
-  CONTRACT_SALARY_COMPONENTS,
-  type ContractDecisionType,
-  type ContractSalaryComponent,
-  type ContractSalaryTerms,
-} from "../../services/api/contractDecisionsApi";
+import { triggerBlobDownload } from "../../services/api/downloads";
+import { previewBlob } from "../../utils/download";
 import {
   acknowledgeRatingTerminationNotice,
+  downloadContractRatingPdf,
   getContractRating,
-  isFullContractRating,
+  isRatedFullContractRating,
   listContractRatings,
+  requestRatingHrComment,
   submitRatingCeoDecision,
-  submitRatingHrReview,
+  submitRatingHrComment,
+  submitRatingHrGate,
   type CeoDecisionPayload,
   type ContractRatingStatus,
   type ContractRatingView,
   type FullContractRating,
-  type HrReviewAction,
+  type HrCoarseContractRatingView,
+  type RatingMode,
 } from "../../services/api/contractRatingsApi";
 
-const { Text } = Typography;
+const { Paragraph, Text } = Typography;
 
-const STATUS_OPTIONS: ContractRatingStatus[] = [
+const HR_STATUS_OPTIONS: ContractRatingStatus[] = [
+  "PENDING_HR_GATE",
   "PENDING_RESPONSES",
   "WAITING_MANAGER",
   "WAITING_EMPLOYEE",
-  "PENDING_HR",
   "PENDING_CEO",
-  "APPROVED",
-  "REJECTED",
+  "DECIDED",
   "MANUAL_RESOLUTION_REQUIRED",
 ];
 
-const ALTERNATIVE_OPTIONS: ContractDecisionType[] = [
-  "RENEW",
-  "RENEW_WITH_CHANGES",
-  "TERMINATE",
+/** The CEO list is scoped server-side to PENDING_CEO + own decisions. */
+const CEO_STATUS_OPTIONS: ContractRatingStatus[] = [
+  "PENDING_CEO",
+  "DECIDED",
+  "MANUAL_RESOLUTION_REQUIRED",
 ];
 
-type HrReturnTarget = "return-manager" | "return-employee" | "return-both";
+/** Which control raised the current errors, so they render only there. */
+type ActionScope = "gate" | "comment" | "decision" | "acknowledge";
 
-type AlternativeValues = {
-  ceo_selected_option?: ContractDecisionType;
-  comment?: string;
-  override_salary?: boolean;
-  terms?: Partial<Record<ContractSalaryComponent, string>>;
-  ceo_salary_override_reason?: string;
-};
+function statusTone(status: ContractRatingStatus): ApprovalStatusTone {
+  if (status === "DECIDED") return "approved";
+  if (status === "MANUAL_RESOLUTION_REQUIRED") return "rejected";
+  if (status.startsWith("PENDING")) return "pending";
+  return "inProgress";
+}
+
+/** Outcome, whichever shape carries it. */
+function outcomeOf(view: ContractRatingView) {
+  if (view.viewer === "full") return view.ceo_decision;
+  if (view.viewer === "hr_coarse") return view.outcome?.ceo_decision ?? "";
+  return "";
+}
 
 export default function ContractRatingsPage() {
   const { t } = useI18n();
   const location = useLocation();
   const navigate = useNavigate();
   const { id } = useParams<{ id?: string }>();
-  const user = useAuthStore((state) => state.user);
   const isCeoRoute = location.pathname.startsWith("/ceo/");
-  const isCeo = isCeoRoute || user?.role === "CEO";
-  const isHr =
-    !isCeoRoute && (user?.role === "HRManager" || user?.role === "SystemAdmin");
-  const basePath = isCeo ? "/ceo/contract-ratings" : "/hr/contract-ratings";
+  const basePath = isCeoRoute ? "/ceo/contract-ratings" : "/hr/contract-ratings";
+  // Same destinations ContractDecisionsPage uses for its employee links.
+  const employeeProfilePath = (employeeId: number) =>
+    isCeoRoute ? `/manager/team/${employeeId}` : `/hr/employees/${employeeId}`;
 
   const { criteria, error: criteriaError } = useRatingCriteria();
   const [records, setRecords] = useState<ContractRatingView[]>([]);
   const [record, setRecord] = useState<ContractRatingView | null>(null);
   const [statusFilter, setStatusFilter] = useState<
     ContractRatingStatus | undefined
-  >(isCeo ? "PENDING_CEO" : "PENDING_HR");
+  >(isCeoRoute ? "PENDING_CEO" : "PENDING_HR_GATE");
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionErrors, setActionErrors] = useState<string[]>([]);
+  const [errorScope, setErrorScope] = useState<ActionScope | null>(null);
+  const [hrComment, setHrComment] = useState("");
+  const [pdfAction, setPdfAction] = useState<"preview" | "download" | null>(
+    null,
+  );
   const [messageApi, messageContext] = message.useMessage();
   const [modal, modalContext] = Modal.useModal();
-
-  // HR dialogs
-  const [hrApproveOpen, setHrApproveOpen] = useState(false);
-  const [hrApproveComment, setHrApproveComment] = useState("");
-  const [hrReturnOpen, setHrReturnOpen] = useState(false);
-  const [hrReturnTarget, setHrReturnTarget] =
-    useState<HrReturnTarget>("return-manager");
-  const [hrReturnReason, setHrReturnReason] = useState("");
-
-  // CEO dialogs
-  const [ceoAcceptOpen, setCeoAcceptOpen] = useState(false);
-  const [ceoAcceptComment, setCeoAcceptComment] = useState("");
-  const [ceoReturnReason, setCeoReturnReason] = useState("");
-  const [reasonAction, setReasonAction] = useState<
-    "DECLINE" | "RETURN_TO_HR" | null
-  >(null);
-  const [alternativeOpen, setAlternativeOpen] = useState(false);
-  const [alternativeForm] = Form.useForm<AlternativeValues>();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -158,6 +152,9 @@ export default function ContractRatingsPage() {
         const response = await getContractRating(id);
         if (isApiError(response)) throw new Error(response.message);
         setRecord(response.data);
+        if (response.data.viewer === "full") {
+          setHrComment(response.data.hr_comment ?? "");
+        }
         return;
       }
       const response = await listContractRatings({
@@ -168,9 +165,11 @@ export default function ContractRatingsPage() {
       if (isApiError(response)) throw new Error(response.message);
       setRecords(response.data.items ?? []);
     } catch (error) {
-      if (isForbidden(error)) setLoadError(t("contractRatings.forbidden"));
-      else if (isNotFound(error)) setLoadError(t("contractRatings.notFound"));
-      else setLoadError(getHttpErrorMessage(error));
+      setLoadError(
+        isNotFound(error)
+          ? t("contractRatings.notFound")
+          : getHttpErrorMessage(error),
+      );
     } finally {
       setLoading(false);
     }
@@ -184,42 +183,61 @@ export default function ContractRatingsPage() {
     t(`contractRatings.status.${status}`, status);
 
   /**
-   * Reports the status the backend returned. A 200 can carry
-   * MANUAL_RESOLUTION_REQUIRED when the contract changed underneath the rating.
+   * Runs one mutation and reports the status the backend returned (a 200 can
+   * carry MANUAL_RESOLUTION_REQUIRED). 422 and 403 messages come from the
+   * server and are listed, never swallowed. Resolves true on success.
    */
-  const announce = (next: ContractRatingView) => {
-    const text = t("contractRatings.resultStatus", {
-      status: statusLabel(next.status),
-    });
-    if (
-      next.status === "MANUAL_RESOLUTION_REQUIRED" ||
-      next.status === "REJECTED"
-    ) {
-      messageApi.warning(text);
-    } else {
-      messageApi.success(text);
-    }
-  };
-
-  /** Runs one mutation; returns true when the dialog may close. */
   const runAction = async (
-    request: () => Promise<
-      Awaited<ReturnType<typeof submitRatingHrReview>>
-    >,
+    scope: ActionScope,
+    request: () => Promise<ApiResponse<ContractRatingView | null>>,
   ): Promise<boolean> => {
     setActionLoading(true);
     setActionErrors([]);
+    setErrorScope(scope);
     try {
       const response = await request();
       if (isApiError(response)) throw new Error(response.message);
+      if (!response.data) {
+        // Recorded, but the rating left this viewer's scope (e.g. a CEO
+        // return moves it out of PENDING_CEO). Its detail is gone for them.
+        messageApi.success(t("contractRatings.doneLeftQueue"));
+        navigate(basePath);
+        return true;
+      }
+      if (
+        scope === "decision" &&
+        isCeoRoute &&
+        response.data.viewer === "full" &&
+        response.data.status !== "PENDING_CEO" &&
+        !response.data.ceo_decision
+      ) {
+        // A return was recorded. The rating is out of the CEO's scope now, so
+        // its detail can no longer be re-fetched — go back to the queue.
+        messageApi.success(t("contractRatings.doneLeftQueue"));
+        navigate(basePath);
+        return true;
+      }
       setRecord(response.data);
-      announce(response.data);
+      const text = t("contractRatings.resultStatus", {
+        status: statusLabel(response.data.status),
+      });
+      if (response.data.status === "MANUAL_RESOLUTION_REQUIRED") {
+        messageApi.warning(text);
+      } else {
+        messageApi.success(text);
+      }
       return true;
     } catch (error) {
       if (isValidationError(error)) {
-        setActionErrors(collectApiErrorMessages(error));
+        const messages = collectApiErrorMessages(error);
+        setActionErrors(
+          messages.length ? messages : [getHttpErrorMessage(error)],
+        );
       } else if (isForbidden(error)) {
-        setActionErrors([t("contractRatings.staleAction")]);
+        setActionErrors([
+          getHttpErrorMessage(error),
+          t("contractRatings.staleAction"),
+        ]);
         await load();
       } else {
         setActionErrors([getHttpErrorMessage(error)]);
@@ -230,39 +248,67 @@ export default function ContractRatingsPage() {
     }
   };
 
-  const hrReview = async (action: HrReviewAction, comment: string) => {
-    if (!record) return false;
-    return runAction(() =>
-      submitRatingHrReview(record.id, { action, comment }),
-    );
+  const runPdf = async (action: "preview" | "download") => {
+    if (!id) return;
+    const tab =
+      action === "preview" ? window.open("about:blank", "_blank") : null;
+    setPdfAction(action);
+    try {
+      const blob = await downloadContractRatingPdf(id);
+      if (action === "download") {
+        triggerBlobDownload(blob, `contract_rating_${id}.pdf`);
+      } else if (!(await previewBlob(blob, tab))) {
+        messageApi.error(t("contractRatings.pdfPreviewFailed"));
+      }
+    } catch (error) {
+      tab?.close();
+      messageApi.error(
+        isForbidden(error)
+          ? getHttpErrorMessage(error)
+          : t(
+              action === "preview"
+                ? "contractRatings.pdfPreviewFailed"
+                : "contractRatings.pdfFailed",
+            ),
+      );
+    } finally {
+      setPdfAction(null);
+    }
   };
 
-  const ceoDecide = async (payload: CeoDecisionPayload) => {
-    if (!record) return false;
-    return runAction(() => submitRatingCeoDecision(record.id, payload));
+  const errorsFor = (scope: ActionScope) =>
+    errorScope === scope ? actionErrors : [];
+
+  const confirmGate = (ratingId: number, mode: RatingMode) => {
+    setActionErrors([]);
+    void modal.confirm({
+      title: t(`contractRatings.gateConfirmTitle.${mode}`),
+      content: t(`contractRatings.gateConfirmBody.${mode}`),
+      okText: t(`contractRatings.gateAction.${mode}`),
+      cancelText: t("common.cancel"),
+      onOk: () => runAction("gate", () => submitRatingHrGate(ratingId, mode)),
+    });
   };
 
-  const acknowledge = () => {
-    if (!record) return;
+  const confirmAcknowledge = (ratingId: number) => {
+    setActionErrors([]);
     void modal.confirm({
       title: t("contractRatings.acknowledgeTitle"),
       content: t("contractRatings.acknowledgeBody"),
       okText: t("contractRatings.acknowledge"),
       cancelText: t("common.cancel"),
-      onOk: async () => {
-        const ok = await runAction(() =>
-          acknowledgeRatingTerminationNotice(record.id),
-        );
-        if (!ok) messageApi.error(t("contractRatings.actionFailed"));
-      },
+      onOk: () =>
+        runAction("acknowledge", () =>
+          acknowledgeRatingTerminationNotice(ratingId),
+        ),
     });
   };
 
   // ── List ────────────────────────────────────────────────────────────────
   if (!id) {
-    const pendingStatus: ContractRatingStatus = isCeo
+    const pendingStatus: ContractRatingStatus = isCeoRoute
       ? "PENDING_CEO"
-      : "PENDING_HR";
+      : "PENDING_HR_GATE";
     const columns: ColumnsType<ContractRatingView> = [
       {
         title: t("contractRatings.employee"),
@@ -286,30 +332,27 @@ export default function ContractRatingsPage() {
         title: t("contractRatings.statusLabel"),
         dataIndex: "status",
         render: (value: ContractRatingStatus) => (
-          <ApprovalStatusTag label={statusLabel(value)} status={value} />
+          <ApprovalStatusTag label={statusLabel(value)} tone={statusTone(value)} />
         ),
       },
       {
-        title: t("contractRatings.recommendation"),
-        key: "recommendation",
+        title: t("contractRatings.routing"),
+        key: "routing",
         responsive: ["md"],
-        render: (_, item) =>
-          isFullContractRating(item) &&
-          item.manager_response?.recommendation ? (
-            <Tag
-              color={
-                item.manager_response.recommendation === "TERMINATE"
-                  ? "red"
-                  : "blue"
-              }
-            >
-              {t(
-                `contractRatings.recommendationLabel.${item.manager_response.recommendation}`,
-              )}
-            </Tag>
-          ) : (
-            "—"
-          ),
+        render: (_, item) => (
+          <Space size={4} wrap>
+            <RatingModeTag mode={item.rating_mode} />
+            {item.viewer === "hr_coarse" && item.gate ? (
+              <AccountConnectedTag connected={item.gate.account_connected} />
+            ) : null}
+          </Space>
+        ),
+      },
+      {
+        title: t("contractRatings.ceoDecision"),
+        key: "outcome",
+        responsive: ["md"],
+        render: (_, item) => <CeoOutcomeTag decision={outcomeOf(item)} />,
       },
       {
         title: t("common.actions"),
@@ -328,7 +371,7 @@ export default function ContractRatingsPage() {
         <ApprovalQueuePage
           title={t("contractRatings.title")}
           subtitle={
-            isCeo
+            isCeoRoute
               ? t("contractRatings.subtitleCeo")
               : t("contractRatings.subtitleHr")
           }
@@ -354,10 +397,9 @@ export default function ContractRatingsPage() {
                 allowClear
                 style={{ minWidth: 240 }}
                 aria-label={t("contractRatings.filter")}
-                options={STATUS_OPTIONS.map((value) => ({
-                  value,
-                  label: statusLabel(value),
-                }))}
+                options={(isCeoRoute ? CEO_STATUS_OPTIONS : HR_STATUS_OPTIONS).map(
+                  (value) => ({ value, label: statusLabel(value) }),
+                )}
               />
             </Space>
           }
@@ -388,6 +430,7 @@ export default function ContractRatingsPage() {
     );
   }
 
+  const canDownloadPdf = record.viewer === "full";
   const header = (
     <PageHeader
       title={t("contractRatings.detailTitle")}
@@ -401,6 +444,24 @@ export default function ContractRatingsPage() {
           >
             {t("common.refresh")}
           </Button>
+          {canDownloadPdf ? (
+            <>
+              <Button
+                icon={<EyeOutlined />}
+                loading={pdfAction === "preview"}
+                onClick={() => void runPdf("preview")}
+              >
+                {t("contractRatings.previewPdf")}
+              </Button>
+              <Button
+                icon={<FilePdfOutlined />}
+                loading={pdfAction === "download"}
+                onClick={() => void runPdf("download")}
+              >
+                {t("contractRatings.downloadPdf")}
+              </Button>
+            </>
+          ) : null}
           <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(basePath)}>
             {t("common.back")}
           </Button>
@@ -409,14 +470,27 @@ export default function ContractRatingsPage() {
     />
   );
 
+  const alerts = (
+    <>
+      {loadError ? (
+        <Alert type="error" showIcon style={{ marginBottom: 16 }} message={loadError} />
+      ) : null}
+      {record.status === "MANUAL_RESOLUTION_REQUIRED" ? (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={t("contractRatings.manualResolutionNotice")}
+          description={t("contractRatings.manualResolutionHint")}
+        />
+      ) : null}
+    </>
+  );
+
   // A privileged user who is also this employee's manager, or the employee
-  // themself, receives the restricted payload. Point them at their own page
-  // rather than rendering an HR view from data that is not there.
-  if (!isFullContractRating(record)) {
-    const ownPath =
-      "employee_response" in record
-        ? `/employee/contract-ratings/${record.id}`
-        : `/manager/contract-ratings/${record.id}`;
+  // themself, receives only their own side. Point them at their own page.
+  if (record.viewer === "employee" || record.viewer === "manager") {
+    const ownPath = `/${record.viewer}/contract-ratings/${record.id}`;
     return (
       <>
         {header}
@@ -438,726 +512,444 @@ export default function ContractRatingsPage() {
     );
   }
 
-  const item: FullContractRating = record;
-  const criteriaList = criteria?.criteria ?? [];
-  const manager = item.manager_response;
-  const employee = item.employee_response;
-  const canHrReview = isHr && item.status === "PENDING_HR";
-  const ceoPending = isCeo && item.status === "PENDING_CEO";
-  const canCeoDecide = ceoPending && Boolean(item.workflow?.can_approve);
-  const canAcknowledge =
-    isHr &&
-    item.status === "APPROVED" &&
-    item.scheduled_termination &&
-    !item.employee_notified_of_termination_at;
-  const hasSalaryProposal = Boolean(
-    manager?.recommended_change_types?.includes("SALARY_INCREASE") ||
-      item.salary_change_proposed,
-  );
-
-  const openAlternative = () => {
-    setActionErrors([]);
-    alternativeForm.resetFields();
-    const proposed: Partial<Record<ContractSalaryComponent, string>> = {};
-    const base =
-      manager?.proposed_terms && Object.keys(manager.proposed_terms).length
-        ? manager.proposed_terms
-        : item.current_terms;
-    for (const field of CONTRACT_SALARY_COMPONENTS) {
-      const value = base?.[field];
-      if (value != null && value !== "") proposed[field] = String(value);
-    }
-    alternativeForm.setFieldsValue({ terms: proposed });
-    setAlternativeOpen(true);
-  };
-
-  const submitAlternative = async (values: AlternativeValues) => {
-    const payload: CeoDecisionPayload = {
-      action: "DECLINE_WITH_ALTERNATIVE",
-      ceo_selected_option: values.ceo_selected_option,
-      comment: (values.comment ?? "").trim(),
-    };
-    if (
-      values.ceo_selected_option === "RENEW_WITH_CHANGES" &&
-      values.override_salary
-    ) {
-      const terms: ContractSalaryTerms = {};
-      for (const field of CONTRACT_SALARY_COMPONENTS) {
-        const raw = (values.terms?.[field] ?? "").trim();
-        if (raw) terms[field] = raw;
-      }
-      payload.ceo_approved_terms = terms;
-      payload.ceo_salary_override_reason = (
-        values.ceo_salary_override_reason ?? ""
-      ).trim();
-    }
-    if (await ceoDecide(payload)) setAlternativeOpen(false);
-  };
-
-  const errorList = actionErrors.length ? (
-    <Alert
-      type="error"
-      showIcon
-      style={{ marginBottom: 16 }}
-      message={t("contractRatings.validationTitle")}
-      description={
-        <ul style={{ margin: 0, paddingInlineStart: 18 }}>
-          {actionErrors.map((text, index) => (
-            <li key={`${text}-${index}`}>{text}</li>
-          ))}
-        </ul>
-      }
-    />
-  ) : null;
+  if (record.viewer === "hr_coarse") {
+    return (
+      <>
+        {messageContext}
+        {modalContext}
+        {header}
+        {alerts}
+        {renderCoarse(record)}
+      </>
+    );
+  }
 
   return (
     <>
       {messageContext}
       {modalContext}
       {header}
-      {loadError ? (
-        <Alert
-          type="error"
-          showIcon
-          style={{ marginBottom: 16 }}
-          message={loadError}
-        />
-      ) : null}
-      {criteriaError ? (
-        <Alert
-          type="error"
-          showIcon
-          style={{ marginBottom: 16 }}
-          message={criteriaError}
-        />
-      ) : null}
-
-      {item.status === "MANUAL_RESOLUTION_REQUIRED" ? (
-        <Alert
-          type="warning"
-          showIcon
-          style={{ marginBottom: 16 }}
-          message={t("contractRatings.manualResolutionNotice")}
-          description={t("contractRatings.manualResolutionHint")}
-        />
-      ) : null}
-
-      {item.scheduled_termination && item.status === "APPROVED"
-        ? renderTermination(item)
-        : null}
-
-      {/* A. Employee details */}
-      <ApprovalSurface padding={16} style={{ marginBottom: 16 }}>
-        <Space direction="vertical" size={12} style={{ width: "100%" }}>
-          <RatingHeaderDetails rating={item} />
-          <Descriptions bordered size="small" column={{ xs: 1, sm: 2, md: 3 }}>
-            <Descriptions.Item label={t("contractRatings.remainingDays")}>
-              {item.remaining_contract_days ?? "—"}
-            </Descriptions.Item>
-            <Descriptions.Item label={t("contractRatings.employmentStatus")}>
-              {item.employment_status || "—"}
-            </Descriptions.Item>
-            <Descriptions.Item label={t("contractRatings.profileArchived")}>
-              {item.is_archived ? t("common.yes") : t("common.no")}
-            </Descriptions.Item>
-          </Descriptions>
-        </Space>
-      </ApprovalSurface>
-
-      {/* F. Manager recommendation, called out */}
-      <Card
-        title={t("contractRatings.managerRecommendation")}
-        style={{ marginBottom: 16 }}
-      >
-        {manager ? (
-          <RecommendationSummary response={manager} />
-        ) : (
-          <Text type="secondary">{t("contractRatings.notSubmittedYet")}</Text>
-        )}
-      </Card>
-
-      {/* G + H. Salary proposal and existing contract terms */}
-      <Card title={t("contractRatings.salarySection")} style={{ marginBottom: 16 }}>
-        <Descriptions bordered size="small" column={1}>
-          <Descriptions.Item label={t("contractRatings.currentSalary")}>
-            <SalaryTermsTags terms={item.current_terms} />
-          </Descriptions.Item>
-          {hasSalaryProposal ? (
-            <>
-              {Object.keys(item.salary_before_snapshot ?? {}).length ? (
-                <Descriptions.Item label={t("contractRatings.salaryBefore")}>
-                  <SalaryTermsTags terms={item.salary_before_snapshot} />
-                </Descriptions.Item>
-              ) : null}
-              <Descriptions.Item label={t("contractRatings.proposedSalary")}>
-                <SalaryTermsTags terms={manager?.proposed_terms} />
-              </Descriptions.Item>
-              {Object.keys(item.ceo_approved_terms ?? {}).length ? (
-                <Descriptions.Item label={t("contractRatings.ceoApprovedSalary")}>
-                  <SalaryTermsTags terms={item.ceo_approved_terms} />
-                </Descriptions.Item>
-              ) : null}
-              <Descriptions.Item label={t("contractRatings.salaryIncrease")}>
-                {item.salary_increase_amount}
-                {item.salary_increase_percent != null
-                  ? ` (${item.salary_increase_percent}%)`
-                  : ""}
-              </Descriptions.Item>
-              <Descriptions.Item label={t("contractRatings.salaryEffectiveDate")}>
-                {formatDateOnly(item.salary_effective_date)}
-              </Descriptions.Item>
-              {item.ceo_salary_override_reason ? (
-                <Descriptions.Item label={t("contractRatings.overrideReason")}>
-                  {item.ceo_salary_override_reason}
-                </Descriptions.Item>
-              ) : null}
-              <Descriptions.Item label={t("contractRatings.salaryApplied")}>
-                {item.salary_change_applied_at ? (
-                  <Space wrap>
-                    <Tag color="green">
-                      {formatDateTimeShort(item.salary_change_applied_at)}
-                    </Tag>
-                    <SalaryTermsTags terms={item.salary_after_snapshot} />
-                  </Space>
-                ) : (
-                  t("contractRatings.salaryNotApplied")
-                )}
-              </Descriptions.Item>
-            </>
-          ) : (
-            <Descriptions.Item label={t("contractRatings.proposedSalary")}>
-              {t("contractRatings.noSalaryProposal")}
-            </Descriptions.Item>
-          )}
-        </Descriptions>
-      </Card>
-
-      {/* B, C, D. Evaluations and comparison */}
-      <Card style={{ marginBottom: 16 }}>
-        <Tabs
-          items={[
-            {
-              key: "comparison",
-              label: t("contractRatings.comparison"),
-              children: (
-                <RatingComparisonView rating={item} criteria={criteriaList} />
-              ),
-            },
-            {
-              key: "manager",
-              label: t("contractRatings.managerEvaluation"),
-              children: manager ? (
-                <RatingResponseDetails
-                  response={manager}
-                  criteria={criteriaList}
-                />
-              ) : (
-                <Text type="secondary">
-                  {t("contractRatings.notSubmittedYet")}
-                </Text>
-              ),
-            },
-            {
-              key: "employee",
-              label: t("contractRatings.employeeEvaluation"),
-              children: employee ? (
-                <RatingResponseDetails
-                  response={employee}
-                  criteria={criteriaList}
-                />
-              ) : (
-                <Text type="secondary">
-                  {t("contractRatings.notSubmittedYet")}
-                </Text>
-              ),
-            },
-          ]}
-        />
-      </Card>
-
-      {/* E. HR review and CEO decision */}
-      <Card title={t("contractRatings.reviewSection")} style={{ marginBottom: 16 }}>
-        <Descriptions bordered size="small" column={{ xs: 1, sm: 1, md: 2 }}>
-          <Descriptions.Item label={t("contractRatings.hrReviewedBy")}>
-            {item.hr_reviewed_by_name || "—"}
-          </Descriptions.Item>
-          <Descriptions.Item label={t("contractRatings.hrDecidedAt")}>
-            {item.hr_decided_at ? formatDateTimeShort(item.hr_decided_at) : "—"}
-          </Descriptions.Item>
-          <Descriptions.Item label={t("contractRatings.hrComment")} span={2}>
-            {item.hr_comment || "—"}
-          </Descriptions.Item>
-          <Descriptions.Item label={t("contractRatings.ceoAction")}>
-            {item.ceo_action
-              ? t(`contractRatings.ceoActionLabel.${item.ceo_action}`)
-              : "—"}
-          </Descriptions.Item>
-          <Descriptions.Item label={t("contractRatings.ceoSelectedOption")}>
-            {item.ceo_selected_option
-              ? t(`contractRatings.alternative.${item.ceo_selected_option}`)
-              : "—"}
-          </Descriptions.Item>
-          <Descriptions.Item label={t("contractRatings.ceoDecidedBy")}>
-            {item.ceo_decided_by_name || "—"}
-          </Descriptions.Item>
-          <Descriptions.Item label={t("contractRatings.ceoDecidedAt")}>
-            {item.ceo_decided_at ? formatDateTimeShort(item.ceo_decided_at) : "—"}
-          </Descriptions.Item>
-          <Descriptions.Item label={t("contractRatings.ceoComment")} span={2}>
-            {item.ceo_comment || "—"}
-          </Descriptions.Item>
-        </Descriptions>
-      </Card>
-
-      {/* Actions */}
-      {canHrReview || canCeoDecide || canAcknowledge || ceoPending ? (
-        <ApprovalSurface padding={16} style={{ marginBottom: 16 }}>
-          {!hrApproveOpen &&
-          !hrReturnOpen &&
-          !ceoAcceptOpen &&
-          !reasonAction &&
-          !alternativeOpen
-            ? errorList
-            : null}
-          {canHrReview ? (
-            <ApprovalActions
-              size="middle"
-              approveLabel={t("contractRatings.hrApprove")}
-              rejectLabel={t("contractRatings.hrReturn")}
-              subjectLabel={item.employee.full_name}
-              approveLoading={actionLoading}
-              approveDisabled={!manager || !employee}
-              onApprove={() => {
-                setActionErrors([]);
-                setHrApproveComment("");
-                setHrApproveOpen(true);
-              }}
-              onReject={() => {
-                setActionErrors([]);
-                setHrReturnReason("");
-                setHrReturnTarget("return-manager");
-                setHrReturnOpen(true);
-              }}
-            />
-          ) : null}
-          {ceoPending && !canCeoDecide ? (
-            <Alert
-              type="info"
-              showIcon
-              message={t("contractRatings.ceoCannotAct")}
-            />
-          ) : null}
-          {canCeoDecide ? (
-            <Space wrap>
-              <ApprovalActions
-                size="middle"
-                approveLabel={t("contractRatings.ceoActionLabel.ACCEPT")}
-                rejectLabel={t("contractRatings.ceoActionLabel.DECLINE")}
-                subjectLabel={item.employee.full_name}
-                approveLoading={actionLoading}
-                onApprove={() => {
-                  setActionErrors([]);
-                  setCeoAcceptComment("");
-                  setCeoAcceptOpen(true);
-                }}
-                onReject={() => {
-                  setActionErrors([]);
-                  setReasonAction("DECLINE");
-                }}
-              />
-              <Button
-                icon={<SwapOutlined aria-hidden />}
-                onClick={openAlternative}
-                disabled={actionLoading}
-                style={{ borderRadius: 8, fontWeight: 600 }}
-              >
-                {t("contractRatings.ceoActionLabel.DECLINE_WITH_ALTERNATIVE")}
-              </Button>
-              <Button
-                icon={<RollbackOutlined aria-hidden />}
-                onClick={() => {
-                  setActionErrors([]);
-                  setCeoReturnReason("");
-                  setReasonAction("RETURN_TO_HR");
-                }}
-                disabled={actionLoading}
-                style={{ borderRadius: 8, fontWeight: 600 }}
-              >
-                {t("contractRatings.ceoActionLabel.RETURN_TO_HR")}
-              </Button>
-            </Space>
-          ) : null}
-          {canAcknowledge ? (
-            <Button
-              type="primary"
-              icon={<CheckOutlined aria-hidden />}
-              loading={actionLoading}
-              onClick={acknowledge}
-            >
-              {t("contractRatings.acknowledge")}
-            </Button>
-          ) : null}
-        </ApprovalSurface>
-      ) : null}
-
-      {/* I. Workflow history */}
-      <Card title={t("contractRatings.history")}>
-        {item.workflow?.history?.length ? (
-          <ApprovalTimeline workflow={item.workflow} />
-        ) : (
-          <Text type="secondary">{t("contractRatings.historyEmpty")}</Text>
-        )}
-      </Card>
-
-      {/* HR approve */}
-      <Modal
-        open={hrApproveOpen}
-        title={t("contractRatings.hrApproveTitle")}
-        okText={t("contractRatings.hrApprove")}
-        cancelText={t("common.cancel")}
-        okButtonProps={{ loading: actionLoading }}
-        onCancel={() => !actionLoading && setHrApproveOpen(false)}
-        onOk={async () => {
-          if (await hrReview("approve", hrApproveComment.trim())) {
-            setHrApproveOpen(false);
-          }
-        }}
-        destroyOnHidden
-      >
-        {errorList}
-        <Input.TextArea
-          rows={3}
-          value={hrApproveComment}
-          onChange={(event) => setHrApproveComment(event.target.value)}
-          placeholder={t("contractRatings.optionalComment")}
-          aria-label={t("contractRatings.optionalComment")}
-        />
-      </Modal>
-
-      {/* HR return */}
-      <Modal
-        open={hrReturnOpen}
-        title={t("contractRatings.hrReturnTitle")}
-        okText={t("contractRatings.hrReturn")}
-        cancelText={t("common.cancel")}
-        okButtonProps={{ danger: true, loading: actionLoading }}
-        onCancel={() => !actionLoading && setHrReturnOpen(false)}
-        onOk={async () => {
-          const reason = hrReturnReason.trim();
-          if (!reason) {
-            setActionErrors([t("contractRatings.reasonRequired")]);
-            return;
-          }
-          if (await hrReview(hrReturnTarget, reason)) setHrReturnOpen(false);
-        }}
-        destroyOnHidden
-      >
-        {errorList}
-        <Form layout="vertical">
-          <Form.Item label={t("contractRatings.returnTarget")} required>
-            <Radio.Group
-              value={hrReturnTarget}
-              onChange={(event) => setHrReturnTarget(event.target.value)}
-              options={(
-                [
-                  "return-manager",
-                  "return-employee",
-                  "return-both",
-                ] as HrReturnTarget[]
-              ).map((value) => ({
-                value,
-                label: t(`contractRatings.returnTargetLabel.${value}`),
-              }))}
-            />
-          </Form.Item>
-          <Form.Item label={t("contractRatings.returnReason")} required>
-            <Input.TextArea
-              rows={4}
-              value={hrReturnReason}
-              onChange={(event) => setHrReturnReason(event.target.value)}
-              aria-label={t("contractRatings.returnReason")}
-            />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* CEO accept */}
-      <Modal
-        open={ceoAcceptOpen}
-        title={t("contractRatings.ceoAcceptTitle")}
-        okText={t("contractRatings.ceoActionLabel.ACCEPT")}
-        cancelText={t("common.cancel")}
-        okButtonProps={{ loading: actionLoading }}
-        onCancel={() => !actionLoading && setCeoAcceptOpen(false)}
-        onOk={async () => {
-          if (
-            await ceoDecide({
-              action: "ACCEPT",
-              comment: ceoAcceptComment.trim(),
-            })
-          ) {
-            setCeoAcceptOpen(false);
-          }
-        }}
-        destroyOnHidden
-      >
-        {errorList}
-        <Alert
-          type={manager?.recommendation === "TERMINATE" ? "warning" : "info"}
-          showIcon
-          style={{ marginBottom: 12 }}
-          message={t(
-            manager?.recommendation === "TERMINATE"
-              ? "contractRatings.acceptTerminateHint"
-              : hasSalaryProposal
-                ? "contractRatings.acceptSalaryHint"
-                : "contractRatings.acceptHint",
-          )}
-        />
-        <Input.TextArea
-          rows={3}
-          value={ceoAcceptComment}
-          onChange={(event) => setCeoAcceptComment(event.target.value)}
-          placeholder={t("contractRatings.optionalComment")}
-          aria-label={t("contractRatings.optionalComment")}
-        />
-      </Modal>
-
-      {/* CEO decline — terminal, so the shared rejection dialog fits */}
-      <RejectReasonModal
-        open={reasonAction === "DECLINE"}
-        title={t("contractRatings.ceoDeclineTitle")}
-        subject={item.employee.full_name}
-        confirmText={t("contractRatings.ceoActionLabel.DECLINE")}
-        loading={actionLoading}
-        errorMessage={actionErrors.length ? actionErrors.join(" ") : null}
-        onCancel={() => setReasonAction(null)}
-        onSubmit={async (reason) => {
-          if (await ceoDecide({ action: "DECLINE", comment: reason })) {
-            setReasonAction(null);
-          }
-        }}
-      />
-
-      {/* CEO return to HR — non-terminal, so not the "rejection is final" dialog */}
-      <Modal
-        open={reasonAction === "RETURN_TO_HR"}
-        title={t("contractRatings.ceoReturnTitle")}
-        okText={t("contractRatings.ceoActionLabel.RETURN_TO_HR")}
-        cancelText={t("common.cancel")}
-        okButtonProps={{ loading: actionLoading }}
-        onCancel={() => !actionLoading && setReasonAction(null)}
-        onOk={async () => {
-          const reason = ceoReturnReason.trim();
-          if (!reason) {
-            setActionErrors([t("contractRatings.reasonRequired")]);
-            return;
-          }
-          if (await ceoDecide({ action: "RETURN_TO_HR", comment: reason })) {
-            setReasonAction(null);
-          }
-        }}
-        destroyOnHidden
-      >
-        {errorList}
-        <Typography.Paragraph type="secondary">
-          {t("contractRatings.ceoReturnHint")}
-        </Typography.Paragraph>
-        <Form layout="vertical">
-          <Form.Item label={t("contractRatings.returnReason")} required>
-            <Input.TextArea
-              rows={4}
-              value={ceoReturnReason}
-              onChange={(event) => setCeoReturnReason(event.target.value)}
-              aria-label={t("contractRatings.returnReason")}
-            />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* CEO decline with alternative */}
-      <Modal
-        open={alternativeOpen}
-        title={t("contractRatings.ceoAlternativeTitle")}
-        footer={null}
-        onCancel={() => !actionLoading && setAlternativeOpen(false)}
-        destroyOnHidden
-      >
-        {errorList}
-        <Form<AlternativeValues>
-          form={alternativeForm}
-          layout="vertical"
-          onFinish={submitAlternative}
-        >
-          <Form.Item
-            name="ceo_selected_option"
-            label={t("contractRatings.ceoSelectedOption")}
-            rules={[
-              { required: true, message: t("contractRatings.fieldRequired") },
-            ]}
-          >
-            <Radio.Group
-              options={ALTERNATIVE_OPTIONS.map((value) => ({
-                value,
-                label: t(`contractRatings.alternative.${value}`),
-              }))}
-            />
-          </Form.Item>
-          <Form.Item noStyle shouldUpdate>
-            {() => {
-              const option = alternativeForm.getFieldValue(
-                "ceo_selected_option",
-              ) as ContractDecisionType | undefined;
-              if (option === "TERMINATE") {
-                return (
-                  <Alert
-                    type="warning"
-                    showIcon
-                    style={{ marginBottom: 16 }}
-                    message={t("contractRatings.alternativeTerminateHint")}
-                  />
-                );
-              }
-              if (option !== "RENEW_WITH_CHANGES") return null;
-              const override = alternativeForm.getFieldValue(
-                "override_salary",
-              ) as boolean | undefined;
-              return (
-                <>
-                  <Form.Item name="override_salary" valuePropName="checked">
-                    <Checkbox>{t("contractRatings.overrideSalary")}</Checkbox>
-                  </Form.Item>
-                  {!override ? (
-                    <Text
-                      type="secondary"
-                      style={{ display: "block", marginBottom: 16 }}
-                    >
-                      {hasSalaryProposal
-                        ? t("contractRatings.alternativeKeepsProposal")
-                        : t("contractRatings.alternativeNoSalary")}
-                    </Text>
-                  ) : (
-                    <>
-                      <Text
-                        type="secondary"
-                        style={{ display: "block", marginBottom: 8 }}
-                      >
-                        {t("contractRatings.overrideSalaryHint")}
-                      </Text>
-                      {CONTRACT_SALARY_COMPONENTS.map((field) => (
-                        <Form.Item
-                          key={field}
-                          name={["terms", field]}
-                          label={t(`contractDecisions.terms.${field}`)}
-                          rules={[
-                            {
-                              validator: (_rule, value?: string) => {
-                                const raw = (value ?? "").trim();
-                                if (!raw || SALARY_PATTERN.test(raw)) {
-                                  return Promise.resolve();
-                                }
-                                return Promise.reject(
-                                  new Error(
-                                    t("contractDecisions.invalidAmount"),
-                                  ),
-                                );
-                              },
-                            },
-                          ]}
-                        >
-                          <Input inputMode="decimal" autoComplete="off" />
-                        </Form.Item>
-                      ))}
-                      <Form.Item
-                        name="ceo_salary_override_reason"
-                        label={t("contractRatings.overrideReason")}
-                        rules={[
-                          {
-                            required: true,
-                            whitespace: true,
-                            message: t("contractRatings.reasonRequired"),
-                          },
-                        ]}
-                      >
-                        <Input.TextArea rows={2} />
-                      </Form.Item>
-                    </>
-                  )}
-                </>
-              );
-            }}
-          </Form.Item>
-          <Form.Item
-            name="comment"
-            label={t("contractRatings.ceoComment")}
-            rules={[
-              {
-                required: true,
-                whitespace: true,
-                message: t("contractRatings.reasonRequired"),
-              },
-            ]}
-          >
-            <Input.TextArea rows={3} />
-          </Form.Item>
-          <Button
-            type="primary"
-            htmlType="submit"
-            loading={actionLoading}
-            block
-          >
-            {t("contractRatings.ceoActionLabel.DECLINE_WITH_ALTERNATIVE")}
-          </Button>
-        </Form>
-      </Modal>
+      {alerts}
+      {renderFull(record)}
     </>
   );
 
-  function renderTermination(rating: FullContractRating) {
-    const processed = Boolean(rating.termination_processed_at);
+  /** HR without a CEO comment request: status, routing gate, outcome only. */
+  function renderCoarse(item: HrCoarseContractRatingView) {
+    const gateOpen = item.status === "PENDING_HR_GATE";
+    const canAcknowledge =
+      !isCeoRoute &&
+      item.status === "DECIDED" &&
+      item.outcome?.ceo_decision === "TERMINATE" &&
+      item.outcome.scheduled_termination &&
+      !item.outcome.employee_notified_of_termination_at;
     return (
-      <Alert
-        type={processed ? "error" : "warning"}
-        showIcon
-        style={{ marginBottom: 16 }}
-        message={
-          processed
-            ? t("contractRatings.terminationProcessed")
-            : t("contractRatings.terminationScheduled", {
-                date: formatDateOnly(rating.contract_expiry),
-              })
-        }
-        description={
-          <Descriptions size="small" column={{ xs: 1, sm: 2 }}>
-            {processed ? (
-              <>
-                <Descriptions.Item label={t("contractRatings.employmentStatus")}>
-                  {rating.employment_status}
+      <>
+        <ApprovalSurface padding={16} style={{ marginBottom: 16 }}>
+          <Space direction="vertical" size={12} style={{ width: "100%" }}>
+            <RatingHeaderDetails
+              rating={item}
+              profileHref={employeeProfilePath(item.employee.id)}
+            />
+            <Descriptions bordered size="small" column={1}>
+              <Descriptions.Item label={t("contractRatings.routing")}>
+                <RatingModeTag mode={item.rating_mode} />
+              </Descriptions.Item>
+            </Descriptions>
+          </Space>
+        </ApprovalSurface>
+
+        {gateOpen && item.gate && !isCeoRoute ? (
+          <Card title={t("contractRatings.gateTitle")} style={{ marginBottom: 16 }}>
+            <RatingActionErrors errors={errorsFor("gate")} />
+            <Paragraph>{t("contractRatings.gateBody")}</Paragraph>
+            <Space direction="vertical" size={12} style={{ width: "100%" }}>
+              <Space wrap>
+                <Text strong>{t("contractRatings.accountConnected")}:</Text>
+                <AccountConnectedTag connected={item.gate.account_connected} />
+              </Space>
+              {!item.gate.account_connected ? (
+                <Alert
+                  type="info"
+                  showIcon
+                  message={t("contractRatings.accountNotConnectedHint")}
+                />
+              ) : null}
+              <Space wrap>
+                <Button
+                  type="primary"
+                  icon={<StarOutlined aria-hidden />}
+                  loading={actionLoading}
+                  onClick={() => confirmGate(item.id, "RATE")}
+                >
+                  {t("contractRatings.gateAction.RATE")}
+                </Button>
+                <Button
+                  icon={<SendOutlined aria-hidden />}
+                  disabled={actionLoading}
+                  onClick={() => confirmGate(item.id, "SKIP_TO_CEO")}
+                >
+                  {t("contractRatings.gateAction.SKIP_TO_CEO")}
+                </Button>
+              </Space>
+            </Space>
+          </Card>
+        ) : gateOpen ? (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message={t("contractRatings.gateNotYours")}
+          />
+        ) : null}
+
+        {!gateOpen && !item.outcome ? (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message={t("contractRatings.coarseTitle")}
+            description={
+              isCeoRoute
+                ? t("contractRatings.coarseBodyCeoRoute")
+                : t("contractRatings.coarseBody")
+            }
+          />
+        ) : null}
+
+        {item.outcome ? (
+          <Card title={t("contractRatings.outcomeSection")} style={{ marginBottom: 16 }}>
+            <RatingActionErrors errors={errorsFor("acknowledge")} />
+            <RatingOutcomeDetails
+              outcome={item.outcome}
+              contractExpiry={item.contract_expiry}
+            />
+            {item.outcome.scheduled_termination ? (
+              <Descriptions bordered size="small" column={1} style={{ marginTop: 12 }}>
+                <Descriptions.Item label={t("contractRatings.employeeNotified")}>
+                  {item.outcome.employee_notified_of_termination_at
+                    ? formatDateTimeShort(
+                        item.outcome.employee_notified_of_termination_at,
+                      )
+                    : t("contractRatings.employeeNotNotified")}
                 </Descriptions.Item>
-                <Descriptions.Item label={t("contractRatings.profileArchived")}>
-                  {rating.is_archived ? t("common.yes") : t("common.no")}
-                </Descriptions.Item>
-                <Descriptions.Item label={t("contractRatings.archiveReason")}>
-                  {rating.archive_reason === "END_OF_CONTRACT"
-                    ? t("contractRatings.archiveReasonEndOfContract")
-                    : rating.archive_reason || "—"}
-                </Descriptions.Item>
-                <Descriptions.Item label={t("contractRatings.lastWorkingDate")}>
-                  {formatDateOnly(rating.contract_expiry)}
-                </Descriptions.Item>
-                <Descriptions.Item label={t("contractRatings.processedAt")}>
-                  {formatDateTimeShort(rating.termination_processed_at)}
-                </Descriptions.Item>
-              </>
+              </Descriptions>
             ) : null}
-            <Descriptions.Item label={t("contractRatings.employeeNotified")}>
-              {rating.employee_notified_of_termination_at
-                ? formatDateTimeShort(rating.employee_notified_of_termination_at)
-                : t("contractRatings.employeeNotNotified")}
-            </Descriptions.Item>
-          </Descriptions>
-        }
-      />
+            {canAcknowledge ? (
+              <Space direction="vertical" style={{ marginTop: 16 }}>
+                <Text type="secondary">{t("contractRatings.acknowledgeHint")}</Text>
+                <Button
+                  type="primary"
+                  icon={<CheckOutlined aria-hidden />}
+                  loading={actionLoading}
+                  onClick={() => confirmAcknowledge(item.id)}
+                >
+                  {t("contractRatings.acknowledge")}
+                </Button>
+              </Space>
+            ) : null}
+          </Card>
+        ) : null}
+      </>
     );
   }
+
+  /** The CEO's package, or HR's once the CEO requested a comment. */
+  function renderFull(item: FullContractRating) {
+    const criteriaList = criteria?.criteria ?? [];
+    const ceoPending = isCeoRoute && item.status === "PENDING_CEO";
+    const canCeoAct = ceoPending && item.workflow?.can_approve !== false;
+    const canAcknowledge =
+      !isCeoRoute &&
+      item.status === "DECIDED" &&
+      item.ceo_decision === "TERMINATE" &&
+      item.scheduled_termination &&
+      !item.employee_notified_of_termination_at;
+
+    return (
+      <>
+        {criteriaError ? (
+          <Alert
+            type="error"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message={criteriaError}
+          />
+        ) : null}
+
+        {/* A. Employee details + F. existing contract */}
+        <ApprovalSurface padding={16} style={{ marginBottom: 16 }}>
+          <Space direction="vertical" size={12} style={{ width: "100%" }}>
+            <RatingHeaderDetails
+              rating={item}
+              profileHref={employeeProfilePath(item.employee.id)}
+            />
+            <Descriptions bordered size="small" column={{ xs: 1, sm: 2, md: 3 }}>
+              <Descriptions.Item label={t("contractRatings.routing")}>
+                <RatingModeTag mode={item.rating_mode} />
+              </Descriptions.Item>
+              <Descriptions.Item label={t("contractRatings.remainingDays")}>
+                {item.remaining_contract_days ?? "—"}
+              </Descriptions.Item>
+              <Descriptions.Item label={t("contractRatings.employmentStatus")}>
+                {item.employment_status || "—"}
+              </Descriptions.Item>
+              <Descriptions.Item label={t("contractRatings.profileArchived")}>
+                {item.is_archived ? t("common.yes") : t("common.no")}
+              </Descriptions.Item>
+              <Descriptions.Item label={t("contractRatings.currentSalary")} span={2}>
+                <SalaryTermsTags terms={item.current_terms} />
+              </Descriptions.Item>
+            </Descriptions>
+          </Space>
+        </ApprovalSurface>
+
+        {/* B, C, D. Evaluations and comparison — or the skipped banner */}
+        {isRatedFullContractRating(item) ? (
+          <Card style={{ marginBottom: 16 }}>
+            <Tabs
+              items={[
+                {
+                  key: "comparison",
+                  label: t("contractRatings.comparison"),
+                  children: (
+                    <RatingComparisonView rating={item} criteria={criteriaList} />
+                  ),
+                },
+                {
+                  key: "manager",
+                  label: t("contractRatings.managerEvaluation"),
+                  children: item.manager_response ? (
+                    <RatingResponseDetails
+                      response={item.manager_response}
+                      criteria={criteriaList}
+                    />
+                  ) : (
+                    <Text type="secondary">
+                      {t("contractRatings.notSubmittedYet")}
+                    </Text>
+                  ),
+                },
+                {
+                  key: "employee",
+                  label: t("contractRatings.employeeEvaluation"),
+                  children: item.employee_response ? (
+                    <RatingResponseDetails
+                      response={item.employee_response}
+                      criteria={criteriaList}
+                    />
+                  ) : (
+                    <Text type="secondary">
+                      {t("contractRatings.notSubmittedYet")}
+                    </Text>
+                  ),
+                },
+              ]}
+            />
+          </Card>
+        ) : (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message={t("contractRatings.skippedTitle")}
+            description={t("contractRatings.skippedBody", {
+              name: item.hr_gate_decided_by_name || "—",
+              date: item.hr_gate_decided_at
+                ? formatDateTimeShort(item.hr_gate_decided_at)
+                : "—",
+            })}
+          />
+        )}
+
+        {/* E. Advisory HR comment */}
+        <Card
+          title={
+            <Space>
+              <MessageOutlined aria-hidden />
+              {t("contractRatings.hrCommentSection")}
+            </Space>
+          }
+          style={{ marginBottom: 16 }}
+        >
+          {renderHrComment(item, ceoPending && canCeoAct)}
+        </Card>
+
+        {/* Decision outcome, once recorded */}
+        {item.ceo_decision ? (
+          <Card title={t("contractRatings.outcomeSection")} style={{ marginBottom: 16 }}>
+            <RatingOutcomeDetails
+              outcome={{ ...item, ceo_decision: item.ceo_decision }}
+              contractExpiry={item.contract_expiry}
+            />
+            {item.scheduled_termination ? (
+              <Descriptions bordered size="small" column={1} style={{ marginTop: 12 }}>
+                <Descriptions.Item label={t("contractRatings.employeeNotified")}>
+                  {item.employee_notified_of_termination_at
+                    ? formatDateTimeShort(item.employee_notified_of_termination_at)
+                    : t("contractRatings.employeeNotNotified")}
+                </Descriptions.Item>
+              </Descriptions>
+            ) : null}
+            {canAcknowledge ? (
+              <Space direction="vertical" style={{ marginTop: 16 }}>
+                <RatingActionErrors errors={errorsFor("acknowledge")} />
+                <Button
+                  type="primary"
+                  icon={<CheckOutlined aria-hidden />}
+                  loading={actionLoading}
+                  onClick={() => confirmAcknowledge(item.id)}
+                >
+                  {t("contractRatings.acknowledge")}
+                </Button>
+              </Space>
+            ) : null}
+          </Card>
+        ) : null}
+
+        {/* CEO decision */}
+        {ceoPending ? (
+          <ApprovalSurface padding={16} style={{ marginBottom: 16 }}>
+            {canCeoAct ? (
+              <CeoRatingDecisionPanel
+                rating={item}
+                loading={actionLoading}
+                errors={errorsFor("decision")}
+                onClearErrors={() => setActionErrors([])}
+                onDecide={(payload: CeoDecisionPayload) =>
+                  runAction("decision", () =>
+                    submitRatingCeoDecision(item.id, payload),
+                  )
+                }
+              />
+            ) : (
+              <Alert type="info" showIcon message={t("contractRatings.ceoCannotAct")} />
+            )}
+          </ApprovalSurface>
+        ) : null}
+
+        {/* G. Workflow history */}
+        <Card title={t("contractRatings.history")}>
+          {item.workflow?.history?.length ? (
+            <ApprovalTimeline workflow={item.workflow} />
+          ) : (
+            <Text type="secondary">{t("contractRatings.historyEmpty")}</Text>
+          )}
+        </Card>
+      </>
+    );
+  }
+
+  function renderHrComment(item: FullContractRating, ceoCanRequest: boolean) {
+    const requested = Boolean(item.hr_comment_requested_at);
+    const commentBlock = item.hr_comment_submitted_at ? (
+      <Descriptions bordered size="small" column={1}>
+        <Descriptions.Item label={t("contractRatings.hrCommentBy")}>
+          {item.hr_comment_by_name || "—"} ·{" "}
+          {formatDateTimeShort(item.hr_comment_submitted_at)}
+        </Descriptions.Item>
+        <Descriptions.Item label={t("contractRatings.hrComment")}>
+          <span style={{ whiteSpace: "pre-wrap" }}>{item.hr_comment}</span>
+        </Descriptions.Item>
+      </Descriptions>
+    ) : null;
+
+    if (isCeoRoute) {
+      if (!requested) {
+        return ceoCanRequest ? (
+          <Space direction="vertical">
+            <RatingActionErrors errors={errorsFor("comment")} />
+            <Text type="secondary">{t("contractRatings.requestHrCommentHint")}</Text>
+            <Button
+              icon={<MessageOutlined aria-hidden />}
+              loading={actionLoading}
+              onClick={() => {
+                setActionErrors([]);
+                void runAction("comment", () => requestRatingHrComment(item.id));
+              }}
+            >
+              {t("contractRatings.requestHrComment")}
+            </Button>
+          </Space>
+        ) : (
+          <Text type="secondary">{t("contractRatings.hrCommentNotRequested")}</Text>
+        );
+      }
+      return (
+        <Space direction="vertical" style={{ width: "100%" }}>
+          <Text type="secondary">
+            {t("contractRatings.hrCommentRequestedAt", {
+              name: item.hr_comment_requested_by_name || "—",
+              date: formatDateTimeShort(item.hr_comment_requested_at),
+            })}
+          </Text>
+          {commentBlock ?? (
+            <Alert type="info" showIcon message={t("contractRatings.hrCommentAwaiting")} />
+          )}
+        </Space>
+      );
+    }
+
+    // HR: the only input HR has on the content — an advisory comment.
+    return (
+      <Space direction="vertical" style={{ width: "100%" }}>
+        <Text type="secondary">
+          {t("contractRatings.hrCommentRequestedAt", {
+            name: item.hr_comment_requested_by_name || "—",
+            date: formatDateTimeShort(item.hr_comment_requested_at),
+          })}
+        </Text>
+        {item.status === "DECIDED" ? (
+          <Alert type="warning" showIcon message={t("contractRatings.hrCommentAfterDecision")} />
+        ) : (
+          <Alert type="info" showIcon message={t("contractRatings.hrCommentAdvisory")} />
+        )}
+        {commentBlock}
+        <RatingActionErrors errors={errorsFor("comment")} />
+        <Input.TextArea
+          rows={4}
+          value={hrComment}
+          onChange={(event) => setHrComment(event.target.value)}
+          aria-label={t("contractRatings.hrComment")}
+          placeholder={t("contractRatings.hrCommentPlaceholder")}
+        />
+        <Button
+          type="primary"
+          icon={<MessageOutlined aria-hidden />}
+          loading={actionLoading}
+          disabled={!hrComment.trim()}
+          onClick={() =>
+            void runAction("comment", () =>
+              submitRatingHrComment(item.id, hrComment.trim()),
+            )
+          }
+        >
+          {item.hr_comment_submitted_at
+            ? t("contractRatings.updateHrComment")
+            : t("contractRatings.submitHrComment")}
+        </Button>
+      </Space>
+    );
+  }
+}
+
+function RatingModeTag({ mode }: { mode: RatingMode | "" }) {
+  const { t } = useI18n();
+  if (!mode) {
+    return <Tag>{t("contractRatings.ratingMode.UNDECIDED")}</Tag>;
+  }
+  return (
+    <Tag color={mode === "RATE" ? "blue" : "purple"}>
+      {t(`contractRatings.ratingMode.${mode}`)}
+    </Tag>
+  );
+}
+
+function AccountConnectedTag({ connected }: { connected: boolean }) {
+  const { t } = useI18n();
+  return connected ? (
+    <Tag color="green">{t("contractRatings.accountLinked")}</Tag>
+  ) : (
+    <Tag color="orange">{t("contractRatings.accountNotLinked")}</Tag>
+  );
 }

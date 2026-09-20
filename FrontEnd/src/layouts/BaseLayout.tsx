@@ -44,6 +44,7 @@ import {
 } from "@ant-design/icons";
 import type { MenuProps } from "antd";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { getHomePath } from "../routes/homeRoute";
 import { useAuthStore } from "../auth/authStore";
 import { logoutApi } from "../services/api/authApi";
 import { useI18n } from "../i18n/useI18n";
@@ -73,6 +74,9 @@ type BrandLogoProps = {
   accent: string;
   accentGlow: string;
   titleColor?: string;
+  /** Dashboard for the signed-in role; the brand block links there. */
+  homePath: string;
+  homeLabel: string;
 };
 
 function BrandLogo({
@@ -82,10 +86,20 @@ function BrandLogo({
   accent,
   accentGlow,
   titleColor = "white",
+  homePath,
+  homeLabel,
 }: BrandLogoProps) {
+  // The whole brand block is the way back to the role's dashboard.
   return (
-    <div
+    <Link
+      to={homePath}
+      aria-label={`${title}, ${homeLabel}`}
+      title={homeLabel}
+      className="sidebar-brand-link"
       style={{
+        textDecoration: "none",
+        color: "inherit",
+        cursor: "pointer",
         padding: collapsed ? "16px 0" : "18px 16px",
         display: "flex",
         alignItems: "center",
@@ -145,7 +159,7 @@ function BrandLogo({
           </div>
         </div>
       )}
-    </div>
+    </Link>
   );
 }
 
@@ -186,7 +200,7 @@ function getTitle(
   if (pathname.startsWith("/manager/team-requests"))
     return t("layout.teamRequests", "Team Requests");
   if (pathname.startsWith("/manager/permission-requests"))
-    return t("permissionRequests.list.managerTitle");
+    return t("layout.teamPermissionRequests", "Team Permission Requests");
   if (pathname.startsWith("/manager/team"))
     return t("layout.myTeam", "My Team");
   if (pathname.startsWith("/manager/announcements"))
@@ -264,12 +278,8 @@ function getOpenKeysForPath(pathname: string): string[] {
   if (isHrInboxPath) opens.push("hr-inbox-sub");
   if (isEmployeeRequestPath) opens.push("hr-emp-requests-sub");
   if (pathname.startsWith("/hr/attendance")) opens.push("hr-attendance-sub");
-  if (pathname.startsWith("/employee/attendance"))
-    opens.push("hr-emp-attendance-sub");
   // Employee sidebar sub-menus
   if (isEmployeeRequestPath) opens.push("emp-requests-sub");
-  if (pathname.startsWith("/employee/attendance"))
-    opens.push("emp-attendance-sub");
   // Manager sidebar sub-menus
   if (isEmployeeRequestPath) opens.push("mgr-requests-sub");
   if (
@@ -277,10 +287,6 @@ function getOpenKeysForPath(pathname: string): string[] {
     pathname.startsWith("/employee/announcements")
   )
     opens.push("mgr-announcements-sub");
-  if (pathname.startsWith("/manager/attendance"))
-    opens.push("mgr-attendance-sub");
-  if (pathname.startsWith("/manager/permission-requests"))
-    opens.push("mgr-requests-sub");
   // CEO sidebar sub-menus (owned by ceoNav so the groups stay in one place)
   opens.push(...getCeoOpenKeysForPath(pathname));
   return opens;
@@ -587,10 +593,7 @@ export default function BaseLayout() {
   const adminItems: MenuProps["items"] = [
     {
       type: "group",
-      label: sectionLabel(
-        t("layout.dashboard"),
-        t("layout.menu.operations", "Operations"),
-      ),
+      label: sectionLabel(t("layout.dashboard")),
       children: [
         {
           key: "/admin/dashboard",
@@ -616,7 +619,7 @@ export default function BaseLayout() {
           icon: <UserSwitchOutlined />,
           label: (
             <Link to="/admin/workflow/delegations">
-              {t("layout.delegationRules", "Delegation Rules")}
+              {t("layout.nav.alternatesSetup", "Alternates Setup")}
             </Link>
           ),
         },
@@ -637,7 +640,7 @@ export default function BaseLayout() {
           icon: <SettingOutlined />,
           label: (
             <Link to="/admin/biotime">
-              {t("bioTime.pageTitle", "BioTime Settings")}
+              {t("layout.nav.biotimeSettings", "BioTime Settings")}
             </Link>
           ),
         },
@@ -646,7 +649,7 @@ export default function BaseLayout() {
           icon: <WhatsAppOutlined />,
           label: (
             <Link to="/admin/whatsapp">
-              {t("layout.whatsappIntegration", "WhatsApp Integration")}
+              {t("layout.nav.whatsapp", "WhatsApp")}
             </Link>
           ),
         },
@@ -654,10 +657,7 @@ export default function BaseLayout() {
     },
     {
       type: "group",
-      label: sectionLabel(
-        t("layout.users"),
-        t("layout.menu.peopleOrg", "People & Organization"),
-      ),
+      label: sectionLabel(t("layout.users")),
       children: [
         {
           key: "/admin/users",
@@ -678,10 +678,7 @@ export default function BaseLayout() {
     },
     {
       type: "group",
-      label: sectionLabel(
-        t("layout.profile"),
-        t("layout.menu.account", "Account"),
-      ),
+      label: sectionLabel(t("layout.profile")),
       children: [
         {
           key: "/admin/profile",
@@ -699,16 +696,8 @@ export default function BaseLayout() {
       label: <Link to="/hr/dashboard">{t("layout.dashboard")}</Link>,
     },
     {
-      key: "/hr/invites",
-      icon: <UserAddOutlined />,
-      label: <Link to="/hr/invites">{t("layout.invites")}</Link>,
-    },
-    {
       type: "group",
-      label: sectionLabel(
-        t("layout.menu.workInbox", "Work Inbox"),
-        t("layout.menu.approvals", "Approvals"),
-      ),
+      label: sectionLabel(t("layout.menu.workInbox", "Work Inbox")),
       children: [
         {
           key: "/pending-inbox",
@@ -722,7 +711,7 @@ export default function BaseLayout() {
         {
           key: "hr-inbox-sub",
           icon: <InboxOutlined />,
-          label: t("layout.inbox", "Inbox"),
+          label: t("layout.nav.requestQueues", "Request Queues"),
           children: [
             {
               key: "/hr/leave/requests",
@@ -734,7 +723,7 @@ export default function BaseLayout() {
               key: "/hr/annual-leave-payments",
               label: (
                 <Link to="/hr/annual-leave-payments">
-                  {t("layout.annualLeaveSettlements")}
+                  {t("layout.nav.leaveSettlements", "Leave Settlements")}
                 </Link>
               ),
             },
@@ -750,7 +739,7 @@ export default function BaseLayout() {
               key: "/hr/permission-requests",
               label: (
                 <Link to="/hr/permission-requests">
-                  {t("permissionRequests.list.hrTitle")}
+                  {t("layout.nav.permissionInbox", "Permission Inbox")}
                 </Link>
               ),
             },
@@ -800,7 +789,7 @@ export default function BaseLayout() {
           icon: <UserSwitchOutlined />,
           label: (
             <Link to="/hr/workflow/delegations">
-              {t("layout.delegationRules", "Delegation Rules")}
+              {t("layout.nav.alternatesSetup", "Alternates Setup")}
             </Link>
           ),
         },
@@ -808,10 +797,7 @@ export default function BaseLayout() {
     },
     {
       type: "group",
-      label: sectionLabel(
-        t("layout.menu.myRequests", "My Requests"),
-        t("layout.employeeSelfService"),
-      ),
+      label: sectionLabel(t("layout.menu.myRequests", "My Requests")),
       children: [
         {
           key: "hr-emp-requests-sub",
@@ -862,7 +848,7 @@ export default function BaseLayout() {
               key: "/employee/permission-requests",
               label: (
                 <Link to="/employee/permission-requests">
-                  {t("permissionRequests.list.mineTitle")}
+                  {t("layout.nav.myPermissions", "My Permissions")}
                 </Link>
               ),
             },
@@ -873,24 +859,18 @@ export default function BaseLayout() {
           icon: <UserSwitchOutlined />,
           label: (
             <Link to="/employee/delegated-approvals">
-              {t("layout.delegatedApprovals", "Delegated Approvals")}
+              {t("layout.nav.alternateApprovals", "Alternate Approvals")}
             </Link>
           ),
         },
         {
-          key: "hr-emp-attendance-sub",
+          key: "/employee/attendance",
           icon: <ClockCircleOutlined />,
-          label: t("layout.attendance"),
-          children: [
-            {
-              key: "/employee/attendance",
-              label: (
-                <Link to="/employee/attendance">
-                  {t("layout.attendanceRecords", "Records")}
-                </Link>
-              ),
-            },
-          ],
+          label: (
+            <Link to="/employee/attendance">
+              {t("layout.nav.myAttendance", "My Attendance")}
+            </Link>
+          ),
         },
         {
           key: "/employee/assets",
@@ -905,10 +885,7 @@ export default function BaseLayout() {
     },
     {
       type: "group",
-      label: sectionLabel(
-        t("layout.menu.people", "People"),
-        t("layout.employees"),
-      ),
+      label: sectionLabel(t("layout.menu.people", "People")),
       children: [
         {
           key: "/hr/employees",
@@ -935,15 +912,11 @@ export default function BaseLayout() {
           icon: <SafetyOutlined />,
           label: <Link to="/hr/sponsors">{t("layout.sponsors")}</Link>,
         },
-      ],
-    },
-    {
-      type: "group",
-      label: sectionLabel(
-        t("layout.menu.operations", "Operations"),
-        t("layout.payroll"),
-      ),
-      children: [
+        {
+          key: "/hr/invites",
+          icon: <UserAddOutlined />,
+          label: <Link to="/hr/invites">{t("layout.invites")}</Link>,
+        },
         {
           key: "/hr/import/employees",
           icon: <UploadOutlined />,
@@ -951,6 +924,45 @@ export default function BaseLayout() {
             <Link to="/hr/import/employees">{t("layout.importEmployees")}</Link>
           ),
         },
+      ],
+    },
+    {
+      type: "group",
+      label: sectionLabel(t("layout.menu.hiring", "Hiring")),
+      children: [
+        {
+          key: "/hr/job-offers",
+          icon: <FileDoneOutlined />,
+          label: (
+            <Link to="/hr/job-offers">
+              {t("layout.jobOffers", "Job Offers")}
+            </Link>
+          ),
+        },
+        {
+          key: "/hr/starting-work-acknowledgments",
+          icon: <SafetyCertificateOutlined />,
+          label: (
+            <Link to="/hr/starting-work-acknowledgments">
+              {t("layout.startingWorkAcknowledgments", "BioTime Verifications")}
+            </Link>
+          ),
+        },
+        {
+          key: "/hr/templates",
+          icon: <FileTextOutlined />,
+          label: (
+            <Link to="/hr/templates">
+              {t("layout.templateLibrary", "Template Library")}
+            </Link>
+          ),
+        },
+      ],
+    },
+    {
+      type: "group",
+      label: sectionLabel(t("layout.menu.payrollAssets", "Payroll & Assets")),
+      children: [
         {
           key: "/hr/payroll",
           icon: <DollarOutlined />,
@@ -1004,33 +1016,12 @@ export default function BaseLayout() {
             },
           ],
         },
-        {
-          key: "/hr/job-offers",
-          icon: <FileDoneOutlined />,
-          label: (
-            <Link to="/hr/job-offers">
-              {t("layout.jobOffers", "Job Offers")}
-            </Link>
-          ),
-        },
-        {
-          key: "/hr/starting-work-acknowledgments",
-          icon: <SafetyCertificateOutlined />,
-          label: (
-            <Link to="/hr/starting-work-acknowledgments">
-              {t("layout.startingWorkAcknowledgments", "BioTime Verifications")}
-            </Link>
-          ),
-        },
-        {
-          key: "/hr/templates",
-          icon: <FileTextOutlined />,
-          label: (
-            <Link to="/hr/templates">
-              {t("layout.templateLibrary", "Template Library")}
-            </Link>
-          ),
-        },
+      ],
+    },
+    {
+      type: "group",
+      label: sectionLabel(t("layout.menu.communication", "Communication")),
+      children: [
         {
           key: "hr-announcements-sub",
           icon: <BellOutlined />,
@@ -1040,7 +1031,7 @@ export default function BaseLayout() {
               key: "/hr/announcements",
               label: (
                 <Link to="/hr/announcements">
-                  {t("layout.announcements", "Announcements")}
+                  {t("layout.manage", "Manage")}
                 </Link>
               ),
             },
@@ -1058,10 +1049,7 @@ export default function BaseLayout() {
     },
     {
       type: "group",
-      label: sectionLabel(
-        t("layout.menu.account", "Account"),
-        t("layout.profile"),
-      ),
+      label: sectionLabel(t("layout.menu.account", "Account")),
       children: [
         {
           key: "/hr/profile",
@@ -1080,25 +1068,16 @@ export default function BaseLayout() {
     },
     {
       type: "group",
-      label: sectionLabel(
-        t("layout.menu.myRequests", "My Requests"),
-        t("layout.employeeSelfService"),
-      ),
+      label: sectionLabel(t("layout.menu.myRequests", "My Requests")),
       children: [
         {
-          key: "emp-attendance-sub",
+          key: "/employee/attendance",
           icon: <ClockCircleOutlined />,
-          label: t("layout.attendance"),
-          children: [
-            {
-              key: "/employee/attendance",
-              label: (
-                <Link to="/employee/attendance">
-                  {t("layout.attendanceRecords", "Records")}
-                </Link>
-              ),
-            },
-          ],
+          label: (
+            <Link to="/employee/attendance">
+              {t("layout.nav.myAttendance", "My Attendance")}
+            </Link>
+          ),
         },
         {
           key: "emp-requests-sub",
@@ -1141,7 +1120,7 @@ export default function BaseLayout() {
               key: "/employee/permission-requests",
               label: (
                 <Link to="/employee/permission-requests">
-                  {t("permissionRequests.list.mineTitle")}
+                  {t("layout.nav.myPermissions", "My Permissions")}
                 </Link>
               ),
             },
@@ -1152,7 +1131,7 @@ export default function BaseLayout() {
           icon: <UserSwitchOutlined />,
           label: (
             <Link to="/employee/delegated-approvals">
-              {t("layout.delegatedApprovals", "Delegated Approvals")}
+              {t("layout.nav.alternateApprovals", "Alternate Approvals")}
             </Link>
           ),
         },
@@ -1172,14 +1151,13 @@ export default function BaseLayout() {
         },
       ],
     },
-    ...(hasManagerAccess || isFinanceApprover || isCFOApprover || isCEOApprover
+    // With manager access the Pending Inbox sits in My Team instead.
+    ...(!hasManagerAccess &&
+    (isFinanceApprover || isCFOApprover || isCEOApprover)
       ? [
           {
             type: "group" as const,
-            label: sectionLabel(
-              t("layout.menu.workInbox", "Work Inbox"),
-              t("layout.menu.approvals", "Approvals"),
-            ),
+            label: sectionLabel(t("layout.menu.workInbox", "Work Inbox")),
             children: [
               {
                 key: "/pending-inbox",
@@ -1199,10 +1177,7 @@ export default function BaseLayout() {
       ? [
           {
             type: "group" as const,
-            label: sectionLabel(
-              t("layout.menu.finance", "Finance"),
-              t("layout.menu.approvals", "Approvals"),
-            ),
+            label: sectionLabel(t("layout.menu.finance", "Finance")),
             children: [
               {
                 key: "/finance/loan-requests",
@@ -1221,10 +1196,7 @@ export default function BaseLayout() {
       ? [
           {
             type: "group" as const,
-            label: sectionLabel(
-              t("layout.menu.cfo", "CFO"),
-              t("layout.menu.finance", "Finance"),
-            ),
+            label: sectionLabel(t("layout.menu.cfo", "CFO")),
             children: [
               {
                 key: "/cfo/loan-requests",
@@ -1243,10 +1215,7 @@ export default function BaseLayout() {
       ? [
           {
             type: "group" as const,
-            label: sectionLabel(
-              t("layout.menu.ceo", "CEO"),
-              t("layout.menu.approvals", "Approvals"),
-            ),
+            label: sectionLabel(t("layout.menu.ceo", "CEO")),
             children: [
               {
                 key: "/ceo/loan-requests",
@@ -1315,10 +1284,7 @@ export default function BaseLayout() {
       : []),
     {
       type: "group",
-      label: sectionLabel(
-        t("layout.menu.account", "Account"),
-        t("layout.profile"),
-      ),
+      label: sectionLabel(t("layout.menu.account", "Account")),
       children: [
         {
           key: "/employee/announcements",
@@ -1346,33 +1312,16 @@ export default function BaseLayout() {
     },
     {
       type: "group",
-      label: sectionLabel(
-        t("layout.menu.myRequests", "My Requests"),
-        t("layout.employeeSelfService"),
-      ),
+      label: sectionLabel(t("layout.menu.myRequests", "My Requests")),
       children: [
         {
-          key: "mgr-attendance-sub",
+          key: "/employee/attendance",
           icon: <ClockCircleOutlined />,
-          label: t("layout.attendance"),
-          children: [
-            {
-              key: "/manager/attendance",
-              label: (
-                <Link to="/manager/attendance">
-                  {t("layout.attendanceRecords", "Records")}
-                </Link>
-              ),
-            },
-            {
-              key: "/manager/permission-requests",
-              label: (
-                <Link to="/manager/permission-requests">
-                  {t("permissionRequests.list.managerTitle")}
-                </Link>
-              ),
-            },
-          ],
+          label: (
+            <Link to="/employee/attendance">
+              {t("layout.nav.myAttendance", "My Attendance")}
+            </Link>
+          ),
         },
         {
           key: "mgr-requests-sub",
@@ -1419,6 +1368,22 @@ export default function BaseLayout() {
                 </Link>
               ),
             },
+            {
+              key: "/employee/permission-requests/new",
+              label: (
+                <Link to="/employee/permission-requests/new">
+                  {t("employee.dashboard.permissionAction")}
+                </Link>
+              ),
+            },
+            {
+              key: "/employee/permission-requests",
+              label: (
+                <Link to="/employee/permission-requests">
+                  {t("layout.nav.myPermissions", "My Permissions")}
+                </Link>
+              ),
+            },
           ],
         },
         {
@@ -1426,7 +1391,7 @@ export default function BaseLayout() {
           icon: <UserSwitchOutlined />,
           label: (
             <Link to="/employee/delegated-approvals">
-              {t("layout.delegatedApprovals", "Delegated Approvals")}
+              {t("layout.nav.alternateApprovals", "Alternate Approvals")}
             </Link>
           ),
         },
@@ -1446,31 +1411,30 @@ export default function BaseLayout() {
         },
       ],
     },
-    {
-      type: "group",
-      label: sectionLabel(
-        t("layout.menu.workInbox", "Work Inbox"),
-        t("layout.menu.approvals", "Approvals"),
-      ),
-      children: [
-        {
-          key: "/pending-inbox",
-          icon: <InboxOutlined />,
-          label: (
-            <Link to="/pending-inbox">
-              {t("layout.pendingInbox", "Pending Inbox")}
-            </Link>
-          ),
-        },
-      ],
-    },
+    // With manager access the Pending Inbox sits in My Team instead.
+    ...(hasManagerAccess
+      ? []
+      : [
+          {
+            type: "group" as const,
+            label: sectionLabel(t("layout.menu.workInbox", "Work Inbox")),
+            children: [
+              {
+                key: "/pending-inbox",
+                icon: <InboxOutlined />,
+                label: (
+                  <Link to="/pending-inbox">
+                    {t("layout.pendingInbox", "Pending Inbox")}
+                  </Link>
+                ),
+              },
+            ],
+          },
+        ]),
     ...buildManagerNavGroups(t, hasManagerAccess),
     {
       type: "group",
-      label: sectionLabel(
-        t("layout.menu.account", "Account"),
-        t("layout.profile"),
-      ),
+      label: sectionLabel(t("layout.menu.account", "Account")),
       children: [
         {
           key: "mgr-announcements-sub",
@@ -1527,10 +1491,7 @@ export default function BaseLayout() {
     },
     {
       type: "group",
-      label: sectionLabel(
-        t("layout.menu.workInbox", "Work Inbox"),
-        t("layout.menu.approvals", "Approvals"),
-      ),
+      label: sectionLabel(t("layout.menu.workInbox", "Work Inbox")),
       children: [
         {
           key: "/pending-inbox",
@@ -1545,10 +1506,7 @@ export default function BaseLayout() {
     },
     {
       type: "group",
-      label: sectionLabel(
-        t("layout.menu.cfo", "CFO"),
-        t("layout.menu.finance", "Finance"),
-      ),
+      label: sectionLabel(t("layout.menu.cfo", "CFO")),
       children: [
         {
           key: "/cfo/loan-requests",
@@ -1563,10 +1521,7 @@ export default function BaseLayout() {
     },
     {
       type: "group",
-      label: sectionLabel(
-        t("layout.menu.teamOperations", "Team Operations"),
-        t("layout.menu.teamManagement", "Team Management"),
-      ),
+      label: sectionLabel(t("layout.menu.teamOperations", "Team Operations")),
       children: [
         {
           key: "/manager/dashboard",
@@ -1593,23 +1548,11 @@ export default function BaseLayout() {
             </Link>
           ),
         },
-        {
-          key: "/manager/loan-requests",
-          icon: <DollarOutlined />,
-          label: (
-            <Link to="/manager/loan-requests">
-              {t("layout.loanRequests", "Loan Requests")}
-            </Link>
-          ),
-        },
       ],
     },
     {
       type: "group",
-      label: sectionLabel(
-        t("layout.menu.account", "Account"),
-        t("layout.profile"),
-      ),
+      label: sectionLabel(t("layout.menu.account", "Account")),
       children: [
         {
           key: "/cfo/profile",
@@ -1709,6 +1652,8 @@ export default function BaseLayout() {
         accent={sidebarBrandTheme.accent}
         accentGlow={sidebarBrandTheme.accentGlow}
         titleColor={sidebarBrandTheme.titleColor}
+        homePath={getHomePath(role)}
+        homeLabel={t("layout.dashboard")}
       />
       <div
         style={{

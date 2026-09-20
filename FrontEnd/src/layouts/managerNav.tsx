@@ -2,8 +2,8 @@ import { Link } from "react-router-dom";
 import {
   ClockCircleOutlined,
   DashboardOutlined,
-  DollarOutlined,
   FileSearchOutlined,
+  InboxOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
 import type { MenuProps } from "antd";
@@ -27,10 +27,7 @@ type MenuItemGroup = NonNullable<MenuProps["items"]>[number];
 export function buildManagerNavGroup(t: Translate): MenuItemGroup {
   return {
     type: "group" as const,
-    label: sectionLabel(
-      t("layout.menu.myTeam", "My Team"),
-      t("layout.menu.teamManagement", "Team Management"),
-    ),
+    label: sectionLabel(t("layout.menu.myTeam", "My Team")),
     children: [
       {
         key: "/manager/dashboard",
@@ -41,11 +38,22 @@ export function buildManagerNavGroup(t: Translate): MenuItemGroup {
           </Link>
         ),
       },
+      // Everything currently waiting on this user, across request types.
+      {
+        key: "/pending-inbox",
+        icon: <InboxOutlined />,
+        label: (
+          <Link to="/pending-inbox">
+            {t("layout.pendingInbox", "Pending Inbox")}
+          </Link>
+        ),
+      },
       {
         key: "/manager/team",
         icon: <TeamOutlined />,
         label: <Link to="/manager/team">{t("layout.myTeam", "My Team")}</Link>,
       },
+      // Leave, loan, permission and asset-return queues are tabs of this page.
       {
         key: "/manager/team-requests",
         icon: <FileSearchOutlined />,
@@ -60,15 +68,6 @@ export function buildManagerNavGroup(t: Translate): MenuItemGroup {
         icon: <ClockCircleOutlined />,
         label: (
           <Link to="/manager/attendance">{t("attendance.managerTitle")}</Link>
-        ),
-      },
-      {
-        key: "/manager/loan-requests",
-        icon: <DollarOutlined />,
-        label: (
-          <Link to="/manager/loan-requests">
-            {t("layout.loanRequests", "Loan Requests")}
-          </Link>
         ),
       },
     ],

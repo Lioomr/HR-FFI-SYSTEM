@@ -41,6 +41,37 @@ it("opens an absolute review URL as an application path", async () => {
     },
   });
   render(<PendingInboxPage />);
-  fireEvent.click(await screen.findByRole("button", { name: /Review/i }));
+  fireEvent.click(await screen.findByRole("button", { name: /Review$/ }));
   expect(navigate).toHaveBeenCalledWith("/ceo/job-offers/123?review=1");
+});
+
+it("opens a contract rating from the employee name, not only the Review button", async () => {
+  vi.mocked(getPendingRequests).mockResolvedValue({
+    status: "success",
+    data: {
+      items: [
+        {
+          id: 15,
+          workflow_id: 9,
+          request_type: "CONTRACT_RATING",
+          request_type_label: "Employee Contract Rating",
+          name: "ZEYAD ABDELHAMID",
+          action: "Employee Contract Rating",
+          time: new Date().toISOString(),
+          review_path: `${window.location.origin}/ceo/contract-ratings/15`,
+          avatar: "",
+          current_approver_role: "ceo",
+        },
+      ],
+      count: 1,
+      page: 1,
+      page_size: 20,
+    },
+  });
+  render(<PendingInboxPage />);
+  // The Review button sits behind a horizontal scroll on narrow screens.
+  fireEvent.click(await screen.findByRole("button", { name: "ZEYAD ABDELHAMID" }));
+  expect(navigate).toHaveBeenCalledWith("/ceo/contract-ratings/15");
+  // The type is a known one, so it renders its translated label.
+  expect(screen.getByText("Contract Rating")).toBeTruthy();
 });

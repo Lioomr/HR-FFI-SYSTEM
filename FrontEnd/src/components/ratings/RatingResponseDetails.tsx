@@ -1,5 +1,6 @@
 import { Descriptions, Space, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { Link } from "react-router-dom";
 
 import { useI18n } from "../../i18n/useI18n";
 import {
@@ -11,8 +12,7 @@ import {
   type ContractRatingStatus,
   type RatingCriterion,
   type RatingGrade,
-  type RatingRecommendationFields,
-  type RatingResponseBase,
+  type RatingResponse,
 } from "../../services/api/contractRatingsApi";
 import { formatDateOnly, formatDateTimeShort } from "../../utils/dateTime";
 
@@ -75,7 +75,7 @@ export function RatingResponseDetails({
   response,
   criteria,
 }: {
-  response: RatingResponseBase;
+  response: RatingResponse;
   criteria: RatingCriterion[];
 }) {
   const { t, language } = useI18n();
@@ -149,81 +149,28 @@ export function RatingResponseDetails({
   );
 }
 
-/** The manager's recommendation and whichever change details it carries. */
-export function RecommendationSummary({
-  response,
-  positionLabel,
-}: {
-  response: RatingRecommendationFields;
-  positionLabel?: string;
-}) {
-  const { t } = useI18n();
-  const types = response.recommended_change_types ?? [];
-  return (
-    <Descriptions bordered size="small" column={1}>
-      <Descriptions.Item label={t("contractRatings.recommendation")}>
-        {response.recommendation ? (
-          <Tag
-            color={response.recommendation === "TERMINATE" ? "red" : "blue"}
-          >
-            {t(
-              `contractRatings.recommendationLabel.${response.recommendation}`,
-            )}
-          </Tag>
-        ) : (
-          "—"
-        )}
-      </Descriptions.Item>
-      {types.length ? (
-        <Descriptions.Item label={t("contractRatings.changeTypes")}>
-          <Space wrap>
-            {types.map((type) => (
-              <Tag key={type}>
-                {t(`contractRatings.changeTypeLabel.${type}`)}
-              </Tag>
-            ))}
-          </Space>
-        </Descriptions.Item>
-      ) : null}
-      {types.includes("SALARY_INCREASE") ? (
-        <Descriptions.Item label={t("contractRatings.proposedSalary")}>
-          <SalaryTermsTags terms={response.proposed_terms} />
-        </Descriptions.Item>
-      ) : null}
-      {response.proposed_job_title ? (
-        <Descriptions.Item label={t("contractRatings.proposedJobTitle")}>
-          {response.proposed_job_title}
-        </Descriptions.Item>
-      ) : null}
-      {response.proposed_position_id ? (
-        <Descriptions.Item label={t("contractRatings.proposedPosition")}>
-          {positionLabel ?? `#${response.proposed_position_id}`}
-        </Descriptions.Item>
-      ) : null}
-      {response.other_change_notes ? (
-        <Descriptions.Item label={t("contractRatings.otherChangeNotes")}>
-          {response.other_change_notes}
-        </Descriptions.Item>
-      ) : null}
-    </Descriptions>
-  );
-}
-
 /**
  * The employee/contract header every role's payload carries. Reads only
  * `ContractRatingHeader` keys, so it is safe for manager and employee views.
  */
 export function RatingHeaderDetails({
   rating,
+  profileHref,
 }: {
   rating: ContractRatingHeader;
+  /** HR/CEO only: the rater pages never link out to a profile. */
+  profileHref?: string;
 }) {
   const { t } = useI18n();
   const { employee } = rating;
   return (
     <Descriptions bordered size="small" column={{ xs: 1, sm: 1, md: 1, lg: 2, xl: 3 }}>
       <Descriptions.Item label={t("contractRatings.employee")}>
-        {employee.full_name}
+        {profileHref ? (
+          <Link to={profileHref}>{employee.full_name}</Link>
+        ) : (
+          employee.full_name
+        )}
       </Descriptions.Item>
       <Descriptions.Item label={t("contractRatings.employeeNumber")}>
         {employee.employee_number || employee.employee_id}
