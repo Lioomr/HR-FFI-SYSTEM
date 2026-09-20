@@ -28,6 +28,9 @@ import { toPayload, fromEmployeeToFormValues } from "./employeeFormMapper";
 import EmployeeForm from "./EmployeeForm";
 import { useI18n } from "../../../i18n/useI18n";
 import { useAuthStore } from "../../../auth/authStore";
+import dayjs from "dayjs";
+import { createCrossCompanyManagerAssignment, listOrganizationScopes } from "../../../services/api/managerAssignmentsApi";
+import type { OrganizationScope } from "../../../services/api/managerAssignmentsApi";
 
 export default function EditEmployeePage() {
   const { t } = useI18n();
@@ -61,6 +64,7 @@ export default function EditEmployeePage() {
   const [taskGroups, setTaskGroups] = useState<TaskGroup[]>([]);
   const [sponsors, setSponsors] = useState<Sponsor[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [organizationScopes, setOrganizationScopes] = useState<OrganizationScope[]>([]);
 
   /**
    * Load employee data and reference data
@@ -80,7 +84,7 @@ export default function EditEmployeePage() {
 
       try {
         // Fetch employee and reference data in parallel
-        const [employeeRes, deptRes, posRes, tgRes, sponsorRes, employeesRes] =
+        const [employeeRes, deptRes, posRes, tgRes, sponsorRes, employeesRes, scopesRes] =
           await Promise.all([
             getEmployee(id),
             listDepartments(),
@@ -88,6 +92,7 @@ export default function EditEmployeePage() {
             listTaskGroups(),
             listSponsors(),
             listEmployees({ scope: "all", page: 1, page_size: 1000 }),
+            listOrganizationScopes(),
           ]);
 
         // Check for errors
@@ -106,7 +111,8 @@ export default function EditEmployeePage() {
           isApiError(posRes) ||
           isApiError(tgRes) ||
           isApiError(sponsorRes) ||
-          isApiError(employeesRes)
+          isApiError(employeesRes) ||
+          isApiError(scopesRes)
         ) {
           notifyError(t("hr.employees.fetchRefDataFailed"));
           setLoading(false);
@@ -123,6 +129,7 @@ export default function EditEmployeePage() {
           (employeesRes.data as any)?.items ||
           [];
         setEmployees(Array.isArray(managerCandidates) ? managerCandidates : []);
+        setOrganizationScopes(scopesRes.data?.items ?? []);
 
         // Prefill form with employee data
         setEmployeeCompanyId(employeeRes.data.company_id ?? null);
@@ -178,6 +185,10 @@ export default function EditEmployeePage() {
 
       // Transform form values to API payload
       const payload = toPayload(values) as CreateEmployeeDto;
+      const crossCompany = values.manager_profile_id && values.cross_company_scope_id && values.cross_company_end_at;
+      if (crossCompany) delete (payload as any).manager_profile_id;
+      delete (payload as any).cross_company_scope_id;
+      delete (payload as any).cross_company_end_at;
 
       setSubmitting(true);
       const response = await updateEmployee(id, payload, { scope: "all" });
@@ -191,6 +202,17 @@ export default function EditEmployeePage() {
         notifyError(response.message || t("hr.employees.updateFailed"));
         setSubmitting(false);
         return;
+      }
+
+      if (crossCompany) {
+        await createCrossCompanyManagerAssignment({
+          employee_id: Number(id),
+          manager_profile_id: Number(values.manager_profile_id),
+          scope_id: Number(values.cross_company_scope_id),
+          start_at: new Date().toISOString(),
+          end_at: dayjs(values.cross_company_end_at).toISOString(),
+          capabilities: ["employees.view", "leaves.approve", "attendance.approve"],
+        });
       }
 
       // Success
@@ -278,7 +300,7 @@ export default function EditEmployeePage() {
       />
 
       <Card style={{ borderRadius: 16 }}>
-        <EmployeeForm
+          <EmployeeForm
           form={form}
           currentEmployeeId={id}
           managerAssignmentError={managerAssignmentError}
@@ -288,7 +310,9 @@ export default function EditEmployeePage() {
             taskGroups,
             sponsors,
             employees,
+            organizationScopes,
           }}
+          employeeCompanyId={employeeCompanyId}
         />
       </Card>
     </div>

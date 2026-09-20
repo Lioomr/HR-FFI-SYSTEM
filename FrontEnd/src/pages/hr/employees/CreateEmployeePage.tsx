@@ -27,6 +27,9 @@ import EmployeeForm from "./EmployeeForm";
 import { useI18n } from "../../../i18n/useI18n";
 import { useAuthStore } from "../../../auth/authStore";
 import { isHeadOfficeOrganization } from "../../../utils/organizationContext";
+import dayjs from "dayjs";
+import { createCrossCompanyManagerAssignment, listOrganizationScopes } from "../../../services/api/managerAssignmentsApi";
+import type { OrganizationScope } from "../../../services/api/managerAssignmentsApi";
 
 export default function CreateEmployeePage() {
   const { t } = useI18n();
@@ -49,6 +52,7 @@ export default function CreateEmployeePage() {
   const [taskGroups, setTaskGroups] = useState<TaskGroup[]>([]);
   const [sponsors, setSponsors] = useState<Sponsor[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [organizationScopes, setOrganizationScopes] = useState<OrganizationScope[]>([]);
 
   /**
    * Load reference data on mount
@@ -60,13 +64,14 @@ export default function CreateEmployeePage() {
 
       try {
         // Fetch all reference data in parallel
-        const [deptRes, posRes, tgRes, sponsorRes, employeesRes] =
+        const [deptRes, posRes, tgRes, sponsorRes, employeesRes, scopesRes] =
           await Promise.all([
             listDepartments(),
             listPositions(),
             listTaskGroups(),
             listSponsors(),
             listEmployees({ scope: "all", page: 1, page_size: 1000 }),
+            listOrganizationScopes(),
           ]);
 
         // Check for errors
@@ -75,7 +80,8 @@ export default function CreateEmployeePage() {
           isApiError(posRes) ||
           isApiError(tgRes) ||
           isApiError(sponsorRes) ||
-          isApiError(employeesRes)
+          isApiError(employeesRes) ||
+          isApiError(scopesRes)
         ) {
           notifyError(t("hr.employees.fetchRefDataFailed"));
           setLoading(false);
@@ -92,6 +98,7 @@ export default function CreateEmployeePage() {
           (employeesRes.data as any)?.items ||
           [];
         setEmployees(Array.isArray(managerCandidates) ? managerCandidates : []);
+        setOrganizationScopes(scopesRes.data?.items ?? []);
 
         setLoading(false);
       } catch (err: any) {
@@ -124,6 +131,10 @@ export default function CreateEmployeePage() {
 
       // Transform form values to API payload
       const payload = toPayload(values) as CreateEmployeeDto;
+      const crossCompany = values.manager_profile_id && values.cross_company_scope_id && values.cross_company_end_at;
+      if (crossCompany) delete (payload as any).manager_profile_id;
+      delete (payload as any).cross_company_scope_id;
+      delete (payload as any).cross_company_end_at;
 
       setSubmitting(true);
       const response = await createEmployee(payload, { scope: "all" });
@@ -142,6 +153,16 @@ export default function CreateEmployeePage() {
       // Success - extract ID and redirect
       const employeeId = response.data?.id || response.data?.employee_id;
       if (employeeId) {
+        if (crossCompany) {
+          await createCrossCompanyManagerAssignment({
+            employee_id: Number(employeeId),
+            manager_profile_id: Number(values.manager_profile_id),
+            scope_id: Number(values.cross_company_scope_id),
+            start_at: new Date().toISOString(),
+            end_at: dayjs(values.cross_company_end_at).toISOString(),
+            capabilities: ["employees.view", "leaves.approve", "attendance.approve"],
+          });
+        }
         navigate(`/hr/employees/${employeeId}`);
       } else {
         // Fallback to list if no ID returned
@@ -223,7 +244,9 @@ export default function CreateEmployeePage() {
             taskGroups,
             sponsors,
             employees,
+            organizationScopes,
           }}
+          employeeCompanyId={Number(user?.active_organization_id ?? user?.default_organization_id) || null}
         />
       </Card>
     </div>

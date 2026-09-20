@@ -38,6 +38,7 @@ import type { Sponsor } from "../../../services/api/sponsorsApi";
 import type { Employee } from "../../../services/api/employeesApi";
 import { useEffect, useState } from "react";
 import { useI18n } from "../../../i18n/useI18n";
+import type { OrganizationScope } from "../../../services/api/managerAssignmentsApi";
 
 interface EmployeeFormProps {
   form: FormInstance;
@@ -48,6 +49,7 @@ interface EmployeeFormProps {
     taskGroups: TaskGroup[];
     sponsors: Sponsor[];
     employees?: Employee[]; // For manager selection
+    organizationScopes?: OrganizationScope[];
   };
   /** Profile being edited, so it can never be offered as its own manager. */
   currentEmployeeId?: number | string | null;
@@ -56,6 +58,7 @@ interface EmployeeFormProps {
    * cross-company, archived/inactive manager, reporting cycle).
    */
   managerAssignmentError?: string | null;
+  employeeCompanyId?: number | null;
 }
 
 function localizeManagerAssignmentError(
@@ -94,6 +97,7 @@ export default function EmployeeForm({
   refOptions,
   currentEmployeeId = null,
   managerAssignmentError = null,
+  employeeCompanyId = null,
 }: EmployeeFormProps) {
   const { t } = useI18n();
   const localizedManagerAssignmentError = localizeManagerAssignmentError(
@@ -106,7 +110,13 @@ export default function EmployeeForm({
     taskGroups,
     sponsors,
     employees = [],
+    organizationScopes = [],
   } = refOptions;
+  const selectedManagerId = Form.useWatch("manager_profile_id", form);
+  const selectedManager = employees.find((employee) => employee.id === selectedManagerId);
+  const isCrossCompanyManager = Boolean(
+    employeeCompanyId && selectedManager?.company_id && employeeCompanyId !== selectedManager.company_id,
+  );
   const [isSaudi, setIsSaudi] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState("1");
 
@@ -564,6 +574,34 @@ export default function EmployeeForm({
                               )}
                               description={localizedManagerAssignmentError}
                             />
+                          )}
+                          {isCrossCompanyManager && (
+                            <Row gutter={16} style={{ marginTop: 8 }}>
+                              <Col xs={24} md={12}>
+                                <Form.Item
+                                  label={t("employees.form.managerScope", "Approved organization scope")}
+                                  name="cross_company_scope_id"
+                                  rules={[{ required: true, message: t("common.required", "This field is required") }]}
+                                >
+                                  <Select
+                                    size="large"
+                                    placeholder={t("employees.form.managerScopePlaceholder", "Select scope")}
+                                    options={organizationScopes
+                                      .filter((scope) => scope.companies.some((company) => company.id === employeeCompanyId) && scope.companies.some((company) => company.id === selectedManager?.company_id))
+                                      .map((scope) => ({ label: `${scope.code} - ${scope.name}`, value: scope.id }))}
+                                  />
+                                </Form.Item>
+                              </Col>
+                              <Col xs={24} md={12}>
+                                <Form.Item
+                                  label={t("employees.form.managerAssignmentEnd", "Assignment expiry")}
+                                  name="cross_company_end_at"
+                                  rules={[{ required: true, message: t("common.required", "This field is required") }]}
+                                >
+                                  <DatePicker showTime style={{ width: "100%" }} size="large" />
+                                </Form.Item>
+                              </Col>
+                            </Row>
                           )}
                         </Col>
 
