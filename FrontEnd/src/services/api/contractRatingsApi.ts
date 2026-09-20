@@ -1,5 +1,6 @@
 import { api } from "./apiClient";
 import type { ApiResponse, PaginatedResponse } from "./apiTypes";
+import { isApiError } from "./apiTypes";
 import type { WorkflowSnapshot } from "../../types/workflow";
 import type {
   ContractDecisionType,
@@ -11,8 +12,7 @@ import type {
  *
  * This backend app is mounted at the site root, NOT under `/api/` like every
  * other module (Backend/config/urls.py: `path("", include("contract_ratings.urls"))`).
- * That is intentional per plans/Employee Contract Rating Backend Handoff.md —
- * do not add an `/api` prefix to these paths.
+ * Do not add an `/api` prefix to these paths.
  */
 const BASE = "/contract-ratings";
 
@@ -25,44 +25,32 @@ export type RatingGrade =
 
 /** Every member of `contract_ratings.models.ContractRating.Status`. */
 export type ContractRatingStatus =
+  | "PENDING_HR_GATE"
   | "PENDING_RESPONSES"
   | "WAITING_MANAGER"
   | "WAITING_EMPLOYEE"
-  | "PENDING_HR"
   | "PENDING_CEO"
-  | "APPROVED"
-  | "REJECTED"
+  | "DECIDED"
   | "MANUAL_RESOLUTION_REQUIRED";
 
+/** HR's one-time routing choice; blank until HR decides the gate. */
+export type RatingMode = "RATE" | "SKIP_TO_CEO";
+
 /** Statuses in which the backend accepts a manager/employee (re)submission. */
-export const RESPONSE_STATUSES: ContractRatingStatus[] = [
+export const RESPONSE_STATUSES: readonly ContractRatingStatus[] = [
   "PENDING_RESPONSES",
   "WAITING_MANAGER",
   "WAITING_EMPLOYEE",
 ];
 
-export type RatingRecommendation =
-  | "CONTINUE_CONTRACT"
-  | "CONTINUE_WITH_CHANGES"
-  | "TERMINATE";
+/** The CEO's three contract outcomes reuse `ContractDecision.DecisionType`. */
+export type CeoOutcome = ContractDecisionType;
 
-export type RatingChangeType =
-  | "SALARY_INCREASE"
-  | "JOB_TITLE_CHANGE"
-  | "POSITION_CHANGE"
-  | "OTHER";
-
-export type CeoRatingAction =
-  | "ACCEPT"
-  | "RETURN_TO_HR"
-  | "DECLINE"
-  | "DECLINE_WITH_ALTERNATIVE";
-
-export type HrReviewAction =
-  | "approve"
-  | "return-manager"
-  | "return-employee"
-  | "return-both";
+/** Correction actions; rejected by the backend on a SKIP_TO_CEO rating. */
+export type CeoReturnAction =
+  | "RETURN_TO_MANAGER"
+  | "RETURN_TO_EMPLOYEE"
+  | "RETURN_TO_BOTH";
 
 /** One criterion answer — the exact shape the backend validates. */
 export interface CriterionRating {
@@ -94,6 +82,7 @@ export interface RatingCriteriaPayload {
 export interface ContractRatingHeader {
   id: number;
   status: ContractRatingStatus;
+  rating_mode: RatingMode | "";
   company: number;
   employee: {
     id: number;
@@ -112,10 +101,12 @@ export interface ContractRatingHeader {
   manager_name: string;
 }
 
-/** Fields shared by both raters' response rows. Averages are server-computed. */
-export interface RatingResponseBase {
+/**
+ * One rater's response row. Manager and employee rows have the identical,
+ * decision-free shape; averages are server-computed.
+ */
+export interface RatingResponse {
   id: number;
-  rating: number;
   rater_type: "MANAGER" | "EMPLOYEE";
   status: "SUBMITTED" | "RETURNED";
   submitted_by: number | null;
@@ -133,37 +124,66 @@ export interface RatingResponseBase {
   updated_at: string;
 }
 
-/** Recommendation columns. Present on the manager's own row. */
-export interface RatingRecommendationFields {
-  recommendation: RatingRecommendation | "";
-  recommended_change_types: RatingChangeType[];
-  proposed_terms: ContractSalaryTerms;
-  proposed_job_title: string;
-  proposed_position_id: number | null;
-  other_change_notes: string;
-}
-
-export type ManagerRatingResponse = RatingResponseBase &
-  RatingRecommendationFields;
-
-/** The backend strips every recommendation column from the employee's row. */
-export type EmployeeRatingResponse = RatingResponseBase;
-
-/**
- * What a manager receives. Only the header and their own response exist in
- * the payload — no employee response, comparison, comments or workflow.
+/*
+ * The backend's read serializer is role-shaped: each viewer role gets a
+ * structurally different object, not one object with nulled-out fields. The
+ * payload itself carries no role marker, so `toContractRatingView` classifies
+ * it once by the keys only that shape has and stamps a client-side `viewer`
+ * discriminant. Pages switch on `viewer` and TypeScript then refuses to read,
+ * say, `manager_response` from an employee-shaped payload.
  */
-export interface ManagerContractRatingView extends ContractRatingHeader {
-  manager_response: ManagerRatingResponse | null;
-}
 
-/**
- * What the rated employee receives. Only the header and their own response
- * exist in the payload — nothing about the manager, HR or CEO.
- */
+/** The rated employee: header + own response only, never anything else. */
 export interface EmployeeContractRatingView extends ContractRatingHeader {
-  employee_response: EmployeeRatingResponse | null;
+  viewer: "employee";
+  /** Employee payloads exist only for rated (not skipped) cycles. */
+  rating_mode: "RATE";
+  employee_response: RatingResponse | null;
 }
+
+/** The employee's manager: header + own response only. */
+export interface ManagerContractRatingView extends ContractRatingHeader {
+  viewer: "manager";
+  rating_mode: "RATE";
+  manager_response: RatingResponse | null;
+}
+
+/** Present on an HR coarse payload only while status is PENDING_HR_GATE. */
+export interface HrGateFields {
+  account_connected: boolean;
+  hr_gate_decided_by: number | null;
+  hr_gate_decided_by_name: string;
+  hr_gate_decided_at: string | null;
+}
+
+/** Present on an HR coarse payload only once the CEO has decided. */
+export interface CeoOutcomeFields {
+  ceo_decision: CeoOutcome;
+  ceo_comment: string;
+  ceo_decided_at: string | null;
+  ceo_decided_by: number | null;
+  ceo_approved_terms: ContractSalaryTerms;
+  salary_effective_date: string | null;
+  salary_change_applied_at: string | null;
+  salary_after_snapshot: ContractSalaryTerms;
+  scheduled_termination: boolean;
+  employee_notified_of_termination_at: string | null;
+  employee_notified_of_termination_by: number | null;
+  termination_processed_at: string | null;
+}
+
+/**
+ * HR (or SystemAdmin) on a rating where the CEO has not requested a comment:
+ * coarse status only. No scores, grades, remarks, comparison or workflow.
+ */
+export type HrCoarseContractRatingView = ContractRatingHeader & {
+  viewer: "hr_coarse";
+  hr_comment_requested_at: null;
+  /** Gate decision support; present only while PENDING_HR_GATE. */
+  gate: HrGateFields | null;
+  /** Decision outcome; present only once the CEO has decided. */
+  outcome: CeoOutcomeFields | null;
+};
 
 export interface RatingComparisonRow {
   manager_grade: RatingGrade;
@@ -175,8 +195,8 @@ export interface RatingComparisonRow {
 }
 
 /**
- * Built when both responses are submitted; `{}` otherwise (including after an
- * HR return). Criterion codes map to rows; the four summary keys are strings.
+ * Built when both responses are submitted; `{}` otherwise (including after a
+ * CEO return). Criterion codes map to rows; the four summary keys are strings.
  */
 export type RatingComparisonSummary = {
   manager_average?: string;
@@ -185,43 +205,41 @@ export type RatingComparisonSummary = {
   employee_overall_grade?: RatingGrade;
 } & Record<string, RatingComparisonRow | string | undefined>;
 
-/** The full HR / CEO package. */
-export interface FullContractRating extends ContractRatingHeader {
+/** Fields common to the full CEO / comment-requested HR package. */
+interface FullContractRatingBase extends ContractRatingHeader {
+  viewer: "full";
   contract_decision: number;
-  employee_profile: number;
+  hr_gate_decided_by: number | null;
+  hr_gate_decided_by_name: string;
+  hr_gate_decided_at: string | null;
   manager_at_creation: number | null;
   department_snapshot: string;
   section_snapshot: string;
   job_title_snapshot: string;
-  /** Full rows; the employee row carries empty recommendation columns. */
-  manager_response: ManagerRatingResponse | null;
-  employee_response: ManagerRatingResponse | null;
-  comparison_summary: RatingComparisonSummary;
-  hr_reviewed_by: number | null;
-  hr_reviewed_by_name: string;
+  hr_comment_requested_by: number | null;
+  hr_comment_requested_by_name: string;
+  hr_comment_requested_at: string | null;
+  hr_comment_by: number | null;
+  hr_comment_by_name: string;
   hr_comment: string;
-  hr_decided_at: string | null;
-  ceo_action: CeoRatingAction | "";
-  ceo_selected_option: ContractDecisionType | "";
+  hr_comment_submitted_at: string | null;
+  ceo_decision: CeoOutcome | "";
   ceo_decided_by: number | null;
   ceo_decided_by_name: string;
   ceo_comment: string;
   ceo_decided_at: string | null;
-  salary_change_proposed: boolean;
   salary_before_snapshot: ContractSalaryTerms;
   ceo_approved_terms: ContractSalaryTerms;
-  ceo_salary_override_reason: string;
   salary_effective_date: string | null;
   salary_change_applied_at: string | null;
   salary_after_snapshot: ContractSalaryTerms;
-  /** Decimal string; difference between the approved/proposed and base total. */
+  /** Decimal string: approved total − base total ("0" before a decision). */
   salary_increase_amount: string;
   salary_increase_percent: string | null;
   scheduled_termination: boolean;
   employee_notified_of_termination_at: string | null;
   employee_notified_of_termination_by: number | null;
   termination_processed_at: string | null;
-  notification_milestones: Record<string, unknown>;
   /** Live `EmployeeProfile` salary terms. */
   current_terms: ContractSalaryTerms;
   remaining_contract_days: number | null;
@@ -233,98 +251,149 @@ export interface FullContractRating extends ContractRatingHeader {
   updated_at: string;
 }
 
+/** A rated cycle: both evaluation panels and the comparison exist. */
+export interface RatedFullContractRating extends FullContractRatingBase {
+  rating_mode: "RATE" | "";
+  manager_response: RatingResponse | null;
+  employee_response: RatingResponse | null;
+  comparison_summary: RatingComparisonSummary;
+}
+
 /**
- * Any detail/list item. A viewer with no role on the rating gets `{}`.
- * Narrow with the guards below before touching role-specific keys.
+ * HR sent the cycle straight to the CEO. The backend removes the evaluation
+ * keys entirely — there is nothing to compare or return.
  */
+export interface SkippedFullContractRating extends FullContractRatingBase {
+  rating_mode: "SKIP_TO_CEO";
+}
+
+export type FullContractRating =
+  | RatedFullContractRating
+  | SkippedFullContractRating;
+
 export type ContractRatingView =
-  | FullContractRating
+  | EmployeeContractRatingView
   | ManagerContractRatingView
-  | EmployeeContractRatingView;
+  | HrCoarseContractRatingView
+  | FullContractRating;
+
+type RawRating = Record<string, unknown>;
+
+const GATE_KEYS = [
+  "account_connected",
+  "hr_gate_decided_by",
+  "hr_gate_decided_by_name",
+  "hr_gate_decided_at",
+] as const;
+const OUTCOME_KEYS = [
+  "ceo_decision",
+  "ceo_comment",
+  "ceo_decided_at",
+  "ceo_decided_by",
+  "ceo_approved_terms",
+  "salary_effective_date",
+  "salary_change_applied_at",
+  "salary_after_snapshot",
+  "scheduled_termination",
+  "employee_notified_of_termination_at",
+  "employee_notified_of_termination_by",
+  "termination_processed_at",
+] as const;
+
+function pick<K extends string>(raw: RawRating, keys: readonly K[]) {
+  return Object.fromEntries(keys.map((key) => [key, raw[key]])) as Record<
+    K,
+    unknown
+  >;
+}
 
 /**
- * The full package is identified by keys only it carries. A privileged user
- * who is also this employee's manager receives the manager shape instead.
+ * Classifies one role-shaped payload. Returns null for `{}`, which the backend
+ * sends to a viewer with no role on the rating. Order matters: the full
+ * package also carries the response keys, so it is recognised first.
  */
-export function isFullContractRating(
-  view: ContractRatingView | Record<string, never>,
-): view is FullContractRating {
-  return "workflow" in view && "comparison_summary" in view;
+export function toContractRatingView(
+  raw: RawRating | null | undefined,
+): ContractRatingView | null {
+  if (!raw || typeof raw !== "object" || !("id" in raw)) return null;
+  if ("workflow" in raw) {
+    return { ...raw, viewer: "full" } as unknown as FullContractRating;
+  }
+  if ("employee_response" in raw) {
+    return { ...raw, viewer: "employee" } as unknown as EmployeeContractRatingView;
+  }
+  if ("manager_response" in raw) {
+    return { ...raw, viewer: "manager" } as unknown as ManagerContractRatingView;
+  }
+  if ("hr_comment_requested_at" in raw) {
+    const header = { ...raw };
+    for (const key of [...GATE_KEYS, ...OUTCOME_KEYS]) delete header[key];
+    return {
+      ...header,
+      viewer: "hr_coarse",
+      hr_comment_requested_at: null,
+      gate: "account_connected" in raw ? pick(raw, GATE_KEYS) : null,
+      outcome: raw.ceo_decision ? pick(raw, OUTCOME_KEYS) : null,
+    } as unknown as HrCoarseContractRatingView;
+  }
+  return null;
 }
 
-export function isManagerRatingView(
-  view: ContractRatingView | Record<string, never>,
-): view is ManagerContractRatingView {
-  return (
-    "id" in view && "manager_response" in view && !isFullContractRating(view)
-  );
+/** A rated full package carries both evaluation panels. */
+export function isRatedFullContractRating(
+  view: FullContractRating,
+): view is RatedFullContractRating {
+  return view.rating_mode !== "SKIP_TO_CEO";
 }
 
-export function isEmployeeRatingView(
-  view: ContractRatingView | Record<string, never>,
-): view is EmployeeContractRatingView {
-  return (
-    "id" in view && "employee_response" in view && !isFullContractRating(view)
-  );
-}
-
-export interface ManagerResponsePayload {
+export interface RatingResponsePayload {
   criterion_ratings: CriterionRatings;
   overall_remark: string;
-  recommendation: RatingRecommendation;
-  /** Only with CONTINUE_WITH_CHANGES. */
-  recommended_change_types?: RatingChangeType[];
-  /** Only with SALARY_INCREASE; omitted components keep the current value. */
-  proposed_terms?: ContractSalaryTerms;
-  /** Only with JOB_TITLE_CHANGE. */
-  proposed_job_title?: string;
-  /** Only with POSITION_CHANGE. */
-  proposed_position_id?: number;
-  /** Only with OTHER. */
-  other_change_notes?: string;
-  /** Only with SALARY_INCREASE; backend defaults to the day after expiry. */
-  salary_effective_date?: string;
 }
 
 /**
- * The employee payload deliberately has no other keys: the backend rejects the
- * request if any manager field is present, even an empty one.
+ * Salary data is representable only on RENEW_WITH_CHANGES; the backend 422s
+ * salary keys on any other value, so the type forbids them too.
  */
-export interface EmployeeResponsePayload {
-  criterion_ratings: CriterionRatings;
-  overall_remark?: string;
+export type CeoDecisionPayload =
+  | { ceo_decision: "RENEW" | "TERMINATE"; comment: string }
+  | {
+      ceo_decision: "RENEW_WITH_CHANGES";
+      comment: string;
+      /** Only changed components; the server re-derives `total_salary`. */
+      ceo_approved_terms: ContractSalaryTerms;
+      /** YYYY-MM-DD */
+      salary_effective_date: string;
+    }
+  | { ceo_decision: CeoReturnAction; comment: string };
+
+async function unwrapView(
+  request: Promise<{ data: ApiResponse<RawRating> }>,
+): Promise<ApiResponse<ContractRatingView>> {
+  const { data } = await request;
+  if (isApiError(data)) return data;
+  const view = toContractRatingView(data.data);
+  if (!view) {
+    return {
+      status: "error",
+      message: "This contract rating is not available to you.",
+    };
+  }
+  return { ...data, data: view };
 }
 
-export interface HrReviewPayload {
-  action: HrReviewAction;
-  /** Required for every return action. */
-  comment?: string;
-}
-
-export interface CeoDecisionPayload {
-  action: CeoRatingAction;
-  /** Required for everything except ACCEPT. */
-  comment?: string;
-  /** Required only (and allowed only) for DECLINE_WITH_ALTERNATIVE. */
-  ceo_selected_option?: ContractDecisionType;
-  /** Only for DECLINE_WITH_ALTERNATIVE + RENEW_WITH_CHANGES. */
-  ceo_approved_terms?: ContractSalaryTerms;
-  /** Required when `ceo_approved_terms` differ from the manager's proposal. */
-  ceo_salary_override_reason?: string;
-}
-
-export interface RatingPositionOption {
-  id: number;
-  name: string;
-}
-
-export async function listRatingPositions(
-  id: number | string,
-): Promise<ApiResponse<RatingPositionOption[]>> {
-  const { data } = await api.get<ApiResponse<RatingPositionOption[]>>(
-    `${BASE}/${id}/positions/`,
-  );
-  return data;
+/**
+ * A mutation can succeed and still leave the actor with no role on the
+ * rating: after a CEO return the rating leaves PENDING_CEO, so the backend
+ * answers `{}` (and a later GET 404s). That is reported as success with
+ * `data: null`, never as an error.
+ */
+async function unwrapMutation(
+  request: Promise<{ data: ApiResponse<RawRating> }>,
+): Promise<ApiResponse<ContractRatingView | null>> {
+  const { data } = await request;
+  if (isApiError(data)) return data;
+  return { ...data, data: toContractRatingView(data.data) };
 }
 
 export async function getRatingCriteria(): Promise<
@@ -343,21 +412,25 @@ export async function listContractRatings(
     page_size?: number;
   } = {},
 ): Promise<ApiResponse<PaginatedResponse<ContractRatingView>>> {
-  const { data } = await api.get<
-    ApiResponse<PaginatedResponse<ContractRatingView>>
-  >(`${BASE}/`, { params });
-  return data;
-}
-
-export async function getContractRating(
-  id: number | string,
-): Promise<ApiResponse<ContractRatingView>> {
-  const { data } = await api.get<ApiResponse<ContractRatingView>>(
-    `${BASE}/${id}/`,
+  const { data } = await api.get<ApiResponse<PaginatedResponse<RawRating>>>(
+    `${BASE}/`,
+    { params },
   );
-  return data;
+  if (isApiError(data)) return data;
+  const items = (data.data.items ?? [])
+    .map(toContractRatingView)
+    .filter((item): item is ContractRatingView => item !== null);
+  return { ...data, data: { ...data.data, items } };
 }
 
+export function getContractRating(id: number | string) {
+  return unwrapView(api.get<ApiResponse<RawRating>>(`${BASE}/${id}/`));
+}
+
+/**
+ * HR receives 403 unless the CEO requested a comment on this rating;
+ * managers and employees get their own side only.
+ */
 export async function downloadContractRatingPdf(
   id: number | string,
 ): Promise<Blob> {
@@ -367,56 +440,62 @@ export async function downloadContractRatingPdf(
   return response.data;
 }
 
-export async function submitManagerRatingResponse(
-  id: number | string,
-  payload: ManagerResponsePayload,
-): Promise<ApiResponse<ContractRatingView>> {
-  const { data } = await api.post<ApiResponse<ContractRatingView>>(
-    `${BASE}/${id}/manager-response/`,
-    payload,
+export function submitRatingHrGate(id: number | string, rating_mode: RatingMode) {
+  return unwrapMutation(
+    api.post<ApiResponse<RawRating>>(`${BASE}/${id}/hr-gate/`, { rating_mode }),
   );
-  return data;
 }
 
-export async function submitEmployeeRatingResponse(
+export function submitManagerRatingResponse(
   id: number | string,
-  payload: EmployeeResponsePayload,
-): Promise<ApiResponse<ContractRatingView>> {
-  const { data } = await api.post<ApiResponse<ContractRatingView>>(
-    `${BASE}/${id}/employee-response/`,
-    payload,
+  payload: RatingResponsePayload,
+) {
+  return unwrapMutation(
+    api.post<ApiResponse<RawRating>>(`${BASE}/${id}/manager-response/`, payload),
   );
-  return data;
 }
 
-export async function submitRatingHrReview(
+export function submitEmployeeRatingResponse(
   id: number | string,
-  payload: HrReviewPayload,
-): Promise<ApiResponse<ContractRatingView>> {
-  const { data } = await api.post<ApiResponse<ContractRatingView>>(
-    `${BASE}/${id}/hr-review/`,
-    payload,
+  payload: RatingResponsePayload,
+) {
+  return unwrapMutation(
+    api.post<ApiResponse<RawRating>>(
+      `${BASE}/${id}/employee-response/`,
+      payload,
+    ),
   );
-  return data;
 }
 
-export async function submitRatingCeoDecision(
+/** CEO only, PENDING_CEO only; idempotent. */
+export function requestRatingHrComment(id: number | string) {
+  return unwrapMutation(
+    api.post<ApiResponse<RawRating>>(`${BASE}/${id}/request-hr-comment/`, {}),
+  );
+}
+
+/** HR only; requires a prior CEO request on this rating. */
+export function submitRatingHrComment(id: number | string, comment: string) {
+  return unwrapMutation(
+    api.post<ApiResponse<RawRating>>(`${BASE}/${id}/hr-comment/`, { comment }),
+  );
+}
+
+export function submitRatingCeoDecision(
   id: number | string,
   payload: CeoDecisionPayload,
-): Promise<ApiResponse<ContractRatingView>> {
-  const { data } = await api.post<ApiResponse<ContractRatingView>>(
-    `${BASE}/${id}/ceo-decision/`,
-    payload,
+) {
+  return unwrapMutation(
+    api.post<ApiResponse<RawRating>>(`${BASE}/${id}/ceo-decision/`, payload),
   );
-  return data;
 }
 
-export async function acknowledgeRatingTerminationNotice(
-  id: number | string,
-): Promise<ApiResponse<ContractRatingView>> {
-  const { data } = await api.post<ApiResponse<ContractRatingView>>(
-    `${BASE}/${id}/acknowledge-termination-notice/`,
-    {},
+/** HR only, once the CEO has decided TERMINATE. */
+export function acknowledgeRatingTerminationNotice(id: number | string) {
+  return unwrapMutation(
+    api.post<ApiResponse<RawRating>>(
+      `${BASE}/${id}/acknowledge-termination-notice/`,
+      {},
+    ),
   );
-  return data;
 }

@@ -38,23 +38,7 @@ export function getSelectedKey(
   return longestMatch;
 }
 
-/** Two-line group heading used by every role's sidebar. */
-export function sectionLabel(title: string, caption?: string) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      <span>{title}</span>
-      {caption ? (
-        <span
-          style={{
-            fontSize: 10,
-            letterSpacing: "0.04em",
-            textTransform: "none",
-            opacity: 0.7,
-          }}
-        >
-          {caption}
-        </span>
-      ) : null}
-    </div>
-  );
+/** Group heading used by every role's sidebar. */
+export function sectionLabel(title: string) {
+  return <span>{title}</span>;
 }

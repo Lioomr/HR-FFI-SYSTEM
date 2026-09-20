@@ -49,10 +49,7 @@ export function buildCeoMenuItems(t: TranslateFn): MenuProps["items"] {
   return [
     {
       type: "group",
-      label: sectionLabel(
-        t("layout.menu.overview", "Overview"),
-        t("ceo.nav.overviewCaption"),
-      ),
+      label: sectionLabel(t("layout.menu.overview", "Overview")),
       children: [
         {
           key: "/ceo/dashboard",
@@ -81,17 +78,14 @@ export function buildCeoMenuItems(t: TranslateFn): MenuProps["items"] {
     },
     {
       type: "group",
-      label: sectionLabel(
-        t("layout.menu.approvals", "Approvals"),
-        t("ceo.nav.approvalsCaption"),
-      ),
+      label: sectionLabel(t("layout.menu.approvals", "Approvals")),
       children: [
         {
           key: "/ceo/leave/requests",
           icon: <CalendarOutlined />,
           label: (
             <Link to="/ceo/leave/requests">
-              {t("layout.ceoLeaveApprovals", "Leave Approvals")}
+              {t("layout.nav.leaveApprovals", "Leave Approvals")}
             </Link>
           ),
         },
@@ -100,7 +94,7 @@ export function buildCeoMenuItems(t: TranslateFn): MenuProps["items"] {
           icon: <DollarOutlined />,
           label: (
             <Link to="/ceo/annual-leave-payments">
-              {t("layout.annualLeaveSettlements", "Annual Leave Settlements")}
+              {t("layout.nav.leaveSettlements", "Leave Settlements")}
             </Link>
           ),
         },
@@ -110,15 +104,6 @@ export function buildCeoMenuItems(t: TranslateFn): MenuProps["items"] {
           label: (
             <Link to="/ceo/loan-requests">
               {t("layout.loanRequests", "Loan Requests")}
-            </Link>
-          ),
-        },
-        {
-          key: "/manager/loan-requests",
-          icon: <DollarOutlined />,
-          label: (
-            <Link to="/manager/loan-requests">
-              {t("layout.teamLoanRequests", "Team Loan Requests")}
             </Link>
           ),
         },
@@ -185,10 +170,7 @@ export function buildCeoMenuItems(t: TranslateFn): MenuProps["items"] {
     },
     {
       type: "group",
-      label: sectionLabel(
-        t("layout.menu.operations", "Operations"),
-        t("ceo.nav.operationsCaption"),
-      ),
+      label: sectionLabel(t("layout.menu.operations", "Operations")),
       children: [
         {
           key: "/ceo/attendance",
@@ -199,10 +181,7 @@ export function buildCeoMenuItems(t: TranslateFn): MenuProps["items"] {
     },
     {
       type: "group",
-      label: sectionLabel(
-        t("layout.menu.teamComms", "Team & Communication"),
-        t("ceo.nav.teamCaption"),
-      ),
+      label: sectionLabel(t("layout.menu.teamComms", "Team & Communication")),
       children: [
         {
           key: "/ceo/team",
@@ -247,7 +226,7 @@ export function buildCeoMenuItems(t: TranslateFn): MenuProps["items"] {
     },
     {
       type: "group",
-      label: sectionLabel(t("layout.profile"), t("ceo.nav.profileCaption")),
+      label: sectionLabel(t("layout.profile")),
       children: [
         {
           key: "/ceo/profile",

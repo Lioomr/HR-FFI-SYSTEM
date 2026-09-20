@@ -11,7 +11,7 @@ export default function ManagerLoanRequestDetailsPage() {
   return (
     <LoanRequestDetailsPage
       title={t("loans.inbox.managerReviewTitle")}
-      backPath="/manager/loan-requests"
+      backPath="/manager/team-requests?tab=loans"
       fetchOne={getManagerLoanRequest}
       approve={approveManagerLoanRequest}
       reject={rejectManagerLoanRequest}

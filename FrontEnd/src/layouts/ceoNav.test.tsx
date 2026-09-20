@@ -36,7 +36,7 @@ function groupTitles(items: MenuProps["items"]): string[] {
       <Menu mode="inline" items={items} />
     </MemoryRouter>,
   );
-  // The group heading stacks a title over a caption; assert on the title line.
+  // Group headings are a single title line.
   return Array.from(
     container.querySelectorAll(".ant-menu-item-group-title"),
   ).map((node) => node.querySelector("span")?.textContent ?? "");
@@ -92,11 +92,11 @@ describe("CEO navigation", () => {
     expect(keys).not.toContain("/manager/team-requests");
   });
 
-  it("keeps the manager queues that show different data, under distinct labels", () => {
+  it("keeps the team dashboard and leaves team loans to the Team Requests tabs", () => {
     const items = buildCeoMenuItems(t("en"));
-    expect(collectKeys(items)).toEqual(
-      expect.arrayContaining(["/manager/dashboard", "/manager/loan-requests"]),
-    );
+    const keys = collectKeys(items);
+    expect(keys).toContain("/manager/dashboard");
+    expect(keys).not.toContain("/manager/loan-requests");
 
     render(
       <MemoryRouter>
@@ -104,8 +104,7 @@ describe("CEO navigation", () => {
       </MemoryRouter>,
     );
     expect(screen.getByText("Team Dashboard")).toBeInTheDocument();
-    expect(screen.getByText("Team Loan Requests")).toBeInTheDocument();
-    // ...and stay distinguishable from the CEO's own loan queue.
+    expect(screen.queryByText("Team Loan Requests")).not.toBeInTheDocument();
     expect(screen.getByText("Loan Requests")).toBeInTheDocument();
   });
 

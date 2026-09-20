@@ -20,7 +20,21 @@ vi.mock("../../services/api/managerApi", async (importOriginal) => ({
   rejectManagerAssetReturnRequest: vi.fn(),
 }));
 
+vi.mock("../../services/api/loanApi", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../services/api/loanApi")>()),
+  getManagerLoanRequests: vi.fn(),
+}));
+
+vi.mock("../../services/api/permissionRequestsApi", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("../../services/api/permissionRequestsApi")
+  >()),
+  getManagerPermissionRequests: vi.fn(),
+}));
+
 import ManagerTeamRequestsPage from "./ManagerTeamRequestsPage";
+import { getManagerLoanRequests } from "../../services/api/loanApi";
+import { getManagerPermissionRequests } from "../../services/api/permissionRequestsApi";
 import {
   approveLeaveRequestManager,
   getManagerAccess,
@@ -38,6 +52,8 @@ const mockedAccess = vi.mocked(getManagerAccess);
 const mockedLeave = vi.mocked(getManagerLeaveRequests);
 const mockedAssets = vi.mocked(getManagerAssetReturnRequests);
 const mockedTeam = vi.mocked(getManagerTeam);
+const mockedLoans = vi.mocked(getManagerLoanRequests);
+const mockedPermissions = vi.mocked(getManagerPermissionRequests);
 const mockedApprove = vi.mocked(approveLeaveRequestManager);
 const mockedReject = vi.mocked(rejectLeaveRequestManager);
 
@@ -100,6 +116,14 @@ describe("ManagerTeamRequestsPage", () => {
     });
     mockedAssets.mockResolvedValue({ status: "success", data: [] });
     mockedTeam.mockResolvedValue({ status: "success", data: [] });
+    mockedLoans.mockResolvedValue({
+      status: "success",
+      data: { items: [], count: 0, page: 1, page_size: 20 },
+    } as never);
+    mockedPermissions.mockResolvedValue({
+      status: "success",
+      data: { items: [], count: 0, page: 1, page_size: 10 },
+    } as never);
     useAuthStore.setState({
       isAuthenticated: true,
       user: { id: "21", email: "lead@ffi.test", role: "Employee" },
@@ -120,6 +144,33 @@ describe("ManagerTeamRequestsPage", () => {
       expect(mockedLeave).not.toHaveBeenCalled();
     },
   );
+
+  it.each([
+    ["loans", mockedLoans, "Loan Requests"],
+    ["permissions", mockedPermissions, "Manager Permission Inbox"],
+  ] as const)(
+    "shows the team %s queue as a tab without its own page header",
+    async (tab, fetcher, standaloneTitle) => {
+      renderPage(`/manager/team-requests?tab=${tab}`);
+
+      await waitFor(() => expect(fetcher).toHaveBeenCalled());
+      expect(screen.getByRole("tab", { selected: true })).toHaveTextContent(
+        tab === "loans" ? "Loans" : "Permissions",
+      );
+      // Only the Team Requests header is shown.
+      expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(1);
+      expect(
+        screen.queryByRole("heading", { name: standaloneTitle }),
+      ).not.toBeInTheDocument();
+    },
+  );
+
+  it("does not load the loan or permission queues until their tab is opened", async () => {
+    renderPage();
+    await screen.findByText("Sara Idris");
+    expect(mockedLoans).not.toHaveBeenCalled();
+    expect(mockedPermissions).not.toHaveBeenCalled();
+  });
 
   it("shows the outstanding count per tab and totals them in the header", async () => {
     // Only active request workflows contribute to the pending count.

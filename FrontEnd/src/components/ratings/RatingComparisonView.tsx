@@ -4,7 +4,7 @@ import { WarningOutlined } from "@ant-design/icons";
 
 import { useI18n } from "../../i18n/useI18n";
 import type {
-  FullContractRating,
+  RatedFullContractRating,
   RatingComparisonRow,
   RatingCriterion,
 } from "../../services/api/contractRatingsApi";
@@ -32,14 +32,15 @@ type Row = { criterion: RatingCriterion; data: RatingComparisonRow };
 
 /**
  * HR/CEO-only side-by-side comparison of the manager's evaluation and the
- * employee's self-evaluation. It requires the full HR/CEO package type, so it
- * cannot be fed a manager- or employee-shaped payload.
+ * employee's self-evaluation. It requires the rated full HR/CEO package type,
+ * so it cannot be fed a manager-, employee-, coarse-HR- or skipped-cycle
+ * payload (none of those carry `comparison_summary`).
  */
 export default function RatingComparisonView({
   rating,
   criteria,
 }: {
-  rating: FullContractRating;
+  rating: RatedFullContractRating;
   criteria: RatingCriterion[];
 }) {
   const { t, language } = useI18n();

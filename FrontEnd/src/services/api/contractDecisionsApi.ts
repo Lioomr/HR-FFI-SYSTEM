@@ -108,15 +108,9 @@ export interface ContractDecision {
 export interface ContractDecisionRatingSummary {
   /** A `ContractRatingStatus` value (see contractRatingsApi.ts). */
   status: string;
-  manager_recommendation:
-    | "CONTINUE_CONTRACT"
-    | "CONTINUE_WITH_CHANGES"
-    | "TERMINATE"
-    | ""
-    | null;
-  hr_approved: boolean;
-  ceo_action: string;
-  ceo_selected_option: ContractDecisionType | "";
+  /** The CEO's rating outcome; blank until decided. */
+  ceo_decision: ContractDecisionType | "";
+  ceo_comment: string;
 }
 
 export interface ContractDecisionSubmitPayload {

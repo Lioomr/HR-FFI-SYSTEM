@@ -9,7 +9,6 @@ import {
   type PaginatedResponse,
 } from "../services/api/apiTypes";
 import {
-  isEmployeeRatingView,
   listContractRatings,
   type ContractRatingStatus,
   type ContractRatingView,
@@ -68,14 +67,11 @@ export default function RequireCompletedSelfRating() {
           (response) => response.data.items ?? [],
         );
         const pending = items.find(
-          (item: ContractRatingView | Record<string, never>) =>
-            "id" in item &&
-            "status" in item &&
-            isEmployeeRatingView(item) &&
-            PENDING_FOR_EMPLOYEE.has(item.status as ContractRatingStatus),
+          (item: ContractRatingView) =>
+            item.viewer === "employee" && PENDING_FOR_EMPLOYEE.has(item.status),
         );
         setCheck(
-          pending && "id" in pending
+          pending
             ? { state: "pending", id: pending.id }
             : { state: "clear" },
         );

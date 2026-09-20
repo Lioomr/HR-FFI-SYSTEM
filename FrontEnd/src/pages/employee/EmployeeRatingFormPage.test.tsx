@@ -48,8 +48,10 @@ const criteria = {
 
 // Captured from the live backend for an employee viewer: header + own response only.
 const employeeView: api.EmployeeContractRatingView = {
+  viewer: "employee",
   id: 1,
   status: "PENDING_RESPONSES",
+  rating_mode: "RATE",
   company: 5,
   employee: {
     id: 4,
@@ -151,5 +153,91 @@ describe("EmployeeRatingFormPage", () => {
       (await screen.findAllByText("Select a grade and enter a score.")).length,
     ).toBe(2);
     expect(submit).not.toHaveBeenCalled();
+  });
+
+  it("pre-fills a returned response and shows the CEO's reason", async () => {
+    getRating.mockResolvedValue({
+      status: "success",
+      data: {
+        ...employeeView,
+        employee_response: {
+          id: 9,
+          rater_type: "EMPLOYEE",
+          status: "RETURNED",
+          submitted_by: 4,
+          submitted_by_name: "RT EMP1",
+          criterion_ratings: {
+            work_accomplishment: { grade: "VERY_GOOD", score: 84, remark: "" },
+            cooperation: { grade: "GOOD", score: 71, remark: "team" },
+          },
+          average_score: "77.50",
+          overall_grade: "GOOD",
+          overall_remark: "first pass",
+          submitted_at: "2026-09-01T10:00:00Z",
+          returned_at: "2026-09-02T10:00:00Z",
+          returned_by: 7,
+          return_reason: "Please justify the cooperation score",
+          created_at: "2026-09-01T10:00:00Z",
+          updated_at: "2026-09-02T10:00:00Z",
+        },
+      },
+    });
+    renderPage();
+    expect(
+      await screen.findByText(/Please justify the cooperation score/),
+    ).toBeTruthy();
+    expect(
+      (screen.getByLabelText("Score: Work") as HTMLInputElement).value,
+    ).toBe("84");
+    expect(screen.getByDisplayValue("first pass")).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Resubmit evaluation" }),
+    ).toBeTruthy();
+  });
+
+  it("refuses to render a form from a non-employee payload", async () => {
+    getRating.mockResolvedValue({
+      status: "success",
+      data: {
+        ...employeeView,
+        viewer: "manager",
+        manager_response: null,
+      } as unknown as api.ContractRatingView,
+    });
+    renderPage();
+    expect(
+      await screen.findByText("This self-evaluation belongs to another employee."),
+    ).toBeTruthy();
+    expect(screen.queryByText("1. Work")).toBeNull();
+  });
+
+  it("shows a read-only state once submitted", async () => {
+    getRating.mockResolvedValue({
+      status: "success",
+      data: {
+        ...employeeView,
+        status: "PENDING_CEO",
+        employee_response: {
+          id: 9,
+          rater_type: "EMPLOYEE",
+          status: "SUBMITTED",
+          submitted_by: 4,
+          submitted_by_name: "RT EMP1",
+          criterion_ratings: {},
+          average_score: "90.00",
+          overall_grade: "EXCELLENT",
+          overall_remark: "",
+          submitted_at: "2026-09-01T10:00:00Z",
+          returned_at: null,
+          returned_by: null,
+          return_reason: "",
+          created_at: "2026-09-01T10:00:00Z",
+          updated_at: "2026-09-01T10:00:00Z",
+        },
+      },
+    });
+    renderPage();
+    expect(await screen.findByText(/^Submitted\. Your evaluation is locked/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Submit evaluation/ })).toBeNull();
   });
 });

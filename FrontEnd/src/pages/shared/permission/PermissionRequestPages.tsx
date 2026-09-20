@@ -603,7 +603,14 @@ export function PermissionRequestFormPage() {
   );
 }
 
-function RequestList({ inbox }: { inbox: "mine" | "manager" | "hr" }) {
+function RequestList({
+  inbox,
+  embedded = false,
+}: {
+  inbox: "mine" | "manager" | "hr";
+  /** Rendered as a tab of another page, which owns the header. */
+  embedded?: boolean;
+}) {
   const { t, language } = useI18n();
   const navigate = useNavigate();
   const [items, setItems] = useState<PermissionRequest[]>([]);
@@ -665,19 +672,21 @@ function RequestList({ inbox }: { inbox: "mine" | "manager" | "hr" }) {
     inbox === "mine" ? "/employee" : inbox === "manager" ? "/manager" : "/hr";
   return (
     <div>
-      <PageHeader
-        title={title}
-        actions={
-          inbox === "mine" ? (
-            <Button
-              type="primary"
-              onClick={() => navigate("/employee/permission-requests/new")}
-            >
-              {t("permissionRequests.list.new")}
-            </Button>
-          ) : undefined
-        }
-      />
+      {!embedded && (
+        <PageHeader
+          title={title}
+          actions={
+            inbox === "mine" ? (
+              <Button
+                type="primary"
+                onClick={() => navigate("/employee/permission-requests/new")}
+              >
+                {t("permissionRequests.list.new")}
+              </Button>
+            ) : undefined
+          }
+        />
+      )}
       <Card>
         <Flex wrap gap={12} style={{ marginBottom: 16 }}>
           <Select
@@ -799,8 +808,12 @@ function RequestList({ inbox }: { inbox: "mine" | "manager" | "hr" }) {
 export function MyPermissionRequestsPage() {
   return <RequestList inbox="mine" />;
 }
-export function ManagerPermissionRequestsPage() {
-  return <RequestList inbox="manager" />;
+export function ManagerPermissionRequestsPage({
+  embedded = false,
+}: {
+  embedded?: boolean;
+}) {
+  return <RequestList inbox="manager" embedded={embedded} />;
 }
 export function HrPermissionRequestsPage() {
   return <RequestList inbox="hr" />;

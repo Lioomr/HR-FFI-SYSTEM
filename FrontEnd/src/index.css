@@ -287,6 +287,18 @@ body.ltr textarea.ant-input {
   font-size: 15px !important;
 }
 
+/* Brand block links to the dashboard */
+.sidebar-brand-link {
+  transition: background 0.13s ease !important;
+}
+.sidebar-brand-link:hover {
+  background: var(--sb-hover-bg, rgba(255, 255, 255, 0.06));
+}
+.sidebar-brand-link:focus-visible {
+  outline: 2px solid var(--sb-accent, #f97316);
+  outline-offset: -2px;
+}
+
 /* ─── Section groups (flat) ─ */
 .modern-sidebar .ant-menu-item-group {
   margin: 0 !important;

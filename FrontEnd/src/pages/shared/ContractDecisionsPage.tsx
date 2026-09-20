@@ -473,25 +473,21 @@ export default function ContractDecisionsPage() {
     return (
       <Space wrap>
         <Tag>{t(`contractRatings.status.${rating.status}`, rating.status)}</Tag>
-        {rating.manager_recommendation ? (
-          <Tag color={rating.manager_recommendation === "TERMINATE" ? "red" : "blue"}>
-            {t(
-              `contractRatings.recommendationLabel.${rating.manager_recommendation}`,
-            )}
+        {rating.ceo_decision ? (
+          <Tag
+            color={
+              rating.ceo_decision === "TERMINATE"
+                ? "red"
+                : rating.ceo_decision === "RENEW_WITH_CHANGES"
+                  ? "blue"
+                  : "green"
+            }
+          >
+            {t(`contractRatings.outcome.${rating.ceo_decision}`, rating.ceo_decision)}
           </Tag>
         ) : null}
-        <Tag color={rating.hr_approved ? "green" : "default"}>
-          {rating.hr_approved
-            ? t("contractDecisions.ratingHrApproved")
-            : t("contractDecisions.ratingHrNotApproved")}
-        </Tag>
-        {rating.ceo_action ? (
-          <Tag color="purple">
-            {t(`contractRatings.ceoActionLabel.${rating.ceo_action}`, rating.ceo_action)}
-            {rating.ceo_selected_option
-              ? ` → ${t(`contractRatings.alternative.${rating.ceo_selected_option}`)}`
-              : ""}
-          </Tag>
+        {rating.ceo_comment ? (
+          <Typography.Text type="secondary">{rating.ceo_comment}</Typography.Text>
         ) : null}
         <Link to={ratingsPath}>{t("contractDecisions.ratingOpen")}</Link>
       </Space>

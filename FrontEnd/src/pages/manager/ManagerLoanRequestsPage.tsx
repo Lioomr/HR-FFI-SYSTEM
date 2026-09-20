@@ -2,7 +2,11 @@ import LoanRequestsTablePage from "../../components/loan/LoanRequestsTablePage";
 import { getManagerLoanRequests } from "../../services/api/loanApi";
 import { useI18n } from "../../i18n/useI18n";
 
-export default function ManagerLoanRequestsPage() {
+export default function ManagerLoanRequestsPage({
+  embedded = false,
+}: {
+  embedded?: boolean;
+}) {
   const { t } = useI18n();
   return (
     <LoanRequestsTablePage
@@ -12,6 +16,7 @@ export default function ManagerLoanRequestsPage() {
       employeeProfilePath={(employeeProfileId) =>
         `/manager/team/${employeeProfileId}`
       }
+      embedded={embedded}
       fetcher={getManagerLoanRequests}
     />
   );

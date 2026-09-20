@@ -91,14 +91,12 @@ import {
   ManagerLeaveRequestDetailsPage,
   ManagerTeamPage,
   CreateTeamAnnouncementPage,
-  ManagerLoanRequestsPage,
   ManagerLoanRequestDetailsPage,
   ManagerEmployeeProfilePage,
   ManagerAttendancePage,
   PermissionRequestDetailPage,
   PermissionRequestFormPage,
   HrPermissionRequestsPage,
-  ManagerPermissionRequestsPage,
   MyPermissionRequestsPage,
   AnnouncementsManagementPage,
   CreateAnnouncementPage,
@@ -543,9 +541,15 @@ export const routes = [
                         path: "manager/team-requests",
                         element: <ManagerTeamRequestsPage />,
                       },
+                      // Team loan and permission queues are tabs of Team Requests.
                       {
                         path: "manager/permission-requests",
-                        element: <ManagerPermissionRequestsPage />,
+                        element: (
+                          <Navigate
+                            to="/manager/team-requests?tab=permissions"
+                            replace
+                          />
+                        ),
                       },
                       {
                         path: "manager/permission-requests/:id",
@@ -574,7 +578,12 @@ export const routes = [
                       },
                       {
                         path: "manager/loan-requests",
-                        element: <ManagerLoanRequestsPage />,
+                        element: (
+                          <Navigate
+                            to="/manager/team-requests?tab=loans"
+                            replace
+                          />
+                        ),
                       },
                       {
                         path: "manager/loan-requests/:id",
