@@ -50,6 +50,7 @@ from organization.services import (
     get_requested_company_id,
     get_requested_organization_scope,
     get_scope_company_ids,
+    get_user_accessible_company_ids,
 )
 
 from .archive_request_services import (
@@ -487,6 +488,8 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             base_qs = base_qs.filter(is_archived=False)
 
         if role in ["SystemAdmin", "HRManager"]:
+            if self.action == "list" and self.request.query_params.get("scope", "").lower() == "all":
+                return base_qs.filter(company_id__in=get_user_accessible_company_ids(user))
             return filter_queryset_by_company_scope(base_qs, self.request)
 
         scope, delegated_company_ids, manager_assignment_ids = _cross_company_employee_scope_for_request(self.request)

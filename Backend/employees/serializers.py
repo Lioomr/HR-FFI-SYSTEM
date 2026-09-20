@@ -11,6 +11,7 @@ from core.permissions import get_role
 from core.services import get_workflow_snapshot, get_workflow_snapshot_read_only
 from hr_reference.models import Department, Position, Sponsor, TaskGroup
 from in_app_notifications.models import Notification
+from organization.services import get_user_accessible_company_ids
 
 from .models import ContractDecision, EmployeeDeletionRequest, EmployeeDocument, EmployeeImport, EmployeeProfile
 from .ocr.parsers import sanitize_extracted_fields
@@ -564,9 +565,15 @@ class EmployeeProfileWriteSerializer(serializers.ModelSerializer):
                 company=company,
                 is_active=True,
             )
-            self.fields["manager_profile_id"].queryset = EmployeeProfile.objects.filter(
-                company=company,
-            )
+            manager_queryset = EmployeeProfile.objects.filter(company=company)
+            if request and request.query_params.get("scope", "").lower() == "all" and get_role(request.user) in {
+                "HRManager",
+                "SystemAdmin",
+            }:
+                manager_queryset = EmployeeProfile.objects.filter(
+                    company_id__in=get_user_accessible_company_ids(request.user),
+                )
+            self.fields["manager_profile_id"].queryset = manager_queryset
 
     def validate_full_name(self, value):
         if not value.strip():
