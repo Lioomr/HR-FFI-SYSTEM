@@ -70,6 +70,19 @@ export default function EmployeeForm({
   managerAssignmentError = null,
 }: EmployeeFormProps) {
   const { t } = useI18n();
+  const localizedManagerAssignmentError = managerAssignmentError
+    ? managerAssignmentError.includes("must belong to the employee's company")
+      ? t("employees.form.managerErrors.company")
+      : managerAssignmentError.includes("cannot be an employee's own manager") ||
+          managerAssignmentError.includes("cannot be their own manager")
+        ? t("employees.form.managerErrors.self")
+        : managerAssignmentError.includes("manager is archived")
+          ? t("employees.form.managerErrors.archived")
+          : managerAssignmentError.includes("must be an active employee")
+            ? t("employees.form.managerErrors.inactive")
+            : managerAssignmentError.includes("reporting cycle")
+              ? t("employees.form.managerErrors.cycle")
+              : managerAssignmentError;
   const {
     departments,
     positions,
@@ -509,7 +522,7 @@ export default function EmployeeForm({
                             validateStatus={
                               managerAssignmentError ? "error" : undefined
                             }
-                            help={managerAssignmentError || undefined}
+                              help={localizedManagerAssignmentError || undefined}
                           >
                             <Select
                               size="large"
@@ -532,7 +545,7 @@ export default function EmployeeForm({
                               title={t(
                                 "employees.form.managerAssignmentRejected",
                               )}
-                              description={managerAssignmentError}
+                              description={localizedManagerAssignmentError}
                             />
                           )}
                         </Col>
