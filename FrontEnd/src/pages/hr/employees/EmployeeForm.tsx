@@ -58,6 +58,32 @@ interface EmployeeFormProps {
   managerAssignmentError?: string | null;
 }
 
+function localizeManagerAssignmentError(
+  message: string | null,
+  translate: (key: string) => string,
+): string | null {
+  if (!message) return null;
+  if (message.includes("must belong to the employee's company")) {
+    return translate("employees.form.managerErrors.company");
+  }
+  if (
+    message.includes("cannot be an employee's own manager") ||
+    message.includes("cannot be their own manager")
+  ) {
+    return translate("employees.form.managerErrors.self");
+  }
+  if (message.includes("manager is archived")) {
+    return translate("employees.form.managerErrors.archived");
+  }
+  if (message.includes("must be an active employee")) {
+    return translate("employees.form.managerErrors.inactive");
+  }
+  if (message.includes("reporting cycle")) {
+    return translate("employees.form.managerErrors.cycle");
+  }
+  return message;
+}
+
 /**
  * Shared employee form component used by both Create and Edit pages
  * Supports bilingual names, Saudi/Foreign distinction, and manager profile selection
@@ -70,19 +96,10 @@ export default function EmployeeForm({
   managerAssignmentError = null,
 }: EmployeeFormProps) {
   const { t } = useI18n();
-  const localizedManagerAssignmentError = managerAssignmentError
-    ? managerAssignmentError.includes("must belong to the employee's company")
-      ? t("employees.form.managerErrors.company")
-      : managerAssignmentError.includes("cannot be an employee's own manager") ||
-          managerAssignmentError.includes("cannot be their own manager")
-        ? t("employees.form.managerErrors.self")
-        : managerAssignmentError.includes("manager is archived")
-          ? t("employees.form.managerErrors.archived")
-          : managerAssignmentError.includes("must be an active employee")
-            ? t("employees.form.managerErrors.inactive")
-            : managerAssignmentError.includes("reporting cycle")
-              ? t("employees.form.managerErrors.cycle")
-              : managerAssignmentError;
+  const localizedManagerAssignmentError = localizeManagerAssignmentError(
+    managerAssignmentError,
+    t,
+  );
   const {
     departments,
     positions,
