@@ -89,6 +89,7 @@ export interface Employee {
  * List employees query parameters
  */
 export interface ListEmployeesParams {
+  scope?: "all";
   page?: number;
   page_size?: number;
   search?: string;
@@ -223,8 +224,9 @@ export interface CreateEmployeeDto {
  */
 export async function createEmployee(
   payload: CreateEmployeeDto,
+  params?: Pick<ListEmployeesParams, "scope">,
 ): Promise<ApiResponse<Employee>> {
-  const { data } = await api.post<ApiResponse<Employee>>("/employees", payload);
+  const { data } = await api.post<ApiResponse<Employee>>("/employees", payload, { params });
   return data;
 }
 
@@ -234,10 +236,12 @@ export async function createEmployee(
 export async function updateEmployee(
   id: string | number,
   payload: CreateEmployeeDto,
+  params?: Pick<ListEmployeesParams, "scope">,
 ): Promise<ApiResponse<Employee>> {
   const { data } = await api.patch<ApiResponse<Employee>>(
     `/employees/${id}`,
     payload,
+    { params },
   );
   return data;
 }

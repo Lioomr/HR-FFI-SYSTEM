@@ -66,7 +66,7 @@ export default function CreateEmployeePage() {
             listPositions(),
             listTaskGroups(),
             listSponsors(),
-            listEmployees({ page: 1, page_size: 1000 }),
+            listEmployees({ scope: "all", page: 1, page_size: 1000 }),
           ]);
 
         // Check for errors
@@ -126,7 +126,7 @@ export default function CreateEmployeePage() {
       const payload = toPayload(values) as CreateEmployeeDto;
 
       setSubmitting(true);
-      const response = await createEmployee(payload);
+      const response = await createEmployee(payload, { scope: "all" });
 
       if (isApiError(response)) {
         // Apply 422 field errors
