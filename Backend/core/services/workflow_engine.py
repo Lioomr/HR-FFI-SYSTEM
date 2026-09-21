@@ -244,13 +244,23 @@ def _get_subject_user(instance):
     return None
 
 
+def _get_manager_user_for_instance(instance, subject_user):
+    """Resolve the manager stage using the domain's explicit cross-company rules."""
+    if instance.__class__.__name__ == "LeaveRequest":
+        from employees.services.manager_relationships import get_valid_manager_user
+
+        profile = getattr(instance, "employee_profile", None) or getattr(subject_user, "employee_profile", None)
+        return get_valid_manager_user(profile, cross_company_capability="leaves.approve")
+    return get_direct_manager_user(subject_user)
+
+
 def _resolve_current_actor(role: str, instance):
     subject_user = _get_subject_user(instance)
     candidate = None
     if role == "delegate":
         return getattr(instance, "delegated_to", None)
     if role == "manager":
-        candidate = get_direct_manager_user(subject_user) if subject_user else None
+        candidate = _get_manager_user_for_instance(instance, subject_user) if subject_user else None
     if candidate:
         delegation = get_active_delegation(candidate)
         if delegation:
@@ -278,7 +288,7 @@ def can_user_act_on_instance(user, instance, workflow: WorkflowInstance | None =
         return bool(getattr(instance, "delegated_to_id", None) == user.id)
     if role == "manager":
         subject_user = _get_subject_user(instance)
-        direct_manager = get_direct_manager_user(subject_user) if subject_user else None
+        direct_manager = _get_manager_user_for_instance(instance, subject_user) if subject_user else None
         return bool(direct_manager and direct_manager.id == user.id)
     if role in {"hr", "cfo", "ceo", "disbursement"}:
         return is_user_approver_for_role(user, role)

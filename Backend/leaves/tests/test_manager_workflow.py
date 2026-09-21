@@ -11,10 +11,10 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from audit.models import AuditLog
-from core.models import DelegationRule
+from core.models import CrossCompanyManagerAssignment, DelegationRule
 from employees.models import EmployeeDocument, EmployeeProfile
 from leaves.models import LeaveRequest, LeaveType
-from organization.models import UserOrganizationAccess
+from organization.models import OrganizationNode, OrganizationScope, OrganizationScopeMembership, UserOrganizationAccess
 from organization.services import get_default_company
 
 User = get_user_model()
@@ -183,6 +183,70 @@ class ManagerWorkflowTests(APITestCase):
         response = self.client.post(self.requests_url, data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["data"]["status"], LeaveRequest.RequestStatus.PENDING_MANAGER)
+
+    def test_cross_company_manager_assignment_routes_leave_to_manager_workflow(self):
+        other_company = OrganizationNode.objects.create(
+            code="LEAVE_CROSS_MANAGER",
+            name="Leave Cross Manager",
+            node_type=OrganizationNode.NodeType.COMPANY,
+        )
+        scope = OrganizationScope.objects.create(code="LEAVE_CROSS_SCOPE", name="Leave cross-company scope")
+        OrganizationScopeMembership.objects.create(scope=scope, company=self.company)
+        OrganizationScopeMembership.objects.create(scope=scope, company=other_company)
+
+        cross_manager = User.objects.create_user(email="cross-manager@example.com", password="password")
+        cross_manager_profile = EmployeeProfile.objects.create(
+            user=cross_manager,
+            company=other_company,
+            employee_id="EMP-CROSS-MGR",
+            department="Operations",
+            job_title="Cross-company Manager",
+            hire_date=date(2020, 1, 1),
+        )
+        cross_employee = User.objects.create_user(email="cross-employee@example.com", password="password")
+        cross_employee_profile = EmployeeProfile.objects.create(
+            user=cross_employee,
+            company=self.company,
+            employee_id="EMP-CROSS-001",
+            department="IT",
+            job_title="Developer",
+            hire_date=date(2021, 1, 1),
+        )
+        CrossCompanyManagerAssignment.objects.create(
+            employee=cross_employee_profile,
+            manager_profile=cross_manager_profile,
+            scope=scope,
+            start_at=timezone.now() - timedelta(minutes=1),
+            end_at=timezone.now() + timedelta(days=30),
+            capabilities=["leaves.approve"],
+            created_by=self.hr_user,
+        )
+
+        self.client.force_authenticate(user=cross_employee)
+        start = timezone.localdate() + timedelta(days=1)
+        response = self.client.post(
+            self.requests_url,
+            {
+                "leave_type": self.leave_type.id,
+                "start_date": str(start),
+                "end_date": str(start + timedelta(days=1)),
+                "reason": "Cross-company manager workflow",
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        request_id = response.data["data"]["id"]
+        self.assertEqual(response.data["data"]["status"], LeaveRequest.RequestStatus.PENDING_MANAGER)
+        self.assertEqual(response.data["data"]["workflow"]["current_actor"]["id"], cross_manager.id)
+
+        self.client.force_authenticate(user=cross_manager)
+        inbox = self.client.get(self.manager_inbox_url)
+        self.assertEqual(inbox.status_code, status.HTTP_200_OK)
+        self.assertIn(request_id, [item["id"] for item in inbox.data["data"]["items"]])
+
+        approval = self.client.post(f"{self.manager_inbox_url}{request_id}/approve/", {"comment": "Approved"})
+        self.assertEqual(approval.status_code, status.HTTP_200_OK)
+        self.assertEqual(approval.data["data"]["status"], LeaveRequest.RequestStatus.PENDING_HR)
 
     def test_submission_without_manager_sets_pending_hr(self):
         """
