@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { formatDelegationCandidateLabel } from "./delegationCandidates";
 
 describe("formatDelegationCandidateLabel", () => {
-  it("includes company names for cross-company leave delegates", () => {
+  it("shows only the employee name for cross-company leave delegates", () => {
     expect(
       formatDelegationCandidateLabel({
         id: 12,
@@ -13,10 +13,10 @@ describe("formatDelegationCandidateLabel", () => {
         company_name: "Athroya",
         can_delegate: true,
       }),
-    ).toBe("Amina Saleh (ATH-012 - Athroya)");
+    ).toBe("Amina Saleh");
   });
 
-  it("keeps disabled reasons visible", () => {
+  it("falls back to the employee name when company data is present", () => {
     expect(
       formatDelegationCandidateLabel({
         id: null,
@@ -27,6 +27,6 @@ describe("formatDelegationCandidateLabel", () => {
         can_delegate: false,
         disabled_reason: "No login account",
       }),
-    ).toBe("No Login (ATH-013 - Athroya) - No login account");
+    ).toBe("No Login");
   });
 });
