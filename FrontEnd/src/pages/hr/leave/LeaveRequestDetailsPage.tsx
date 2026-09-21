@@ -41,7 +41,11 @@ import { isApiError } from "../../../services/api/apiTypes";
 import { useI18n } from "../../../i18n/useI18n";
 import LeaveApprovalMap from "../../../components/leaves/LeaveApprovalMap";
 import RequestObligationsPanel from "../../../components/requests/RequestObligationsPanel";
-import { downloadBlob, openOrDownloadBlob } from "../../../utils/download";
+import {
+  downloadBlob,
+  openOrDownloadBlob,
+  previewBlob,
+} from "../../../utils/download";
 
 const { confirm } = Modal;
 const { TextArea } = Input;
@@ -214,6 +218,33 @@ export default function LeaveRequestDetailsPage({
     }
   };
 
+  const previewPdf = async () => {
+    if (!request) return;
+    // Opening the tab synchronously keeps the browser from blocking the PDF
+    // once the authenticated request has completed.
+    const previewTab = window.open("about:blank", "_blank");
+    setPdfLoading(true);
+    try {
+      const blob = isCEO
+        ? await getCEOLeaveRequestPdfBlob(request.id, false)
+        : await getLeaveRequestPdfBlob(request.id, false);
+      if (!(await previewBlob(blob, previewTab))) {
+        notification.error({
+          message: t("common.error"),
+          description: t("leave.pdfDownloadFailed"),
+        });
+      }
+    } catch {
+      previewTab?.close();
+      notification.error({
+        message: t("common.error"),
+        description: t("leave.pdfDownloadFailed"),
+      });
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
   const handleReject = async () => {
     if (!request || !rejectionReason.trim()) {
       notification.error({
@@ -354,13 +385,22 @@ export default function LeaveRequestDetailsPage({
         title={t("leave.requestDetailsTitle", { id: request.id })}
         tags={<Tag color={statusColor()}>{statusLabel}</Tag>}
         actions={
-          <Button
-            icon={<FilePdfOutlined />}
-            onClick={downloadPdf}
-            loading={pdfLoading}
-          >
-            {t("leave.downloadRequestPdf")}
-          </Button>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <Button
+              icon={<EyeOutlined />}
+              onClick={previewPdf}
+              loading={pdfLoading}
+            >
+              {t("common.preview")}
+            </Button>
+            <Button
+              icon={<FilePdfOutlined />}
+              onClick={downloadPdf}
+              loading={pdfLoading}
+            >
+              {t("leave.downloadRequestPdf")}
+            </Button>
+          </div>
         }
       />
 
