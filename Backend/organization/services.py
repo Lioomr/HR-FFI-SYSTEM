@@ -272,6 +272,8 @@ def filter_queryset_by_accessible_companies(
     if not accessible_company_ids:
         return queryset.none()
     if active_org and active_org.node_type == OrganizationNode.NodeType.COMPANY:
+        if active_org.id not in accessible_company_ids:
+            return queryset.none()
         return queryset.filter(**{field_name: active_org.id})
     return queryset.filter(**{f"{field_name}__in": list(accessible_company_ids)})
 

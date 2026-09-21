@@ -72,6 +72,7 @@ export interface LeaveRequest {
   obligations_summary?: RequestObligationSummary;
   employee_documents?: EmployeeDocument[];
   // Travel & delegation fields
+  will_travel?: boolean;
   other_leave_description?: string;
   date_of_rejoin?: string | null;
   po_box?: string;
@@ -467,6 +468,38 @@ export async function getCEOLeaveRequests(params?: {
     "/api/leaves/ceo/leave-requests/",
     { params },
   );
+  return data;
+}
+
+/** Get one pending CEO leave request with its approval details. */
+export async function getCEOLeaveRequest(
+  id: string | number,
+): Promise<ApiResponse<LeaveRequest>> {
+  const { data } = await api.get<ApiResponse<LeaveRequest>>(
+    `/api/leaves/ceo/leave-requests/${id}/`,
+  );
+  return data;
+}
+
+export async function getCEOLeaveRequestDocumentBlob(
+  id: string | number,
+  download = false,
+): Promise<Blob> {
+  const { data } = await api.get(
+    `/api/leaves/ceo/leave-requests/${id}/document/`,
+    { params: download ? { download: 1 } : undefined, responseType: "blob" },
+  );
+  return data;
+}
+
+export async function getCEOLeaveRequestPdfBlob(
+  id: string | number,
+  download = true,
+): Promise<Blob> {
+  const { data } = await api.get(`/api/leaves/ceo/leave-requests/${id}/pdf/`, {
+    params: download ? { download: 1 } : { download: 0 },
+    responseType: "blob",
+  });
   return data;
 }
 

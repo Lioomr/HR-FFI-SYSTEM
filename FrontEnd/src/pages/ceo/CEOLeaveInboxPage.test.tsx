@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 
 vi.mock("../../services/api/leaveApi", () => ({
   getCEOLeaveRequests: vi.fn(),
@@ -62,10 +63,32 @@ describe("CEOLeaveInboxPage", () => {
   it("shows the outstanding count beside the title", async () => {
     getCEOLeaveRequests.mockResolvedValue(listResponse([makeRequest()]));
 
-    render(<CEOLeaveInboxPage />);
+    render(
+      <MemoryRouter>
+        <CEOLeaveInboxPage />
+      </MemoryRouter>,
+    );
 
     expect(await screen.findByText("Sara Ahmed")).toBeInTheDocument();
     expect(screen.getByText("1 awaiting")).toBeInTheDocument();
+  });
+
+  it("opens the CEO leave details page instead of the manager-only employee page", async () => {
+    getCEOLeaveRequests.mockResolvedValue(
+      listResponse([makeRequest({ employee_profile: 7 })]),
+    );
+
+    render(
+      <MemoryRouter>
+        <CEOLeaveInboxPage />
+      </MemoryRouter>,
+    );
+
+    expect(
+      (await screen.findByRole("link", { name: "Sara Ahmed" })).getAttribute(
+        "href",
+      ),
+    ).toBe("/ceo/leave/requests/41");
   });
 
   it("labels both decision buttons in text, not by colour alone", async () => {

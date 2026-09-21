@@ -22,6 +22,7 @@ from leaves.services import (
     apply_ceo_approval,
     apply_ceo_rejection,
 )
+from organization.models import OrganizationNode, UserOrganizationAccess
 from organization.services import get_default_company
 
 User = get_user_model()
@@ -55,6 +56,19 @@ class CEOLeaveDecisionTests(APITestCase):
         EmployeeProfile.objects.create(
             user=user,
             company=self.company,
+            employee_id=employee_id,
+            department="Ops",
+            job_title="Staff",
+            hire_date=date(2021, 1, 1),
+            is_saudi=is_saudi,
+        )
+        return user
+
+    def _user_in_company(self, company, email, employee_id, *, is_saudi=False):
+        user = User.objects.create_user(email=email, password="password")
+        EmployeeProfile.objects.create(
+            user=user,
+            company=company,
             employee_id=employee_id,
             department="Ops",
             job_title="Staff",
@@ -187,6 +201,60 @@ class CEOLeaveDecisionTests(APITestCase):
         self.assertEqual(leave.ceo_decision_note, "Not this month")
 
     # --- API ---
+
+    @patch("leaves.views.notify_after_ceo_approval")
+    def test_ceo_can_view_and_approve_an_explicitly_accessible_company(self, notify_approved):
+        other_company = OrganizationNode.objects.create(
+            code="CEO-ACCESS", name="CEO Accessible Company", node_type=OrganizationNode.NodeType.COMPANY
+        )
+        UserOrganizationAccess.objects.create(user=self.ceo_user, organization=other_company)
+        employee = self._user_in_company(other_company, "ceo-access-employee@example.com", "EMP-CEOD-ACCESS")
+        leave_type = LeaveType.objects.create(
+            company=other_company, name="Annual Leave", code="ANNUAL", is_active=True
+        )
+        leave = LeaveRequest.objects.create(
+            employee=employee,
+            employee_profile=employee.employee_profile,
+            leave_type=leave_type,
+            start_date=date(2026, 12, 1),
+            end_date=date(2026, 12, 3),
+            status=Status.PENDING_CEO,
+        )
+        self.client.force_authenticate(user=self.ceo_user)
+        headers = {"HTTP_X_ACTIVE_COMPANY_ID": str(other_company.id)}
+
+        detail = self.client.get(f"{CEO_REQUESTS_URL}{leave.id}/", **headers)
+        approval = self.client.post(f"{CEO_REQUESTS_URL}{leave.id}/approve/", {"comment": "OK"}, format="json", **headers)
+
+        self.assertEqual(detail.status_code, status.HTTP_200_OK, detail.data)
+        self.assertEqual(approval.status_code, status.HTTP_200_OK, approval.data)
+        leave.refresh_from_db()
+        self.assertEqual(leave.status, Status.APPROVED)
+        notify_approved.assert_called_once()
+
+    def test_ceo_cannot_view_a_company_without_explicit_access(self):
+        foreign_company = OrganizationNode.objects.create(
+            code="CEO-FOREIGN", name="CEO Foreign Company", node_type=OrganizationNode.NodeType.COMPANY
+        )
+        employee = self._user_in_company(foreign_company, "ceo-foreign-employee@example.com", "EMP-CEOD-FOREIGN")
+        leave_type = LeaveType.objects.create(
+            company=foreign_company, name="Annual Leave", code="ANNUAL", is_active=True
+        )
+        leave = LeaveRequest.objects.create(
+            employee=employee,
+            employee_profile=employee.employee_profile,
+            leave_type=leave_type,
+            start_date=date(2026, 12, 1),
+            end_date=date(2026, 12, 3),
+            status=Status.PENDING_CEO,
+        )
+        self.client.force_authenticate(user=self.ceo_user)
+
+        response = self.client.get(
+            f"{CEO_REQUESTS_URL}{leave.id}/", HTTP_X_ACTIVE_COMPANY_ID=str(foreign_company.id)
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_approve_endpoint_returns_obligations_summary_when_blocked(self):
         leave = self._blocked_business_trip()

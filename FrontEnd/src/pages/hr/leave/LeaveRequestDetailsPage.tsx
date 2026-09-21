@@ -30,6 +30,9 @@ import {
   rejectLeaveRequest,
   sendLeaveRequestToCEO,
   hrCancelLeaveRequest,
+  getCEOLeaveRequest,
+  getCEOLeaveRequestDocumentBlob,
+  getCEOLeaveRequestPdfBlob,
   getLeaveRequestDocumentBlob,
   getLeaveRequestPdfBlob,
   type LeaveRequest,
@@ -43,10 +46,17 @@ import { downloadBlob, openOrDownloadBlob } from "../../../utils/download";
 const { confirm } = Modal;
 const { TextArea } = Input;
 
-export default function LeaveRequestDetailsPage() {
+type LeaveRequestDetailsPageProps = {
+  audience?: "hr" | "ceo";
+};
+
+export default function LeaveRequestDetailsPage({
+  audience = "hr",
+}: LeaveRequestDetailsPageProps) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { t } = useI18n();
+  const isCEO = audience === "ceo";
 
   // Translate leave type names from the API
   const translateLeaveType = (name?: string): string => {
@@ -76,7 +86,9 @@ export default function LeaveRequestDetailsPage() {
     if (!id) return;
     setLoading(true);
     try {
-      const res = await getLeaveRequest(id);
+      const res = isCEO
+        ? await getCEOLeaveRequest(id)
+        : await getLeaveRequest(id);
       if (isApiError(res)) {
         setError(res.message);
       } else {
@@ -87,7 +99,7 @@ export default function LeaveRequestDetailsPage() {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, isCEO, t]);
 
   useEffect(() => {
     loadData();
@@ -166,7 +178,9 @@ export default function LeaveRequestDetailsPage() {
     if (!request) return;
     setDocumentLoading(true);
     try {
-      const blob = await getLeaveRequestDocumentBlob(request.id, download);
+      const blob = isCEO
+        ? await getCEOLeaveRequestDocumentBlob(request.id, download)
+        : await getLeaveRequestDocumentBlob(request.id, download);
       openOrDownloadBlob(
         blob,
         `leave_request_${request.id}_document`,
@@ -186,7 +200,9 @@ export default function LeaveRequestDetailsPage() {
     if (!request) return;
     setPdfLoading(true);
     try {
-      const blob = await getLeaveRequestPdfBlob(request.id, true);
+      const blob = isCEO
+        ? await getCEOLeaveRequestPdfBlob(request.id, true)
+        : await getLeaveRequestPdfBlob(request.id, true);
       downloadBlob(blob, `leave_request_${request.id}.pdf`);
     } catch {
       notification.error({
@@ -285,19 +301,20 @@ export default function LeaveRequestDetailsPage() {
   // HR can only action submitted or pending_hr requests.
   // pending_ceo requests must go to the CEO portal.
   const canAction =
-    request.status?.toLowerCase() === "submitted" ||
-    request.status?.toLowerCase() === "pending_hr";
-  const canSendToCEO = canAction;
+    !isCEO &&
+    ["submitted", "pending_hr"].includes(request.status?.toLowerCase() ?? "");
+  const canSendToCEO = !isCEO && canAction;
   // Employees cannot cancel their own leave; HR cancels any request in progress or already approved.
-  const canHrCancel = [
-    "submitted",
-    "pending_delegate",
-    "pending_manager",
-    "pending_hr",
-    "pending_ceo",
-    "pending_hr_completion",
-    "approved",
-  ].includes(request.status?.toLowerCase() ?? "");
+  const canHrCancel =
+    [
+      "submitted",
+      "pending_delegate",
+      "pending_manager",
+      "pending_hr",
+      "pending_ceo",
+      "pending_hr_completion",
+      "approved",
+    ].includes(request.status?.toLowerCase() ?? "") && !isCEO;
 
   const statusLabel = (() => {
     const statusKey = `leave.status.${(request.status || "").toLowerCase()}`;
@@ -325,7 +342,9 @@ export default function LeaveRequestDetailsPage() {
       <Button
         type="link"
         icon={<ArrowLeftOutlined />}
-        onClick={() => navigate("/hr/leave/requests")}
+        onClick={() =>
+          navigate(isCEO ? "/ceo/leave/requests" : "/hr/leave/requests")
+        }
         style={{ paddingLeft: 0, marginBottom: 16 }}
       >
         {t("leave.backToInbox")}
