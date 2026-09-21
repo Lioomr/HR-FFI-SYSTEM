@@ -14,7 +14,7 @@ import {
 } from "antd";
 import { DownloadOutlined, EyeOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import ApprovalActions from "../../components/ceo/ApprovalActions";
 import ApprovalQueuePage from "../../components/ceo/ApprovalQueuePage";
@@ -39,6 +39,7 @@ const PAGE_SIZE = 20;
 
 export default function CEOLeaveInboxPage() {
   const { t } = useI18n();
+  const navigate = useNavigate();
   const screens = useBreakpoint();
   const isNarrow = !screens.lg;
 
@@ -91,6 +92,14 @@ export default function CEOLeaveInboxPage() {
 
   const employeeName = (record: LeaveRequest) =>
     record.employee?.full_name || `#${record.employee?.id ?? record.id}`;
+
+  const openRequest = (record: LeaveRequest) => {
+    navigate(`/ceo/leave/requests/${record.id}`);
+  };
+
+  const isInteractiveTableTarget = (target: EventTarget | null) =>
+    target instanceof Element &&
+    Boolean(target.closest("a, button, input, select, textarea, [role='button']"));
 
   // ── Approve, with the CEO waiver requirement kept intact ──────────────────
   const blockerCount = approving?.obligations_summary?.blocking_open || 0;
@@ -345,6 +354,12 @@ export default function CEOLeaveInboxPage() {
           dataSource={requests}
           rowKey="id"
           scroll={{ x: 960 }}
+          onRow={(record) => ({
+            onClick: (event) => {
+              if (!isInteractiveTableTarget(event.target)) openRequest(record);
+            },
+            style: { cursor: "pointer" },
+          })}
           expandable={{
             expandedRowRender: (record) => (
               <Space direction="vertical" size={16} style={{ width: "100%" }}>

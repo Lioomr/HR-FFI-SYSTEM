@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 
 vi.mock("../../services/api/leaveApi", () => ({
   getCEOLeaveRequests: vi.fn(),
@@ -48,6 +48,19 @@ const listResponse = (items: LeaveRequest[]) => ({
   data: { items, count: items.length, page: 1, page_size: 20 },
 });
 
+function LocationDisplay() {
+  const location = useLocation();
+  return <output data-testid="location">{location.pathname}</output>;
+}
+
+function renderPage() {
+  return render(
+    <MemoryRouter>
+      <CEOLeaveInboxPage />
+    </MemoryRouter>,
+  );
+}
+
 beforeEach(() => {
   getCEOLeaveRequests.mockReset();
   approveCEOLeaveRequest.mockReset();
@@ -91,10 +104,27 @@ describe("CEOLeaveInboxPage", () => {
     ).toBe("/ceo/leave/requests/41");
   });
 
+  it("opens the leave details page when any non-interactive part of a row is selected", async () => {
+    getCEOLeaveRequests.mockResolvedValue(listResponse([makeRequest()]));
+
+    render(
+      <MemoryRouter initialEntries={["/ceo/leave/requests"]}>
+        <CEOLeaveInboxPage />
+        <LocationDisplay />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByText("Annual"));
+
+    expect(screen.getByTestId("location")).toHaveTextContent(
+      "/ceo/leave/requests/41",
+    );
+  });
+
   it("labels both decision buttons in text, not by colour alone", async () => {
     getCEOLeaveRequests.mockResolvedValue(listResponse([makeRequest()]));
 
-    render(<CEOLeaveInboxPage />);
+    renderPage();
 
     expect(
       await screen.findByRole("button", { name: "Approve: Sara Ahmed" }),
@@ -107,7 +137,7 @@ describe("CEOLeaveInboxPage", () => {
   it("renders an empty state when nothing is awaiting the CEO", async () => {
     getCEOLeaveRequests.mockResolvedValue(listResponse([]));
 
-    render(<CEOLeaveInboxPage />);
+    renderPage();
 
     expect(
       await screen.findByText("No pending leave requests found."),
@@ -123,7 +153,7 @@ describe("CEOLeaveInboxPage", () => {
       message: "backend down",
     });
 
-    render(<CEOLeaveInboxPage />);
+    renderPage();
 
     expect(await screen.findByText("backend down")).toBeInTheDocument();
 
@@ -142,7 +172,7 @@ describe("CEOLeaveInboxPage", () => {
       data: makeRequest(),
     });
 
-    render(<CEOLeaveInboxPage />);
+    renderPage();
 
     fireEvent.click(
       await screen.findByRole("button", { name: "Approve: Sara Ahmed" }),
@@ -175,7 +205,7 @@ describe("CEOLeaveInboxPage", () => {
       data: makeRequest(),
     });
 
-    render(<CEOLeaveInboxPage />);
+    renderPage();
 
     fireEvent.click(
       await screen.findByRole("button", { name: "Approve: Sara Ahmed" }),
@@ -212,7 +242,7 @@ describe("CEOLeaveInboxPage", () => {
       data: makeRequest(),
     });
 
-    render(<CEOLeaveInboxPage />);
+    renderPage();
 
     fireEvent.click(
       await screen.findByRole("button", { name: "Reject: Sara Ahmed" }),
@@ -239,7 +269,7 @@ describe("CEOLeaveInboxPage", () => {
     useI18nStore.getState().setLanguage("ar");
     getCEOLeaveRequests.mockResolvedValue(listResponse([makeRequest()]));
 
-    render(<CEOLeaveInboxPage />);
+    renderPage();
 
     expect(
       await screen.findByRole("button", { name: "موافقة: Sara Ahmed" }),

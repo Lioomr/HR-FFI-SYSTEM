@@ -227,6 +227,8 @@ class CEOLeaveDecisionTests(APITestCase):
         approval = self.client.post(f"{CEO_REQUESTS_URL}{leave.id}/approve/", {"comment": "OK"}, format="json", **headers)
 
         self.assertEqual(detail.status_code, status.HTTP_200_OK, detail.data)
+        self.assertEqual(detail.data["status"], "success")
+        self.assertEqual(detail.data["data"]["id"], leave.id)
         self.assertEqual(approval.status_code, status.HTTP_200_OK, approval.data)
         leave.refresh_from_db()
         self.assertEqual(leave.status, Status.APPROVED)
