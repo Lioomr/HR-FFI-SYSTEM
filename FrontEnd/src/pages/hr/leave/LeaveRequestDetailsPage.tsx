@@ -366,12 +366,14 @@ export default function LeaveRequestDetailsPage({
 
       <div style={{ display: "grid", gap: 18 }}>
         <LeaveApprovalMap request={request} t={t} />
-        <RequestObligationsPanel
-          parentType="leave_request"
-          parentId={request.id}
-          leaveRequest={request}
-          onChanged={loadData}
-        />
+        {!isCEO && (
+          <RequestObligationsPanel
+            parentType="leave_request"
+            parentId={request.id}
+            leaveRequest={request}
+            onChanged={loadData}
+          />
+        )}
 
         <Card style={{ borderRadius: 16 }} title={t("common.details")}>
           <Descriptions bordered column={1}>
