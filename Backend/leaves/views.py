@@ -2442,9 +2442,14 @@ class CEOLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
                 is_active=True,
             )
         )
-        if self.action == "list":
-            return filter_queryset_by_company_scope(qs, self.request)
-        return filter_queryset_by_accessible_companies(qs, self.request)
+        # CEO approvals may legitimately span companies.  Scope every action
+        # (including the list) through the CEO's explicit organization access,
+        # rather than falling back to the company of the CEO's own profile.
+        return filter_queryset_by_accessible_companies(
+            qs,
+            self.request,
+            roles_with_access={"CEO", "SystemAdmin", "HRManager"},
+        )
 
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
@@ -2502,3 +2507,16 @@ class CEOLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
     def document(self, request, pk=None):
         instance = self.get_object()
         return _serve_leave_document(instance, request)
+
+    @action(detail=True, methods=["get"])
+    def pdf(self, request, pk=None):
+        instance = self.get_object()
+        pdf_bytes = _build_leave_request_pdf(instance)
+        packet = _to_bool(request.query_params.get("packet", "0"))
+        filename = f"leave_request_{instance.id}.pdf"
+        if packet:
+            doc_bytes = _leave_document_pdf_bytes(instance)
+            if doc_bytes:
+                pdf_bytes = merge_pdfs([pdf_bytes, doc_bytes])
+                filename = f"leave_request_{instance.id}_packet.pdf"
+        return _configure_sensitive_download(HttpResponse(pdf_bytes, content_type="application/octet-stream"), filename)

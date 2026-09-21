@@ -267,6 +267,15 @@ def test_state_reads_cleanly_before_any_upload(world):
     }
 
 
+def test_owner_signature_state_is_available_when_another_company_is_selected(world):
+    response = client_for(world["users"]["owner"], world["foreign"].id).get(
+        SIGNATURE_URL.format("me"), secure=True
+    )
+
+    assert response.status_code == 200
+    assert response.data["data"]["has_signature"] is False
+
+
 # --------------------------------------------------------------------------
 # Preview response
 # --------------------------------------------------------------------------

@@ -818,18 +818,26 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         delete it as part of normal employee administration.
         """
 
-        profiles = filter_queryset_by_company_scope(
-            EmployeeProfile.objects.select_related("user", "company"),
-            request,
-        )
         role = get_role(request.user)
         is_hr = role in {"SystemAdmin", "HRManager"}
 
         if str(pk) == "me":
-            profile = profiles.filter(user=request.user).first()
+            # A reusable signature is strictly self-service.  The owner may
+            # read and manage their own row regardless of which company is
+            # currently selected; that context must never make a personal
+            # profile appear missing.
+            profile = EmployeeProfile.objects.select_related("user", "company").filter(user=request.user).first()
         elif is_hr:
+            profiles = filter_queryset_by_company_scope(
+                EmployeeProfile.objects.select_related("user", "company"),
+                request,
+            )
             profile = profiles.filter(pk=pk).first()
         else:
+            profiles = filter_queryset_by_company_scope(
+                EmployeeProfile.objects.select_related("user", "company"),
+                request,
+            )
             profile = profiles.filter(pk=pk, user=request.user).first()
 
         if profile is None:

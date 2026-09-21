@@ -624,10 +624,8 @@ export const routes = [
               { path: "ceo/leave/requests", element: <CEOLeaveInboxPage /> },
               {
                 path: "ceo/leave/requests/:id",
-                element: <Navigate to="/ceo/leave/requests" replace />,
+                element: <LeaveRequestDetailsPage audience="ceo" />,
               },
-              // The queue itself is scoped to pending_ceo; ":id" only exists so
-              // the notification deep link resolves to the queue.
               {
                 path: "ceo/annual-leave-payments",
                 element: <CEOAnnualLeaveSettlementsPage />,

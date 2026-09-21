@@ -224,7 +224,7 @@ export default function CEOLeaveInboxPage() {
         <div style={{ minWidth: 0 }}>
           {record.employee_profile ? (
             <Link
-              to={`/manager/team/${record.employee_profile}`}
+              to={`/ceo/leave/requests/${record.id}`}
               style={{
                 color: "#f97316",
                 fontWeight: 600,
