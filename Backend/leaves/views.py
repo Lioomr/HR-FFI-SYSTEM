@@ -1290,9 +1290,14 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         if self.action in {"retrieve", "document", "pdf"}:
             user = self.request.user
             role = get_role(user)
-            qs = self._unscoped_queryset()
-            if role not in ["SystemAdmin", "HRManager"]:
-                qs = qs.filter(Q(employee=user) | Q(delegated_to=user))
+            if role in ["SystemAdmin", "HRManager"]:
+                qs = self._unscoped_queryset()
+            else:
+                owned_qs = filter_queryset_by_accessible_companies(self._base_queryset(), self.request).filter(
+                    employee=user
+                )
+                delegated_qs = self._base_queryset().filter(delegated_to=user)
+                qs = (owned_qs | delegated_qs).distinct()
             obj = qs.filter(pk=self.kwargs.get(self.lookup_field)).first()
             if obj is None:
                 from django.shortcuts import get_object_or_404
@@ -2186,7 +2191,7 @@ class EmployeeDelegatedLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
                 is_active=True,
             )
         )
-        return filter_queryset_by_company_scope(queryset, self.request)
+        return queryset
 
     def list(self, request, *args, **kwargs):
         qs = self.filter_queryset(self.get_queryset())

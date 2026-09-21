@@ -204,6 +204,14 @@ export default function DelegatedLeaveInboxPage() {
         `${record.start_date} ${t("common.to")} ${record.end_date}`,
     },
     {
+      title: t("leave.company"),
+      dataIndex: "company_name",
+      key: "company_name",
+      width: 160,
+      responsive: ["md"],
+      render: (value) => value || "-",
+    },
+    {
       title: t("leave.days"),
       dataIndex: "days",
       key: "days",

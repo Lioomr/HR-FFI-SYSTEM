@@ -784,7 +784,7 @@ class EmployeeProfileTests(TestCase):
             },
         )
 
-    def test_employee_can_list_same_company_delegation_candidates(self):
+    def test_employee_can_list_cross_company_delegation_candidates(self):
         company = OrganizationNode.objects.create(
             code="TEST_CO",
             name="Test Co",
@@ -826,12 +826,14 @@ class EmployeeProfileTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         candidates = response.data["data"]
-        self.assertEqual([item["id"] for item in candidates], [self.employee_user_2.id])
-        self.assertEqual(candidates[0]["employee_profile_id"], delegate_profile.id)
-        self.assertEqual(candidates[0]["employee_id"], "EMP-DELEGATE")
+        self.assertEqual([item["id"] for item in candidates], [outsider_user.id, self.employee_user_2.id])
+        self.assertEqual(candidates[0]["employee_id"], "EMP-DELEGATE-OUT")
+        self.assertEqual(candidates[0]["company_name"], "Other Co")
+        self.assertEqual(candidates[1]["employee_profile_id"], delegate_profile.id)
+        self.assertEqual(candidates[1]["employee_id"], "EMP-DELEGATE")
         self.assertNotIn(requester_profile.id, [item["employee_profile_id"] for item in candidates])
 
-    def test_employee_cannot_request_all_company_delegation_candidates(self):
+    def test_employee_scope_all_delegation_candidates_is_global_but_still_linked_active_only(self):
         company = OrganizationNode.objects.create(
             code="ALL_CO",
             name="All Co",
@@ -870,7 +872,10 @@ class EmployeeProfileTests(TestCase):
         self.client.force_authenticate(user=self.employee_user)
         response = self.client.get("/api/employees/delegation-candidates/?scope=all")
 
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        candidates = response.data["data"]
+        self.assertEqual([item["id"] for item in candidates], [other_user.id])
+        self.assertEqual(candidates[0]["company_name"], "All Other Co")
 
     def test_hr_can_export_filtered_employees_as_xlsx(self):
         EmployeeProfile.objects.create(

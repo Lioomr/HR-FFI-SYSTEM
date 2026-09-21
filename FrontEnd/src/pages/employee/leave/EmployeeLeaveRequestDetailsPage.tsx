@@ -330,6 +330,9 @@ export default function EmployeeLeaveRequestDetailsPage() {
             <Descriptions.Item label={t("common.submittedOn")}>
               {formatDateTime(request.created_at)}
             </Descriptions.Item>
+            <Descriptions.Item label={t("leave.company")}>
+              {request.company_name || "-"}
+            </Descriptions.Item>
             <Descriptions.Item label={t("leave.requestSource")}>
               {request.source === "hr_manual"
                 ? t("leave.manual.badge")

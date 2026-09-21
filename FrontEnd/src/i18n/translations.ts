@@ -1719,6 +1719,7 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "leave.employeeDetailsSubtitle":
       "Review the request status, approval path, and exported summary",
     "leave.period": "Period",
+    "leave.company": "Company",
     "leave.rejectionReason": "Rejection Reason",
     "leave.statusNote": "Status Note",
     "leave.ceoApprovalWait":
@@ -6605,6 +6606,7 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "leave.employeeDetailsSubtitle":
       "راجع حالة الطلب ومسار الموافقات وملف الملخص",
     "leave.period": "الفترة",
+    "leave.company": "الشركة",
     "leave.rejectionReason": "سبب الرفض",
     "leave.statusNote": "ملاحظة الحالة",
     "leave.ceoApprovalWait":

@@ -141,7 +141,7 @@ export async function listEmployees(
 }
 
 export async function listDelegationCandidates(params?: {
-  scope?: "all";
+  scope?: "all" | "accessible";
 }): Promise<ApiResponse<DelegationCandidate[]>> {
   const { data } = await api.get<ApiResponse<DelegationCandidate[]>>(
     "/api/employees/delegation-candidates/",
