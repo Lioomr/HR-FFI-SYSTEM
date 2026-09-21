@@ -78,7 +78,13 @@ export interface LeaveRequest {
   full_address?: string;
   airplane_ticket_payer?: "company" | "employee" | "";
   airplane_ticket_address?: string;
-  delegated_to?: { id: number; email: string; full_name: string } | null;
+  delegated_to?: {
+    id: number;
+    email: string;
+    full_name: string;
+    company_id?: number | null;
+    company_name?: string;
+  } | null;
   delegation_note?: string;
 }
 

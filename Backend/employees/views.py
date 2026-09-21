@@ -1385,14 +1385,6 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             user__is_active=True,
         )
 
-        requested_scope = (request.query_params.get("scope") or "active").strip().lower()
-        if requested_scope in {"all", "accessible"}:
-            if get_role(request.user) not in {"SystemAdmin", "HRManager"}:
-                return error("Forbidden", status=status.HTTP_403_FORBIDDEN)
-            qs = filter_queryset_by_accessible_companies(qs, request)
-        else:
-            qs = filter_queryset_by_company_scope(qs, request)
-
         qs = qs.exclude(user=request.user).order_by("company__name", "full_name_en", "full_name", "employee_id")
         serializer = self.get_serializer(qs, many=True)
         return success(serializer.data)

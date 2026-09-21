@@ -86,6 +86,7 @@ HR_CANCELLABLE_STATUSES = frozenset(
 COMMENT_REQUIRED_MESSAGE = "comment is required."
 DELEGATE_NOT_ASSIGNABLE_MESSAGE = "Delegate can only be updated while the request is pending."
 SELF_DELEGATE_MESSAGE = "You cannot delegate the request to the same employee."
+DELEGATE_UNAVAILABLE_MESSAGE = "Delegate must be an active employee with an active user account."
 DELEGATE_NOT_ASSIGNED_MESSAGE = "You are not the alternative employee for this leave request."
 NOT_DELEGATE_PENDING_MESSAGE = "Request is not waiting for delegated user approval."
 MANAGER_CANNOT_APPROVE_MESSAGE = "You cannot approve this leave request."
@@ -301,6 +302,23 @@ def ensure_delegate_assignable(instance: LeaveRequest) -> None:
         raise LeaveTransitionError(DELEGATE_NOT_ASSIGNABLE_MESSAGE)
 
 
+def ensure_delegate_available(delegated_to) -> None:
+    try:
+        profile = delegated_to.employee_profile
+    except Exception:
+        profile = None
+    if (
+        not delegated_to
+        or not delegated_to.is_active
+        or profile is None
+        or profile.is_archived
+        or profile.employment_status != profile.EmploymentStatus.ACTIVE
+        or not profile.company_id
+        or not profile.company.is_active
+    ):
+        raise LeaveTransitionError(DELEGATE_UNAVAILABLE_MESSAGE)
+
+
 def apply_delegate_assignment(instance: LeaveRequest, *, actor, delegated_to, note: str | None = None) -> Transition:
     """Add or replace the alternative employee; the request waits on them before continuing.
 
@@ -309,6 +327,7 @@ def apply_delegate_assignment(instance: LeaveRequest, *, actor, delegated_to, no
     """
 
     ensure_delegate_assignable(instance)
+    ensure_delegate_available(delegated_to)
     if delegated_to.pk == instance.employee_id:
         raise LeaveTransitionError(SELF_DELEGATE_MESSAGE)
 

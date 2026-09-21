@@ -288,10 +288,17 @@ class LeaveRequest(models.Model):
             delegated_profile = self.delegated_to.employee_profile if self.delegated_to_id else None
         except ObjectDoesNotExist:
             delegated_profile = None
-        if self.delegated_to_id and delegated_profile is None:
+        if self.delegated_to_id and (not self.delegated_to or not self.delegated_to.is_active):
+            errors["delegated_to"] = _("The delegate must have an active user account.")
+        elif self.delegated_to_id and delegated_profile is None:
             errors["delegated_to"] = _("The delegate must have an employee profile.")
-        elif delegated_profile and delegated_profile.company_id != self.company_id:
-            errors["delegated_to"] = _("Delegate and leave request must belong to the same company.")
+        elif delegated_profile and (
+            delegated_profile.is_archived
+            or delegated_profile.employment_status != delegated_profile.EmploymentStatus.ACTIVE
+            or not delegated_profile.company_id
+            or not delegated_profile.company.is_active
+        ):
+            errors["delegated_to"] = _("The delegate must be an active employee.")
         if errors:
             raise ValidationError(errors)
 

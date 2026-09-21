@@ -50,9 +50,26 @@ def delegation_user_queryset():
 
 
 class UserSummarySerializer(serializers.ModelSerializer):
+    company_id = serializers.SerializerMethodField()
+    company_name = serializers.SerializerMethodField()
+
+    def _profile(self, obj):
+        try:
+            return obj.employee_profile
+        except EmployeeProfile.DoesNotExist:
+            return None
+
+    def get_company_id(self, obj):
+        profile = self._profile(obj)
+        return profile.company_id if profile else None
+
+    def get_company_name(self, obj):
+        profile = self._profile(obj)
+        return profile.company.name if profile and profile.company else ""
+
     class Meta:
         model = User
-        fields = ["id", "email", "full_name"]
+        fields = ["id", "email", "full_name", "company_id", "company_name"]
 
 
 class LeaveTypeSerializer(serializers.ModelSerializer):
@@ -249,7 +266,6 @@ class LeaveRequestCreateSerializer(serializers.ModelSerializer):
                 company=active_company,
                 is_active=True,
             )
-            qs = qs.filter(employee_profile__company=active_company)
             qs = qs.exclude(id=request.user.id)
         self.fields["delegated_to"].queryset = qs
 
@@ -272,10 +288,6 @@ class LeaveRequestCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Employee does not belong to the active company.")
         if leave_type and leave_type.company_id != profile.company_id:
             raise serializers.ValidationError({"leave_type": "Leave type must belong to the employee's company."})
-        delegated_profile = getattr(delegated_to, "employee_profile", None) if delegated_to else None
-        if delegated_profile and delegated_profile.company_id != profile.company_id:
-            raise serializers.ValidationError({"delegated_to": "Delegate must belong to the employee's company."})
-
         if delegated_to and delegated_to.id == user.id:
             raise serializers.ValidationError(
                 {"delegated_to": "You cannot delegate your own leave request to yourself."}
@@ -397,7 +409,7 @@ class HRManualLeaveRequestSerializer(serializers.ModelSerializer):
         from organization.services import get_active_company_for_request
 
         company = get_active_company_for_request(request) if request else None
-        self.fields["delegated_to"].queryset = delegation_user_queryset().filter(employee_profile__company=company)
+        self.fields["delegated_to"].queryset = delegation_user_queryset()
         self.fields["leave_type"].queryset = LeaveType.objects.filter(company=company, is_active=True)
         self._active_company = company
 
@@ -457,10 +469,6 @@ class HRManualLeaveRequestSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"leave_type": "Leave type is inactive."})
         if leave_type and leave_type.company_id != employee_profile.company_id:
             raise serializers.ValidationError({"leave_type": "Leave type must belong to the employee's company."})
-        delegated_profile = getattr(delegated_to, "employee_profile", None) if delegated_to else None
-        if delegated_profile and delegated_profile.company_id != employee_profile.company_id:
-            raise serializers.ValidationError({"delegated_to": "Delegate must belong to the employee's company."})
-
         leave_code = (leave_type.code or leave_type.name or "").strip().upper().replace(" ", "_")
         if leave_code in {"SICK", "SICK_LEAVE"} and not document and not getattr(self.instance, "document", None):
             raise serializers.ValidationError({"document": "Medical report document is required for sick leave."})

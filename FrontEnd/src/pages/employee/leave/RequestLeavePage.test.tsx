@@ -19,6 +19,7 @@ import RequestLeavePage, {
   getLeavePageLoadErrorMessage,
   LeaveSubmissionError,
 } from "./RequestLeavePage";
+import { listDelegationCandidates } from "../../../services/api/employeesApi";
 import {
   getLeaveValidationErrors,
   isEmployeeLeaveDateDisabled,
@@ -29,6 +30,7 @@ const today = dayjs("2026-08-11");
 
 beforeEach(() => {
   useI18nStore.getState().setLanguage("en");
+  vi.mocked(listDelegationCandidates).mockClear();
 });
 
 describe("employee leave backdated dates", () => {
@@ -66,6 +68,20 @@ describe("employee leave backdated dates", () => {
         "Leave can be submitted up to 7 calendar days after it starts.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("loads global delegation candidates for the selector", async () => {
+    render(
+      <MemoryRouter>
+        <RequestLeavePage />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText(
+      "Leave can be submitted up to 7 calendar days after it starts.",
+    );
+
+    expect(listDelegationCandidates).toHaveBeenCalledWith();
   });
 
   it("renders the backend start-date validation error clearly", () => {

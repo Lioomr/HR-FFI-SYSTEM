@@ -40,6 +40,7 @@ import {
   readLeaveBalanceFigures,
   validateAnnualLeaveDays,
 } from "./leaveRequestValidation";
+import { formatDelegationCandidateLabel } from "../../../utils/delegationCandidates";
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -514,7 +515,7 @@ export default function RequestLeavePage() {
               placeholder="-"
               options={delegationCandidates.map((e) => ({
                 value: e.id,
-                label: `${e.full_name_en || e.full_name || e.employee_id} (${e.employee_id})`,
+                label: formatDelegationCandidateLabel(e),
               }))}
             />
           </Form.Item>
