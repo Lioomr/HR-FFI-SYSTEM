@@ -2451,6 +2451,11 @@ class CEOLeaveRequestViewSet(viewsets.ReadOnlyModelViewSet):
             roles_with_access={"CEO", "SystemAdmin", "HRManager"},
         )
 
+    def retrieve(self, request, *args, **kwargs):
+        """Return the standard API envelope consumed by the CEO details page."""
+        instance = self.get_object()
+        return success(self.get_serializer(instance).data)
+
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
         instance = self.get_object()
