@@ -16,7 +16,7 @@ describe("formatDelegationCandidateLabel", () => {
     ).toBe("Amina Saleh");
   });
 
-  it("falls back to the employee name when company data is present", () => {
+  it("keeps the employee name when company data is present", () => {
     expect(
       formatDelegationCandidateLabel({
         id: null,
