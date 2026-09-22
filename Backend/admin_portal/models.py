@@ -2,13 +2,6 @@ from datetime import time
 
 from django.db import models
 
-# Python weekday(): Monday=0 .. Sunday=6. Default working week: Sunday–Thursday.
-DEFAULT_WORK_WEEK_DAYS = [6, 0, 1, 2, 3]
-
-
-def default_work_week_days():
-    return list(DEFAULT_WORK_WEEK_DAYS)
-
 
 class SystemSettings(models.Model):
     """
@@ -41,14 +34,13 @@ class SystemSettings(models.Model):
     # Attendance permission policy. This singleton intentionally remains
     # global/company-wide: no per-company or employee schedules are introduced.
     grace_window_minutes = models.PositiveIntegerField(default=15)
-    grace_use_limit_per_month = models.PositiveIntegerField(default=3)
     post_grace_tolerance_minutes = models.PositiveIntegerField(default=5)
     approved_late_permission_limit_per_month = models.PositiveIntegerField(default=3)
     during_shift_permission_max_minutes = models.PositiveIntegerField(default=120)
     permission_request_advance_limit_days = models.PositiveIntegerField(default=7)
     absence_detection_enabled = models.BooleanField(default=True)
-    # List of Python weekday() ints (Mon=0 .. Sun=6) considered working days.
-    work_week_days = models.JSONField(default=default_work_week_days, blank=True)
+    # The working week is not configurable: it is fixed per employee by
+    # nationality in attendance.schedule.is_working_day.
 
     updated_at = models.DateTimeField(auto_now=True)
 

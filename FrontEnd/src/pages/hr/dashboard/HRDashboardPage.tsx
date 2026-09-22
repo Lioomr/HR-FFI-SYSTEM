@@ -1,67 +1,92 @@
 import { useEffect, useState } from "react";
-import { Button, Col, Grid, Row, Tag, Tooltip } from "antd";
-import {
-  CalendarOutlined,
-  FileExclamationOutlined,
-  InboxOutlined,
-  PlayCircleOutlined,
-  ReloadOutlined,
-  TeamOutlined,
-  UploadOutlined,
-  UserAddOutlined,
-  WarningOutlined,
-} from "@ant-design/icons";
+import { Button, Col, Grid, Row } from "antd";
+import { DollarOutlined, InboxOutlined, TeamOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
+import dayjs from "dayjs";
 import LoadingState from "../../../components/ui/LoadingState";
 import ErrorState from "../../../components/ui/ErrorState";
-import PageHeader from "../../../components/ui/PageHeader";
 import StatCard from "../../../components/ui/StatCard";
 import DashboardPanel from "../../../components/hr/dashboard/DashboardPanel";
-import PendingApprovalsList from "../../../components/hr/dashboard/PendingApprovalsList";
+import ExpiringDocumentsPanel from "../../../components/hr/dashboard/ExpiringDocumentsPanel";
 import RecentActivityFeed from "../../../components/hr/dashboard/RecentActivityFeed";
-import WorkforcePayrollPanel from "../../../components/hr/dashboard/WorkforcePayrollPanel";
+import WorkforceStatusChart from "../../../components/hr/dashboard/WorkforceStatusChart";
+import NationalityChart from "../../../components/hr/dashboard/NationalityChart";
+import AmountWithSAR from "../../../components/ui/AmountWithSAR";
 import Unauthorized403Page from "../../Unauthorized403Page";
 import { getHrSummary } from "../../../services/api/hrSummaryApi";
-import type { HRSummary } from "../../../services/api/hrSummaryApi";
+import type {
+  ExpiringDocumentsSummary,
+  HRSummary,
+  NationalityBreakdown,
+  WorkforceStatus,
+} from "../../../services/api/hrSummaryApi";
 import { getPendingRequests } from "../../../services/api/pendingRequestsApi";
 import { isApiError } from "../../../services/api/apiTypes";
 import { isForbidden } from "../../../services/api/httpErrors";
 import AnnouncementWidget from "../../../components/announcements/AnnouncementWidget";
 import { useI18n } from "../../../i18n/useI18n";
 import { useAuthStore } from "../../../auth/authStore";
-import {
-  getActiveOrganization,
-  isHeadOfficeOrganization,
-} from "../../../utils/organizationContext";
+import { isHeadOfficeOrganization } from "../../../utils/organizationContext";
 
 const { useBreakpoint } = Grid;
 
 const ACTIVITY_PREVIEW_SIZE = 5;
+
+/** Backend sends "M/YYYY"; render it as a readable month when parseable. */
+function formatPayrollPeriod(period: string | null | undefined) {
+  if (!period) return null;
+  const match = period.match(/^(\d{1,2})\/(\d{4})$/);
+  if (!match) return period;
+  const parsed = dayjs(`${match[2]}-${match[1].padStart(2, "0")}-01`);
+  return parsed.isValid() ? parsed.format("MMMM YYYY") : period;
+}
+
+const EMPTY_WORKFORCE_STATUS: WorkforceStatus = {
+  currently_employed: 0,
+  on_leave_outside: 0,
+  on_leave_inside: 0,
+  archived: 0,
+};
+
+const EMPTY_EXPIRING_DOCUMENTS: ExpiringDocumentsSummary = {
+  window_days: 30,
+  employee_count: 0,
+  by_type: {
+    national_id: 0,
+    iqama: 0,
+    passport: 0,
+    work_license: 0,
+    contract: 0,
+    health_insurance: 0,
+  },
+  soonest: [],
+};
+
+const EMPTY_NATIONALITY_BREAKDOWN: NationalityBreakdown = {
+  saudi_active: 0,
+  active_total: 0,
+  nationalities: [],
+};
 
 export default function HRDashboardPage() {
   const navigate = useNavigate();
   const { t } = useI18n();
   const screens = useBreakpoint();
   const isMobile = !screens.md;
-  // The activity table only reads well once the column has real width; below
-  // that it stacks rather than scrolling sideways inside the card.
-  const stackActivity = !screens.xl;
+  // The activity table only reads well with real width; below that it stacks
+  // rather than scrolling sideways inside the card.
+  const stackActivity = !screens.lg;
   const user = useAuthStore((state) => state.user);
-  const activeOrganization = getActiveOrganization(user);
   const isHeadOffice = isHeadOfficeOrganization(user);
 
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [forbidden, setForbidden] = useState(false);
   const [summary, setSummary] = useState<HRSummary | null>(null);
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
 
-  const loadSummary = async ({
-    isRefresh = false,
-  }: { isRefresh?: boolean } = {}) => {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
+  const loadSummary = async () => {
+    setLoading(true);
     setError(null);
     setForbidden(false);
     try {
@@ -85,7 +110,6 @@ export default function HRDashboardPage() {
       setError(err.message || t("error.loadDashboard"));
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   };
 
@@ -107,133 +131,66 @@ export default function HRDashboardPage() {
 
   const totalEmployees = summary?.total_employees ?? 0;
   const activeEmployees = summary?.active_employees ?? 0;
-  const expiringDocs = summary?.expiring_docs ?? 0;
-  const pendingLeaves = summary?.pending_leaves ?? 0;
-  const pendingApprovals = summary?.pending_approvals ?? [];
+  const inactiveEmployees = Math.max(totalEmployees - activeEmployees, 0);
+  const activeInactiveCaption = t("hr.dashboard.activeInactive", {
+    active: activeEmployees.toLocaleString(),
+    inactive: inactiveEmployees.toLocaleString(),
+  });
+  const expiringDocuments =
+    summary?.expiring_documents ?? EMPTY_EXPIRING_DOCUMENTS;
+  const openExpiries = () => navigate("/hr/employees/expiries");
+  const workforceStatus = summary?.workforce_status ?? EMPTY_WORKFORCE_STATUS;
+  const nationalityBreakdown =
+    summary?.nationality_breakdown ?? EMPTY_NATIONALITY_BREAKDOWN;
+  const payrollNet = summary?.latest_payroll?.latest_total_net ?? null;
+  const payrollPeriod = formatPayrollPeriod(
+    summary?.latest_payroll?.latest_period,
+  );
+  const payrollCaption =
+    payrollNet === null
+      ? t("hr.dashboard.payrollNoRun")
+      : `${t("hr.dashboard.netTotal")}${payrollPeriod ? ` · ${payrollPeriod}` : ""}`;
+  const payrollTrend = summary?.latest_payroll?.trend_percentage ?? null;
+  const payrollTrendLabel =
+    payrollTrend === null
+      ? null
+      : `${payrollTrend > 0 ? "+" : ""}${payrollTrend}%`;
   const recentActivity = (summary?.recent_activity ?? []).slice(
     0,
     ACTIVITY_PREVIEW_SIZE,
   );
 
-  // ─── Primary HR actions — kept in the page header so they are always the
-  //     first interactive elements after the title. ─────────────────────────
-  const quickActions = [
-    {
-      key: "add-employee",
-      label: t("hr.dashboard.addEmployee"),
-      icon: <UserAddOutlined />,
-      path: "/hr/employees/create",
-      primary: true,
-    },
-    {
-      key: "import-employees",
-      label: t("hr.dashboard.uploadExcel"),
-      icon: <UploadOutlined />,
-      path: "/hr/import/employees",
-      primary: false,
-    },
-    {
-      key: "run-payroll",
-      label: t("hr.dashboard.runPayroll"),
-      icon: <PlayCircleOutlined />,
-      path: "/hr/payroll",
-      primary: false,
-    },
-  ];
-
-  const headerActions = (
-    <div
-      style={{
-        display: "flex",
-        flexWrap: "wrap",
-        gap: 8,
-        width: isMobile ? "100%" : undefined,
-      }}
-    >
-      {quickActions.map((action) => {
-        const button = (
-          <Button
-            key={action.key}
-            type={action.primary ? "primary" : "default"}
-            icon={action.icon}
-            disabled={isHeadOffice}
-            onClick={() => navigate(action.path)}
-            className="press-scale"
-            style={{
-              borderRadius: 10,
-              minHeight: 40,
-              flex: isMobile ? "1 1 auto" : undefined,
-            }}
-          >
-            {action.label}
-          </Button>
-        );
-        return isHeadOffice ? (
-          <Tooltip
-            key={action.key}
-            title={t("organization.headOffice.switchToUseAction")}
-          >
-            <span
-              style={{
-                display: "inline-flex",
-                flex: isMobile ? "1 1 auto" : undefined,
-              }}
-            >
-              {button}
-            </span>
-          </Tooltip>
-        ) : (
-          button
-        );
-      })}
-      <Button
-        icon={<ReloadOutlined />}
-        loading={refreshing}
-        onClick={() => loadSummary({ isRefresh: true })}
-        aria-label={t("common.refresh")}
-        style={{ borderRadius: 10, minHeight: 40 }}
-      >
-        {t("common.refresh")}
-      </Button>
-    </div>
-  );
-
+  // Three KPI tiles: one row on wide screens, a pair plus a full-width
+  // payroll tile on tablets, a single column on phones.
+  const kpiColumns = screens.lg ? 3 : screens.sm ? 2 : 1;
   const gutter: [number, number] = isMobile ? [12, 12] : [20, 20];
 
   return (
     <div style={{ maxWidth: 1600, margin: "0 auto", paddingBottom: 24 }}>
-      <PageHeader
-        title={t("hr.dashboard.title")}
-        subtitle={activeOrganization?.name}
-        secondarySubtitle={t("hr.dashboard.overviewContext")}
-        actions={headerActions}
-      />
-
       {/* ─── KPI summaries ──────────────────────────────────────────── */}
-      <Row
-        gutter={gutter}
-        style={{ marginBottom: isMobile ? 12 : 20 }}
+      <div
         role="list"
+        style={{
+          display: "grid",
+          gridTemplateColumns: `repeat(${kpiColumns}, minmax(0, 1fr))`,
+          gap: gutter[0],
+          marginBottom: isMobile ? 12 : 20,
+        }}
       >
-        <Col xs={24} sm={12} xl={6} role="listitem">
+        <div role="listitem">
           <StatCard
             title={t("hr.dashboard.totalEmployees")}
             value={totalEmployees.toLocaleString()}
-            caption={t("hr.dashboard.activeCount", {
-              count: activeEmployees.toLocaleString(),
-            })}
+            caption={activeInactiveCaption}
             icon={<TeamOutlined />}
             color="#f97316"
             compact={isMobile}
             onClick={() => navigate("/hr/employees")}
-            ariaLabel={`${t("hr.dashboard.totalEmployees")}: ${totalEmployees}. ${t(
-              "hr.dashboard.activeCount",
-              { count: activeEmployees.toLocaleString() },
-            )}`}
+            ariaLabel={`${t("hr.dashboard.totalEmployees")}: ${totalEmployees}. ${activeInactiveCaption}`}
             animDelay={0}
           />
-        </Col>
-        <Col xs={24} sm={12} xl={6} role="listitem">
+        </div>
+        <div role="listitem">
           <StatCard
             title={t("pendingInbox.title", "Pending Requests")}
             value={pendingRequestsCount.toLocaleString()}
@@ -247,129 +204,79 @@ export default function HRDashboardPage() {
             )}`}
             animDelay={60}
           />
-        </Col>
-        <Col xs={24} sm={12} xl={6} role="listitem">
+        </div>
+        <div
+          role="listitem"
+          style={{ gridColumn: kpiColumns === 2 ? "1 / -1" : undefined }}
+        >
           <StatCard
-            title={t("hr.dashboard.leaveAwaitingHr")}
-            value={pendingLeaves.toLocaleString()}
-            caption={t("hr.dashboard.acrossCompany")}
-            icon={<CalendarOutlined />}
-            color="#0ea5e9"
-            compact={isMobile}
-            onClick={() => navigate("/hr/leave/requests")}
-            ariaLabel={`${t("hr.dashboard.leaveAwaitingHr")}: ${pendingLeaves}. ${t(
-              "hr.dashboard.acrossCompany",
-            )}`}
-            animDelay={120}
-          />
-        </Col>
-        <Col xs={24} sm={12} xl={6} role="listitem">
-          <StatCard
-            title={t("hr.dashboard.expiringDocs")}
-            value={expiringDocs.toLocaleString()}
-            caption={t("hr.dashboard.expiringDocsCaption")}
-            icon={<FileExclamationOutlined />}
-            color="#d97706"
-            compact={isMobile}
+            title={t("hr.dashboard.latestPayrollRun")}
+            value={
+              payrollNet === null ? (
+                "—"
+              ) : (
+                <AmountWithSAR
+                  amount={payrollNet}
+                  size={isMobile ? 16 : 20}
+                  color="#334155"
+                />
+              )
+            }
+            caption={payrollCaption}
+            trend={payrollTrendLabel}
+            trendLabel={t("hr.dashboard.vsPreviousMonth")}
             note={
-              expiringDocs > 0
-                ? {
-                    label: t("hr.dashboard.actionNeeded"),
-                    icon: <WarningOutlined aria-hidden />,
-                    tone: "warning",
-                  }
+              payrollNet !== null && payrollTrendLabel === null
+                ? { label: t("hr.dashboard.noComparison"), tone: "info" }
                 : undefined
             }
-            onClick={() => navigate("/hr/employees/expiries")}
-            ariaLabel={`${t("hr.dashboard.expiringDocs")}: ${expiringDocs}. ${t(
-              "hr.dashboard.expiringDocsCaption",
-            )}`}
-            animDelay={180}
+            icon={<DollarOutlined />}
+            color="#059669"
+            compact={isMobile}
+            onClick={() => navigate("/hr/payroll")}
+            ariaLabel={`${t("hr.dashboard.latestPayrollRun")}: ${payrollCaption}`}
+            animDelay={240}
           />
-        </Col>
-      </Row>
+        </div>
+      </div>
 
-      {/* ─── Pending actions + payroll/workforce trend ───────────────── */}
-      <Row
-        gutter={gutter}
-        align="top"
-        style={{ marginBottom: isMobile ? 12 : 20 }}
-      >
-        <Col xs={24} lg={15}>
+      {/* ─── Workforce analytics ────────────────────────────────────── */}
+      <Row gutter={gutter} style={{ marginBottom: isMobile ? 12 : 20 }}>
+        <Col xs={24} lg={12}>
           <DashboardPanel
-            title={t("hr.dashboard.needsAttention")}
-            titleSuffix={
-              pendingRequestsCount > 0 ? (
-                <Tag
-                  color="orange"
-                  style={{
-                    margin: 0,
-                    borderRadius: 20,
-                    fontWeight: 700,
-                    fontSize: 11,
-                  }}
-                >
-                  {pendingRequestsCount}
-                </Tag>
-              ) : undefined
-            }
-            description={
-              pendingRequestsCount > pendingApprovals.length
-                ? t("hr.dashboard.showingOf", {
-                    shown: pendingApprovals.length.toString(),
-                    total: pendingRequestsCount.toString(),
-                  })
-                : undefined
-            }
-            action={
-              <Button
-                type="link"
-                onClick={() => navigate("/pending-inbox")}
-                style={{
-                  padding: 0,
-                  fontWeight: 600,
-                  color: "#ea580c",
-                  minHeight: 40,
-                }}
-              >
-                {t("hr.dashboard.openInbox")}
-              </Button>
-            }
+            title={t("hr.dashboard.workforceStatus")}
+            description={t("hr.dashboard.workforceStatusDesc")}
+            bodyPadding={18}
             animDelay={220}
           >
-            <PendingApprovalsList
-              items={pendingApprovals}
-              showCompany={isHeadOffice}
-              isMobile={isMobile}
-            />
+            <WorkforceStatusChart status={workforceStatus} />
           </DashboardPanel>
         </Col>
-
-        <Col xs={24} lg={9}>
+        <Col xs={24} lg={12}>
           <DashboardPanel
-            title={t("hr.dashboard.payrollAndWorkforce")}
+            title={t("hr.dashboard.nationality")}
+            description={t("hr.dashboard.nationalityDesc")}
             bodyPadding={18}
             animDelay={260}
           >
-            <WorkforcePayrollPanel
-              totalEmployees={totalEmployees}
-              activeEmployees={activeEmployees}
-              payroll={summary?.latest_payroll}
-            />
+            <NationalityChart breakdown={nationalityBreakdown} />
           </DashboardPanel>
         </Col>
       </Row>
 
-      {/* ─── Recent activity + announcements ─────────────────────────── */}
-      <Row gutter={gutter}>
+      {/* ─── Expiring documents + announcements (equal height) ─────── */}
+      <Row gutter={gutter} style={{ marginBottom: isMobile ? 12 : 20 }}>
         <Col xs={24} lg={15}>
           <DashboardPanel
-            title={t("hr.dashboard.recentActivity")}
-            bodyPadding={stackActivity ? 12 : 0}
+            title={t("hr.dashboard.expiringDocsTitle")}
+            description={t("hr.dashboard.expiringDocsDesc", {
+              count: expiringDocuments.employee_count.toString(),
+              days: expiringDocuments.window_days.toString(),
+            })}
             action={
               <Button
                 type="link"
-                onClick={() => navigate("/hr/activity")}
+                onClick={openExpiries}
                 style={{
                   padding: 0,
                   fontWeight: 600,
@@ -380,12 +287,12 @@ export default function HRDashboardPage() {
                 {t("common.viewAll")}
               </Button>
             }
-            animDelay={300}
+            bodyPadding={18}
+            animDelay={340}
           >
-            <RecentActivityFeed
-              items={recentActivity}
-              showCompany={isHeadOffice}
-              stacked={stackActivity}
+            <ExpiringDocumentsPanel
+              summary={expiringDocuments}
+              onOpen={openExpiries}
             />
           </DashboardPanel>
         </Col>
@@ -393,12 +300,39 @@ export default function HRDashboardPage() {
         <Col xs={24} lg={9}>
           <div
             className="animate-fade-in-up"
-            style={{ animationDelay: "340ms", height: "100%" }}
+            style={{ animationDelay: "380ms", height: "100%" }}
           >
             <AnnouncementWidget role="hr" />
           </div>
         </Col>
       </Row>
+
+      {/* ─── Recent activity (full width) ────────────────────────────── */}
+      <DashboardPanel
+        title={t("hr.dashboard.recentActivity")}
+        bodyPadding={stackActivity ? 12 : 0}
+        action={
+          <Button
+            type="link"
+            onClick={() => navigate("/hr/activity")}
+            style={{
+              padding: 0,
+              fontWeight: 600,
+              color: "#ea580c",
+              minHeight: 40,
+            }}
+          >
+            {t("common.viewAll")}
+          </Button>
+        }
+        animDelay={420}
+      >
+        <RecentActivityFeed
+          items={recentActivity}
+          showCompany={isHeadOffice}
+          stacked={stackActivity}
+        />
+      </DashboardPanel>
     </div>
   );
 }

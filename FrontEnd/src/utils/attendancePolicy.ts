@@ -111,6 +111,7 @@ type Translate = (
 
 const GRACE_REASON_KEYS: Record<GraceReason, string> = {
   attendance_exempt: "attendancePolicy.graceReason.attendanceExempt",
+  non_working_day: "attendancePolicy.graceReason.nonWorkingDay",
   late_permission: "attendancePolicy.graceReason.latePermission",
   no_check_in: "attendancePolicy.graceReason.noCheckIn",
   on_time: "attendancePolicy.graceReason.onTime",
@@ -156,6 +157,7 @@ export const DEDUCTION_STATUS_COLORS: Record<
 /** Chip colors: green excuses the day, orange marks it late. */
 export const GRACE_REASON_COLORS: Record<GraceReason, string> = {
   attendance_exempt: "blue",
+  non_working_day: "blue",
   late_permission: "cyan",
   no_check_in: "default",
   on_time: "green",

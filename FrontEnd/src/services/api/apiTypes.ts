@@ -122,6 +122,9 @@ export type AdminSummary = {
 export type UserDto = {
   id: number | string;
   full_name: string;
+  /** Display names per language (from the employee profile when linked). */
+  full_name_en?: string | null;
+  full_name_ar?: string | null;
   email: string;
   is_active: boolean;
   role: Role;
@@ -204,9 +207,10 @@ export type AttendancePolicySettings = {
    * Do not send it; the server keeps both synchronized.
    */
   late_grace_minutes?: number;
-  /** Arrivals within the grace window forgiven per month (0–31). */
-  grace_use_limit_per_month?: number;
-  /** Once grace is used up, minutes still treated as on time (0–240). */
+  /**
+   * Once the month's 3rd late violation withdraws the grace window, minutes
+   * still treated as on time (0–240).
+   */
   post_grace_tolerance_minutes?: number;
   /** Final-approved Late Permissions allowed per month (0–31). */
   approved_late_permission_limit_per_month?: number;
@@ -216,8 +220,6 @@ export type AttendancePolicySettings = {
   permission_request_advance_limit_days?: number;
   /** When true, a daily job marks Absent anyone with no record and no approved leave. */
   absence_detection_enabled?: boolean;
-  /** Working weekdays as Python `date.weekday()` (Mon=0 … Sun=6). Default [6,0,1,2,3] = Sun–Thu. */
-  work_week_days?: number[];
 };
 
 /**

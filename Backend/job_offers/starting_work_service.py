@@ -334,7 +334,7 @@ def void_starting_work_acknowledgment(
         )
         schedule = get_work_schedule()
         for record in records:
-            restored_status = classify_check_in(record.check_in_at, record.date, schedule)
+            restored_status = classify_check_in(record.check_in_at, record.date, record.employee_profile, schedule)
             record.status = restored_status
             record.is_late_flagged = restored_status == AttendanceRecord.Status.LATE
             record.save(update_fields=["status", "is_late_flagged", "updated_at"])

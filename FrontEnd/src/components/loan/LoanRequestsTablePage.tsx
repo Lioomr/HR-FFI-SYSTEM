@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button, Select, Space, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -32,6 +32,8 @@ type Props = {
   defaultStatus?: LoanStatus;
   /** Rendered as a tab of another page, which owns the header. */
   embedded?: boolean;
+  /** Buttons shown in the page header next to Refresh. */
+  headerActions?: ReactNode;
   fetcher: (params?: {
     status?: LoanStatus;
     page?: number;
@@ -68,6 +70,7 @@ export default function LoanRequestsTablePage({
   employeeProfilePath,
   defaultStatus,
   embedded = false,
+  headerActions,
   fetcher,
 }: Props) {
   const navigate = useNavigate();
@@ -220,6 +223,7 @@ export default function LoanRequestsTablePage({
   return (
     <ApprovalQueuePage
       embedded={embedded}
+      extraActions={headerActions}
       title={title}
       subtitle={subtitle}
       pendingCount={total}

@@ -112,19 +112,28 @@ from .throttles import EmployeeImportThrottle
 logger = logging.getLogger(__name__)
 
 LEAVE_RELATIONSHIP_CONFLICT = "Changing this employee user would orphan leave relationships."
+ANNUAL_LEAVE_PAYMENT_RELATIONSHIP_CONFLICT = "Changing this employee user would orphan Annual Leave payments."
 
 
 def _employee_update_integrity_error_response(exc):
     """Convert protected employee relationship failures into an actionable API error."""
 
-    if LEAVE_RELATIONSHIP_CONFLICT not in str(exc):
-        return None
+    error_text = str(exc)
+    if LEAVE_RELATIONSHIP_CONFLICT in error_text:
+        return error(
+            "This account cannot be unlinked because leave records reference it.",
+            errors=["Reassign or preserve the leave relationships before changing the linked account."],
+            status=status.HTTP_409_CONFLICT,
+        )
 
-    return error(
-        "This account cannot be unlinked because leave records reference it.",
-        errors=["Reassign or preserve the leave relationships before changing the linked account."],
-        status=status.HTTP_409_CONFLICT,
-    )
+    if ANNUAL_LEAVE_PAYMENT_RELATIONSHIP_CONFLICT in error_text:
+        return error(
+            "This account cannot be unlinked because annual leave payment records reference it.",
+            errors=["Preserve the annual leave payment history before changing the linked account."],
+            status=status.HTTP_409_CONFLICT,
+        )
+
+    return None
 
 
 def _log_notification_failure(event_name, *, entity_id, notification_type, actor_id=None, channel=None):

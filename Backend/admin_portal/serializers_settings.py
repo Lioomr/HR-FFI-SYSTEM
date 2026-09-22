@@ -29,21 +29,11 @@ class AttendanceSettingsSerializer(serializers.Serializer):
     default_shift_end_time = serializers.TimeField(required=False)
     late_grace_minutes = serializers.IntegerField(required=False, min_value=0, max_value=240)
     grace_window_minutes = serializers.IntegerField(required=False, min_value=0, max_value=240)
-    grace_use_limit_per_month = serializers.IntegerField(required=False, min_value=0, max_value=31)
     post_grace_tolerance_minutes = serializers.IntegerField(required=False, min_value=0, max_value=240)
     approved_late_permission_limit_per_month = serializers.IntegerField(required=False, min_value=0, max_value=31)
     during_shift_permission_max_minutes = serializers.IntegerField(required=False, min_value=1, max_value=1440)
     permission_request_advance_limit_days = serializers.IntegerField(required=False, min_value=0, max_value=365)
     absence_detection_enabled = serializers.BooleanField(required=False)
-    work_week_days = serializers.ListField(
-        child=serializers.IntegerField(min_value=0, max_value=6),
-        required=False,
-        allow_empty=False,
-        max_length=7,
-    )
-
-    def validate_work_week_days(self, value):
-        return sorted(set(value))
 
     def validate(self, attrs):
         legacy_value = attrs.get("late_grace_minutes")
@@ -68,13 +58,11 @@ def _attendance_snapshot(settings_obj: SystemSettings):
         "default_shift_end_time": settings_obj.default_shift_end_time.isoformat(),
         "late_grace_minutes": settings_obj.late_grace_minutes,
         "grace_window_minutes": settings_obj.grace_window_minutes,
-        "grace_use_limit_per_month": settings_obj.grace_use_limit_per_month,
         "post_grace_tolerance_minutes": settings_obj.post_grace_tolerance_minutes,
         "approved_late_permission_limit_per_month": settings_obj.approved_late_permission_limit_per_month,
         "during_shift_permission_max_minutes": settings_obj.during_shift_permission_max_minutes,
         "permission_request_advance_limit_days": settings_obj.permission_request_advance_limit_days,
         "absence_detection_enabled": settings_obj.absence_detection_enabled,
-        "work_week_days": list(settings_obj.work_week_days or []),
     }
 
 
@@ -83,13 +71,11 @@ def _apply_attendance_settings(settings_obj: SystemSettings, attendance: dict):
         "geofence_enabled": "geofence_attendance_enabled",
         "work_day_start_time": "work_day_start_time",
         "default_shift_end_time": "default_shift_end_time",
-        "grace_use_limit_per_month": "grace_use_limit_per_month",
         "post_grace_tolerance_minutes": "post_grace_tolerance_minutes",
         "approved_late_permission_limit_per_month": "approved_late_permission_limit_per_month",
         "during_shift_permission_max_minutes": "during_shift_permission_max_minutes",
         "permission_request_advance_limit_days": "permission_request_advance_limit_days",
         "absence_detection_enabled": "absence_detection_enabled",
-        "work_week_days": "work_week_days",
     }
     for payload_field, model_field in field_map.items():
         if payload_field in attendance:
@@ -162,14 +148,12 @@ class SettingsUpdateSerializer(serializers.Serializer):
             "default_shift_end_time": settings_obj.default_shift_end_time.isoformat(),
             "late_grace_minutes": settings_obj.late_grace_minutes,
             "grace_window_minutes": settings_obj.grace_window_minutes,
-            "grace_use_limit_per_month": settings_obj.grace_use_limit_per_month,
-            "post_grace_tolerance_minutes": settings_obj.post_grace_tolerance_minutes,
+                "post_grace_tolerance_minutes": settings_obj.post_grace_tolerance_minutes,
             "approved_late_permission_limit_per_month": settings_obj.approved_late_permission_limit_per_month,
             "during_shift_permission_max_minutes": settings_obj.during_shift_permission_max_minutes,
             "permission_request_advance_limit_days": settings_obj.permission_request_advance_limit_days,
             "absence_detection_enabled": settings_obj.absence_detection_enabled,
-            "work_week_days": list(settings_obj.work_week_days or []),
-        }
+            }
 
         pp = self.validated_data["password_policy"]
         se = self.validated_data["session"]
@@ -205,14 +189,12 @@ class SettingsUpdateSerializer(serializers.Serializer):
             "default_shift_end_time": settings_obj.default_shift_end_time.isoformat(),
             "late_grace_minutes": settings_obj.late_grace_minutes,
             "grace_window_minutes": settings_obj.grace_window_minutes,
-            "grace_use_limit_per_month": settings_obj.grace_use_limit_per_month,
-            "post_grace_tolerance_minutes": settings_obj.post_grace_tolerance_minutes,
+                "post_grace_tolerance_minutes": settings_obj.post_grace_tolerance_minutes,
             "approved_late_permission_limit_per_month": settings_obj.approved_late_permission_limit_per_month,
             "during_shift_permission_max_minutes": settings_obj.during_shift_permission_max_minutes,
             "permission_request_advance_limit_days": settings_obj.permission_request_advance_limit_days,
             "absence_detection_enabled": settings_obj.absence_detection_enabled,
-            "work_week_days": list(settings_obj.work_week_days or []),
-        }
+            }
 
         changed = {k: {"from": before[k], "to": after[k]} for k in before.keys() if before[k] != after[k]}
         return settings_obj, changed
@@ -242,13 +224,11 @@ def to_settings_response(settings_obj: SystemSettings):
             "default_shift_end_time": settings_obj.default_shift_end_time.strftime("%H:%M"),
             "late_grace_minutes": settings_obj.late_grace_minutes,
             "grace_window_minutes": settings_obj.grace_window_minutes,
-            "grace_use_limit_per_month": settings_obj.grace_use_limit_per_month,
-            "post_grace_tolerance_minutes": settings_obj.post_grace_tolerance_minutes,
+                "post_grace_tolerance_minutes": settings_obj.post_grace_tolerance_minutes,
             "approved_late_permission_limit_per_month": settings_obj.approved_late_permission_limit_per_month,
             "during_shift_permission_max_minutes": settings_obj.during_shift_permission_max_minutes,
             "permission_request_advance_limit_days": settings_obj.permission_request_advance_limit_days,
             "absence_detection_enabled": settings_obj.absence_detection_enabled,
-            "work_week_days": list(settings_obj.work_week_days or []),
-        },
+            },
         "updated_at": settings_obj.updated_at,
     }

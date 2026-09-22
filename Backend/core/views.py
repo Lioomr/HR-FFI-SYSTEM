@@ -1,11 +1,13 @@
 import logging
+from collections import Counter, defaultdict
 from datetime import timedelta
 from html import escape
 
 from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
+from django.core.exceptions import FieldDoesNotExist
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Count, Q, prefetch_related_objects
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.exceptions import NotFound, PermissionDenied
@@ -37,6 +39,7 @@ from core.services import (
     sync_leave_obligations,
     sync_workflow,
 )
+from core.services.workflow_engine import cached_workflow_definitions
 from core.tasks import send_error_report_email
 from employees.models import EmployeeDeletionRequest, EmployeeProfile
 from leaves.models import AnnualLeavePaymentRequest, LeaveRequest
@@ -69,7 +72,7 @@ class PendingRequestsPagination(PageNumberPagination):
     page_query_param = "page"
     max_page_size = 100
 
-    def get_paginated_response(self, data):
+    def get_paginated_response(self, data, **extra):
         return success(
             {
                 "items": data,
@@ -77,6 +80,7 @@ class PendingRequestsPagination(PageNumberPagination):
                 "page_size": self.get_page_size(self.request),
                 "count": self.page.paginator.count,
                 "total_pages": self.page.paginator.num_pages,
+                **extra,
             }
         )
 
@@ -130,7 +134,14 @@ def _safe_send_delegation_emails(rule: DelegationRule):
         )
 
 
-def _sync_pending_request_workflows_for_request(request, *, limit_per_type: int | None = None) -> None:
+def _sync_pending_request_workflows_for_request(request, *, limit_per_type: int | None = None) -> set[tuple[str, int]]:
+    """Sync the workflow of every pending record in scope; return the records synced."""
+    synced: set[tuple[str, int]] = set()
+
+    def _sync(instance):
+        sync_workflow(instance, actor=request.user)
+        synced.add(_workflow_object_key(instance))
+
     def _maybe_limit(queryset):
         if limit_per_type is None:
             return queryset.iterator(chunk_size=200)
@@ -150,7 +161,7 @@ def _sync_pending_request_workflows_for_request(request, *, limit_per_type: int 
         .order_by("-updated_at", "-id")
     )
     for leave_req in _maybe_limit(leave_qs):
-        sync_workflow(leave_req, actor=request.user)
+        _sync(leave_req)
 
     payment_qs = (
         filter_queryset_by_company_scope(AnnualLeavePaymentRequest.objects.all(), request)
@@ -163,7 +174,7 @@ def _sync_pending_request_workflows_for_request(request, *, limit_per_type: int 
         .order_by("-submitted_at", "-id")
     )
     for payment in _maybe_limit(payment_qs):
-        sync_workflow(payment, actor=request.user)
+        _sync(payment)
 
     attendance_statuses = [
         AttendanceRecord.Status.PENDING,
@@ -181,7 +192,7 @@ def _sync_pending_request_workflows_for_request(request, *, limit_per_type: int 
         .order_by("-updated_at", "-id")
     )
     for record in _maybe_limit(attendance_qs):
-        sync_workflow(record, actor=request.user)
+        _sync(record)
 
     correction_statuses = [
         AttendanceCorrectionRequest.Status.PENDING_MANAGER,
@@ -197,7 +208,7 @@ def _sync_pending_request_workflows_for_request(request, *, limit_per_type: int 
         .order_by("-updated_at", "-id")
     )
     for correction in _maybe_limit(correction_qs):
-        sync_workflow(correction, actor=request.user)
+        _sync(correction)
 
     loan_statuses = [
         LoanRequest.RequestStatus.SUBMITTED,
@@ -214,7 +225,7 @@ def _sync_pending_request_workflows_for_request(request, *, limit_per_type: int 
         .order_by("-updated_at", "-id")
     )
     for loan_req in _maybe_limit(loan_qs):
-        sync_workflow(loan_req, actor=request.user)
+        _sync(loan_req)
 
     asset_return_statuses = [
         AssetReturnRequest.RequestStatus.PENDING_MANAGER,
@@ -231,7 +242,7 @@ def _sync_pending_request_workflows_for_request(request, *, limit_per_type: int 
         .order_by("-requested_at", "-id")
     )
     for return_req in _maybe_limit(asset_return_qs):
-        sync_workflow(return_req, actor=request.user)
+        _sync(return_req)
 
     deletion_qs = (
         filter_queryset_by_company_scope(EmployeeDeletionRequest.objects.all(), request)
@@ -243,29 +254,64 @@ def _sync_pending_request_workflows_for_request(request, *, limit_per_type: int 
         .order_by("-updated_at", "-id")
     )
     for deletion_req in _maybe_limit(deletion_qs):
-        sync_workflow(deletion_req, actor=request.user)
+        _sync(deletion_req)
+    return synced
 
 
-def _is_dashboard_object_in_active_scope(obj, request) -> bool:
-    active_company = get_active_company_for_request(request)
+def _workflow_object_key(instance) -> tuple[str, int]:
+    return (instance._meta.label, instance.pk)
+
+
+def _is_dashboard_object_in_active_scope(obj, active_company) -> bool:
     workflow_company_id = _get_company_id_for_dashboard_object(obj)
     return bool(active_company and workflow_company_id == active_company.id)
 
 
 def _build_pending_request_items_for_request(request, *, limit: int | None = None) -> list[dict]:
-    _sync_pending_request_workflows_for_request(request)
-    items = []
-    for workflow in get_pending_approvals_for_user(request.user, limit=limit):
-        content_object = workflow.content_object
-        if content_object is None or not _is_dashboard_object_in_active_scope(content_object, request):
+    with cached_workflow_definitions():
+        return _collect_pending_request_items(request, limit=limit)
+
+
+def _prefetch_employee_profiles(content_objects) -> None:
+    """Batch-load ``employee_profile`` for every record type that has that relation."""
+    by_model = defaultdict(list)
+    for obj in content_objects:
+        by_model[type(obj)].append(obj)
+    for model, objects in by_model.items():
+        try:
+            field = model._meta.get_field("employee_profile")
+        except FieldDoesNotExist:
             continue
-        workflow = sync_workflow(content_object, actor=request.user)
+        if field.is_relation and field.many_to_one:
+            prefetch_related_objects(objects, "employee_profile")
+
+
+def _collect_pending_request_items(request, *, limit: int | None) -> list[dict]:
+    already_synced = _sync_pending_request_workflows_for_request(request)
+    # Resolved once: it costs several queries and is the same for every item.
+    active_company = get_active_company_for_request(request)
+    items = []
+    workflows = get_pending_approvals_for_user(request.user, limit=limit)
+    # One query per request type instead of one per workflow.
+    prefetch_related_objects(workflows, "content_object")
+    _prefetch_employee_profiles([workflow.content_object for workflow in workflows if workflow.content_object])
+    for workflow in workflows:
+        content_object = workflow.content_object
+        if content_object is None or not _is_dashboard_object_in_active_scope(content_object, active_company):
+            continue
+        # Records the pre-sync just handled are current (and this workflow row
+        # was read after it); re-syncing them would only repeat the same work.
+        if _workflow_object_key(content_object) not in already_synced:
+            workflow = sync_workflow(content_object, actor=request.user)
+            # Keep the already-loaded record on the refreshed workflow row.
+            workflow.content_object = content_object
         if workflow.status not in {WorkflowInstance.Status.SUBMITTED, WorkflowInstance.Status.IN_REVIEW}:
             continue
         item = build_pending_approval_item(workflow)
         if not item:
             continue
-        item["company_name"] = _get_company_name_for_dashboard_object(content_object)
+        # Only objects in the active company reach this point.
+        item["company_name"] = active_company.name
         items.append(item)
     items.sort(key=lambda item: item.get("time") or "", reverse=True)
     return items
@@ -278,8 +324,6 @@ class PendingRequestsView(APIView):
         items = _build_pending_request_items_for_request(request, limit=None)
 
         request_type = (request.query_params.get("request_type") or "").strip().upper()
-        if request_type:
-            items = [item for item in items if item["request_type"] == request_type]
 
         search = (request.query_params.get("search") or "").strip().lower()
         if search:
@@ -292,9 +336,165 @@ class PendingRequestsView(APIView):
                 or search in (item.get("details") or "").lower()
             ]
 
+        # Counted before the type filter so every type keeps its count while
+        # the inbox is filtered to one of them.
+        counts_by_type = dict(Counter(item["request_type"] for item in items))
+        total_count = len(items)
+
+        if request_type:
+            items = [item for item in items if item["request_type"] == request_type]
+
         paginator = PendingRequestsPagination()
         page = paginator.paginate_queryset(items, request)
-        return paginator.get_paginated_response(page)
+        return paginator.get_paginated_response(
+            page, counts_by_type=counts_by_type, total_count=total_count
+        )
+
+
+def _build_workforce_status(employee_qs):
+    """Where the workforce is today, for the HR dashboard's status chart.
+
+    Active, non-archived employees are split by approved leave covering today:
+    leave marked as travel counts as outside the country and any other leave
+    as inside the country, whatever the leave type; everyone else is currently
+    employed. Pre-hire and suspended employees are deliberately left out.
+    """
+    today = timezone.localdate()
+    active_ids = set(
+        employee_qs.filter(
+            is_archived=False,
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        ).values_list("id", flat=True)
+    )
+    leaves_today = LeaveRequest.objects.filter(
+        status=LeaveRequest.RequestStatus.APPROVED,
+        is_active=True,
+        start_date__lte=today,
+        end_date__gte=today,
+    ).filter(Q(employee_profile_id__in=active_ids) | Q(employee__employee_profile__id__in=active_ids))
+
+    outside_ids, inside_ids = set(), set()
+    for leave in leaves_today.values("employee_profile_id", "employee__employee_profile__id", "will_travel"):
+        profile_id = leave["employee_profile_id"] or leave["employee__employee_profile__id"]
+        if profile_id not in active_ids:
+            continue
+        (outside_ids if leave["will_travel"] else inside_ids).add(profile_id)
+    # Travelling wins when an employee has overlapping leaves today.
+    inside_ids -= outside_ids
+
+    return {
+        "currently_employed": len(active_ids - outside_ids - inside_ids),
+        "on_leave_outside": len(outside_ids),
+        "on_leave_inside": len(inside_ids),
+        "archived": employee_qs.filter(is_archived=True).count(),
+    }
+
+
+def _build_nationality_breakdown(employee_qs):
+    """Headcount per nationality for non-archived employees, largest first.
+
+    Nationality is free text (imports produce "pakistan" and "Pakistan "), so
+    values are grouped case- and whitespace-insensitively; blanks come back as
+    ``None`` and sort last.
+    """
+    groups = {}
+    rows = (
+        employee_qs.filter(is_archived=False)
+        .order_by()
+        .values("nationality", "nationality_en", "is_saudi", "employment_status")
+        .annotate(count=Count("id"))
+    )
+    for row in rows:
+        name = " ".join((row["nationality"] or row["nationality_en"] or "").split())
+        key = name.casefold() or None
+        group = groups.setdefault(
+            key,
+            {"nationality": name.title() if name else None, "total": 0, "active": 0, "is_saudi": False},
+        )
+        group["total"] += row["count"]
+        if row["employment_status"] == EmployeeProfile.EmploymentStatus.ACTIVE:
+            group["active"] += row["count"]
+        group["is_saudi"] = group["is_saudi"] or row["is_saudi"]
+
+    nationalities = sorted(
+        groups.values(),
+        key=lambda group: (group["nationality"] is None, -group["total"], group["nationality"] or ""),
+    )
+    saudi_active = employee_qs.filter(
+        is_archived=False, is_saudi=True, employment_status=EmployeeProfile.EmploymentStatus.ACTIVE
+    ).count()
+    return {
+        "saudi_active": saudi_active,
+        "active_total": sum(group["active"] for group in nationalities),
+        "nationalities": nationalities,
+    }
+
+
+EXPIRING_DOCUMENTS_WINDOW_DAYS = 30
+EXPIRING_DOCUMENTS_PREVIEW_SIZE = 5
+# Same fields and window as the expiring-documents page (employees/views.py
+# ``expiries``); the ID card is split into National ID (Saudi) and Iqama, and
+# the health card is what HR tracks as health insurance.
+_EXPIRY_FIELDS = [
+    ("id_expiry", None),
+    ("passport_expiry", "passport"),
+    ("work_license_expiry", "work_license"),
+    ("health_card_expiry", "health_insurance"),
+    ("contract_expiry", "contract"),
+]
+
+
+def _build_expiring_documents(employee_qs):
+    """Documents of non-archived employees expiring within the next 30 days."""
+    today = timezone.localdate()
+    cutoff = today + timedelta(days=EXPIRING_DOCUMENTS_WINDOW_DAYS)
+    window = Q()
+    for field, _doc_type in _EXPIRY_FIELDS:
+        window |= Q(**{f"{field}__range": [today, cutoff]})
+    profiles = employee_qs.filter(window, is_archived=False).values(
+        "id", "full_name", "is_saudi", *[field for field, _doc_type in _EXPIRY_FIELDS]
+    )
+
+    by_type = {
+        "national_id": 0,
+        "iqama": 0,
+        "passport": 0,
+        "work_license": 0,
+        "contract": 0,
+        "health_insurance": 0,
+    }
+    documents = []
+    employee_ids = set()
+    for profile in profiles:
+        for order, (field, doc_type) in enumerate(_EXPIRY_FIELDS):
+            expiry_date = profile[field]
+            if not expiry_date or not today <= expiry_date <= cutoff:
+                continue
+            if doc_type is None:
+                doc_type = "national_id" if profile["is_saudi"] else "iqama"
+            by_type[doc_type] += 1
+            employee_ids.add(profile["id"])
+            documents.append(
+                (
+                    (expiry_date - today).days,
+                    profile["full_name"] or "",
+                    order,
+                    {
+                        "employee_id": profile["id"],
+                        "full_name": profile["full_name"],
+                        "doc_type": doc_type,
+                        "expiry_date": expiry_date.isoformat(),
+                        "days_left": (expiry_date - today).days,
+                    },
+                )
+            )
+    documents.sort(key=lambda item: item[:3])
+    return {
+        "window_days": EXPIRING_DOCUMENTS_WINDOW_DAYS,
+        "employee_count": len(employee_ids),
+        "by_type": by_type,
+        "soonest": [item[3] for item in documents[:EXPIRING_DOCUMENTS_PREVIEW_SIZE]],
+    }
 
 
 class HrSummaryView(APIView):
@@ -315,9 +515,6 @@ class HrSummaryView(APIView):
             if cached is not None:
                 return success(cached)
 
-        today = timezone.now().date()
-        warning_date = today + timedelta(days=30)
-
         employee_qs = filter_queryset_by_company_scope(EmployeeProfile.objects.all(), request)
         leave_qs = filter_queryset_by_company_scope(LeaveRequest.objects.all(), request)
         payroll_qs = filter_queryset_by_company_scope(PayrollRun.objects.all(), request)
@@ -330,22 +527,17 @@ class HrSummaryView(APIView):
         # 1. Employee Stats
         total_employees = employee_qs.count()
         active_employees = employee_qs.filter(employment_status=EmployeeProfile.EmploymentStatus.ACTIVE).count()
+        workforce_status = _build_workforce_status(employee_qs)
+        nationality_breakdown = _build_nationality_breakdown(employee_qs)
 
         # 2. Expiring Documents (next 30 days)
-        expiring_docs = employee_qs.filter(
-            Q(passport_expiry__range=[today, warning_date])
-            | Q(id_expiry__range=[today, warning_date])
-            | Q(contract_expiry__range=[today, warning_date])
-            | Q(health_card_expiry__range=[today, warning_date])
-        ).count()
+        expiring_documents = _build_expiring_documents(employee_qs)
+        expiring_docs = expiring_documents["employee_count"]
 
         # 3. Pending Leave (HR Action)
         pending_leaves_count = leave_qs.filter(status=LeaveRequest.RequestStatus.PENDING_HR).count()
 
-        # 4. Pending Approvals List (workflow-backed)
-        pending_approvals = _build_pending_request_items_for_request(request, limit=None)[:5]
-
-        # 5. Recent Activity (From AuditLogs)
+        # 4. Recent Activity (From AuditLogs)
         from audit.models import AuditLog
 
         recent_activity = []
@@ -404,7 +596,7 @@ class HrSummaryView(APIView):
                 }
             )
 
-        # 6. Latest Payroll Run
+        # 5. Latest Payroll Run
         latest_payroll = payroll_qs.order_by("-year", "-month").first()
         payroll_data = {
             "latest_total_net": None,
@@ -434,9 +626,11 @@ class HrSummaryView(APIView):
         data = {
             "total_employees": total_employees,
             "active_employees": active_employees,
+            "workforce_status": workforce_status,
+            "nationality_breakdown": nationality_breakdown,
             "expiring_docs": expiring_docs,
+            "expiring_documents": expiring_documents,
             "pending_leaves": pending_leaves_count,
-            "pending_approvals": pending_approvals,
             "recent_activity": recent_activity,
             "latest_payroll": payroll_data,
         }
@@ -533,36 +727,6 @@ def _get_company_id_for_dashboard_object(obj):
     employee_profile = getattr(employee, "employee_profile", None) if employee else None
     if employee_profile and getattr(employee_profile, "company_id", None):
         return employee_profile.company_id
-
-    return None
-
-
-def _get_company_name_for_dashboard_object(obj):
-    company = getattr(obj, "company", None)
-    if company and getattr(company, "name", None):
-        return company.name
-
-    asset = getattr(obj, "asset", None)
-    company = getattr(asset, "company", None) if asset else None
-    if company and getattr(company, "name", None):
-        return company.name
-
-    employee_profile = getattr(obj, "employee_profile", None)
-    if employee_profile:
-        company = getattr(employee_profile, "company", None)
-        if company and getattr(company, "name", None):
-            return company.name
-
-    employee = getattr(obj, "employee", None)
-    company = getattr(employee, "company", None) if employee else None
-    if company and getattr(company, "name", None):
-        return company.name
-
-    employee_profile = getattr(employee, "employee_profile", None) if employee else None
-    if employee_profile:
-        company = getattr(employee_profile, "company", None)
-        if company and getattr(company, "name", None):
-            return company.name
 
     return None
 

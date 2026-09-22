@@ -94,7 +94,7 @@ class AttendanceCalculationFoundationTests(TestCase):
         self.assertEqual(self._result(date(2026, 4, 2)).status_input, "LATE")
         self.assertEqual(get_work_schedule().grace_minutes, 15)
         late_check_in = timezone.make_aware(datetime(2026, 4, 2, 9, 16))
-        self.assertEqual(classify_check_in(late_check_in, date(2026, 4, 2)), "LATE")
+        self.assertEqual(classify_check_in(late_check_in, date(2026, 4, 2), self.profile), "LATE")
 
     def test_typed_and_multiple_breaks_are_normalized_and_unpaid(self):
         self._ingest(

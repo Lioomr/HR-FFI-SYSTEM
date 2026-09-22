@@ -58,6 +58,8 @@ import { isCEOApproverEmployee } from "../utils/ceoApprover";
 import { isHeadOfficeOrganization } from "../utils/organizationContext";
 import LoadingState from "../components/ui/LoadingState";
 import NotificationBell from "../components/notifications/NotificationBell";
+import DashboardGreeting from "../components/layout/DashboardGreeting";
+import HeaderDate from "../components/layout/HeaderDate";
 import { useNotificationsRuntime } from "../hooks/useNotificationsRuntime";
 import { buildCeoMenuItems, getCeoOpenKeysForPath } from "./ceoNav";
 import { buildManagerNavGroups } from "./managerNav";
@@ -275,8 +277,8 @@ function getOpenKeysForPath(pathname: string): string[] {
     opens.push("hr-rents-sub");
   if (pathname.startsWith("/hr/announcements"))
     opens.push("hr-announcements-sub");
-  if (isHrInboxPath) opens.push("hr-inbox-sub");
-  if (isEmployeeRequestPath) opens.push("hr-emp-requests-sub");
+  // HR reaches their own requests from the inbox pages, so keep that menu open.
+  if (isHrInboxPath || isEmployeeRequestPath) opens.push("hr-inbox-sub");
   if (pathname.startsWith("/hr/attendance")) opens.push("hr-attendance-sub");
   // Employee sidebar sub-menus
   if (isEmployeeRequestPath) opens.push("emp-requests-sub");
@@ -290,6 +292,18 @@ function getOpenKeysForPath(pathname: string): string[] {
   // CEO sidebar sub-menus (owned by ceoNav so the groups stay in one place)
   opens.push(...getCeoOpenKeysForPath(pathname));
   return opens;
+}
+
+/**
+ * HR has no sidebar links for its own leave/loan/permission pages — they open
+ * from buttons on the matching inbox — so highlight that inbox instead.
+ */
+function getHrSelectionPath(pathname: string): string {
+  if (pathname.startsWith("/employee/leave")) return "/hr/leave/requests";
+  if (pathname.startsWith("/employee/loans")) return "/hr/loan-requests";
+  if (pathname.startsWith("/employee/permission-requests"))
+    return "/hr/permission-requests";
+  return pathname;
 }
 
 // ─── Avatar color by role ───────────────────────────────────────────────────────
@@ -469,6 +483,9 @@ function getSidebarBrandTheme(code?: string, nodeType?: string) {
 // ─── Main Layout ────────────────────────────────────────────────────────────────
 export default function BaseLayout() {
   const location = useLocation();
+  // The HR dashboard greets the user in the header instead of a page title.
+  const isHrDashboard =
+    location.pathname.replace(/\/+$/, "") === "/hr/dashboard";
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const setActiveOrganization = useAuthStore((s) => s.setActiveOrganization);
@@ -797,94 +814,6 @@ export default function BaseLayout() {
     },
     {
       type: "group",
-      label: sectionLabel(t("layout.menu.myRequests", "My Requests")),
-      children: [
-        {
-          key: "hr-emp-requests-sub",
-          icon: <FileSearchOutlined />,
-          label: t("layout.requests", "Requests"),
-          children: [
-            {
-              key: "/employee/leave/request",
-              label: (
-                <Link to="/employee/leave/request">
-                  {t("layout.requestLeave", "Request Leave")}
-                </Link>
-              ),
-            },
-            {
-              key: "/employee/leave/requests",
-              label: (
-                <Link to="/employee/leave/requests">
-                  {t("layout.myLeaveRequests", "My Leave Requests")}
-                </Link>
-              ),
-            },
-            {
-              key: "/employee/loans/request",
-              label: (
-                <Link to="/employee/loans/request">
-                  {t("layout.newLoan", "New Loan")}
-                </Link>
-              ),
-            },
-            {
-              key: "/employee/loans",
-              label: (
-                <Link to="/employee/loans">
-                  {t("layout.myLoans", "My Loans")}
-                </Link>
-              ),
-            },
-            {
-              key: "/employee/permission-requests/new",
-              label: (
-                <Link to="/employee/permission-requests/new">
-                  {t("employee.dashboard.permissionAction")}
-                </Link>
-              ),
-            },
-            {
-              key: "/employee/permission-requests",
-              label: (
-                <Link to="/employee/permission-requests">
-                  {t("layout.nav.myPermissions", "My Permissions")}
-                </Link>
-              ),
-            },
-          ],
-        },
-        {
-          key: "/employee/delegated-approvals",
-          icon: <UserSwitchOutlined />,
-          label: (
-            <Link to="/employee/delegated-approvals">
-              {t("layout.nav.alternateApprovals", "Alternate Approvals")}
-            </Link>
-          ),
-        },
-        {
-          key: "/employee/attendance",
-          icon: <ClockCircleOutlined />,
-          label: (
-            <Link to="/employee/attendance">
-              {t("layout.nav.myAttendance", "My Attendance")}
-            </Link>
-          ),
-        },
-        {
-          key: "/employee/assets",
-          icon: <AppstoreOutlined />,
-          label: (
-            <Link to="/employee/assets">
-              {t("layout.myAssets", "My Assets")}
-            </Link>
-          ),
-        },
-      ],
-    },
-    {
-      type: "group",
       label: sectionLabel(t("layout.menu.people", "People")),
       children: [
         {
@@ -1044,6 +973,39 @@ export default function BaseLayout() {
               ),
             },
           ],
+        },
+      ],
+    },
+    {
+      type: "group",
+      label: sectionLabel(t("layout.menu.myRequests", "My Requests")),
+      children: [
+        {
+          key: "/employee/delegated-approvals",
+          icon: <UserSwitchOutlined />,
+          label: (
+            <Link to="/employee/delegated-approvals">
+              {t("layout.nav.alternateApprovals", "Alternate Approvals")}
+            </Link>
+          ),
+        },
+        {
+          key: "/employee/attendance",
+          icon: <ClockCircleOutlined />,
+          label: (
+            <Link to="/employee/attendance">
+              {t("layout.nav.myAttendance", "My Attendance")}
+            </Link>
+          ),
+        },
+        {
+          key: "/employee/assets",
+          icon: <AppstoreOutlined />,
+          label: (
+            <Link to="/employee/assets">
+              {t("layout.myAssets", "My Assets")}
+            </Link>
+          ),
         },
       ],
     },
@@ -1668,7 +1630,14 @@ export default function BaseLayout() {
           mode="inline"
           theme="dark"
           inlineCollapsed={collapsed}
-          selectedKeys={[getSelectedKey(location.pathname, menuItems)]}
+          selectedKeys={[
+            getSelectedKey(
+              role === "HRManager"
+                ? getHrSelectionPath(location.pathname)
+                : location.pathname,
+              menuItems,
+            ),
+          ]}
           openKeys={openMenuKeys}
           onOpenChange={setOpenMenuKeys}
           items={menuItems}
@@ -1838,24 +1807,28 @@ export default function BaseLayout() {
                 }}
               />
             )}
-            <Typography.Title
-              level={isMobile ? 5 : 4}
-              style={{
-                margin: 0,
-                fontWeight: 600,
-                fontSize: isMobile ? 13 : 15,
-                color: "#64748b",
-                letterSpacing: "0.02em",
-                textTransform: "uppercase",
-                fontFamily: "'Outfit', sans-serif",
-                minWidth: 0,
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-            >
-              {getTitle(location.pathname, t)}
-            </Typography.Title>
+            {isHrDashboard ? (
+              <DashboardGreeting isMobile={isMobile} />
+            ) : (
+              <Typography.Title
+                level={isMobile ? 5 : 4}
+                style={{
+                  margin: 0,
+                  fontWeight: 600,
+                  fontSize: isMobile ? 13 : 15,
+                  color: "#64748b",
+                  letterSpacing: "0.02em",
+                  textTransform: "uppercase",
+                  fontFamily: "'Outfit', sans-serif",
+                  minWidth: 0,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {getTitle(location.pathname, t)}
+              </Typography.Title>
+            )}
           </div>
 
           {/* Right-side controls stay independent so a long company name never
@@ -1870,6 +1843,9 @@ export default function BaseLayout() {
               color: organizationTheme.text,
             }}
           >
+            {/* Today's date (no time) — only where there is room for it. */}
+            {screens.lg && <HeaderDate color={organizationTheme.text} />}
+
             {/* Company selector: compact in the header; its menu keeps enough
                 width to show every company name in full. */}
             {organizations.length > 0 && (

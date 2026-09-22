@@ -1,13 +1,59 @@
 import { api } from "./apiClient";
 import type { ApiResponse, PaginatedResponse } from "./apiTypes";
-import type { PendingRequestItem } from "./pendingRequestsApi";
 
 /**
- * Pending approval rows on the HR summary are produced by the same workflow
- * builder as the pending inbox, plus a free-text reason.
+ * Where the workforce is today. Active employees are split by approved leave
+ * covering today; pre-hire and suspended employees are not counted.
  */
-export interface HrPendingApprovalItem extends PendingRequestItem {
-  details?: string;
+export interface WorkforceStatus {
+  currently_employed: number;
+  /** Approved leave marked as travel, any leave type. */
+  on_leave_outside: number;
+  /** Approved leave without travel, any leave type. */
+  on_leave_inside: number;
+  archived: number;
+}
+
+/** Headcount for one nationality (non-archived employees). */
+export interface NationalityCount {
+  /** Free-text nationality as recorded; null when blank. */
+  nationality: string | null;
+  total: number;
+  active: number;
+  is_saudi: boolean;
+}
+
+export interface NationalityBreakdown {
+  saudi_active: number;
+  active_total: number;
+  /** Largest first; the blank group, if any, is last. */
+  nationalities: NationalityCount[];
+}
+
+export type ExpiringDocumentGroup =
+  | "national_id"
+  | "iqama"
+  | "passport"
+  | "work_license"
+  | "contract"
+  | "health_insurance";
+
+export interface ExpiringDocumentPreview {
+  /** EmployeeProfile id */
+  employee_id: number;
+  full_name: string;
+  doc_type: ExpiringDocumentGroup;
+  expiry_date: string;
+  days_left: number;
+}
+
+/** Documents of non-archived employees expiring within `window_days`. */
+export interface ExpiringDocumentsSummary {
+  window_days: number;
+  employee_count: number;
+  by_type: Record<ExpiringDocumentGroup, number>;
+  /** Soonest first, at most five. */
+  soonest: ExpiringDocumentPreview[];
 }
 
 /**
@@ -16,9 +62,11 @@ export interface HrPendingApprovalItem extends PendingRequestItem {
 export interface HRSummary {
   total_employees: number;
   active_employees: number;
+  workforce_status: WorkforceStatus;
+  nationality_breakdown: NationalityBreakdown;
   expiring_docs: number;
+  expiring_documents: ExpiringDocumentsSummary;
   pending_leaves: number;
-  pending_approvals: HrPendingApprovalItem[];
   recent_activity: Array<{
     key: string;
     employee: string;

@@ -33,8 +33,15 @@ export interface PendingRequestsParams {
   search?: string;
 }
 
+export type PendingRequestsPage = PaginatedResponse<PendingRequestItem> & {
+  /** Pending items per type, after search but ignoring the type filter. */
+  counts_by_type?: Partial<Record<PendingRequestType, number>>;
+  /** All pending items after search, ignoring the type filter. */
+  total_count?: number;
+};
+
 export function getPendingRequests(
   params?: PendingRequestsParams,
-): Promise<ApiResponse<PaginatedResponse<PendingRequestItem>>> {
+): Promise<ApiResponse<PendingRequestsPage>> {
   return api.get("/api/core/pending-requests/", { params }).then((r) => r.data);
 }

@@ -15,7 +15,6 @@ these global fields:
 {
   "default_shift_end_time": "18:00",
   "grace_window_minutes": 15,
-  "grace_use_limit_per_month": 3,
   "post_grace_tolerance_minutes": 5,
   "approved_late_permission_limit_per_month": 3,
   "during_shift_permission_max_minutes": 120,

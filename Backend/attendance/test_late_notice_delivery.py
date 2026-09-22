@@ -72,6 +72,12 @@ from .models import (
 from .policy import AttendancePolicyService
 from .views import AttendanceNoticeViewSet
 
+
+def _without_marks(value: str) -> str:
+    """Drop Unicode combining marks: the PDF shaper never draws them."""
+    return "".join(ch for ch in value if unicodedata.category(ch) != "Mn")
+
+
 User = get_user_model()
 NOTICES_URL = "/api/attendance/notices/"
 TEMPLATES_DIR = Path(settings.BASE_DIR) / "static" / "pdf_templates"
@@ -197,7 +203,6 @@ class LateAttendanceNoticeTestBase(TestCase):
         settings_obj.work_day_start_time = time(9, 0)
         settings_obj.default_shift_end_time = time(18, 0)
         settings_obj.grace_window_minutes = 15
-        settings_obj.grace_use_limit_per_month = 0
         settings_obj.post_grace_tolerance_minutes = 0
         settings_obj.save()
 
@@ -373,7 +378,7 @@ class LateNoticeTemplateTests(LateAttendanceNoticeTestBase):
 
 class LateNoticeIssuanceTests(LateAttendanceNoticeTestBase):
     def test_each_occurrence_renders_on_its_v3_level_pair_with_formatted_policy_values(self):
-        violations = [self._late(date(2026, 5, day)) for day in range(1, 6)]
+        violations = [self._late(date(2026, 5, day)) for day in range(2, 7)]
         notices = list(AttendanceLateNotice.objects.order_by("violation__date"))
 
         self.assertEqual([(n.occurrence_number, n.level) for n in notices], [(1, 1), (2, 2), (3, 3), (4, 4), (5, 4)])
@@ -408,7 +413,7 @@ class LateNoticeIssuanceTests(LateAttendanceNoticeTestBase):
                 self.assertEqual(self._generated_audit(notice).metadata["template_version"], 3)
 
     def test_occurrences_four_and_five_each_receive_their_own_level_four_notice(self):
-        for day in range(1, 6):
+        for day in range(2, 7):
             self._late(date(2026, 5, day))
         fourth, fifth = AttendanceLateNotice.objects.filter(level=4).order_by("occurrence_number")
 
@@ -419,8 +424,8 @@ class LateNoticeIssuanceTests(LateAttendanceNoticeTestBase):
         self.assertNotEqual(fourth.notification_id, fifth.notification_id)
 
     def test_rendered_values_sit_inside_their_declared_v3_fields(self):
-        self._late(date(2026, 5, 1))
         self._late(date(2026, 5, 2))
+        self._late(date(2026, 5, 3))
         notice = AttendanceLateNotice.objects.get(occurrence_number=2)
         values = build_notice_values(notice)
 
@@ -431,8 +436,10 @@ class LateNoticeIssuanceTests(LateAttendanceNoticeTestBase):
         )
         self.assertEqual((values["actual_first_check_in"], values["minutes_late"]), ("09:30", "30"))
         # The policy's internal reason code is translated, never printed.
-        self.assertEqual(notice.violation.reason, "post_grace_late")
-        self.assertEqual(values["reason"], late_notices.REASON_TEXT["post_grace_late"])
+        # These are the month's first violations, so the window was still open
+        # and the 09:30 arrival simply fell outside it.
+        self.assertEqual(notice.violation.reason, "outside_grace")
+        self.assertEqual(values["reason"], late_notices.REASON_TEXT["outside_grace"])
         # No authoritative contact data exists: optional contact fields stay empty.
         for key in ("company_phone", "company_address", "company_website", "company_email"):
             self.assertEqual(values[key], "")
@@ -463,8 +470,12 @@ class LateNoticeIssuanceTests(LateAttendanceNoticeTestBase):
                         # the sorted character multiset sidesteps bidi word-order/attachment
                         # quirks while still proving exactly the expected text was drawn.
                         extracted = unicodedata.normalize("NFKC", "".join(w[4] for w in inside))
+                        # shape_ar drops Arabic combining marks (the tanween in
+                        # "متجاوزًا"), so they are never drawn and cannot be
+                        # extracted. Compare the letters that are actually drawn.
                         self.assertEqual(
-                            sorted(extracted.replace(" ", "")), sorted(values[key].replace(" ", ""))
+                            sorted(_without_marks(extracted).replace(" ", "")),
+                            sorted(_without_marks(values[key]).replace(" ", "")),
                         )
                     else:
                         self.assertEqual(" ".join(w[4] for w in inside), values[key])
@@ -477,8 +488,8 @@ class LateNoticeIssuanceTests(LateAttendanceNoticeTestBase):
 
     def test_opaque_and_transparent_logos_fill_only_their_slot_and_the_hr_signature_is_never_passed(self):
         cases = (
-            ("opaque", date(2026, 5, 1), _png()),
-            ("transparent", date(2026, 5, 2), _png(transparent=True)),
+            ("opaque", date(2026, 5, 2), _png()),
+            ("transparent", date(2026, 5, 3), _png(transparent=True)),
         )
         with patch("attendance.late_notices.render_mapped_form", wraps=render_mapped_form) as renderer:
             for _, day, content in cases:
@@ -535,18 +546,18 @@ class LateNoticeIssuanceTests(LateAttendanceNoticeTestBase):
 
         cases = []
         configure(None)
-        cases.append(("not_configured", self._late(date(2026, 5, 1))))
+        cases.append(("not_configured", self._late(date(2026, 5, 2))))
         configure(b"this is not an image")
-        cases.append(("invalid", self._late(date(2026, 5, 2))))
+        cases.append(("invalid", self._late(date(2026, 5, 3))))
         configure(None)
         OrganizationNode.objects.filter(pk=self.company.pk).update(logo="organization_logos/missing-logo.png")
         with self.assertLogs("attendance.late_notices", level="WARNING") as logs:
-            cases.append(("unreadable", self._late(date(2026, 5, 3))))
+            cases.append(("unreadable", self._late(date(2026, 5, 4))))
         OrganizationNode.objects.filter(pk=self.company.pk).update(logo="")
         self.company.refresh_from_db()
         configure(_png())
         with patch("attendance.late_notices.MAX_LOGO_BYTES", 16):
-            cases.append(("oversized", self._late(date(2026, 5, 4))))
+            cases.append(("oversized", self._late(date(2026, 5, 5))))
 
         for expected, violation in cases:
             with self.subTest(outcome=expected):
@@ -563,7 +574,7 @@ class LateNoticeIssuanceTests(LateAttendanceNoticeTestBase):
             self.assertNotIn(str(settings.PRIVATE_UPLOAD_ROOT), str(vars(record)))
 
     def test_recalculation_reuses_the_notice_without_a_new_pdf_notification_or_audit(self):
-        violation = self._late(date(2026, 5, 1))
+        violation = self._late(date(2026, 5, 2))
         notice = AttendanceLateNotice.objects.get()
         document_name = notice.document.name
 
@@ -580,8 +591,8 @@ class LateNoticeIssuanceTests(LateAttendanceNoticeTestBase):
         self.assertEqual(AuditLog.objects.filter(action="attendance_late_notice_delivery_scheduled").count(), 1)
 
     def test_existing_v1_and_v2_notices_are_never_re_rendered_replaced_backfilled_or_redelivered(self):
-        first = self._late(date(2026, 5, 1))
-        second = self._late(date(2026, 5, 2))
+        first = self._late(date(2026, 5, 2))
+        second = self._late(date(2026, 5, 3))
         snapshots = {}
         # Turn both notices into snapshots issued before the v3 package.
         for violation, version, template in (
@@ -613,7 +624,7 @@ class LateNoticeIssuanceTests(LateAttendanceNoticeTestBase):
             AttendancePolicyService.reconcile_month(self.profile, first.date)
             for violation in (first, second):
                 self.assertIn(issue_late_notice_for_new_violation(violation).pk, snapshots)
-            self._late(date(2026, 5, 3))
+            self._late(date(2026, 5, 4))
 
         for pk, (version, template, content, name, notification_id, delivery_status, issued_at) in snapshots.items():
             with self.subTest(template_version=version):
@@ -717,7 +728,7 @@ class LateNoticeIssuanceTests(LateAttendanceNoticeTestBase):
         self.profile.full_name_ar = "موظف الإشعار"
         self.profile.save(update_fields=["full_name", "full_name_en", "full_name_ar"])
 
-        self._late(date(2026, 5, 1))
+        self._late(date(2026, 5, 2))
         page = self._page(AttendanceLateNotice.objects.get())
         text = page.extract_text()
 
@@ -734,8 +745,8 @@ class LateNoticeIssuanceTests(LateAttendanceNoticeTestBase):
         self.assertTrue(any(name.endswith(f"+{face_name}") for name in fonts), (face_name, fonts))
 
     def test_notice_issuance_never_changes_finalized_payroll_totals(self):
-        self._late(date(2026, 5, 1))
         self._late(date(2026, 5, 2))
+        self._late(date(2026, 5, 3))
         run = PayrollRun.objects.create(company=self.company, year=2026, month=5)
         with transaction.atomic():
             _generate_payroll_items(run)
@@ -747,7 +758,7 @@ class LateNoticeIssuanceTests(LateAttendanceNoticeTestBase):
         before = (run.total_net, item.total_deductions, item.net_salary)
         applied = list(AttendancePayrollDeduction.objects.values_list("id", "status", "claimed_amount"))
 
-        self._late(date(2026, 5, 3))
+        self._late(date(2026, 5, 4))
 
         run.refresh_from_db()
         item.refresh_from_db()
@@ -766,7 +777,7 @@ class LateNoticeIssuanceTests(LateAttendanceNoticeTestBase):
 
 class LateNoticeDeliveryTests(LateAttendanceNoticeTestBase):
     def test_notice_notification_replaces_the_violation_notification_and_audits_carry_no_paths(self):
-        self._late(date(2026, 5, 1))
+        self._late(date(2026, 5, 2))
         notice = AttendanceLateNotice.objects.get()
         notification = notice.notification
 
@@ -787,8 +798,8 @@ class LateNoticeDeliveryTests(LateAttendanceNoticeTestBase):
 
     def test_whatsapp_delivery_uses_the_dedicated_template_exact_variables_and_private_attachment(self):
         with patch("attendance.late_notices.dispatch_notification_channels", wraps=dispatch_notification_channels) as dispatch:
-            self._late(date(2026, 5, 1))
             self._late(date(2026, 5, 2))
+            self._late(date(2026, 5, 3))
         notice = AttendanceLateNotice.objects.get(occurrence_number=2)
         kwargs = dispatch.call_args.kwargs
         first_variables = dispatch.call_args_list[0].kwargs["whatsapp_variables"]
@@ -820,7 +831,7 @@ class LateNoticeDeliveryTests(LateAttendanceNoticeTestBase):
                 "employee_name": "Notice Employee",
                 "notice_level": "Formal Caution",
                 "notice_level_ar": "تنبيه رسمي",
-                "violation_date": "2026-05-02",
+                "violation_date": "2026-05-03",
                 "occurrence_number": "2",
                 "reference_number": notice.reference_number,
                 "policy_result": "Formal caution - 5% daily-rate deduction.",
@@ -867,10 +878,10 @@ class LateNoticeDeliveryTests(LateAttendanceNoticeTestBase):
 
     def test_notification_failure_never_blocks_attendance_and_is_audited(self):
         with patch("attendance.late_notices.dispatch_notification_channels", side_effect=RuntimeError("down")):
-            violation = self._late(date(2026, 5, 1))
+            violation = self._late(date(2026, 5, 2))
 
         self.assertEqual(violation.lifecycle, AttendanceLateViolation.Lifecycle.ACTIVE)
-        self.assertEqual(AttendanceDailyResult.objects.get(date=date(2026, 5, 1)).status_input, "LATE")
+        self.assertEqual(AttendanceDailyResult.objects.get(date=date(2026, 5, 2)).status_input, "LATE")
         notice = AttendanceLateNotice.objects.get()
         self.assertEqual(notice.delivery_status, AttendanceLateNotice.DeliveryStatus.FAILED)
         self.assertTrue(notice.document)
@@ -878,7 +889,7 @@ class LateNoticeDeliveryTests(LateAttendanceNoticeTestBase):
 
     def test_rendering_failure_never_blocks_attendance_and_falls_back_to_the_violation_notification(self):
         with patch("attendance.late_notices.render_mapped_form", side_effect=ValueError("broken template")):
-            violation = self._late(date(2026, 5, 1))
+            violation = self._late(date(2026, 5, 2))
 
         self.assertEqual(violation.lifecycle, AttendanceLateViolation.Lifecycle.ACTIVE)
         self.assertFalse(AttendanceLateNotice.objects.exists())
@@ -888,7 +899,7 @@ class LateNoticeDeliveryTests(LateAttendanceNoticeTestBase):
     def test_employee_without_an_active_user_is_skipped_but_the_notice_is_kept_for_hr(self):
         self.user.is_active = False
         self.user.save(update_fields=["is_active"])
-        self._late(date(2026, 5, 1))
+        self._late(date(2026, 5, 2))
 
         notice = AttendanceLateNotice.objects.get()
         self.assertEqual(notice.delivery_status, AttendanceLateNotice.DeliveryStatus.SKIPPED)
@@ -978,9 +989,9 @@ class LateNoticeApiTests(LateAttendanceNoticeTestBase):
         self.hr_other_only = self._user("hr-other@notice.test", "HRManager", self.other_company)
         self.admin = self._user("admin@notice.test", "SystemAdmin")
 
-        self._late(date(2026, 5, 1))
-        self._late(date(2026, 5, 1), profile=self.coworker_profile)
-        self._late(date(2026, 5, 1), profile=self.foreign_profile)
+        self._late(date(2026, 5, 2))
+        self._late(date(2026, 5, 2), profile=self.coworker_profile)
+        self._late(date(2026, 5, 2), profile=self.foreign_profile)
         self.own = AttendanceLateNotice.objects.get(employee_profile=self.profile)
         self.coworker_notice = AttendanceLateNotice.objects.get(employee_profile=self.coworker_profile)
         self.foreign_notice = AttendanceLateNotice.objects.get(employee_profile=self.foreign_profile)
@@ -1008,7 +1019,7 @@ class LateNoticeApiTests(LateAttendanceNoticeTestBase):
         )
         self.assertEqual(
             (item["violation_date"], item["occurrence_number"], item["notice_level"], item["reference_number"]),
-            ("2026-05-01", 1, 1, self.own.reference_number),
+            ("2026-05-02", 1, 1, self.own.reference_number),
         )
         self.assertEqual(item["delivery_status"], "scheduled")
         self.assertTrue(item["delivery_message"])
@@ -1049,7 +1060,7 @@ class LateNoticeApiTests(LateAttendanceNoticeTestBase):
             self._ids(self._get(self.hr, f"{NOTICES_URL}?search=coworker", self.company)), {self.coworker_notice.id}
         )
         self.assertEqual(
-            self._ids(self._get(self.hr, f"{NOTICES_URL}?date_from=2026-05-01&date_to=2026-05-01", self.company)),
+            self._ids(self._get(self.hr, f"{NOTICES_URL}?date_from=2026-05-02&date_to=2026-05-02", self.company)),
             {self.own.id, self.coworker_notice.id},
         )
         for query, field in (("notice_level=5", "notice_level"), ("date_from=01-05-2026", "date_from")):

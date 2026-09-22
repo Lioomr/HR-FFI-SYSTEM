@@ -186,11 +186,18 @@ class UserMeView(APIView):
         user = request.user
         accessible_orgs = get_user_accessible_organizations(user)
         active_org = get_active_organization_for_request(request) or get_default_organization_for_user(user)
+        # Display names per language: the employee profile holds the English
+        # and Arabic names; accounts without a profile fall back to the user.
+        profile = getattr(user, "employee_profile", None)
+        full_name_en = (profile and (profile.full_name_en or profile.full_name)) or user.full_name or None
+        full_name_ar = (profile and profile.full_name_ar) or None
         return success(
             {
                 "id": str(user.id),
                 "email": user.email,
                 "full_name": user.full_name,
+                "full_name_en": full_name_en,
+                "full_name_ar": full_name_ar,
                 "role": get_role(user),
                 "is_active": user.is_active,
                 "date_joined": user.date_joined,

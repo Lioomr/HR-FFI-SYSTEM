@@ -150,7 +150,6 @@ class LeaveResolutionTests(TestCase):
 
     def test_absence_detection_ignores_deleted_leave_and_skips_active_approved_leave(self):
         settings = SystemSettings.get_solo()
-        settings.work_week_days = [0, 1, 2, 3, 4]
         settings.absence_detection_enabled = True
         settings.save()
         self.record.delete()

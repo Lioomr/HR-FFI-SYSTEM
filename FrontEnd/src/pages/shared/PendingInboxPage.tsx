@@ -1,33 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   Avatar,
-  Badge,
   Button,
   Card,
-  Col,
-  Descriptions,
   Empty,
-  Form,
   Input,
-  Row,
-  Select,
-  Space,
-  Statistic,
   Tag,
+  Tooltip,
   Typography,
   notification,
+  theme,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
-  AppstoreOutlined,
-  CheckCircleOutlined,
-  ClearOutlined,
   ClockCircleOutlined,
   EyeOutlined,
-  FileTextOutlined,
-  FilterOutlined,
   ReloadOutlined,
+  SearchOutlined,
 } from "@ant-design/icons";
 
 import PageHeader from "../../components/ui/PageHeader";
@@ -37,10 +26,6 @@ import {
   type PendingRequestItem,
   type PendingRequestType,
 } from "../../services/api/pendingRequestsApi";
-import {
-  listNotifications,
-  type NotificationDto,
-} from "../../services/api/notificationsApi";
 import { isApiError } from "../../services/api/apiTypes";
 import { useI18n } from "../../i18n/useI18n";
 import { useAuthStore } from "../../auth/authStore";
@@ -50,38 +35,39 @@ import {
   PENDING_TYPE_COLORS,
   PENDING_TYPE_LABEL_KEYS,
 } from "../../utils/pendingRequests";
-import NotificationItem from "../../components/notifications/NotificationItem";
+import { formatRelativeTime } from "../../components/notifications/notificationMeta";
 import { useNotificationNavigate } from "../../components/notifications/notificationUrl";
 
-interface Filters {
-  request_type?: PendingRequestType;
-  search?: string;
-}
+/** A request waiting longer than this is flagged in the list. */
+const STALE_AFTER_MS = 3 * 86_400_000;
 
 export default function PendingInboxPage() {
-  const navigate = useNavigate();
-  const { t } = useI18n();
+  const { t, language } = useI18n();
+  const { token } = theme.useToken();
   const navigateToNotification = useNotificationNavigate();
   const user = useAuthStore((s) => s.user);
   const isHeadOffice = isHeadOfficeOrganization(user);
 
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<PendingRequestItem[]>([]);
-  const [total, setTotal] = useState(0);
+  const [count, setCount] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const [countsByType, setCountsByType] = useState<
+    Partial<Record<PendingRequestType, number>>
+  >({});
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
-  const [filters, setFilters] = useState<Filters>({});
-  const [approvalNotifications, setApprovalNotifications] = useState<
-    NotificationDto[]
-  >([]);
-  const [form] = Form.useForm();
+  const [requestType, setRequestType] = useState<PendingRequestType>();
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const res = await getPendingRequests({
-        ...filters,
+        request_type: requestType,
+        search: search || undefined,
         page,
         page_size: pageSize,
       });
@@ -91,8 +77,11 @@ export default function PendingInboxPage() {
           description: res.message,
         });
       } else {
+        const filteredCount = res.data.count ?? 0;
         setData(res.data.items ?? []);
-        setTotal(res.data.count ?? 0);
+        setCount(filteredCount);
+        setTotalCount(res.data.total_count ?? filteredCount);
+        setCountsByType(res.data.counts_by_type ?? {});
       }
     } catch (err: any) {
       notification.error({
@@ -102,26 +91,11 @@ export default function PendingInboxPage() {
     } finally {
       setLoading(false);
     }
-  }, [filters, page, pageSize, t]);
-
-  const loadApprovalNotifications = useCallback(async () => {
-    try {
-      const response = await listNotifications({
-        category: "approval",
-        page: 1,
-        page_size: 20,
-      });
-      if (!isApiError(response))
-        setApprovalNotifications(response.data.items ?? []);
-    } catch {
-      // The workflow queue remains usable if notification history is unavailable.
-    }
-  }, []);
+  }, [requestType, search, page, pageSize, t]);
 
   useEffect(() => {
     loadData();
-    loadApprovalNotifications();
-  }, [loadData, loadApprovalNotifications]);
+  }, [loadData]);
 
   // Refetch when tab becomes visible again
   useEffect(() => {
@@ -139,21 +113,95 @@ export default function PendingInboxPage() {
     };
   }, []);
 
-  const handleValuesChange = (_changed: Partial<Filters>, all: Filters) => {
+  const handleSearchChange = (value: string) => {
+    setSearchInput(value);
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    const apply = () => {
-      setFilters({
-        request_type: all.request_type || undefined,
-        search: all.search || undefined,
-      });
+    searchTimer.current = setTimeout(() => {
+      setSearch(value.trim());
       setPage(1);
-    };
-    if ("search" in _changed) {
-      searchTimer.current = setTimeout(apply, 350);
-    } else {
-      apply();
-    }
+    }, 350);
   };
+
+  const selectType = (type?: PendingRequestType) => {
+    setRequestType((current) => (current === type ? undefined : type));
+    setPage(1);
+  };
+
+  const typeLabel = (type: PendingRequestType, fallback?: string) =>
+    t(PENDING_TYPE_LABEL_KEYS[type] ?? type, fallback ?? type);
+
+  const paletteColor = (type: PendingRequestType) => {
+    const preset = PENDING_TYPE_COLORS[type];
+    return (
+      (preset && (token as unknown as Record<string, string>)[`${preset}6`]) ||
+      token.colorPrimary
+    );
+  };
+
+  // Only types with something waiting get a chip; the biggest queue comes first.
+  const typeChips = (
+    Object.entries(countsByType) as [PendingRequestType, number][]
+  )
+    .filter(([, value]) => value > 0)
+    .sort(([, a], [, b]) => b - a);
+
+  const renderChip = (
+    key: string,
+    label: string,
+    value: number,
+    active: boolean,
+    color: string,
+    onClick: () => void,
+  ) => (
+    <button
+      key={key}
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "6px 12px",
+        borderRadius: 999,
+        cursor: "pointer",
+        font: "inherit",
+        fontSize: 13,
+        fontWeight: active ? 600 : 500,
+        color: active ? color : token.colorText,
+        background: active ? `${color}14` : token.colorBgContainer,
+        border: `1px solid ${active ? color : token.colorBorderSecondary}`,
+        transition: "background 120ms, border-color 120ms, color 120ms",
+      }}
+    >
+      <span
+        aria-hidden
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: "50%",
+          background: color,
+          flexShrink: 0,
+        }}
+      />
+      {label}
+      <span
+        style={{
+          minWidth: 22,
+          padding: "0 6px",
+          borderRadius: 999,
+          fontSize: 12,
+          fontWeight: 700,
+          lineHeight: "20px",
+          fontVariantNumeric: "tabular-nums",
+          color: active ? token.colorWhite : token.colorText,
+          background: active ? color : token.colorFillSecondary,
+        }}
+      >
+        {value}
+      </span>
+    </button>
+  );
 
   const columns: ColumnsType<PendingRequestItem> = [
     {
@@ -186,10 +234,7 @@ export default function PendingInboxPage() {
       key: "request_type",
       render: (_, record) => (
         <Tag color={PENDING_TYPE_COLORS[record.request_type] ?? "default"}>
-          {t(
-            PENDING_TYPE_LABEL_KEYS[record.request_type],
-            record.request_type_label,
-          )}
+          {typeLabel(record.request_type, record.request_type_label)}
         </Tag>
       ),
     },
@@ -198,24 +243,22 @@ export default function PendingInboxPage() {
       dataIndex: "action",
       key: "action",
       render: (value: string, record) => (
-        <div>
+        <div style={{ maxWidth: 420 }}>
           <Typography.Text strong>{value}</Typography.Text>
           {record.details ? (
             <Typography.Paragraph
-              ellipsis={{ rows: 1 }}
-              style={{ margin: "3px 0 0", color: "#64748b", fontSize: 12 }}
+              ellipsis={{ rows: 1, tooltip: record.details }}
+              style={{
+                margin: "3px 0 0",
+                color: token.colorTextSecondary,
+                fontSize: 12,
+              }}
             >
               {record.details}
             </Typography.Paragraph>
           ) : null}
         </div>
       ),
-    },
-    {
-      title: t("pendingInbox.col.approverRole"),
-      dataIndex: "current_approver_role",
-      key: "current_approver_role",
-      render: (val: string) => <Tag>{val}</Tag>,
     },
     ...(isHeadOffice
       ? [
@@ -232,7 +275,28 @@ export default function PendingInboxPage() {
       title: t("pendingInbox.col.time"),
       dataIndex: "time",
       key: "time",
-      render: (val: string) => formatDateTime(val),
+      render: (val: string) => {
+        const stale = Date.now() - new Date(val).getTime() > STALE_AFTER_MS;
+        return (
+          <Tooltip title={formatDateTime(val)}>
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                whiteSpace: "nowrap",
+                color: stale ? token.colorWarningText : token.colorTextSecondary,
+                fontWeight: stale ? 600 : 400,
+              }}
+            >
+              {stale ? (
+                <ClockCircleOutlined aria-label={t("pendingInbox.waitingLong")} />
+              ) : null}
+              {formatRelativeTime(val, language)}
+            </span>
+          </Tooltip>
+        );
+      },
     },
     {
       title: t("common.actions"),
@@ -242,7 +306,12 @@ export default function PendingInboxPage() {
         <Button
           icon={<EyeOutlined />}
           size="small"
-          onClick={() => navigateToNotification(record.review_path)}
+          type="primary"
+          ghost
+          onClick={(event) => {
+            event.stopPropagation();
+            navigateToNotification(record.review_path);
+          }}
         >
           {t("common.review")}
         </Button>
@@ -250,11 +319,7 @@ export default function PendingInboxPage() {
     },
   ];
 
-  const typeCounts = data.reduce<Record<string, number>>((counts, item) => {
-    counts[item.request_type] = (counts[item.request_type] || 0) + 1;
-    return counts;
-  }, {});
-  const hasFilters = Boolean(filters.search || filters.request_type);
+  const isFiltered = Boolean(search || requestType);
 
   return (
     <div style={{ maxWidth: 1200, margin: "0 auto" }}>
@@ -262,8 +327,8 @@ export default function PendingInboxPage() {
         title={t("pendingInbox.title")}
         subtitle={t("pendingInbox.subtitle")}
         tags={
-          <Tag color={total ? "orange" : "green"}>
-            {total
+          <Tag color={totalCount ? "orange" : "green"}>
+            {totalCount
               ? t("pendingInbox.needsAttention")
               : t("pendingInbox.allClear")}
           </Tag>
@@ -279,170 +344,51 @@ export default function PendingInboxPage() {
         }
       />
 
-      <Card
-        title={
-          <Space>
-            <Typography.Text strong>
-              {t("pendingInbox.notificationsTitle")}
-            </Typography.Text>
-            <Badge
-              count={
-                approvalNotifications.filter((item) => !item.is_read).length
-              }
-              showZero
-              style={{ backgroundColor: "#f97316" }}
-            />
-          </Space>
-        }
-        extra={
-          <Button type="link" onClick={() => navigate("/notifications")}>
-            {t("pendingInbox.viewAllNotifications")}
-          </Button>
-        }
-        style={{ marginBottom: 16, borderRadius: 16 }}
-      >
-        {approvalNotifications.length === 0 ? (
-          <Empty
-            description={t("pendingInbox.noNotifications")}
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-          />
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {approvalNotifications.slice(0, 5).map((item) => (
-              <NotificationItem
-                key={item.id}
-                notification={item}
-                onSelect={(notification) => {
-                  navigateToNotification(notification.action_url);
-                }}
-              />
-            ))}
+      <Card style={{ borderRadius: 16 }} styles={{ body: { padding: 20 } }}>
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            marginBottom: 16,
+          }}
+        >
+          <div
+            role="group"
+            aria-label={t("pendingInbox.col.requestType")}
+            style={{ display: "flex", flexWrap: "wrap", gap: 8 }}
+          >
+            {renderChip(
+              "all",
+              t("pendingInbox.filterAll"),
+              totalCount,
+              !requestType,
+              token.colorPrimary,
+              () => selectType(undefined),
+            )}
+            {typeChips.map(([type, value]) =>
+              renderChip(
+                type,
+                typeLabel(type),
+                value,
+                requestType === type,
+                paletteColor(type),
+                () => selectType(type),
+              ),
+            )}
           </div>
-        )}
-      </Card>
+          <Input
+            value={searchInput}
+            onChange={(event) => handleSearchChange(event.target.value)}
+            placeholder={t("pendingInbox.searchPlaceholder")}
+            prefix={<SearchOutlined style={{ color: token.colorTextTertiary }} />}
+            allowClear
+            style={{ width: 280, maxWidth: "100%" }}
+          />
+        </div>
 
-      <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
-        <Col xs={24} sm={12} lg={6}>
-          <Card size="small" bordered={false} style={{ borderRadius: 14 }}>
-            <Statistic
-              title={t("pendingInbox.stats.total")}
-              value={total}
-              prefix={<AppstoreOutlined style={{ color: "#f97316" }} />}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card size="small" bordered={false} style={{ borderRadius: 14 }}>
-            <Statistic
-              title={t("pendingInbox.stats.leave")}
-              value={typeCounts.LEAVE || 0}
-              prefix={<ClockCircleOutlined style={{ color: "#1677ff" }} />}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card size="small" bordered={false} style={{ borderRadius: 14 }}>
-            <Statistic
-              title={t("pendingInbox.stats.loan")}
-              value={typeCounts.LOAN || 0}
-              prefix={<FileTextOutlined style={{ color: "#d48806" }} />}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card size="small" bordered={false} style={{ borderRadius: 14 }}>
-            <Statistic
-              title={t("pendingInbox.stats.other")}
-              value={Math.max(
-                total - (typeCounts.LEAVE || 0) - (typeCounts.LOAN || 0),
-                0,
-              )}
-              prefix={<CheckCircleOutlined style={{ color: "#722ed1" }} />}
-            />
-          </Card>
-        </Col>
-      </Row>
-
-      <Card
-        style={{ marginBottom: 16, borderRadius: 16 }}
-        title={
-          <Space>
-            <FilterOutlined />
-            <Typography.Text strong>
-              {t("pendingInbox.filters")}
-            </Typography.Text>
-          </Space>
-        }
-        extra={
-          hasFilters ? (
-            <Button
-              type="link"
-              icon={<ClearOutlined />}
-              onClick={() => {
-                form.resetFields();
-                setFilters({});
-                setPage(1);
-              }}
-            >
-              {t("pendingInbox.clearFilters")}
-            </Button>
-          ) : null
-        }
-      >
-        <Form form={form} layout="vertical" onValuesChange={handleValuesChange}>
-          <Row gutter={16}>
-            <Col xs={24} sm={12} md={10}>
-              <Form.Item name="search" label={t("common.search")}>
-                <Input
-                  placeholder={t("pendingInbox.searchPlaceholder")}
-                  allowClear
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12} md={8}>
-              <Form.Item
-                name="request_type"
-                label={t("pendingInbox.filterByType")}
-              >
-                <Select placeholder={t("pendingInbox.allTypes")} allowClear>
-                  <Select.Option value="LEAVE">
-                    {t("pendingInbox.requestType.LEAVE")}
-                  </Select.Option>
-                  <Select.Option value="LOAN">
-                    {t("pendingInbox.requestType.LOAN")}
-                  </Select.Option>
-                  <Select.Option value="ATTENDANCE">
-                    {t("pendingInbox.requestType.ATTENDANCE")}
-                  </Select.Option>
-                  <Select.Option value="ASSET">
-                    {t("pendingInbox.requestType.ASSET")}
-                  </Select.Option>
-                  <Select.Option value="EMPLOYEE_DELETION">
-                    {t("pendingInbox.requestType.EMPLOYEE_DELETION")}
-                  </Select.Option>
-                  <Select.Option value="ANNUAL_LEAVE_PAYMENT">
-                    {t("pendingInbox.requestType.ANNUAL_LEAVE_PAYMENT")}
-                  </Select.Option>
-                </Select>
-              </Form.Item>
-            </Col>
-          </Row>
-        </Form>
-      </Card>
-
-      <Card
-        style={{ borderRadius: 16 }}
-        title={
-          <Space>
-            <Typography.Text strong>{t("pendingInbox.title")}</Typography.Text>
-            <Badge
-              count={total}
-              overflowCount={999}
-              style={{ backgroundColor: total > 0 ? "#f97316" : "#94a3b8" }}
-            />
-          </Space>
-        }
-      >
         <ResponsiveTable
           mobileCard={{
             titleKey: "employee",
@@ -462,42 +408,31 @@ export default function PendingInboxPage() {
           locale={{
             emptyText: (
               <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description={
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 15 }}>
-                      {t("pendingInbox.empty")}
+                  isFiltered ? (
+                    t("pendingInbox.noMatches")
+                  ) : (
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 15 }}>
+                        {t("pendingInbox.empty")}
+                      </div>
+                      <div
+                        style={{ color: token.colorTextTertiary, marginTop: 4 }}
+                      >
+                        {t("pendingInbox.emptyDesc")}
+                      </div>
                     </div>
-                    <div style={{ color: "#94a3b8", marginTop: 4 }}>
-                      {t("pendingInbox.emptyDesc")}
-                    </div>
-                  </div>
+                  )
                 }
               />
             ),
           }}
-          expandable={{
-            expandedRowRender: (record) => (
-              <Descriptions size="small" column={{ xs: 1, sm: 2 }}>
-                <Descriptions.Item label={t("pendingInbox.detail.requestId")}>
-                  #{record.id}
-                </Descriptions.Item>
-                <Descriptions.Item label={t("pendingInbox.detail.workflowId")}>
-                  #{record.workflow_id}
-                </Descriptions.Item>
-                <Descriptions.Item label={t("pendingInbox.detail.description")}>
-                  {record.details || t("pendingInbox.detail.noDescription")}
-                </Descriptions.Item>
-                <Descriptions.Item label={t("pendingInbox.detail.nextStep")}>
-                  {record.current_approver_role}
-                </Descriptions.Item>
-              </Descriptions>
-            ),
-            rowExpandable: (record) => Boolean(record.details),
-          }}
           pagination={{
             current: page,
             pageSize,
-            total,
+            total: count,
+            hideOnSinglePage: true,
             showSizeChanger: true,
             pageSizeOptions: ["10", "20", "50"],
             onChange: (p, ps) => {

@@ -16,7 +16,7 @@ from .models import (
     BioTimeEmployeeMap,
     WorkLocation,
 )
-from .schedule import get_work_schedule
+from .schedule import get_work_schedule, is_working_day
 
 
 class AttendanceDailyResultSerializer(serializers.ModelSerializer):
@@ -231,6 +231,9 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
         if not obj.check_in_at:
             return 0
         try:
+            # A punch on the employee's own day off is recorded, never rated.
+            if not is_working_day(obj.employee_profile, obj.date):
+                return 0
             return self._work_schedule().late_minutes(obj.check_in_at, obj.date)
         except Exception:
             return 0

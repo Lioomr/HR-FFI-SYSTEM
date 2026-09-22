@@ -20,7 +20,6 @@ from organization.models import OrganizationNode
 def test_hire_status_archive_company_and_leave_rules_apply_to_every_entrypoint(entrypoint):
     workday = date(2026, 1, 5)
     settings = SystemSettings.get_solo()
-    settings.work_week_days = [0, 1, 2, 3, 4]
     settings.absence_detection_enabled = True
     settings.save()
     company = OrganizationNode.objects.create(code="ABS-ELIGIBLE", name="Eligible", node_type="company")
@@ -93,11 +92,12 @@ def test_backfill_crossing_hire_date_starts_on_hire_date_and_is_idempotent():
     )
     BioTimeEmployeeMap.objects.create(employee_profile=profile, biotime_emp_code="BT-ABS-RANGE")
     settings = SystemSettings.get_solo()
-    settings.work_week_days = [0, 1, 2, 3, 4]
     settings.absence_detection_enabled = False  # Backfill bypasses only this flag.
     settings.save()
     for _ in range(2):
         call_command("backfill_absences", date_from="2026-01-05", date_to="2026-01-10", stdout=StringIO())
+    # Jan 6-8 are Tue-Thu, Jan 9 is a Friday (off for everyone) and Jan 10 is a
+    # Saturday, which this non-Saudi profile works.
     assert list(
         AttendanceRecord.objects.filter(employee_profile=profile).order_by("date").values_list("date", flat=True)
-    ) == [date(2026, 1, day) for day in range(6, 10)]
+    ) == [date(2026, 1, day) for day in (6, 7, 8, 10)]

@@ -27,7 +27,7 @@ export function getDetailedHttpErrorMessage(
   const validationMessage = getFirstApiErrorMessage(err);
   if (status === 401) return t("common.error.unauthorizedDetailed");
   if (status === 403) return t("common.error.forbiddenDetailed");
-  if (status === 400 || status === 422)
+  if (status === 400 || status === 409 || status === 422)
     return validationMessage || t("common.error.validationDetailed");
   if (status !== undefined && status >= 500)
     return t("common.error.serverDetailed");

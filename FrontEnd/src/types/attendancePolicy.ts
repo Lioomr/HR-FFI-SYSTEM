@@ -12,6 +12,7 @@ export type AttendanceStatusInput = "PRESENT" | "LATE";
 
 export const GRACE_REASONS = [
   "attendance_exempt",
+  "non_working_day",
   "late_permission",
   "no_check_in",
   "on_time",

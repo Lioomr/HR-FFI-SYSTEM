@@ -16,6 +16,7 @@ from payroll.models import AttendancePayrollDeduction, PayrollRun
 
 from .biotime_policy import is_attendance_exempt
 from .models import AttendanceAdjustment, AttendanceDailyResult, AttendanceGraceUse, AttendanceLateViolation
+from .schedule import is_working_day
 
 Lifecycle = AttendanceLateViolation.Lifecycle
 DeductionStatus = AttendancePayrollDeduction.Status
@@ -25,6 +26,11 @@ DeductionStatus = AttendancePayrollDeduction.Status
 COUNTED_LIFECYCLES = (Lifecycle.ACTIVE, Lifecycle.APPLIED, Lifecycle.MANUAL_REVIEW)
 # Payroll-locked history: never re-rated, re-sequenced, or reactivated.
 FROZEN_LIFECYCLES = (Lifecycle.APPLIED, Lifecycle.MANUAL_REVIEW)
+
+# The grace window stays open all month until the employee collects this many
+# late violations; from the next arrival on it is withdrawn for the rest of that
+# month. Fixed company policy, deliberately not an HR-editable setting.
+MONTHLY_LATE_VIOLATION_LIMIT = 3
 
 
 def _is_payroll_locked(violation) -> bool:
@@ -212,10 +218,20 @@ def _notify_violation(profile, violation):
 
 class AttendancePolicyService:
     @staticmethod
-    def classify_arrival(result, settings_obj, grace_used, *, exempt, excused):
-        """Return ``(late, reason, consumes_grace)`` for one calculated work day."""
+    def classify_arrival(result, settings_obj, month_late_count, *, exempt, excused, working_day=True):
+        """Return ``(late, reason, used_window)`` for one calculated work day.
+
+        ``month_late_count`` is how many late violations this calendar month has
+        already produced. Below :data:`MONTHLY_LATE_VIOLATION_LIMIT` the grace
+        window is open with no cap on how often it is used; at the limit it is
+        withdrawn for the rest of the month and only the post-grace tolerance
+        remains.
+        """
         if exempt:
             return False, "attendance_exempt", False
+        if not working_day:
+            # A punch on the employee's day off is recorded but never rated.
+            return False, "non_working_day", False
         if excused:
             return False, "late_permission", False
         check_in = result.first_check_in_at
@@ -223,11 +239,12 @@ class AttendancePolicyService:
             return False, "no_check_in", False
         if check_in <= result.shift_start_at:
             return False, "on_time", False
-        if grace_used < int(settings_obj.grace_use_limit_per_month):
+        if month_late_count < MONTHLY_LATE_VIOLATION_LIMIT:
             if check_in <= result.shift_start_at + timedelta(minutes=int(settings_obj.grace_window_minutes)):
                 return False, "monthly_grace", True
             return True, "outside_grace", False
-        # After grace exhaustion, lateness starts at the first minute past the tolerance.
+        # Once the window is withdrawn, lateness starts at the first minute past
+        # the tolerance: with a 5-minute tolerance 09:05:59 is on time, 09:06:00 is late.
         late_at = result.shift_start_at + timedelta(minutes=int(settings_obj.post_grace_tolerance_minutes) + 1)
         if check_in >= late_at:
             return True, "post_grace_late", False
@@ -278,18 +295,26 @@ class AttendancePolicyService:
             if effective_from is not None:
                 historical_violations = historical_violations.filter(date__gte=effective_from)
             occurrences = historical_violations.count()
-            grace_used = 0
+            # Every calendar month starts with the grace window open and no late
+            # violations. Walking the month in date order is what resets it, so a
+            # delayed punch on an earlier day moves the cutoff for every later day.
+            month_late_count = 0
             for result in results:
                 # Attendance remains visible, but late-policy actions begin only
                 # on the configured cutover date. This covers sync and manual
                 # recalculation because both call this central reconciliation.
                 if effective_from is not None and result.date < effective_from:
                     continue
+                working_day = is_working_day(profile, result.date)
                 excused = result.date in late_marker_days
-                late, reason, consumes_grace = cls.classify_arrival(
-                    result, settings_obj, grace_used, exempt=exempt, excused=excused
+                late, reason, used_window = cls.classify_arrival(
+                    result,
+                    settings_obj,
+                    month_late_count,
+                    exempt=exempt,
+                    excused=excused,
+                    working_day=working_day,
                 )
-                grace_used += int(consumes_grace)
                 AttendanceGraceUse.objects.update_or_create(
                     employee_profile=profile,
                     date=result.date,
@@ -297,26 +322,40 @@ class AttendancePolicyService:
                         "company": profile.company,
                         "month": month,
                         "result": result,
-                        "consumed": consumes_grace,
+                        "consumed": used_window,
                         "reason": reason,
                     },
                 )
                 violation = violations.get(result.date)
                 if violation is not None and _is_payroll_locked(violation):
+                    # Payroll-locked history still counts toward both sequences.
                     occurrences += 1
+                    month_late_count += 1
                     if not late and violation.lifecycle == Lifecycle.APPLIED:
                         cls._send_to_manual_review(violation, reason)
                 elif late:
                     occurrences += 1
+                    month_late_count += 1
                     cls._charge(profile, result, violation, occurrences, reason)
                 elif violation is not None and violation.lifecycle != Lifecycle.VOID:
+                    # A voided violation never counts toward the month's limit.
                     cls._void(violation, reason)
 
                 inputs = dict(result.calculation_inputs or {})
-                inputs["policy"] = {"late_excused": excused, "grace_reason": reason, "is_exempt": exempt}
+                inputs["policy"] = {
+                    "late_excused": excused,
+                    "grace_reason": reason,
+                    "is_exempt": exempt,
+                    "working_day": working_day,
+                }
                 result.status_input = "LATE" if late else "PRESENT"
+                if not working_day:
+                    # Recorded, but never counted as missing time.
+                    result.missing_minutes = 0
                 result.calculation_inputs = inputs
-                result.save(update_fields=["status_input", "calculation_inputs", "calculated_at"])
+                result.save(
+                    update_fields=["status_input", "missing_minutes", "calculation_inputs", "calculated_at"]
+                )
             cls._resequence_from(profile, next_month, occurrences)
             return AttendanceDailyResult.objects.get(employee_profile=profile, date=work_date)
 
