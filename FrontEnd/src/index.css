@@ -572,7 +572,7 @@ html[dir="rtl"] .modern-sidebar .ant-menu-item-selected::before {
 /* ===========================
    BUTTON OVERRIDES
    =========================== */
-.ant-btn-primary {
+.ant-btn-primary:not(.ant-btn-background-ghost) {
   background: linear-gradient(135deg, #f97316, #ea580c) !important;
   border: none !important;
   box-shadow: 0 4px 14px rgba(249, 115, 22, 0.4) !important;
@@ -580,14 +580,14 @@ html[dir="rtl"] .modern-sidebar .ant-menu-item-selected::before {
 }
 
 @media (hover: hover) {
-  .ant-btn-primary:hover {
+  .ant-btn-primary:not(.ant-btn-background-ghost):hover {
     transform: translateY(-1px) !important;
     box-shadow: 0 6px 20px rgba(249, 115, 22, 0.5) !important;
     opacity: 0.92 !important;
   }
 }
 
-.ant-btn-primary:active {
+.ant-btn-primary:not(.ant-btn-background-ghost):active {
   transform: translateY(0) !important;
 }
 
