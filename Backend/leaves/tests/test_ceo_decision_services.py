@@ -209,9 +209,7 @@ class CEOLeaveDecisionTests(APITestCase):
         )
         UserOrganizationAccess.objects.create(user=self.ceo_user, organization=other_company)
         employee = self._user_in_company(other_company, "ceo-access-employee@example.com", "EMP-CEOD-ACCESS")
-        leave_type = LeaveType.objects.create(
-            company=other_company, name="Annual Leave", code="ANNUAL", is_active=True
-        )
+        leave_type = LeaveType.objects.create(company=other_company, name="Annual Leave", code="ANNUAL", is_active=True)
         leave = LeaveRequest.objects.create(
             employee=employee,
             employee_profile=employee.employee_profile,
@@ -224,7 +222,9 @@ class CEOLeaveDecisionTests(APITestCase):
         headers = {"HTTP_X_ACTIVE_COMPANY_ID": str(other_company.id)}
 
         detail = self.client.get(f"{CEO_REQUESTS_URL}{leave.id}/", **headers)
-        approval = self.client.post(f"{CEO_REQUESTS_URL}{leave.id}/approve/", {"comment": "OK"}, format="json", **headers)
+        approval = self.client.post(
+            f"{CEO_REQUESTS_URL}{leave.id}/approve/", {"comment": "OK"}, format="json", **headers
+        )
 
         self.assertEqual(detail.status_code, status.HTTP_200_OK, detail.data)
         self.assertEqual(detail.data["status"], "success")
@@ -252,10 +252,11 @@ class CEOLeaveDecisionTests(APITestCase):
         )
         self.client.force_authenticate(user=self.ceo_user)
 
-        response = self.client.get(
-            f"{CEO_REQUESTS_URL}{leave.id}/", HTTP_X_ACTIVE_COMPANY_ID=str(foreign_company.id)
-        )
+        response = self.client.get(f"{CEO_REQUESTS_URL}{leave.id}/", HTTP_X_ACTIVE_COMPANY_ID=str(foreign_company.id))
 
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        # A valid own-company selector must still hide the foreign object.
+        response = self.client.get(f"{CEO_REQUESTS_URL}{leave.id}/")
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_approve_endpoint_returns_obligations_summary_when_blocked(self):

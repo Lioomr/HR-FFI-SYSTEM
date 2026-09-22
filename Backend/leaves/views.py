@@ -156,6 +156,7 @@ def _configure_sensitive_download(response, filename):
 LEAVE_READ_SELECT_RELATED = (
     "employee",
     "employee__employee_profile",
+    "employee__employee_profile__company",
     "employee__employee_profile__manager_profile",
     "employee__employee_profile__manager_profile__user",
     "employee_profile",
@@ -1556,12 +1557,20 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         )
 
     def retrieve(self, request, *args, **kwargs):
+        role = get_role(request.user)
+        queryset = self._unscoped_queryset()
+        if role not in ["SystemAdmin", "HRManager"]:
+            # Preserve existing approver access while admitting only explicitly
+            # assigned alternatives outside the user's own company.
+            queryset = queryset | self._delegated_action_queryset()
         try:
-            instance = self._unscoped_queryset().get(pk=kwargs.get("pk"))
+            instance = queryset.get(pk=kwargs.get("pk"))
         except LeaveRequest.DoesNotExist:
             return error("Not found", errors=["Not found."], status=404)
-        role = get_role(request.user)
-        if role not in ["SystemAdmin", "HRManager"] and instance.employee_id != request.user.id:
+        if role not in ["SystemAdmin", "HRManager"] and request.user.id not in {
+            instance.employee_id,
+            instance.delegated_to_id,
+        }:
             if not can_user_act_on_instance(request.user, instance):
                 return error("Not found", errors=["Not found."], status=404)
         return success(LeaveRequestSerializer(instance, context={"request": request}).data)

@@ -892,9 +892,11 @@ class EmployeeProfileTests(TestCase):
         )
 
         self.client.force_authenticate(user=self.employee_user)
-        response = self.client.get("/api/employees/delegation-candidates/?scope=all")
+        response = self.client.get(
+            "/api/employees/delegation-candidates/?scope=all", HTTP_X_ACTIVE_COMPANY_ID=str(company.id)
+        )
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         candidates = response.data["data"]
         self.assertEqual([item["id"] for item in candidates], [other_user.id])
         self.assertEqual(candidates[0]["company_name"], "All Other Co")

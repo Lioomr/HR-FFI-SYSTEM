@@ -386,6 +386,7 @@ def test_oversized_signature_payload_is_refused():
 
 #: Every form a renderer fills, and the map that must travel with its template.
 RENDERED_FORM_PAIRS = (
+    ("employee_evaluation_blank.pdf", "employee_evaluation_blank_field_map.json"),
     ("leave_request_blank.pdf", "leave_request_blank_field_map.json"),
     ("loan_request_blank.pdf", "loan_request_blank_field_map.json"),
     (

@@ -1,5 +1,11 @@
 # AWS Deployment Handoff for Agents
 
+Frontend image builds precompress text assets using `FrontEnd/scripts/precompress.mjs`.
+Nginx serves the gzip sidecars when supported and retains original files for other clients.
+Hashed assets use sendfile and a bounded file cache; missing assets must not receive
+the one-year immutable cache header. Validate with `nginx -t`, compressed/uncompressed
+asset requests, an asset 404, and the SPA no-store header before frontend rollout.
+
 This document is the operational guide for AI agents working on the deployed HR FFI system in AWS. Use it when investigating production issues, rebuilding containers, comparing local versus production behavior, or explaining how deployment works.
 
 ## 1) Current AWS Deployment Shape

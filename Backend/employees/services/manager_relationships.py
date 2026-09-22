@@ -108,7 +108,9 @@ def validate_cross_company_manager_assignment(
     if not _is_active_manager_profile(employee) or not _is_active_manager_profile(manager_profile):
         raise ValidationError("Cross-company manager assignments require active, non-archived employee users.")
     if end_at is None or start_at is None or end_at <= start_at:
-        raise ValidationError({"end_at": "Cross-company manager assignments require a future end time after start time."})
+        raise ValidationError(
+            {"end_at": "Cross-company manager assignments require a future end time after start time."}
+        )
     member_ids = set(scope.memberships.values_list("company_id", flat=True))
     if employee.company_id not in member_ids or manager_profile.company_id not in member_ids:
         raise ValidationError("Both companies must be included in the approved organization scope.")
@@ -137,7 +139,9 @@ def validate_cross_company_manager_assignment(
         if current_id in visited:
             continue
         visited.add(current_id)
-        direct_manager_id = EmployeeProfile.objects.filter(pk=current_id).values_list("manager_profile_id", flat=True).first()
+        direct_manager_id = (
+            EmployeeProfile.objects.filter(pk=current_id).values_list("manager_profile_id", flat=True).first()
+        )
         if direct_manager_id:
             stack.append(direct_manager_id)
         stack.extend(extra_edges.get(current_id, set()))
@@ -309,9 +313,10 @@ def manager_approval_actor_source(
             if is_user_delegate_for_manager(user, manager_profile.user):
                 return "delegate"
 
-    if capability and active_cross_company_manager_assignments(user, capability=capability).filter(
-        employee=employee
-    ).exists():
+    if (
+        capability
+        and active_cross_company_manager_assignments(user, capability=capability).filter(employee=employee).exists()
+    ):
         return "cross_company_assignment"
 
     if allow_admin:
@@ -416,7 +421,8 @@ def fallback_invalid_manager_stage(instance, *, actor=None) -> bool:
     profile = getattr(instance, profile_attr, None)
     if profile is None and instance.__class__.__name__ == "LeaveRequest":
         profile = getattr(getattr(instance, "employee", None), "employee_profile", None)
-    if get_valid_direct_manager_user(profile):
+    capability = "leaves.approve" if instance.__class__.__name__ == "LeaveRequest" else None
+    if get_valid_manager_user(profile, cross_company_capability=capability):
         return False
 
     previous_status = instance.status

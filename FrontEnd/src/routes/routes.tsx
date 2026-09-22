@@ -1,5 +1,6 @@
 import { Suspense } from "react";
-import { Navigate, useParams } from "react-router-dom";
+import { Navigate } from "react-router-dom";
+import LegacyEmployeeRedirect from "./LegacyEmployeeRedirect";
 import RequireAuth from "./RequireAuth";
 import RequireRole from "./RequireRole";
 import RequireManagerAccess from "./RequireManagerAccess";
@@ -153,11 +154,6 @@ const LazyUnauthorized403Page = (
 import RouteErrorBoundary from "./RouteErrorBoundary";
 
 import BaseLayout from "../layouts/BaseLayout";
-
-function LegacyEmployeeRedirect() {
-  const { id } = useParams();
-  return <Navigate to={`/hr/employees/${id}`} replace />;
-}
 
 export const routes = [
   // Public
