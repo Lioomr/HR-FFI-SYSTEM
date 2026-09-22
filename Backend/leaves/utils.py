@@ -299,6 +299,13 @@ def get_contract_year_cycle(profile: EmployeeProfile, reference_date: date | Non
     if not start_date:
         return None, None
 
+    contract_expiry = getattr(profile, "contract_expiry", None)
+    if contract_expiry and start_date <= reference_date <= contract_expiry:
+        # An explicit active contract term is authoritative. In particular, do
+        # not reset entitlement on the start-date anniversary when the signed
+        # contract continues for a few more days.
+        return start_date, contract_expiry
+
     if reference_date < start_date:
         return start_date, _anniversary_for_year(start_date, start_date.year + 1) - timedelta(days=1)
 
