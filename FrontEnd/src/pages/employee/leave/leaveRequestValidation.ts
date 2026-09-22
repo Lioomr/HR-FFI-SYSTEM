@@ -1,5 +1,10 @@
 import dayjs from "dayjs";
 import type { Dayjs } from "dayjs";
+import { getHttpErrorMessage } from "../../../services/api/httpErrors";
+
+export function getLeavePageLoadErrorMessage(error: unknown): string {
+  return getHttpErrorMessage(error);
+}
 
 export const EMPLOYEE_LEAVE_BACKDATE_DAYS = 7;
 

@@ -280,7 +280,12 @@ class LateNoticeTemplateTests(LateAttendanceNoticeTestBase):
     def test_version_three_pairs_are_the_approved_files_and_older_pairs_are_untouched(self):
         for filename, digest in {**V3_PAIR_SHA256, **V2_PAIR_SHA256, **V1_PAIR_SHA256}.items():
             with self.subTest(filename=filename):
-                self.assertEqual(hashlib.sha256((TEMPLATES_DIR / filename).read_bytes()).hexdigest(), digest)
+                content = (TEMPLATES_DIR / filename).read_bytes()
+                if filename.endswith("_field_map_v2.json"):
+                    # These approved hashes were recorded on Windows. Git may
+                    # check JSON out with LF on Linux; preserve the content check.
+                    content = content.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")
+                self.assertEqual(hashlib.sha256(content).hexdigest(), digest)
 
         for level, copy in LEVEL_POLICY_COPY.items():
             with self.subTest(level=level):
@@ -311,9 +316,12 @@ class LateNoticeTemplateTests(LateAttendanceNoticeTestBase):
         assets = load_notice_assets(2)
         downgraded = dataclasses.replace(assets, meta={**assets.meta, "version": 2})
         stale_revision = dataclasses.replace(assets, meta={**assets.meta, "asset_revision": 2})
-        wrong_template = dataclasses.replace(assets, meta={**assets.meta, "template": "late_attendance_level_2_blank_v2.pdf"})
+        wrong_template = dataclasses.replace(
+            assets, meta={**assets.meta, "template": "late_attendance_level_2_blank_v2.pdf"}
+        )
         auto_signed = dataclasses.replace(
-            assets, fields={**assets.fields, HR_SIGNATURE_FIELD: {**assets.fields[HR_SIGNATURE_FIELD], "auto_sign": True}}
+            assets,
+            fields={**assets.fields, HR_SIGNATURE_FIELD: {**assets.fields[HR_SIGNATURE_FIELD], "auto_sign": True}},
         )
         for broken in (downgraded, stale_revision, wrong_template, auto_signed):
             with patch("attendance.late_notices.load_form_assets", return_value=broken):
@@ -349,7 +357,6 @@ class LateNoticeTemplateTests(LateAttendanceNoticeTestBase):
             document.close()
         for placeholder in placeholders:
             self.assertIn(placeholder, text)
-
 
     def test_notice_titles_and_level_labels_use_the_canonical_v3_taxonomy(self):
         for level, (english, arabic) in CANONICAL_LEVEL_LABELS.items():
@@ -389,7 +396,10 @@ class LateNoticeIssuanceTests(LateAttendanceNoticeTestBase):
         self.assertEqual({n.template_version for n in notices}, {3})
         values = [build_notice_values(notice) for notice in notices]
         self.assertEqual(
-            [(v["occurrence_number"], v["penalty_percentage"], v["penalty_amount"], v["policy_result"]) for v in values],
+            [
+                (v["occurrence_number"], v["penalty_percentage"], v["penalty_amount"], v["policy_result"])
+                for v in values
+            ],
             [
                 ("1", "0%", "SAR 0.00", LEVEL_POLICY_COPY[1]),
                 ("2", "5%", "SAR 5.00", LEVEL_POLICY_COPY[2]),
@@ -797,7 +807,9 @@ class LateNoticeDeliveryTests(LateAttendanceNoticeTestBase):
             self.assertNotIn(str(settings.PRIVATE_UPLOAD_ROOT), str(log.metadata))
 
     def test_whatsapp_delivery_uses_the_dedicated_template_exact_variables_and_private_attachment(self):
-        with patch("attendance.late_notices.dispatch_notification_channels", wraps=dispatch_notification_channels) as dispatch:
+        with patch(
+            "attendance.late_notices.dispatch_notification_channels", wraps=dispatch_notification_channels
+        ) as dispatch:
             self._late(date(2026, 5, 2))
             self._late(date(2026, 5, 3))
         notice = AttendanceLateNotice.objects.get(occurrence_number=2)
@@ -954,7 +966,9 @@ class LateNoticeWhatsAppTemplateTests(TestCase):
                 self.assertEqual(error, "")
                 arabic, english = text.index("إنذار التأخر في الحضور"), text.index("Late attendance notice")
                 self.assertTrue(text.startswith("⚠️ *إنذار التأخر في الحضور*\n"), text[:40])
-                self.assertIn("صدر لك إنذار تأخر في الحضور. نسختك الخاصة من الإنذار بصيغة PDF مرفقة بهذه الرسالة.", text)
+                self.assertIn(
+                    "صدر لك إنذار تأخر في الحضور. نسختك الخاصة من الإنذار بصيغة PDF مرفقة بهذه الرسالة.", text
+                )
                 self.assertNotIn("إشعار", text[:english])
                 self.assertLess(arabic, english)
                 self.assertLess(text.index(result_ar), english)
@@ -1026,7 +1040,9 @@ class LateNoticeApiTests(LateAttendanceNoticeTestBase):
         self.assertEqual(item["filename"], f"late_attendance_notice_{self.own.reference_number}.pdf")
         self.assertNotIn("attendance_late_notices/", str(employee_list.data))
 
-        self.assertEqual(self._ids(self._get(self.hr, NOTICES_URL, self.company)), {self.own.id, self.coworker_notice.id})
+        self.assertEqual(
+            self._ids(self._get(self.hr, NOTICES_URL, self.company)), {self.own.id, self.coworker_notice.id}
+        )
         self.assertEqual(self._ids(self._get(self.hr, NOTICES_URL, self.other_company)), {self.foreign_notice.id})
         self.assertEqual(self._get(self.hr, NOTICES_URL, get_head_office_node()).status_code, status.HTTP_403_FORBIDDEN)
 
@@ -1049,7 +1065,9 @@ class LateNoticeApiTests(LateAttendanceNoticeTestBase):
         )
         self.assertEqual(self._ids(self._get(self.hr, f"{NOTICES_URL}?notice_level=2,3", self.company)), set())
         self.assertEqual(
-            self._ids(self._get(self.hr, f"{NOTICES_URL}?employee_profile_id={self.coworker_profile.id}", self.company)),
+            self._ids(
+                self._get(self.hr, f"{NOTICES_URL}?employee_profile_id={self.coworker_profile.id}", self.company)
+            ),
             {self.coworker_notice.id},
         )
         self.assertEqual(

@@ -1,5 +1,12 @@
 # Docker Deployment Guide (Dev + Prod)
 
+Frontend Docker builds generate gzip sidecars after Vite completes. Nginx negotiates
+precompressed responses (`gzip_static`) with `Vary: Accept-Encoding`, reducing request-time
+compression work. Original assets remain available. Hashed assets use sendfile and a
+bounded file cache; successful responses retain immutable caching, while missing files
+do not. No database migration or environment variable is required. Rebuild only frontend
+after release checks pass; rolling back to the previous image restores its serving config.
+
 ## 1) Files You Use
 
 - Development: `docker-compose.dev.yml` (or existing `docker-compose.yml`)

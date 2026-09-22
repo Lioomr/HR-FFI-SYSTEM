@@ -43,7 +43,7 @@ def test_employee_submits_a_valid_request(team, client_for, notifications):
 
     notified = notifications.pending.call_args.kwargs
     assert notified["users"] == [team.manager]
-    assert notified["request_type"] == "Permission Request"
+    assert notified["request_type"] == "Exit Permission"
     assert notified["action_path"] == f"/manager/permission-requests/{data['id']}"
 
 

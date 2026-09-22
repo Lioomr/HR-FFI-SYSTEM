@@ -15,12 +15,10 @@ vi.mock("../../../services/api/employeesApi", () => ({
     .mockResolvedValue({ status: "success", data: [] }),
 }));
 
-import RequestLeavePage, {
-  getLeavePageLoadErrorMessage,
-  LeaveSubmissionError,
-} from "./RequestLeavePage";
+import RequestLeavePage, { LeaveSubmissionError } from "./RequestLeavePage";
 import { listDelegationCandidates } from "../../../services/api/employeesApi";
 import {
+  getLeavePageLoadErrorMessage,
   getLeaveValidationErrors,
   isEmployeeLeaveDateDisabled,
 } from "./leaveRequestValidation";
@@ -110,10 +108,13 @@ describe("employee leave backdated dates", () => {
           status: 404,
           data: {
             status: "error",
-            message: "No employee profile is linked to your account in the selected company.",
+            message:
+              "No employee profile is linked to your account in the selected company.",
           },
         },
       }),
-    ).toBe("No employee profile is linked to your account in the selected company.");
+    ).toBe(
+      "No employee profile is linked to your account in the selected company.",
+    );
   });
 });
