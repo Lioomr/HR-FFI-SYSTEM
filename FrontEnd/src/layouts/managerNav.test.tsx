@@ -92,6 +92,10 @@ async function renderShell(path = "/employee/home") {
             path="/employee/attendance"
             element={<div>Personal attendance</div>}
           />
+          <Route
+            path="/employee/leave/requests"
+            element={<div>Own leave requests</div>}
+          />
         </Route>
       </Routes>
     </MemoryRouter>,
@@ -369,11 +373,11 @@ describe("BaseLayout manager navigation", () => {
     ).map((node) => node.textContent);
     expect(headings).toEqual([
       "Work Inbox",
-      "My Requests",
       "People",
       "Hiring",
       "Payroll & Assets",
       "Communication",
+      "My Requests",
       "Account",
     ]);
 
@@ -388,11 +392,36 @@ describe("BaseLayout manager navigation", () => {
     expect(groupOf("/hr/starting-work-acknowledgments")).toBe("Hiring");
     expect(groupOf("/hr/templates")).toBe("Hiring");
     expect(groupOf("/hr/payroll")).toBe("Payroll & Assets");
+    expect(groupOf("/employee/attendance")).toBe("My Requests");
+    expect(groupOf("/employee/assets")).toBe("My Requests");
+    // HR files and tracks its own requests from the inbox pages instead.
+    for (const href of [
+      "/employee/leave/request",
+      "/employee/leave/requests",
+      "/employee/loans/request",
+      "/employee/loans",
+      "/employee/permission-requests/new",
+      "/employee/permission-requests",
+    ]) {
+      expect(document.querySelector(`a[href="${href}"]`)).toBeNull();
+    }
     // "Inbox" read as a second copy of Pending Requests.
     expect(screen.getByText("Request Queues")).toBeInTheDocument();
     expect(
       screen.queryByText("Inbox", { selector: ".ant-menu-title-content" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("highlights the HR leave inbox while HR views its own leave requests", async () => {
+    signIn("HRManager");
+    setManagerAccess(false);
+
+    await renderShell("/employee/leave/requests");
+
+    const inboxLink = screen.getByRole("link", { name: "Leave Inbox" });
+    expect(inboxLink.closest(".ant-menu-item")).toHaveClass(
+      "ant-menu-item-selected",
+    );
   });
 
   it("does not add manager navigation to the SystemAdmin menu", async () => {

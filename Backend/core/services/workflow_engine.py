@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -201,7 +203,52 @@ def _template_for(workflow_key: str) -> dict[str, Any]:
     return WORKFLOW_TEMPLATES[workflow_key]
 
 
+# Request-scoped memo for ``get_or_create_workflow_definition``. Unset (None)
+# outside ``cached_workflow_definitions()``, so writes and background jobs
+# always read the definition fresh.
+_definition_cache: ContextVar[dict[str, WorkflowDefinition] | None] = ContextVar(
+    "workflow_definition_cache", default=None
+)
+
+
+@contextmanager
+def cached_workflow_definitions():
+    """Read each workflow definition at most once within this block (e.g. one inbox request)."""
+    token = _definition_cache.set({})
+    try:
+        yield
+    finally:
+        _definition_cache.reset(token)
+
+
+_STAGE_FIELDS = ("title", "approver_role", "order", "is_optional", "is_terminal", "condition_key")
+
+
+def _stages_match_template(definition: WorkflowDefinition, template_stages: list[dict]) -> bool:
+    """True when the stored stages equal the template (missing template fields use model defaults)."""
+    stored = {stage["key"]: stage for stage in definition.stages.values("key", *_STAGE_FIELDS)}
+    if set(stored) != {stage["key"] for stage in template_stages}:
+        return False
+    for stage_data in template_stages:
+        row = stored[stage_data["key"]]
+        for field in _STAGE_FIELDS:
+            expected = stage_data.get(field, WorkflowStageDefinition._meta.get_field(field).get_default())
+            if row[field] != expected:
+                return False
+    return True
+
+
 def get_or_create_workflow_definition(workflow_key: str) -> WorkflowDefinition:
+    cache = _definition_cache.get()
+    if cache is not None and workflow_key in cache:
+        return cache[workflow_key]
+    definition = _get_or_create_workflow_definition(workflow_key)
+    if cache is not None:
+        cache[workflow_key] = definition
+    return definition
+
+
+def _get_or_create_workflow_definition(workflow_key: str) -> WorkflowDefinition:
     template = _template_for(workflow_key)
     definition, _ = WorkflowDefinition.objects.get_or_create(
         key=workflow_key,
@@ -220,6 +267,11 @@ def get_or_create_workflow_definition(workflow_key: str) -> WorkflowDefinition:
         definition.module_key = template["module_key"]
         definition.is_active = True
         definition.save(update_fields=["name", "module_key", "is_active", "updated_at"])
+
+    if _stages_match_template(definition, template["stages"]):
+        # Called on every workflow sync (including page reads); only rewrite
+        # the stages when they actually drifted from the code template.
+        return definition
 
     with transaction.atomic():
         valid_keys = {stage["key"] for stage in template["stages"]}

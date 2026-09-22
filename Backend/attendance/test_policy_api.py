@@ -55,7 +55,6 @@ class AttendancePolicyApiTests(TestCase):
         settings_obj.work_day_start_time = time(9, 0)
         settings_obj.default_shift_end_time = time(18, 0)
         settings_obj.grace_window_minutes = 15
-        settings_obj.grace_use_limit_per_month = 3
         settings_obj.post_grace_tolerance_minutes = 5
         settings_obj.save()
         self.today = timezone.localdate()

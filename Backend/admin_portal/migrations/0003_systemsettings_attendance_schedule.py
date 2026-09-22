@@ -2,7 +2,14 @@ from datetime import time
 
 from django.db import migrations, models
 
-import admin_portal.models
+
+def default_work_week_days():
+    """Historical default for the removed ``work_week_days`` field.
+
+    Kept local to this migration so the model module no longer has to carry a
+    callable that only migration history references.
+    """
+    return [6, 0, 1, 2, 3]
 
 
 class Migration(migrations.Migration):
@@ -31,7 +38,7 @@ class Migration(migrations.Migration):
             model_name="systemsettings",
             name="work_week_days",
             field=models.JSONField(
-                blank=True, default=admin_portal.models.default_work_week_days
+                blank=True, default=default_work_week_days
             ),
         ),
     ]

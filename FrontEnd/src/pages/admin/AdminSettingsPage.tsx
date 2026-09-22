@@ -3,7 +3,6 @@ import {
   Alert,
   Button,
   Card,
-  Checkbox,
   Divider,
   Form,
   InputNumber,
@@ -27,7 +26,6 @@ import { isApiError } from "../../services/api/apiTypes";
 import type { SettingsDto } from "../../services/api/apiTypes";
 import { getFirstApiErrorMessage } from "../../utils/formErrors";
 import { useI18n } from "../../i18n/useI18n";
-import { WORK_WEEK_DAY_OPTIONS } from "./workWeekDays";
 
 type FormValues = SettingsDto;
 
@@ -308,20 +306,6 @@ export default function AdminSettingsPage() {
               <Switch />
             </Form.Item>
           </Space>
-
-          <Form.Item
-            label={t("admin.settings.lblWorkingDays")}
-            name={["attendance", "work_week_days"]}
-            extra={t("admin.settings.helpWorkingDays")}
-            style={{ marginTop: 8 }}
-          >
-            <Checkbox.Group
-              options={WORK_WEEK_DAY_OPTIONS.map((day) => ({
-                label: t(day.labelKey),
-                value: day.value,
-              }))}
-            />
-          </Form.Item>
 
           <Typography.Title level={5}>
             {t("admin.settings.secAttendancePolicy")}

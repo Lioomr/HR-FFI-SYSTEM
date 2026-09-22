@@ -45,6 +45,31 @@ class AccountTests(TestCase):
         )
         return user
 
+    def test_me_returns_english_and_arabic_names_from_employee_profile(self):
+        user = User.objects.create_user(email="named@ffi.com", password=self.password, full_name="Account Name")
+        EmployeeProfile.objects.create(
+            user=user,
+            company=self.company,
+            employee_id="NAMED-1",
+            full_name="Mohammed Sami Alansari",
+            full_name_ar="محمد سامي الأنصاري",
+        )
+        self.client.force_authenticate(user=user)
+
+        data = self.client.get("/auth/me").data["data"]
+
+        self.assertEqual(data["full_name_en"], "Mohammed Sami Alansari")
+        self.assertEqual(data["full_name_ar"], "محمد سامي الأنصاري")
+
+    def test_me_falls_back_to_account_name_without_employee_profile(self):
+        user = User.objects.create_user(email="plain@ffi.com", password=self.password, full_name="Plain Admin")
+        self.client.force_authenticate(user=user)
+
+        data = self.client.get("/auth/me").data["data"]
+
+        self.assertEqual(data["full_name_en"], "Plain Admin")
+        self.assertIsNone(data["full_name_ar"])
+
     def test_login_success(self):
         response = self.client.post("/auth/login", {"email": "test@ffi.com", "password": self.password})
         self.assertEqual(response.status_code, status.HTTP_200_OK)

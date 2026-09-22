@@ -19,11 +19,10 @@ describe("attendance policy settings", () => {
     await updateAttendancePolicy({
       grace_window_minutes: 20,
       late_grace_minutes: 15,
-      grace_use_limit_per_month: 3,
-    });
+      });
 
     expect(api.put).toHaveBeenCalledWith("/settings/", {
-      attendance: { grace_window_minutes: 20, grace_use_limit_per_month: 3 },
+      attendance: { grace_window_minutes: 20 },
     });
   });
 

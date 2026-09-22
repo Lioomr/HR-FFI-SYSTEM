@@ -227,6 +227,28 @@ class EmployeeProfileTests(TestCase):
         )
         self.assertIn("Reassign or preserve", response.data["errors"][0])
 
+    def test_unlinking_user_with_annual_leave_payment_relationship_returns_conflict(self):
+        profile = EmployeeProfile.objects.create(
+            user=self.employee_user,
+            company=self.company,
+            employee_id="EMP-ANNUAL-PAY-UNL",
+        )
+
+        self.client.force_authenticate(user=self.hr_user)
+        with patch.object(
+            EmployeeProfile,
+            "save",
+            side_effect=IntegrityError("Changing this employee user would orphan Annual Leave payments."),
+        ):
+            response = self.client.patch(f"/api/employees/{profile.pk}/", {"user_id": None}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(
+            response.data["message"],
+            "This account cannot be unlinked because annual leave payment records reference it.",
+        )
+        self.assertIn("Preserve the annual leave payment history", response.data["errors"][0])
+
     def test_unlinking_user_is_not_blocked_by_stale_manager_profile(self):
         profile = EmployeeProfile.objects.create(
             user=self.employee_user,

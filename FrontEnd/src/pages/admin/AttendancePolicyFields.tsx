@@ -63,13 +63,6 @@ export default function AttendancePolicyFields() {
       max: 240,
     },
     {
-      name: "grace_use_limit_per_month",
-      label: t("admin.settings.lblGraceUseLimit"),
-      help: t("admin.settings.helpGraceUseLimit"),
-      min: 0,
-      max: 31,
-    },
-    {
       name: "post_grace_tolerance_minutes",
       label: t("admin.settings.lblPostGraceTolerance"),
       help: t("admin.settings.helpPostGraceTolerance"),

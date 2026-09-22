@@ -43,7 +43,6 @@ class AttendancePayrollDeductionTests(TestCase):
         )
         settings_obj = SystemSettings.get_solo()
         settings_obj.grace_window_minutes = 15
-        settings_obj.grace_use_limit_per_month = 3
         settings_obj.post_grace_tolerance_minutes = 5
         settings_obj.save()
 

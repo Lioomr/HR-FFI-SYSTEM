@@ -131,6 +131,40 @@ class AttendancePolicySettingsAuthorizationTests(TestCase):
             ],
         )
 
+    def test_removed_work_week_and_grace_limit_settings_are_absent_from_the_response(self):
+        """Both are fixed policy now: the late threshold is 3, the week is by nationality."""
+        self.client.force_authenticate(self.hr)
+
+        response = self.client.get("/settings/", **self.headers)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        attendance = response.data["data"]["attendance"]
+        self.assertNotIn("grace_use_limit_per_month", attendance)
+        self.assertNotIn("work_week_days", attendance)
+
+    def test_removed_settings_are_ignored_rather_than_stored_when_a_client_still_sends_them(self):
+        self.client.force_authenticate(self.hr)
+
+        response = self.client.put(
+            "/settings/",
+            {
+                "attendance": {
+                    "grace_window_minutes": 15,
+                    "grace_use_limit_per_month": 9,
+                    "work_week_days": [0, 1, 2],
+                }
+            },
+            format="json",
+            **self.headers,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertNotIn("grace_use_limit_per_month", response.data["data"]["attendance"])
+        self.assertNotIn("work_week_days", response.data["data"]["attendance"])
+        settings_obj = SystemSettings.get_solo()
+        self.assertFalse(hasattr(settings_obj, "grace_use_limit_per_month"))
+        self.assertFalse(hasattr(settings_obj, "work_week_days"))
+
     def test_policy_is_global_even_when_an_active_company_header_is_present(self):
         self.client.force_authenticate(self.hr)
         response = self.client.put(

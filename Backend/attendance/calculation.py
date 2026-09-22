@@ -18,6 +18,7 @@ from django.utils import timezone
 from admin_portal.models import SystemSettings
 
 from .models import AttendanceAdjustment, AttendanceDailyResult, BioTimeRawPunch, NormalizedAttendanceEvent
+from .schedule import is_working_day
 
 
 @dataclass(frozen=True)
@@ -117,8 +118,13 @@ def calculate_daily_attendance(
     approved_permission_minutes: int = 0,
     adjustments: Iterable[AttendanceAdjustment] | None = None,
     settings_obj: SystemSettings | None = None,
+    working_day: bool = True,
 ) -> DailyAttendanceDTO:
-    """Calculate time inputs only. It never produces a penalty or deduction."""
+    """Calculate time inputs only. It never produces a penalty or deduction.
+
+    ``working_day`` is False on the employee's own day off: the punches are still
+    normalized and recorded, but the day owes no scheduled time and is never late.
+    """
     settings_obj = settings_obj or SystemSettings.get_solo()
     shift = resolve_shift(work_date, settings_obj)
     events = sorted(normalized_events, key=lambda event: (event.occurred_at, event.id or 0))
@@ -204,13 +210,14 @@ def calculate_daily_attendance(
         )
     approved_permission_minutes = max(0, int(approved_permission_minutes))
     accounted = physical_work_minutes + approved_permission_minutes
-    missing = max(0, shift.scheduled_minutes - accounted)
+    # A day off is scheduled for no work, so it can never be missing any.
+    missing = max(0, shift.scheduled_minutes - accounted) if working_day else 0
 
     # Grace use exhaustion and the later five-minute tolerance are permission
     # workflow concerns. This foundation only classifies against the full
     # configured grace window.
     late_cutoff = shift.start_at + timedelta(minutes=int(settings_obj.grace_window_minutes))
-    status_input = "LATE" if first_check_in and first_check_in > late_cutoff else "PRESENT"
+    status_input = "LATE" if working_day and first_check_in and first_check_in > late_cutoff else "PRESENT"
     return DailyAttendanceDTO(
         shift=shift,
         physical_work_minutes=physical_work_minutes,
@@ -261,6 +268,7 @@ class AttendanceCalculationService:
                 events,
                 work_date=work_date,
                 adjustments=adjustments,
+                working_day=is_working_day(profile, work_date),
             )
             defaults = {
                 "company": profile.company,

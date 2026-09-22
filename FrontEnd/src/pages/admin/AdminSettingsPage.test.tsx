@@ -30,13 +30,11 @@ const DEFAULT_ATTENDANCE = {
   default_shift_end_time: "18:00",
   late_grace_minutes: 15,
   grace_window_minutes: 15,
-  grace_use_limit_per_month: 3,
   post_grace_tolerance_minutes: 5,
   approved_late_permission_limit_per_month: 3,
   during_shift_permission_max_minutes: 120,
   permission_request_advance_limit_days: 7,
   absence_detection_enabled: true,
-  work_week_days: [6, 0, 1, 2, 3],
 };
 
 /** What the page PUTs: the canonical grace field, never the legacy alias. */
@@ -45,13 +43,11 @@ const CANONICAL_ATTENDANCE = {
   work_day_start_time: "09:00",
   default_shift_end_time: "18:00",
   grace_window_minutes: 15,
-  grace_use_limit_per_month: 3,
   post_grace_tolerance_minutes: 5,
   approved_late_permission_limit_per_month: 3,
   during_shift_permission_max_minutes: 120,
   permission_request_advance_limit_days: 7,
   absence_detection_enabled: true,
-  work_week_days: [6, 0, 1, 2, 3],
 };
 
 function makeSettings(
@@ -176,7 +172,6 @@ describe("work schedule controls", () => {
         late_grace_minutes: 20,
         grace_window_minutes: 20,
         absence_detection_enabled: false,
-        work_week_days: [0, 1, 2, 3, 4],
       }),
     });
 
@@ -186,13 +181,17 @@ describe("work schedule controls", () => {
     expect(
       screen.getByLabelText("Automatic absence detection"),
     ).not.toBeChecked();
-    // Working days Mon–Fri selected, weekend days not.
-    expect(screen.getByRole("checkbox", { name: "Monday" })).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "Friday" })).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "Sunday" })).not.toBeChecked();
-    expect(
-      screen.getByRole("checkbox", { name: "Saturday" }),
-    ).not.toBeChecked();
+  });
+
+  it("offers no working-day controls: the week is fixed by nationality", async () => {
+    await renderLoaded();
+
+    for (const day of ["Monday", "Friday", "Saturday", "Sunday"]) {
+      expect(
+        screen.queryByRole("checkbox", { name: day }),
+      ).not.toBeInTheDocument();
+    }
+    expect(screen.queryByText("Working days")).not.toBeInTheDocument();
   });
 
   it("round-trips the untouched work-schedule values on save", async () => {
@@ -216,20 +215,6 @@ describe("work schedule controls", () => {
     expect(attendance).not.toHaveProperty("late_grace_minutes");
   });
 
-  it("submits the working-day numbers the user leaves checked", async () => {
-    await renderLoaded();
-
-    const thursday = screen.getByRole("checkbox", { name: "Thursday" });
-    expect(thursday).toBeChecked();
-    fireEvent.click(thursday); // drop Thursday (weekday() === 3)
-    fireEvent.click(save());
-
-    await waitFor(() => expect(put).toHaveBeenCalled(), FIND);
-    expect(put.mock.calls[0][0].attendance.work_week_days).toEqual([
-      6, 0, 1, 2,
-    ]);
-  });
-
   it("toggles absence detection off in the payload", async () => {
     await renderLoaded();
 
@@ -248,7 +233,7 @@ describe("attendance policy controls", () => {
     await renderLoaded();
 
     expect(screen.getByLabelText("Default shift end")).toHaveValue("18:00");
-    expect(screen.getByLabelText("Grace uses per month")).toHaveValue("3");
+    expect(screen.queryByLabelText("Grace uses per month")).toBeNull();
     changeNumber("Tolerance after grace runs out (minutes)", "10");
     changeNumber("Approved Late Permissions per month", "4");
     changeNumber("During Shift permission limit (minutes)", "90");

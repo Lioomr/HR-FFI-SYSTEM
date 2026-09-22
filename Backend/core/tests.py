@@ -1,6 +1,8 @@
 import time
-from datetime import date
+from collections import Counter
+from datetime import date, timedelta
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -15,6 +17,7 @@ from rest_framework.test import APITestCase
 from assets.models import Asset, AssetReturnRequest
 from attendance.models import AttendanceRecord
 from audit.models import AuditLog
+from core import views as core_views
 from core.models import DelegationRule, UserPreference
 from core.permissions import get_role, is_department_ceo_approver_user
 from core.responses import error
@@ -168,6 +171,161 @@ class HrSummaryViewTests(APITestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["data"]["total_employees"], 3)
+
+    def _make_profile(self, code, *, status=EmployeeProfile.EmploymentStatus.ACTIVE, nationality="", **extra):
+        return EmployeeProfile.objects.create(
+            employee_id=f"MIX-{code}",
+            full_name=f"Mix Employee {code}",
+            basic_salary=Decimal("5000.00"),
+            department_ref=self.department,
+            position_ref=self.position,
+            hire_date=date(2024, 3, 1),
+            company=self.company,
+            employment_status=status,
+            nationality=nationality,
+            **extra,
+        )
+
+    def _approved_leave(self, profile, leave_type, *, will_travel=False, start_offset=-1, end_offset=1, **extra):
+        today = timezone.localdate()
+        return LeaveRequest.objects.create(
+            employee_profile=profile,
+            company=self.company,
+            leave_type=leave_type,
+            start_date=today + timedelta(days=start_offset),
+            end_date=today + timedelta(days=end_offset),
+            status=extra.pop("status", LeaveRequest.RequestStatus.APPROVED),
+            will_travel=will_travel,
+            **extra,
+        )
+
+    def test_summary_includes_workforce_status_breakdown(self):
+        EmployeeProfile.objects.filter(user__in=[self.hr_user, self.admin_user]).update(
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE
+        )
+        annual = LeaveType.objects.create(company=self.company, name="Annual", code="ANNUAL", is_paid=True)
+        unpaid = LeaveType.objects.create(company=self.company, name="Unpaid", code="UNPAID", is_paid=False)
+
+        travelling = self._make_profile("travel")
+        self._approved_leave(travelling, annual, will_travel=True)
+        unpaid_home = self._make_profile("unpaid-home")
+        self._approved_leave(unpaid_home, unpaid)
+        unpaid_abroad = self._make_profile("unpaid-abroad")
+        self._approved_leave(unpaid_abroad, unpaid, will_travel=True)
+        # Any leave type without travel counts as on leave inside the country.
+        paid_home = self._make_profile("paid-home")
+        self._approved_leave(paid_home, annual)
+        # Leave that is not approved, already over, or not started does not count.
+        pending = self._make_profile("pending")
+        self._approved_leave(pending, annual, will_travel=True, status=LeaveRequest.RequestStatus.PENDING_HR)
+        finished = self._make_profile("finished")
+        self._approved_leave(finished, annual, will_travel=True, start_offset=-5, end_offset=-1)
+        cancelled = self._make_profile("cancelled")
+        self._approved_leave(cancelled, unpaid, is_active=False)
+        # Hidden statuses and archived employees.
+        self._make_profile("prehire", status=EmployeeProfile.EmploymentStatus.PREHIRE)
+        self._make_profile("suspended", status=EmployeeProfile.EmploymentStatus.SUSPENDED)
+        self._make_profile("archived-1", is_archived=True)
+        self._make_profile("archived-2", status=EmployeeProfile.EmploymentStatus.TERMINATED, is_archived=True)
+
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.get("/api/hr/summary/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data["data"]["workforce_status"],
+            {
+                # hr + admin + pending + finished + cancelled
+                "currently_employed": 5,
+                "on_leave_outside": 2,
+                "on_leave_inside": 2,
+                "archived": 2,
+            },
+        )
+
+    def test_summary_includes_every_nationality(self):
+        EmployeeProfile.objects.filter(user__in=[self.hr_user, self.admin_user]).update(
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE, nationality="Saudi Arabia", is_saudi=True
+        )
+        self._make_profile("eg-1", nationality="Egypt")
+        self._make_profile("eg-2", nationality="egypt ")
+        self._make_profile("eg-3", nationality="Egypt", status=EmployeeProfile.EmploymentStatus.PREHIRE)
+        self._make_profile("pk-1", nationality="pakistan")
+        self._make_profile("blank", nationality="")
+        self._make_profile("sa-archived", nationality="Saudi Arabia", is_saudi=True, is_archived=True)
+
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.get("/api/hr/summary/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id))
+
+        self.assertEqual(response.status_code, 200)
+        data = response.data["data"]["nationality_breakdown"]
+        self.assertEqual(data["saudi_active"], 2)
+        self.assertEqual(data["active_total"], 6)
+        self.assertEqual(
+            data["nationalities"],
+            [
+                {"nationality": "Egypt", "total": 3, "active": 2, "is_saudi": False},
+                {"nationality": "Saudi Arabia", "total": 2, "active": 2, "is_saudi": True},
+                {"nationality": "Pakistan", "total": 1, "active": 1, "is_saudi": False},
+                {"nationality": None, "total": 1, "active": 1, "is_saudi": False},
+            ],
+        )
+
+    def test_summary_does_not_build_the_pending_approvals_list(self):
+        self.client.force_authenticate(user=self.hr_user)
+
+        with patch("core.views._build_pending_request_items_for_request") as builder:
+            response = self.client.get("/api/hr/summary/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id))
+
+        self.assertEqual(response.status_code, 200)
+        builder.assert_not_called()
+        self.assertNotIn("pending_approvals", response.data["data"])
+
+    def test_summary_breaks_down_expiring_documents(self):
+        today = timezone.localdate()
+        soon = today + timedelta(days=5)
+        later = today + timedelta(days=20)
+        saudi = self._make_profile("saudi", is_saudi=True, id_expiry=soon)
+        expat = self._make_profile(
+            "expat", id_expiry=later, passport_expiry=soon, work_license_expiry=today, health_card_expiry=later
+        )
+        self._make_profile("contract", contract_expiry=today + timedelta(days=30))
+        # Outside the 30-day window, already expired, or archived: not counted.
+        self._make_profile("far", passport_expiry=today + timedelta(days=31))
+        self._make_profile("expired", passport_expiry=today - timedelta(days=1))
+        self._make_profile("archived-doc", passport_expiry=soon, is_archived=True)
+
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.get("/api/hr/summary/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id))
+
+        self.assertEqual(response.status_code, 200)
+        data = response.data["data"]
+        self.assertEqual(data["expiring_docs"], 3)
+        expiring = data["expiring_documents"]
+        self.assertEqual(expiring["window_days"], 30)
+        self.assertEqual(expiring["employee_count"], 3)
+        self.assertEqual(
+            expiring["by_type"],
+            {
+                "national_id": 1,
+                "iqama": 1,
+                "passport": 1,
+                "work_license": 1,
+                "contract": 1,
+                "health_insurance": 1,
+            },
+        )
+        self.assertEqual(
+            [(item["employee_id"], item["doc_type"], item["days_left"]) for item in expiring["soonest"]],
+            [
+                (expat.id, "work_license", 0),
+                (expat.id, "passport", 5),
+                (saudi.id, "national_id", 5),
+                (expat.id, "iqama", 20),
+                (expat.id, "health_insurance", 20),
+            ],
+        )
+        self.assertEqual(expiring["soonest"][0]["full_name"], "Mix Employee expat")
 
 
 class HrSummaryViewCacheTests(APITestCase):
@@ -595,6 +753,29 @@ class PendingRequestsApiTests(APITestCase):
             status=AssetReturnRequest.RequestStatus.PENDING,
         )
 
+    def test_pending_requests_resolve_active_company_once(self):
+        self._create_hr_pending_requests()
+        self.client.force_authenticate(user=self.hr_user)
+
+        with patch("core.views.get_active_company_for_request", wraps=core_views.get_active_company_for_request) as spy:
+            response = self.client.get("/api/core/pending-requests/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["data"]["items"]), 4)
+        self.assertEqual(spy.call_count, 1)
+
+    def test_pending_requests_sync_each_workflow_at_most_once(self):
+        self._create_hr_pending_requests()
+        self.client.force_authenticate(user=self.hr_user)
+
+        with patch("core.views.sync_workflow", wraps=core_views.sync_workflow) as spy:
+            response = self.client.get("/api/core/pending-requests/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["data"]["items"]), 4)
+        synced = Counter((call.args[0].__class__.__name__, call.args[0].pk) for call in spy.call_args_list)
+        self.assertEqual({key: count for key, count in synced.items() if count > 1}, {})
+
     def test_hr_pending_requests_include_all_hr_workflow_types_and_filters(self):
         self._create_hr_pending_requests()
         self.client.force_authenticate(user=self.hr_user)
@@ -613,6 +794,13 @@ class PendingRequestsApiTests(APITestCase):
             HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
         )
         self.assertEqual([item["request_type"] for item in loan_response.data["data"]["items"]], ["LOAN"])
+        # Per-type counts ignore the type filter so the inbox chips keep every type.
+        self.assertEqual(
+            loan_response.data["data"]["counts_by_type"],
+            {"LEAVE": 1, "LOAN": 1, "ATTENDANCE": 1, "ASSET": 1},
+        )
+        self.assertEqual(loan_response.data["data"]["total_count"], 4)
+        self.assertEqual(loan_response.data["data"]["count"], 1)
 
         search_response = self.client.get(
             "/api/core/pending-requests/",
@@ -620,6 +808,7 @@ class PendingRequestsApiTests(APITestCase):
             HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
         )
         self.assertEqual([item["request_type"] for item in search_response.data["data"]["items"]], ["LOAN"])
+        self.assertEqual(search_response.data["data"]["counts_by_type"], {"LOAN": 1})
 
     def test_pending_request_time_uses_request_submission_timestamp(self):
         leave = LeaveRequest.objects.create(

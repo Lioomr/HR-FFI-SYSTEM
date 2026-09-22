@@ -28,27 +28,47 @@ class WorkScheduleTests(TestCase):
         s = SystemSettings.get_solo()
         s.work_day_start_time = time(9, 0)
         s.late_grace_minutes = 15
-        s.work_week_days = [0, 1, 2, 3, 4]  # Mon-Fri for deterministic tests
         s.absence_detection_enabled = True
         s.save()
+        self.company = OrganizationNode.objects.create(
+            code="ATT_WORKWEEK", name="Work Week Co", node_type=OrganizationNode.NodeType.COMPANY
+        )
+        self.expat = EmployeeProfile.objects.create(
+            full_name="Expat", company=self.company, employee_id="WW001", is_saudi=False
+        )
+        self.saudi = EmployeeProfile.objects.create(
+            full_name="Saudi", company=self.company, employee_id="WW002", is_saudi=True
+        )
 
     def test_on_time_is_present(self):
         # 2026-01-05 is a Monday
         self.assertEqual(
-            classify_check_in(_aware(2026, 1, 5, 9, 10), date(2026, 1, 5)),
+            classify_check_in(_aware(2026, 1, 5, 9, 10), date(2026, 1, 5), self.expat),
             AttendanceRecord.Status.PRESENT,
         )
 
     def test_past_grace_is_late(self):
         self.assertEqual(
-            classify_check_in(_aware(2026, 1, 5, 9, 16), date(2026, 1, 5)),
+            classify_check_in(_aware(2026, 1, 5, 9, 16), date(2026, 1, 5), self.expat),
             AttendanceRecord.Status.LATE,
         )
 
-    def test_non_working_day_never_late(self):
-        # 2026-01-10 is a Saturday
+    def test_friday_is_never_late_for_anyone(self):
+        # 2026-01-09 is a Friday: a day off whatever the nationality.
+        for profile in (self.expat, self.saudi):
+            self.assertEqual(
+                classify_check_in(_aware(2026, 1, 9, 11, 0), date(2026, 1, 9), profile),
+                AttendanceRecord.Status.PRESENT,
+            )
+
+    def test_saturday_is_a_working_day_only_for_non_saudi_employees(self):
+        # 2026-01-10 is a Saturday.
         self.assertEqual(
-            classify_check_in(_aware(2026, 1, 10, 11, 0), date(2026, 1, 10)),
+            classify_check_in(_aware(2026, 1, 10, 11, 0), date(2026, 1, 10), self.expat),
+            AttendanceRecord.Status.LATE,
+        )
+        self.assertEqual(
+            classify_check_in(_aware(2026, 1, 10, 11, 0), date(2026, 1, 10), self.saudi),
             AttendanceRecord.Status.PRESENT,
         )
 
@@ -63,7 +83,6 @@ class BioTimeLateClassificationTests(TestCase):
         s = SystemSettings.get_solo()
         s.work_day_start_time = time(9, 0)
         s.late_grace_minutes = 15
-        s.work_week_days = [0, 1, 2, 3, 4]
         s.save()
         self.company = OrganizationNode.objects.create(
             code="ATT_SCHED", name="Sched Co", node_type=OrganizationNode.NodeType.COMPANY
@@ -99,7 +118,6 @@ class BioTimeLateClassificationTests(TestCase):
 class AbsenceDetectionTests(TestCase):
     def setUp(self):
         s = SystemSettings.get_solo()
-        s.work_week_days = [0, 1, 2, 3, 4]
         s.absence_detection_enabled = True
         s.save()
         self.company = OrganizationNode.objects.create(
@@ -163,9 +181,27 @@ class AbsenceDetectionTests(TestCase):
         self.assertEqual(second["skipped_on_leave"], 1)
 
     def test_non_working_day_skipped(self):
-        result = mark_absentees_for_date(date(2026, 1, 10))  # Saturday
+        # Friday is the one day off every employee shares.
+        result = mark_absentees_for_date(date(2026, 1, 9))
         self.assertTrue(result["non_working_day"])
         self.assertEqual(result["created"], 0)
+
+    def test_saturday_is_skipped_only_for_saudi_employees(self):
+        # 2026-01-10 is a Saturday: a work day for these non-Saudi profiles.
+        saturday_result = mark_absentees_for_date(date(2026, 1, 10))
+        self.assertFalse(saturday_result["non_working_day"])
+        self.assertTrue(
+            AttendanceRecord.objects.filter(
+                employee_profile=self.absent_emp, date=date(2026, 1, 10), status=AttendanceRecord.Status.ABSENT
+            ).exists()
+        )
+
+        EmployeeProfile.objects.filter(company=self.company).update(is_saudi=True)
+        AttendanceRecord.objects.filter(date=date(2026, 1, 10)).delete()
+
+        saudi_result = mark_absentees_for_date(date(2026, 1, 10))
+        self.assertTrue(saudi_result["non_working_day"])
+        self.assertEqual(saudi_result["created"], 0)
 
     def test_disabled_setting_blocks_scheduled_task(self):
         s = SystemSettings.get_solo()

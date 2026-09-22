@@ -41,7 +41,6 @@ class AttendancePolicyTestBase(TestCase):
         settings_obj.work_day_start_time = time(9, 0)
         settings_obj.default_shift_end_time = time(18, 0)
         settings_obj.grace_window_minutes = 15
-        settings_obj.grace_use_limit_per_month = 3
         settings_obj.post_grace_tolerance_minutes = 5
         settings_obj.save()
 
@@ -81,10 +80,6 @@ class AttendancePolicyTestBase(TestCase):
 class AttendancePolicyEnforcementTests(AttendancePolicyTestBase):
     @override_settings(LATE_POLICY_EFFECTIVE_FROM="2026-09-17")
     def test_policy_ignores_late_attendance_before_the_effective_date(self):
-        settings_obj = SystemSettings.get_solo()
-        settings_obj.grace_use_limit_per_month = 0
-        settings_obj.save(update_fields=["grace_use_limit_per_month"])
-
         historical = self._result(date(2026, 9, 16), 30)
         current = self._result(date(2026, 9, 17), 30)
 
@@ -93,26 +88,24 @@ class AttendancePolicyEnforcementTests(AttendancePolicyTestBase):
         self.assertFalse(AttendanceLateViolation.objects.filter(date=historical.date).exists())
         self.assertTrue(AttendanceLateViolation.objects.filter(date=current.date).exists())
 
-    def test_three_grace_arrivals_succeed_then_0906_is_late_and_penalized(self):
-        for day in (date(2026, 5, 1), date(2026, 5, 2), date(2026, 5, 3)):
+    def test_four_arrivals_inside_the_window_are_never_late(self):
+        """The window is uncapped while the month has no late violations."""
+        for day in (date(2026, 5, 2), date(2026, 5, 3), date(2026, 5, 4)):
             self._result(day, 10)
-        fourth = self._result(date(2026, 5, 4), 6)
-        AttendancePolicyService.reconcile_month(self.profile, fourth.date)
-        self.assertEqual(AttendanceLateViolation.objects.count(), 1)
-        violation = AttendanceLateViolation.objects.get()
-        self.assertEqual(violation.occurrence_number, 1)
-        self.assertEqual(violation.penalty_amount, Decimal("0.00"))
-        self.assertEqual(violation.reason, "post_grace_late")
-        self.assertEqual(AttendanceGraceUse.objects.filter(consumed=True).count(), 3)
-        fourth.refresh_from_db()
-        self.assertEqual(fourth.status_input, "LATE")
-
-    def test_0905_after_grace_exhaustion_is_within_post_grace_tolerance(self):
-        for day in (date(2026, 5, 1), date(2026, 5, 2), date(2026, 5, 3)):
-            self._result(day, 10)
-        fourth = self._result(date(2026, 5, 4), 5)
+        fourth = self._result(date(2026, 5, 5), 6)
         AttendancePolicyService.reconcile_month(self.profile, fourth.date)
         self.assertFalse(AttendanceLateViolation.objects.exists())
+        self.assertEqual(AttendanceGraceUse.objects.filter(consumed=True).count(), 4)
+        fourth.refresh_from_db()
+        self.assertEqual(fourth.status_input, "PRESENT")
+
+    def test_0905_after_the_window_is_withdrawn_is_within_post_grace_tolerance(self):
+        # Three 09:30 arrivals withdraw the window for the rest of the month.
+        for day in (date(2026, 5, 2), date(2026, 5, 3), date(2026, 5, 4)):
+            self._result(day, 30)
+        fourth = self._result(date(2026, 5, 5), 5)
+        AttendancePolicyService.reconcile_month(self.profile, fourth.date)
+        self.assertEqual(AttendanceLateViolation.objects.count(), 3)
         self.assertEqual(AttendanceGraceUse.objects.get(date=fourth.date).reason, "post_grace_tolerance")
 
     def test_late_marker_excuses_arrival_without_paid_minutes(self):
@@ -128,9 +121,9 @@ class AttendancePolicyEnforcementTests(AttendancePolicyTestBase):
     def test_exempt_employee_consumes_no_grace_and_records_no_violation(self):
         self.profile.attendance_exempt = True
         self.profile.save(update_fields=["attendance_exempt"])
-        self._result(date(2026, 5, 1), 10)
-        self._result(date(2026, 5, 2), 45)
-        AttendancePolicyService.reconcile_month(self.profile, date(2026, 5, 2))
+        self._result(date(2026, 5, 2), 10)
+        self._result(date(2026, 5, 3), 45)
+        AttendancePolicyService.reconcile_month(self.profile, date(2026, 5, 3))
         self.assertFalse(AttendanceLateViolation.objects.exists())
         self.assertEqual(
             set(AttendanceGraceUse.objects.values_list("consumed", "reason")), {(False, "attendance_exempt")}

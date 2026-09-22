@@ -36,7 +36,7 @@ from organization.models import OrganizationNode
 
 from .biotime_policy import mapped_employee_profile_ids
 from .models import AttendanceRecord
-from .schedule import get_work_schedule
+from .schedule import get_work_schedule, is_rest_day_for_everyone, is_working_day
 
 logger = logging.getLogger(__name__)
 
@@ -118,12 +118,20 @@ def mark_absentees_for_date(target_date: date_type, *, force: bool = False) -> d
         result["disabled"] = True
         logger.info("Absence detection disabled; skipping %s.", target_date)
         return result
-    if not schedule.is_working_day(target_date):
+    if is_rest_day_for_everyone(target_date):
         result["non_working_day"] = True
         logger.info("%s is not a working day; skipping absence detection.", target_date)
         return result
 
-    profiles = list(_active_employee_profiles(target_date))
+    # Saturday is a working day for non-Saudi employees only, so the working
+    # week is filtered per employee rather than for the date as a whole.
+    profiles = [
+        profile for profile in _active_employee_profiles(target_date) if is_working_day(profile, target_date)
+    ]
+    if not profiles:
+        result["non_working_day"] = True
+        logger.info("%s is not a working day for any active employee.", target_date)
+        return result
     existing_ids = set(
         AttendanceRecord.objects.filter(date=target_date, employee_profile__in=profiles).values_list(
             "employee_profile_id", flat=True

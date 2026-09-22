@@ -683,6 +683,20 @@ function RequestList({
               >
                 {t("permissionRequests.list.new")}
               </Button>
+            ) : inbox === "hr" ? (
+              // HR files and tracks its own permissions from its inbox; the
+              // HR sidebar has no self-service links for them.
+              <Space wrap>
+                <Button onClick={() => navigate("/employee/permission-requests")}>
+                  {t("layout.nav.myPermissions")}
+                </Button>
+                <Button
+                  type="primary"
+                  onClick={() => navigate("/employee/permission-requests/new")}
+                >
+                  {t("employee.dashboard.permissionAction")}
+                </Button>
+              </Space>
             ) : undefined
           }
         />

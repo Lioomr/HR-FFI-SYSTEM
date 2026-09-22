@@ -15,6 +15,7 @@ import {
   Input,
   Upload,
   Popconfirm,
+  Space,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
@@ -22,6 +23,8 @@ import {
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
+  CalendarOutlined,
+  UnorderedListOutlined,
 } from "@ant-design/icons";
 import type { UploadFile } from "antd/es/upload/interface";
 import dayjs from "dayjs";
@@ -516,19 +519,33 @@ export default function LeaveInboxPage() {
         title={t("leave.title")}
         subtitle={t("layout.leaveInbox")}
         actions={
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={openCreateModal}
-            disabled={isHeadOffice}
-            title={
-              isHeadOffice
-                ? t("organization.headOffice.switchToCreateRecords")
-                : undefined
-            }
-          >
-            {t("leave.manual.addButton")}
-          </Button>
+          <Space wrap>
+            <Button
+              icon={<UnorderedListOutlined />}
+              onClick={() => navigate("/employee/leave/requests")}
+            >
+              {t("layout.myLeaveRequests")}
+            </Button>
+            <Button
+              icon={<CalendarOutlined />}
+              onClick={() => navigate("/employee/leave/request")}
+            >
+              {t("layout.requestLeave")}
+            </Button>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={openCreateModal}
+              disabled={isHeadOffice}
+              title={
+                isHeadOffice
+                  ? t("organization.headOffice.switchToCreateRecords")
+                  : undefined
+              }
+            >
+              {t("leave.manual.addButton")}
+            </Button>
+          </Space>
         }
       />
 

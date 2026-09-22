@@ -148,7 +148,10 @@ describe("lifecycle and payroll-status labels", () => {
       expect(graceReasonLabel(en, reason)).not.toMatch(/attendancePolicy/);
     }
     expect(graceReasonLabel(en, "post_grace_late")).toBe(
-      "Late: this month's grace is used up",
+      "Late: the grace window is withdrawn for the rest of this month",
+    );
+    expect(graceReasonLabel(en, "non_working_day")).toBe(
+      "Day off: recorded but not counted",
     );
     expect(graceReasonLabel(en, null)).toBe("Not evaluated yet");
     expect(graceReasonLabel(en, "future_reason")).toBe("future_reason");
