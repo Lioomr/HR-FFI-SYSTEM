@@ -307,7 +307,7 @@ def _collect_pending_request_items(request, *, limit: int | None) -> list[dict]:
             workflow.content_object = content_object
         if workflow.status not in {WorkflowInstance.Status.SUBMITTED, WorkflowInstance.Status.IN_REVIEW}:
             continue
-        item = build_pending_approval_item(workflow)
+        item = build_pending_approval_item(workflow, language=getattr(request, "LANGUAGE_CODE", "en"))
         if not item:
             continue
         # Only objects in the active company reach this point.

@@ -21,6 +21,7 @@ from core.delegation import (
 )
 from core.models import WorkflowAction, WorkflowDefinition, WorkflowInstance, WorkflowStageDefinition
 from core.permissions import get_role
+from in_app_notifications.i18n import normalize_language
 
 from .pending_approval_email import get_direct_manager_user
 
@@ -2196,10 +2197,25 @@ def _pending_item_submitted_time(workflow: WorkflowInstance, obj) -> str:
     return value.isoformat() if hasattr(value, "isoformat") else str(value or "")
 
 
-def build_pending_approval_item(workflow: WorkflowInstance) -> dict[str, Any] | None:
+_PENDING_LABEL_AR = {
+    "leave_request": "إجازة",
+    "loan_request": "قرض",
+    "attendance_request": "الحضور",
+    "attendance_correction_request": "تصحيح الحضور",
+    "asset_return_request": "إرجاع عهدة",
+    "employee_deletion_request": "حذف موظف",
+    "contract_decision": "قرار العقد",
+    "contract_rating": "تقييم عقد الموظف",
+    "permission_request": "إذن انصراف",
+    "annual_leave_payment_request": "تسوية الإجازة السنوية",
+}
+
+
+def build_pending_approval_item(workflow: WorkflowInstance, *, language: str = "en") -> dict[str, Any] | None:
     obj = workflow.content_object
     if obj is None:
         return None
+    is_ar = normalize_language(language) == "ar"
     workflow_key = workflow.definition.key
     label_map = {
         "leave_request": "Leave",
@@ -2217,7 +2233,8 @@ def build_pending_approval_item(workflow: WorkflowInstance) -> dict[str, Any] | 
     if workflow_key == "annual_leave_payment_request":
         profile = getattr(obj, "employee_profile", None)
         name = getattr(profile, "full_name", "") or getattr(profile, "employee_id", f"Request #{obj.pk}")
-        action = f"Annual leave settlement: {getattr(obj, 'payment_amount', '')}"
+        amount = getattr(obj, "payment_amount", "")
+        action = f"تسوية الإجازة السنوية: {amount}" if is_ar else f"Annual leave settlement: {amount}"
         request_type = "ANNUAL_LEAVE_PAYMENT"
     elif workflow_key == "permission_request":
         profile = getattr(obj, "employee_profile", None)
@@ -2225,61 +2242,69 @@ def build_pending_approval_item(workflow: WorkflowInstance) -> dict[str, Any] | 
         name = getattr(profile, "full_name", "") or getattr(employee, "email", f"Request #{obj.pk}")
         from_time, to_time = getattr(obj, "from_time", None), getattr(obj, "to_time", None)
         window = f"{from_time:%H:%M}-{to_time:%H:%M}" if from_time and to_time else ""
-        action = f"Exit permission: {getattr(obj, 'request_date', '')} {window}".strip()
+        prefix = "إذن انصراف" if is_ar else "Exit permission"
+        action = f"{prefix}: {getattr(obj, 'request_date', '')} {window}".strip()
         request_type = "PERMISSION"
     elif workflow_key == "leave_request":
         profile = getattr(getattr(obj, "employee", None), "employee_profile", None)
         name = getattr(profile, "full_name", "") or getattr(
             getattr(obj, "employee", None), "email", f"Request #{obj.pk}"
         )
-        action = f"Leave: {getattr(getattr(obj, 'leave_type', None), 'name', 'Request')}"
+        leave_type_name = getattr(getattr(obj, "leave_type", None), "name", "Request")
+        action = f"إجازة: {leave_type_name}" if is_ar else f"Leave: {leave_type_name}"
         request_type = "LEAVE"
     elif workflow_key == "loan_request":
         profile = getattr(obj, "employee_profile", None)
         employee = getattr(obj, "employee", None)
         name = getattr(profile, "full_name", "") or getattr(employee, "email", f"Request #{obj.pk}")
-        action = f"Loan: {getattr(obj, 'requested_amount', '')}"
+        amount = getattr(obj, "requested_amount", "")
+        action = f"قرض: {amount}" if is_ar else f"Loan: {amount}"
         request_type = "LOAN"
     elif workflow_key == "asset_return_request":
         employee = getattr(obj, "employee", None)
         user = getattr(employee, "user", None)
         name = getattr(employee, "full_name", "") or getattr(user, "email", f"Request #{obj.pk}")
         asset = getattr(obj, "asset", None)
-        action = f"Asset Return: {getattr(asset, 'asset_code', obj.pk)}"
+        code = getattr(asset, "asset_code", obj.pk)
+        action = f"إرجاع عهدة: {code}" if is_ar else f"Asset Return: {code}"
         request_type = "ASSET"
     elif workflow_key == "attendance_correction_request":
         profile = getattr(obj, "employee_profile", None)
         user = getattr(profile, "user", None)
         name = getattr(profile, "full_name", "") or getattr(user, "email", f"Request #{obj.pk}")
-        action = f"Attendance correction: {getattr(obj, 'date', '')}"
+        date_value = getattr(obj, "date", "")
+        action = f"تصحيح حضور: {date_value}" if is_ar else f"Attendance correction: {date_value}"
         request_type = "ATTENDANCE"
     elif workflow_key == "employee_deletion_request":
         snapshot = getattr(obj, "request_snapshot", {}) or {}
         name = snapshot.get("full_name") or snapshot.get("employee_id") or f"Request #{obj.pk}"
-        action = "Employee hard delete request"
+        action = "طلب حذف نهائي لموظف" if is_ar else "Employee hard delete request"
         request_type = "EMPLOYEE_DELETION"
     elif workflow_key == "contract_rating":
         profile = obj.employee_profile
         name = profile.full_name or profile.employee_id
-        action = "Employee Contract Rating"
+        action = "تقييم عقد الموظف" if is_ar else "Employee Contract Rating"
         request_type = "CONTRACT_RATING"
     elif workflow_key == "contract_decision":
         profile = getattr(obj, "employee_profile", None)
         name = getattr(profile, "full_name", "") or getattr(profile, "employee_id", f"Request #{obj.pk}")
-        action = f"Contract: {getattr(obj, 'get_decision_type_display', lambda: 'HR decision')()}"
+        decision_display = getattr(obj, "get_decision_type_display", lambda: "HR decision")()
+        action = f"العقد: {decision_display}" if is_ar else f"Contract: {decision_display}"
         request_type = "CONTRACT_DECISION"
     else:
         profile = getattr(obj, "employee_profile", None)
         user = getattr(profile, "user", None)
         name = getattr(profile, "full_name", "") or getattr(user, "email", f"Request #{obj.pk}")
-        action = "Attendance: Check-in/out review"
+        action = "الحضور: مراجعة الدخول/الخروج" if is_ar else "Attendance: Check-in/out review"
         request_type = "ATTENDANCE"
     return {
         "id": obj.pk,
         "workflow_id": workflow.id,
         "name": name,
         "request_type": request_type,
-        "request_type_label": label_map.get(workflow_key, "Request"),
+        "request_type_label": (
+            _PENDING_LABEL_AR.get(workflow_key, "طلب") if is_ar else label_map.get(workflow_key, "Request")
+        ),
         "action": action,
         "details": str(getattr(obj, "reason", "") or ""),
         "time": _pending_item_submitted_time(workflow, obj),
