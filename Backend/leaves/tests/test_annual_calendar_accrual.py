@@ -19,7 +19,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.db import connection
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.test.utils import CaptureQueriesContext
 from rest_framework.test import APIClient
 
@@ -37,7 +37,7 @@ from organization.models import OrganizationNode, UserOrganizationAccess
 User = get_user_model()
 
 
-class CalendarMonthHelperTests(TestCase):
+class CalendarMonthHelperTests(SimpleTestCase):
     """Pure helper tests — no company/DB needed beyond the helper."""
 
     def _details(self, contract_start, as_of):
@@ -143,6 +143,26 @@ class CalendarMonthHelperTests(TestCase):
                 # For 12-month cycle, day before end still 11 unless that day itself is an anniversary
                 # (e.g., Feb case). We assert it is not 12.
                 self.assertEqual(c_before, 11)
+
+    def test_active_contract_expiry_controls_the_final_cycle_window(self):
+        """A contractual expiry must not discard entitlement before that date."""
+
+        class P:
+            contract_date = date(2025, 9, 20)
+            hire_date = contract_date
+            contract_expiry = date(2026, 9, 23)
+
+        cycle_start, cycle_end = get_contract_year_cycle(P(), date(2026, 9, 22))
+
+        self.assertEqual(cycle_start, date(2025, 9, 20))
+        self.assertEqual(cycle_end, date(2026, 9, 23))
+
+        details = get_annual_accrual_details(P(), date(2026, 9, 22))
+        self.assertEqual(details["accrued_days"], Decimal("21.00"))
+
+        next_cycle_start, next_cycle_end = get_contract_year_cycle(P(), date(2026, 9, 24))
+        self.assertEqual(next_cycle_start, date(2026, 9, 20))
+        self.assertEqual(next_cycle_end, date(2027, 9, 19))
 
     def test_six_and_twelve_month_rules(self):
         c = self._details(date(2023, 1, 1), date(2023, 6, 30))[2]
