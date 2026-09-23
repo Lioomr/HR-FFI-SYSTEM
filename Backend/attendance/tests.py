@@ -481,7 +481,8 @@ class BioTimeSyncTests(TestCase):
         self.assertEqual(result["created"], 1)
         record = AttendanceRecord.objects.get(employee_profile=self.profile, date=date(2026, 4, 1))
         self.assertEqual(record.source, AttendanceRecord.Source.SYSTEM)
-        self.assertEqual(record.status, AttendanceRecord.Status.PENDING_HR)
+        # No accepted job offer exists, so no starting-work verification hold applies.
+        self.assertEqual(record.status, AttendanceRecord.Status.PRESENT)
         self.assertIsNotNone(record.check_in_at)
         self.assertIsNotNone(record.check_out_at)
         self.assertIsNotNone(BioTimeConfig.get_solo().last_sync_time)
@@ -588,7 +589,7 @@ class BioTimeSyncTests(TestCase):
         self.assertEqual(result["processed"], 0)
 
     @patch("attendance.services.BioTimeClient")
-    def test_sync_preserves_manual_record_and_updates_system_bounds(self, client_cls):
+    def test_sync_preserves_manual_and_historical_system_records(self, client_cls):
         BioTimeEmployeeMap.objects.create(employee_profile=self.profile, biotime_emp_code="100001")
         manual = AttendanceRecord.objects.create(
             employee_profile=self.profile,
@@ -617,16 +618,17 @@ class BioTimeSyncTests(TestCase):
         successful, result = SyncBioTimeService.execute(days_back=1)
 
         self.assertTrue(successful)
-        self.assertEqual(result["updated"], 1)
-        self.assertEqual(result["skipped"], 1)
+        self.assertEqual(result["created"], 2)  # Two new daily calculation results.
+        self.assertEqual(result["updated"], 0)
+        self.assertEqual(result["skipped"], 2)
         manual.refresh_from_db()
         system.refresh_from_db()
         self.assertEqual(manual.check_in_at, timezone.make_aware(datetime(2026, 4, 3, 9, 0)))
-        self.assertEqual(system.check_in_at, timezone.make_aware(datetime(2026, 4, 4, 8, 0)))
-        self.assertEqual(system.check_out_at, timezone.make_aware(datetime(2026, 4, 4, 18, 0)))
-        self.assertEqual(system.status, AttendanceRecord.Status.PENDING_HR)
-        self.assertEqual(system.biotime_emp_code, "100001")
-        self.assertEqual(system.biotime_terminal_sn, "DEV-1")
+        self.assertEqual(system.check_in_at, timezone.make_aware(datetime(2026, 4, 4, 9, 0)))
+        self.assertEqual(system.check_out_at, timezone.make_aware(datetime(2026, 4, 4, 17, 0)))
+        self.assertEqual(system.status, AttendanceRecord.Status.LATE)
+        self.assertEqual(system.biotime_emp_code, "")
+        self.assertEqual(system.biotime_terminal_sn, "")
 
     def test_mapping_api_enforces_active_company_and_duplicate_rules(self):
         second_user = User.objects.create_user(email="biotime-second@ffi.com", password="password")

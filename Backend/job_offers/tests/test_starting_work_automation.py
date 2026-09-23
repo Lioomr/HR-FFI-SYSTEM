@@ -194,7 +194,7 @@ class StartingWorkAcknowledgmentAutomationTests(TestCase):
         successful, result, notify = self._sync(self._transactions())
 
         self.assertTrue(successful)
-        self.assertEqual(result["created"], 0)
+        self.assertEqual(result["created"], 1)  # Daily result, not a replacement HR record.
         self.assertEqual(result["skipped"], 1)
         self.assertFalse(StartingWorkAcknowledgment.objects.exists())
         notify.assert_not_called()
@@ -215,7 +215,7 @@ class StartingWorkAcknowledgmentAutomationTests(TestCase):
         successful, result, notify = self._sync(self._transactions())
 
         self.assertTrue(successful)
-        self.assertEqual(result["unmapped"], 1)
+        self.assertEqual(result["unmapped"], 2)  # One count per raw punch.
         self.assertFalse(AttendanceRecord.objects.exists())
         self.assertFalse(StartingWorkAcknowledgment.objects.exists())
         notify.assert_not_called()

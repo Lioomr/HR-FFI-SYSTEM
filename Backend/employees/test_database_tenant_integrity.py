@@ -113,7 +113,9 @@ class DatabaseTenantIntegrityTests(TransactionTestCase):
                 ]
             )
 
-        with self.assertRaises(IntegrityError), transaction.atomic():
+        # Migration 0024 permits an explicitly chosen alternative employee
+        # from another company; the requester and leave type remain scoped.
+        with transaction.atomic():
             LeaveRequest.objects.bulk_create(
                 [
                     LeaveRequest(
@@ -127,6 +129,9 @@ class DatabaseTenantIntegrityTests(TransactionTestCase):
                     )
                 ]
             )
+        self.assertTrue(
+            LeaveRequest.objects.filter(company=self.company_a, employee=self.user_a, delegated_to=self.user_b).exists()
+        )
 
         with self.assertRaises(IntegrityError), transaction.atomic():
             LeaveBalanceSnapshot.objects.bulk_create(

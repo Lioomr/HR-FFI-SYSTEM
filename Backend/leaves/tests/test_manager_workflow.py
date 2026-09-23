@@ -223,6 +223,11 @@ class ManagerWorkflowTests(APITestCase):
         )
 
         self.client.force_authenticate(user=cross_employee)
+        from employees.services.manager_relationships import get_valid_manager_user
+
+        self.assertEqual(
+            get_valid_manager_user(cross_employee_profile, cross_company_capability="leaves.approve"), cross_manager
+        )
         start = timezone.localdate() + timedelta(days=1)
         response = self.client.post(
             self.requests_url,

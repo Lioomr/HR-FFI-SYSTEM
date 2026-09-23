@@ -329,7 +329,7 @@ class CrossCompanyAlternativeEmployeeAPITests(APITestCase):
         inactive = self._user(
             "leave-cross-model-inactive@example.com",
             self.delegate_company,
-            "EMP-XCO-MODEL-INACTIVE",
+            "EMP-XCO-INACT-MODEL",
             is_active=False,
         )
 

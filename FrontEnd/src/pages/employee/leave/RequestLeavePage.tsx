@@ -30,10 +30,10 @@ import {
   type DelegationCandidate,
 } from "../../../services/api/employeesApi";
 import { isApiError } from "../../../services/api/apiTypes";
-import { getHttpErrorMessage } from "../../../services/api/httpErrors";
 import { getDetailedHttpErrorMessage } from "../../../services/api/userErrorMessages";
 import {
   annualLeaveDaysIssueMessage,
+  getLeavePageLoadErrorMessage,
   getLeaveValidationErrors,
   isAnnualLeaveCode,
   isEmployeeLeaveDateDisabled,
@@ -51,10 +51,6 @@ export function LeaveSubmissionError({ message }: { message: string | null }) {
   return (
     <Alert type="error" title={message} showIcon style={{ marginBottom: 24 }} />
   );
-}
-
-export function getLeavePageLoadErrorMessage(error: unknown): string {
-  return getHttpErrorMessage(error);
 }
 
 export default function RequestLeavePage() {

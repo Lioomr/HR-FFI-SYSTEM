@@ -197,8 +197,9 @@ class LeaveManagementTests(TestCase):
             "end_date": str(date.today() + timedelta(days=21)),
             "reason": "Notification failure test",
         }
-        with self.assertLogs("leaves.views", level="ERROR") as logs, patch(
-            "leaves.views.notify_leave_submitted", side_effect=RuntimeError("provider unavailable")
+        with (
+            self.assertLogs("leaves.views", level="ERROR") as logs,
+            patch("leaves.views.notify_leave_submitted", side_effect=RuntimeError("provider unavailable")),
         ):
             response = self.client.post("/api/leaves/leave-requests/", data)
 
@@ -245,7 +246,9 @@ class LeaveManagementTests(TestCase):
             )
             for offset, employee in enumerate((self.emp1, self.emp2, self.hr))
         ]
-        queryset = _leave_read_queryset(LeaveRequest.objects.filter(pk__in=[item.pk for item in requests]).order_by("id"))
+        queryset = _leave_read_queryset(
+            LeaveRequest.objects.filter(pk__in=[item.pk for item in requests]).order_by("id")
+        )
 
         with CaptureQueriesContext(connection) as single_queries:
             LeaveRequestSerializer(queryset.filter(pk=requests[0].pk), many=True).data
@@ -592,7 +595,7 @@ class LeaveManagementTests(TestCase):
         self.assertEqual(workflow["current_stage"], "delegate")
         self.assertTrue(workflow["can_approve"])
 
-    def test_employee_cannot_create_leave_request_with_cross_company_delegate(self):
+    def test_employee_can_create_leave_request_with_cross_company_delegate(self):
 
         requester_company = OrganizationNode.objects.create(
             code="LEAVE_CROSS_REQUESTER",
@@ -621,8 +624,11 @@ class LeaveManagementTests(TestCase):
             HTTP_X_ACTIVE_COMPANY_ID=str(requester_company.id),
         )
 
-        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
-        self.assertFalse(LeaveRequest.objects.filter(reason="Cross-company coverage").exists())
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        leave = LeaveRequest.objects.get(reason="Cross-company coverage")
+        self.assertEqual(leave.company, requester_company)
+        self.assertEqual(leave.delegated_to, self.emp2)
+        self.assertEqual(leave.status, LeaveRequest.RequestStatus.PENDING_DELEGATE)
 
     def test_delegate_approval_moves_leave_request_to_hr(self):
 
