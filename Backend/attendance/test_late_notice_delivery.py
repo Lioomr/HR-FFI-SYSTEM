@@ -281,6 +281,8 @@ class LateNoticeTemplateTests(LateAttendanceNoticeTestBase):
         for filename, digest in {**V3_PAIR_SHA256, **V2_PAIR_SHA256, **V1_PAIR_SHA256}.items():
             with self.subTest(filename=filename):
                 content = (TEMPLATES_DIR / filename).read_bytes()
+                if filename.endswith(".json"):
+                    content = content.replace(b"\r\n", b"\n")
                 if filename.endswith("_field_map_v2.json"):
                     # These approved hashes were recorded on Windows. Git may
                     # check JSON out with LF on Linux; preserve the content check.
