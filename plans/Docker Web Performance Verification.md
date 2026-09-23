@@ -37,17 +37,29 @@ also repairs the following issues without disabling CI checks:
 
 Frontend lint and type-check pass; the focused leave-page suite passes (8 tests).
 The manager-routing, leave-query-count and delegation-candidate checks pass.
-Broader backend/frontend regression runs and the GitHub release gate are pending.
+The template, migration and database-integrity regression run passes (90 tests
+plus 83 subtests); manager-form tests pass (7 tests). Route and forbidden-page
+fixtures now match the current application (20 tests pass). Permission form
+tests wait for time-picker state to settle between input and commit events (5
+tests pass). The frontend dependency audit reports zero vulnerabilities.
+The GitHub release gate remains pending.
 No migrations, API renames, runtime environment variables or dependency upgrades
 are introduced by these repairs.
 
 ## Deployment status
 
-Production has not been changed. SSH to 13.51.209.116 timed out during release
-preparation, and the local AWS CLI reports an expired login session. Public HTTPS
-probes also timed out from this computer; that alone does not establish root cause.
-Restore AWS access and verify the instance/IP before rollout. The repository
+Production has not been changed. SSH access was restored on September 23, and
+the public API liveness endpoint `/healthz/` returns 200. Production is still at
+`a365dd27`. Compose validation passes and the frontend build uses the same-origin
+API proxy. A resource snapshot shows low CPU and memory usage, not a load test.
+Recent worker logs show contract auto-renewal blocked by a legacy manager profile
+without a linked user. This requires an HR data correction; validation has not
+been bypassed and reporting relationships have not been changed. The repository
 release gate still requires successful CI. Rebuild frontend and backend plus the
 backend-image worker/beat services only after the candidate passes; retain old
 image IDs for rollback, do not remove persistent volumes, and verify health,
 proxy routing, compression negotiation and cache headers afterward.
+
+Full-repository pre-commit was attempted in an isolated checkout: five existing
+Ruff findings remain in generated PDF scripts and the BioTime sync agent. Checks
+on the changed files pass; unrelated generated files were not reformatted here.
