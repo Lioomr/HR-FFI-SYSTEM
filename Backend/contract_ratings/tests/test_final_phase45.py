@@ -150,6 +150,6 @@ def test_standalone_contract_decision_termination_remains_immediate(world):
     finalize_decision(rating.contract_decision_id, actor=world.ceo)
     world.profile.refresh_from_db()
     assert world.profile.is_archived is True
-    assert world.profile.employment_status == EmployeeProfile.EmploymentStatus.ACTIVE
+    assert world.profile.employment_status == EmployeeProfile.EmploymentStatus.TERMINATED
     result = submit_ceo_decision(rating.pk, actor=world.ceo, ceo_decision="RENEW")
     assert result.status == ContractRating.Status.MANUAL_RESOLUTION_REQUIRED

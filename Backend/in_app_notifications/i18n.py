@@ -368,6 +368,18 @@ MESSAGES: dict[str, dict[str, tuple[str, str]]] = {
             "معالجة عقد {employee_name} تتطلب إجراءً يدوياً. السبب: {reason}",
         ),
     },
+    "contract.termination_settlement_required": {
+        "title": (
+            "Termination settlement required: {employee_name}",
+            "مطلوب تسوية نهاية الخدمة: {employee_name}",
+        ),
+        "message": (
+            "{employee_name}'s contract was terminated on {date}. Create a termination settlement "
+            "(annual leave payment) for this employee.",
+            "تم إنهاء عقد {employee_name} بتاريخ {date}. يرجى إنشاء تسوية نهاية الخدمة "
+            "(بدل الإجازة السنوية) لهذا الموظف.",
+        ),
+    },
     "contract.rating": {
         "title": ("Contract Rating: {event}", "تقييم العقد: {event}"),
         "message": ("{message}", "{message}"),

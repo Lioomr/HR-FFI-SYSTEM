@@ -193,7 +193,9 @@ def test_non_salary_decisions_are_terminal_and_never_mutate_salary(world, decisi
     assert world.profile.basic_salary == before
     assert not result.salary_change_applied_at
     assert result.scheduled_termination is (decision == "TERMINATE")
-    assert result.contract_decision.status == "PENDING_HR"
+    result.contract_decision.refresh_from_db()
+    # A renewal closes the linked decision now; a termination only once it executes at expiry.
+    assert result.contract_decision.status == ("APPROVED" if decision == "RENEW" else "PENDING_HR")
 
 
 @pytest.mark.parametrize("decision", ["RENEW", "TERMINATE", RETURN_TO_MANAGER])
