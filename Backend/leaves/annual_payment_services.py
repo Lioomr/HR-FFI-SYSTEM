@@ -20,6 +20,7 @@ from in_app_notifications.models import Notification
 
 from .models import AnnualLeavePaymentRequest
 from .services import COMMENT_REQUIRED_MESSAGE, LeaveTransitionError, leave_employee_name
+from .utils import annual_leave_payment_amount, get_annual_salary_at_year_end
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +93,30 @@ def apply_annual_payment_hr_review(
     return locked
 
 
+def refresh_settlement_salary(locked: AnnualLeavePaymentRequest) -> dict | None:
+    """Re-price a still-unpaid payout at the employee's live salary.
+
+    The salary is snapshotted when the request is submitted, but a contract renewal
+    with a salary change can land before the CEO approves. Carry-forward requests pay
+    nothing, so only a pending PAY resolution is re-priced. Returns the change, or
+    ``None`` when the snapshot is still current.
+    """
+    if locked.status != Status.PENDING_CEO or locked.resolution != Resolution.PAY or locked.settled_at:
+        return None
+    current_salary = get_annual_salary_at_year_end(locked.employee_profile)
+    if current_salary == locked.salary_at_year_end:
+        return None
+    change = {
+        "previous_salary_at_year_end": str(locked.salary_at_year_end),
+        "salary_at_year_end": str(current_salary),
+        "previous_payment_amount": str(locked.payment_amount),
+    }
+    locked.salary_at_year_end = current_salary
+    locked.payment_amount = annual_leave_payment_amount(locked.eligible_unused_days, current_salary)
+    change["payment_amount"] = str(locked.payment_amount)
+    return change
+
+
 def apply_annual_payment_ceo_approval(
     instance: AnnualLeavePaymentRequest, *, actor, note: str = ""
 ) -> AnnualLeavePaymentRequest:
@@ -104,6 +129,7 @@ def apply_annual_payment_ceo_approval(
 
         start = begin_recorded_transition(locked, actor=actor)
         now = timezone.now()
+        salary_refresh = refresh_settlement_salary(locked)
         locked.status = Status.CARRIED_FORWARD if locked.resolution == Resolution.CARRY_FORWARD else Status.APPROVED
         locked.ceo_decided_by = actor
         locked.ceo_decided_at = now
@@ -117,7 +143,10 @@ def apply_annual_payment_ceo_approval(
             actor=actor,
             note=note,
             approver_role="ceo",
-            metadata={"resolution": locked.resolution},
+            metadata={
+                "resolution": locked.resolution,
+                **({"salary_refresh": salary_refresh} if salary_refresh else {}),
+            },
         )
     return locked
 

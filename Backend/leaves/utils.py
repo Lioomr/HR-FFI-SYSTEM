@@ -635,6 +635,11 @@ def get_annual_salary_at_year_end(profile: EmployeeProfile):
     return Decimal(salary).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
+def annual_leave_payment_amount(eligible_days, salary) -> Decimal:
+    """Pay each eligible whole day at one thirtieth of the monthly salary."""
+    return (Decimal(eligible_days) * Decimal(salary) / Decimal("30")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
 def get_prior_annual_carry_forward_days(profile: EmployeeProfile, cycle_start: date):
     previous = (
         AnnualLeavePaymentRequest.objects.filter(
@@ -668,7 +673,7 @@ def build_annual_leave_payment_snapshot(
     eligible_unused = max(Decimal("0.00"), accrued - used)
     eligible_whole_days = eligible_unused.quantize(Decimal("1"), rounding=ROUND_FLOOR)
     salary = get_annual_salary_at_year_end(profile)
-    amount = (eligible_whole_days * salary / Decimal("30")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    amount = annual_leave_payment_amount(eligible_whole_days, salary)
     return {
         "cycle_start": cycle_start,
         "cycle_end": cycle_end,
