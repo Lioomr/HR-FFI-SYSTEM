@@ -82,18 +82,30 @@ describe("EmployeeForm direct manager assignment", () => {
   });
 
   it.each([
-    "The selected manager must belong to the employee's company.",
-    "The selected manager is archived.",
-    "The selected manager must be an active employee.",
-    "Manager assignment cannot create a reporting cycle.",
-  ])("renders the backend message '%s' inline", async (message) => {
-    renderForm({ managerAssignmentError: message });
+    [
+      "The selected manager must belong to the employee's company.",
+      "The selected manager must belong to the employee's company.",
+    ],
+    ["The selected manager is archived.", "The selected manager is archived."],
+    [
+      "The selected manager must be an active employee.",
+      "The selected manager must be an active employee with an active user account.",
+    ],
+    [
+      "Manager assignment cannot create a reporting cycle.",
+      "Manager assignment cannot create a reporting cycle.",
+    ],
+  ])(
+    "renders the localized backend message '%s' inline",
+    async (message, displayedMessage) => {
+      renderForm({ managerAssignmentError: message });
 
-    const alerts = await screen.findAllByRole("alert");
-    expect(alerts.some((alert) => alert.textContent?.includes(message))).toBe(
-      true,
-    );
-  });
+      const alerts = await screen.findAllByRole("alert");
+      expect(
+        alerts.some((alert) => alert.textContent?.includes(displayedMessage)),
+      ).toBe(true);
+    },
+  );
 
   it("never offers the employee being edited as their own manager", async () => {
     renderForm({ currentEmployeeId: 1 });
