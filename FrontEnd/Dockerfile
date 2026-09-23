@@ -12,7 +12,7 @@ COPY . /app
 ARG VITE_API_BASE_URL=
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 
-RUN npm run build
+RUN npm run build && node scripts/precompress.mjs
 
 FROM nginx:1.27-alpine
 

@@ -100,7 +100,7 @@ class HRManualLeaveRecordTests(APITestCase):
         self.assertEqual(record.delegated_to, self.manager_user)
         self.assertEqual(record.delegation_note, "Please cover the employee's urgent duties.")
 
-    def test_hr_manual_record_rejects_cross_company_delegate(self):
+    def test_hr_manual_record_accepts_cross_company_delegate_without_changing_company(self):
         delegate_company = OrganizationNode.objects.create(
             code="HR_MANUAL_DELEGATE_CO",
             name="HR Manual Delegate Co",
@@ -129,7 +129,10 @@ class HRManualLeaveRecordTests(APITestCase):
 
         response = self.client.post(self.url, payload, format="json")
 
-        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        leave = LeaveRequest.objects.get(pk=response.data["data"]["id"])
+        self.assertEqual(leave.company_id, self.employee_profile.company_id)
+        self.assertEqual(leave.delegated_to, external_delegate)
 
     def test_manual_create_blocks_non_active_employee(self):
         self.employee_profile.employment_status = EmployeeProfile.EmploymentStatus.TERMINATED

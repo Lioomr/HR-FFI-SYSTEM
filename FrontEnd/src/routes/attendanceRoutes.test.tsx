@@ -10,12 +10,18 @@ import {
   ManagerAttendancePage,
   AttendancePreviewPage,
   AttendancePolicyPage,
+  LeaveRequestDetailsPage,
 } from "./lazyPages";
 function collect(
   nodes: RouteObject[],
   found = new Map<
     string,
-    ReactElement<{ to?: string; replace?: boolean; role?: string }>
+    ReactElement<{
+      to?: string;
+      replace?: boolean;
+      role?: string;
+      audience?: string;
+    }>
   >(),
 ) {
   for (const node of nodes) {
@@ -26,6 +32,7 @@ function collect(
           to?: string;
           replace?: boolean;
           role?: string;
+          audience?: string;
         }>,
       );
     if (node.children) collect(node.children, found);
@@ -35,13 +42,18 @@ function collect(
 const paths = collect(routes);
 describe("BioTime attendance routes", () => {
   it.each([
-    ["ceo/leave/requests/:id", "/ceo/leave/requests"],
     ["employee/attendance-corrections", "/employee/attendance"],
     ["hr/attendance-correction-requests", "/hr/attendance"],
     ["manager/attendance-corrections", "/manager/attendance"],
   ])("%s redirects to %s", (path, to) => {
     expect(paths.get(path)?.type).toBe(Navigate);
     expect(paths.get(path)?.props).toMatchObject({ to, replace: true });
+  });
+  it("keeps the CEO leave detail page available", () => {
+    expect(paths.get("ceo/leave/requests/:id")?.type).toBe(
+      LeaveRequestDetailsPage,
+    );
+    expect(paths.get("ceo/leave/requests/:id")?.props.audience).toBe("ceo");
   });
   it("mounts the read-only employee and manager pages", () => {
     expect(paths.get("employee/attendance")?.type).toBe(EmployeeAttendancePage);

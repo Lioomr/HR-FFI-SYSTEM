@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import dayjs from "dayjs";
 import { useI18nStore } from "../../../i18n/i18nStore";
 import { PermissionRequestFormPage } from "./PermissionRequestPages";
@@ -39,13 +45,21 @@ function fillReason(text = "Clinic appointment") {
   });
 }
 
-function setTime(label: string, value: string) {
+async function setTime(label: string, value: string) {
   const input = screen.getByLabelText(label);
-  fireEvent.mouseDown(input);
-  fireEvent.focus(input);
-  fireEvent.change(input, { target: { value } });
-  fireEvent.keyDown(input, { key: "Enter", code: "Enter", keyCode: 13 });
-  fireEvent.blur(input);
+  await act(async () => {
+    fireEvent.mouseDown(input);
+    fireEvent.focus(input);
+  });
+  await act(async () => {
+    fireEvent.change(input, { target: { value } });
+  });
+  await act(async () => {
+    fireEvent.keyDown(input, { key: "Enter", code: "Enter", keyCode: 13 });
+  });
+  await act(async () => {
+    fireEvent.blur(input);
+  });
 }
 
 /** The evidence picker appears once the type switch has re-rendered the form. */
@@ -209,8 +223,8 @@ describe("During Shift Permission form", () => {
     chooseType("During shift");
     expect(await screen.findByText("Maximum 90 minutes.")).toBeInTheDocument();
 
-    setTime("From time", "10:00");
-    setTime("To time", "12:00");
+    await setTime("From time", "10:00");
+    await setTime("To time", "12:00");
     expect(
       await screen.findByText("The duration cannot exceed 90 minutes."),
     ).toBeInTheDocument();
@@ -218,7 +232,7 @@ describe("During Shift Permission form", () => {
       screen.getByRole("button", { name: "Submit request" }),
     ).toBeDisabled();
 
-    setTime("To time", "11:00");
+    await setTime("To time", "11:00");
     await waitFor(() =>
       expect(
         screen.getByRole("button", { name: "Submit request" }),
@@ -247,8 +261,8 @@ describe("Exit Permission form", () => {
   it("keeps the legacy same-day payload without a permission type", async () => {
     render(<PermissionRequestFormPage />);
 
-    setTime("From time", "14:00");
-    setTime("To time", "15:30");
+    await setTime("From time", "14:00");
+    await setTime("To time", "15:30");
     fillReason("Bank visit");
     await waitFor(() =>
       expect(

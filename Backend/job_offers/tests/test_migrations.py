@@ -51,11 +51,15 @@ class HiringRequestRemovalMigrationTests(TransactionTestCase):
         self.addCleanup(self._rollback_schema_changes)
         self.executor = MigrationExecutor(connection)
         self.executor.migrate(self.migrate_from)
-        old_apps = self.executor.loader.project_state(self.migrate_from).apps
+        # Unrelated apps remain at their applied migrations. Include them in
+        # the historical state so model fields match the actual test schema.
+        self.executor = MigrationExecutor(connection)
+        old_apps = self.executor.loader.project_state(list(self.executor.loader.applied_migrations)).apps
         self.offer_id = self._create_old_data(old_apps)
         self.executor = MigrationExecutor(connection)
         self.executor.migrate(self.migrate_to)
-        self.new_apps = self.executor.loader.project_state(self.migrate_to).apps
+        self.executor = MigrationExecutor(connection)
+        self.new_apps = self.executor.loader.project_state(list(self.executor.loader.applied_migrations)).apps
 
     def _rollback_schema_changes(self):
         if self._schema_rolled_back:

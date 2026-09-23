@@ -218,16 +218,11 @@ class SyncBioTimeService:
                         "is_biotime_projection": True,
                     },
                 )
-                if record_created:
-                    try:
-                        from job_offers.starting_work_service import generate_starting_work_acknowledgment
-
-                        generate_starting_work_acknowledgment(record, received_from_biotime=True)
-                    except Exception:
-                        logger.exception(
-                            "starting_work_acknowledgment_generation_failed", extra={"attendance_record_id": record.id}
-                        )
-                elif record.is_biotime_projection and record.source == AttendanceRecord.Source.SYSTEM:
+                if (
+                    not record_created
+                    and record.is_biotime_projection
+                    and record.source == AttendanceRecord.Source.SYSTEM
+                ):
                     # We may refresh only the compatibility rows introduced by
                     # this foundation, and only while they are still SYSTEM
                     # rows. Historical SYSTEM rows are legacy data too and
@@ -237,11 +232,29 @@ class SyncBioTimeService:
                     record.biotime_emp_code = codes_by_profile[profile_id]
                     record.biotime_terminal_sn = terminal_sn
                     record.save(
-                        update_fields=["check_in_at", "check_out_at", "biotime_emp_code", "biotime_terminal_sn", "updated_at"]
+                        update_fields=[
+                            "check_in_at",
+                            "check_out_at",
+                            "biotime_emp_code",
+                            "biotime_terminal_sn",
+                            "updated_at",
+                        ]
                     )
                     counts["updated"] += 1
-                else:
+                elif not record_created:
                     counts["skipped"] += 1
+
+                # Verification holds are an explicit workflow transition, not a
+                # punch overwrite. Extend an existing hold to later synced days
+                # even when the compatibility row already existed.
+                try:
+                    from job_offers.starting_work_service import generate_starting_work_acknowledgment
+
+                    generate_starting_work_acknowledgment(record, received_from_biotime=True)
+                except Exception:
+                    logger.exception(
+                        "starting_work_acknowledgment_generation_failed", extra={"attendance_record_id": record.id}
+                    )
 
         logger.info("BioTime sync completed: %s", counts)
         return counts
