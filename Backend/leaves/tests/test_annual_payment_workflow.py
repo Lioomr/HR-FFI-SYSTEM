@@ -106,6 +106,43 @@ class AnnualPaymentWorkflowTests(APITestCase):
         self.assertIsNotNone(payment.settled_at)
         self.assertEqual(self._workflow(payment).status, WorkflowInstance.Status.APPROVED)
 
+    def test_ceo_approval_reprices_payout_at_the_live_salary(self):
+        profile = self.employee.employee_profile
+        profile.total_salary = Decimal("3000.00")
+        profile.save(update_fields=["total_salary"])
+        payment = self._payment(salary_at_year_end=Decimal("3000.00"))
+        record_annual_payment_submission(payment, actor=self.employee)
+        payment = apply_annual_payment_hr_review(payment, actor=self.hr_user, decision="forward")
+        # A renewal with a raise lands while the payout waits on the CEO.
+        profile.total_salary = Decimal("3600.00")
+        profile.save(update_fields=["total_salary"])
+
+        payment = apply_annual_payment_ceo_approval(payment, actor=self.ceo_user)
+
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, Status.APPROVED)
+        self.assertEqual(payment.salary_at_year_end, Decimal("3600.00"))
+        self.assertEqual(payment.payment_amount, Decimal("1200.00"))  # 10 days x 3600 / 30
+        approval = self._workflow(payment).actions.get(action=Action.APPROVE)
+        self.assertEqual(approval.metadata["salary_refresh"]["previous_salary_at_year_end"], "3000.00")
+
+    def test_ceo_approval_keeps_current_salary_snapshot_and_carry_forward_unpriced(self):
+        profile = self.employee.employee_profile
+        profile.total_salary = Decimal("3000.00")
+        profile.save(update_fields=["total_salary"])
+        current = self._payment(salary_at_year_end=Decimal("3000.00"))
+        record_annual_payment_submission(current, actor=self.employee)
+        current = apply_annual_payment_hr_review(current, actor=self.hr_user, decision="forward")
+        carried = self._payment(salary_at_year_end=Decimal("2000.00"))
+        record_annual_payment_submission(carried, actor=self.employee)
+        carried = apply_annual_payment_hr_review(carried, actor=self.hr_user, decision="carry_forward")
+
+        current = apply_annual_payment_ceo_approval(current, actor=self.ceo_user)
+        carried = apply_annual_payment_ceo_approval(carried, actor=self.ceo_user)
+
+        self.assertEqual((current.salary_at_year_end, current.payment_amount), (Decimal("3000.00"), Decimal("1000.00")))
+        self.assertEqual((carried.salary_at_year_end, carried.payment_amount), (Decimal("2000.00"), Decimal("0")))
+
     def test_refusals(self):
         with self.assertRaisesMessage(LeaveTransitionError, NOT_PENDING_HR_MESSAGE):
             apply_annual_payment_hr_review(
