@@ -315,6 +315,43 @@ class ContractExpiryWorkflowTests(TestCase):
         self.assertEqual(self.profile.archive_reason, EmployeeProfile.ArchiveReason.END_OF_CONTRACT)
         self.assertFalse(self.employee.is_active)
 
+    @patch("employees.contract_expiry.dispatch_notification_channels")
+    def test_approved_termination_marks_terminated_and_asks_hr_for_a_settlement(self, dispatch):
+        dispatch.return_value = {"notification": object(), "created": True}
+        decision, _ = ensure_contract_decision(self.profile)
+        submit_decision(decision.id, actor=self.hr, decision_type=ContractDecision.DecisionType.TERMINATE)
+        dispatch.reset_mock()
+
+        finalize_decision(decision.id, actor=self.ceo)
+
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.employment_status, EmployeeProfile.EmploymentStatus.TERMINATED)
+        self.assertTrue(self.profile.is_archived)
+        settlement = [
+            call
+            for call in dispatch.call_args_list
+            if call.kwargs["deduplication_key"] == f"contract.expiry:{decision.id}:termination-settlement"
+        ]
+        self.assertEqual([call.kwargs["recipient"] for call in settlement], [self.hr])
+        self.assertEqual(settlement[0].kwargs["i18n"]["key"], "contract.termination_settlement_required")
+        self.assertTrue(settlement[0].kwargs["metadata"]["is_termination_settlement"])
+
+    @patch("employees.contract_expiry.dispatch_notification_channels")
+    def test_approved_renewal_sends_no_termination_settlement_notice(self, dispatch):
+        dispatch.return_value = {"notification": object(), "created": True}
+        decision, _ = ensure_contract_decision(self.profile)
+        submit_decision(decision.id, actor=self.hr, decision_type=ContractDecision.DecisionType.RENEW)
+
+        finalize_decision(decision.id, actor=self.ceo)
+
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.employment_status, EmployeeProfile.EmploymentStatus.ACTIVE)
+        self.assertFalse(
+            any(
+                call.kwargs["deduplication_key"].endswith(":termination-settlement") for call in dispatch.call_args_list
+            )
+        )
+
     def test_contract_decision_api_enforces_roles_and_ceo_approval(self):
         self.client.force_authenticate(user=self.hr)
         response = self.client.post(

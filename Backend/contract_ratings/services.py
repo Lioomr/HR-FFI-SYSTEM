@@ -16,6 +16,7 @@ from core.services.workflow_engine import (
     sync_workflow,
 )
 from employees.contract_expiry import (
+    _renewal_dates,
     _resolved_renewal_terms,
     apply_contract_terms,
     contract_terms_snapshot,
@@ -293,6 +294,73 @@ def submit_employee_response(rating_id, *, actor, **data):
     return _submit_response(rating_id, actor, data, R.RaterType.EMPLOYEE)
 
 
+RENEWAL_DECISIONS = {ContractDecision.DecisionType.RENEW, ContractDecision.DecisionType.RENEW_WITH_CHANGES}
+OPEN_DECISION_STATUSES = {ContractDecision.Status.PENDING_HR, ContractDecision.Status.PENDING_CEO}
+
+
+def close_contract_decision(rating, *, actor=None):
+    """Finalize the linked ``ContractDecision`` with the outcome the rating flow reached.
+
+    The rating flow owns the contract once a rating exists (the legacy sweep skips
+    it), so the decision must not stay PENDING_HR/PENDING_CEO after the contract's
+    fate is settled. ``APPROVED`` is reused for both outcomes, exactly as the legacy
+    flow records an approved renewal or an approved termination; ``decision_type``
+    tells them apart. The caller holds the decision row lock (see ``_locked``).
+    """
+    decision = rating.contract_decision
+    if decision.status not in OPEN_DECISION_STATUSES:
+        return decision
+    start = begin_recorded_transition(decision, actor=actor)
+    now = timezone.now()
+    decision.decision_type = rating.ceo_decision
+    if rating.ceo_decision in RENEWAL_DECISIONS:
+        decision.proposed_terms = rating.ceo_approved_terms or {}
+    decision.status = ContractDecision.Status.APPROVED
+    decision.ceo_decided_by_id = rating.ceo_decided_by_id
+    decision.ceo_decided_at = rating.ceo_decided_at or now
+    decision.ceo_comment = rating.ceo_comment
+    decision.finalized_by = actor
+    decision.finalized_at = now
+    decision.finalized_by_system = actor is None
+    decision.automatic_renewal = False
+    decision.automatic_renewal_reason = ""
+    decision.failure_reason = ""
+    # The rating flow sends its own outcome notices; keep the legacy final notice from repeating them.
+    decision.final_notification_sent_at = now
+    decision.save()
+    metadata = {"source": "contract_rating", "contract_rating_id": rating.id, "decision_type": decision.decision_type}
+    record_workflow_transition(
+        decision,
+        start,
+        action=WorkflowAction.Action.APPROVE,
+        actor=actor,
+        note=rating.ceo_comment or "",
+        approver_role="ceo",
+        metadata=metadata,
+    )
+    audit(
+        None,
+        "contract_decision_finalized_by_rating",
+        entity="ContractDecision",
+        entity_id=decision.id,
+        metadata=metadata,
+        actor=actor,
+    )
+    return decision
+
+
+def _apply_renewal_dates(rating, profile):
+    """Move the profile onto the renewed contract term, as a legacy approved renewal does."""
+    start, expiry = _renewal_dates(rating.contract_decision)
+    profile.refresh_from_db()  # A salary change may have been applied through a separately loaded row.
+    profile.contract_date = start
+    profile.contract_expiry = expiry
+    apply_contract_terms(profile, {}, extra_update_fields=["contract_date", "contract_expiry"])
+    decision = rating.contract_decision
+    decision.proposed_contract_date = start
+    decision.proposed_contract_expiry = expiry
+
+
 def _reject_self_dealing(rating, profile, actor):
     if actor.id == profile.user_id or (rating.manager_response and actor.id == rating.manager_response.submitted_by_id):
         raise PermissionDenied("A manager-rater cannot also act as HR or CEO on the same rating.")
@@ -429,6 +497,9 @@ def submit_ceo_decision(
     approved_terms = {}
     if ceo_decision == ContractDecision.DecisionType.RENEW_WITH_CHANGES:
         approved_terms = _resolved_renewal_terms(profile, data["ceo_approved_terms"])
+    if ceo_decision in RENEWAL_DECISIONS:
+        # Fail before anything is written when the renewed term cannot be derived.
+        _renewal_dates(rating.contract_decision)
 
     rating.status = S.DECIDED
     rating.ceo_decision = ceo_decision
@@ -462,6 +533,10 @@ def submit_ceo_decision(
         rating.refresh_from_db()
         if rating.status == S.MANUAL_RESOLUTION_REQUIRED:
             return rating
+    if ceo_decision in RENEWAL_DECISIONS:
+        # Renewal is settled now; a termination is closed out when it executes at expiry.
+        _apply_renewal_dates(rating, profile)
+        close_contract_decision(rating, actor=actor)
     if rating.scheduled_termination:
         _record(
             rating,

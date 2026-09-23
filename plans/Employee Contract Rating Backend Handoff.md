@@ -12,7 +12,14 @@ Implemented from `C:/Users/Asus/.claude/plans/new-feature-employee-soft-sparkle.
 6. Final decisions are `RENEW`, `RENEW_WITH_CHANGES`, and `TERMINATE`. `RENEW_WITH_CHANGES` requires CEO-approved salary terms and an effective date and applies exactly once after snapshot validation.
 7. `TERMINATE` records a scheduled outcome. The hourly task archives/deactivates the employee atomically at contract expiry. HR acknowledgement is record-only and never gates execution.
 
-The independent `ContractDecision` workflow remains available and unchanged. A finalized or changed standalone decision makes a linked rating require manual resolution rather than silently rewriting either workflow.
+The independent `ContractDecision` workflow remains available. A finalized or changed standalone decision makes a linked rating require manual resolution rather than silently rewriting either workflow.
+
+### Ownership between the two workflows (deviation from the original design)
+
+- Once a `ContractRating` exists for a `ContractDecision`, the hourly legacy sweep (`employees.contract_expiry.process_contract_expiry`) skips that decision entirely: no 90/65-day milestones, CEO reminders, 48-hour CEO auto-approval, 59-day auto-renewal, or legacy final notice. `auto_renew_decision` and automatic `finalize_decision` re-check this under the row lock. Manual HR/CEO actions on the standalone decision are still allowed and still push the rating to manual resolution.
+- The rating flow now closes the linked decision instead of leaving it at `PENDING_HR`/`PENDING_CEO`. A CEO `RENEW`/`RENEW_WITH_CHANGES` moves the profile onto the renewed term (same date rule as a legacy renewal) and marks the decision `APPROVED`. A `TERMINATE` marks it `APPROVED` (with `decision_type=TERMINATE`, the same representation the legacy flow uses) only when the scheduled termination executes at expiry. No new status or migration was added.
+- Both flows now set `employment_status=TERMINATED` on termination and send HR a `contract.termination_settlement_required` notification to create the termination settlement (`AnnualLeavePaymentRequest` with `is_termination_settlement=True`). The settlement itself is still created and reviewed by HR.
+- CEO approval of a `pay` annual leave settlement re-prices `salary_at_year_end` and `payment_amount` at the live salary when it changed after submission; the change is recorded in the approval's workflow metadata.
 
 ## API contract
 

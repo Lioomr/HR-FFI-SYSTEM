@@ -52,6 +52,20 @@ FINAL_NOTIFICATION_STATUSES = {
 }
 
 
+def _without_contract_rating(queryset):
+    """Drop decisions owned by the contract-rating workflow.
+
+    Once a ``ContractRating`` exists for a decision, that workflow is the sole owner
+    of the contract's outcome. The legacy sweep must not remind, auto-approve,
+    auto-renew or send final notices for it, or the two schedulers race.
+    """
+    return queryset.filter(rating__isnull=True)
+
+
+def has_contract_rating(decision_id: int) -> bool:
+    return ContractDecision.objects.filter(pk=decision_id, rating__isnull=False).exists()
+
+
 def contract_terms_snapshot(profile: EmployeeProfile) -> dict:
     return {
         field: str(getattr(profile, field)) if getattr(profile, field) is not None else None for field in TERM_FIELDS
@@ -332,6 +346,55 @@ def notify_auto_renewal_failure(decision: ContractDecision) -> int | None:
     return notify_manual_resolution(decision)
 
 
+def notify_hr_termination_settlement(decision: ContractDecision, *, termination_date: date) -> int | None:
+    """Tell HR to raise the termination settlement once a contract is terminated.
+
+    Shared by the legacy decision flow and the contract-rating flow at the point the
+    employee becomes TERMINATED. It only notifies: the ``AnnualLeavePaymentRequest``
+    (``is_termination_settlement=True``) is still created and reviewed by HR. A
+    delivery failure never undoes the termination.
+    """
+    profile = decision.employee_profile
+    text = notification_text(
+        "contract.termination_settlement_required",
+        employee_name=profile_name(profile),
+        date=termination_date,
+    )
+    count = 0
+    try:
+        with transaction.atomic():
+            for recipient in _company_hr_recipients(decision.company_id):
+                result = _dispatch(
+                    recipient=recipient,
+                    decision=decision,
+                    **text,
+                    action_url="/hr/annual-leave-payments",
+                    category=Notification.Category.APPROVAL,
+                    deduplication_key=f"contract.expiry:{decision.id}:termination-settlement",
+                    metadata={
+                        "contract_decision_id": decision.id,
+                        "employee_profile_id": profile.id,
+                        "termination_date": termination_date.isoformat(),
+                        "is_termination_settlement": True,
+                        "action": "create_termination_settlement",
+                    },
+                )
+                count += int(result.get("created", False))
+    except Exception:
+        logger.exception("contract_termination_settlement_notification_failed", extra={"decision_id": decision.id})
+        return None
+    return count
+
+
+def mark_employment_terminated(profile: EmployeeProfile, now) -> None:
+    """Record TERMINATED on the profile without ``save()`` (which re-runs ``clean()`` on an archived row)."""
+    EmployeeProfile._base_manager.filter(pk=profile.pk).update(
+        employment_status=EmployeeProfile.EmploymentStatus.TERMINATED, updated_at=now
+    )
+    profile.employment_status = EmployeeProfile.EmploymentStatus.TERMINATED
+    profile.updated_at = now
+
+
 def _parse_term_values(values: dict) -> dict:
     if not isinstance(values, dict):
         raise ValueError("Proposed contract terms must be an object.")
@@ -483,6 +546,9 @@ def finalize_decision(decision_id: int, *, actor=None, automatic: bool = False, 
     )
     if decision.status != ContractDecision.Status.PENDING_CEO:
         raise ValueError("This contract decision is no longer pending CEO approval.")
+    if automatic and has_contract_rating(decision.id):
+        # Re-checked under the row lock: a rating cycle may have started after the sweep's query.
+        return decision
     profile = (
         EmployeeProfile.objects.select_for_update(of=("self",))
         .select_related("user")
@@ -549,6 +615,8 @@ def finalize_decision(decision_id: int, *, actor=None, automatic: bool = False, 
                 "Termination cannot be completed because an active record blocks archiving. "
                 "No attendance history or BioTime mapping was changed."
             ) from exc
+        # Match the rating flow's termination so both leave the profile in the same state.
+        mark_employment_terminated(profile, now)
         if profile.user_id:
             profile.user.is_active = False
             profile.user.auth_token_version += 1
@@ -591,6 +659,8 @@ def finalize_decision(decision_id: int, *, actor=None, automatic: bool = False, 
         },
         actor=actor,
     )
+    if decision.decision_type == ContractDecision.DecisionType.TERMINATE:
+        notify_hr_termination_settlement(decision, termination_date=timezone.localdate(now))
     return decision
 
 
@@ -650,7 +720,8 @@ def auto_renew_decision(decision_id: int):
     decision = (
         ContractDecision.objects.select_for_update().select_related("employee_profile", "company").get(pk=decision_id)
     )
-    if decision.status != ContractDecision.Status.PENDING_HR:
+    if decision.status != ContractDecision.Status.PENDING_HR or has_contract_rating(decision.id):
+        # A rating cycle owns this contract; never auto-renew underneath it.
         return decision, False
     profile = EmployeeProfile.objects.select_for_update().get(pk=decision.employee_profile_id)
     workflow_start = begin_recorded_transition(decision)
@@ -739,7 +810,7 @@ def process_contract_expiry(*, today=None, now=None) -> dict:
         try:
             days_left = (profile.contract_expiry - today).days
             decision, _ = ensure_contract_decision(profile)
-            if days_left in CONTRACT_MILESTONES:
+            if days_left in CONTRACT_MILESTONES and not has_contract_rating(decision.id):
                 milestone = CONTRACT_MILESTONES[days_left]
                 if not decision.notification_milestones.get(milestone):
                     notification_result = notify_hr_milestone(decision, milestone, days_left)
@@ -758,8 +829,8 @@ def process_contract_expiry(*, today=None, now=None) -> dict:
             summary["profile_failures"] = summary.get("profile_failures", 0) + 1
             logger.exception("contract_expiry_profile_processing_failed", extra={"profile_id": profile.id})
 
-    pending_ceo = ContractDecision.objects.filter(
-        status=ContractDecision.Status.PENDING_CEO, ceo_deadline__isnull=False
+    pending_ceo = _without_contract_rating(
+        ContractDecision.objects.filter(status=ContractDecision.Status.PENDING_CEO, ceo_deadline__isnull=False)
     )
     for decision in pending_ceo.select_related("employee_profile", "company").iterator():
         if decision.ceo_deadline <= now:
@@ -778,7 +849,7 @@ def process_contract_expiry(*, today=None, now=None) -> dict:
             try:
                 with transaction.atomic():
                     locked = ContractDecision.objects.select_for_update().get(pk=decision.id)
-                    if locked.status != ContractDecision.Status.PENDING_CEO:
+                    if locked.status != ContractDecision.Status.PENDING_CEO or has_contract_rating(locked.id):
                         continue
                     reminder_number = locked.ceo_reminder_count + 1
                     notification_result = notify_ceo_pending(
@@ -799,9 +870,11 @@ def process_contract_expiry(*, today=None, now=None) -> dict:
                 summary["notification_failures"] = summary.get("notification_failures", 0) + 1
                 logger.exception("contract_decision_ceo_reminder_failed", extra={"decision_id": decision.id})
 
-    pending_hr = ContractDecision.objects.filter(
-        status=ContractDecision.Status.PENDING_HR,
-        original_contract_expiry__lte=today + timedelta(days=AUTO_RENEWAL_DAYS_BEFORE_EXPIRY),
+    pending_hr = _without_contract_rating(
+        ContractDecision.objects.filter(
+            status=ContractDecision.Status.PENDING_HR,
+            original_contract_expiry__lte=today + timedelta(days=AUTO_RENEWAL_DAYS_BEFORE_EXPIRY),
+        )
     )
     for decision in pending_hr.values_list("id", flat=True).iterator():
         try:
@@ -822,10 +895,12 @@ def process_contract_expiry(*, today=None, now=None) -> dict:
             logger.exception("contract_decision_auto_renewal_failed", extra={"decision_id": decision})
             summary["renewal_failures"] += 1
 
-    pending_final_notifications = ContractDecision.objects.filter(
-        status__in=FINAL_NOTIFICATION_STATUSES,
-        finalized_at__isnull=False,
-        final_notification_sent_at__isnull=True,
+    pending_final_notifications = _without_contract_rating(
+        ContractDecision.objects.filter(
+            status__in=FINAL_NOTIFICATION_STATUSES,
+            finalized_at__isnull=False,
+            final_notification_sent_at__isnull=True,
+        )
     ).filter(
         Q(last_final_notification_attempt_at__isnull=True)
         | Q(last_final_notification_attempt_at__lte=now - FINAL_NOTIFICATION_RETRY_INTERVAL)

@@ -7,7 +7,13 @@ from django.db.models import Exists, OuterRef
 from django.utils import timezone
 
 from core.services.workflow_engine import begin_recorded_transition
-from employees.contract_expiry import CEO_REMINDER_INTERVAL, _company_ceo_recipients, _company_hr_recipients
+from employees.contract_expiry import (
+    CEO_REMINDER_INTERVAL,
+    _company_ceo_recipients,
+    _company_hr_recipients,
+    mark_employment_terminated,
+    notify_hr_termination_settlement,
+)
 from employees.models import ContractDecision, EmployeeProfile
 from employees.services.archiving import retire_biotime_mapping_and_archive_profile
 from employees.services.manager_relationships import get_valid_direct_manager_user
@@ -88,7 +94,14 @@ def notify_event(rating, event, audiences, message="", *, key=None):
 
 @transaction.atomic
 def execute_scheduled_termination(rating_id, *, today=None):
-    from .services import _locked, _manual_resolution, _notify, _record, _snapshot_mismatch_reason
+    from .services import (
+        _locked,
+        _manual_resolution,
+        _notify,
+        _record,
+        _snapshot_mismatch_reason,
+        close_contract_decision,
+    )
 
     rating, profile = _locked(rating_id)
     if (
@@ -109,9 +122,7 @@ def execute_scheduled_termination(rating_id, *, today=None):
     retire_biotime_mapping_and_archive_profile(
         profile, execution_snapshot, None, EmployeeProfile.ArchiveReason.END_OF_CONTRACT, now
     )
-    EmployeeProfile._base_manager.filter(pk=profile.pk).update(
-        employment_status=EmployeeProfile.EmploymentStatus.TERMINATED, updated_at=now
-    )
+    mark_employment_terminated(profile, now)
     if profile.user_id:
         from django.contrib.auth import get_user_model
 
@@ -121,6 +132,7 @@ def execute_scheduled_termination(rating_id, *, today=None):
         user.save(update_fields=["is_active", "auth_token_version"])
     rating.termination_processed_at = now
     rating.save(update_fields=["termination_processed_at", "updated_at"])
+    close_contract_decision(rating)
     _record(
         rating,
         "contract_rating_termination_processed",
@@ -140,6 +152,7 @@ def execute_scheduled_termination(rating_id, *, today=None):
     if rating.rating_mode == ContractRating.RatingMode.RATE:
         audiences.append("manager")
     _notify(rating, "termination_finalized", audiences)
+    notify_hr_termination_settlement(rating.contract_decision, termination_date=profile.contract_expiry)
     return rating
 
 
