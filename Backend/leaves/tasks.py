@@ -96,7 +96,7 @@ def send_annual_leave_year_end_notifications():
                             "employee_profile_id": profile.id,
                             "cycle_start": previous_start.isoformat(),
                             "cycle_end": previous_end.isoformat(),
-                            "decision_options": ["carry_forward", "pay"],
+                            "decision_options": ["carry_forward", "carry_forward_locked", "pay"],
                         },
                         deduplication_key=f"annual_leave.year_end_decision_required:{profile.id}:{previous_end.isoformat()}",
                         company=profile.company,

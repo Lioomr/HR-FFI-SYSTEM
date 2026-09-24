@@ -572,6 +572,7 @@ def build_annual_leave_eligibility(profile: EmployeeProfile | None, *, active_co
         "cycle_start": None,
         "cycle_end": None,
         "eligible_unused_days": zero,
+        "locked_unused_days": zero,
         "fractional_days": zero,
         "salary_at_year_end": zero,
         "estimated_payment_amount": zero,
@@ -610,6 +611,7 @@ def build_annual_leave_eligibility(profile: EmployeeProfile | None, *, active_co
         base.update(
             {
                 "eligible_unused_days": snapshot["eligible_unused_days"],
+                "locked_unused_days": snapshot["locked_unused_days"],
                 "fractional_days": snapshot["fractional_days"],
                 "salary_at_year_end": snapshot["salary_at_year_end"],
                 "estimated_payment_amount": snapshot["payment_amount"],
@@ -647,14 +649,47 @@ def annual_leave_payment_amount(eligible_days, salary) -> Decimal:
     return (Decimal(eligible_days) * Decimal(salary) / Decimal("30")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
-def _carry_forward_from_settlement(status, carry_forward_days, eligible_unused_days) -> Decimal:
-    """Opening balance a recorded ``AnnualLeavePaymentRequest`` hands to the following cycle."""
+ZERO_DAYS = Decimal("0.00")
+
+
+def _carry_forward_split_from_settlement(
+    status, carry_forward_days, eligible_unused_days, *, resolution=None, locked_unused_days=None
+) -> tuple[Decimal, Decimal]:
+    """``(cash_eligible, locked)`` opening balance a recorded settlement hands to the following cycle.
+
+    ``locked_unused_days`` are leave-only days already in that cycle's balance: they are never
+    paid, so they carry forward as locked whatever the outcome (paid, carried, rejected or
+    pending). Only the cash-eligible ``eligible_unused_days`` follow the pay/carry decision, and
+    a ``CARRY_FORWARD_LOCKED`` resolution moves them into the locked bucket for good.
+    """
+    locked = Decimal(locked_unused_days or 0)
     if status == AnnualLeavePaymentRequest.Status.APPROVED:
-        return Decimal("0.00")
+        return ZERO_DAYS, locked
     if status == AnnualLeavePaymentRequest.Status.CARRIED_FORWARD:
-        return carry_forward_days
+        if resolution == AnnualLeavePaymentRequest.Resolution.CARRY_FORWARD_LOCKED:
+            return ZERO_DAYS, locked + carry_forward_days
+        return carry_forward_days, locked
     # A rejected or still-pending payment must not erase the employee's balance.
-    return eligible_unused_days
+    return eligible_unused_days, locked
+
+
+def _settlement_carry_forward_split(settlement) -> tuple[Decimal, Decimal]:
+    """``_carry_forward_split_from_settlement`` for a model instance or a ``.values()`` row."""
+    if isinstance(settlement, dict):
+        return _carry_forward_split_from_settlement(
+            settlement["status"],
+            settlement["carry_forward_days"],
+            settlement["eligible_unused_days"],
+            resolution=settlement.get("resolution"),
+            locked_unused_days=settlement.get("locked_unused_days"),
+        )
+    return _carry_forward_split_from_settlement(
+        settlement.status,
+        settlement.carry_forward_days,
+        settlement.eligible_unused_days,
+        resolution=settlement.resolution,
+        locked_unused_days=settlement.locked_unused_days,
+    )
 
 
 def _latest_settlement_before(profile: EmployeeProfile, cycle_start: date):
@@ -668,12 +703,18 @@ def _latest_settlement_before(profile: EmployeeProfile, cycle_start: date):
     )
 
 
-def _recorded_annual_carry_forward_days(profile: EmployeeProfile, cycle_start: date) -> Decimal:
-    """Carry-forward from recorded settlements only; ``0.00`` when none exists (never computes a balance)."""
+def _recorded_annual_carry_forward_split(profile: EmployeeProfile, cycle_start: date) -> tuple[Decimal, Decimal]:
+    """``(cash_eligible, locked)`` carry-forward from recorded settlements only (never computes a balance)."""
     previous = _latest_settlement_before(profile, cycle_start)
     if not previous:
-        return Decimal("0.00")
-    return _carry_forward_from_settlement(previous.status, previous.carry_forward_days, previous.eligible_unused_days)
+        return ZERO_DAYS, ZERO_DAYS
+    return _settlement_carry_forward_split(previous)
+
+
+def _recorded_annual_carry_forward_days(profile: EmployeeProfile, cycle_start: date) -> Decimal:
+    """Carry-forward from recorded settlements only; ``0.00`` when none exists (never computes a balance)."""
+    cash, locked = _recorded_annual_carry_forward_split(profile, cycle_start)
+    return cash + locked
 
 
 def _renewal_decisions(profile_ids):
@@ -750,6 +791,33 @@ def _annual_balance_totals(opening, accrued_days, used):
     return accrued, eligible_unused, eligible_whole_days
 
 
+def _split_locked_whole_days(opening_locked, used, eligible_unused, eligible_whole_days):
+    """Split a cycle's whole unused days into ``(cash_eligible_whole, locked_whole)``.
+
+    Leave taken in the cycle draws down the locked (leave-only) days first: taking them as
+    leave is the only way they can ever be used. Whatever locked days are left stay locked;
+    only the rest of the balance (new accrual plus any unlocked carry-forward) is payable.
+    The two parts always add up to ``eligible_whole_days``, so the cycle's total balance is
+    exactly what it was before the split existed, and with no locked opening the payable
+    part is the whole balance.
+    """
+    locked_remaining = max(ZERO_DAYS, Decimal(opening_locked) - Decimal(used))
+    cash_unused = max(ZERO_DAYS, eligible_unused - locked_remaining)
+    cash_whole = min(cash_unused.quantize(Decimal("1"), rounding=ROUND_FLOOR), eligible_whole_days)
+    # A fractional cash remainder can round the leave-only part up by a fraction, but a
+    # locked fraction can never round the payable part up.
+    return cash_whole, eligible_whole_days - cash_whole
+
+
+def _unsettled_cycle_split(
+    prior_start, prior_end, contract_start, *, opening_cash, opening_locked, used
+) -> tuple[Decimal, Decimal]:
+    """``(cash_eligible_whole, locked_whole)`` a settlement for ``[prior_start, prior_end]`` would have recorded."""
+    _periods, accrued_days = _annual_cycle_accrual(prior_start, prior_end, min(date.today(), prior_end), contract_start)
+    _accrued, unused, eligible_whole_days = _annual_balance_totals(opening_cash + opening_locked, accrued_days, used)
+    return _split_locked_whole_days(opening_locked, used, unused, eligible_whole_days)
+
+
 def _unsettled_cycle_whole_days(prior_start, prior_end, contract_start, *, opening, used) -> Decimal:
     """Whole unused days a settlement for ``[prior_start, prior_end]`` would have recorded.
 
@@ -771,9 +839,23 @@ def get_unsettled_annual_cycle_unused_days(
     That cycle's own opening balance comes only from *recorded* settlements before it, never
     from another live computation, so the lookup is exactly one cycle deep and cannot recurse.
     """
-    opening = _recorded_annual_carry_forward_days(profile, prior_start)
+    cash, locked = get_unsettled_annual_cycle_split(profile, prior_start, prior_end, contract_start)
+    return cash + locked
+
+
+def get_unsettled_annual_cycle_split(
+    profile: EmployeeProfile, prior_start: date, prior_end: date, contract_start: date | None
+) -> tuple[Decimal, Decimal]:
+    """``(cash_eligible, locked)`` whole unused days of a completed cycle that has no settlement request.
+
+    No HR decision was made for that cycle, so its own accrual stays cash-eligible; only
+    leave-only days it inherited from a recorded ``CARRY_FORWARD_LOCKED`` settlement stay locked.
+    """
+    opening_cash, opening_locked = _recorded_annual_carry_forward_split(profile, prior_start)
     used = Decimal(str(get_annual_used_days_for_cycle(profile, prior_start, prior_end, as_of=prior_end)))
-    return _unsettled_cycle_whole_days(prior_start, prior_end, contract_start, opening=opening, used=used)
+    return _unsettled_cycle_split(
+        prior_start, prior_end, contract_start, opening_cash=opening_cash, opening_locked=opening_locked, used=used
+    )
 
 
 def get_unsettled_renewed_annual_term(profile: EmployeeProfile, cycle_start: date):
@@ -791,7 +873,12 @@ def get_unsettled_renewed_annual_term(profile: EmployeeProfile, cycle_start: dat
     return prior_cycle[0], prior_cycle[1], get_unsettled_annual_cycle_unused_days(profile, *prior_cycle)
 
 
-def get_prior_annual_carry_forward_days(profile: EmployeeProfile, cycle_start: date):
+def get_prior_annual_carry_forward_split(profile: EmployeeProfile, cycle_start: date) -> tuple[Decimal, Decimal]:
+    """``(cash_eligible, locked)`` opening Annual Leave balance of the cycle starting on ``cycle_start``.
+
+    ``locked`` days are leave-only (a ``CARRY_FORWARD_LOCKED`` settlement put them there) and
+    are never paid out; ``cash_eligible`` days may still be paid by a later settlement.
+    """
     previous = _latest_settlement_before(profile, cycle_start)
     if previous is None or previous.cycle_end < cycle_start - timedelta(days=1):
         # No settlement covers the cycle that ended just before ``cycle_start`` (for example
@@ -799,10 +886,16 @@ def get_prior_annual_carry_forward_days(profile: EmployeeProfile, cycle_start: d
         # unused days must carry forward instead of silently resetting to zero.
         prior_cycle = get_previous_annual_cycle(profile, cycle_start)
         if prior_cycle and (previous is None or previous.cycle_end < prior_cycle[0]):
-            return get_unsettled_annual_cycle_unused_days(profile, *prior_cycle)
+            return get_unsettled_annual_cycle_split(profile, *prior_cycle)
     if not previous:
-        return Decimal("0.00")
-    return _carry_forward_from_settlement(previous.status, previous.carry_forward_days, previous.eligible_unused_days)
+        return ZERO_DAYS, ZERO_DAYS
+    return _settlement_carry_forward_split(previous)
+
+
+def get_prior_annual_carry_forward_days(profile: EmployeeProfile, cycle_start: date):
+    """Total opening Annual Leave balance (cash-eligible plus leave-only) of the cycle starting on ``cycle_start``."""
+    cash, locked = get_prior_annual_carry_forward_split(profile, cycle_start)
+    return cash + locked
 
 
 def build_annual_leave_payment_snapshot(
@@ -815,17 +908,24 @@ def build_annual_leave_payment_snapshot(
     if not cycle_start:
         return None
     effective_cycle_end = min(cycle_end, effective_date)
-    opening = get_prior_annual_carry_forward_days(profile, cycle_start)
+    opening_cash, opening_locked = get_prior_annual_carry_forward_split(profile, cycle_start)
     used = Decimal(str(get_annual_used_days_for_cycle(profile, cycle_start, effective_cycle_end, as_of=effective_date)))
-    accrued, eligible_unused, eligible_whole_days = _annual_balance_totals(opening, details["accrued_days"], used)
+    accrued, eligible_unused, eligible_whole_days = _annual_balance_totals(
+        opening_cash + opening_locked, details["accrued_days"], used
+    )
+    # Only the cash-eligible whole days are payable; leave-only days are reported apart.
+    cash_whole_days, locked_whole_days = _split_locked_whole_days(
+        opening_locked, used, eligible_unused, eligible_whole_days
+    )
     salary = get_annual_salary_at_year_end(profile)
-    amount = annual_leave_payment_amount(eligible_whole_days, salary)
+    amount = annual_leave_payment_amount(cash_whole_days, salary)
     return {
         "cycle_start": cycle_start,
         "cycle_end": cycle_end,
         "accrued_days": accrued,
         "used_days": used,
-        "eligible_unused_days": eligible_whole_days,
+        "eligible_unused_days": cash_whole_days,
+        "locked_unused_days": locked_whole_days,
         "fractional_days": (eligible_unused - eligible_whole_days).quantize(Decimal("0.01")),
         "salary_at_year_end": salary,
         "payment_amount": amount,
@@ -1058,13 +1158,8 @@ def _batch_latest_settlement_before(batch, profile, cycle_start):
 def _batch_unsettled_annual_cycle_unused_days(batch, profile, prior_start, prior_end, contract_start):
     """Batched ``get_unsettled_annual_cycle_unused_days`` over the preloaded rows."""
     recorded = _batch_latest_settlement_before(batch, profile, prior_start)
-    opening = (
-        _carry_forward_from_settlement(
-            recorded["status"], recorded["carry_forward_days"], recorded["eligible_unused_days"]
-        )
-        if recorded
-        else Decimal("0.00")
-    )
+    # Total only: the batched path feeds leave balances, where leave-only days count in full.
+    opening = sum(_settlement_carry_forward_split(recorded), ZERO_DAYS) if recorded else ZERO_DAYS
     rows = batch["rows_by_profile"].get(profile.id, [])
     leave_types = batch["leave_types_by_company"].get(profile.company_id, [])
     # Same types as get_annual_used_days_for_cycle: the first annual and the first emergency type.
@@ -1096,9 +1191,7 @@ def _batch_prior_annual_carry_forward_uncached(batch, profile, cycle_start):
             return _batch_unsettled_annual_cycle_unused_days(batch, profile, *prior_cycle)
     if previous is None:
         return Decimal("0.00")
-    return _carry_forward_from_settlement(
-        previous["status"], previous["carry_forward_days"], previous["eligible_unused_days"]
-    )
+    return sum(_settlement_carry_forward_split(previous), ZERO_DAYS)
 
 
 def _calculate_leave_balance_from_batch(profile, year, batch, memo, as_of=None):
@@ -1122,12 +1215,8 @@ def _calculate_leave_balance_from_batch(profile, year, batch, memo, as_of=None):
         annual_cycle_start, annual_cycle_end = get_contract_year_cycle(profile, balance_date)
         if _is_annual(code) and annual_cycle_start:
             used = 0
-            annual_type = next(
-                (item for item in leave_types if _is_annual(_normalized_leave_code(item))), None
-            )
-            emergency_type = next(
-                (item for item in leave_types if _is_emergency(_normalized_leave_code(item))), None
-            )
+            annual_type = next((item for item in leave_types if _is_annual(_normalized_leave_code(item))), None)
+            emergency_type = next((item for item in leave_types if _is_emergency(_normalized_leave_code(item))), None)
             if annual_type:
                 used += _batch_period_days(
                     rows,
@@ -1180,9 +1269,7 @@ def _calculate_leave_balance_from_batch(profile, year, batch, memo, as_of=None):
         opening = 0.0
         if leave_type.allow_carry_over and year > hire_year:
             previous_balances = _calculate_leave_balance_from_batch(profile, year - 1, batch, memo)
-            previous = next(
-                (item for item in previous_balances if item["leave_type_id"] == leave_type.id), None
-            )
+            previous = next((item for item in previous_balances if item["leave_type_id"] == leave_type.id), None)
             if previous:
                 opening = float(previous["remaining_days"])
                 if leave_type.max_carry_over is not None:
@@ -1387,7 +1474,14 @@ def get_leave_request_payment_context(instances):
 
     payment_rows = list(
         AnnualLeavePaymentRequest.objects.filter(employee_profile_id__in=profile_ids).values(
-            "id", "employee_profile_id", "cycle_end", "status", "carry_forward_days", "eligible_unused_days"
+            "id",
+            "employee_profile_id",
+            "cycle_end",
+            "status",
+            "resolution",
+            "carry_forward_days",
+            "eligible_unused_days",
+            "locked_unused_days",
         )
     )
     batch = {
@@ -1413,7 +1507,11 @@ def get_leave_request_payment_context(instances):
             {LeaveRequest.RequestStatus.APPROVED},
         )
         current_days = get_leave_days(instance.start_date, instance.end_date)
-        used_before = max(0.0, used_total - current_days) if instance.status == LeaveRequest.RequestStatus.APPROVED else used_total
+        used_before = (
+            max(0.0, used_total - current_days)
+            if instance.status == LeaveRequest.RequestStatus.APPROVED
+            else used_total
+        )
         breakdown = get_payment_breakdown(
             instance.leave_type,
             used_before,
@@ -1453,9 +1551,11 @@ def validate_leave_request_policy(
     if _is_annual(code):
         today = timezone.localdate()
         contract_start = get_contract_start_date(profile)
-        if contract_start and get_completed_calendar_months(
-            contract_start, today, contract_start=contract_start
-        ) < ANNUAL_MINIMUM_PERIODS:
+        if (
+            contract_start
+            and get_completed_calendar_months(contract_start, today, contract_start=contract_start)
+            < ANNUAL_MINIMUM_PERIODS
+        ):
             return "Annual leave can be used only after completing 6 months of service."
 
         # Only enforce remaining balance when profile + hire date are available.
