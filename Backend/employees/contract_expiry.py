@@ -374,6 +374,9 @@ def notify_hr_termination_settlement(decision: ContractDecision, *, termination_
                     metadata={
                         "contract_decision_id": decision.id,
                         "employee_profile_id": profile.id,
+                        # Labels this notice in the decision's notification status (frontend
+                        # ``contractDecisions.milestone.*``) instead of the generic event key.
+                        "milestone": "contract.termination_settlement_required",
                         "termination_date": termination_date.isoformat(),
                         "is_termination_settlement": True,
                         "action": "create_termination_settlement",

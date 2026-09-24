@@ -335,6 +335,7 @@ class ContractExpiryWorkflowTests(TestCase):
         self.assertEqual([call.kwargs["recipient"] for call in settlement], [self.hr])
         self.assertEqual(settlement[0].kwargs["i18n"]["key"], "contract.termination_settlement_required")
         self.assertTrue(settlement[0].kwargs["metadata"]["is_termination_settlement"])
+        self.assertEqual(settlement[0].kwargs["metadata"]["milestone"], "contract.termination_settlement_required")
 
     @patch("employees.contract_expiry.dispatch_notification_channels")
     def test_approved_renewal_sends_no_termination_settlement_notice(self, dispatch):
