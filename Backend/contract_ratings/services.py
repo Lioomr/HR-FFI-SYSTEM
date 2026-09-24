@@ -21,6 +21,7 @@ from employees.contract_expiry import (
     contract_rating_due,
     contract_terms_snapshot,
     ensure_contract_decision,
+    notify_hr_renewal_settlement_review,
 )
 from employees.models import ContractDecision, EmployeeProfile
 from employees.services.manager_relationships import get_valid_direct_manager_user, manager_approval_actor_source
@@ -526,6 +527,7 @@ def submit_ceo_decision(
         # Renewal is settled now; a termination is closed out when it executes at expiry.
         _apply_renewal_dates(rating, profile)
         close_contract_decision(rating, actor=actor)
+        notify_hr_renewal_settlement_review(rating.contract_decision)
     if rating.scheduled_termination:
         _record(
             rating,

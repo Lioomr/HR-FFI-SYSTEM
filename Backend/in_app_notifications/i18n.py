@@ -380,6 +380,20 @@ MESSAGES: dict[str, dict[str, tuple[str, str]]] = {
             "(بدل الإجازة السنوية) لهذا الموظف.",
         ),
     },
+    "contract.renewal_settlement_review_required": {
+        "title": (
+            "Annual leave settlement review: {employee_name}",
+            "مراجعة تسوية الإجازة السنوية: {employee_name}",
+        ),
+        "message": (
+            "{employee_name}'s contract was renewed before the annual leave settlement window for "
+            "{cycle_start} to {cycle_end} opened. {days} unused annual leave days from that contract year "
+            "have no settlement and will carry forward unless HR pays them out.",
+            "تم تجديد عقد {employee_name} قبل فتح فترة تسوية الإجازة السنوية للفترة من {cycle_start} "
+            "إلى {cycle_end}. لا توجد تسوية لعدد {days} يوماً من الإجازة السنوية غير المستخدمة لتلك "
+            "السنة التعاقدية، وسيتم ترحيلها ما لم تقم الموارد البشرية بصرفها.",
+        ),
+    },
     "contract.rating": {
         "title": ("Contract Rating: {event}", "تقييم العقد: {event}"),
         "message": ("{message}", "{message}"),
