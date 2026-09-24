@@ -25,11 +25,22 @@ export const ANNUAL_LEAVE_PAYMENT_STATUSES = [
 export type AnnualLeavePaymentStatus =
   (typeof ANNUAL_LEAVE_PAYMENT_STATUSES)[number];
 
-/** `pay` settles in cash; `carry_forward` moves the days into the next cycle. */
-export type AnnualLeavePaymentResolution = "pay" | "carry_forward";
+/**
+ * `pay` settles in cash; `carry_forward` moves the days into the next cycle,
+ * where a later settlement may still pay them; `carry_forward_locked` moves
+ * them into the next cycle as leave-only days that can never be paid out.
+ * Both carry-forward resolutions settle at status `carried_forward`.
+ */
+export type AnnualLeavePaymentResolution =
+  | "pay"
+  | "carry_forward"
+  | "carry_forward_locked";
 
-/** HR's two options while the request sits at `pending_hr`. */
-export type AnnualLeavePaymentReviewDecision = "forward" | "carry_forward";
+/** HR's options while the request sits at `pending_hr`. */
+export type AnnualLeavePaymentReviewDecision =
+  | "forward"
+  | "carry_forward"
+  | "carry_forward_locked";
 
 /**
  * Decimal fields are serialised by DRF as strings (`"12.25"`). They are typed
@@ -59,6 +70,12 @@ export interface AnnualLeavePaymentRequest {
   salary_at_year_end: string | number;
   payment_amount: string | number;
   carry_forward_days: string | number;
+  /**
+   * Leave-only days in this cycle's balance (carried in under a
+   * `carry_forward_locked` resolution). They are not part of
+   * `eligible_unused_days` or `payment_amount` and are never paid.
+   */
+  locked_unused_days?: string | number;
   resolution: AnnualLeavePaymentResolution;
   status: AnnualLeavePaymentStatus;
   is_termination_settlement: boolean;
@@ -90,6 +107,8 @@ export interface AnnualLeaveEligibility {
   cycle_start: string | null;
   cycle_end: string | null;
   eligible_unused_days: string | number;
+  /** Leave-only days: takeable as leave, never included in the estimate. */
+  locked_unused_days?: string | number;
   fractional_days: string | number;
   salary_at_year_end: string | number;
   estimated_payment_amount: string | number;
@@ -189,7 +208,10 @@ export async function createHRAnnualLeaveSettlement(
   return data;
 }
 
-/** HR review: `forward` sends it to the CEO to pay, `carry_forward` to carry. */
+/**
+ * HR review: `forward` sends it to the CEO to pay, `carry_forward` to carry,
+ * `carry_forward_locked` to carry as leave only (never payable).
+ */
 export async function reviewAnnualLeavePaymentRequest(
   id: string | number,
   payload: AnnualLeavePaymentReviewPayload,

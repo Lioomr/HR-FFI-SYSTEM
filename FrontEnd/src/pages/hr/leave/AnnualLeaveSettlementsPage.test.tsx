@@ -245,6 +245,46 @@ describe("HR Annual Leave settlements queue", () => {
     );
   });
 
+  it("sends a leave-only (non-payable) carry-forward when HR picks it", async () => {
+    reviewAnnualLeavePaymentRequest.mockResolvedValue({
+      status: "success" as const,
+      data: makeSettlement({
+        status: "pending_ceo",
+        resolution: "carry_forward_locked",
+      }),
+    });
+
+    renderPage();
+    await openReview();
+
+    fireEvent.mouseDown(screen.getByLabelText("HR decision"));
+    fireEvent.click(
+      await screen.findByTitle("Carry forward (leave only, not payable)"),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+
+    await waitFor(() =>
+      expect(reviewAnnualLeavePaymentRequest).toHaveBeenCalledWith(9, {
+        decision: "carry_forward_locked",
+        comment: "",
+      }),
+    );
+  });
+
+  it("shows leave-only days apart from the payable days", async () => {
+    getAnnualLeavePaymentRequests.mockResolvedValue(
+      listResponse([makeSettlement({ locked_unused_days: "7.00" })]),
+    );
+
+    renderPage();
+    await openReview();
+
+    expect(
+      screen.getByText("Leave-only days (not payable)"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("7 Days")).toBeInTheDocument();
+  });
+
   it("shows the exact backend validation error and keeps the dialog open", async () => {
     reviewAnnualLeavePaymentRequest.mockRejectedValue({
       apiData: {

@@ -52,8 +52,9 @@ const PAGE_SIZE = 20;
 /**
  * HR review queue for Annual Leave settlements.
  *
- * HR only ever decides how the days are resolved — `forward` (pay) or
- * `carry_forward` — and both send the request on to the CEO
+ * HR only ever decides how the days are resolved — `forward` (pay),
+ * `carry_forward` (still payable later) or `carry_forward_locked` (leave
+ * only, never payable) — and each sends the request on to the CEO
  * (`pending_hr` -> `pending_ceo`). Approve and reject belong to the CEO and are
  * deliberately absent here.
  *
@@ -164,9 +165,11 @@ export default function AnnualLeaveSettlementsPage() {
       }
       notification.success({
         message:
-          reviewDecision === "carry_forward"
-            ? t("annualPayment.carryForwardSuccess")
-            : t("annualPayment.forwardSuccess"),
+          reviewDecision === "carry_forward_locked"
+            ? t("annualPayment.carryForwardLockedSuccess")
+            : reviewDecision === "carry_forward"
+              ? t("annualPayment.carryForwardSuccess")
+              : t("annualPayment.forwardSuccess"),
       });
       setReviewing(null);
       await loadData();
@@ -469,6 +472,10 @@ export default function AnnualLeaveSettlementsPage() {
                       value: "carry_forward",
                       label: t("annualPayment.carryForward"),
                     },
+                    {
+                      value: "carry_forward_locked",
+                      label: t("annualPayment.carryForwardLocked"),
+                    },
                   ]}
                 />
               </Form.Item>
@@ -560,6 +567,10 @@ export default function AnnualLeaveSettlementsPage() {
                 {
                   value: "carry_forward",
                   label: t("annualPayment.carryForward"),
+                },
+                {
+                  value: "carry_forward_locked",
+                  label: t("annualPayment.carryForwardLocked"),
                 },
                 { value: "pay", label: t("annualPayment.pay") },
               ]}

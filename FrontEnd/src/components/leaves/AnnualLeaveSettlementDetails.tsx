@@ -5,7 +5,15 @@ import type { AnnualLeavePaymentRequest } from "../../services/api/annualLeavePa
 import {
   formatSettlementAmount,
   formatSettlementDays,
+  settlementResolutionLabelKey,
 } from "./annualLeaveSettlement";
+import { toDecimalNumber } from "../../services/api/annualLeavePaymentsApi";
+
+const RESOLUTION_TAG_COLORS = {
+  pay: "green",
+  carry_forward: "blue",
+  carry_forward_locked: "purple",
+} as const;
 
 /**
  * The settlement figures, exactly as the backend calculated them. Nothing here
@@ -47,6 +55,15 @@ export default function AnnualLeaveSettlementDetails({
           label: t("annualPayment.eligibleDays"),
           children: `${formatSettlementDays(request.eligible_unused_days)} ${t("leave.days")}`,
         },
+        ...(toDecimalNumber(request.locked_unused_days) > 0
+          ? [
+              {
+                key: "locked",
+                label: t("annualPayment.lockedDays"),
+                children: `${formatSettlementDays(request.locked_unused_days)} ${t("leave.days")}`,
+              },
+            ]
+          : []),
         {
           key: "fractional",
           label: t("annualPayment.fractionalDays"),
@@ -71,12 +88,8 @@ export default function AnnualLeaveSettlementDetails({
           key: "resolution",
           label: t("annualPayment.resolution"),
           children: (
-            <Tag
-              color={request.resolution === "carry_forward" ? "blue" : "green"}
-            >
-              {request.resolution === "carry_forward"
-                ? t("annualPayment.resolution.carryForward")
-                : t("annualPayment.resolution.pay")}
+            <Tag color={RESOLUTION_TAG_COLORS[request.resolution] ?? "green"}>
+              {t(settlementResolutionLabelKey(request.resolution))}
             </Tag>
           ),
         },
