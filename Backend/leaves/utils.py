@@ -396,6 +396,15 @@ def get_completed_annual_periods(cycle_start: date, as_of: date | None = None) -
     return get_completed_calendar_months(cycle_start, as_of)
 
 
+def _annual_cycle_accrual(cycle_start: date, cycle_end: date, as_of: date, contract_start: date | None):
+    """Return ``(completed_periods, accrued_days)`` for one explicit contract-year cycle."""
+    effective_date = min(as_of, cycle_end)
+    periods = get_completed_calendar_months(
+        cycle_start, effective_date, contract_start=contract_start, cycle_end=cycle_end
+    )
+    return periods, (ANNUAL_ACCRUAL_DAYS_PER_PERIOD * periods).quantize(Decimal("0.01"))
+
+
 def get_annual_accrual_details(profile: EmployeeProfile, as_of: date | None = None):
     cycle_start, cycle_end = get_contract_year_cycle(profile, as_of or date.today())
     if not cycle_start:
@@ -405,16 +414,14 @@ def get_annual_accrual_details(profile: EmployeeProfile, as_of: date | None = No
             "completed_periods": 0,
             "accrued_days": Decimal("0.00"),
         }
-    effective_date = min(as_of or date.today(), cycle_end)
-    contract_start = get_contract_start_date(profile)
-    periods = get_completed_calendar_months(
-        cycle_start, effective_date, contract_start=contract_start, cycle_end=cycle_end
+    periods, accrued_days = _annual_cycle_accrual(
+        cycle_start, cycle_end, as_of or date.today(), get_contract_start_date(profile)
     )
     return {
         "cycle_start": cycle_start,
         "cycle_end": cycle_end,
         "completed_periods": periods,
-        "accrued_days": (ANNUAL_ACCRUAL_DAYS_PER_PERIOD * periods).quantize(Decimal("0.01")),
+        "accrued_days": accrued_days,
     }
 
 
@@ -640,8 +647,18 @@ def annual_leave_payment_amount(eligible_days, salary) -> Decimal:
     return (Decimal(eligible_days) * Decimal(salary) / Decimal("30")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
-def get_prior_annual_carry_forward_days(profile: EmployeeProfile, cycle_start: date):
-    previous = (
+def _carry_forward_from_settlement(status, carry_forward_days, eligible_unused_days) -> Decimal:
+    """Opening balance a recorded ``AnnualLeavePaymentRequest`` hands to the following cycle."""
+    if status == AnnualLeavePaymentRequest.Status.APPROVED:
+        return Decimal("0.00")
+    if status == AnnualLeavePaymentRequest.Status.CARRIED_FORWARD:
+        return carry_forward_days
+    # A rejected or still-pending payment must not erase the employee's balance.
+    return eligible_unused_days
+
+
+def _latest_settlement_before(profile: EmployeeProfile, cycle_start: date):
+    return (
         AnnualLeavePaymentRequest.objects.filter(
             employee_profile=profile,
             cycle_end__lt=cycle_start,
@@ -649,12 +666,128 @@ def get_prior_annual_carry_forward_days(profile: EmployeeProfile, cycle_start: d
         .order_by("-cycle_end", "-id")
         .first()
     )
-    if not previous or previous.status == AnnualLeavePaymentRequest.Status.APPROVED:
+
+
+def _recorded_annual_carry_forward_days(profile: EmployeeProfile, cycle_start: date) -> Decimal:
+    """Carry-forward from recorded settlements only; ``0.00`` when none exists (never computes a balance)."""
+    previous = _latest_settlement_before(profile, cycle_start)
+    if not previous:
         return Decimal("0.00")
-    if previous.status == AnnualLeavePaymentRequest.Status.CARRIED_FORWARD:
-        return previous.carry_forward_days
-    # A rejected or still-pending payment must not erase the employee's balance.
-    return previous.eligible_unused_days
+    return _carry_forward_from_settlement(previous.status, previous.carry_forward_days, previous.eligible_unused_days)
+
+
+def _renewal_decisions(profile_ids):
+    """Finalized ``ContractDecision`` rows that moved these profiles onto a renewed term."""
+    from employees.models import ContractDecision
+
+    return ContractDecision.objects.filter(employee_profile_id__in=profile_ids).filter(
+        Q(status=ContractDecision.Status.AUTO_RENEWED)
+        | Q(
+            status__in=[ContractDecision.Status.APPROVED, ContractDecision.Status.AUTO_APPROVED],
+            decision_type__in=[ContractDecision.DecisionType.RENEW, ContractDecision.DecisionType.RENEW_WITH_CHANGES],
+        )
+    )
+
+
+def _renewed_contract_term_before(profile: EmployeeProfile, cycle_start: date, *, decisions=None):
+    """Return ``(start, end)`` of the contract term a finalized renewal replaced with the term starting on ``cycle_start``.
+
+    A renewal overwrites ``profile.contract_date``/``contract_expiry`` with the new term (see
+    ``employees.contract_expiry.finalize_decision``/``auto_renew_decision`` and
+    ``contract_ratings.services._apply_renewal_dates``), so the replaced term is recoverable only
+    from the ``ContractDecision`` snapshot.
+    """
+    # Local import: employees.contract_expiry pulls in the notification stack.
+    from employees.contract_expiry import _renewal_dates
+
+    if decisions is None:
+        decisions = _renewal_decisions([profile.id]).filter(original_contract_expiry__lt=cycle_start)
+    candidates = sorted(
+        (item for item in decisions if item.original_contract_expiry < cycle_start),
+        key=lambda item: (item.original_contract_expiry, item.id),
+        reverse=True,
+    )
+    for decision in candidates:
+        try:
+            renewed_start, _renewed_expiry = _renewal_dates(decision)
+        except ValueError:
+            continue
+        if renewed_start != cycle_start:
+            continue
+        term_start = decision.original_contract_date or profile.hire_date
+        if term_start and term_start <= decision.original_contract_expiry:
+            return term_start, decision.original_contract_expiry
+    return None
+
+
+def get_previous_annual_cycle(profile: EmployeeProfile, cycle_start: date, *, renewal_decisions=None):
+    """Return the contract term a finalized renewal closed out just before ``cycle_start``.
+
+    Returns ``(prior_start, prior_end, contract_start)`` where ``contract_start`` is the start
+    date that term's calendar-month accrual was anchored to, or ``None`` when no finalized
+    renewal led into ``cycle_start`` (the first cycle of employment, or an anniversary cycle
+    whose own final-five-days settlement window was reachable).
+
+    Only renewal-closed terms qualify: a renewal (automatic at 59 days, or approved earlier)
+    moves ``contract_date`` past the old term before its settlement window opens, which is
+    the case where unused days were being lost. Anniversary cycles keep their existing rule.
+    """
+    if not cycle_start:
+        return None
+    renewed = _renewed_contract_term_before(profile, cycle_start, decisions=renewal_decisions)
+    if not renewed:
+        return None
+    # The replaced term was the live contract, so its own start anchored its accrual
+    # (get_contract_start_date(profile) returned it while that term was current).
+    return renewed[0], renewed[1], renewed[0]
+
+
+def _annual_balance_totals(opening, accrued_days, used):
+    """Shared balance math for one cycle: ``(accrued, eligible_unused, eligible_whole_days)``."""
+    accrued = (opening + accrued_days).quantize(Decimal("0.01"))
+    eligible_unused = max(Decimal("0.00"), accrued - used)
+    eligible_whole_days = eligible_unused.quantize(Decimal("1"), rounding=ROUND_FLOOR)
+    return accrued, eligible_unused, eligible_whole_days
+
+
+def _unsettled_cycle_whole_days(prior_start, prior_end, contract_start, *, opening, used) -> Decimal:
+    """Whole unused days a settlement for ``[prior_start, prior_end]`` would have recorded.
+
+    Accrual stops at today while that cycle is still running (a renewal is finalized before
+    the old term expires), so days are never credited before they are earned; ``used`` covers
+    the whole cycle, including approved leave still to be taken in it.
+    """
+    _periods, accrued_days = _annual_cycle_accrual(prior_start, prior_end, min(date.today(), prior_end), contract_start)
+    _accrued, _unused, eligible_whole_days = _annual_balance_totals(opening, accrued_days, used)
+    return eligible_whole_days
+
+
+def get_unsettled_annual_cycle_unused_days(
+    profile: EmployeeProfile, prior_start: date, prior_end: date, contract_start: date | None
+) -> Decimal:
+    """Whole unused Annual Leave days of a completed cycle that has no settlement request.
+
+    Mirrors what ``build_annual_leave_payment_snapshot`` would have recorded at ``prior_end``.
+    That cycle's own opening balance comes only from *recorded* settlements before it, never
+    from another live computation, so the lookup is exactly one cycle deep and cannot recurse.
+    """
+    opening = _recorded_annual_carry_forward_days(profile, prior_start)
+    used = Decimal(str(get_annual_used_days_for_cycle(profile, prior_start, prior_end, as_of=prior_end)))
+    return _unsettled_cycle_whole_days(prior_start, prior_end, contract_start, opening=opening, used=used)
+
+
+def get_prior_annual_carry_forward_days(profile: EmployeeProfile, cycle_start: date):
+    previous = _latest_settlement_before(profile, cycle_start)
+    if previous is None or previous.cycle_end < cycle_start - timedelta(days=1):
+        # No settlement covers the cycle that ended just before ``cycle_start`` (for example
+        # a renewal moved the contract on before the final-five-days window opened). Its
+        # unused days must carry forward instead of silently resetting to zero.
+        prior_cycle = get_previous_annual_cycle(profile, cycle_start)
+        if prior_cycle and (previous is None or previous.cycle_end < prior_cycle[0]):
+            return get_unsettled_annual_cycle_unused_days(profile, *prior_cycle)
+    if not previous:
+        return Decimal("0.00")
+    return _carry_forward_from_settlement(previous.status, previous.carry_forward_days, previous.eligible_unused_days)
 
 
 def build_annual_leave_payment_snapshot(
@@ -668,10 +801,8 @@ def build_annual_leave_payment_snapshot(
         return None
     effective_cycle_end = min(cycle_end, effective_date)
     opening = get_prior_annual_carry_forward_days(profile, cycle_start)
-    accrued = (opening + details["accrued_days"]).quantize(Decimal("0.01"))
     used = Decimal(str(get_annual_used_days_for_cycle(profile, cycle_start, effective_cycle_end, as_of=effective_date)))
-    eligible_unused = max(Decimal("0.00"), accrued - used)
-    eligible_whole_days = eligible_unused.quantize(Decimal("1"), rounding=ROUND_FLOOR)
+    accrued, eligible_unused, eligible_whole_days = _annual_balance_totals(opening, details["accrued_days"], used)
     salary = get_annual_salary_at_year_end(profile)
     amount = annual_leave_payment_amount(eligible_whole_days, salary)
     return {
@@ -890,21 +1021,69 @@ def _batch_calendar_days(rows, leave_type_id, year, statuses, *, active_only=Fal
     )
 
 
-def _batch_prior_annual_carry_forward(payment_rows, profile_id, cycle_start):
+def _batch_prior_annual_carry_forward(batch, profile, cycle_start):
+    """Batched ``get_prior_annual_carry_forward_days``: same rules, settlement and renewal rows preloaded."""
+    memo = batch.setdefault("prior_carry_forward_memo", {})
+    key = (profile.id, cycle_start)
+    if key not in memo:
+        memo[key] = _batch_prior_annual_carry_forward_uncached(batch, profile, cycle_start)
+    return memo[key]
+
+
+def _batch_latest_settlement_before(batch, profile, cycle_start):
     previous = [
         row
-        for row in payment_rows
-        if row["employee_profile_id"] == profile_id and row["cycle_end"] < cycle_start
+        for row in batch["payment_rows"]
+        if row["employee_profile_id"] == profile.id and row["cycle_end"] < cycle_start
     ]
-    if not previous:
-        return Decimal("0.00")
     previous.sort(key=lambda row: (row["cycle_end"], row["id"]), reverse=True)
-    previous = previous[0]
-    if previous["status"] == AnnualLeavePaymentRequest.Status.APPROVED:
+    return previous[0] if previous else None
+
+
+def _batch_unsettled_annual_cycle_unused_days(batch, profile, prior_start, prior_end, contract_start):
+    """Batched ``get_unsettled_annual_cycle_unused_days`` over the preloaded rows."""
+    recorded = _batch_latest_settlement_before(batch, profile, prior_start)
+    opening = (
+        _carry_forward_from_settlement(
+            recorded["status"], recorded["carry_forward_days"], recorded["eligible_unused_days"]
+        )
+        if recorded
+        else Decimal("0.00")
+    )
+    rows = batch["rows_by_profile"].get(profile.id, [])
+    leave_types = batch["leave_types_by_company"].get(profile.company_id, [])
+    # Same types as get_annual_used_days_for_cycle: the first annual and the first emergency type.
+    annual_type = next((item for item in leave_types if _is_annual(_normalized_leave_code(item))), None)
+    emergency_type = next((item for item in leave_types if _is_emergency(_normalized_leave_code(item))), None)
+    used = sum(
+        _batch_period_days(
+            rows,
+            leave_type.id,
+            prior_start,
+            prior_end,
+            {LeaveRequest.RequestStatus.APPROVED},
+            active_only=True,
+            as_of=prior_end,
+        )
+        for leave_type in (annual_type, emergency_type)
+        if leave_type
+    )
+    return _unsettled_cycle_whole_days(prior_start, prior_end, contract_start, opening=opening, used=Decimal(str(used)))
+
+
+def _batch_prior_annual_carry_forward_uncached(batch, profile, cycle_start):
+    previous = _batch_latest_settlement_before(batch, profile, cycle_start)
+    if previous is None or previous["cycle_end"] < cycle_start - timedelta(days=1):
+        prior_cycle = get_previous_annual_cycle(
+            profile, cycle_start, renewal_decisions=batch["renewal_decisions_by_profile"].get(profile.id, [])
+        )
+        if prior_cycle and (previous is None or previous["cycle_end"] < prior_cycle[0]):
+            return _batch_unsettled_annual_cycle_unused_days(batch, profile, *prior_cycle)
+    if previous is None:
         return Decimal("0.00")
-    if previous["status"] == AnnualLeavePaymentRequest.Status.CARRIED_FORWARD:
-        return previous["carry_forward_days"]
-    return previous["eligible_unused_days"]
+    return _carry_forward_from_settlement(
+        previous["status"], previous["carry_forward_days"], previous["eligible_unused_days"]
+    )
 
 
 def _calculate_leave_balance_from_batch(profile, year, batch, memo, as_of=None):
@@ -1021,15 +1200,11 @@ def _calculate_leave_balance_from_batch(profile, year, batch, memo, as_of=None):
 
         emergency_available_days = None
         if _is_emergency(code):
-            annual_type = next(
-                (item for item in leave_types if _is_annual(_normalized_leave_code(item))), None
-            )
+            annual_type = next((item for item in leave_types if _is_annual(_normalized_leave_code(item))), None)
             annual_details = get_annual_accrual_details(profile, balance_date) if annual_type else {}
             if annual_type and annual_details.get("cycle_start"):
                 annual_total = float(annual_details["accrued_days"]) + float(
-                    _batch_prior_annual_carry_forward(
-                        batch["payment_rows"], profile.id, annual_details["cycle_start"]
-                    )
+                    _batch_prior_annual_carry_forward(batch, profile, annual_details["cycle_start"])
                 )
                 annual_used_only = _batch_period_days(
                     rows,
@@ -1054,11 +1229,11 @@ def _calculate_leave_balance_from_batch(profile, year, batch, memo, as_of=None):
 
         available_total = opening + quota + adjustments
         if available_annual_year_days is not None:
-            prior_carry = float(
-                _batch_prior_annual_carry_forward(
-                    batch["payment_rows"], profile.id, annual_cycle_start
-                )
-            ) if annual_cycle_start else 0.0
+            prior_carry = (
+                float(_batch_prior_annual_carry_forward(batch, profile, annual_cycle_start))
+                if annual_cycle_start
+                else 0.0
+            )
             available_total = prior_carry + available_annual_year_days + adjustments
         if emergency_available_days is not None:
             available_total = emergency_available_days
@@ -1122,12 +1297,26 @@ def get_leave_request_payment_context(instances):
     if not profiles:
         return {}
 
+    profile_ids = list(profiles)
+    renewal_decisions_by_profile = defaultdict(list)
+    for decision in _renewal_decisions(profile_ids):
+        renewal_decisions_by_profile[decision.employee_profile_id].append(decision)
+    # A renewed profile's previous term predates its current contract date; its leave rows
+    # are needed to carry an unsettled previous term forward.
+    replaced_term_years = [
+        (decision.original_contract_date or profiles[profile_id].hire_date or decision.original_contract_expiry).year
+        for profile_id, decisions in renewal_decisions_by_profile.items()
+        for decision in decisions
+    ]
     minimum_year = min(
-        [*years, *[(get_contract_start_date(profile) or date(min(years), 1, 1)).year for profile in profiles.values()]]
+        [
+            *years,
+            *[(get_contract_start_date(profile) or date(min(years), 1, 1)).year for profile in profiles.values()],
+            *replaced_term_years,
+        ]
     )
     maximum_year = max(years)
     user_ids = [profile.user_id for profile in profiles.values() if profile.user_id]
-    profile_ids = list(profiles)
     request_rows = list(
         LeaveRequest.objects.filter(
             Q(employee_id__in=user_ids) | Q(employee_profile_id__in=profile_ids),
@@ -1191,6 +1380,7 @@ def get_leave_request_payment_context(instances):
         "leave_types_by_company": leave_types_by_company,
         "adjustments": adjustments,
         "payment_rows": payment_rows,
+        "renewal_decisions_by_profile": renewal_decisions_by_profile,
     }
     balance_memo = {}
     context = {}
