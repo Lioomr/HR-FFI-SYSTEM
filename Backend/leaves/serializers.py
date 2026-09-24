@@ -668,9 +668,7 @@ class AnnualLeavePaymentRequestCreateSerializer(serializers.Serializer):
     employee_id = serializers.IntegerField(required=False, write_only=True)
     employee_note = serializers.CharField(required=False, allow_blank=True)
     termination_date = serializers.DateField(required=False, write_only=True)
-    decision = serializers.ChoiceField(
-        choices=["pay", "carry_forward", "carry_forward_locked"], required=False, write_only=True
-    )
+    decision = serializers.ChoiceField(choices=["pay", "carry_forward"], required=False, write_only=True)
 
     def validate(self, attrs):
         request = self.context["request"]
@@ -706,8 +704,9 @@ class AnnualLeavePaymentRequestCreateSerializer(serializers.Serializer):
         if profile.employment_status == EmployeeProfile.EmploymentStatus.TERMINATED and not termination_date:
             termination_date = profile.archived_at.date() if profile.archived_at else timezone.localdate()
 
-        if attrs.get("decision") == "carry_forward_locked" and not hr_resolution:
-            # Locking days out of any future payout is an HR decision, never a self-service one.
+        if attrs.get("decision") == "carry_forward" and not hr_resolution:
+            # Carrying days forward locks them out of any future payout: an HR decision,
+            # never a self-service one.
             raise serializers.ValidationError({"decision": "Only HR can carry days forward as leave only."})
 
         today = timezone.localdate()
@@ -770,7 +769,6 @@ class AnnualLeavePaymentRequestCreateSerializer(serializers.Serializer):
         validated_data.pop("decision", None)
         resolution = validated_data.pop("resolution")
         hr_resolution = validated_data.pop("hr_resolution")
-        carries_forward = resolution in {"carry_forward", "carry_forward_locked"}
         return AnnualLeavePaymentRequest.objects.create(
             employee=profile.user,
             employee_profile=profile,
@@ -792,13 +790,13 @@ class AnnualLeavePaymentRequestCreateSerializer(serializers.Serializer):
             eligible_unused_days=snapshot["eligible_unused_days"],
             salary_at_year_end=snapshot["salary_at_year_end"],
             locked_unused_days=snapshot["locked_unused_days"],
-            payment_amount=(Decimal("0.00") if carries_forward else snapshot["payment_amount"]),
-            carry_forward_days=(snapshot["eligible_unused_days"] if carries_forward else Decimal("0.00")),
+            payment_amount=(Decimal("0.00") if resolution == "carry_forward" else snapshot["payment_amount"]),
+            carry_forward_days=(snapshot["eligible_unused_days"] if resolution == "carry_forward" else Decimal("0.00")),
             is_termination_settlement=validated_data.pop("is_termination_settlement"),
             **validated_data,
         )
 
 
 class AnnualLeavePaymentReviewSerializer(serializers.Serializer):
-    decision = serializers.ChoiceField(choices=["forward", "carry_forward", "carry_forward_locked"])
+    decision = serializers.ChoiceField(choices=["forward", "carry_forward"])
     comment = serializers.CharField(required=False, allow_blank=True)

@@ -1,8 +1,8 @@
 """Business rules and state transitions for annual leave payment (settlement) requests.
 
-Route: employee or HR submits -> HR review (pay, carry forward, or carry forward as
-leave only) -> CEO approves or rejects. An HR-submitted termination settlement can
-start at the CEO. Workflow history is recorded as each action happens.
+Route: employee or HR submits -> HR review (pay, or carry forward as leave only) ->
+CEO approves or rejects. An HR-submitted termination settlement can start at the
+CEO. Workflow history is recorded as each action happens.
 """
 
 from __future__ import annotations
@@ -31,13 +31,6 @@ Action = WorkflowAction.Action
 HR_ACTION_PATH = "/hr/annual-leave-payments/{id}"
 CEO_ACTION_PATH = "/ceo/annual-leave-payments/{id}"
 EMPLOYEE_ACTION_PATH = "/employee/leave/requests"
-
-#: HR review ``decision`` -> stored resolution. Anything else (``forward``) pays.
-HR_REVIEW_RESOLUTIONS = {
-    "carry_forward": Resolution.CARRY_FORWARD,
-    "carry_forward_locked": Resolution.CARRY_FORWARD_LOCKED,
-}
-CARRY_FORWARD_RESOLUTIONS = frozenset(HR_REVIEW_RESOLUTIONS.values())
 
 NOT_PENDING_HR_MESSAGE = "Payment request is not pending HR review."
 NOT_PENDING_CEO_MESSAGE = "Payment request is not pending CEO approval."
@@ -73,10 +66,9 @@ def apply_annual_payment_hr_review(
 ) -> AnnualLeavePaymentRequest:
     """HR chooses to pay the unused balance or carry it forward, then sends it to the CEO.
 
-    ``decision`` is ``forward`` (pay), ``carry_forward`` (carried days stay payable by a later
-    settlement) or ``carry_forward_locked`` (carried days become leave-only, never payable).
-    Either way only ``eligible_unused_days`` is decided on: ``locked_unused_days`` are
-    already leave-only and carry forward untouched.
+    ``decision`` is ``forward`` (pay) or ``carry_forward`` (the days become leave-only and
+    are never payable by any later settlement). Either way only ``eligible_unused_days`` is
+    decided on: ``locked_unused_days`` are already leave-only and carry forward untouched.
     """
 
     ensure_pending_hr_review(instance)
@@ -85,9 +77,8 @@ def apply_annual_payment_hr_review(
         ensure_pending_hr_review(locked)
 
         start = begin_recorded_transition(locked, actor=actor)
-        resolution = HR_REVIEW_RESOLUTIONS.get(decision, Resolution.PAY)
-        carry_forward = resolution in CARRY_FORWARD_RESOLUTIONS
-        locked.resolution = resolution
+        carry_forward = decision == "carry_forward"
+        locked.resolution = Resolution.CARRY_FORWARD if carry_forward else Resolution.PAY
         locked.carry_forward_days = locked.eligible_unused_days if carry_forward else 0
         locked.payment_amount = 0 if carry_forward else locked.payment_amount
         locked.status = Status.PENDING_CEO
@@ -144,7 +135,7 @@ def apply_annual_payment_ceo_approval(
         start = begin_recorded_transition(locked, actor=actor)
         now = timezone.now()
         salary_refresh = refresh_settlement_salary(locked)
-        locked.status = Status.CARRIED_FORWARD if locked.resolution in CARRY_FORWARD_RESOLUTIONS else Status.APPROVED
+        locked.status = Status.CARRIED_FORWARD if locked.resolution == Resolution.CARRY_FORWARD else Status.APPROVED
         locked.ceo_decided_by = actor
         locked.ceo_decided_at = now
         locked.ceo_decision_note = note

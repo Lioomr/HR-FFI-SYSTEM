@@ -412,9 +412,8 @@ class AnnualLeavePaymentRequest(models.Model):
 
     class Resolution(models.TextChoices):
         PAY = "pay", _("Pay")
+        # Carried days are leave-only: never payable, in any later cycle.
         CARRY_FORWARD = "carry_forward", _("Carry Forward")
-        # Carried forward as leave-only days: never payable, in any later cycle.
-        CARRY_FORWARD_LOCKED = "carry_forward_locked", _("Carry Forward (Leave Only)")
 
     employee = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -443,10 +442,10 @@ class AnnualLeavePaymentRequest(models.Model):
     salary_at_year_end = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     payment_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     carry_forward_days = models.DecimalField(max_digits=8, decimal_places=2, default=0)
-    # Whole unused days of this cycle that are leave-only (carried in under a
-    # ``CARRY_FORWARD_LOCKED`` resolution). They are excluded from
-    # ``eligible_unused_days`` and ``payment_amount`` and keep carrying forward as
-    # leave-only whatever this request's outcome is.
+    # Whole unused days of this cycle that are leave-only (carried in by an earlier
+    # ``CARRY_FORWARD`` settlement). They are excluded from ``eligible_unused_days``
+    # and ``payment_amount`` and keep carrying forward as leave-only whatever this
+    # request's outcome is.
     locked_unused_days = models.DecimalField(max_digits=8, decimal_places=2, default=0)
     resolution = models.CharField(max_length=20, choices=Resolution.choices, default=Resolution.PAY)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING_HR)
