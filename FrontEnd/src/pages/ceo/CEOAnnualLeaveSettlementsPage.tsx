@@ -9,7 +9,6 @@ import AnnualLeavePaymentStatusTag from "../../components/leaves/AnnualLeavePaym
 import {
   formatSettlementAmount,
   formatSettlementDays,
-  settlementResolutionLabelKey,
 } from "../../components/leaves/annualLeaveSettlement";
 import AnnualLeaveSettlementDetails from "../../components/leaves/AnnualLeaveSettlementDetails";
 import { useI18n } from "../../i18n/useI18n";
@@ -115,11 +114,9 @@ export default function CEOAnnualLeaveSettlementsPage() {
       }
       notification.success({
         message:
-          row.resolution === "carry_forward_locked"
-            ? t("annualPayment.carriedForwardLockedSuccess")
-            : row.resolution === "carry_forward"
-              ? t("annualPayment.carriedForwardSuccess")
-              : t("annualPayment.approveSuccess"),
+          row.resolution === "carry_forward"
+            ? t("annualPayment.carriedForwardSuccess")
+            : t("annualPayment.approveSuccess"),
       });
       setApproving(null);
       // The optimistic removal above is only a display shortcut. Re-read the
@@ -225,7 +222,10 @@ export default function CEOAnnualLeaveSettlementsPage() {
       title: t("annualPayment.resolution"),
       key: "resolution",
       width: 150,
-      render: (_, record) => t(settlementResolutionLabelKey(record.resolution)),
+      render: (_, record) =>
+        record.resolution === "carry_forward"
+          ? t("annualPayment.resolution.carryForward")
+          : t("annualPayment.resolution.pay"),
     },
     {
       title: t("common.status"),
@@ -318,15 +318,15 @@ export default function CEOAnnualLeaveSettlementsPage() {
           <Space direction="vertical" size={12} style={{ width: "100%" }}>
             <Typography.Text strong>{employeeName(approving)}</Typography.Text>
             <Alert
-              type={approving.resolution === "pay" ? "success" : "info"}
+              type={
+                approving.resolution === "carry_forward" ? "info" : "success"
+              }
               showIcon
               style={{ borderRadius: 10 }}
               message={
-                approving.resolution === "carry_forward_locked"
-                  ? t("annualPayment.approveCarryForwardLockedNotice")
-                  : approving.resolution === "carry_forward"
-                    ? t("annualPayment.approveCarryForwardNotice")
-                    : t("annualPayment.approvePayNotice")
+                approving.resolution === "carry_forward"
+                  ? t("annualPayment.approveCarryForwardNotice")
+                  : t("annualPayment.approvePayNotice")
               }
             />
             <AnnualLeaveSettlementDetails request={approving} showEmployee />
