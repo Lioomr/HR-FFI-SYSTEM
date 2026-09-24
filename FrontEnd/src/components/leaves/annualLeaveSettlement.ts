@@ -1,7 +1,6 @@
 import {
   toDecimalNumber,
   type AnnualLeavePaymentRequest,
-  type AnnualLeavePaymentResolution,
   type AnnualLeavePaymentStatus,
 } from "../../services/api/annualLeavePaymentsApi";
 
@@ -40,25 +39,4 @@ export function formatSettlementAmount(
   value: string | number | null | undefined,
 ): string {
   return toDecimalNumber(value).toFixed(2);
-}
-
-/** Both carry-forward resolutions move the days on instead of paying them. */
-export function isCarryForwardResolution(
-  resolution: AnnualLeavePaymentResolution | undefined,
-): boolean {
-  return (
-    resolution === "carry_forward" || resolution === "carry_forward_locked"
-  );
-}
-
-/** Translation key naming a resolution for display. */
-export function settlementResolutionLabelKey(
-  resolution: AnnualLeavePaymentResolution | undefined,
-): string {
-  if (resolution === "carry_forward_locked") {
-    return "annualPayment.resolution.carryForwardLocked";
-  }
-  return resolution === "carry_forward"
-    ? "annualPayment.resolution.carryForward"
-    : "annualPayment.resolution.pay";
 }

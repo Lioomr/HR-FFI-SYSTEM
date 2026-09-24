@@ -26,21 +26,13 @@ export type AnnualLeavePaymentStatus =
   (typeof ANNUAL_LEAVE_PAYMENT_STATUSES)[number];
 
 /**
- * `pay` settles in cash; `carry_forward` moves the days into the next cycle,
- * where a later settlement may still pay them; `carry_forward_locked` moves
- * them into the next cycle as leave-only days that can never be paid out.
- * Both carry-forward resolutions settle at status `carried_forward`.
+ * `pay` settles in cash; `carry_forward` moves the days into the next cycle as
+ * leave-only days that can be taken as leave but are never paid out later.
  */
-export type AnnualLeavePaymentResolution =
-  | "pay"
-  | "carry_forward"
-  | "carry_forward_locked";
+export type AnnualLeavePaymentResolution = "pay" | "carry_forward";
 
-/** HR's options while the request sits at `pending_hr`. */
-export type AnnualLeavePaymentReviewDecision =
-  | "forward"
-  | "carry_forward"
-  | "carry_forward_locked";
+/** HR's two options while the request sits at `pending_hr`. */
+export type AnnualLeavePaymentReviewDecision = "forward" | "carry_forward";
 
 /**
  * Decimal fields are serialised by DRF as strings (`"12.25"`). They are typed
@@ -71,9 +63,9 @@ export interface AnnualLeavePaymentRequest {
   payment_amount: string | number;
   carry_forward_days: string | number;
   /**
-   * Leave-only days in this cycle's balance (carried in under a
-   * `carry_forward_locked` resolution). They are not part of
-   * `eligible_unused_days` or `payment_amount` and are never paid.
+   * Leave-only days in this cycle's balance (carried in by an earlier
+   * `carry_forward` settlement). They are not part of `eligible_unused_days`
+   * or `payment_amount` and are never paid.
    */
   locked_unused_days?: string | number;
   resolution: AnnualLeavePaymentResolution;
@@ -209,8 +201,8 @@ export async function createHRAnnualLeaveSettlement(
 }
 
 /**
- * HR review: `forward` sends it to the CEO to pay, `carry_forward` to carry,
- * `carry_forward_locked` to carry as leave only (never payable).
+ * HR review: `forward` sends it to the CEO to pay, `carry_forward` to carry as
+ * leave only (never payable later).
  */
 export async function reviewAnnualLeavePaymentRequest(
   id: string | number,

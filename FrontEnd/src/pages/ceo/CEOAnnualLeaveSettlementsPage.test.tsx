@@ -165,7 +165,7 @@ describe("CEO Annual Leave settlements queue", () => {
 
     expect(
       await screen.findByText(
-        "This will carry the eligible days into the next contract year.",
+        "This will carry the eligible days into the next contract year as leave only. They can be taken as leave but will never be paid out.",
       ),
     ).toBeInTheDocument();
 
@@ -283,36 +283,10 @@ describe("CEO Annual Leave settlements queue", () => {
     render(<CEOAnnualLeaveSettlementsPage />);
 
     await screen.findByText("Sara Ahmed");
-    expect(screen.getAllByText("Carry Forward").length).toBeGreaterThan(0);
-    expect(screen.queryByText("Approved for Payment")).not.toBeInTheDocument();
-  });
-
-  it("tells a leave-only carry-forward apart and warns it is never paid", async () => {
-    getAnnualLeavePaymentRequests.mockResolvedValue(
-      listResponse([
-        makeSettlement({
-          resolution: "carry_forward_locked",
-          payment_amount: "0.00",
-          carry_forward_days: "10.00",
-        }),
-      ]),
-    );
-
-    render(<CEOAnnualLeaveSettlementsPage />);
-
-    await screen.findByText("Sara Ahmed");
     expect(
       screen.getAllByText("Carry Forward (Leave Only)").length,
     ).toBeGreaterThan(0);
-
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Approve: Sara Ahmed" }),
-    );
-    expect(
-      await screen.findByText(
-        "This will carry the eligible days into the next contract year as leave only. They can be taken as leave but will never be paid out.",
-      ),
-    ).toBeInTheDocument();
+    expect(screen.queryByText("Approved for Payment")).not.toBeInTheDocument();
   });
 
   it("renders an empty state when nothing awaits the CEO", async () => {

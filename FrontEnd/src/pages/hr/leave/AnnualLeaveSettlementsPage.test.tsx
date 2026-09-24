@@ -231,7 +231,9 @@ describe("HR Annual Leave settlements queue", () => {
 
     // Ant Design's Select is a combobox; pick the carry-forward option by name.
     fireEvent.mouseDown(screen.getByLabelText("HR decision"));
-    fireEvent.click(await screen.findByTitle("Carry forward"));
+    fireEvent.click(
+      await screen.findByTitle("Carry forward (leave only, not payable)"),
+    );
     fireEvent.change(screen.getByLabelText("HR comment"), {
       target: { value: "Carry forward approved for CEO review." },
     });
@@ -245,30 +247,16 @@ describe("HR Annual Leave settlements queue", () => {
     );
   });
 
-  it("sends a leave-only (non-payable) carry-forward when HR picks it", async () => {
-    reviewAnnualLeavePaymentRequest.mockResolvedValue({
-      status: "success" as const,
-      data: makeSettlement({
-        status: "pending_ceo",
-        resolution: "carry_forward_locked",
-      }),
-    });
-
+  it("offers exactly two decisions: pay or leave-only carry-forward", async () => {
     renderPage();
     await openReview();
 
     fireEvent.mouseDown(screen.getByLabelText("HR decision"));
-    fireEvent.click(
+    const options = await screen.findAllByRole("option");
+    expect(options).toHaveLength(2);
+    expect(
       await screen.findByTitle("Carry forward (leave only, not payable)"),
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
-
-    await waitFor(() =>
-      expect(reviewAnnualLeavePaymentRequest).toHaveBeenCalledWith(9, {
-        decision: "carry_forward_locked",
-        comment: "",
-      }),
-    );
+    ).toBeInTheDocument();
   });
 
   it("shows leave-only days apart from the payable days", async () => {
