@@ -370,6 +370,88 @@ class ContractExpiryWorkflowTests(TestCase):
             )
         )
 
+    @staticmethod
+    def _renewal_settlement_calls(dispatch):
+        return [
+            call for call in dispatch.call_args_list if call.kwargs["deduplication_key"].endswith(":renewal-settlement")
+        ]
+
+    @patch("employees.contract_expiry.dispatch_notification_channels")
+    def test_approved_renewal_asks_hr_to_review_the_unsettled_annual_leave_term(self, dispatch):
+        dispatch.return_value = {"notification": object(), "created": True}
+        old_start, old_end = self.profile.contract_date, self.profile.contract_expiry
+        decision, _ = ensure_contract_decision(self.profile)
+        submit_decision(decision.id, actor=self.hr, decision_type=ContractDecision.DecisionType.RENEW)
+
+        finalize_decision(decision.id, actor=self.ceo)
+
+        calls = self._renewal_settlement_calls(dispatch)
+        self.assertEqual([call.kwargs["recipient"] for call in calls], [self.hr])
+        notice = calls[0].kwargs
+        self.assertEqual(notice["deduplication_key"], f"contract.expiry:{decision.id}:renewal-settlement")
+        self.assertEqual(notice["i18n"]["key"], "contract.renewal_settlement_review_required")
+        self.assertEqual(notice["action_url"], "/hr/annual-leave-payments")
+        self.assertEqual(notice["metadata"]["milestone"], "contract.renewal_settlement_review_required")
+        self.assertEqual(notice["metadata"]["cycle_start"], old_start.isoformat())
+        self.assertEqual(notice["metadata"]["cycle_end"], old_end.isoformat())
+        self.assertGreater(Decimal(notice["metadata"]["eligible_unused_days"]), 0)
+
+    @patch("employees.contract_expiry.dispatch_notification_channels")
+    def test_auto_renewal_asks_hr_to_review_the_unsettled_annual_leave_term(self, dispatch):
+        dispatch.return_value = {"notification": object(), "created": True}
+        decision, _ = ensure_contract_decision(self.profile)
+
+        _decision, changed = auto_renew_decision(decision.id)
+
+        self.assertTrue(changed)
+        calls = self._renewal_settlement_calls(dispatch)
+        self.assertEqual([call.kwargs["recipient"] for call in calls], [self.hr])
+        self.assertEqual(calls[0].kwargs["metadata"]["milestone"], "contract.renewal_settlement_review_required")
+
+    @patch("employees.contract_expiry.dispatch_notification_channels")
+    def test_renewal_of_a_settled_term_sends_no_settlement_review(self, dispatch):
+        from leaves.models import AnnualLeavePaymentRequest
+
+        dispatch.return_value = {"notification": object(), "created": True}
+        AnnualLeavePaymentRequest.objects.create(
+            employee=self.employee,
+            employee_profile=self.profile,
+            company=self.company,
+            cycle_start=self.profile.contract_date,
+            cycle_end=self.profile.contract_expiry,
+            eligible_unused_days=Decimal("19.00"),
+            status=AnnualLeavePaymentRequest.Status.PENDING_HR,
+        )
+        decision, _ = ensure_contract_decision(self.profile)
+
+        auto_renew_decision(decision.id)
+
+        self.assertEqual(self._renewal_settlement_calls(dispatch), [])
+
+    @patch("employees.contract_expiry.dispatch_notification_channels")
+    def test_renewal_with_no_unused_annual_leave_sends_no_settlement_review(self, dispatch):
+        dispatch.return_value = {"notification": object(), "created": True}
+        # Under one completed month into the term: nothing has accrued yet.
+        self.profile.contract_date = timezone.localdate() - timedelta(days=5)
+        self.profile.save(update_fields=["contract_date", "updated_at"])
+        decision, _ = ensure_contract_decision(self.profile)
+
+        auto_renew_decision(decision.id)
+
+        self.assertEqual(self._renewal_settlement_calls(dispatch), [])
+
+    @patch("employees.contract_expiry.dispatch_notification_channels", side_effect=RuntimeError("provider down"))
+    def test_renewal_settlement_review_failure_never_undoes_the_renewal(self, _dispatch):
+        decision, _ = ensure_contract_decision(self.profile)
+
+        with self.assertLogs("employees.contract_expiry", level="ERROR"):
+            renewed, changed = auto_renew_decision(decision.id)
+
+        self.profile.refresh_from_db()
+        self.assertTrue(changed)
+        self.assertEqual(renewed.status, ContractDecision.Status.AUTO_RENEWED)
+        self.assertEqual(self.profile.contract_date, decision.original_contract_expiry + timedelta(days=1))
+
     def test_contract_decision_api_enforces_roles_and_ceo_approval(self):
         self.client.force_authenticate(user=self.hr)
         response = self.client.post(

@@ -776,6 +776,21 @@ def get_unsettled_annual_cycle_unused_days(
     return _unsettled_cycle_whole_days(prior_start, prior_end, contract_start, opening=opening, used=used)
 
 
+def get_unsettled_renewed_annual_term(profile: EmployeeProfile, cycle_start: date):
+    """The renewal-closed term before ``cycle_start`` when no settlement request covers it.
+
+    Returns ``(term_start, term_end, eligible_unused_days)`` or ``None``. Uses the same rule
+    as ``get_prior_annual_carry_forward_days``, so a renewal notice and the carried balance agree.
+    """
+    prior_cycle = get_previous_annual_cycle(profile, cycle_start)
+    if not prior_cycle:
+        return None
+    previous = _latest_settlement_before(profile, cycle_start)
+    if previous is not None and previous.cycle_end >= prior_cycle[0]:
+        return None
+    return prior_cycle[0], prior_cycle[1], get_unsettled_annual_cycle_unused_days(profile, *prior_cycle)
+
+
 def get_prior_annual_carry_forward_days(profile: EmployeeProfile, cycle_start: date):
     previous = _latest_settlement_before(profile, cycle_start)
     if previous is None or previous.cycle_end < cycle_start - timedelta(days=1):

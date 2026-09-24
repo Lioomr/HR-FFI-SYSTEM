@@ -414,6 +414,61 @@ def notify_hr_termination_settlement(decision: ContractDecision, *, termination_
     return count
 
 
+def notify_hr_renewal_settlement_review(decision: ContractDecision) -> int | None:
+    """Tell HR when a finalized renewal closes out a term that has no annual leave settlement.
+
+    Shared by the legacy renewal paths (``finalize_decision``, ``auto_renew_decision``) and the
+    contract-rating flow, called once the profile is on the renewed term. A renewal lands
+    before the employee's final-five-days settlement window for the old term opens, so HR is
+    asked to review it. It only notifies; the term's unused days carry forward regardless
+    (``leaves.utils.get_prior_annual_carry_forward_days``). Returns ``None`` when nothing is
+    unsettled or delivery failed; a failure never undoes the renewal.
+    """
+    from leaves.utils import get_unsettled_renewed_annual_term
+
+    profile = decision.employee_profile
+    count = 0
+    try:
+        with transaction.atomic():
+            profile.refresh_from_db(fields=["contract_date", "contract_expiry", "hire_date"])
+            unsettled = get_unsettled_renewed_annual_term(profile, profile.contract_date)
+            if not unsettled or unsettled[2] <= 0:
+                return None
+            term_start, term_end, unused_days = unsettled
+            text = notification_text(
+                "contract.renewal_settlement_review_required",
+                employee_name=profile_name(profile),
+                cycle_start=term_start,
+                cycle_end=term_end,
+                days=unused_days,
+            )
+            for recipient in _company_hr_recipients(decision.company_id):
+                result = _dispatch(
+                    recipient=recipient,
+                    decision=decision,
+                    **text,
+                    action_url="/hr/annual-leave-payments",
+                    category=Notification.Category.APPROVAL,
+                    deduplication_key=f"contract.expiry:{decision.id}:renewal-settlement",
+                    metadata={
+                        "contract_decision_id": decision.id,
+                        "employee_profile_id": profile.id,
+                        # Labels this notice in the decision's notification status (frontend
+                        # ``contractDecisions.milestone.*``) instead of the generic event key.
+                        "milestone": "contract.renewal_settlement_review_required",
+                        "cycle_start": term_start.isoformat(),
+                        "cycle_end": term_end.isoformat(),
+                        "eligible_unused_days": str(unused_days),
+                        "action": "review_renewal_settlement",
+                    },
+                )
+                count += int(result.get("created", False))
+    except Exception:
+        logger.exception("contract_renewal_settlement_notification_failed", extra={"decision_id": decision.id})
+        return None
+    return count
+
+
 def mark_employment_terminated(profile: EmployeeProfile, now) -> None:
     """Record TERMINATED on the profile without ``save()`` (which re-runs ``clean()`` on an archived row)."""
     EmployeeProfile._base_manager.filter(pk=profile.pk).update(
@@ -689,6 +744,8 @@ def finalize_decision(decision_id: int, *, actor=None, automatic: bool = False, 
     )
     if decision.decision_type == ContractDecision.DecisionType.TERMINATE:
         notify_hr_termination_settlement(decision, termination_date=timezone.localdate(now))
+    else:
+        notify_hr_renewal_settlement_review(decision)
     return decision
 
 
@@ -812,6 +869,7 @@ def auto_renew_decision(decision_id: int):
             "reason": "hr_no_action",
         },
     )
+    notify_hr_renewal_settlement_review(decision)
     return decision, True
 
 

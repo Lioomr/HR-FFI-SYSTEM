@@ -107,6 +107,26 @@ def test_rating_renewal_closes_the_decision_and_renews_the_contract(world):
     final_notice.assert_not_called()
 
 
+def test_rating_renewal_asks_hr_to_review_the_unsettled_annual_leave_term(world):
+    rating = pending_ceo(world)
+    old_start, old_end = world.profile.contract_date, world.profile.contract_expiry
+
+    with patch("employees.contract_expiry.dispatch_notification_channels") as dispatch:
+        dispatch.return_value = {"notification": object(), "created": True}
+        result = submit_ceo_decision(rating.pk, actor=world.ceo, ceo_decision="RENEW", comment="Keep")
+
+    calls = [
+        call for call in dispatch.call_args_list if call.kwargs["deduplication_key"].endswith(":renewal-settlement")
+    ]
+    assert {call.kwargs["recipient"].id for call in calls} == {world.hr.id}
+    notice = calls[0].kwargs
+    assert notice["deduplication_key"] == f"contract.expiry:{result.contract_decision_id}:renewal-settlement"
+    assert notice["action_url"] == "/hr/annual-leave-payments"
+    assert notice["metadata"]["milestone"] == "contract.renewal_settlement_review_required"
+    assert notice["metadata"]["cycle_start"] == old_start.isoformat()
+    assert notice["metadata"]["cycle_end"] == old_end.isoformat()
+
+
 def test_rating_termination_closes_the_decision_and_asks_hr_for_a_settlement(world):
     rating = pending_ceo(world)
     rating = submit_ceo_decision(rating.pk, actor=world.ceo, ceo_decision="TERMINATE", comment="End")
