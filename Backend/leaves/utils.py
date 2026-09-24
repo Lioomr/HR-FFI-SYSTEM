@@ -653,23 +653,22 @@ ZERO_DAYS = Decimal("0.00")
 
 
 def _carry_forward_split_from_settlement(
-    status, carry_forward_days, eligible_unused_days, *, resolution=None, locked_unused_days=None
+    status, carry_forward_days, eligible_unused_days, *, locked_unused_days=None
 ) -> tuple[Decimal, Decimal]:
     """``(cash_eligible, locked)`` opening balance a recorded settlement hands to the following cycle.
 
     ``locked_unused_days`` are leave-only days already in that cycle's balance: they are never
     paid, so they carry forward as locked whatever the outcome (paid, carried, rejected or
-    pending). Only the cash-eligible ``eligible_unused_days`` follow the pay/carry decision, and
-    a ``CARRY_FORWARD_LOCKED`` resolution moves them into the locked bucket for good.
+    pending). Only the cash-eligible ``eligible_unused_days`` follow the pay/carry decision; a
+    carry-forward moves them into the locked bucket for good, so no later settlement pays them.
     """
     locked = Decimal(locked_unused_days or 0)
     if status == AnnualLeavePaymentRequest.Status.APPROVED:
         return ZERO_DAYS, locked
     if status == AnnualLeavePaymentRequest.Status.CARRIED_FORWARD:
-        if resolution == AnnualLeavePaymentRequest.Resolution.CARRY_FORWARD_LOCKED:
-            return ZERO_DAYS, locked + carry_forward_days
-        return carry_forward_days, locked
-    # A rejected or still-pending payment must not erase the employee's balance.
+        return ZERO_DAYS, locked + carry_forward_days
+    # A rejected or still-pending payment must not erase the employee's balance; no
+    # carry-forward was settled, so its cash-eligible days stay cash-eligible.
     return eligible_unused_days, locked
 
 
@@ -680,14 +679,12 @@ def _settlement_carry_forward_split(settlement) -> tuple[Decimal, Decimal]:
             settlement["status"],
             settlement["carry_forward_days"],
             settlement["eligible_unused_days"],
-            resolution=settlement.get("resolution"),
             locked_unused_days=settlement.get("locked_unused_days"),
         )
     return _carry_forward_split_from_settlement(
         settlement.status,
         settlement.carry_forward_days,
         settlement.eligible_unused_days,
-        resolution=settlement.resolution,
         locked_unused_days=settlement.locked_unused_days,
     )
 
@@ -796,8 +793,8 @@ def _split_locked_whole_days(opening_locked, used, eligible_unused, eligible_who
 
     Leave taken in the cycle draws down the locked (leave-only) days first: taking them as
     leave is the only way they can ever be used. Whatever locked days are left stay locked;
-    only the rest of the balance (new accrual plus any unlocked carry-forward) is payable.
-    The two parts always add up to ``eligible_whole_days``, so the cycle's total balance is
+    only the rest of the balance is payable (new accrual, plus days of an earlier cycle that
+    no carry-forward settled, e.g. a rejected payment or a renewal-closed term). The two parts always add up to ``eligible_whole_days``, so the cycle's total balance is
     exactly what it was before the split existed, and with no locked opening the payable
     part is the whole balance.
     """
@@ -849,7 +846,7 @@ def get_unsettled_annual_cycle_split(
     """``(cash_eligible, locked)`` whole unused days of a completed cycle that has no settlement request.
 
     No HR decision was made for that cycle, so its own accrual stays cash-eligible; only
-    leave-only days it inherited from a recorded ``CARRY_FORWARD_LOCKED`` settlement stay locked.
+    leave-only days it inherited from a recorded carry-forward settlement stay locked.
     """
     opening_cash, opening_locked = _recorded_annual_carry_forward_split(profile, prior_start)
     used = Decimal(str(get_annual_used_days_for_cycle(profile, prior_start, prior_end, as_of=prior_end)))
@@ -876,7 +873,7 @@ def get_unsettled_renewed_annual_term(profile: EmployeeProfile, cycle_start: dat
 def get_prior_annual_carry_forward_split(profile: EmployeeProfile, cycle_start: date) -> tuple[Decimal, Decimal]:
     """``(cash_eligible, locked)`` opening Annual Leave balance of the cycle starting on ``cycle_start``.
 
-    ``locked`` days are leave-only (a ``CARRY_FORWARD_LOCKED`` settlement put them there) and
+    ``locked`` days are leave-only (a carry-forward settlement put them there) and
     are never paid out; ``cash_eligible`` days may still be paid by a later settlement.
     """
     previous = _latest_settlement_before(profile, cycle_start)
@@ -1478,7 +1475,6 @@ def get_leave_request_payment_context(instances):
             "employee_profile_id",
             "cycle_end",
             "status",
-            "resolution",
             "carry_forward_days",
             "eligible_unused_days",
             "locked_unused_days",

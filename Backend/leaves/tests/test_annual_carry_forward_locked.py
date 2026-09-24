@@ -1,9 +1,9 @@
-"""Annual Leave carried forward as leave only (``carry_forward_locked``): never payable, in any cycle.
+"""Annual Leave carried forward is leave only: never payable, in any later cycle.
 
-HR can resolve a settlement three ways: pay, carry forward (the days stay payable by a later
-settlement) or carry forward as leave only. Leave-only days are recorded in
-``locked_unused_days``, are excluded from ``eligible_unused_days`` and ``payment_amount``, and
-keep rolling forward as leave-only through every later cycle until they are taken as leave.
+HR resolves a settlement one of two ways: pay, or carry forward. Carried days become leave-only
+days: they are recorded in ``locked_unused_days`` of every later cycle, are excluded from
+``eligible_unused_days`` and ``payment_amount``, and keep rolling forward as leave-only through
+every later cycle until they are taken as leave.
 """
 
 from datetime import date, timedelta
@@ -144,29 +144,28 @@ class LockedCarryForwardBalanceTests(TestCase):
     # --- recorded settlement -> next cycle's opening -----------------------------------
 
     def test_locked_carry_forward_hands_leave_only_days_to_next_cycle(self):
-        self._recorded(CYCLE_2023, Status.CARRIED_FORWARD, resolution=Resolution.CARRY_FORWARD_LOCKED, carry="10.00")
+        self._recorded(CYCLE_2023, Status.CARRIED_FORWARD, resolution=Resolution.CARRY_FORWARD, carry="10.00")
 
         self.assertEqual(get_prior_annual_carry_forward_split(self.profile, CYCLE_2024[0]), (_days("0"), _days("10")))
         # Leave balances count leave-only days in full: they are real, takeable leave.
         self.assertEqual(get_prior_annual_carry_forward_days(self.profile, CYCLE_2024[0]), _days("10"))
 
-    def test_cash_carry_forward_is_unchanged_and_stays_payable(self):
+    def test_carried_days_are_not_priced_in_the_next_cycle(self):
         self._recorded(CYCLE_2023, Status.CARRIED_FORWARD, resolution=Resolution.CARRY_FORWARD, carry="10.00")
 
-        self.assertEqual(get_prior_annual_carry_forward_split(self.profile, CYCLE_2024[0]), (_days("10"), _days("0")))
         snapshot = build_annual_leave_payment_snapshot(self.profile, as_of=CYCLE_2024[1])
-        self.assertEqual(snapshot["eligible_unused_days"], _days("31"))  # 10 carried + 21 accrued, all payable
-        self.assertEqual(snapshot["locked_unused_days"], _days("0"))
-        self.assertEqual(snapshot["payment_amount"], Decimal("3100.00"))
+        self.assertEqual(snapshot["accrued_days"], _days("31"))  # 10 carried + 21 accrued: all takeable leave
+        self.assertEqual(snapshot["eligible_unused_days"], _days("21"))  # only the 2024 accrual is payable
+        self.assertEqual(snapshot["locked_unused_days"], _days("10"))
+        self.assertEqual(snapshot["payment_amount"], Decimal("2100.00"))  # not 31 x 3000 / 30
 
     def test_every_outcome_keeps_already_locked_days_locked(self):
         for status_value, resolution, expected in (
             (Status.APPROVED, Resolution.PAY, ("0", "4")),
-            (Status.CARRIED_FORWARD, Resolution.CARRY_FORWARD, ("6", "4")),
-            (Status.CARRIED_FORWARD, Resolution.CARRY_FORWARD_LOCKED, ("0", "10")),
-            (Status.REJECTED, Resolution.CARRY_FORWARD_LOCKED, ("6", "4")),
+            (Status.CARRIED_FORWARD, Resolution.CARRY_FORWARD, ("0", "10")),
+            (Status.REJECTED, Resolution.CARRY_FORWARD, ("6", "4")),
             (Status.PENDING_HR, Resolution.PAY, ("6", "4")),
-            (Status.PENDING_CEO, Resolution.CARRY_FORWARD_LOCKED, ("6", "4")),
+            (Status.PENDING_CEO, Resolution.CARRY_FORWARD, ("6", "4")),
         ):
             with self.subTest(status=status_value, resolution=resolution):
                 AnnualLeavePaymentRequest.objects.all().delete()
@@ -181,12 +180,12 @@ class LockedCarryForwardBalanceTests(TestCase):
 
     # --- services: the new HR decision --------------------------------------------------
 
-    def test_hr_locked_decision_settles_as_carried_forward_with_no_payout(self):
+    def test_hr_carry_forward_settles_as_leave_only_with_no_payout(self):
         payment = self._submit_from_snapshot(CYCLE_2023)
         self.assertEqual((payment.eligible_unused_days, payment.payment_amount), (_days("21"), Decimal("2100.00")))
 
-        payment = apply_annual_payment_hr_review(payment, actor=self.hr_user, decision="carry_forward_locked")
-        self.assertEqual(payment.resolution, Resolution.CARRY_FORWARD_LOCKED)
+        payment = apply_annual_payment_hr_review(payment, actor=self.hr_user, decision="carry_forward")
+        self.assertEqual(payment.resolution, Resolution.CARRY_FORWARD)
         self.assertEqual((payment.payment_amount, payment.carry_forward_days), (Decimal("0"), _days("21")))
         # A raise before the CEO approves must not price a carry-forward.
         self._set_salary("6000.00")
@@ -198,15 +197,15 @@ class LockedCarryForwardBalanceTests(TestCase):
         self.assertIsNotNone(payment.settled_at)
         self.assertEqual(get_prior_annual_carry_forward_split(self.profile, CYCLE_2024[0]), (_days("0"), _days("21")))
 
-    def test_ceo_rejecting_a_locked_decision_does_not_lock_the_days(self):
+    def test_ceo_rejecting_a_carry_forward_does_not_lock_the_days(self):
         payment = self._submit_from_snapshot(CYCLE_2023)
-        payment = apply_annual_payment_hr_review(payment, actor=self.hr_user, decision="carry_forward_locked")
+        payment = apply_annual_payment_hr_review(payment, actor=self.hr_user, decision="carry_forward")
         apply_annual_payment_ceo_rejection(payment, actor=self.ceo_user, comment="Pay it instead next time")
 
         self.assertEqual(get_prior_annual_carry_forward_split(self.profile, CYCLE_2024[0]), (_days("21"), _days("0")))
 
     def test_later_pay_excludes_locked_days_and_carries_them_forward_untouched(self):
-        self._recorded(CYCLE_2023, Status.CARRIED_FORWARD, resolution=Resolution.CARRY_FORWARD_LOCKED, carry="10.00")
+        self._recorded(CYCLE_2023, Status.CARRIED_FORWARD, resolution=Resolution.CARRY_FORWARD, carry="10.00")
         self._approved_leave(date(2024, 4, 7), date(2024, 4, 9))  # 3 days, drawn from the locked days first
 
         payment = self._submit_from_snapshot(CYCLE_2024)
@@ -233,52 +232,61 @@ class LockedCarryForwardBalanceTests(TestCase):
         self.assertEqual(snapshot_2025["payment_amount"], Decimal("2520.00"))
 
     def test_locked_days_survive_several_cycles_without_becoming_payable(self):
-        # 2023: HR locks the whole 21-day balance.
-        settled_2023 = self._settle(CYCLE_2023, "carry_forward_locked")
+        cycle_2027 = (date(2027, 1, 1), date(2027, 12, 31))
+
+        # 2023: HR carries the whole 21-day balance forward: it becomes leave only.
+        settled_2023 = self._settle(CYCLE_2023, "carry_forward")
         self.assertEqual(
             (settled_2023.eligible_unused_days, settled_2023.carry_forward_days), (_days("21"), _days("21"))
         )
         self.assertEqual(settled_2023.payment_amount, Decimal("0.00"))
+        self.assertEqual(get_prior_annual_carry_forward_split(self.profile, CYCLE_2024[0]), (_days("0"), _days("21")))
 
-        # 2024: 3 days of leave come out of the locked days; HR carries the new accrual forward (payable).
+        # 2024: 3 days of leave come out of the locked days; HR carries the new accrual forward too.
         self._approved_leave(date(2024, 4, 7), date(2024, 4, 9))
         settled_2024 = self._settle(CYCLE_2024, "carry_forward")
-        self.assertEqual(settled_2024.status, Status.CARRIED_FORWARD)
         self.assertEqual(
             (settled_2024.eligible_unused_days, settled_2024.locked_unused_days), (_days("21"), _days("18"))
         )
-        self.assertEqual(get_prior_annual_carry_forward_split(self.profile, CYCLE_2025[0]), (_days("21"), _days("18")))
+        self.assertEqual(settled_2024.payment_amount, Decimal("0.00"))
+        self.assertEqual(get_prior_annual_carry_forward_split(self.profile, CYCLE_2025[0]), (_days("0"), _days("39")))
 
-        # 2025: no leave taken; HR locks the payable 42 days as well.
-        settled_2025 = self._settle(CYCLE_2025, "carry_forward_locked")
+        # 2025: HR pays. Only the 2025 accrual is paid; the 39 locked days stay locked.
+        settled_2025 = self._settle(CYCLE_2025, "forward")
+        self.assertEqual(settled_2025.status, Status.APPROVED)
         self.assertEqual(
-            (settled_2025.eligible_unused_days, settled_2025.locked_unused_days), (_days("42"), _days("18"))
+            (settled_2025.eligible_unused_days, settled_2025.locked_unused_days), (_days("21"), _days("39"))
         )
-        self.assertEqual(settled_2025.payment_amount, Decimal("0.00"))
-        self.assertEqual(get_prior_annual_carry_forward_split(self.profile, CYCLE_2026[0]), (_days("0"), _days("60")))
+        self.assertEqual(settled_2025.payment_amount, Decimal("2100.00"))
+        self.assertEqual(get_prior_annual_carry_forward_split(self.profile, CYCLE_2026[0]), (_days("0"), _days("39")))
 
-        # 2026: HR pays. Only the 2026 accrual is paid; all 60 locked days stay locked.
-        settled_2026 = self._settle(CYCLE_2026, "forward")
-        self.assertEqual(settled_2026.status, Status.APPROVED)
+        # 2026: HR carries forward again; the locked bucket grows and nothing merges back.
+        settled_2026 = self._settle(CYCLE_2026, "carry_forward")
         self.assertEqual(
-            (settled_2026.eligible_unused_days, settled_2026.locked_unused_days), (_days("21"), _days("60"))
+            (settled_2026.eligible_unused_days, settled_2026.locked_unused_days), (_days("21"), _days("39"))
         )
-        self.assertEqual(settled_2026.payment_amount, Decimal("2100.00"))
+        self.assertEqual(get_prior_annual_carry_forward_split(self.profile, cycle_2027[0]), (_days("0"), _days("60")))
+
+        # 2027: HR pays. Still only that year's accrual.
+        settled_2027 = self._settle(cycle_2027, "forward")
         self.assertEqual(
-            get_prior_annual_carry_forward_split(self.profile, CYCLE_2026[1] + timedelta(days=1)),
+            (settled_2027.eligible_unused_days, settled_2027.locked_unused_days), (_days("21"), _days("60"))
+        )
+        self.assertEqual(settled_2027.payment_amount, Decimal("2100.00"))
+        self.assertEqual(
+            get_prior_annual_carry_forward_split(self.profile, cycle_2027[1] + timedelta(days=1)),
             (_days("0"), _days("60")),
         )
 
-        # Across every cycle, nothing locked was ever priced: 21 + 21 + 42 + 21 payable days were
-        # offered, and only the paid 21 reached a payout.
+        # Across five cycles only the two paid years' own accruals were ever priced.
         total_paid = sum(
             AnnualLeavePaymentRequest.objects.filter(status=Status.APPROVED).values_list("payment_amount", flat=True),
             Decimal("0"),
         )
-        self.assertEqual(total_paid, Decimal("2100.00"))
+        self.assertEqual(total_paid, Decimal("4200.00"))
 
     def test_fractional_cash_accrual_never_rounds_locked_days_into_payable_days(self):
-        self._recorded(CYCLE_2023, Status.CARRIED_FORWARD, resolution=Resolution.CARRY_FORWARD_LOCKED, carry="10.00")
+        self._recorded(CYCLE_2023, Status.CARRIED_FORWARD, resolution=Resolution.CARRY_FORWARD, carry="10.00")
 
         # Six months into 2024: 10.50 accrued + 10 locked = 20.50 -> 20 whole days.
         snapshot = build_annual_leave_payment_snapshot(self.profile, as_of=date(2024, 7, 15))
@@ -289,7 +297,7 @@ class LockedCarryForwardBalanceTests(TestCase):
         self.assertEqual(snapshot["payment_amount"], Decimal("1000.00"))
 
     def test_leave_beyond_the_locked_days_draws_down_the_payable_days(self):
-        self._recorded(CYCLE_2023, Status.CARRIED_FORWARD, resolution=Resolution.CARRY_FORWARD_LOCKED, carry="2.00")
+        self._recorded(CYCLE_2023, Status.CARRIED_FORWARD, resolution=Resolution.CARRY_FORWARD, carry="2.00")
         self._approved_leave(date(2024, 4, 7), date(2024, 4, 11))  # 5 days: 2 locked + 3 payable
 
         snapshot = build_annual_leave_payment_snapshot(self.profile, as_of=CYCLE_2024[1])
@@ -352,7 +360,7 @@ class LockedCarryForwardRenewalTests(TestCase):
             cycle_end=CYCLE_2023[1],
             eligible_unused_days=Decimal("10.00"),
             carry_forward_days=Decimal("10.00"),
-            resolution=Resolution.CARRY_FORWARD_LOCKED,
+            resolution=Resolution.CARRY_FORWARD,
             status=Status.CARRIED_FORWARD,
         )
         # 2024 is closed by a renewal with no settlement: no HR decision was made for it.
@@ -403,7 +411,6 @@ class LockedCarryForwardRenewalTests(TestCase):
                     "employee_profile_id",
                     "cycle_end",
                     "status",
-                    "resolution",
                     "carry_forward_days",
                     "eligible_unused_days",
                     "locked_unused_days",
@@ -456,7 +463,7 @@ class LockedCarryForwardApiTests(APITestCase):
         self.client.defaults["HTTP_X_ACTIVE_COMPANY_ID"] = str(self.company.id)
 
     @patch(NOTIFY)
-    def test_hr_review_can_carry_forward_as_leave_only(self, notify):
+    def test_hr_review_carry_forward_is_leave_only(self, notify):
         self.client.force_authenticate(self.employee)
         created = self.client.post("/api/leaves/annual-leave-payments/", {})
         self.assertEqual(created.status_code, status.HTTP_201_CREATED)
@@ -466,38 +473,38 @@ class LockedCarryForwardApiTests(APITestCase):
         self.client.force_authenticate(self.hr)
         review = self.client.post(
             f"/api/leaves/annual-leave-payments/{payment_id}/review/",
-            {"decision": "carry_forward_locked", "comment": "Leave only"},
+            {"decision": "carry_forward", "comment": "Leave only"},
         )
         self.assertEqual(review.status_code, status.HTTP_200_OK)
-        self.assertEqual(review.data["data"]["resolution"], Resolution.CARRY_FORWARD_LOCKED)
+        self.assertEqual(review.data["data"]["resolution"], Resolution.CARRY_FORWARD)
         self.assertEqual(Decimal(str(review.data["data"]["payment_amount"])), Decimal("0.00"))
 
         self.client.force_authenticate(self.ceo)
         approved = self.client.post(f"/api/leaves/annual-leave-payments/{payment_id}/approve/", {})
         self.assertEqual(approved.status_code, status.HTTP_200_OK)
         self.assertEqual(approved.data["data"]["status"], Status.CARRIED_FORWARD)
-        self.assertEqual(approved.data["data"]["resolution"], Resolution.CARRY_FORWARD_LOCKED)
+        self.assertEqual(approved.data["data"]["resolution"], Resolution.CARRY_FORWARD)
         payment = AnnualLeavePaymentRequest.objects.get(pk=payment_id)
         self.assertEqual(payment.carry_forward_days, payment.eligible_unused_days)
         self.assertEqual(payment.payment_amount, Decimal("0.00"))
 
     @patch(NOTIFY)
-    def test_hr_submitted_leave_only_decision_is_created_unpriced(self, notify):
+    def test_hr_submitted_carry_forward_is_created_unpriced(self, notify):
         self.client.force_authenticate(self.hr)
         response = self.client.post(
             "/api/leaves/annual-leave-payments/",
-            {"employee_id": self.profile.id, "decision": "carry_forward_locked"},
+            {"employee_id": self.profile.id, "decision": "carry_forward"},
         )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         data = response.data["data"]
-        self.assertEqual((data["status"], data["resolution"]), (Status.PENDING_CEO, Resolution.CARRY_FORWARD_LOCKED))
+        self.assertEqual((data["status"], data["resolution"]), (Status.PENDING_CEO, Resolution.CARRY_FORWARD))
         self.assertEqual(Decimal(str(data["payment_amount"])), Decimal("0.00"))
         self.assertEqual(Decimal(str(data["carry_forward_days"])), Decimal(str(data["eligible_unused_days"])))
 
-    def test_employee_cannot_lock_their_own_days(self):
+    def test_employee_cannot_carry_forward_their_own_days(self):
         self.client.force_authenticate(self.employee)
-        response = self.client.post("/api/leaves/annual-leave-payments/", {"decision": "carry_forward_locked"})
+        response = self.client.post("/api/leaves/annual-leave-payments/", {"decision": "carry_forward"})
 
         self.assertEqual(response.status_code, 422)
         self.assertFalse(AnnualLeavePaymentRequest.objects.exists())
@@ -511,7 +518,7 @@ class LockedCarryForwardApiTests(APITestCase):
             cycle_end=self.profile.contract_date - timedelta(days=1),
             eligible_unused_days=Decimal("5.00"),
             carry_forward_days=Decimal("5.00"),
-            resolution=Resolution.CARRY_FORWARD_LOCKED,
+            resolution=Resolution.CARRY_FORWARD,
             status=Status.CARRIED_FORWARD,
         )
         self.client.force_authenticate(self.employee)
