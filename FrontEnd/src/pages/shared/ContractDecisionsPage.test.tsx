@@ -428,6 +428,13 @@ describe("ContractDecisionsPage detail", () => {
               created_at: "2026-08-06T08:00:00Z",
               deliveries: [],
             },
+            {
+              id: 13,
+              event_key: "contract.expiry",
+              milestone: "contract.termination_settlement_required",
+              created_at: "2026-08-07T08:00:00Z",
+              deliveries: [],
+            },
           ],
         }),
       ),
@@ -440,6 +447,9 @@ describe("ContractDecisionsPage detail", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText("contract.reminder: in-app only"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Termination settlement required: in-app only"),
     ).toBeInTheDocument();
   });
 

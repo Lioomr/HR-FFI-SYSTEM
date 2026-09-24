@@ -4626,6 +4626,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
       "Decision completed",
     "contractDecisions.milestone.contract.manual_resolution":
       "Manual resolution needed",
+    "contractDecisions.milestone.contract.termination_settlement_required":
+      "Termination settlement required",
     "contractDecisions.channel.email": "email",
     "contractDecisions.channel.whatsapp": "WhatsApp",
     "contractDecisions.deliveryStatus.sent": "sent",
@@ -9481,6 +9483,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "contractDecisions.milestone.contract.decision_completed": "اكتمال القرار",
     "contractDecisions.milestone.contract.manual_resolution":
       "تتطلب معالجة يدوية",
+    "contractDecisions.milestone.contract.termination_settlement_required":
+      "مطلوب تسوية نهاية الخدمة",
     "contractDecisions.channel.email": "البريد الإلكتروني",
     "contractDecisions.channel.whatsapp": "واتساب",
     "contractDecisions.deliveryStatus.sent": "تم الإرسال",
