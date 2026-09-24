@@ -12,7 +12,7 @@ from django.utils import timezone
 
 from contract_ratings.models import ContractRating
 from contract_ratings.services import submit_ceo_decision
-from contract_ratings.tasks import execute_scheduled_termination
+from contract_ratings.tasks import execute_scheduled_termination, process_contract_ratings
 from employees.contract_expiry import (
     AUTO_RENEWAL_DAYS_BEFORE_EXPIRY,
     CEO_APPROVAL_WINDOW,
@@ -56,6 +56,19 @@ def test_legacy_sweep_sends_no_milestone_for_a_rated_decision(world):
     with patch("employees.contract_expiry.notify_hr_milestone") as milestone:
         process_contract_expiry(today=at_65_days, now=timezone.now())
     milestone.assert_not_called()
+
+
+def test_hr_gets_one_notice_at_90_days_when_the_legacy_sweep_runs_first(world, notifications):
+    # Both hourly tasks fire on the same minute; the legacy sweep may run before the
+    # rating task has created the rating. It must defer to the rating flow's notice.
+    today = world.profile.contract_expiry - timedelta(days=90)
+    with patch("employees.contract_expiry.dispatch_notification_channels") as legacy_dispatch:
+        process_contract_expiry(today=today, now=timezone.now())
+        summary = process_contract_ratings(today=today)
+    legacy_dispatch.assert_not_called()
+    assert summary["created"] == 1
+    hr_notices = [call for call in notifications.call_args_list if call.kwargs["recipient"].id == world.hr.id]
+    assert [call.kwargs["metadata"]["event"] for call in hr_notices] == ["awaiting_routing"]
 
 
 def test_legacy_sweep_never_auto_approves_or_reminds_a_rated_ceo_decision(world):

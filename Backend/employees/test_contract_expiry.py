@@ -59,8 +59,10 @@ class ContractExpiryWorkflowTests(TestCase):
             accommodation_allowance=Decimal("200.00"),
         )
 
+    # Legacy-only path: the rating flow is not taking this decision over.
+    @patch("employees.contract_expiry.contract_rating_due", return_value=False)
     @patch("employees.contract_expiry.notify_hr_milestone")
-    def test_milestones_are_created_once(self, notify):
+    def test_milestones_are_created_once(self, notify, _rating_due):
         notify.return_value = 0
         today = self.profile.contract_expiry - timedelta(days=90)
         process_contract_expiry(today=today, now=timezone.now())
@@ -91,8 +93,10 @@ class ContractExpiryWorkflowTests(TestCase):
             send_email.call_args.kwargs["html_content"],
         )
 
+    # Legacy-only path: the rating flow is not taking this decision over.
+    @patch("employees.contract_expiry.contract_rating_due", return_value=False)
     @patch("employees.contract_expiry.notify_hr_milestone")
-    def test_failed_milestone_persistence_is_retried(self, notify):
+    def test_failed_milestone_persistence_is_retried(self, notify, _rating_due):
         notify.return_value = None
         today = self.profile.contract_expiry - timedelta(days=90)
 
@@ -102,8 +106,10 @@ class ContractExpiryWorkflowTests(TestCase):
         self.assertEqual(notify.call_count, 1)
         self.assertNotIn("90_DAY", decision.notification_milestones)
 
+    # Legacy-only path: the rating flow is not taking this decision over.
+    @patch("employees.contract_expiry.contract_rating_due", return_value=False)
     @patch("employees.contract_expiry.notify_hr_milestone")
-    def test_only_90_and_65_day_reminders_are_sent_before_auto_renewal(self, notify):
+    def test_only_90_and_65_day_reminders_are_sent_before_auto_renewal(self, notify, _rating_due):
         notify.return_value = 0
         for days_left in range(90, 59, -1):
             process_contract_expiry(today=self.profile.contract_expiry - timedelta(days=days_left), now=timezone.now())
@@ -111,6 +117,17 @@ class ContractExpiryWorkflowTests(TestCase):
         decision = ContractDecision.objects.get(employee_profile=self.profile)
         self.assertEqual([call.args[1:] for call in notify.call_args_list], [("90_DAY", 90), ("65_DAY", 65)])
         self.assertEqual(decision.status, ContractDecision.Status.PENDING_HR)
+
+    @patch("employees.contract_expiry.notify_hr_milestone")
+    def test_no_legacy_milestone_when_the_rating_flow_creates_a_rating_this_cycle(self, notify):
+        # At the 90-day mark the rating task (a separate hourly job) creates the rating and
+        # notifies HR itself; the legacy sweep must not get in first with its own notice.
+        today = self.profile.contract_expiry - timedelta(days=90)
+        process_contract_expiry(today=today, now=timezone.now())
+
+        decision = ContractDecision.objects.get(employee_profile=self.profile)
+        notify.assert_not_called()
+        self.assertNotIn("90_DAY", decision.notification_milestones)
 
     @patch("employees.contract_expiry._dispatch")
     def test_65_day_reminder_asks_hr_to_act_before_the_auto_renewal_date(self, dispatch):

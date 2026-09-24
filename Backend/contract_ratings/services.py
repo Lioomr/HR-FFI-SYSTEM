@@ -1,6 +1,5 @@
 import logging
 from copy import deepcopy
-from datetime import timedelta
 
 from django.db import transaction
 from django.utils import timezone
@@ -19,6 +18,7 @@ from employees.contract_expiry import (
     _renewal_dates,
     _resolved_renewal_terms,
     apply_contract_terms,
+    contract_rating_due,
     contract_terms_snapshot,
     ensure_contract_decision,
 )
@@ -114,18 +114,7 @@ def ensure_contract_rating(profile, *, actor=None, only_if_due_on=None):
     profile = EmployeeProfile.objects.select_for_update().get(pk=profile.pk)
     if only_if_due_on is not None:
         # Recheck after locking: the scheduler's candidate snapshot may be stale.
-        if (
-            profile.is_archived
-            or profile.employment_status != "ACTIVE"
-            or not profile.company.is_active
-            or not profile.contract_expiry
-            or not only_if_due_on <= profile.contract_expiry <= only_if_due_on + timedelta(days=90)
-            or decision.finalized_at
-            or decision.status not in {ContractDecision.Status.PENDING_HR, ContractDecision.Status.PENDING_CEO}
-            or decision.company_id != profile.company_id
-            or decision.original_contract_date != profile.contract_date
-            or decision.original_contract_expiry != profile.contract_expiry
-        ):
+        if not contract_rating_due(profile, decision, only_if_due_on):
             return None, False
     rating, created = ContractRating.objects.get_or_create(
         contract_decision=decision,

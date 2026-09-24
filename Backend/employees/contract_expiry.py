@@ -66,6 +66,31 @@ def has_contract_rating(decision_id: int) -> bool:
     return ContractDecision.objects.filter(pk=decision_id, rating__isnull=False).exists()
 
 
+#: The contract-rating flow creates a ``ContractRating`` once expiry is this close.
+CONTRACT_RATING_CREATION_DAYS = 90
+
+
+def contract_rating_due(profile: EmployeeProfile, decision: ContractDecision, today: date) -> bool:
+    """Whether the contract-rating scheduler creates a rating for this decision on ``today``.
+
+    The single eligibility rule for ``contract_ratings.services.ensure_contract_rating``.
+    The legacy sweep checks it too, so it backs off from a decision the rating flow is
+    about to own instead of racing that (separate, same-hour) task to notify HR first.
+    """
+    return not (
+        profile.is_archived
+        or profile.employment_status != "ACTIVE"
+        or not profile.company.is_active
+        or not profile.contract_expiry
+        or not today <= profile.contract_expiry <= today + timedelta(days=CONTRACT_RATING_CREATION_DAYS)
+        or decision.finalized_at
+        or decision.status not in {ContractDecision.Status.PENDING_HR, ContractDecision.Status.PENDING_CEO}
+        or decision.company_id != profile.company_id
+        or decision.original_contract_date != profile.contract_date
+        or decision.original_contract_expiry != profile.contract_expiry
+    )
+
+
 def contract_terms_snapshot(profile: EmployeeProfile) -> dict:
     return {
         field: str(getattr(profile, field)) if getattr(profile, field) is not None else None for field in TERM_FIELDS
@@ -813,7 +838,13 @@ def process_contract_expiry(*, today=None, now=None) -> dict:
         try:
             days_left = (profile.contract_expiry - today).days
             decision, _ = ensure_contract_decision(profile)
-            if days_left in CONTRACT_MILESTONES and not has_contract_rating(decision.id):
+            # A decision the rating flow owns, or will own this cycle, gets its HR notice
+            # from that flow ("awaiting_routing" / HR-gate reminders), never from here too.
+            if (
+                days_left in CONTRACT_MILESTONES
+                and not has_contract_rating(decision.id)
+                and not contract_rating_due(profile, decision, today)
+            ):
                 milestone = CONTRACT_MILESTONES[days_left]
                 if not decision.notification_milestones.get(milestone):
                     notification_result = notify_hr_milestone(decision, milestone, days_left)
