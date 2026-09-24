@@ -21,6 +21,7 @@ from .models import AnnualLeavePaymentRequest, LeaveBalanceAdjustment, LeaveRequ
 from .utils import (
     ANNUAL_LEAVE_SETTLEMENT_EXISTS_REASON,
     PENDING_RESERVATION_STATUSES,
+    annual_settlement_payable_days,
     build_annual_leave_payment_snapshot,
     get_contract_year_cycle,
     get_leave_days,
@@ -621,6 +622,7 @@ class AnnualLeavePaymentRequestSerializer(serializers.ModelSerializer):
             "payment_amount",
             "carry_forward_days",
             "locked_unused_days",
+            "include_locked_days_in_termination_payout",
             "resolution",
             "status",
             "is_termination_settlement",
@@ -669,6 +671,7 @@ class AnnualLeavePaymentRequestCreateSerializer(serializers.Serializer):
     employee_note = serializers.CharField(required=False, allow_blank=True)
     termination_date = serializers.DateField(required=False, write_only=True)
     decision = serializers.ChoiceField(choices=["pay", "carry_forward"], required=False, write_only=True)
+    include_locked_days_in_termination_payout = serializers.BooleanField(required=False, default=False, write_only=True)
 
     def validate(self, attrs):
         request = self.context["request"]
@@ -708,6 +711,30 @@ class AnnualLeavePaymentRequestCreateSerializer(serializers.Serializer):
             # Carrying days forward locks them out of any future payout: an HR decision,
             # never a self-service one.
             raise serializers.ValidationError({"decision": "Only HR can carry days forward as leave only."})
+
+        include_locked_days = attrs.get("include_locked_days_in_termination_payout", False)
+        if include_locked_days:
+            # HR's per-termination exception to "leave-only days are never paid".
+            if not attrs.get("employee_id"):
+                raise serializers.ValidationError(
+                    {"include_locked_days_in_termination_payout": "Only HR can pay out leave-only days."}
+                )
+            if not termination_date:
+                raise serializers.ValidationError(
+                    {
+                        "include_locked_days_in_termination_payout": (
+                            "Leave-only days can be paid out only in a termination settlement."
+                        )
+                    }
+                )
+            if attrs.get("decision") == "carry_forward":
+                raise serializers.ValidationError(
+                    {
+                        "include_locked_days_in_termination_payout": (
+                            "Leave-only days can be paid out only when the settlement pays."
+                        )
+                    }
+                )
 
         today = timezone.localdate()
         settlement_date = termination_date or today
@@ -749,8 +776,19 @@ class AnnualLeavePaymentRequestCreateSerializer(serializers.Serializer):
             profile,
             as_of=settlement_date,
             termination_date=termination_date,
+            include_locked_days=include_locked_days,
         )
-        if not snapshot or snapshot["eligible_unused_days"] <= 0:
+        payable_days = (
+            annual_settlement_payable_days(
+                snapshot["eligible_unused_days"],
+                snapshot["locked_unused_days"],
+                is_termination_settlement=bool(termination_date),
+                include_locked_days=include_locked_days,
+            )
+            if snapshot
+            else Decimal("0")
+        )
+        if payable_days <= 0:
             raise serializers.ValidationError("There are no eligible whole Annual Leave days available for payment.")
 
         attrs["profile"] = profile
@@ -790,6 +828,7 @@ class AnnualLeavePaymentRequestCreateSerializer(serializers.Serializer):
             eligible_unused_days=snapshot["eligible_unused_days"],
             salary_at_year_end=snapshot["salary_at_year_end"],
             locked_unused_days=snapshot["locked_unused_days"],
+            include_locked_days_in_termination_payout=validated_data.pop("include_locked_days_in_termination_payout"),
             payment_amount=(Decimal("0.00") if resolution == "carry_forward" else snapshot["payment_amount"]),
             carry_forward_days=(snapshot["eligible_unused_days"] if resolution == "carry_forward" else Decimal("0.00")),
             is_termination_settlement=validated_data.pop("is_termination_settlement"),
@@ -800,3 +839,5 @@ class AnnualLeavePaymentRequestCreateSerializer(serializers.Serializer):
 class AnnualLeavePaymentReviewSerializer(serializers.Serializer):
     decision = serializers.ChoiceField(choices=["forward", "carry_forward"])
     comment = serializers.CharField(required=False, allow_blank=True)
+    # Termination settlements only: HR may pay the leave-only days out in the final payout.
+    include_locked_days_in_termination_payout = serializers.BooleanField(required=False, default=False)

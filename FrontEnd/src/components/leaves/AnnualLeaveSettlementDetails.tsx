@@ -52,7 +52,9 @@ export default function AnnualLeaveSettlementDetails({
           ? [
               {
                 key: "locked",
-                label: t("annualPayment.lockedDays"),
+                label: request.include_locked_days_in_termination_payout
+                  ? t("annualPayment.lockedDaysPaidOnTermination")
+                  : t("annualPayment.lockedDays"),
                 children: `${formatSettlementDays(request.locked_unused_days)} ${t("leave.days")}`,
               },
             ]

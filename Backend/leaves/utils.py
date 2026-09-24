@@ -652,8 +652,19 @@ def annual_leave_payment_amount(eligible_days, salary) -> Decimal:
 ZERO_DAYS = Decimal("0.00")
 
 
+def annual_settlement_payable_days(
+    eligible_unused_days, locked_unused_days, *, is_termination_settlement, include_locked_days
+) -> Decimal:
+    """Whole days a settlement pays: the cash-eligible days, plus the leave-only days only
+    when HR chose to pay them out on this termination settlement."""
+    payable = Decimal(eligible_unused_days or 0)
+    if is_termination_settlement and include_locked_days:
+        payable += Decimal(locked_unused_days or 0)
+    return payable
+
+
 def _carry_forward_split_from_settlement(
-    status, carry_forward_days, eligible_unused_days, *, locked_unused_days=None
+    status, carry_forward_days, eligible_unused_days, *, locked_unused_days=None, locked_paid_out=False
 ) -> tuple[Decimal, Decimal]:
     """``(cash_eligible, locked)`` opening balance a recorded settlement hands to the following cycle.
 
@@ -661,10 +672,12 @@ def _carry_forward_split_from_settlement(
     paid, so they carry forward as locked whatever the outcome (paid, carried, rejected or
     pending). Only the cash-eligible ``eligible_unused_days`` follow the pay/carry decision; a
     carry-forward moves them into the locked bucket for good, so no later settlement pays them.
+    The one exception is an approved termination settlement where HR chose to pay the locked
+    days out (``locked_paid_out``): they were paid, so nothing is left to carry.
     """
     locked = Decimal(locked_unused_days or 0)
     if status == AnnualLeavePaymentRequest.Status.APPROVED:
-        return ZERO_DAYS, locked
+        return ZERO_DAYS, (ZERO_DAYS if locked_paid_out else locked)
     if status == AnnualLeavePaymentRequest.Status.CARRIED_FORWARD:
         return ZERO_DAYS, locked + carry_forward_days
     # A rejected or still-pending payment must not erase the employee's balance; no
@@ -680,12 +693,17 @@ def _settlement_carry_forward_split(settlement) -> tuple[Decimal, Decimal]:
             settlement["carry_forward_days"],
             settlement["eligible_unused_days"],
             locked_unused_days=settlement.get("locked_unused_days"),
+            locked_paid_out=bool(
+                settlement.get("is_termination_settlement")
+                and settlement.get("include_locked_days_in_termination_payout")
+            ),
         )
     return _carry_forward_split_from_settlement(
         settlement.status,
         settlement.carry_forward_days,
         settlement.eligible_unused_days,
         locked_unused_days=settlement.locked_unused_days,
+        locked_paid_out=settlement.pays_locked_days,
     )
 
 
@@ -896,7 +914,11 @@ def get_prior_annual_carry_forward_days(profile: EmployeeProfile, cycle_start: d
 
 
 def build_annual_leave_payment_snapshot(
-    profile: EmployeeProfile, *, as_of: date | None = None, termination_date: date | None = None
+    profile: EmployeeProfile,
+    *,
+    as_of: date | None = None,
+    termination_date: date | None = None,
+    include_locked_days: bool = False,
 ):
     effective_date = termination_date or as_of or date.today()
     details = get_annual_accrual_details(profile, effective_date)
@@ -915,7 +937,14 @@ def build_annual_leave_payment_snapshot(
         opening_locked, used, eligible_unused, eligible_whole_days
     )
     salary = get_annual_salary_at_year_end(profile)
-    amount = annual_leave_payment_amount(cash_whole_days, salary)
+    # Leave-only days are priced only on a termination settlement where HR opted to pay them.
+    payable_days = annual_settlement_payable_days(
+        cash_whole_days,
+        locked_whole_days,
+        is_termination_settlement=bool(termination_date),
+        include_locked_days=include_locked_days,
+    )
+    amount = annual_leave_payment_amount(payable_days, salary)
     return {
         "cycle_start": cycle_start,
         "cycle_end": cycle_end,
@@ -1478,6 +1507,8 @@ def get_leave_request_payment_context(instances):
             "carry_forward_days",
             "eligible_unused_days",
             "locked_unused_days",
+            "is_termination_settlement",
+            "include_locked_days_in_termination_payout",
         )
     )
     batch = {

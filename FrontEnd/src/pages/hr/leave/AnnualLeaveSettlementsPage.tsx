@@ -4,6 +4,7 @@ import {
   Alert,
   Button,
   Card,
+  Checkbox,
   Form,
   Input,
   Modal,
@@ -81,6 +82,7 @@ export default function AnnualLeaveSettlementsPage() {
   const [reviewDecision, setReviewDecision] =
     useState<AnnualLeavePaymentReviewDecision>("forward");
   const [reviewComment, setReviewComment] = useState("");
+  const [reviewPayLockedDays, setReviewPayLockedDays] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
 
@@ -90,7 +92,18 @@ export default function AnnualLeaveSettlementsPage() {
   const [createForm] = Form.useForm<{
     employee_id: number;
     decision: AnnualLeavePaymentResolution;
+    include_locked_days_in_termination_payout?: boolean;
   }>();
+  const createEmployeeId = Form.useWatch("employee_id", createForm);
+  const createDecision = Form.useWatch("decision", createForm);
+  // The termination exception is offered only for a terminated employee being paid.
+  const createForTerminatedPayout =
+    createDecision === "pay" &&
+    employees.some(
+      (employee) =>
+        employee.id === createEmployeeId &&
+        employee.employment_status === "TERMINATED",
+    );
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -121,7 +134,8 @@ export default function AnnualLeaveSettlementsPage() {
 
   useEffect(() => {
     let cancelled = false;
-    listEmployees({ page: 1, page_size: 300 })
+    // "all" so terminated (archived) employees can get their termination settlement.
+    listEmployees({ page: 1, page_size: 300, archive_state: "all" })
       .then((res) => {
         if (cancelled || isApiError(res)) return;
         setEmployees(res.data.results || []);
@@ -147,6 +161,9 @@ export default function AnnualLeaveSettlementsPage() {
     setReviewing(request);
     setReviewDecision("forward");
     setReviewComment("");
+    setReviewPayLockedDays(
+      Boolean(request.include_locked_days_in_termination_payout),
+    );
     setReviewError(null);
   };
 
@@ -155,9 +172,14 @@ export default function AnnualLeaveSettlementsPage() {
     setProcessing(true);
     setReviewError(null);
     try {
+      const offersLockedPayout =
+        reviewing.is_termination_settlement && reviewDecision === "forward";
       const res = await reviewAnnualLeavePaymentRequest(reviewing.id, {
         decision: reviewDecision,
         comment: reviewComment.trim(),
+        ...(offersLockedPayout
+          ? { include_locked_days_in_termination_payout: reviewPayLockedDays }
+          : {}),
       });
       if (isApiError(res)) {
         setReviewError(getFirstApiErrorMessage(res) || res.message);
@@ -188,6 +210,10 @@ export default function AnnualLeaveSettlementsPage() {
       const res = await createHRAnnualLeaveSettlement({
         employee_id: values.employee_id,
         decision: values.decision,
+        ...(createForTerminatedPayout &&
+        values.include_locked_days_in_termination_payout
+          ? { include_locked_days_in_termination_payout: true }
+          : {}),
       });
       if (isApiError(res)) {
         setCreateError(getFirstApiErrorMessage(res) || res.message);
@@ -473,6 +499,23 @@ export default function AnnualLeaveSettlementsPage() {
                   ]}
                 />
               </Form.Item>
+              {reviewing.is_termination_settlement &&
+                reviewDecision === "forward" && (
+                  <Form.Item
+                    extra={t("annualPayment.payLockedDaysOnTerminationHint")}
+                    style={{ marginBottom: 12 }}
+                  >
+                    <Checkbox
+                      checked={reviewPayLockedDays}
+                      disabled={processing}
+                      onChange={(event) =>
+                        setReviewPayLockedDays(event.target.checked)
+                      }
+                    >
+                      {t("annualPayment.payLockedDaysOnTermination")}
+                    </Checkbox>
+                  </Form.Item>
+                )}
               <Form.Item
                 label={t("annualPayment.hrComment")}
                 style={{ marginBottom: 0 }}
@@ -566,6 +609,17 @@ export default function AnnualLeaveSettlementsPage() {
               ]}
             />
           </Form.Item>
+          {createForTerminatedPayout && (
+            <Form.Item
+              name="include_locked_days_in_termination_payout"
+              valuePropName="checked"
+              extra={t("annualPayment.payLockedDaysOnTerminationHint")}
+            >
+              <Checkbox>
+                {t("annualPayment.payLockedDaysOnTermination")}
+              </Checkbox>
+            </Form.Item>
+          )}
         </Form>
       </Modal>
     </div>

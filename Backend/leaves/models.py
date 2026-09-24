@@ -447,6 +447,9 @@ class AnnualLeavePaymentRequest(models.Model):
     # and ``payment_amount`` and keep carrying forward as leave-only whatever this
     # request's outcome is.
     locked_unused_days = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    # HR's per-termination exception: pay ``locked_unused_days`` out in this final
+    # settlement. Only valid on a PAY termination settlement; never set otherwise.
+    include_locked_days_in_termination_payout = models.BooleanField(default=False)
     resolution = models.CharField(max_length=20, choices=Resolution.choices, default=Resolution.PAY)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING_HR)
     is_termination_settlement = models.BooleanField(default=False)
@@ -498,8 +501,23 @@ class AnnualLeavePaymentRequest(models.Model):
             errors["employee_profile"] = _("Employee and Annual Leave payment request must belong to the same company.")
         if self.employee_id and self.employee_profile.user_id != self.employee_id:
             errors["employee"] = _("Employee and employee profile must refer to the same person.")
+        if self.include_locked_days_in_termination_payout and (
+            not self.is_termination_settlement or self.resolution != self.Resolution.PAY
+        ):
+            errors["include_locked_days_in_termination_payout"] = _(
+                "Leave-only days can be paid out only by a termination settlement that pays."
+            )
         if errors:
             raise ValidationError(errors)
+
+    @property
+    def pays_locked_days(self) -> bool:
+        """Whether this settlement's payout includes its leave-only days (termination exception)."""
+        return bool(
+            self.include_locked_days_in_termination_payout
+            and self.is_termination_settlement
+            and self.resolution == self.Resolution.PAY
+        )
 
     def save(self, *args, **kwargs):
         self.full_clean()
