@@ -9,6 +9,7 @@ from django.utils import timezone
 from core.services.workflow_engine import begin_recorded_transition
 from employees.contract_expiry import (
     CEO_REMINDER_INTERVAL,
+    CONTRACT_RATING_CREATION_DAYS,
     _company_ceo_recipients,
     _company_hr_recipients,
     mark_employment_terminated,
@@ -204,7 +205,7 @@ def process_contract_ratings(*, today=None, now=None):
         employment_status="ACTIVE",
         company__is_active=True,
         contract_expiry__gte=today,
-        contract_expiry__lte=today + timedelta(days=90),
+        contract_expiry__lte=today + timedelta(days=CONTRACT_RATING_CREATION_DAYS),
     ).exclude(
         Exists(
             ContractRating.objects.filter(
