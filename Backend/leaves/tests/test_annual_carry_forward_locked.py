@@ -532,3 +532,226 @@ class LockedCarryForwardApiTests(APITestCase):
             Decimal(str(data["estimated_payment_amount"])),
             annual_leave_payment_amount(Decimal(str(data["eligible_unused_days"])), Decimal("3000.00")),
         )
+
+
+class TerminationLockedDaysPayoutTests(APITestCase):
+    """HR's per-termination choice to pay leave-only days out in the final settlement."""
+
+    TERMINATION_DATE = date(2025, 7, 15)
+
+    def setUp(self):
+        head_office = OrganizationNode.objects.create(
+            code="HEAD_OFFICE_LOCKED_TERM",
+            name="Locked Termination Head Office",
+            node_type=OrganizationNode.NodeType.HEAD_OFFICE,
+        )
+        self.company = OrganizationNode.objects.create(
+            code="LOCKED_TERM_COMPANY",
+            name="Locked Termination Company",
+            node_type=OrganizationNode.NodeType.COMPANY,
+            parent=head_office,
+        )
+        self.hr = User.objects.create_user(email="locked.term.hr@test.com", password="password")
+        self.ceo = User.objects.create_user(email="locked.term.ceo@test.com", password="password")
+        for user, role in ((self.hr, "HRManager"), (self.ceo, "CEO")):
+            group, _ = Group.objects.get_or_create(name=role)
+            user.groups.add(group)
+        UserOrganizationAccess.objects.create(user=self.hr, organization=self.company)
+        for user, employee_id in ((self.hr, "EMP-LOCKED-TERM-HR"), (self.ceo, "EMP-LOCKED-TERM-CEO")):
+            EmployeeProfile.objects.create(user=user, company=self.company, employee_id=employee_id)
+        LeaveType.objects.create(company=self.company, name="Annual Leave", code="ANNUAL", is_active=True)
+        self.client.defaults["HTTP_X_ACTIVE_COMPANY_ID"] = str(self.company.id)
+
+        self.leaver = self._employee("locked.term.leaver", EmployeeProfile.EmploymentStatus.TERMINATED)
+        # 2024 was carried forward: 10 leave-only days open 2025.
+        self._carried_forward(self.leaver, "10.00")
+
+    def _employee(self, handle, employment_status):
+        user = User.objects.create_user(email=f"{handle}@test.com", password="password")
+        group, _ = Group.objects.get_or_create(name="Employee")
+        user.groups.add(group)
+        return EmployeeProfile.objects.create(
+            user=user,
+            company=self.company,
+            employee_id=f"LT-{handle.rsplit('.', 1)[-1].upper()}"[:20],
+            full_name=handle,
+            contract_date=CYCLE_2024[0],
+            hire_date=CYCLE_2024[0],
+            total_salary=Decimal("3000.00"),
+            employment_status=employment_status,
+        )
+
+    def _carried_forward(self, profile, days):
+        AnnualLeavePaymentRequest.objects.create(
+            employee=profile.user,
+            employee_profile=profile,
+            company=self.company,
+            cycle_start=CYCLE_2024[0],
+            cycle_end=CYCLE_2024[1],
+            eligible_unused_days=Decimal(days),
+            carry_forward_days=Decimal(days),
+            resolution=Resolution.CARRY_FORWARD,
+            status=Status.CARRIED_FORWARD,
+        )
+
+    def _create(self, profile=None, **payload):
+        self.client.force_authenticate(self.hr)
+        body = {"employee_id": (profile or self.leaver).id, "decision": "pay", **payload}
+        if (profile or self.leaver).employment_status == EmployeeProfile.EmploymentStatus.TERMINATED:
+            body.setdefault("termination_date", str(self.TERMINATION_DATE))
+        return self.client.post("/api/leaves/annual-leave-payments/", body)
+
+    def _approve(self, payment_id):
+        self.client.force_authenticate(self.ceo)
+        return self.client.post(f"/api/leaves/annual-leave-payments/{payment_id}/approve/", {})
+
+    # --- snapshot ------------------------------------------------------------------------
+
+    def test_snapshot_prices_locked_days_only_when_asked_on_a_termination(self):
+        off = build_annual_leave_payment_snapshot(self.leaver, termination_date=self.TERMINATION_DATE)
+        on = build_annual_leave_payment_snapshot(
+            self.leaver, termination_date=self.TERMINATION_DATE, include_locked_days=True
+        )
+        # Six months into 2025: 10.50 accrued -> 10 payable; 10 leave-only carried in.
+        for snapshot in (off, on):
+            self.assertEqual(
+                (snapshot["eligible_unused_days"], snapshot["locked_unused_days"]), (_days("10"), _days("10"))
+            )
+        self.assertEqual(off["payment_amount"], Decimal("1000.00"))
+        self.assertEqual(on["payment_amount"], Decimal("2000.00"))
+
+        # Not a termination: the flag has no effect.
+        not_termination = build_annual_leave_payment_snapshot(
+            self.leaver, as_of=self.TERMINATION_DATE, include_locked_days=True
+        )
+        self.assertEqual(not_termination["payment_amount"], Decimal("1000.00"))
+
+    # --- flag off: today's behaviour --------------------------------------------------------
+
+    @patch(NOTIFY)
+    def test_termination_without_the_flag_forfeits_locked_days(self, notify):
+        created = self._create()
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED, created.data)
+        data = created.data["data"]
+        self.assertFalse(data["include_locked_days_in_termination_payout"])
+        self.assertTrue(data["is_termination_settlement"])
+        self.assertEqual(Decimal(str(data["locked_unused_days"])), Decimal("10.00"))
+        self.assertEqual(Decimal(str(data["payment_amount"])), Decimal("1000.00"))
+
+        approved = self._approve(data["id"])
+        self.assertEqual(approved.data["data"]["status"], Status.APPROVED)
+        self.assertEqual(Decimal(str(approved.data["data"]["payment_amount"])), Decimal("1000.00"))
+        # The locked days were not paid, so they are still recorded as locked.
+        self.assertEqual(get_prior_annual_carry_forward_split(self.leaver, CYCLE_2026[0]), (_days("0"), _days("10")))
+
+    # --- flag on ---------------------------------------------------------------------------
+
+    @patch(NOTIFY)
+    def test_termination_with_the_flag_pays_locked_days_at_the_live_salary(self, notify):
+        created = self._create(include_locked_days_in_termination_payout=True)
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED, created.data)
+        data = created.data["data"]
+        self.assertTrue(data["include_locked_days_in_termination_payout"])
+        self.assertEqual(Decimal(str(data["payment_amount"])), Decimal("2000.00"))  # 20 days x 3000 / 30
+
+        # A raise lands before the CEO approves: the CEO re-price covers the locked days too.
+        self.leaver.total_salary = Decimal("3600.00")
+        self.leaver.save(update_fields=["total_salary"])
+        approved = self._approve(data["id"])
+        self.assertEqual(approved.status_code, status.HTTP_200_OK)
+        payment = AnnualLeavePaymentRequest.objects.get(pk=data["id"])
+        self.assertEqual(payment.status, Status.APPROVED)
+        self.assertTrue(payment.include_locked_days_in_termination_payout)
+        self.assertEqual(payment.payment_amount, Decimal("2400.00"))  # 20 x 3600 / 30
+        # Paid out, so nothing is left to carry.
+        self.assertEqual(get_prior_annual_carry_forward_split(self.leaver, CYCLE_2026[0]), (_days("0"), _days("0")))
+
+    @patch(NOTIFY)
+    def test_only_locked_days_left_can_still_be_paid_on_termination(self, notify):
+        leaver = self._employee("locked.term.onlylocked", EmployeeProfile.EmploymentStatus.TERMINATED)
+        self._carried_forward(leaver, "8.00")
+        early = date(2025, 1, 20)  # no 2025 month completed yet: nothing payable but the locked days
+
+        refused = self._create(leaver, termination_date=str(early))
+        self.assertEqual(refused.status_code, 422)
+
+        created = self._create(leaver, termination_date=str(early), include_locked_days_in_termination_payout=True)
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED, created.data)
+        self.assertEqual(Decimal(str(created.data["data"]["payment_amount"])), Decimal("800.00"))
+
+    @patch(NOTIFY)
+    def test_hr_review_decides_the_flag_on_a_termination_settlement(self, notify):
+        # Opened without a decision, so it waits for HR review.
+        self.client.force_authenticate(self.hr)
+        created = self.client.post(
+            "/api/leaves/annual-leave-payments/",
+            {"employee_id": self.leaver.id, "termination_date": str(self.TERMINATION_DATE)},
+        )
+        self.assertEqual(created.data["data"]["status"], Status.PENDING_HR)
+        payment_id = created.data["data"]["id"]
+
+        review = self.client.post(
+            f"/api/leaves/annual-leave-payments/{payment_id}/review/",
+            {"decision": "forward", "include_locked_days_in_termination_payout": True},
+        )
+        self.assertEqual(review.status_code, status.HTTP_200_OK, review.data)
+        self.assertTrue(review.data["data"]["include_locked_days_in_termination_payout"])
+        self.assertEqual(Decimal(str(review.data["data"]["payment_amount"])), Decimal("2000.00"))
+
+    # --- scoped to termination settlements that pay ------------------------------------------
+
+    def test_flag_is_refused_outside_a_paying_termination_settlement(self):
+        active = self._employee("locked.term.active", EmployeeProfile.EmploymentStatus.ACTIVE)
+        self._carried_forward(active, "10.00")
+        with self.subTest("not a termination"):
+            response = self._create(active, include_locked_days_in_termination_payout=True)
+            self.assertEqual(response.status_code, 422)
+        with self.subTest("termination carried forward"):
+            response = self._create(decision="carry_forward", include_locked_days_in_termination_payout=True)
+            self.assertEqual(response.status_code, 422)
+        with self.subTest("employee self-service"):
+            self.client.force_authenticate(self.leaver.user)
+            response = self.client.post(
+                "/api/leaves/annual-leave-payments/", {"include_locked_days_in_termination_payout": True}
+            )
+            self.assertEqual(response.status_code, 422)
+        self.assertFalse(
+            AnnualLeavePaymentRequest.objects.filter(include_locked_days_in_termination_payout=True).exists()
+        )
+
+    def test_hr_review_refuses_the_flag_on_a_non_termination_settlement(self):
+        active = self._employee("locked.term.review", EmployeeProfile.EmploymentStatus.ACTIVE)
+        payment = AnnualLeavePaymentRequest.objects.create(
+            employee=active.user,
+            employee_profile=active,
+            company=self.company,
+            cycle_start=CYCLE_2025[0],
+            cycle_end=CYCLE_2025[1],
+            eligible_unused_days=Decimal("21.00"),
+            locked_unused_days=Decimal("10.00"),
+            payment_amount=Decimal("2100.00"),
+            status=Status.PENDING_HR,
+        )
+        self.client.force_authenticate(self.hr)
+        response = self.client.post(
+            f"/api/leaves/annual-leave-payments/{payment.id}/review/",
+            {"decision": "forward", "include_locked_days_in_termination_payout": True},
+        )
+
+        self.assertEqual(response.status_code, 422)
+        payment.refresh_from_db()
+        self.assertEqual((payment.status, payment.payment_amount), (Status.PENDING_HR, Decimal("2100.00")))
+        self.assertFalse(payment.include_locked_days_in_termination_payout)
+
+    def test_model_refuses_the_flag_on_a_non_termination_record(self):
+        from django.core.exceptions import ValidationError
+
+        with self.assertRaises(ValidationError):
+            AnnualLeavePaymentRequest.objects.create(
+                employee=self.leaver.user,
+                employee_profile=self.leaver,
+                company=self.company,
+                cycle_start=CYCLE_2025[0],
+                cycle_end=CYCLE_2025[1],
+                include_locked_days_in_termination_payout=True,
+            )

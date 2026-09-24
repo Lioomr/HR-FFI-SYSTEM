@@ -20,7 +20,7 @@ from in_app_notifications.models import Notification
 
 from .models import AnnualLeavePaymentRequest
 from .services import COMMENT_REQUIRED_MESSAGE, LeaveTransitionError, leave_employee_name
-from .utils import annual_leave_payment_amount, get_annual_salary_at_year_end
+from .utils import annual_leave_payment_amount, annual_settlement_payable_days, get_annual_salary_at_year_end
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +34,7 @@ EMPLOYEE_ACTION_PATH = "/employee/leave/requests"
 
 NOT_PENDING_HR_MESSAGE = "Payment request is not pending HR review."
 NOT_PENDING_CEO_MESSAGE = "Payment request is not pending CEO approval."
+LOCKED_PAYOUT_TERMINATION_ONLY_MESSAGE = "Leave-only days can be paid out only by a termination settlement that pays."
 
 
 def _lock(instance: AnnualLeavePaymentRequest) -> AnnualLeavePaymentRequest:
@@ -61,17 +62,39 @@ def ensure_pending_hr_review(instance: AnnualLeavePaymentRequest) -> None:
         raise LeaveTransitionError(NOT_PENDING_HR_MESSAGE)
 
 
+def settlement_payable_days(instance: AnnualLeavePaymentRequest):
+    """Whole days this settlement pays: leave-only days only under HR's termination exception."""
+    return annual_settlement_payable_days(
+        instance.eligible_unused_days,
+        instance.locked_unused_days,
+        is_termination_settlement=instance.is_termination_settlement,
+        include_locked_days=instance.pays_locked_days,
+    )
+
+
 def apply_annual_payment_hr_review(
-    instance: AnnualLeavePaymentRequest, *, actor, decision: str, comment: str = ""
+    instance: AnnualLeavePaymentRequest,
+    *,
+    actor,
+    decision: str,
+    comment: str = "",
+    include_locked_days_in_termination_payout: bool = False,
 ) -> AnnualLeavePaymentRequest:
     """HR chooses to pay the unused balance or carry it forward, then sends it to the CEO.
 
     ``decision`` is ``forward`` (pay) or ``carry_forward`` (the days become leave-only and
     are never payable by any later settlement). Either way only ``eligible_unused_days`` is
     decided on: ``locked_unused_days`` are already leave-only and carry forward untouched.
+
+    ``include_locked_days_in_termination_payout`` is HR's exception for a termination
+    settlement that pays: its leave-only days are paid out too. Refused on anything else.
     """
 
     ensure_pending_hr_review(instance)
+    if include_locked_days_in_termination_payout and (
+        not instance.is_termination_settlement or decision == "carry_forward"
+    ):
+        raise LeaveTransitionError(LOCKED_PAYOUT_TERMINATION_ONLY_MESSAGE)
     with transaction.atomic():
         locked = _lock(instance)
         ensure_pending_hr_review(locked)
@@ -81,6 +104,13 @@ def apply_annual_payment_hr_review(
         locked.resolution = Resolution.CARRY_FORWARD if carry_forward else Resolution.PAY
         locked.carry_forward_days = locked.eligible_unused_days if carry_forward else 0
         locked.payment_amount = 0 if carry_forward else locked.payment_amount
+        # HR's review is the decision point for the termination exception, so it sets the
+        # flag either way (a creation-time choice is shown to HR and can be changed here).
+        locked.include_locked_days_in_termination_payout = bool(include_locked_days_in_termination_payout)
+        if locked.is_termination_settlement and not carry_forward:
+            locked.payment_amount = annual_leave_payment_amount(
+                settlement_payable_days(locked), locked.salary_at_year_end
+            )
         locked.status = Status.PENDING_CEO
         locked.hr_reviewed_by = actor
         locked.hr_reviewed_at = timezone.now()
@@ -93,7 +123,10 @@ def apply_annual_payment_hr_review(
             actor=actor,
             note=comment,
             approver_role="hr",
-            metadata={"resolution": locked.resolution},
+            metadata={
+                "resolution": locked.resolution,
+                "include_locked_days_in_termination_payout": locked.include_locked_days_in_termination_payout,
+            },
         )
     return locked
 
@@ -117,7 +150,7 @@ def refresh_settlement_salary(locked: AnnualLeavePaymentRequest) -> dict | None:
         "previous_payment_amount": str(locked.payment_amount),
     }
     locked.salary_at_year_end = current_salary
-    locked.payment_amount = annual_leave_payment_amount(locked.eligible_unused_days, current_salary)
+    locked.payment_amount = annual_leave_payment_amount(settlement_payable_days(locked), current_salary)
     change["payment_amount"] = str(locked.payment_amount)
     return change
 
@@ -193,6 +226,8 @@ def _log_notification_failure(event_name: str, instance, notification_type: str,
 def _locked_days_details(instance: AnnualLeavePaymentRequest) -> list[str]:
     if not instance.locked_unused_days:
         return []
+    if instance.pays_locked_days:
+        return [f"Leave-only Days (paid out on termination): {instance.locked_unused_days}"]
     return [f"Leave-only Days (not payable): {instance.locked_unused_days}"]
 
 
@@ -264,6 +299,7 @@ def notify_employee_of_annual_payment_decision(instance: AnnualLeavePaymentReque
                 "payment_amount": str(instance.payment_amount),
                 "eligible_unused_days": str(instance.eligible_unused_days),
                 "locked_unused_days": str(instance.locked_unused_days),
+                "include_locked_days_in_termination_payout": instance.include_locked_days_in_termination_payout,
                 "resolution": instance.resolution,
             },
             deduplication_key=f"{event_key}:{instance.id}",

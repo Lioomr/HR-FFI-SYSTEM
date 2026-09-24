@@ -2337,6 +2337,7 @@ class AnnualLeavePaymentRequestViewSet(viewsets.ModelViewSet):
                 "eligible_unused_days": str(instance.eligible_unused_days),
                 "payment_amount": str(instance.payment_amount),
                 "is_termination_settlement": instance.is_termination_settlement,
+                "include_locked_days_in_termination_payout": instance.include_locked_days_in_termination_payout,
             },
         )
         notify_after_annual_payment_submission(instance, actor_id=request.user.id)
@@ -2358,6 +2359,9 @@ class AnnualLeavePaymentRequestViewSet(viewsets.ModelViewSet):
                 actor=request.user,
                 decision=serializer.validated_data["decision"],
                 comment=serializer.validated_data.get("comment", ""),
+                include_locked_days_in_termination_payout=serializer.validated_data.get(
+                    "include_locked_days_in_termination_payout", False
+                ),
             )
         except LeaveTransitionError as exc:
             return exc.to_response()
@@ -2366,7 +2370,11 @@ class AnnualLeavePaymentRequestViewSet(viewsets.ModelViewSet):
             "annual_leave_payment_hr_reviewed",
             entity="AnnualLeavePaymentRequest",
             entity_id=instance.id,
-            metadata={"resolution": instance.resolution, "comment": instance.hr_review_note},
+            metadata={
+                "resolution": instance.resolution,
+                "comment": instance.hr_review_note,
+                "include_locked_days_in_termination_payout": instance.include_locked_days_in_termination_payout,
+            },
         )
         notify_after_annual_payment_hr_review(instance, actor_id=request.user.id)
         return success(AnnualLeavePaymentRequestSerializer(instance).data)

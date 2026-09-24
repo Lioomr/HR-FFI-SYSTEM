@@ -68,6 +68,11 @@ export interface AnnualLeavePaymentRequest {
    * or `payment_amount` and are never paid.
    */
   locked_unused_days?: string | number;
+  /**
+   * HR's per-termination exception: this termination settlement pays the
+   * leave-only days out too (they are then included in `payment_amount`).
+   */
+  include_locked_days_in_termination_payout?: boolean;
   resolution: AnnualLeavePaymentResolution;
   status: AnnualLeavePaymentStatus;
   is_termination_settlement: boolean;
@@ -132,11 +137,15 @@ export interface CreateHRAnnualLeaveSettlementPayload {
   employee_id: number;
   decision: AnnualLeavePaymentResolution;
   termination_date?: string;
+  /** Termination settlements that pay only; the backend rejects it otherwise. */
+  include_locked_days_in_termination_payout?: boolean;
 }
 
 export interface AnnualLeavePaymentReviewPayload {
   decision: AnnualLeavePaymentReviewDecision;
   comment?: string;
+  /** Termination settlements that pay only; the backend rejects it otherwise. */
+  include_locked_days_in_termination_payout?: boolean;
 }
 
 /** Reads a DRF decimal string (or number) as a number, defaulting to 0. */

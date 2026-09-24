@@ -273,6 +273,50 @@ describe("HR Annual Leave settlements queue", () => {
     expect(screen.getByText("7 Days")).toBeInTheDocument();
   });
 
+  it("lets HR pay out leave-only days on a termination settlement", async () => {
+    getAnnualLeavePaymentRequests.mockResolvedValue(
+      listResponse([
+        makeSettlement({
+          is_termination_settlement: true,
+          locked_unused_days: "5.00",
+        }),
+      ]),
+    );
+    reviewAnnualLeavePaymentRequest.mockResolvedValue({
+      status: "success" as const,
+      data: makeSettlement({ status: "pending_ceo" }),
+    });
+
+    renderPage();
+    await openReview();
+
+    fireEvent.click(
+      screen.getByLabelText(
+        "Pay out locked (leave-only) days for this termination",
+      ),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+
+    await waitFor(() =>
+      expect(reviewAnnualLeavePaymentRequest).toHaveBeenCalledWith(9, {
+        decision: "forward",
+        comment: "",
+        include_locked_days_in_termination_payout: true,
+      }),
+    );
+  });
+
+  it("does not offer the leave-only payout outside a termination", async () => {
+    renderPage();
+    await openReview();
+
+    expect(
+      screen.queryByLabelText(
+        "Pay out locked (leave-only) days for this termination",
+      ),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows the exact backend validation error and keeps the dialog open", async () => {
     reviewAnnualLeavePaymentRequest.mockRejectedValue({
       apiData: {

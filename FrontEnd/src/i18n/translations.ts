@@ -103,6 +103,12 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "annualPayment.resolution.pay": "Pay",
     "annualPayment.resolution.carryForward": "Carry Forward (Leave Only)",
     "annualPayment.lockedDays": "Leave-only days (not payable)",
+    "annualPayment.lockedDaysPaidOnTermination":
+      "Leave-only days (paid out on termination)",
+    "annualPayment.payLockedDaysOnTermination":
+      "Pay out locked (leave-only) days for this termination",
+    "annualPayment.payLockedDaysOnTerminationHint":
+      "Exception: leave-only days are normally never paid. For a termination, HR can include them in this final settlement.",
     "annualPayment.pendingAnnualLeave": "Pending Annual Leave",
     "annualPayment.employeeNote": "Employee note",
     "annualPayment.ceoComment": "CEO comment",
@@ -5033,6 +5039,12 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "annualPayment.resolution.pay": "دفع",
     "annualPayment.resolution.carryForward": "ترحيل (إجازة فقط)",
     "annualPayment.lockedDays": "أيام إجازة فقط (غير قابلة للصرف)",
+    "annualPayment.lockedDaysPaidOnTermination":
+      "أيام إجازة فقط (تُصرف عند إنهاء الخدمة)",
+    "annualPayment.payLockedDaysOnTermination":
+      "صرف أيام الإجازة المقفلة (إجازة فقط) لإنهاء الخدمة هذا",
+    "annualPayment.payLockedDaysOnTerminationHint":
+      "استثناء: أيام الإجازة فقط لا تُصرف عادةً. عند إنهاء الخدمة يمكن للموارد البشرية تضمينها في هذه التسوية النهائية.",
     "annualPayment.pendingAnnualLeave": "إجازة سنوية معلقة",
     "annualPayment.employeeNote": "ملاحظة الموظف",
     "annualPayment.ceoComment": "ملاحظة الرئيس التنفيذي",
