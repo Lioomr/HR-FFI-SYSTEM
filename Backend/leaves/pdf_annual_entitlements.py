@@ -55,6 +55,7 @@ PRE_PRINTED_FIELDS = frozenset({"letter_body"})
 RESOLUTION_LABELS = {
     "pay": "Disbursement of Annual Entitlements",
     "carry_forward": "Carry Forward of Annual Entitlements",
+    "carry_forward_locked": "Carry Forward of Annual Entitlements (Leave Only, Not Payable)",
 }
 
 

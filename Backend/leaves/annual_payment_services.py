@@ -1,8 +1,8 @@
 """Business rules and state transitions for annual leave payment (settlement) requests.
 
-Route: employee or HR submits -> HR review (pay or carry forward) -> CEO approves
-or rejects. An HR-submitted termination settlement can start at the CEO. Workflow
-history is recorded as each action happens.
+Route: employee or HR submits -> HR review (pay, carry forward, or carry forward as
+leave only) -> CEO approves or rejects. An HR-submitted termination settlement can
+start at the CEO. Workflow history is recorded as each action happens.
 """
 
 from __future__ import annotations
@@ -31,6 +31,13 @@ Action = WorkflowAction.Action
 HR_ACTION_PATH = "/hr/annual-leave-payments/{id}"
 CEO_ACTION_PATH = "/ceo/annual-leave-payments/{id}"
 EMPLOYEE_ACTION_PATH = "/employee/leave/requests"
+
+#: HR review ``decision`` -> stored resolution. Anything else (``forward``) pays.
+HR_REVIEW_RESOLUTIONS = {
+    "carry_forward": Resolution.CARRY_FORWARD,
+    "carry_forward_locked": Resolution.CARRY_FORWARD_LOCKED,
+}
+CARRY_FORWARD_RESOLUTIONS = frozenset(HR_REVIEW_RESOLUTIONS.values())
 
 NOT_PENDING_HR_MESSAGE = "Payment request is not pending HR review."
 NOT_PENDING_CEO_MESSAGE = "Payment request is not pending CEO approval."
@@ -64,7 +71,13 @@ def ensure_pending_hr_review(instance: AnnualLeavePaymentRequest) -> None:
 def apply_annual_payment_hr_review(
     instance: AnnualLeavePaymentRequest, *, actor, decision: str, comment: str = ""
 ) -> AnnualLeavePaymentRequest:
-    """HR chooses to pay the unused balance or carry it forward, then sends it to the CEO."""
+    """HR chooses to pay the unused balance or carry it forward, then sends it to the CEO.
+
+    ``decision`` is ``forward`` (pay), ``carry_forward`` (carried days stay payable by a later
+    settlement) or ``carry_forward_locked`` (carried days become leave-only, never payable).
+    Either way only ``eligible_unused_days`` is decided on: ``locked_unused_days`` are
+    already leave-only and carry forward untouched.
+    """
 
     ensure_pending_hr_review(instance)
     with transaction.atomic():
@@ -72,8 +85,9 @@ def apply_annual_payment_hr_review(
         ensure_pending_hr_review(locked)
 
         start = begin_recorded_transition(locked, actor=actor)
-        carry_forward = decision == "carry_forward"
-        locked.resolution = Resolution.CARRY_FORWARD if carry_forward else Resolution.PAY
+        resolution = HR_REVIEW_RESOLUTIONS.get(decision, Resolution.PAY)
+        carry_forward = resolution in CARRY_FORWARD_RESOLUTIONS
+        locked.resolution = resolution
         locked.carry_forward_days = locked.eligible_unused_days if carry_forward else 0
         locked.payment_amount = 0 if carry_forward else locked.payment_amount
         locked.status = Status.PENDING_CEO
@@ -130,7 +144,7 @@ def apply_annual_payment_ceo_approval(
         start = begin_recorded_transition(locked, actor=actor)
         now = timezone.now()
         salary_refresh = refresh_settlement_salary(locked)
-        locked.status = Status.CARRIED_FORWARD if locked.resolution == Resolution.CARRY_FORWARD else Status.APPROVED
+        locked.status = Status.CARRIED_FORWARD if locked.resolution in CARRY_FORWARD_RESOLUTIONS else Status.APPROVED
         locked.ceo_decided_by = actor
         locked.ceo_decided_at = now
         locked.ceo_decision_note = note
@@ -185,6 +199,12 @@ def _log_notification_failure(event_name: str, instance, notification_type: str,
     logger.exception(event_name, extra=extra)
 
 
+def _locked_days_details(instance: AnnualLeavePaymentRequest) -> list[str]:
+    if not instance.locked_unused_days:
+        return []
+    return [f"Leave-only Days (not payable): {instance.locked_unused_days}"]
+
+
 def _notify_ceo(instance: AnnualLeavePaymentRequest) -> None:
     notify_users_for_pending_status(
         users=get_ceo_approver_users(),
@@ -195,6 +215,7 @@ def _notify_ceo(instance: AnnualLeavePaymentRequest) -> None:
         details=[
             f"Resolution: {instance.resolution}",
             f"Eligible Days: {instance.eligible_unused_days}",
+            *_locked_days_details(instance),
             f"Payment Amount: {instance.payment_amount}",
         ],
         action_path=CEO_ACTION_PATH.format(id=instance.id),
@@ -214,6 +235,7 @@ def notify_after_annual_payment_submission(instance: AnnualLeavePaymentRequest, 
                 status_label=instance.status,
                 details=[
                     f"Eligible Days: {instance.eligible_unused_days}",
+                    *_locked_days_details(instance),
                     f"Payment Amount: {instance.payment_amount}",
                 ],
                 action_path=HR_ACTION_PATH.format(id=instance.id),
@@ -250,6 +272,7 @@ def notify_employee_of_annual_payment_decision(instance: AnnualLeavePaymentReque
             metadata={
                 "payment_amount": str(instance.payment_amount),
                 "eligible_unused_days": str(instance.eligible_unused_days),
+                "locked_unused_days": str(instance.locked_unused_days),
                 "resolution": instance.resolution,
             },
             deduplication_key=f"{event_key}:{instance.id}",
