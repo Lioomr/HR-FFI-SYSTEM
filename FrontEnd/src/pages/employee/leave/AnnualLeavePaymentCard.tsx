@@ -26,6 +26,7 @@ import {
   createEmployeeAnnualLeavePaymentRequest,
   getAnnualLeaveEligibility,
   getAnnualLeavePaymentRequests,
+  toDecimalNumber,
   type AnnualLeaveEligibility,
   type AnnualLeavePaymentRequest,
 } from "../../../services/api/annualLeavePaymentsApi";
@@ -202,6 +203,16 @@ export default function AnnualLeavePaymentCard({
           label: t("annualPayment.eligibleWholeDays"),
           children: `${formatSettlementDays(eligibility.eligible_unused_days)} ${t("leave.days")}`,
         },
+        // Leave-only days: part of the balance to take as leave, never paid.
+        ...(toDecimalNumber(eligibility.locked_unused_days) > 0
+          ? [
+              {
+                key: "locked",
+                label: t("annualPayment.lockedDays"),
+                children: `${formatSettlementDays(eligibility.locked_unused_days)} ${t("leave.days")}`,
+              },
+            ]
+          : []),
         {
           key: "fractional",
           label: t("annualPayment.fractionalDays"),

@@ -82,6 +82,10 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "annualPayment.carryForward": "Carry forward",
     "annualPayment.carryForwardSuccess":
       "Days marked to carry forward and sent to the CEO.",
+    "annualPayment.carryForwardLocked":
+      "Carry forward (leave only, not payable)",
+    "annualPayment.carryForwardLockedSuccess":
+      "Days marked to carry forward as leave only and sent to the CEO.",
     "annualPayment.pay": "Pay",
     "annualPayment.allStatuses": "All statuses",
     "annualPayment.status": "Status",
@@ -102,6 +106,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "annualPayment.resolution": "Resolution",
     "annualPayment.resolution.pay": "Pay",
     "annualPayment.resolution.carryForward": "Carry Forward",
+    "annualPayment.resolution.carryForwardLocked": "Carry Forward (Leave Only)",
+    "annualPayment.lockedDays": "Leave-only days (not payable)",
     "annualPayment.pendingAnnualLeave": "Pending Annual Leave",
     "annualPayment.employeeNote": "Employee note",
     "annualPayment.ceoComment": "CEO comment",
@@ -117,9 +123,13 @@ export const translations: Record<AppLanguage, TranslationMap> = {
       "This will approve payment for the eligible days.",
     "annualPayment.approveCarryForwardNotice":
       "This will carry the eligible days into the next contract year.",
+    "annualPayment.approveCarryForwardLockedNotice":
+      "This will carry the eligible days into the next contract year as leave only. They can be taken as leave but will never be paid out.",
     "annualPayment.approveSuccess": "Settlement approved for payment.",
     "annualPayment.carriedForwardSuccess":
       "Settlement approved for carry-forward.",
+    "annualPayment.carriedForwardLockedSuccess":
+      "Settlement approved for carry-forward as leave only.",
     "annualPayment.rejectTitle": "Reject settlement",
     "annualPayment.rejectConfirm": "Reject this Annual Leave settlement?",
     "annualPayment.rejectSuccess": "Settlement rejected.",
@@ -5011,6 +5021,9 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "annualPayment.carryForward": "ترحيل",
     "annualPayment.carryForwardSuccess":
       "تم تحديد الأيام للترحيل وإرسالها للرئيس التنفيذي.",
+    "annualPayment.carryForwardLocked": "ترحيل (إجازة فقط، غير قابل للصرف)",
+    "annualPayment.carryForwardLockedSuccess":
+      "تم تحديد الأيام للترحيل كإجازة فقط وإرسالها للرئيس التنفيذي.",
     "annualPayment.pay": "دفع",
     "annualPayment.allStatuses": "كل الحالات",
     "annualPayment.status": "الحالة",
@@ -5031,6 +5044,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "annualPayment.resolution": "القرار",
     "annualPayment.resolution.pay": "دفع",
     "annualPayment.resolution.carryForward": "ترحيل",
+    "annualPayment.resolution.carryForwardLocked": "ترحيل (إجازة فقط)",
+    "annualPayment.lockedDays": "أيام إجازة فقط (غير قابلة للصرف)",
     "annualPayment.pendingAnnualLeave": "إجازة سنوية معلقة",
     "annualPayment.employeeNote": "ملاحظة الموظف",
     "annualPayment.ceoComment": "ملاحظة الرئيس التنفيذي",
@@ -5044,8 +5059,12 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "annualPayment.approvePayNotice": "سيتم اعتماد دفع الأيام المستحقة.",
     "annualPayment.approveCarryForwardNotice":
       "سيتم ترحيل الأيام المستحقة إلى سنة العقد التالية.",
+    "annualPayment.approveCarryForwardLockedNotice":
+      "سيتم ترحيل الأيام المستحقة إلى سنة العقد التالية كإجازة فقط. يمكن استخدامها كإجازة ولن تُصرف نقداً.",
     "annualPayment.approveSuccess": "تم اعتماد التسوية للدفع.",
     "annualPayment.carriedForwardSuccess": "تم اعتماد التسوية للترحيل.",
+    "annualPayment.carriedForwardLockedSuccess":
+      "تم اعتماد التسوية للترحيل كإجازة فقط.",
     "annualPayment.rejectTitle": "رفض التسوية",
     "annualPayment.rejectConfirm": "هل تريد رفض تسوية الإجازة السنوية؟",
     "annualPayment.rejectSuccess": "تم رفض التسوية.",
