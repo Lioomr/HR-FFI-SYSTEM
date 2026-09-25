@@ -26,6 +26,7 @@ export default function AnnualLeaveSettlementDetails({
     <Descriptions
       size="small"
       bordered
+      styles={{ content: { overflowWrap: "anywhere" } }}
       column={{ xs: 1, sm: 1, md: 2 }}
       items={[
         ...(showEmployee
@@ -35,6 +36,7 @@ export default function AnnualLeaveSettlementDetails({
                 label: t("annualPayment.employee"),
                 children:
                   request.employee_name || `#${request.employee_id ?? "—"}`,
+                span: 2,
               },
             ]
           : []),
