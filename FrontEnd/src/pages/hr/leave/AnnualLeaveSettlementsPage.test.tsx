@@ -25,6 +25,7 @@ vi.mock("../../../services/api/employeesApi", () => ({
 }));
 
 import AnnualLeaveSettlementsPage from "./AnnualLeaveSettlementsPage";
+import { listEmployees } from "../../../services/api/employeesApi";
 import * as annualApi from "../../../services/api/annualLeavePaymentsApi";
 import type { AnnualLeavePaymentRequest } from "../../../services/api/annualLeavePaymentsApi";
 import { useI18nStore } from "../../../i18n/i18nStore";
@@ -314,6 +315,64 @@ describe("HR Annual Leave settlements queue", () => {
       screen.queryByLabelText(
         "Pay out locked (leave-only) days for this termination",
       ),
+    ).not.toBeInTheDocument();
+  });
+
+  it("adds only terminated archived employees to the Open Settlement picker", async () => {
+    const mockedListEmployees = listEmployees as unknown as ReturnType<
+      typeof vi.fn
+    >;
+    const page = (results: object[]) => ({
+      status: "success",
+      data: { results, count: results.length },
+    });
+    mockedListEmployees
+      .mockResolvedValueOnce(
+        page([{ id: 47, employee_id: "FFI-047", full_name: "Sara Ahmed" }]),
+      )
+      .mockResolvedValueOnce(
+        page([
+          {
+            id: 48,
+            employee_id: "FFI-048",
+            full_name: "Omar Terminated",
+            employment_status: "TERMINATED",
+          },
+          // Archived for another reason: must never reach the picker.
+          {
+            id: 49,
+            employee_id: "FFI-049",
+            full_name: "Layla Archived",
+            employment_status: "ACTIVE",
+          },
+        ]),
+      );
+
+    renderPage();
+
+    await waitFor(() =>
+      expect(mockedListEmployees).toHaveBeenCalledWith({
+        page: 1,
+        page_size: 300,
+        archive_state: "archived",
+        status: "TERMINATED",
+      }),
+    );
+    expect(mockedListEmployees).toHaveBeenCalledWith({
+      page: 1,
+      page_size: 300,
+    });
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Open Settlement/ }, FIND),
+    );
+    fireEvent.mouseDown(await screen.findByLabelText("Employee"));
+
+    expect(
+      await screen.findByTitle("Omar Terminated (FFI-048)", {}, FIND),
+    ).toBeInTheDocument();
+    expect(screen.getByTitle("Sara Ahmed (FFI-047)")).toBeInTheDocument();
+    expect(
+      screen.queryByTitle("Layla Archived (FFI-049)"),
     ).not.toBeInTheDocument();
   });
 
