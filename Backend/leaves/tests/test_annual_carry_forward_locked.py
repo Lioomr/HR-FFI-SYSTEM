@@ -755,3 +755,23 @@ class TerminationLockedDaysPayoutTests(APITestCase):
                 cycle_end=CYCLE_2025[1],
                 include_locked_days_in_termination_payout=True,
             )
+
+    def test_settlement_picker_query_returns_only_terminated_archived_employees(self):
+        """The Open Settlement picker asks for ``archive_state=archived&status=TERMINATED``."""
+        terminated = self._employee("locked.term.picked", EmployeeProfile.EmploymentStatus.TERMINATED)
+        other = self._employee("locked.term.otherarch", EmployeeProfile.EmploymentStatus.ACTIVE)
+        EmployeeProfile.objects.filter(pk=terminated.pk).update(
+            is_archived=True, archive_reason=EmployeeProfile.ArchiveReason.FIRED
+        )
+        EmployeeProfile.objects.filter(pk=other.pk).update(
+            is_archived=True, archive_reason=EmployeeProfile.ArchiveReason.OTHER
+        )
+        self.client.force_authenticate(self.hr)
+
+        response = self.client.get("/api/employees/?archive_state=archived&status=TERMINATED&page_size=300")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = {item["id"] for item in response.data["data"]["results"]}
+        self.assertIn(terminated.id, ids)
+        self.assertNotIn(other.id, ids)
+        self.assertNotIn(self.leaver.id, ids)  # terminated but not archived: already in the default list

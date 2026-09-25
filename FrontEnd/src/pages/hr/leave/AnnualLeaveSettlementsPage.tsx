@@ -134,15 +134,33 @@ export default function AnnualLeaveSettlementsPage() {
 
   useEffect(() => {
     let cancelled = false;
-    // "all" so terminated (archived) employees can get their termination settlement.
-    listEmployees({ page: 1, page_size: 300, archive_state: "all" })
-      .then((res) => {
-        if (cancelled || isApiError(res)) return;
-        setEmployees(res.data.results || []);
-      })
-      .catch(() => {
-        /* The picker stays empty; the queue itself is unaffected. */
-      });
+    // Current employees as before, plus archived employees only when they are
+    // TERMINATED (they still need a termination settlement). Employees archived
+    // for any other reason stay out of the picker.
+    // A failed load leaves that part of the picker empty; the queue is unaffected.
+    const load = (params: Parameters<typeof listEmployees>[0]) =>
+      listEmployees(params)
+        .then((res) => (isApiError(res) ? [] : res.data.results || []))
+        .catch(() => [] as Employee[]);
+    Promise.all([
+      load({ page: 1, page_size: 300 }),
+      load({
+        page: 1,
+        page_size: 300,
+        archive_state: "archived",
+        status: "TERMINATED",
+      }),
+    ]).then(([current, archived]) => {
+      if (cancelled) return;
+      const terminated = archived.filter(
+        (employee) => employee.employment_status === "TERMINATED",
+      );
+      const seen = new Set(current.map((employee) => employee.id));
+      setEmployees([
+        ...current,
+        ...terminated.filter((employee) => !seen.has(employee.id)),
+      ]);
+    });
     return () => {
       cancelled = true;
     };
