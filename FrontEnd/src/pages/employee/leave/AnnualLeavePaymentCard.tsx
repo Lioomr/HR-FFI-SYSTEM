@@ -148,7 +148,12 @@ export default function AnnualLeavePaymentCard({
   const latest = requests[0];
   // A settlement already in flight blocks a new one for the same cycle; the
   // eligibility payload does not cover that case, so it stays a separate guard.
-  const hasActiveRequest = isActiveAnnualPayment(latest);
+  // Only a settlement for the cycle being offered blocks a new one; a carry-forward
+  // from an earlier cycle must not hide the request action for the current cycle.
+  const hasActiveRequest =
+    isActiveAnnualPayment(latest) &&
+    (!eligibility?.cycle_start ||
+      latest?.cycle_start === eligibility.cycle_start);
   const canRequest = eligibility?.can_request === true;
   const showRequestAction = !hasActiveRequest && canRequest;
 
