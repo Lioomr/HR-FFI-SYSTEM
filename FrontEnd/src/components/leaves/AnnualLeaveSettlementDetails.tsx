@@ -26,8 +26,11 @@ export default function AnnualLeaveSettlementDetails({
     <Descriptions
       size="small"
       bordered
-      styles={{ content: { overflowWrap: "anywhere" } }}
-      column={{ xs: 1, sm: 1, md: 2 }}
+      styles={{
+        label: { width: "40%" },
+        content: { overflowWrap: "break-word" },
+      }}
+      column={1}
       items={[
         ...(showEmployee
           ? [
