@@ -1717,15 +1717,9 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "leave.allowed": "Allowed",
     "leave.used": "Used",
     "leave.remaining": "Remaining",
-    "leave.reservedDays": "Reserved (Pending)",
     "leave.requestableDays": "Requestable Days",
-    "leave.fractionalDays": "Fractional Days",
     "leave.requestableDaysHint":
       "Requestable days are calculated by the system: whole remaining days minus days already reserved by pending requests.",
-    "leave.reservedDaysHint":
-      "{days} day(s) are reserved by your pending requests and cannot be requested again.",
-    "leave.fractionalBalanceHint":
-      "{days} day(s) of your balance are fractional and cannot be requested as whole days.",
     "leave.annual.wholeDaysOnly":
       "Annual Leave can be requested in whole days only.",
     "leave.annual.exceedsRequestable":
@@ -6640,15 +6634,9 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "leave.allowed": "المسموح",
     "leave.used": "المستخدم",
     "leave.remaining": "المتبقي",
-    "leave.reservedDays": "الأيام المحجوزة",
     "leave.requestableDays": "الأيام القابلة للطلب",
-    "leave.fractionalDays": "الأيام الجزئية",
     "leave.requestableDaysHint":
       "تُحسب الأيام القابلة للطلب تلقائياً: الأيام المتبقية الكاملة ناقص الأيام المحجوزة بالفعل بطلبات معلّقة.",
-    "leave.reservedDaysHint":
-      "{days} يوم/أيام محجوزة بطلباتك المعلّقة ولا يمكن طلبها مرة أخرى.",
-    "leave.fractionalBalanceHint":
-      "{days} يوم/أيام من رصيدك جزئية ولا يمكن طلبها كأيام كاملة.",
     "leave.annual.wholeDaysOnly": "يمكن طلب الإجازة السنوية بأيام كاملة فقط.",
     "leave.annual.exceedsRequestable":
       "الإجازة السنوية تتجاوز رصيدك القابل للطلب ({requestable} يوم/أيام قابلة للطلب، {pending} يوم/أيام محجوزة بطلبات معلّقة).",

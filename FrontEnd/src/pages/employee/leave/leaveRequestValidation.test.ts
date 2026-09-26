@@ -35,7 +35,6 @@ const annualBalance = {
   remaining_days: "10.25",
   pending_days: "3.00",
   requestable_days: "7.00",
-  fractional_days: "0.25",
 };
 
 beforeEach(() => {
@@ -63,7 +62,6 @@ describe("reading the backend balance figures", () => {
       remaining: 10.25,
       pending: 3,
       requestable: 7,
-      fractional: 0.25,
       hasRequestableDays: true,
     });
   });

@@ -47,20 +47,6 @@ const LeaveBalanceTable: React.FC<LeaveBalanceTableProps> = ({
       },
     },
     {
-      // Days held by requests that are submitted but not yet decided.
-      title: t("leave.reservedDays"),
-      dataIndex: "pending_days",
-      key: "pending_days",
-      render: (val: number | string | undefined) => {
-        const num = Number(val || 0);
-        return num > 0 ? (
-          <Tag color="gold">{num.toFixed(1)}</Tag>
-        ) : (
-          <span>0.0</span>
-        );
-      },
-    },
-    {
       // The only figure the employee may request against.
       title: t("leave.requestableDays"),
       dataIndex: "requestable_days",

@@ -358,26 +358,8 @@ export default function RequestLeavePage() {
                   <strong>{t("leave.requestableDays")}:</strong>{" "}
                   {formatDays(selectedBalanceFigures.requestable)}{" "}
                   {t("leave.days")}
-                  {" | "}
-                  {t("leave.reservedDays")}:{" "}
-                  {formatDays(selectedBalanceFigures.pending)} {t("leave.days")}
                 </div>
               )}
-              {selectedBalanceFigures && selectedBalanceFigures.pending > 0 && (
-                <div style={{ marginTop: 6, color: "#ad6800" }}>
-                  {t("leave.reservedDaysHint", {
-                    days: formatDays(selectedBalanceFigures.pending),
-                  })}
-                </div>
-              )}
-              {selectedBalanceFigures &&
-                selectedBalanceFigures.fractional > 0 && (
-                  <div style={{ marginTop: 6, color: "#ad6800" }}>
-                    {t("leave.fractionalBalanceHint", {
-                      days: formatDays(selectedBalanceFigures.fractional),
-                    })}
-                  </div>
-                )}
             </div>
           )}
 

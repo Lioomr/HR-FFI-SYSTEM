@@ -238,7 +238,6 @@ export type LeaveBalance = {
   /** The only figure an employee may request against: floor(remaining) - pending. */
   requestable_days?: number | string;
   /** Sub-day remainder of the balance; informational, never requestable. */
-  fractional_days?: number | string;
   adjustments?: number | string;
   available_annual_year_days?: number | string;
 };
