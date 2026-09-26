@@ -158,33 +158,42 @@ beforeEach(() => {
 });
 
 describe("MyLeaveBalancePage — Annual Leave accrual figures", () => {
-  it("shows pending days as reserved and the requestable limit", async () => {
+  it("shows the requestable limit without the reserved and fractional columns", async () => {
     render(<MyLeaveBalancePage />);
 
     // The test viewport is a phone, so each balance renders as a card.
     const card = (await screen.findByText("Annual Leave", {}, FIND)).closest(
       "li",
     )!;
-    expect(within(card).getByText("3")).toBeInTheDocument(); // reserved (pending_days)
     expect(within(card).getByText("7")).toBeInTheDocument(); // requestable_days
-
-    // Column titles become the card's field labels.
-    expect(screen.getAllByText("Reserved (Pending)").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Requestable Days").length).toBeGreaterThan(0);
-  });
-
-  it("shows the fractional remainder and explains that it cannot be booked", async () => {
-    render(<MyLeaveBalancePage />);
-
-    const card = (await screen.findByText("Annual Leave", {}, FIND)).closest(
-      "li",
-    )!;
-    expect(within(card).getByText("0.25")).toBeInTheDocument();
+    expect(screen.queryByText("Reserved (Pending)")).not.toBeInTheDocument();
+    expect(screen.queryByText("Fractional Days")).not.toBeInTheDocument();
+    expect(within(card).queryByText("0.25")).not.toBeInTheDocument();
     expect(
       screen.getByText(
         "Requestable days are calculated by the system: whole remaining days minus days already reserved by pending requests.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("lists only the Annual Leave balance and hides other leave types", async () => {
+    getMyLeaveBalance.mockResolvedValue({
+      status: "success",
+      data: [
+        annualRow,
+        {
+          ...annualRow,
+          leave_type_id: 2,
+          leave_type: "Sick Leave",
+          leave_code: "SICK",
+        },
+      ],
+    });
+    render(<MyLeaveBalancePage />);
+
+    await screen.findByText("Annual Leave", {}, FIND);
+    expect(screen.queryByText("Sick Leave")).not.toBeInTheDocument();
   });
 
   it("never shows HR or CEO settlement controls to the employee", async () => {

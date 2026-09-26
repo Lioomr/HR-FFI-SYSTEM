@@ -13,7 +13,10 @@ import {
 } from "../../../services/api/leaveApi";
 import { isApiError } from "../../../services/api/apiTypes";
 import AnnualLeavePaymentCard from "./AnnualLeavePaymentCard";
-import { readLeaveBalanceFigures } from "./leaveRequestValidation";
+import {
+  isAnnualLeaveCode,
+  readLeaveBalanceFigures,
+} from "./leaveRequestValidation";
 
 /** Renders a day count without inventing precision the backend did not send. */
 function formatDays(value: number | string | undefined): string {
@@ -38,7 +41,13 @@ export default function MyLeaveBalancePage() {
       if (isApiError(res)) {
         setError(res.message);
       } else {
-        setBalances(res.data || []);
+        // Employees see only their Annual Leave record here; other types stay
+        // requestable from the leave request page without exposing balances.
+        setBalances(
+          (res.data || []).filter((balance) =>
+            isAnnualLeaveCode(balance.leave_code),
+          ),
+        );
       }
     } catch (err: any) {
       setError(err.message || t("common.tryAgain"));
@@ -77,21 +86,6 @@ export default function MyLeaveBalancePage() {
       render: (val) => formatDays(val),
     },
     {
-      // Days already held by requests that are submitted but not decided.
-      title: t("leave.reservedDays"),
-      dataIndex: "pending_days",
-      key: "pending_days",
-      align: "center",
-      render: (_, record) => {
-        const { pending } = readLeaveBalanceFigures(record);
-        return pending > 0 ? (
-          <Tag color="gold">{formatDays(pending)}</Tag>
-        ) : (
-          <span>0</span>
-        );
-      },
-    },
-    {
       // The only figure the employee may request against.
       title: t("leave.requestableDays"),
       dataIndex: "requestable_days",
@@ -105,25 +99,6 @@ export default function MyLeaveBalancePage() {
           <Tag color={requestable > 0 ? "green" : "red"}>
             {formatDays(requestable)}
           </Tag>
-        );
-      },
-    },
-    {
-      title: t("leave.fractionalDays"),
-      dataIndex: "fractional_days",
-      key: "fractional_days",
-      align: "center",
-      render: (_, record) => {
-        const { fractional } = readLeaveBalanceFigures(record);
-        if (fractional <= 0) return <span>0</span>;
-        return (
-          <Tooltip
-            title={t("leave.fractionalBalanceHint", {
-              days: formatDays(fractional),
-            })}
-          >
-            <Tag color="blue">{formatDays(fractional)}</Tag>
-          </Tooltip>
         );
       },
     },
