@@ -184,12 +184,13 @@ describe("HR Annual Leave settlements queue", () => {
     renderPage();
 
     await screen.findByText("Sara Ahmed");
-    expect(
-      screen.queryByRole("button", { name: /^Approve/ }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: /^Reject/ }),
-    ).not.toBeInTheDocument();
+    // The "Approved"/"Rejected" status filter chips are not decisions.
+    const decisionButtons = (name: RegExp) =>
+      screen
+        .queryAllByRole("button", { name })
+        .filter((button) => !button.closest('[role="group"]'));
+    expect(decisionButtons(/^Approve/)).toHaveLength(0);
+    expect(decisionButtons(/^Reject/)).toHaveLength(0);
   });
 
   it("forwards to the CEO with the HR comment and reloads the queue", async () => {

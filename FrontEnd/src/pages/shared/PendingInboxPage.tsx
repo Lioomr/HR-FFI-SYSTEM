@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Avatar,
   Button,
-  Card,
   Empty,
   Input,
   Tag,
@@ -20,6 +19,11 @@ import {
 } from "@ant-design/icons";
 
 import PageHeader from "../../components/ui/PageHeader";
+import {
+  FilterChips,
+  WorkspaceCard,
+  WorkspaceViews,
+} from "../../components/ui/workspace/Workspace";
 import ResponsiveTable from "../../components/ui/ResponsiveTable";
 import {
   getPendingRequests,
@@ -145,64 +149,6 @@ export default function PendingInboxPage() {
     .filter(([, value]) => value > 0)
     .sort(([, a], [, b]) => b - a);
 
-  const renderChip = (
-    key: string,
-    label: string,
-    value: number,
-    active: boolean,
-    color: string,
-    onClick: () => void,
-  ) => (
-    <button
-      key={key}
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 8,
-        padding: "6px 12px",
-        borderRadius: 999,
-        cursor: "pointer",
-        font: "inherit",
-        fontSize: 13,
-        fontWeight: active ? 600 : 500,
-        color: active ? color : token.colorText,
-        background: active ? `${color}14` : token.colorBgContainer,
-        border: `1px solid ${active ? color : token.colorBorderSecondary}`,
-        transition: "background 120ms, border-color 120ms, color 120ms",
-      }}
-    >
-      <span
-        aria-hidden
-        style={{
-          width: 8,
-          height: 8,
-          borderRadius: "50%",
-          background: color,
-          flexShrink: 0,
-        }}
-      />
-      {label}
-      <span
-        style={{
-          minWidth: 22,
-          padding: "0 6px",
-          borderRadius: 999,
-          fontSize: 12,
-          fontWeight: 700,
-          lineHeight: "20px",
-          fontVariantNumeric: "tabular-nums",
-          color: active ? token.colorWhite : token.colorText,
-          background: active ? color : token.colorFillSecondary,
-        }}
-      >
-        {value}
-      </span>
-    </button>
-  );
-
   const columns: ColumnsType<PendingRequestItem> = [
     {
       title: t("pendingInbox.col.employee"),
@@ -285,12 +231,16 @@ export default function PendingInboxPage() {
                 alignItems: "center",
                 gap: 6,
                 whiteSpace: "nowrap",
-                color: stale ? token.colorWarningText : token.colorTextSecondary,
+                color: stale
+                  ? token.colorWarningText
+                  : token.colorTextSecondary,
                 fontWeight: stale ? 600 : 400,
               }}
             >
               {stale ? (
-                <ClockCircleOutlined aria-label={t("pendingInbox.waitingLong")} />
+                <ClockCircleOutlined
+                  aria-label={t("pendingInbox.waitingLong")}
+                />
               ) : null}
               {formatRelativeTime(val, language)}
             </span>
@@ -322,7 +272,7 @@ export default function PendingInboxPage() {
   const isFiltered = Boolean(search || requestType);
 
   return (
-    <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+    <div>
       <PageHeader
         title={t("pendingInbox.title")}
         subtitle={t("pendingInbox.subtitle")}
@@ -344,51 +294,47 @@ export default function PendingInboxPage() {
         }
       />
 
-      <Card style={{ borderRadius: 16 }} styles={{ body: { padding: 20 } }}>
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-            marginBottom: 16,
-          }}
-        >
-          <div
-            role="group"
-            aria-label={t("pendingInbox.col.requestType")}
-            style={{ display: "flex", flexWrap: "wrap", gap: 8 }}
-          >
-            {renderChip(
-              "all",
-              t("pendingInbox.filterAll"),
-              totalCount,
-              !requestType,
-              token.colorPrimary,
-              () => selectType(undefined),
-            )}
-            {typeChips.map(([type, value]) =>
-              renderChip(
-                type,
-                typeLabel(type),
-                value,
-                requestType === type,
-                paletteColor(type),
-                () => selectType(type),
-              ),
-            )}
-          </div>
+      <WorkspaceViews>
+        <FilterChips
+          label={t("pendingInbox.col.requestType")}
+          options={[
+            {
+              key: "all",
+              label: t("pendingInbox.filterAll"),
+              count: totalCount,
+              accentColor: token.colorPrimary,
+              active: !requestType,
+              onSelect: () => selectType(undefined),
+            },
+            ...typeChips.map(([type, value]) => ({
+              key: type,
+              label: typeLabel(type),
+              count: value,
+              accentColor: paletteColor(type),
+              active: requestType === type,
+              onSelect: () => selectType(type),
+            })),
+          ]}
+        />
+      </WorkspaceViews>
+
+      <WorkspaceCard
+        toolbar={
           <Input
             value={searchInput}
             onChange={(event) => handleSearchChange(event.target.value)}
             placeholder={t("pendingInbox.searchPlaceholder")}
-            prefix={<SearchOutlined style={{ color: token.colorTextTertiary }} />}
+            prefix={
+              <SearchOutlined style={{ color: token.colorTextTertiary }} />
+            }
             allowClear
-            style={{ width: 280, maxWidth: "100%" }}
+            className="ffi-toolbar__search"
           />
-        </div>
-
+        }
+        title={requestType ? typeLabel(requestType) : t("common.allRequests")}
+        count={t("common.requestsCount", { count })}
+        busy={loading && data.length > 0}
+      >
         <ResponsiveTable
           mobileCard={{
             titleKey: "employee",
@@ -441,7 +387,7 @@ export default function PendingInboxPage() {
             },
           }}
         />
-      </Card>
+      </WorkspaceCard>
     </div>
   );
 }

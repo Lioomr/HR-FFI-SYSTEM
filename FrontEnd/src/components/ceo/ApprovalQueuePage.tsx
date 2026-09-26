@@ -6,15 +6,17 @@ import EmptyState from "../ui/EmptyState";
 import ErrorState from "../ui/ErrorState";
 import LoadingState from "../ui/LoadingState";
 import PageHeader from "../ui/PageHeader";
+import { WorkspaceCard, WorkspaceViews } from "../ui/workspace/Workspace";
 import { useI18n } from "../../i18n/useI18n";
-import ApprovalSurface from "./ApprovalSurface";
 
 /**
- * Page chrome shared by every CEO approval queue.
+ * Page chrome shared by every approval queue (HR, manager, CFO and CEO).
  *
  * It owns the four screen states (loading, error, empty, populated) so each
  * queue only supplies its own table, and it puts the outstanding count next to
- * the title so the size of the backlog is visible before scrolling.
+ * the title so the size of the backlog is visible before scrolling. The list
+ * uses the shared workspace layout: optional quick-filter chips above one card
+ * holding the filter toolbar, a results heading with a count, and the table.
  */
 export default function ApprovalQueuePage({
   title,
@@ -29,6 +31,9 @@ export default function ApprovalQueuePage({
   onRefresh,
   refreshing = false,
   filters,
+  chips,
+  resultsTitle,
+  resultsCount,
   extraActions,
   embedded = false,
   children,
@@ -45,8 +50,14 @@ export default function ApprovalQueuePage({
   onRetry: () => void;
   onRefresh?: () => void;
   refreshing?: boolean;
-  /** Filter row rendered above the table, inside its own surface. */
+  /** Filter controls, rendered as the list card's toolbar. */
   filters?: ReactNode;
+  /** Quick-filter chips (`FilterChips`) shown above the list card. */
+  chips?: ReactNode;
+  /** Heading of the list card; defaults to the page title. */
+  resultsTitle?: ReactNode;
+  /** Count text beside the list heading, e.g. "12 requests". */
+  resultsCount?: ReactNode;
   /** Buttons placed before the refresh control in the header. */
   extraActions?: ReactNode;
   /** Rendered inside another page (e.g. a tab), which owns the header. */
@@ -68,8 +79,28 @@ export default function ApprovalQueuePage({
       </Tag>
     ) : undefined;
 
+  const body = loading ? (
+    <div style={{ padding: "32px 24px" }}>
+      <LoadingState title={t("loading.generic")} />
+    </div>
+  ) : error ? (
+    <div style={{ padding: "32px 24px" }}>
+      <ErrorState
+        title={t("common.error")}
+        description={error}
+        onRetry={onRetry}
+      />
+    </div>
+  ) : isEmpty ? (
+    <div style={{ padding: "24px" }}>
+      <EmptyState title={emptyTitle} description={emptyDescription} />
+    </div>
+  ) : (
+    children
+  );
+
   return (
-    <div style={{ maxWidth: 1600, margin: "0 auto", paddingBottom: 24 }}>
+    <div style={{ paddingBottom: 24 }}>
       {!embedded && (
         <PageHeader
           title={title}
@@ -94,25 +125,16 @@ export default function ApprovalQueuePage({
         />
       )}
 
-      {filters && (
-        <ApprovalSurface padding={16} style={{ marginBottom: 16 }}>
-          {filters}
-        </ApprovalSurface>
-      )}
+      {chips && <WorkspaceViews>{chips}</WorkspaceViews>}
 
-      {loading ? (
-        <LoadingState title={t("loading.generic")} />
-      ) : error ? (
-        <ErrorState
-          title={t("common.error")}
-          description={error}
-          onRetry={onRetry}
-        />
-      ) : isEmpty ? (
-        <EmptyState title={emptyTitle} description={emptyDescription} />
-      ) : (
-        <ApprovalSurface>{children}</ApprovalSurface>
-      )}
+      <WorkspaceCard
+        toolbar={filters}
+        title={resultsTitle ?? title}
+        count={resultsCount}
+        busy={refreshing}
+      >
+        {body}
+      </WorkspaceCard>
     </div>
   );
 }

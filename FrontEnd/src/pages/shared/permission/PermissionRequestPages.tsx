@@ -23,6 +23,11 @@ import {
 } from "antd";
 import dayjs from "dayjs";
 import PageHeader from "../../../components/ui/PageHeader";
+import {
+  FilterChips,
+  WorkspaceCard,
+  WorkspaceViews,
+} from "../../../components/ui/workspace/Workspace";
 import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import ApprovalFlowMap, {
   type ApprovalFlowStage,
@@ -687,7 +692,9 @@ function RequestList({
               // HR files and tracks its own permissions from its inbox; the
               // HR sidebar has no self-service links for them.
               <Space wrap>
-                <Button onClick={() => navigate("/employee/permission-requests")}>
+                <Button
+                  onClick={() => navigate("/employee/permission-requests")}
+                >
                   {t("layout.nav.myPermissions")}
                 </Button>
                 <Button
@@ -701,50 +708,68 @@ function RequestList({
           }
         />
       )}
-      <Card>
-        <Flex wrap gap={12} style={{ marginBottom: 16 }}>
-          <Select
-            aria-label={t("permissionRequests.list.status")}
-            value={status}
-            onChange={(value) => {
+      <WorkspaceViews>
+        <FilterChips
+          label={t("permissionRequests.list.status")}
+          options={(
+            [
+              ["all", "neutral"],
+              ["pending_manager", "warning"],
+              ["pending_hr", "pending"],
+              ["approved", "positive"],
+              ["rejected", "critical"],
+              ["cancelled", "neutral"],
+            ] as const
+          ).map(([value, tone]) => ({
+            key: value,
+            label:
+              value === "all"
+                ? t("permissionRequests.list.all")
+                : statusLabel(t, value),
+            tone,
+            active: status === value,
+            onSelect: () => {
               setStatus(value);
               setPage(1);
-            }}
-            style={{ width: 190 }}
-            options={[
-              { value: "all", label: t("permissionRequests.list.all") },
-              {
-                value: "pending_manager",
-                label: statusLabel(t, "pending_manager"),
-              },
-              { value: "pending_hr", label: statusLabel(t, "pending_hr") },
-              { value: "approved", label: statusLabel(t, "approved") },
-              { value: "rejected", label: statusLabel(t, "rejected") },
-              { value: "cancelled", label: statusLabel(t, "cancelled") },
-            ]}
-          />
-          <Select
-            aria-label={t("permissionRequests.list.typeFilter")}
-            value={typeFilter}
-            onChange={setTypeFilter}
-            style={{ width: 220 }}
-            options={[
-              {
-                value: "all",
-                label: `${t("permissionRequests.list.typeFilter")}: ${t("permissionRequests.list.allTypes")}`,
-              },
-              ...PERMISSION_TYPES.map((value) => ({
-                value,
-                label: permissionTypeLabel(t, value),
-              })),
-            ]}
-          />
-        </Flex>
-        {typeFilter !== "all" && (
-          <Typography.Paragraph type="secondary">
-            {t("permissionRequests.list.typeFilterNote")}
-          </Typography.Paragraph>
-        )}
+            },
+          }))}
+        />
+      </WorkspaceViews>
+      <WorkspaceCard
+        toolbar={
+          <>
+            <Select
+              aria-label={t("permissionRequests.list.typeFilter")}
+              value={typeFilter}
+              onChange={setTypeFilter}
+              className="ffi-toolbar__field"
+              style={{ maxWidth: 320 }}
+              options={[
+                {
+                  value: "all",
+                  label: `${t("permissionRequests.list.typeFilter")}: ${t("permissionRequests.list.allTypes")}`,
+                },
+                ...PERMISSION_TYPES.map((value) => ({
+                  value,
+                  label: permissionTypeLabel(t, value),
+                })),
+              ]}
+            />
+            {typeFilter !== "all" && (
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                {t("permissionRequests.list.typeFilterNote")}
+              </Typography.Text>
+            )}
+          </>
+        }
+        title={
+          status === "all"
+            ? t("permissionRequests.list.all")
+            : statusLabel(t, status)
+        }
+        count={t("common.requestsCount", { count: total })}
+        busy={loading && items.length > 0}
+      >
         <ResponsiveTable
           mobileCard={{ titleKey: "reference_no", extraKey: "status" }}
           rowKey="id"
@@ -815,7 +840,7 @@ function RequestList({
             },
           ]}
         />
-      </Card>
+      </WorkspaceCard>
     </div>
   );
 }

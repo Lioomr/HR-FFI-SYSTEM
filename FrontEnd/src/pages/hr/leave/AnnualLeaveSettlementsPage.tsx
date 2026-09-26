@@ -16,13 +16,25 @@ import {
   notification,
 } from "antd";
 import {
+  AuditOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  HourglassOutlined,
   PlusOutlined,
   ReloadOutlined,
+  RollbackOutlined,
+  UnorderedListOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 
 import PageHeader from "../../../components/ui/PageHeader";
+import {
+  FilterChips,
+  WorkspaceCard,
+  WorkspaceViews,
+  type FilterChipOption,
+} from "../../../components/ui/workspace/Workspace";
 import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import AnnualLeavePaymentStatusTag from "../../../components/leaves/AnnualLeavePaymentStatusTag";
 import {
@@ -50,6 +62,50 @@ import { getDetailedHttpErrorMessage } from "../../../services/api/userErrorMess
 import { getFirstApiErrorMessage } from "../../../utils/formErrors";
 
 const PAGE_SIZE = 20;
+
+/** Status quick filters, in workflow order. */
+const STATUS_CHIPS: Array<{
+  status?: AnnualLeavePaymentStatus;
+  labelKey: string;
+  icon: FilterChipOption["icon"];
+  tone: FilterChipOption["tone"];
+}> = [
+  {
+    labelKey: "common.allRequests",
+    icon: <UnorderedListOutlined />,
+    tone: "neutral",
+  },
+  {
+    status: "pending_hr",
+    labelKey: "annualPayment.status.pendingHr",
+    icon: <AuditOutlined />,
+    tone: "pending",
+  },
+  {
+    status: "pending_ceo",
+    labelKey: "annualPayment.status.pendingCeo",
+    icon: <HourglassOutlined />,
+    tone: "warning",
+  },
+  {
+    status: "approved",
+    labelKey: "annualPayment.status.approved",
+    icon: <CheckCircleOutlined />,
+    tone: "positive",
+  },
+  {
+    status: "carried_forward",
+    labelKey: "annualPayment.status.carriedForward",
+    icon: <RollbackOutlined />,
+    tone: "informational",
+  },
+  {
+    status: "rejected",
+    labelKey: "annualPayment.status.rejected",
+    icon: <CloseCircleOutlined />,
+    tone: "critical",
+  },
+];
 
 /**
  * The HR decision that matches the employee's preference. Cash maps to
@@ -365,7 +421,7 @@ export default function AnnualLeaveSettlementsPage() {
   ];
 
   return (
-    <div style={{ maxWidth: 1500, margin: "0 auto", paddingBottom: 24 }}>
+    <div style={{ paddingBottom: 24 }}>
       <PageHeader
         title={t("annualPayment.hrTitle")}
         subtitle={t("annualPayment.hrSubtitle")}
@@ -407,37 +463,22 @@ export default function AnnualLeaveSettlementsPage() {
         />
       )}
 
-      <Card style={{ borderRadius: 16, marginBottom: 16 }}>
-        <Space wrap>
-          <span style={{ fontWeight: 500 }}>{t("common.status")}</span>
-          <Select<AnnualLeavePaymentStatus | undefined>
-            allowClear
-            style={{ minWidth: 220 }}
-            value={statusFilter}
-            placeholder={t("annualPayment.allStatuses")}
-            onChange={(value) => {
-              setStatusFilter(value);
+      <WorkspaceViews>
+        <FilterChips
+          label={t("common.status")}
+          options={STATUS_CHIPS.map((chip) => ({
+            key: chip.status ?? "all",
+            label: t(chip.labelKey),
+            icon: chip.icon,
+            tone: chip.tone,
+            active: statusFilter === chip.status,
+            onSelect: () => {
+              setStatusFilter(chip.status);
               setPage(1);
-            }}
-            options={[
-              {
-                value: "pending_hr",
-                label: t("annualPayment.status.pendingHr"),
-              },
-              {
-                value: "pending_ceo",
-                label: t("annualPayment.status.pendingCeo"),
-              },
-              { value: "approved", label: t("annualPayment.status.approved") },
-              {
-                value: "carried_forward",
-                label: t("annualPayment.status.carriedForward"),
-              },
-              { value: "rejected", label: t("annualPayment.status.rejected") },
-            ]}
-          />
-        </Space>
-      </Card>
+            },
+          }))}
+        />
+      </WorkspaceViews>
 
       {deepLinked && (
         <Card
@@ -456,7 +497,14 @@ export default function AnnualLeaveSettlementsPage() {
         </Card>
       )}
 
-      <Card style={{ borderRadius: 16 }}>
+      <WorkspaceCard
+        title={t(
+          STATUS_CHIPS.find((chip) => chip.status === statusFilter)?.labelKey ??
+            "common.allRequests",
+        )}
+        count={t("common.requestsCount", { count: total })}
+        busy={loading && requests.length > 0}
+      >
         <ResponsiveTable
           mobileCard={{
             titleKey: "employee",
@@ -482,7 +530,7 @@ export default function AnnualLeaveSettlementsPage() {
             onChange: (nextPage) => setPage(nextPage),
           }}
         />
-      </Card>
+      </WorkspaceCard>
 
       <Modal
         open={Boolean(reviewing)}
