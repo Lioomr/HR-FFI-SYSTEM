@@ -124,9 +124,13 @@ describe("workflow endpoints", () => {
   });
 
   it("posts the employee payload to the collection route", async () => {
-    await createEmployeeAnnualLeavePaymentRequest({ employee_note: "note" });
+    await createEmployeeAnnualLeavePaymentRequest({
+      employee_preference: "take_as_leave",
+      employee_note: "note",
+    });
 
     expect(post).toHaveBeenCalledWith("/api/leaves/annual-leave-payments/", {
+      employee_preference: "take_as_leave",
       employee_note: "note",
     });
   });

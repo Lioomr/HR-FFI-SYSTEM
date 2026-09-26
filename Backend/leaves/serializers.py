@@ -624,6 +624,7 @@ class AnnualLeavePaymentRequestSerializer(serializers.ModelSerializer):
             "locked_unused_days",
             "include_locked_days_in_termination_payout",
             "resolution",
+            "employee_preference",
             "status",
             "is_termination_settlement",
             "employee_note",
@@ -672,6 +673,10 @@ class AnnualLeavePaymentRequestCreateSerializer(serializers.Serializer):
     termination_date = serializers.DateField(required=False, write_only=True)
     decision = serializers.ChoiceField(choices=["pay", "carry_forward"], required=False, write_only=True)
     include_locked_days_in_termination_payout = serializers.BooleanField(required=False, default=False, write_only=True)
+    # Required on self-service; optional when HR opens the settlement on the employee's behalf.
+    employee_preference = serializers.ChoiceField(
+        choices=AnnualLeavePaymentRequest.EmployeePreference.choices, required=False, write_only=True
+    )
 
     def validate(self, attrs):
         request = self.context["request"]
@@ -790,6 +795,11 @@ class AnnualLeavePaymentRequestCreateSerializer(serializers.Serializer):
         )
         if payable_days <= 0:
             raise serializers.ValidationError("There are no eligible whole Annual Leave days available for payment.")
+
+        if not attrs.get("employee_id") and not attrs.get("employee_preference"):
+            raise serializers.ValidationError(
+                {"employee_preference": "Choose how you would like your eligible days settled."}
+            )
 
         attrs["profile"] = profile
         attrs["snapshot"] = snapshot

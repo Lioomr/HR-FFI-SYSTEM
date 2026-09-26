@@ -2290,7 +2290,10 @@ class AnnualLeavePaymentRequestViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         qs = super().get_queryset()
         role = get_role(self.request.user)
-        if role in {"SystemAdmin", "HRManager", "CEO"}:
+        # ``?mine=true`` narrows HR, SystemAdmin and CEO to their own settlements too
+        # (the employee dashboard lists only the caller's requests).
+        mine = self.request.query_params.get("mine", "").lower() in {"1", "true"}
+        if role in {"SystemAdmin", "HRManager", "CEO"} and not mine:
             return filter_queryset_by_company_scope(qs, self.request)
         qs = qs.filter(employee=self.request.user)
         return filter_queryset_by_company_scope(qs, self.request)
@@ -2338,6 +2341,7 @@ class AnnualLeavePaymentRequestViewSet(viewsets.ModelViewSet):
                 "payment_amount": str(instance.payment_amount),
                 "is_termination_settlement": instance.is_termination_settlement,
                 "include_locked_days_in_termination_payout": instance.include_locked_days_in_termination_payout,
+                "employee_preference": instance.employee_preference,
             },
         )
         notify_after_annual_payment_submission(instance, actor_id=request.user.id)

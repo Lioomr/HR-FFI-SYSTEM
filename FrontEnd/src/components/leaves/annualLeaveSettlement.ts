@@ -1,5 +1,6 @@
 import {
   toDecimalNumber,
+  type AnnualLeaveEmployeePreference,
   type AnnualLeavePaymentRequest,
   type AnnualLeavePaymentStatus,
 } from "../../services/api/annualLeavePaymentsApi";
@@ -40,3 +41,13 @@ export function formatSettlementAmount(
 ): string {
   return toDecimalNumber(value).toFixed(2);
 }
+
+/** Translation keys for the employee's settlement preference. */
+export const EMPLOYEE_PREFERENCE_LABEL_KEYS: Record<
+  AnnualLeaveEmployeePreference,
+  string
+> = {
+  pay: "annualPayment.preference.pay",
+  carry_forward: "annualPayment.preference.carryForward",
+  take_as_leave: "annualPayment.preference.takeAsLeave",
+};

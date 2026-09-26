@@ -7,6 +7,7 @@ import {
   Form,
   Input,
   Modal,
+  Radio,
   Space,
   Spin,
   Typography,
@@ -16,6 +17,7 @@ import { DollarOutlined } from "@ant-design/icons";
 
 import AnnualLeavePaymentStatusTag from "../../../components/leaves/AnnualLeavePaymentStatusTag";
 import {
+  EMPLOYEE_PREFERENCE_LABEL_KEYS,
   formatSettlementAmount,
   formatSettlementDays,
   isActiveAnnualPayment,
@@ -26,13 +28,21 @@ import {
   createEmployeeAnnualLeavePaymentRequest,
   getAnnualLeaveEligibility,
   getAnnualLeavePaymentRequests,
+  ANNUAL_LEAVE_EMPLOYEE_PREFERENCES,
   toDecimalNumber,
+  type AnnualLeaveEmployeePreference,
   type AnnualLeaveEligibility,
   type AnnualLeavePaymentRequest,
 } from "../../../services/api/annualLeavePaymentsApi";
 import { isApiError } from "../../../services/api/apiTypes";
 import { getDetailedHttpErrorMessage } from "../../../services/api/userErrorMessages";
 import { getFirstApiErrorMessage } from "../../../utils/formErrors";
+
+const PREFERENCE_HINT_KEYS: Record<AnnualLeaveEmployeePreference, string> = {
+  pay: "annualPayment.preference.payHint",
+  carry_forward: "annualPayment.preference.carryForwardHint",
+  take_as_leave: "annualPayment.preference.takeAsLeaveHint",
+};
 
 /**
  * Employee-facing Annual Leave settlement panel.
@@ -97,7 +107,10 @@ export default function AnnualLeavePaymentCard({
         reason,
       );
   };
-  const [form] = Form.useForm<{ employee_note?: string }>();
+  const [form] = Form.useForm<{
+    employee_preference: AnnualLeaveEmployeePreference;
+    employee_note?: string;
+  }>();
 
   const [loading, setLoading] = useState(true);
   const [requests, setRequests] = useState<AnnualLeavePaymentRequest[]>([]);
@@ -113,10 +126,11 @@ export default function AnnualLeavePaymentCard({
     setLoading(true);
     setLoadError(null);
     try {
-      // The list is scoped by the backend to the caller's own records for
-      // anyone who is not HR, SystemAdmin or CEO.
+      // `mine` keeps HR, SystemAdmin and CEO callers to their own records
+      // too; everyone else is already scoped to them by the backend.
       const [listRes, eligibilityRes] = await Promise.all([
         getAnnualLeavePaymentRequests({
+          mine: true,
           page: 1,
           page_size: 5,
           ordering: "-submitted_at",
@@ -165,11 +179,18 @@ export default function AnnualLeavePaymentCard({
 
   const handleSubmit = async () => {
     if (!canRequest) return;
-    const values = await form.validateFields();
+    let values;
+    try {
+      values = await form.validateFields();
+    } catch {
+      // The form shows the missing preference inline.
+      return;
+    }
     setSubmitting(true);
     setSubmitError(null);
     try {
       const res = await createEmployeeAnnualLeavePaymentRequest({
+        employee_preference: values.employee_preference,
         employee_note: values.employee_note || "",
       });
       if (isApiError(res)) {
@@ -389,6 +410,38 @@ export default function AnnualLeavePaymentCard({
         )}
 
         <Form form={form} layout="vertical">
+          {/* A preference only: HR decides and the CEO approves. Locked
+              (leave-only) days are never part of it. */}
+          <Form.Item
+            label={t("annualPayment.preference")}
+            name="employee_preference"
+            extra={t("annualPayment.preference.help")}
+            rules={[
+              {
+                required: true,
+                message: t("annualPayment.preference.required"),
+              },
+            ]}
+          >
+            <Radio.Group
+              disabled={!canRequest}
+              aria-label={t("annualPayment.preference")}
+            >
+              <Space direction="vertical" size={8}>
+                {ANNUAL_LEAVE_EMPLOYEE_PREFERENCES.map((preference) => (
+                  <Radio key={preference} value={preference}>
+                    <Typography.Text strong>
+                      {t(EMPLOYEE_PREFERENCE_LABEL_KEYS[preference])}
+                    </Typography.Text>
+                    <br />
+                    <Typography.Text type="secondary">
+                      {t(PREFERENCE_HINT_KEYS[preference])}
+                    </Typography.Text>
+                  </Radio>
+                ))}
+              </Space>
+            </Radio.Group>
+          </Form.Item>
           <Form.Item
             label={t("annualPayment.employeeNote")}
             name="employee_note"

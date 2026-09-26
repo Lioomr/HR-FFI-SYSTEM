@@ -315,6 +315,7 @@ describe("MyLeaveBalancePage — Annual Leave payment request", () => {
     render(<MyLeaveBalancePage />);
     expect(await openPaymentModal()).toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole("radio", { name: /Take as leave/ }));
     fireEvent.change(screen.getByLabelText("Employee note"), {
       target: { value: "Please process my unused Annual Leave." },
     });
@@ -325,6 +326,7 @@ describe("MyLeaveBalancePage — Annual Leave payment request", () => {
     await waitFor(
       () =>
         expect(createEmployeeAnnualLeavePaymentRequest).toHaveBeenCalledWith({
+          employee_preference: "take_as_leave",
           employee_note: "Please process my unused Annual Leave.",
         }),
       FIND,
@@ -359,6 +361,7 @@ describe("MyLeaveBalancePage — Annual Leave payment request", () => {
 
     render(<MyLeaveBalancePage />);
     await openPaymentModal();
+    fireEvent.click(screen.getByRole("radio", { name: /Cash/ }));
     fireEvent.click(
       await screen.findByRole("button", { name: "Submit" }, FIND),
     );
@@ -370,6 +373,48 @@ describe("MyLeaveBalancePage — Annual Leave payment request", () => {
         FIND,
       ),
     ).toBeInTheDocument();
+  });
+
+  it("requires a settlement preference before submitting", async () => {
+    render(<MyLeaveBalancePage />);
+    await openPaymentModal();
+
+    expect(
+      screen.getByText(/Leave-only days are not part of this choice/),
+    ).toBeInTheDocument();
+    expect(screen.getAllByRole("radio")).toHaveLength(3);
+    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+
+    expect(
+      await screen.findByText(
+        "Choose how you would like your eligible days settled.",
+        {},
+        FIND,
+      ),
+    ).toBeInTheDocument();
+    expect(createEmployeeAnnualLeavePaymentRequest).not.toHaveBeenCalled();
+  });
+
+  it("reads only the caller's own settlements and shows their preference", async () => {
+    getAnnualLeavePaymentRequests.mockResolvedValue(
+      listResponse([
+        makeSettlement({
+          status: "approved",
+          cycle_start: "2024-05-02",
+          employee_preference: "carry_forward",
+        }),
+      ]),
+    );
+
+    render(<MyLeaveBalancePage />);
+
+    expect(
+      await screen.findByText("Your preference", {}, FIND),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Carry forward as leave only")).toBeInTheDocument();
+    expect(getAnnualLeavePaymentRequests).toHaveBeenCalledWith(
+      expect.objectContaining({ mine: true }),
+    );
   });
 
   it("hides the request action while a settlement is still active", async () => {

@@ -415,6 +415,11 @@ class AnnualLeavePaymentRequest(models.Model):
         # Carried days are leave-only: never payable, in any later cycle.
         CARRY_FORWARD = "carry_forward", _("Carry Forward")
 
+    class EmployeePreference(models.TextChoices):
+        PAY = "pay", _("Cash")
+        CARRY_FORWARD = "carry_forward", _("Carry forward as leave only")
+        TAKE_AS_LEAVE = "take_as_leave", _("Take as leave")
+
     employee = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -451,6 +456,10 @@ class AnnualLeavePaymentRequest(models.Model):
     # settlement. Only valid on a PAY termination settlement; never set otherwise.
     include_locked_days_in_termination_payout = models.BooleanField(default=False)
     resolution = models.CharField(max_length=20, choices=Resolution.choices, default=Resolution.PAY)
+    # What the employee asked for their cash-eligible days (never the leave-only
+    # ones). Advisory only: HR's ``resolution`` stays the decision. Blank when HR
+    # opened the settlement on the employee's behalf, and on rows that predate it.
+    employee_preference = models.CharField(max_length=20, choices=EmployeePreference.choices, blank=True, default="")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING_HR)
     is_termination_settlement = models.BooleanField(default=False)
     employee_note = models.TextField(blank=True)

@@ -31,6 +31,21 @@ export type AnnualLeavePaymentStatus =
  */
 export type AnnualLeavePaymentResolution = "pay" | "carry_forward";
 
+/**
+ * What the employee asks for their cash-eligible days when they submit. Advisory
+ * only: HR still decides the `resolution` and the CEO approves as before.
+ * `take_as_leave` means they intend to use the days as leave soon. Leave-only
+ * (locked) days are never part of this choice.
+ */
+export const ANNUAL_LEAVE_EMPLOYEE_PREFERENCES = [
+  "pay",
+  "carry_forward",
+  "take_as_leave",
+] as const;
+
+export type AnnualLeaveEmployeePreference =
+  (typeof ANNUAL_LEAVE_EMPLOYEE_PREFERENCES)[number];
+
 /** HR's two options while the request sits at `pending_hr`. */
 export type AnnualLeavePaymentReviewDecision = "forward" | "carry_forward";
 
@@ -74,6 +89,11 @@ export interface AnnualLeavePaymentRequest {
    */
   include_locked_days_in_termination_payout?: boolean;
   resolution: AnnualLeavePaymentResolution;
+  /**
+   * Blank when HR opened the settlement on the employee's behalf, and on
+   * records that predate the preference.
+   */
+  employee_preference?: AnnualLeaveEmployeePreference | "";
   status: AnnualLeavePaymentStatus;
   is_termination_settlement: boolean;
   employee_note: string;
@@ -119,6 +139,8 @@ export interface AnnualLeavePaymentFilter {
   resolution?: AnnualLeavePaymentResolution;
   /** EmployeeProfile id, matching the backend `employee_profile` filter field. */
   employee_profile?: number;
+  /** Only the caller's own settlements, whatever their role. */
+  mine?: boolean;
   ordering?: string;
   page?: number;
   page_size?: number;
@@ -126,6 +148,8 @@ export interface AnnualLeavePaymentFilter {
 
 /** Employee self-service submission; the backend derives every figure. */
 export interface CreateEmployeeAnnualLeavePaymentPayload {
+  /** Required by the backend on self-service submissions. */
+  employee_preference: AnnualLeaveEmployeePreference;
   employee_note?: string;
 }
 

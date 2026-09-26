@@ -1,9 +1,13 @@
+import {
+  getAnnualLeavePaymentRequests,
+  type AnnualLeaveEmployeePreference,
+} from "./annualLeavePaymentsApi";
 import type { ApiResponse, PaginatedResponse } from "./apiTypes";
 import { getMyLeaveRequests } from "./leaveApi";
 import { getMyLoanRequests } from "./loanApi";
 import { getMyPermissionRequests } from "./permissionRequestsApi";
 
-export type CurrentRequestKind = "leave" | "permission" | "loan";
+export type CurrentRequestKind = "leave" | "permission" | "loan" | "settlement";
 export type CurrentRequest = {
   id: number;
   kind: CurrentRequestKind;
@@ -11,6 +15,10 @@ export type CurrentRequest = {
   createdAt?: string;
   reference: string;
   path: string;
+  /** Annual Leave settlements only: the contract year being settled. */
+  cycle?: { start: string; end: string };
+  /** Annual Leave settlements only: blank when HR opened it for the employee. */
+  preference?: AnnualLeaveEmployeePreference | "";
 };
 
 // Read every page: filtering only the first page can hide an older pending request.
@@ -73,6 +81,28 @@ export async function getEmployeeCurrentRequests(
           reference: `#${item.id}`,
           kind: "loan" as const,
           path: `/employee/loans/${item.id}`,
+        })),
+    },
+    {
+      // Only `pending_hr` / `pending_ceo` survive the in-flight filter below;
+      // decided settlements (approved, carried forward, rejected) drop out.
+      kind: "settlement" as const,
+      load: async () =>
+        (
+          await readPages(
+            (params) =>
+              getAnnualLeavePaymentRequests({ ...params, mine: true }),
+            isActive,
+          )
+        ).map((item) => ({
+          id: item.id,
+          status: item.status,
+          createdAt: item.submitted_at,
+          reference: `#${item.id}`,
+          kind: "settlement" as const,
+          path: "/employee/leave/balance",
+          cycle: { start: item.cycle_start, end: item.cycle_end },
+          preference: item.employee_preference ?? "",
         })),
     },
   ];

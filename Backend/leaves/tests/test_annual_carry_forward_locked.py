@@ -465,7 +465,7 @@ class LockedCarryForwardApiTests(APITestCase):
     @patch(NOTIFY)
     def test_hr_review_carry_forward_is_leave_only(self, notify):
         self.client.force_authenticate(self.employee)
-        created = self.client.post("/api/leaves/annual-leave-payments/", {})
+        created = self.client.post("/api/leaves/annual-leave-payments/", {"employee_preference": "carry_forward"})
         self.assertEqual(created.status_code, status.HTTP_201_CREATED)
         payment_id = created.data["data"]["id"]
         self.assertEqual(Decimal(str(created.data["data"]["locked_unused_days"])), Decimal("0.00"))
