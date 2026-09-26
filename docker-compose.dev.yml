@@ -1,14 +1,28 @@
+# Local development stack, shared by every session on this machine.
+#
+# Container names and host ports default to the shared stack (ffi_hr_*,
+# 5173/8000/5432). A git worktree that needs its own stack must use a separate
+# project, prefix and ports so it never replaces the shared containers:
+#
+#   FFI_CONTAINER_PREFIX=ffi_wt1 FFI_FRONTEND_PORT=5273 FFI_BACKEND_PORT=8100
+#   FFI_DB_PORT=5532 EVOLUTION_API_PORT=8180
+#   docker compose -p hr-ffi-wt1 -f docker-compose.dev.yml up -d --build
+#
+# (set those variables in the environment first; the ports above are examples)
+#
+# Prefer tools/dev-compose.sh (or .ps1): it stamps images with the git commit
+# and refuses to rebuild the shared stack from a worktree. See AGENTS.md.
 services:
   db:
     image: postgres:16-alpine
-    container_name: ffi_hr_db
+    container_name: ${FFI_CONTAINER_PREFIX:-ffi_hr}_db
     restart: unless-stopped
     environment:
       POSTGRES_DB: ffi_hr_db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432"
+      - "${FFI_DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -19,7 +33,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: ffi_hr_redis
+    container_name: ${FFI_CONTAINER_PREFIX:-ffi_hr}_redis
     restart: unless-stopped
     volumes:
       - redis_data:/data
@@ -32,7 +46,12 @@ services:
   backend:
     build:
       context: ./Backend
-    container_name: ffi_hr_backend
+      labels:
+        com.ffi.build.commit: "${FFI_BUILD_COMMIT:-unknown}"
+        com.ffi.build.dirty: "${FFI_BUILD_DIRTY:-unknown}"
+        com.ffi.build.source: "${FFI_BUILD_SOURCE:-unknown}"
+        com.ffi.build.time: "${FFI_BUILD_TIME:-unknown}"
+    container_name: ${FFI_CONTAINER_PREFIX:-ffi_hr}_backend
     restart: unless-stopped
     env_file:
       - ./Backend/.env.docker
@@ -44,9 +63,9 @@ services:
       DB_HOST: db
       DB_PORT: 5432
       DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
-      CORS_ALLOWED_ORIGINS: http://localhost:5173
-      CSRF_TRUSTED_ORIGINS: http://localhost:5173
-      FRONTEND_URL: http://localhost:5173
+      CORS_ALLOWED_ORIGINS: http://localhost:${FFI_FRONTEND_PORT:-5173}
+      CSRF_TRUSTED_ORIGINS: http://localhost:${FFI_FRONTEND_PORT:-5173}
+      FRONTEND_URL: http://localhost:${FFI_FRONTEND_PORT:-5173}
       HR_TEMPLATES_DIR: /hr/templates
       REDIS_URL: redis://redis:6379/0
       CACHE_URL: redis://redis:6379/1
@@ -58,7 +77,7 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - "8000:8000"
+      - "${FFI_BACKEND_PORT:-8000}:8000"
     volumes:
       - ./Backend/static/pdf_templates:/hr/templates:ro
       - private_uploads:/app/private_uploads
@@ -74,7 +93,12 @@ services:
   notification-worker:
     build:
       context: ./Backend
-    container_name: ffi_hr_notification_worker
+      labels:
+        com.ffi.build.commit: "${FFI_BUILD_COMMIT:-unknown}"
+        com.ffi.build.dirty: "${FFI_BUILD_DIRTY:-unknown}"
+        com.ffi.build.source: "${FFI_BUILD_SOURCE:-unknown}"
+        com.ffi.build.time: "${FFI_BUILD_TIME:-unknown}"
+    container_name: ${FFI_CONTAINER_PREFIX:-ffi_hr}_notification_worker
     restart: unless-stopped
     user: "app"
     command: ["celery", "-A", "config", "worker", "--loglevel=INFO"]
@@ -115,7 +139,12 @@ services:
   celery-beat:
     build:
       context: ./Backend
-    container_name: ffi_hr_celery_beat
+      labels:
+        com.ffi.build.commit: "${FFI_BUILD_COMMIT:-unknown}"
+        com.ffi.build.dirty: "${FFI_BUILD_DIRTY:-unknown}"
+        com.ffi.build.source: "${FFI_BUILD_SOURCE:-unknown}"
+        com.ffi.build.time: "${FFI_BUILD_TIME:-unknown}"
+    container_name: ${FFI_CONTAINER_PREFIX:-ffi_hr}_celery_beat
     restart: unless-stopped
     user: "app"
     command: ["celery", "-A", "config", "beat", "--loglevel=INFO"]
@@ -155,25 +184,33 @@ services:
       context: ./FrontEnd
       args:
         VITE_API_BASE_URL: ""
-    container_name: ffi_hr_frontend
+        FFI_BUILD_COMMIT: "${FFI_BUILD_COMMIT:-unknown}"
+        FFI_BUILD_DIRTY: "${FFI_BUILD_DIRTY:-unknown}"
+        FFI_BUILD_TIME: "${FFI_BUILD_TIME:-unknown}"
+      labels:
+        com.ffi.build.commit: "${FFI_BUILD_COMMIT:-unknown}"
+        com.ffi.build.dirty: "${FFI_BUILD_DIRTY:-unknown}"
+        com.ffi.build.source: "${FFI_BUILD_SOURCE:-unknown}"
+        com.ffi.build.time: "${FFI_BUILD_TIME:-unknown}"
+    container_name: ${FFI_CONTAINER_PREFIX:-ffi_hr}_frontend
     restart: unless-stopped
     depends_on:
       - backend
     ports:
-      - "5173:80"
+      - "${FFI_FRONTEND_PORT:-5173}:80"
 
   cinematic-site:
     build:
       context: ./CinematicSite
-    container_name: ffi_cinematic_site
+    container_name: ${FFI_CINEMATIC_CONTAINER:-ffi_cinematic_site}
     restart: unless-stopped
     profiles: ["marketing"]
     ports:
-      - "5174:80"
+      - "${FFI_CINEMATIC_PORT:-5174}:80"
 
   evolution-db:
     image: postgres:16-alpine
-    container_name: ffi_hr_evolution_db
+    container_name: ${FFI_CONTAINER_PREFIX:-ffi_hr}_evolution_db
     restart: unless-stopped
     environment:
       POSTGRES_DB: evolution
@@ -189,7 +226,7 @@ services:
 
   evolution-redis:
     image: redis:7-alpine
-    container_name: ffi_hr_evolution_redis
+    container_name: ${FFI_CONTAINER_PREFIX:-ffi_hr}_evolution_redis
     restart: unless-stopped
     volumes:
       - evolution_redis_data:/data
@@ -201,7 +238,7 @@ services:
 
   evolution-api:
     image: evoapicloud/evolution-api:v2.3.7
-    container_name: ffi_hr_evolution_api
+    container_name: ${FFI_CONTAINER_PREFIX:-ffi_hr}_evolution_api
     restart: unless-stopped
     environment:
       AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:-change-me}
