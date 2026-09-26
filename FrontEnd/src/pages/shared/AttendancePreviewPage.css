@@ -110,6 +110,11 @@
   gap: 10px;
 }
 
+/* Employee view: five cards instead of seven. */
+.attendance-overview__grid--compact {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
 .attendance-metric {
   --attendance-accent: #64748b;
   --attendance-accent-soft: #f1f5f9;
@@ -696,11 +701,36 @@
   }
 
   .attendance-metric {
-    padding: 12px;
+    gap: 6px;
+    padding: 10px 12px;
+  }
+
+  .attendance-metric__icon {
+    width: 24px;
+    height: 24px;
+    font-size: 12px;
   }
 
   .attendance-metric__value {
-    font-size: 22px;
+    min-height: 0;
+    font-size: 20px;
+  }
+
+  .attendance-metric__bar {
+    display: none;
+  }
+
+  .attendance-rate {
+    padding: 14px 16px;
+  }
+
+  .attendance-rate__ring {
+    width: 52px;
+    height: 52px;
+  }
+
+  .attendance-rate__value {
+    font-size: 26px;
   }
 
   .attendance-workspace__toolbar {
