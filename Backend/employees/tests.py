@@ -1770,3 +1770,72 @@ class EmployeeListCacheTests(TestCase):
 
         fresh_response = self.client.get("/api/employees/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company_a.id))
         self.assertEqual(fresh_response.data["data"]["results"][0]["full_name"], "Employee A Renamed")
+
+
+class EmployeeExpiringFilterTests(TestCase):
+    """`expiring` list filter: Iqama (non-Saudi ID card) and contract expiry windows."""
+
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+        hr_group, _ = Group.objects.get_or_create(name="HRManager")
+        self.company = OrganizationNode.objects.create(
+            code="EXPCO", name="Expiry Co", node_type=OrganizationNode.NodeType.COMPANY, employee_id_prefix="EX"
+        )
+        self.hr_user = User.objects.create_user(email="hr@expiry.test", password="password")
+        self.hr_user.groups.add(hr_group)
+        UserOrganizationAccess.objects.create(user=self.hr_user, organization=self.company)
+        self.client.force_authenticate(user=self.hr_user)
+
+        today = timezone.localdate()
+        self.today = today
+
+        def make(employee_id, **fields):
+            return EmployeeProfile.objects.create(
+                employee_id=employee_id, full_name=employee_id, company=self.company, **fields
+            )
+
+        make("IQAMA-SOON", is_saudi=False, id_expiry=today + timedelta(days=10))
+        make("IQAMA-EXPIRED", is_saudi=False, id_expiry=today - timedelta(days=3))
+        make("IQAMA-LATER", is_saudi=False, id_expiry=today + timedelta(days=80))
+        make("SAUDI-ID-SOON", is_saudi=True, id_expiry=today + timedelta(days=10))
+        make("CONTRACT-SOON", contract_expiry=today + timedelta(days=20))
+        make("CONTRACT-LATER", contract_expiry=today + timedelta(days=120))
+        make("NO-DATES")
+
+    def tearDown(self):
+        cache.clear()
+
+    def _ids(self, query):
+        response = self.client.get(f"/api/employees/?{query}", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id))
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        return {item["employee_id"] for item in response.data["data"]["results"]}
+
+    def test_iqama_filter_matches_non_saudi_ids_expiring_or_expired_within_window(self):
+        self.assertEqual(self._ids("expiring=iqama"), {"IQAMA-SOON", "IQAMA-EXPIRED"})
+
+    def test_window_is_configurable(self):
+        self.assertEqual(self._ids("expiring=iqama&expiring_days=90"), {"IQAMA-SOON", "IQAMA-EXPIRED", "IQAMA-LATER"})
+
+    def test_contract_filter(self):
+        self.assertEqual(self._ids("expiring=contract"), {"CONTRACT-SOON"})
+
+    def test_several_kinds_match_any(self):
+        self.assertEqual(self._ids("expiring=iqama,contract"), {"IQAMA-SOON", "IQAMA-EXPIRED", "CONTRACT-SOON"})
+
+    def test_combines_with_other_filters(self):
+        self.assertEqual(self._ids("expiring=iqama&search=EXPIRED"), {"IQAMA-EXPIRED"})
+
+    def test_invalid_values_are_rejected(self):
+        for query in ("expiring=visa", "expiring=iqama&expiring_days=0", "expiring=iqama&expiring_days=abc"):
+            response = self.client.get(f"/api/employees/?{query}", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id))
+            self.assertEqual(response.status_code, 422, query)
+
+    def test_export_applies_the_same_filter(self):
+        response = self.client.get(
+            "/api/employees/export?expiring=contract", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id)
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        sheet = load_workbook(BytesIO(response.content)).active
+        exported = {row[0] for row in sheet.iter_rows(min_row=2, values_only=True)}
+        self.assertEqual(exported, {"CONTRACT-SOON"})

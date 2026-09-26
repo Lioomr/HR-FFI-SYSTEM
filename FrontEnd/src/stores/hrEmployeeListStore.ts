@@ -14,6 +14,9 @@ interface EmployeeListFilters {
   joinDateOrder?: "asc" | "desc";
   /** Active employees by default; archived employees are opt-in (HR/Admin only). */
   archiveState?: "active" | "archived";
+  /** Quick view: employees whose Iqama or contract expires within `expiringDays`. */
+  expiring?: "iqama" | "contract";
+  expiringDays?: number;
 }
 
 /**

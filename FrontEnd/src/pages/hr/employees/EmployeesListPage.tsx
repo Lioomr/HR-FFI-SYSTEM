@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Alert,
   Button,
-  Card,
   Checkbox,
   Input,
   Modal,
@@ -15,24 +15,29 @@ import {
   Tooltip,
   Popover,
   Form,
+  Spin,
   message,
 } from "antd";
 import type { MenuProps } from "antd";
-import type { ColumnsType } from "antd/es/table";
+import type { ColumnsType, SorterResult } from "antd/es/table/interface";
 import {
   PlusOutlined,
   SearchOutlined,
-  FilterOutlined,
   DownloadOutlined,
   EllipsisOutlined,
-  SortAscendingOutlined,
   SettingOutlined,
+  TeamOutlined,
+  IdcardOutlined,
+  FileProtectOutlined,
+  UndoOutlined,
+  GlobalOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { getCountryCode } from "../../../utils/countries";
 import { useI18n } from "../../../i18n/useI18n";
 import { useAuthStore } from "../../../auth/authStore";
 import { isHeadOfficeOrganization } from "../../../utils/organizationContext";
+import "./EmployeesListPage.css";
 
 /**
  * Custom debounce hook
@@ -84,7 +89,16 @@ import {
 } from "../../../services/api/preferencesApi";
 
 const { Option } = Select;
-const { Title, Text } = Typography;
+const { Text } = Typography;
+
+type ExpiringKind = "iqama" | "contract";
+const EXPIRING_DAY_OPTIONS = [30, 60, 90];
+const DEFAULT_EXPIRING_DAYS = 30;
+/** Column that shows the date each quick view is about. */
+const EXPIRY_COLUMN_BY_KIND: Record<ExpiringKind, string> = {
+  iqama: "id_expiry",
+  contract: "contract_expiry",
+};
 
 const AVATAR_BG_COLORS = [
   "#f56a00",
@@ -145,16 +159,10 @@ function FlagBadge({ nationality }: { nationality?: string }) {
 
   if (!code) {
     return (
-      <span
-        style={{
-          minWidth: 24,
-          textAlign: "center",
-          color: "#8c8c8c",
-          fontWeight: 600,
-        }}
-      >
-        --
-      </span>
+      <GlobalOutlined
+        aria-hidden="true"
+        style={{ width: 24, fontSize: 16, color: "#94a3b8" }}
+      />
     );
   }
 
@@ -176,62 +184,60 @@ function FlagBadge({ nationality }: { nationality?: string }) {
   );
 }
 
-// Status Badge Helper
+const STATUS_TONE: Record<string, string> = {
+  ACTIVE: "positive",
+  ON_LEAVE: "warning",
+  TERMINATED: "critical",
+  SUSPENDED: "critical",
+};
+
+const STATUS_LABEL_KEY: Record<string, string> = {
+  ACTIVE: "status.active",
+  ON_LEAVE: "status.onLeave",
+  TERMINATED: "status.terminated",
+  SUSPENDED: "status.suspended",
+};
+
 const StatusBadge = ({
   status,
   t,
 }: {
   status?: string;
   t: (k: string, f?: string) => string;
-}) => {
-  let color = "";
-  let text = status || t("status.unknown");
-  let bg = "";
+}) => (
+  <span
+    className={`employees-pill employees-pill--${STATUS_TONE[status || ""] || "neutral"}`}
+  >
+    {status && STATUS_LABEL_KEY[status]
+      ? t(STATUS_LABEL_KEY[status])
+      : status || t("status.unknown")}
+  </span>
+);
 
-  switch (status) {
-    case "ACTIVE":
-      color = "#389e0d";
-      bg = "rgba(82, 196, 26, 0.1)";
-      text = t("status.active");
-      break;
-    case "ON_LEAVE":
-      color = "#d46b08";
-      bg = "rgba(250, 140, 22, 0.1)";
-      text = t("status.onLeave");
-      break;
-    case "TERMINATED":
-      color = "#cf1322";
-      bg = "rgba(255, 77, 79, 0.1)";
-      text = t("status.terminated");
-      break;
-    case "SUSPENDED":
-      color = "#cf1322";
-      bg = "rgba(255, 77, 79, 0.1)";
-      text = t("status.suspended");
-      break;
-    default:
-      color = "#595959";
-      bg = "#f5f5f5";
-  }
-
+/** Expiry date with how far away (or overdue) it is. */
+function ExpiryCell({
+  date,
+  t,
+}: {
+  date?: string | null;
+  t: (k: string, p?: Record<string, unknown>) => string;
+}) {
+  if (!date) return <Text type="secondary">-</Text>;
+  const days = dayjs(date).startOf("day").diff(dayjs().startOf("day"), "day");
+  const tone = days < 0 ? "critical" : days <= 30 ? "warning" : "neutral";
+  const label =
+    days < 0
+      ? t("employees.list.expiry.overdue", { days: Math.abs(days) })
+      : days === 0
+        ? t("employees.list.expiry.today")
+        : t("employees.list.expiry.inDays", { days });
   return (
-    <span
-      style={{
-        color: color,
-        backgroundColor: bg,
-        padding: "4px 12px",
-        borderRadius: "6px",
-        fontSize: "12px",
-        fontWeight: 500,
-        display: "inline-block",
-        textAlign: "center",
-        minWidth: 80,
-      }}
-    >
-      • {text}
-    </span>
+    <div className="employees-expiry">
+      <span>{dayjs(date).format("MMM DD, YYYY")}</span>
+      <span className={`employees-pill employees-pill--${tone}`}>{label}</span>
+    </div>
   );
-};
+}
 
 export default function EmployeesListPage() {
   const navigate = useNavigate();
@@ -275,7 +281,9 @@ export default function EmployeesListPage() {
     { code: string; name: string }[]
   >([]);
   const [nationalities, setNationalities] = useState<string[]>([]);
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [expiringCounts, setExpiringCounts] = useState<
+    Partial<Record<ExpiringKind, number>>
+  >({});
   const [savingPreference, setSavingPreference] = useState(false);
   const preferenceLoadedRef = useRef(false);
 
@@ -309,6 +317,15 @@ export default function EmployeesListPage() {
       ? "archived"
       : "active";
   const viewingArchived = archiveState === "archived";
+  // Expiry quick views only apply to active employees.
+  const expiring: ExpiringKind | undefined = viewingArchived
+    ? undefined
+    : filters.expiring;
+  const expiringDays = EXPIRING_DAY_OPTIONS.includes(
+    filters.expiringDays ?? DEFAULT_EXPIRING_DAYS,
+  )
+    ? (filters.expiringDays ?? DEFAULT_EXPIRING_DAYS)
+    : DEFAULT_EXPIRING_DAYS;
 
   /**
    * Fetch filter options
@@ -326,18 +343,33 @@ export default function EmployeesListPage() {
         );
       }
       if (!isApiError(employeeRes)) {
-        const uniqueNationalities = Array.from(
-          new Set(
-            (employeeRes.data.results || [])
-              .map(
-                (employee) =>
-                  employee.nationality ||
-                  employee.nationality_en ||
-                  employee.nationality_ar,
-              )
-              .filter((value): value is string => Boolean(value?.trim())),
-          ),
-        ).sort((a, b) => a.localeCompare(b));
+        // One entry per nationality regardless of case ("pakistan" and
+        // "Pakistan"); the backend matches case-insensitively. Prefer the
+        // capitalised spelling for display.
+        const byKey = new Map<string, string>();
+        (employeeRes.data.results || [])
+          .map(
+            (employee) =>
+              employee.nationality ||
+              employee.nationality_en ||
+              employee.nationality_ar,
+          )
+          .filter((value): value is string => Boolean(value?.trim()))
+          .forEach((value) => {
+            const name = value.trim();
+            const key = name.toLocaleLowerCase();
+            const current = byKey.get(key);
+            if (
+              !current ||
+              (current[0] !== current[0].toLocaleUpperCase() &&
+                name[0] === name[0].toLocaleUpperCase())
+            ) {
+              byKey.set(key, name);
+            }
+          });
+        const uniqueNationalities = Array.from(byKey.values()).sort((a, b) =>
+          a.localeCompare(b),
+        );
         setNationalities(uniqueNationalities);
       }
     } catch (err) {
@@ -364,6 +396,8 @@ export default function EmployeesListPage() {
         nationality: filters.nationality || undefined,
         join_date_order: filters.joinDateOrder || undefined,
         archive_state: archiveState,
+        expiring,
+        expiring_days: expiring ? expiringDays : undefined,
       };
 
       const response = await listEmployees(params);
@@ -403,7 +437,34 @@ export default function EmployeesListPage() {
       setError(err.message || t("error.generic"));
       setLoading(false);
     }
-  }, [page, pageSize, search, filters, archiveState]);
+  }, [page, pageSize, search, filters, archiveState, expiring, expiringDays]);
+
+  // Chip counts for the expiry quick views (active employees, current window).
+  useEffect(() => {
+    if (viewingArchived) return;
+    let active = true;
+    const kinds: ExpiringKind[] = ["iqama", "contract"];
+    Promise.all(
+      kinds.map((kind) =>
+        listEmployees({
+          page: 1,
+          page_size: 1,
+          archive_state: "active",
+          expiring: kind,
+          expiring_days: expiringDays,
+        })
+          .then((response) =>
+            isApiError(response) ? undefined : response.data.count || 0,
+          )
+          .catch(() => undefined),
+      ),
+    ).then(([iqama, contract]) => {
+      if (active) setExpiringCounts({ iqama, contract });
+    });
+    return () => {
+      active = false;
+    };
+  }, [expiringDays, viewingArchived, activeOrganizationId]);
 
   useEffect(() => {
     loadFilterOptions();
@@ -751,58 +812,61 @@ export default function EmployeesListPage() {
     ];
   };
 
-  const toggleJoinDateOrder = () => {
-    const nextOrder = filters.joinDateOrder === "desc" ? "asc" : "desc";
-    setFilters({ joinDateOrder: nextOrder });
-  };
-
-  const clearExtraFilters = () => {
-    setFilters({ nationality: undefined, joinDateOrder: undefined });
-  };
-
-  const joinDateSortLabel =
-    filters.joinDateOrder === "asc"
-      ? t("employees.list.joinDateOldestFirst", "Joining Date: Oldest First")
-      : filters.joinDateOrder === "desc"
-        ? t("employees.list.joinDateNewestFirst", "Joining Date: Newest First")
-        : t("employees.list.joinDateDefault", "Joining Date: Default");
-
-  const moreFiltersContent = (
-    <div
-      style={{ width: 260, display: "flex", flexDirection: "column", gap: 12 }}
-    >
-      <div>
-        <Text strong style={{ display: "block", marginBottom: 8 }}>
-          {t("common.moreFilters")}
-        </Text>
-        <Text type="secondary" style={{ fontSize: 12 }}>
-          {t(
-            "employees.list.moreFiltersHelp",
-            "Filter by nationality or sort by joining date.",
-          )}
-        </Text>
-      </div>
-
-      <Select
-        placeholder={t("employees.list.nationalityPlaceholder", "Nationality")}
-        value={filters.nationality || undefined}
-        onChange={(value) => setFilters({ nationality: value })}
-        allowClear
-        showSearch
-        optionFilterProp="label"
-        options={nationalities.map((nationality) => ({
-          value: nationality,
-          label: nationality,
-        }))}
-      />
-
-      <Button icon={<SortAscendingOutlined />} onClick={toggleJoinDateOrder}>
-        {joinDateSortLabel}
-      </Button>
-
-      <Button onClick={clearExtraFilters}>{t("common.clear", "Clear")}</Button>
-    </div>
+  const hasFilters = Boolean(
+    search ||
+    filters.department ||
+    filters.status ||
+    filters.nationality ||
+    filters.joinDateOrder ||
+    expiring,
   );
+
+  const resetFilters = () => {
+    setSearchInput("");
+    setSearch("");
+    setFilters({
+      department: undefined,
+      status: undefined,
+      nationality: undefined,
+      joinDateOrder: undefined,
+      expiring: undefined,
+    });
+  };
+
+  const selectQuickView = (kind?: ExpiringKind) =>
+    setFilters({ expiring: filters.expiring === kind ? undefined : kind });
+
+  const quickViews: Array<{
+    key: string;
+    kind?: ExpiringKind;
+    label: string;
+    icon: ReactNode;
+    tone: string;
+    count?: number;
+  }> = [
+    {
+      key: "all",
+      label: t("employees.list.quick.all"),
+      icon: <TeamOutlined />,
+      tone: "neutral",
+    },
+    {
+      key: "iqama",
+      kind: "iqama",
+      label: t("employees.list.quick.iqama"),
+      icon: <IdcardOutlined />,
+      tone: "warning",
+      count: expiringCounts.iqama,
+    },
+    {
+      key: "contract",
+      kind: "contract",
+      label: t("employees.list.quick.contract"),
+      icon: <FileProtectOutlined />,
+      tone: "critical",
+      count: expiringCounts.contract,
+    },
+  ];
 
   const allColumns: ColumnsType<Employee> = [
     {
@@ -810,51 +874,33 @@ export default function EmployeesListPage() {
       key: "full_name",
       width: 250,
       render: (_, record) => (
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div
-            style={{
-              width: 48,
-              height: 48,
-              minWidth: 48,
-              borderRadius: "50%",
-              backgroundColor: getAvatarColor(record.full_name),
-              color: "#fff",
-              fontWeight: 700,
-              fontSize: 24,
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              lineHeight: 1,
-              boxSizing: "border-box",
-            }}
+        <div className="employees-person">
+          <span
+            className="employees-avatar"
+            style={{ backgroundColor: getAvatarColor(record.full_name) }}
+            aria-hidden="true"
           >
             {getInitials(record.full_name)}
-          </div>
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <Text strong style={{ fontSize: 14 }}>
-                {record.full_name}
-              </Text>
+          </span>
+          <div className="employees-person__text">
+            <div className="employees-person__name">
+              <Text strong>{record.full_name}</Text>
               {record.is_archived && (
-                <Tag
-                  color="default"
-                  style={{ fontSize: 11, marginInlineStart: 0 }}
-                >
+                <Tag color="default" className="employees-tag">
                   {t("employees.archive.archivedTag")}
                 </Tag>
               )}
               {!record.is_archived && pendingDeletionIds.has(record.id) && (
-                <Tag
-                  color="warning"
-                  style={{ fontSize: 11, marginInlineStart: 0 }}
-                >
+                <Tag color="warning" className="employees-tag">
                   {t("employees.removal.pendingTag")}
                 </Tag>
               )}
             </div>
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              {record.email}
-            </Text>
+            {record.email && (
+              <Text type="secondary" className="employees-person__email">
+                {record.email}
+              </Text>
+            )}
           </div>
         </div>
       ),
@@ -903,10 +949,31 @@ export default function EmployeesListPage() {
       title: t("employees.list.colJoiningDate"),
       key: "hire_date",
       width: 140,
+      sorter: true,
+      sortOrder:
+        filters.joinDateOrder === "asc"
+          ? "ascend"
+          : filters.joinDateOrder === "desc"
+            ? "descend"
+            : null,
       render: (_, record) => {
         const joiningDate = record.hire_date;
         return joiningDate ? dayjs(joiningDate).format("MMM DD, YYYY") : "-";
       },
+    },
+    {
+      title: t("employees.list.colIqamaExpiry"),
+      key: "id_expiry",
+      width: 170,
+      render: (_, record) => (
+        <ExpiryCell date={record.is_saudi ? null : record.id_expiry} t={t} />
+      ),
+    },
+    {
+      title: t("employees.list.colContractExpiry"),
+      key: "contract_expiry",
+      width: 170,
+      render: (_, record) => <ExpiryCell date={record.contract_expiry} t={t} />,
     },
     {
       title: t("employees.list.colStatus"),
@@ -948,9 +1015,9 @@ export default function EmployeesListPage() {
           >
             <Button
               type="text"
-              icon={
-                <EllipsisOutlined style={{ fontSize: 20, color: "#8c8c8c" }} />
-              }
+              aria-label={t("employees.list.colAction")}
+              className="employees-row-action"
+              icon={<EllipsisOutlined />}
             />
           </Dropdown>
         </div>
@@ -970,8 +1037,13 @@ export default function EmployeesListPage() {
     } else {
       keys = keys.filter((key) => !archiveColumns.includes(key));
     }
+    // A quick view always shows the date it filters on (defined next to the
+    // status column, so column order needs no extra handling).
+    if (expiring && !keys.includes(EXPIRY_COLUMN_BY_KIND[expiring])) {
+      keys = [...keys, EXPIRY_COLUMN_BY_KIND[expiring]];
+    }
     return allColumns.filter((column) => keys.includes(String(column.key)));
-  }, [allColumns, visibleColumnKeys, isHeadOffice, viewingArchived]);
+  }, [allColumns, visibleColumnKeys, isHeadOffice, viewingArchived, expiring]);
 
   const columnOptions = [
     { label: t("employees.list.colName"), value: "full_name" },
@@ -981,6 +1053,8 @@ export default function EmployeesListPage() {
     { label: t("employees.list.colDepartment"), value: "department" },
     { label: t("employees.list.colManager"), value: "manager" },
     { label: t("employees.list.colJoiningDate"), value: "hire_date" },
+    { label: t("employees.list.colIqamaExpiry"), value: "id_expiry" },
+    { label: t("employees.list.colContractExpiry"), value: "contract_expiry" },
     { label: t("employees.list.colStatus"), value: "employment_status" },
     ...(viewingArchived
       ? [
@@ -1007,6 +1081,8 @@ export default function EmployeesListPage() {
         nationality: filters.nationality || undefined,
         join_date_order: filters.joinDateOrder || undefined,
         archive_state: archiveState,
+        expiring,
+        expiring_days: expiring ? expiringDays : undefined,
       });
       triggerBlobDownload(
         blob,
@@ -1048,22 +1124,12 @@ export default function EmployeesListPage() {
   if (forbidden) return <Unauthorized403Page />;
 
   return (
-    <div style={{ padding: "0 12px" }}>
-      {/* Header Section */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          marginBottom: 24,
-          flexWrap: "wrap",
-          gap: 12,
-        }}
-      >
+    <div className="employees-page">
+      <header className="employees-header">
         <div>
-          <Title level={2} style={{ margin: 0, fontWeight: 700 }}>
+          <h1 className="employees-header__title">
             {t("employees.list.title")}
-          </Title>
+          </h1>
           <Text type="secondary">{t("employees.list.subtitle")}</Text>
         </div>
         <Button
@@ -1077,118 +1143,169 @@ export default function EmployeesListPage() {
               ? t("organization.headOffice.switchToCreateEmployees")
               : undefined
           }
-          style={{
-            backgroundColor: "#fa8c16",
-            borderColor: "#fa8c16",
-            borderRadius: 8,
-            height: 44,
-            paddingLeft: 24,
-            paddingRight: 24,
-            boxShadow: "0 4px 10px rgba(250, 140, 22, 0.2)",
-            opacity: isHeadOffice ? 0.65 : 1,
-          }}
+          className="employees-header__create"
         >
           {t("employees.list.createEmployee")}
         </Button>
+      </header>
+
+      <div className="employees-views">
+        {!viewingArchived && (
+          <div
+            className="employees-quick"
+            role="group"
+            aria-label={t("employees.list.quick.label")}
+          >
+            {quickViews.map((view) => (
+              <button
+                key={view.key}
+                type="button"
+                className={`employees-chip employees-chip--${view.tone}`}
+                aria-pressed={view.kind ? expiring === view.kind : !expiring}
+                onClick={() => selectQuickView(view.kind)}
+              >
+                <span className="employees-chip__icon" aria-hidden="true">
+                  {view.icon}
+                </span>
+                {view.label}
+                {view.count !== undefined && (
+                  <span className="employees-chip__count">{view.count}</span>
+                )}
+              </button>
+            ))}
+            <Select
+              aria-label={t("employees.list.expiringWithin", {
+                days: expiringDays,
+              })}
+              value={expiringDays}
+              onChange={(value) => setFilters({ expiringDays: value })}
+              options={EXPIRING_DAY_OPTIONS.map((days) => ({
+                value: days,
+                label: t("employees.list.expiringWithin", { days }),
+              }))}
+              className="employees-quick__window"
+              popupMatchSelectWidth={false}
+            />
+            {expiring && (
+              <Text type="secondary" className="employees-quick__hint">
+                {t("employees.list.expiringHint")}
+              </Text>
+            )}
+          </div>
+        )}
+
+        {canManageArchive && (
+          <Segmented
+            aria-label={t("employees.archive.stateFilterLabel")}
+            value={archiveState}
+            onChange={(value) =>
+              setFilters({ archiveState: value as "active" | "archived" })
+            }
+            options={[
+              {
+                label: t("employees.archive.stateActive"),
+                value: "active",
+              },
+              {
+                label: t("employees.archive.stateArchived"),
+                value: "archived",
+              },
+            ]}
+            className="employees-views__archive"
+          />
+        )}
       </div>
 
-      {/* Filter Section */}
-      <Card
-        bordered={false}
-        style={{
-          borderRadius: 12,
-          marginBottom: 24,
-          boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
-        }}
-        bodyStyle={{ padding: 16 }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            flexWrap: "wrap",
-            gap: 16,
-          }}
-        >
-          <div style={{ flex: 1, minWidth: 200 }}>
-            <Input
-              placeholder={t("employees.list.searchPlaceholder")}
-              prefix={<SearchOutlined style={{ color: "#bfbfbf" }} />}
-              value={searchInput}
-              onChange={(e) => {
-                const value = e.target.value;
-                setSearchInput(value);
-                debouncedSearch(value);
-              }}
-              size="large"
-              style={{
-                borderRadius: 8,
-                backgroundColor: "#f9f9f9",
-                border: "1px solid #f0f0f0",
-                width: "100%",
-                maxWidth: 400,
-              }}
-              bordered={false}
-            />
-          </div>
+      <section className="employees-workspace">
+        <div className="employees-toolbar">
+          <Input
+            allowClear
+            placeholder={t("employees.list.searchPlaceholder")}
+            prefix={<SearchOutlined className="employees-muted-icon" />}
+            value={searchInput}
+            onChange={(e) => {
+              const value = e.target.value;
+              setSearchInput(value);
+              debouncedSearch(value);
+            }}
+            className="employees-toolbar__search"
+          />
 
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            {canManageArchive && (
-              <Segmented
-                aria-label={t("employees.archive.stateFilterLabel")}
-                size="large"
-                value={archiveState}
-                onChange={(value) =>
-                  setFilters({ archiveState: value as "active" | "archived" })
-                }
-                options={[
-                  {
-                    label: t("employees.archive.stateActive"),
-                    value: "active",
-                  },
-                  {
-                    label: t("employees.archive.stateArchived"),
-                    value: "archived",
-                  },
-                ]}
-              />
+          <Select
+            placeholder={t("employees.list.departmentPlaceholder")}
+            aria-label={t("employees.list.departmentPlaceholder")}
+            value={filters.department || undefined}
+            onChange={(value) => setFilters({ department: value })}
+            allowClear
+            showSearch
+            optionFilterProp="children"
+            className="employees-toolbar__select"
+          >
+            {departments.map((dept) => (
+              <Option key={dept.code} value={dept.code}>
+                {dept.name}
+              </Option>
+            ))}
+          </Select>
+
+          <Select
+            placeholder={t("employees.list.statusPlaceholder")}
+            aria-label={t("employees.list.statusPlaceholder")}
+            value={filters.status || undefined}
+            onChange={(value) => setFilters({ status: value })}
+            allowClear
+            className="employees-toolbar__select"
+          >
+            <Option value="ACTIVE">{t("status.active")}</Option>
+            <Option value="ON_LEAVE">{t("status.onLeave")}</Option>
+            <Option value="SUSPENDED">{t("status.suspended")}</Option>
+            <Option value="TERMINATED">{t("status.terminated")}</Option>
+          </Select>
+
+          <Select
+            placeholder={t(
+              "employees.list.nationalityPlaceholder",
+              "Nationality",
             )}
+            aria-label={t(
+              "employees.list.nationalityPlaceholder",
+              "Nationality",
+            )}
+            value={filters.nationality || undefined}
+            onChange={(value) => setFilters({ nationality: value })}
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            options={nationalities.map((nationality) => ({
+              value: nationality,
+              label: nationality,
+            }))}
+            optionRender={(option) => (
+              <span className="employees-nationality">
+                <FlagBadge nationality={String(option.value)} />
+                {option.label}
+              </span>
+            )}
+            labelRender={(option) => (
+              <span className="employees-nationality">
+                <FlagBadge nationality={String(option.value)} />
+                {option.label}
+              </span>
+            )}
+            className="employees-toolbar__select"
+          />
 
-            <Select
-              placeholder={t("employees.list.departmentPlaceholder")}
-              value={filters.department || undefined}
-              onChange={(value) => setFilters({ department: value })}
-              size="large"
-              style={{ flex: "0 1 160px", minWidth: 120 }}
-              allowClear
-              bordered={false}
-              className="custom-select-filter"
-              dropdownStyle={{ borderRadius: 8 }}
-            >
-              {departments.map((dept) => (
-                <Option key={dept.code} value={dept.code}>
-                  {dept.name}
-                </Option>
-              ))}
-            </Select>
+          <Button
+            type="text"
+            icon={<UndoOutlined aria-hidden="true" />}
+            onClick={resetFilters}
+            disabled={!hasFilters}
+            className="employees-toolbar__reset"
+          >
+            {t("common.reset")}
+          </Button>
 
-            <Select
-              placeholder={t("employees.list.statusPlaceholder")}
-              value={filters.status || undefined}
-              onChange={(value) => setFilters({ status: value })}
-              size="large"
-              style={{ flex: "0 1 140px", minWidth: 110 }}
-              allowClear
-              bordered={false}
-              className="custom-select-filter"
-            >
-              <Option value="ACTIVE">{t("status.active")}</Option>
-              <Option value="ON_LEAVE">{t("status.onLeave")}</Option>
-              <Option value="SUSPENDED">{t("status.suspended")}</Option>
-              <Option value="TERMINATED">{t("status.terminated")}</Option>
-            </Select>
-
+          <div className="employees-toolbar__tools">
             <Popover
               content={columnsPopoverContent}
               trigger="click"
@@ -1196,63 +1313,41 @@ export default function EmployeesListPage() {
             >
               <Tooltip title={t("common.columns", "Columns")}>
                 <Button
-                  size="large"
                   icon={<SettingOutlined />}
-                  style={{ borderRadius: 8 }}
+                  aria-label={t("common.columns", "Columns")}
                 />
               </Tooltip>
             </Popover>
-
-            <Popover
-              content={moreFiltersContent}
-              trigger="click"
-              open={filtersOpen}
-              onOpenChange={setFiltersOpen}
-              placement="bottomRight"
-            >
-              <Tooltip title={t("common.moreFilters")}>
-                <Button
-                  size="large"
-                  icon={<FilterOutlined />}
-                  style={{
-                    borderRadius: 8,
-                    borderColor:
-                      filters.nationality || filters.joinDateOrder
-                        ? "#fa8c16"
-                        : undefined,
-                    color:
-                      filters.nationality || filters.joinDateOrder
-                        ? "#fa8c16"
-                        : undefined,
-                  }}
-                />
-              </Tooltip>
-            </Popover>
-
             <Tooltip title={t("common.export")}>
               <Button
-                size="large"
                 icon={<DownloadOutlined />}
-                style={{ borderRadius: 8 }}
+                aria-label={t("common.export")}
                 onClick={handleExport}
               />
             </Tooltip>
           </div>
         </div>
-      </Card>
 
-      {/* Table Section */}
-      <Card
-        bordered={false}
-        style={{ borderRadius: 16, boxShadow: "0 4px 20px rgba(0,0,0,0.02)" }}
-        bodyStyle={{ padding: 0 }}
-      >
+        <div className="employees-results__heading">
+          <span>
+            {viewingArchived
+              ? t("employees.archive.stateArchived")
+              : expiring
+                ? quickViews.find((view) => view.kind === expiring)?.label
+                : t("employees.list.quick.all")}
+          </span>
+          <span className="employees-results__count">
+            {loading && employees.length > 0 && <Spin size="small" />}
+            {t("employees.list.count", { count: total })}
+          </span>
+        </div>
+
         {loading && employees.length === 0 ? (
-          <div style={{ padding: 40 }}>
+          <div className="employees-results__state">
             <LoadingState />
           </div>
         ) : error ? (
-          <div style={{ padding: 40 }}>
+          <div className="employees-results__state">
             <ErrorState
               title={t("common.error")}
               description={error}
@@ -1260,38 +1355,53 @@ export default function EmployeesListPage() {
             />
           </div>
         ) : (
-          <ResponsiveTable
-            mobileCard={{
-              titleKey: "full_name",
-              extraKey: "employment_status",
-              actionsKey: "action",
-            }}
-            dataSource={employees}
-            columns={columns}
-            rowKey="id"
-            pagination={{
-              current: page,
-              pageSize: pageSize,
-              total: total,
-              onChange: (newPage, newPageSize) => {
-                if (newPageSize !== pageSize) {
-                  setPageSize(newPageSize);
-                } else {
-                  setPage(newPage);
-                }
-              },
-              showTotal: (total, range) =>
-                `${t("common.showing")} ${range[0]} ${t("common.to")} ${range[1]} ${t("common.of")} ${total} ${t("common.entries")}`,
-              style: { padding: "24px" },
-            }}
-            onRow={(record) => ({
-              onClick: () => handleRowClick(record),
-              style: { cursor: "pointer" },
-            })}
-            scroll={{ x: "max-content" }}
-          />
+          <div className="employees-table">
+            <ResponsiveTable
+              mobileCard={{
+                titleKey: "full_name",
+                extraKey: "employment_status",
+                actionsKey: "action",
+              }}
+              dataSource={employees}
+              columns={columns}
+              rowKey="id"
+              loading={loading && employees.length > 0}
+              pagination={{
+                current: page,
+                pageSize: pageSize,
+                total: total,
+                onChange: (newPage, newPageSize) => {
+                  if (newPageSize !== pageSize) {
+                    setPageSize(newPageSize);
+                  } else {
+                    setPage(newPage);
+                  }
+                },
+                showTotal: (total, range) =>
+                  `${t("common.showing")} ${range[0]} ${t("common.to")} ${range[1]} ${t("common.of")} ${total} ${t("common.entries")}`,
+              }}
+              onChange={(_pagination, _filters, sorter, extra) => {
+                if (extra?.action !== "sort") return;
+                const { columnKey, order } = sorter as SorterResult<Employee>;
+                if (columnKey !== "hire_date") return;
+                setFilters({
+                  joinDateOrder:
+                    order === "ascend"
+                      ? "asc"
+                      : order === "descend"
+                        ? "desc"
+                        : undefined,
+                });
+              }}
+              onRow={(record) => ({
+                onClick: () => handleRowClick(record),
+                style: { cursor: "pointer" },
+              })}
+              scroll={{ x: "max-content" }}
+            />
+          </div>
         )}
-      </Card>
+      </section>
 
       <Modal
         open={deletionTarget !== null}
@@ -1439,28 +1549,6 @@ export default function EmployeesListPage() {
           </div>
         )}
       </Modal>
-
-      <style>{`
-                .custom-select-filter .ant-select-selector {
-                    background-color: #fff !important;
-                    border: 1px solid #d9d9d9 !important;
-                    border-radius: 8px !important;
-                }
-                .ant-table-thead > tr > th {
-                    background: #fff !important;
-                    color: #8c8c8c !important;
-                    font-weight: 600 !important;
-                    font-size: 12px !important;
-                    text-transform: uppercase !important;
-                    border-bottom: 1px solid #f0f0f0 !important;
-                }
-                .ant-table-tbody > tr > td {
-                    padding: 16px 16px !important;
-                }
-                .ant-table-tbody > tr:hover > td {
-                    background: #fafafa !important;
-                }
-            `}</style>
     </div>
   );
 }
