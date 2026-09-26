@@ -325,3 +325,42 @@
     margin-inline-start: 0;
   }
 }
+
+/* ---------- Small shared bits ---------- */
+
+/* Record codes (asset codes, references). */
+.ffi-code {
+  display: inline-block;
+  padding: 2px 8px;
+  color: #334155;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* Count bubble inside a pill tab label. */
+.ffi-tab-count {
+  display: inline-block;
+  min-width: 20px;
+  margin-inline-start: 4px;
+  padding: 0 6px;
+  color: var(--text-secondary);
+  background: #e9edf3;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.ant-tabs-tab-active .ffi-tab-count {
+  color: #fff;
+  background: var(--brand-primary);
+}

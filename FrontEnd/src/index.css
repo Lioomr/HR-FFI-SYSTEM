@@ -1050,7 +1050,27 @@ html[dir="rtl"] .modern-sidebar .ant-menu-item-selected::before {
 }
 
 @media (max-width: 600px) {
+  /* Phones: tabs wrap onto a second line instead of hiding off-screen. */
+  .ffi-pill-tabs > .ant-tabs-nav .ant-tabs-nav-wrap {
+    overflow: visible;
+  }
+
+  .ffi-pill-tabs > .ant-tabs-nav .ant-tabs-nav-list {
+    flex-wrap: wrap;
+    width: 100%;
+    transform: none !important;
+  }
+
+  .ffi-pill-tabs > .ant-tabs-nav .ant-tabs-nav-wrap::before,
+  .ffi-pill-tabs > .ant-tabs-nav .ant-tabs-nav-wrap::after,
+  .ffi-pill-tabs > .ant-tabs-nav .ant-tabs-nav-operations {
+    display: none !important;
+  }
+
   .ffi-pill-tabs > .ant-tabs-nav .ant-tabs-tab {
+    flex: 1 1 auto;
+    justify-content: center;
     padding: 8px 12px !important;
+    font-size: 13px;
   }
 }

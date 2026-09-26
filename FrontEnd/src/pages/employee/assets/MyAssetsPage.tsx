@@ -1,26 +1,31 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Button,
-  Card,
   Descriptions,
   Form,
   Input,
   Modal,
-  Row,
-  Col,
   Select,
   Space,
   Tabs,
   Tag,
-  Typography,
   message,
 } from "antd";
+import {
+  EyeOutlined,
+  LaptopOutlined,
+  RollbackOutlined,
+  ToolOutlined,
+  UndoOutlined,
+  WarningOutlined,
+} from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 
 import EmptyState from "../../../components/ui/EmptyState";
 import ErrorState from "../../../components/ui/ErrorState";
 import LoadingState from "../../../components/ui/LoadingState";
 import PageHeader from "../../../components/ui/PageHeader";
+import { WorkspaceCard } from "../../../components/ui/workspace/Workspace";
 import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import {
   listMyAssetDamageReports,
@@ -147,15 +152,13 @@ export default function MyAssetsPage() {
 
       if (isApiError(damageRes)) {
         setRequestError(
-          damageRes.message ||
-            t("assets.requestHistoryUnavailable"),
+          damageRes.message || t("assets.requestHistoryUnavailable"),
         );
         return;
       }
       if (isApiError(returnRes)) {
         setRequestError(
-          returnRes.message ||
-            t("assets.requestHistoryUnavailable"),
+          returnRes.message || t("assets.requestHistoryUnavailable"),
         );
         return;
       }
@@ -166,10 +169,7 @@ export default function MyAssetsPage() {
       setReturnTotal(returnRes.data.count || 0);
       setRequestError(null);
     } catch (err: any) {
-      setRequestError(
-        err?.message ||
-          t("assets.requestHistoryUnavailable"),
-      );
+      setRequestError(err?.message || t("assets.requestHistoryUnavailable"));
     } finally {
       setRequestLoading(false);
     }
@@ -294,18 +294,7 @@ export default function MyAssetsPage() {
       dataIndex: "asset_code",
       key: "asset_code",
       width: 140,
-      render: (value: string, record) => (
-        <Button
-          type="link"
-          style={{ paddingInline: 0 }}
-          onClick={(e) => {
-            e.stopPropagation();
-            openDetails(record);
-          }}
-        >
-          {value}
-        </Button>
-      ),
+      render: (value: string) => <span className="ffi-code">{value}</span>,
     },
     {
       title: t("common.name"),
@@ -313,7 +302,7 @@ export default function MyAssetsPage() {
       render: (_: unknown, record) => (
         <Button
           type="link"
-          style={{ paddingInline: 0 }}
+          style={{ paddingInline: 0, fontWeight: 600 }}
           onClick={(e) => {
             e.stopPropagation();
             openDetails(record);
@@ -329,6 +318,14 @@ export default function MyAssetsPage() {
       key: "type",
       width: 120,
       responsive: ["md"],
+      render: (value: string) =>
+        value === "VEHICLE"
+          ? t("hr.assets.vehicle", "Vehicle")
+          : value === "LAPTOP"
+            ? t("hr.assets.laptop", "Laptop")
+            : value === "OTHER"
+              ? t("hr.assets.other", "Other")
+              : value || "-",
     },
     {
       title: t("common.status"),
@@ -360,11 +357,12 @@ export default function MyAssetsPage() {
     {
       title: t("common.actions"),
       key: "actions",
-      width: 220,
+      width: 340,
       render: (_, record) => (
-        <Space>
+        <Space size={4} style={{ whiteSpace: "nowrap" }}>
           <Button
             size="small"
+            icon={<EyeOutlined aria-hidden="true" />}
             onClick={(e) => {
               e.stopPropagation();
               openDetails(record);
@@ -374,6 +372,8 @@ export default function MyAssetsPage() {
           </Button>
           <Button
             size="small"
+            type="text"
+            icon={<ToolOutlined aria-hidden="true" />}
             onClick={(e) => {
               e.stopPropagation();
               setSelectedAsset(record);
@@ -386,6 +386,8 @@ export default function MyAssetsPage() {
           </Button>
           <Button
             size="small"
+            type="text"
+            icon={<RollbackOutlined aria-hidden="true" />}
             onClick={(e) => {
               e.stopPropagation();
               setSelectedAsset(record);
@@ -487,6 +489,199 @@ export default function MyAssetsPage() {
       />
     );
 
+  const requestAssetFilterSelect = (
+    <Select
+      allowClear
+      value={requestAssetFilter}
+      className="ffi-toolbar__field"
+      style={{ maxWidth: 360 }}
+      placeholder={t("assets.allAssets", "All assets")}
+      aria-label={t("assets.filterRequestsByAsset", "Filter by asset")}
+      onChange={(value) => {
+        setRequestAssetFilter(value);
+        setDamagePage(1);
+        setReturnPage(1);
+      }}
+      options={requestAssetOptions}
+    />
+  );
+
+  const requestHistoryError = requestError ? (
+    <div style={{ padding: 24 }}>
+      <ErrorState
+        title={t(
+          "assets.requestHistoryUnavailable",
+          "Unable to load request history",
+        )}
+        description={requestError}
+        onRetry={() => void loadRequestHistory()}
+      />
+    </div>
+  ) : null;
+
+  const hasAssetFilters = Boolean(appliedSearch || typeFilter || statusFilter);
+
+  const assetsView = (
+    <WorkspaceCard
+      toolbar={
+        <>
+          <Input.Search
+            allowClear
+            value={searchText}
+            className="ffi-toolbar__search"
+            placeholder={t(
+              "assets.searchPlaceholder",
+              "Search by asset code, serial number, or name",
+            )}
+            onChange={(e) => setSearchText(e.target.value)}
+            onSearch={(value) => {
+              setAppliedSearch(value.trim());
+              setAssetPage(1);
+            }}
+          />
+          <Select
+            allowClear
+            value={typeFilter}
+            className="ffi-toolbar__field"
+            placeholder={t("common.type")}
+            aria-label={t("common.type")}
+            onChange={(value) => {
+              setTypeFilter(value);
+              setAssetPage(1);
+            }}
+            options={[
+              { label: t("hr.assets.vehicle", "Vehicle"), value: "VEHICLE" },
+              { label: t("hr.assets.laptop", "Laptop"), value: "LAPTOP" },
+              { label: t("hr.assets.other", "Other"), value: "OTHER" },
+            ]}
+          />
+          <Select
+            allowClear
+            value={statusFilter}
+            className="ffi-toolbar__field"
+            placeholder={t("common.status")}
+            aria-label={t("common.status")}
+            onChange={(value) => {
+              setStatusFilter(value);
+              setAssetPage(1);
+            }}
+            options={ASSET_STATUSES.map((value) => ({
+              label: t(`assets.status.${value}`, value),
+              value,
+            }))}
+          />
+          <Button
+            type="text"
+            icon={<UndoOutlined aria-hidden="true" />}
+            className="ffi-toolbar__reset"
+            disabled={!hasAssetFilters && !searchText}
+            onClick={resetAssetFilters}
+          >
+            {t("common.reset")}
+          </Button>
+        </>
+      }
+      title={t("assets.myAssets")}
+      count={t("assets.count", { count: assetTotal })}
+      busy={assetLoading && assets.length > 0}
+    >
+      {assetTotal === 0 && !assetLoading ? (
+        <div style={{ padding: 24 }}>
+          <EmptyState
+            title={t("assets.noAssets")}
+            description={t("assets.noAssetsDesc")}
+          />
+        </div>
+      ) : (
+        <ResponsiveTable
+          mobileCard={{
+            titleKey: "name",
+            extraKey: "status",
+            actionsKey: "actions",
+          }}
+          columns={columns}
+          dataSource={dataSource}
+          loading={assetLoading}
+          scroll={{ x: "max-content" }}
+          pagination={{
+            current: assetPage,
+            pageSize: assetPageSize,
+            total: assetTotal,
+            showSizeChanger: true,
+            onChange: (page, pageSize) => {
+              setAssetPage(page);
+              setAssetPageSize(pageSize);
+            },
+          }}
+          onRow={(record) => ({
+            onClick: () => openDetails(record),
+            style: { cursor: "pointer" },
+          })}
+        />
+      )}
+    </WorkspaceCard>
+  );
+
+  const damageView = (
+    <WorkspaceCard
+      toolbar={requestAssetFilterSelect}
+      title={t("assets.damageReports", "Damage Reports")}
+      count={t("common.requestsCount", { count: damageTotal })}
+      busy={requestLoading && damageReports.length > 0}
+    >
+      {requestHistoryError ?? (
+        <ResponsiveTable
+          mobileCard={{ titleKey: "asset_code", extraKey: "status" }}
+          rowKey="id"
+          columns={damageColumns}
+          dataSource={damageReports}
+          loading={requestLoading}
+          scroll={{ x: "max-content" }}
+          pagination={{
+            current: damagePage,
+            pageSize: damagePageSize,
+            total: damageTotal,
+            showSizeChanger: true,
+            onChange: (page, pageSize) => {
+              setDamagePage(page);
+              setDamagePageSize(pageSize);
+            },
+          }}
+        />
+      )}
+    </WorkspaceCard>
+  );
+
+  const returnView = (
+    <WorkspaceCard
+      toolbar={requestAssetFilterSelect}
+      title={t("assets.returnRequests", "Return Requests")}
+      count={t("common.requestsCount", { count: returnTotal })}
+      busy={requestLoading && returnRequests.length > 0}
+    >
+      {requestHistoryError ?? (
+        <ResponsiveTable
+          mobileCard={{ titleKey: "asset_code", extraKey: "status" }}
+          rowKey="id"
+          columns={returnColumns}
+          dataSource={returnRequests}
+          loading={requestLoading}
+          scroll={{ x: "max-content" }}
+          pagination={{
+            current: returnPage,
+            pageSize: returnPageSize,
+            total: returnTotal,
+            showSizeChanger: true,
+            onChange: (page, pageSize) => {
+              setReturnPage(page);
+              setReturnPageSize(pageSize);
+            },
+          }}
+        />
+      )}
+    </WorkspaceCard>
+  );
+
   return (
     <div>
       {contextHolder}
@@ -495,184 +690,44 @@ export default function MyAssetsPage() {
         subtitle={t("assets.myAssetsDesc")}
       />
 
-      <Card style={{ marginBottom: 16 }}>
-        <Row gutter={[12, 12]}>
-          <Col xs={24} md={10}>
-            <Input.Search
-              allowClear
-              value={searchText}
-              placeholder={t(
-                "assets.searchPlaceholder",
-                "Search by asset code, serial number, or name",
-              )}
-              onChange={(e) => setSearchText(e.target.value)}
-              onSearch={(value) => {
-                setAppliedSearch(value.trim());
-                setAssetPage(1);
-              }}
-            />
-          </Col>
-          <Col xs={24} md={6}>
-            <Select
-              allowClear
-              value={typeFilter}
-              style={{ width: "100%" }}
-              placeholder={t("common.type")}
-              onChange={(value) => {
-                setTypeFilter(value);
-                setAssetPage(1);
-              }}
-              options={[
-                { label: t("hr.assets.vehicle", "Vehicle"), value: "VEHICLE" },
-                { label: t("hr.assets.laptop", "Laptop"), value: "LAPTOP" },
-                { label: t("hr.assets.other", "Other"), value: "OTHER" },
-              ]}
-            />
-          </Col>
-          <Col xs={24} md={6}>
-            <Select
-              allowClear
-              value={statusFilter}
-              style={{ width: "100%" }}
-              placeholder={t("common.status")}
-              onChange={(value) => {
-                setStatusFilter(value);
-                setAssetPage(1);
-              }}
-              options={ASSET_STATUSES.map((value) => ({
-                label: t(`assets.status.${value}`, value),
-                value,
-              }))}
-            />
-          </Col>
-          <Col xs={24} md={2}>
-            <Button block onClick={resetAssetFilters}>
-              {t("common.reset")}
-            </Button>
-          </Col>
-        </Row>
-      </Card>
-
-      {assetTotal === 0 ? (
-        <EmptyState
-          title={t("assets.noAssets")}
-          description={t("assets.noAssetsDesc")}
-        />
-      ) : (
-        <Card style={{ marginBottom: 16 }}>
-          <ResponsiveTable
-            mobileCard={{ titleKey: "name", extraKey: "status" }}
-            columns={columns}
-            dataSource={dataSource}
-            loading={assetLoading}
-            size="small"
-            scroll={{ x: "max-content" }}
-            pagination={{
-              current: assetPage,
-              pageSize: assetPageSize,
-              total: assetTotal,
-              showSizeChanger: true,
-              onChange: (page, pageSize) => {
-                setAssetPage(page);
-                setAssetPageSize(pageSize);
-              },
-            }}
-            onRow={(record) => ({
-              onClick: () => openDetails(record),
-              style: { cursor: "pointer" },
-            })}
-          />
-        </Card>
-      )}
-
-      <Card
-        title={t("assets.requestsHistory", "Request History")}
-        extra={
-          <Space wrap>
-            <Typography.Text type="secondary">
-              {t("assets.filterRequestsByAsset", "Filter by asset")}
-            </Typography.Text>
-            <Select
-              allowClear
-              value={requestAssetFilter}
-              style={{ minWidth: 240 }}
-              placeholder={t("assets.allAssets", "All assets")}
-              onChange={(value) => {
-                setRequestAssetFilter(value);
-                setDamagePage(1);
-                setReturnPage(1);
-              }}
-              options={requestAssetOptions}
-            />
-          </Space>
-        }
-      >
-        {requestError ? (
-          <ErrorState
-            title={t(
-              "assets.requestHistoryUnavailable",
-              "Unable to load request history",
-            )}
-            description={requestError}
-            onRetry={() => void loadRequestHistory()}
-          />
-        ) : (
-          <Tabs
-            items={[
-              {
-                key: "damage",
-                label: `${t("assets.damageReports", "Damage Reports")} (${damageTotal})`,
-                children: (
-                  <ResponsiveTable
-                    mobileCard={{ titleKey: "asset_code", extraKey: "status" }}
-                    rowKey="id"
-                    columns={damageColumns}
-                    dataSource={damageReports}
-                    loading={requestLoading}
-                    size="small"
-                    scroll={{ x: "max-content" }}
-                    pagination={{
-                      current: damagePage,
-                      pageSize: damagePageSize,
-                      total: damageTotal,
-                      showSizeChanger: true,
-                      onChange: (page, pageSize) => {
-                        setDamagePage(page);
-                        setDamagePageSize(pageSize);
-                      },
-                    }}
-                  />
-                ),
-              },
-              {
-                key: "return",
-                label: `${t("assets.returnRequests", "Return Requests")} (${returnTotal})`,
-                children: (
-                  <ResponsiveTable
-                    mobileCard={{ titleKey: "asset_code", extraKey: "status" }}
-                    rowKey="id"
-                    columns={returnColumns}
-                    dataSource={returnRequests}
-                    loading={requestLoading}
-                    size="small"
-                    scroll={{ x: "max-content" }}
-                    pagination={{
-                      current: returnPage,
-                      pageSize: returnPageSize,
-                      total: returnTotal,
-                      showSizeChanger: true,
-                      onChange: (page, pageSize) => {
-                        setReturnPage(page);
-                        setReturnPageSize(pageSize);
-                      },
-                    }}
-                  />
-                ),
-              },
-            ]}
-          />
-        )}
-      </Card>
+      <Tabs
+        className="ffi-pill-tabs"
+        items={[
+          {
+            key: "assets",
+            icon: <LaptopOutlined aria-hidden="true" />,
+            label: (
+              <span>
+                {t("assets.myAssets")}{" "}
+                <span className="ffi-tab-count">{assetTotal}</span>
+              </span>
+            ),
+            children: assetsView,
+          },
+          {
+            key: "damage",
+            icon: <WarningOutlined aria-hidden="true" />,
+            label: (
+              <span>
+                {t("assets.damageReports", "Damage Reports")}{" "}
+                <span className="ffi-tab-count">{damageTotal}</span>
+              </span>
+            ),
+            children: damageView,
+          },
+          {
+            key: "return",
+            icon: <RollbackOutlined aria-hidden="true" />,
+            label: (
+              <span>
+                {t("assets.returnRequests", "Return Requests")}{" "}
+                <span className="ffi-tab-count">{returnTotal}</span>
+              </span>
+            ),
+            children: returnView,
+          },
+        ]}
+      />
 
       <Modal
         title={`${t("assets.details")}${selectedAsset ? `: ${selectedAsset.asset_code}` : ""}`}
