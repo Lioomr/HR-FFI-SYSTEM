@@ -264,11 +264,6 @@ export default function AnnualLeavePaymentCard({
             ]
           : []),
         {
-          key: "fractional",
-          label: t("annualPayment.fractionalDays"),
-          children: `${formatSettlementDays(eligibility.fractional_days)} ${t("leave.days")}`,
-        },
-        {
           key: "salary",
           label: t("annualPayment.yearEndSalary"),
           children: formatSettlementAmount(eligibility.salary_at_year_end),

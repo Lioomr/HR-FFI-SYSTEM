@@ -45,7 +45,6 @@ function makeSettlement(
     accrued_days: "12.25",
     used_days: "2.00",
     eligible_unused_days: "10.00",
-    fractional_days: "0.25",
     has_pending_annual_leave: false,
     salary_at_year_end: "6000.00",
     payment_amount: "2000.00",

@@ -60,7 +60,6 @@ const annualRow = {
   remaining_days: "10.25",
   pending_days: "3.00",
   requestable_days: "7.00",
-  fractional_days: "0.25",
   available_annual_year_days: "12.25",
   adjustments: 0,
 };
@@ -75,7 +74,6 @@ function makeEligibility(
     cycle_start: "2025-05-02",
     cycle_end: "2026-05-01",
     eligible_unused_days: "21.00",
-    fractional_days: "0.00",
     salary_at_year_end: "3500.00",
     estimated_payment_amount: "2450.00",
     has_pending_annual_leave: false,
@@ -97,7 +95,6 @@ function makeSettlement(
     accrued_days: "21.00",
     used_days: "0.00",
     eligible_unused_days: "21.00",
-    fractional_days: "0.00",
     has_pending_annual_leave: false,
     salary_at_year_end: "3500.00",
     payment_amount: "2450.00",

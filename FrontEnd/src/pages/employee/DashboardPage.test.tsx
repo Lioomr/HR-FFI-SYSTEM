@@ -35,7 +35,6 @@ function eligibility(
     cycle_end: "2027-02-23",
     eligible_unused_days: "10.00",
     locked_unused_days: "33.00",
-    fractional_days: "0.00",
     salary_at_year_end: "3000.00",
     estimated_payment_amount: "1000.00",
     has_pending_annual_leave: false,

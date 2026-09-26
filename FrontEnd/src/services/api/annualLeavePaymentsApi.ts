@@ -66,7 +66,6 @@ export interface AnnualLeavePaymentRequest {
   used_days: string | number;
   eligible_unused_days: string | number;
   /** Remainder below a whole day; never payable, shown for information only. */
-  fractional_days: string | number;
   /**
    * Server-owned flag: the employee has an Annual Leave request in one of the
    * reserving states (`submitted`, `pending_delegate`, `pending_manager`,
@@ -126,7 +125,6 @@ export interface AnnualLeaveEligibility {
   eligible_unused_days: string | number;
   /** Leave-only days: takeable as leave, never included in the estimate. */
   locked_unused_days?: string | number;
-  fractional_days: string | number;
   salary_at_year_end: string | number;
   estimated_payment_amount: string | number;
   has_pending_annual_leave: boolean;

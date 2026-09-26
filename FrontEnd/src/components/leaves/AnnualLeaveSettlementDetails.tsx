@@ -66,11 +66,6 @@ export default function AnnualLeaveSettlementDetails({
             ]
           : []),
         {
-          key: "fractional",
-          label: t("annualPayment.fractionalDays"),
-          children: `${formatSettlementDays(request.fractional_days)} ${t("leave.days")}`,
-        },
-        {
           key: "salary",
           label: t("annualPayment.yearEndSalary"),
           children: formatSettlementAmount(request.salary_at_year_end),

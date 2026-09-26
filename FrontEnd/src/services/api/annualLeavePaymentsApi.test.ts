@@ -33,7 +33,6 @@ describe("eligibility", () => {
       cycle_start: "2025-05-02",
       cycle_end: "2026-05-01",
       eligible_unused_days: "21.00",
-      fractional_days: "0.00",
       salary_at_year_end: "3500.00",
       estimated_payment_amount: "2450.00",
       has_pending_annual_leave: false,
