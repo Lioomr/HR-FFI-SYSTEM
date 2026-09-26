@@ -101,6 +101,9 @@ export interface ListEmployeesParams {
   nationality?: string;
   join_date_order?: "asc" | "desc";
   archive_state?: "active" | "archived" | "all";
+  /** Iqama (non-Saudi ID) or contract expiring within `expiring_days`, expired included. */
+  expiring?: "iqama" | "contract";
+  expiring_days?: number;
 }
 
 export interface DelegationCandidate {
@@ -226,7 +229,11 @@ export async function createEmployee(
   payload: CreateEmployeeDto,
   params?: Pick<ListEmployeesParams, "scope">,
 ): Promise<ApiResponse<Employee>> {
-  const { data } = await api.post<ApiResponse<Employee>>("/employees", payload, { params });
+  const { data } = await api.post<ApiResponse<Employee>>(
+    "/employees",
+    payload,
+    { params },
+  );
   return data;
 }
 

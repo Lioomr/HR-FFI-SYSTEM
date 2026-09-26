@@ -16,6 +16,7 @@ from django.http import FileResponse, HttpResponse
 from django.utils import timezone
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -578,6 +579,42 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         context["request"]._active_company = get_active_company_for_request(self.request)
         return context
 
+    # `expiring` list filter: document -> (expiry field, extra condition). The
+    # Iqama is the ID card of a non-Saudi employee; a Saudi's ID card is the
+    # national ID (same split as the HR dashboard's expiring documents).
+    EXPIRING_FILTERS = {
+        "iqama": ("id_expiry", Q(is_saudi=False)),
+        "contract": ("contract_expiry", Q()),
+    }
+    EXPIRING_DEFAULT_DAYS = 30
+
+    def _apply_expiring_filter(self, qs, params):
+        """Employees whose chosen document expires within `expiring_days`.
+
+        Already-expired documents are included: they need HR action first.
+        Several kinds (``expiring=iqama,contract``) match any of them.
+        """
+        raw = params.get("expiring")
+        if not raw:
+            return qs
+        kinds = [kind.strip().lower() for kind in raw.split(",") if kind.strip()]
+        unknown = sorted({kind for kind in kinds if kind not in self.EXPIRING_FILTERS})
+        if not kinds or unknown:
+            raise DRFValidationError({"expiring": [f"Use one or more of: {', '.join(self.EXPIRING_FILTERS)}."]})
+        try:
+            days = int(params.get("expiring_days", self.EXPIRING_DEFAULT_DAYS))
+        except (TypeError, ValueError):
+            days = -1
+        if days < 1 or days > 365:
+            raise DRFValidationError({"expiring_days": ["Must be a whole number between 1 and 365."]})
+
+        cutoff = timezone.localdate() + timedelta(days=days)
+        condition = Q()
+        for kind in dict.fromkeys(kinds):
+            field, extra = self.EXPIRING_FILTERS[kind]
+            condition |= Q(**{f"{field}__isnull": False, f"{field}__lte": cutoff}) & extra
+        return qs.filter(condition)
+
     def _apply_filters(self, qs):
         params = self.request.query_params
         search = params.get("search")
@@ -623,6 +660,8 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
                 | Q(nationality_en__icontains=nationality)
                 | Q(nationality_ar__icontains=nationality)
             )
+
+        qs = self._apply_expiring_filter(qs, params)
 
         join_date_order = params.get("join_date_order")
         if join_date_order == "asc":
