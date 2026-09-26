@@ -291,6 +291,23 @@ class AttendanceReadAccessTests(BioTimeOnlyAttendancePolicyBase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual([row["id"] for row in response.data["data"]["items"]], [record.id])
 
+    def test_own_attendance_includes_period_totals_for_own_rows_only(self):
+        self._biotime_record(self.mapped_profile)
+        absent = self._biotime_record(self.mapped_profile, self.today - timedelta(days=1))
+        absent.status = AttendanceRecord.Status.ABSENT
+        absent.save(update_fields=["status"])
+        # Another employee's row never counts towards the caller's totals.
+        self._biotime_record(self.manager_profile, emp_code="BT-2002")
+        self.client.force_authenticate(user=self.mapped_user)
+
+        response = self.client.get("/api/attendance/me/?page_size=1", **self.headers)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.data["data"]
+        self.assertEqual(len(data["items"]), 1)
+        self.assertEqual(data["summary"], {"PRESENT": 1, "ABSENT": 1})
+        self.assertEqual(sum(data["effective_summary"].values()), 2)
+
     def test_unmapped_employee_is_forbidden_with_a_mapping_message(self):
         self.client.force_authenticate(user=self.unmapped_user)
 

@@ -128,10 +128,12 @@ describe("EmployeeAttendancePage status display", () => {
     render(<EmployeeAttendancePage />);
 
     const list = await findCardList();
-    // Three separate states, never collapsed into one another.
-    expect(within(list).getByText("LATE")).toBeInTheDocument();
-    expect(within(list).getByText("ABSENT")).toBeInTheDocument();
-    expect(within(list).getByText("PENDING_HR")).toBeInTheDocument();
+    // Three separate states, never collapsed into one another, shown with
+    // their translated labels rather than raw status codes.
+    expect(within(list).getByText("Late")).toBeInTheDocument();
+    expect(within(list).getByText("Absent")).toBeInTheDocument();
+    expect(within(list).getByText("Pending HR")).toBeInTheDocument();
+    expect(within(list).queryByText("PENDING_HR")).toBeNull();
   });
 
   it("shows the backend late minutes and flags a late arrival still awaiting approval", async () => {
@@ -183,7 +185,7 @@ describe("EmployeeAttendancePage status display", () => {
     render(<EmployeeAttendancePage />);
 
     const list = await findCardList();
-    expect(within(list).getByText("PENDING_HR")).toBeInTheDocument();
+    expect(within(list).getByText("Pending HR")).toBeInTheDocument();
     expect(within(list).getByText("Late arrival")).toBeInTheDocument();
   });
 
@@ -198,7 +200,8 @@ describe("EmployeeAttendancePage status display", () => {
     // antd's empty illustration repeats the text in its SVG <title>.
     expect((await screen.findAllByText("No data")).length).toBeGreaterThan(0);
     expect(screen.queryByRole("listitem")).toBeNull();
-    expect(screen.queryByText("ABSENT")).toBeNull();
+    // The "Absent" summary card is not a row: no status tag is rendered.
+    expect(screen.queryByText("Absent", { selector: ".ant-tag" })).toBeNull();
   });
 });
 
@@ -235,12 +238,16 @@ describe("BioTime-only attendance", () => {
 });
 
 describe("attendance policy sections", () => {
-  it("mounts today's summary, the late violation history and notices", async () => {
+  it("mounts today's summary, and the violation history and notices as tabs", async () => {
     render(<EmployeeAttendancePage />);
 
     expect(await screen.findByTestId("today-summary-card")).toBeInTheDocument();
-    expect(screen.getByTestId("violation-history")).toBeInTheDocument();
-    expect(screen.getByTestId("notice-history")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Late violations" }));
+    expect(await screen.findByTestId("violation-history")).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("tab", { name: "Late attendance notices" }),
+    );
+    expect(await screen.findByTestId("notice-history")).toBeInTheDocument();
   });
 
   it("hides both when attendance is unavailable for an unmapped employee", async () => {

@@ -1,11 +1,19 @@
 import { create } from "zustand";
-import type { AttendanceRecord, AttendanceFilters } from "../types/attendance";
+import type {
+  AttendanceRecord,
+  AttendanceFilters,
+  EffectiveAttendanceStatus,
+} from "../types/attendance";
 import { getMyAttendance } from "../services/api/attendanceApi";
 import { unwrapEnvelope, normalizeListData } from "../utils/dataUtils";
+
+type AttendanceSummary = Partial<Record<EffectiveAttendanceStatus, number>>;
 
 interface EmployeeAttendanceState {
   records: AttendanceRecord[];
   total: number;
+  /** Period totals by effective status for the requested date range. */
+  summary: AttendanceSummary;
   loading: boolean;
   error: string | null;
 
@@ -18,6 +26,7 @@ export const useEmployeeAttendanceStore = create<EmployeeAttendanceState>(
   (set) => ({
     records: [],
     total: 0,
+    summary: {},
     loading: false,
     error: null,
     accessUnavailable: false,
@@ -26,15 +35,16 @@ export const useEmployeeAttendanceStore = create<EmployeeAttendanceState>(
       set({
         records: [],
         total: 0,
+        summary: {},
         loading: false,
         error: null,
         accessUnavailable: false,
       }),
 
     fetchMyRecords: async (params) => {
+      // Keep the current rows on screen while the next range loads; they are
+      // cleared only when the request fails.
       set({
-        records: [],
-        total: 0,
         loading: true,
         error: null,
         accessUnavailable: false,
@@ -43,7 +53,11 @@ export const useEmployeeAttendanceStore = create<EmployeeAttendanceState>(
         const response = await getMyAttendance(params);
         const data = unwrapEnvelope(response);
         const { items, total } = normalizeListData<AttendanceRecord>(data);
-        set({ records: items, total, loading: false });
+        const summary: AttendanceSummary =
+          (data?.effective_summary as AttendanceSummary | undefined) ||
+          (data?.summary as AttendanceSummary | undefined) ||
+          {};
+        set({ records: items, total, summary, loading: false });
       } catch (err: any) {
         if (
           err.response?.status === 403 &&
@@ -53,6 +67,7 @@ export const useEmployeeAttendanceStore = create<EmployeeAttendanceState>(
           set({
             records: [],
             total: 0,
+            summary: {},
             loading: false,
             error: null,
             accessUnavailable: true,
@@ -63,7 +78,7 @@ export const useEmployeeAttendanceStore = create<EmployeeAttendanceState>(
           err.response?.data?.message ||
           err.message ||
           "Failed to fetch attendance";
-        set({ loading: false, error: msg });
+        set({ records: [], total: 0, summary: {}, loading: false, error: msg });
       }
     },
   }),

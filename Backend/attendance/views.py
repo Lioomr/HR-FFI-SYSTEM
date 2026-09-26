@@ -553,12 +553,25 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         # roles (used by the HR global attendance list). This action must always
         # be scoped to the caller's own profile, regardless of role.
         queryset = self.filter_queryset(self.get_queryset()).filter(employee_profile=profile)
+        filter_error = getattr(self, "_date_filter_error", None) or getattr(self, "_source_filter_error", None)
+        if filter_error:
+            return error(f"Invalid attendance filter: {filter_error}", status=status.HTTP_400_BAD_REQUEST)
+
+        # Same period totals as the HR list, over the caller's own rows only.
+        summary = {row["status"]: row["n"] for row in queryset.values("status").annotate(n=Count("id"))}
+        effective_summary = {
+            row["effective_status"]: row["n"] for row in queryset.values("effective_status").annotate(n=Count("id"))
+        }
 
         page = self.paginate_queryset(queryset)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
             # Return proper paginated response directly (already enveloped)
-            return self.get_paginated_response(serializer.data)
+            response = self.get_paginated_response(serializer.data)
+            if isinstance(response.data, dict) and isinstance(response.data.get("data"), dict):
+                response.data["data"]["summary"] = summary
+                response.data["data"]["effective_summary"] = effective_summary
+            return response
 
         serializer = self.get_serializer(queryset, many=True)
         return success(serializer.data)
