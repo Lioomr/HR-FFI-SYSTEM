@@ -443,11 +443,15 @@ describe("MyLeaveBalancePage — Annual Leave payment request", () => {
     expect(
       await screen.findByText("Pending CEO", {}, FIND),
     ).toBeInTheDocument();
+    // One notice only, and no fresh-offer estimate beside an existing settlement.
     expect(
-      screen.getByText(
+      screen.getAllByText(
         "An Annual Leave settlement already exists for this contract year.",
       ),
-    ).toBeInTheDocument();
+    ).toHaveLength(1);
+    expect(
+      screen.queryByText("Estimated payment amount"),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /Request Annual Leave Payment/ }),
     ).not.toBeInTheDocument();

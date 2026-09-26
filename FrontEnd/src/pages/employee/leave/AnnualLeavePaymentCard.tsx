@@ -328,7 +328,9 @@ export default function AnnualLeavePaymentCard({
         <Spin />
       ) : (
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
-          {eligibility && (
+          {/* A settlement already exists for this cycle: the record below is
+              the truth, so no fresh-offer estimate and no second notice. */}
+          {eligibility && !hasActiveRequest && (
             <>
               <Descriptions
                 size="small"

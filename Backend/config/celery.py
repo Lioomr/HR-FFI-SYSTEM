@@ -52,10 +52,12 @@ app.conf.beat_schedule = {
     },
     # Employee-facing sibling of the HR reminder above: one notice per contract cycle when the
     # Annual Leave settlement request first becomes available (deduplicated per profile and cycle).
-    "send-annual-leave-settlement-window-open-notifications-daily": {
+    # It runs hourly through the working day so a blocker that clears mid-day (for example a pending
+    # leave request being decided) is notified promptly, in step with the dashboard prompt.
+    "send-annual-leave-settlement-window-open-notifications-hourly": {
         "task": "leaves.tasks.send_annual_leave_settlement_window_open_notifications",
         "schedule": crontab(
-            hour=int(os.environ.get("ANNUAL_LEAVE_REMINDER_HOUR", "8")),
+            hour=os.environ.get("ANNUAL_LEAVE_WINDOW_NOTIFY_HOURS", "7-20"),
             minute=int(os.environ.get("ANNUAL_LEAVE_REMINDER_MINUTE", "5")),
         ),
     },
