@@ -17,6 +17,7 @@ from organization.services import get_head_office_node
 from .biotime_policy import ATTENDANCE_UNAVAILABLE_UNMAPPED_MESSAGE
 from .models import AttendanceAdjustment, AttendanceDailyResult, AttendanceLateViolation, BioTimeEmployeeMap
 from .policy import AttendancePolicyService
+from .schedule import FRIDAY, SATURDAY
 from .views import AttendanceViolationViewSet
 
 User = get_user_model()
@@ -24,6 +25,13 @@ RECALCULATE_URL = "/api/attendance/hr/recalculate/"
 SUMMARY_URL = "/api/attendance/me/today-summary/"
 VIOLATIONS_URL = "/api/attendance/violations/"
 NOTICES_URL = "/api/attendance/notices/"
+
+
+def last_day_everyone_works(day):
+    """``day`` or the latest earlier day that is not a Friday or Saturday."""
+    while day.weekday() in (FRIDAY, SATURDAY):
+        day -= timedelta(days=1)
+    return day
 
 
 class AttendancePolicyApiTests(TestCase):
@@ -234,23 +242,26 @@ class AttendancePolicyApiTests(TestCase):
         self.assertNotIn("provider_payload", data)
 
     def test_hr_violation_filters_narrow_the_company_history(self):
-        yesterday = self.today - timedelta(days=1)
+        # Violations only exist on working days, so pin both days to a
+        # Sunday-Thursday instead of the weekday the suite happens to run on.
+        today = last_day_everyone_works(self.today)
+        yesterday = last_day_everyone_works(today - timedelta(days=1))
         earlier = self._late_violation(self.profile, yesterday)
-        own_today = self._late_violation(self.profile)
+        own_today = self._late_violation(self.profile, today)
         coworker_earlier = self._late_violation(self.coworker_profile, yesterday)
         # Occurrence 2 is monetary, so excusing it leaves a void payroll deduction.
-        coworker = self._late_violation(self.coworker_profile)
+        coworker = self._late_violation(self.coworker_profile, today)
         AttendanceAdjustment.objects.create(
             employee_profile=self.coworker_profile,
             company=self.company_a,
-            date=self.today,
-            effective_date=self.today,
+            date=today,
+            effective_date=today,
             kind=AttendanceAdjustment.Kind.LATE_PERMISSION,
             source_key="api-filter-late",
             approved_minutes=0,
             reason="late:TEST",
         )
-        AttendancePolicyService.reconcile_month(self.coworker_profile, self.today)
+        AttendancePolicyService.reconcile_month(self.coworker_profile, today)
         foreign = self._late_violation(self.foreign_profile)
 
         def ids(query):
@@ -268,7 +279,7 @@ class AttendancePolicyApiTests(TestCase):
         self.assertNotIn(foreign.id, ids("search=Person"))
         self.assertEqual(ids("search=coworker"), {coworker_earlier.id, coworker.id})
         self.assertEqual(ids("search=ATTAPI-A01"), {earlier.id, own_today.id})
-        self.assertEqual(ids(f"date_from={self.today}&date_to={self.today}"), {own_today.id, coworker.id})
+        self.assertEqual(ids(f"date_from={today}&date_to={today}"), {own_today.id, coworker.id})
         self.assertEqual(ids(f"date_to={yesterday}"), {earlier.id, coworker_earlier.id})
         # Employees keep their own-only scope even when filtering by another employee.
         self.assertEqual(

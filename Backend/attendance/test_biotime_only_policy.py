@@ -34,6 +34,7 @@ from .models import (
     BioTimeDeviceEmployee,
     BioTimeEmployeeMap,
 )
+from .schedule import FRIDAY, SATURDAY
 
 User = get_user_model()
 
@@ -334,7 +335,11 @@ class AttendanceReadAccessTests(BioTimeOnlyAttendancePolicyBase):
 
 class AbsenceDetectionEligibilityTests(BioTimeOnlyAttendancePolicyBase):
     def test_absence_detection_only_creates_records_for_mapped_employees(self):
+        # Absence detection skips Fridays for everyone and Saturdays for Saudi
+        # employees, so use the latest past Sunday-Thursday.
         target = self.today - timedelta(days=1)
+        while target.weekday() in (FRIDAY, SATURDAY):
+            target -= timedelta(days=1)
 
         result = mark_absentees_for_date(target, force=True)
 
