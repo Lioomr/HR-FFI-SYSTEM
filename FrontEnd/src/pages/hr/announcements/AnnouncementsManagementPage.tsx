@@ -132,14 +132,28 @@ export default function AnnouncementsManagementPage() {
             title: t("hr.announcements.companiesColumn"),
             dataIndex: "broadcast_company_names",
             key: "broadcast_company_names",
-            render: (names?: string[]) =>
-              names?.length
-                ? names.map((name) => (
+            render: (
+              names: string[] | undefined,
+              record: AnnouncementListItem,
+            ) =>
+              names?.length ? (
+                <>
+                  {names.map((name) => (
                     <Tag color="blue" key={name}>
                       {name}
                     </Tag>
-                  ))
-                : "-",
+                  ))}
+                  {record.broadcast_recipient_count ? (
+                    <Tag color="cyan">
+                      {t("hr.announcements.employeeCount", {
+                        count: record.broadcast_recipient_count,
+                      })}
+                    </Tag>
+                  ) : null}
+                </>
+              ) : (
+                "-"
+              ),
           },
         ]
       : []),

@@ -29,16 +29,23 @@ class AnnouncementGroupReadMixin:
 
 
 class BroadcastCompaniesMixin:
-    """Names of the companies a Main Head Office broadcast reached."""
+    """Who a Main Head Office broadcast reached: its companies and chosen employees."""
+
+    def _broadcast_copies(self, obj):
+        return Announcement.objects.filter(broadcast_id=obj.broadcast_id, is_active=True)
 
     def get_broadcast_company_names(self, obj):
         if not obj.broadcast_id:
             return []
         return list(
-            Announcement.objects.filter(broadcast_id=obj.broadcast_id, is_active=True)
-            .order_by("company__name")
-            .values_list("company__name", flat=True)
+            self._broadcast_copies(obj).order_by("company__name").values_list("company__name", flat=True).distinct()
         )
+
+    def get_broadcast_recipient_count(self, obj):
+        """Number of chosen employees; 0 when the broadcast went to whole companies."""
+        if not obj.broadcast_id:
+            return 0
+        return self._broadcast_copies(obj).filter(target_user__isnull=False).count()
 
 
 class AnnouncementSerializer(BroadcastCompaniesMixin, AnnouncementGroupReadMixin, serializers.ModelSerializer):
@@ -51,6 +58,7 @@ class AnnouncementSerializer(BroadcastCompaniesMixin, AnnouncementGroupReadMixin
     company_id = serializers.PrimaryKeyRelatedField(source="company", read_only=True)
     company_name = serializers.CharField(source="company.name", read_only=True)
     broadcast_company_names = serializers.SerializerMethodField()
+    broadcast_recipient_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Announcement
@@ -82,6 +90,7 @@ class AnnouncementSerializer(BroadcastCompaniesMixin, AnnouncementGroupReadMixin
             "company_name",
             "broadcast_id",
             "broadcast_company_names",
+            "broadcast_recipient_count",
             "created_by",
             "created_by_name",
             "created_at",
@@ -128,6 +137,7 @@ class AnnouncementListSerializer(BroadcastCompaniesMixin, AnnouncementGroupReadM
     company_id = serializers.PrimaryKeyRelatedField(source="company", read_only=True)
     company_name = serializers.CharField(source="company.name", read_only=True)
     broadcast_company_names = serializers.SerializerMethodField()
+    broadcast_recipient_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Announcement
@@ -159,6 +169,7 @@ class AnnouncementListSerializer(BroadcastCompaniesMixin, AnnouncementGroupReadM
             "company_name",
             "broadcast_id",
             "broadcast_company_names",
+            "broadcast_recipient_count",
             "created_at",
             "is_active",
         ]

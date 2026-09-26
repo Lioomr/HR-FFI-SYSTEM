@@ -44,18 +44,50 @@ logger = logging.getLogger(__name__)
 # Roles that may send announcements to every company from Main Head Office.
 # Editing and deleting stay HR/Admin-only, as for company announcements.
 HEAD_OFFICE_BROADCAST_ROLES = {"SystemAdmin", "HRManager", "CEO"}
-# A head-office broadcast always goes to everyone in every company; employee
-# lists, role targets and WhatsApp groups are per company, so they are refused.
+# Head-office audiences: every company, chosen companies, or chosen employees
+# from any of the sender's companies. Role targets and WhatsApp groups are per
+# company, so they are refused here.
+BROADCAST_ALL_COMPANIES = "ALL_COMPANIES"
+BROADCAST_COMPANIES = "COMPANIES"
+BROADCAST_EMPLOYEES = "EMPLOYEES"
+BROADCAST_AUDIENCES = {BROADCAST_ALL_COMPANIES, BROADCAST_COMPANIES, BROADCAST_EMPLOYEES}
+# Picking individual employees stays an HR/Admin capability, as in a company.
+BROADCAST_EMPLOYEE_ROLES = {"SystemAdmin", "HRManager"}
 BROADCAST_FORBIDDEN_FIELDS = ("target_user", "target_user_ids", "target_roles", "whatsapp_group_id")
-BROADCAST_AUDIENCE_ERROR = "Announcements from Main Head Office go to every employee in every company."
+BROADCAST_AUDIENCE_ERROR = (
+    "Announcements from Main Head Office go to every company, chosen companies, or chosen employees."
+)
+# Keys handled by the head-office create itself, not by the serializer.
+BROADCAST_REQUEST_KEYS = {"broadcast_audience", "company_ids", "target_user_ids"}
 BROADCAST_EDIT_IN_HEAD_OFFICE = (
     "This announcement was sent to every company from Main Head Office. Switch to Main Head Office to change it."
 )
 
 
-def _broadcast_audience_errors(data):
-    used = [field for field in BROADCAST_FORBIDDEN_FIELDS if data.get(field) not in (None, "", "null", "[]", [])]
+def _broadcast_audience_errors(data, allowed=()):
+    used = [
+        field
+        for field in BROADCAST_FORBIDDEN_FIELDS
+        if field not in allowed and data.get(field) not in (None, "", "null", "[]", [])
+    ]
     return {field: [BROADCAST_AUDIENCE_ERROR] for field in used}
+
+
+def _id_list(data, key):
+    """Integer ids from a JSON list or repeated multipart keys; None when malformed."""
+    if hasattr(data, "getlist"):
+        values = data.getlist(key)
+    else:
+        values = data.get(key) or []
+        if not isinstance(values, list):
+            values = [values]
+    ids = []
+    for value in values:
+        try:
+            ids.append(int(value))
+        except (TypeError, ValueError):
+            return None
+    return list(dict.fromkeys(ids))
 
 
 def _download_filename(file_name):
@@ -249,53 +281,100 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         )
 
     def _create_head_office_broadcast(self, request):
-        if get_role(request.user) not in HEAD_OFFICE_BROADCAST_ROLES:
+        role = get_role(request.user)
+        if role not in HEAD_OFFICE_BROADCAST_ROLES:
             return error(
                 "Forbidden",
                 errors=["Switch to a company to create announcements."],
                 status=status.HTTP_403_FORBIDDEN,
             )
+
+        def invalid(field, message):
+            return error("Validation error", errors={field: [message]}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+        audience = (request.data.get("broadcast_audience") or BROADCAST_ALL_COMPANIES).strip().upper()
+        if audience not in BROADCAST_AUDIENCES:
+            return invalid("broadcast_audience", BROADCAST_AUDIENCE_ERROR)
+        if audience == BROADCAST_EMPLOYEES and role not in BROADCAST_EMPLOYEE_ROLES:
+            return error(
+                "Forbidden",
+                errors=["Only HR managers can send announcements to selected employees."],
+                status=status.HTTP_403_FORBIDDEN,
+            )
         # Checked before validation: those fields are validated against a single
         # active company, which Main Head Office is not.
-        audience_errors = _broadcast_audience_errors(request.data)
+        audience_errors = _broadcast_audience_errors(
+            request.data, allowed=("target_user_ids",) if audience == BROADCAST_EMPLOYEES else ()
+        )
         if audience_errors:
             return error("Validation error", errors=audience_errors, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
-        serializer = AnnouncementCreateSerializer(data=request.data, context=self.get_serializer_context())
-        if not serializer.is_valid():
-            return error("Validation error", errors=serializer.errors, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
-        validated = dict(serializer.validated_data)
-        if not validated.get("whole_company"):
-            return error(
-                "Validation error",
-                errors={"whole_company": [BROADCAST_AUDIENCE_ERROR]},
-                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            )
-
-        companies = list(
-            OrganizationNode.objects.filter(
+        accessible_companies = {
+            company.id: company
+            for company in OrganizationNode.objects.filter(
                 id__in=get_user_accessible_company_ids(request.user),
                 node_type=OrganizationNode.NodeType.COMPANY,
                 is_active=True,
             ).order_by("name", "id")
-        )
-        if not companies:
-            return error(
-                "Validation error",
-                errors=["Your account has no company access to send this announcement to."],
-                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        }
+        if not accessible_companies:
+            return invalid("broadcast_audience", "Your account has no company access to send this announcement to.")
+
+        # (company, target user) per copy; target None means the whole company.
+        recipients = []
+        if audience == BROADCAST_ALL_COMPANIES:
+            recipients = [(company, None) for company in accessible_companies.values()]
+        elif audience == BROADCAST_COMPANIES:
+            company_ids = _id_list(request.data, "company_ids")
+            if not company_ids:
+                return invalid("company_ids", "Choose at least one company.")
+            if any(company_id not in accessible_companies for company_id in company_ids):
+                return invalid("company_ids", "Choose companies you have access to.")
+            recipients = [
+                (company, None) for company_id, company in accessible_companies.items() if company_id in company_ids
+            ]
+        else:
+            user_ids = _id_list(request.data, "target_user_ids")
+            if not user_ids:
+                return invalid("target_user_ids", "Choose at least one employee.")
+            profiles = list(
+                EmployeeProfile.objects.select_related("user").filter(
+                    user_id__in=user_ids,
+                    user__is_active=True,
+                    is_archived=False,
+                    employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+                    company_id__in=accessible_companies.keys(),
+                )
             )
+            if len(profiles) != len(user_ids):
+                return invalid("target_user_ids", "Choose active employees of companies you have access to.")
+            recipients = sorted(
+                ((accessible_companies[profile.company_id], profile.user) for profile in profiles),
+                key=lambda item: (item[0].name, item[1].id),
+            )
+
+        # The serializer validates content and channels; the audience above
+        # replaces its single-company audience rules.
+        data = {key: request.data.get(key) for key in request.data.keys() if key not in BROADCAST_REQUEST_KEYS}
+        data["whole_company"] = True
+        serializer = AnnouncementCreateSerializer(data=data, context=self.get_serializer_context())
+        if not serializer.is_valid():
+            return error("Validation error", errors=serializer.errors, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        validated = dict(serializer.validated_data)
+        validated.pop("whole_company", None)
 
         attachment = validated.pop("attachment", None)
         attachment_bytes = attachment.read() if attachment else None
-        for field in ("target_roles", "target_user", "whatsapp_group_id"):
+        for field in ("target_roles", "target_user", "target_user_ids", "whatsapp_group_id"):
             validated.pop(field, None)
         broadcast_id = uuid.uuid4()
         created = []
         with transaction.atomic():
-            for company in companies:
+            for company, target_user in recipients:
                 announcement = Announcement.objects.create(
                     **validated,
+                    whole_company=target_user is None,
+                    target_user=target_user,
                     target_roles=[],
                     company=company,
                     broadcast_id=broadcast_id,
@@ -321,15 +400,45 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
             entity_id=created[0].id,
             metadata={
                 "broadcast_id": str(broadcast_id),
-                "company_ids": [company.id for company in companies],
+                "audience": audience,
+                "company_ids": sorted({company.id for company, _ in recipients}),
+                "target_user_ids": [user.id for _, user in recipients if user is not None],
                 "created_count": len(created),
             },
         )
         data = AnnouncementSerializer(created[0], context=self.get_serializer_context()).data
         return success(
-            {"announcement": data, "created_count": len(created), "message": "Announcement sent to every company"},
+            {"announcement": data, "created_count": len(created), "message": "Announcement sent"},
             status=status.HTTP_201_CREATED,
         )
+
+    @action(detail=False, methods=["get"], url_path="recipient-candidates")
+    def recipient_candidates(self, request):
+        """Active employees an HR user can pick; every accessible company in Main Head Office."""
+        if get_role(request.user) not in BROADCAST_EMPLOYEE_ROLES:
+            return error("Forbidden", status=status.HTTP_403_FORBIDDEN)
+        profiles = EmployeeProfile.objects.select_related("company").filter(
+            user__is_active=True,
+            is_archived=False,
+            employment_status=EmployeeProfile.EmploymentStatus.ACTIVE,
+        )
+        if is_head_office_context(request):
+            profiles = profiles.filter(company_id__in=get_user_accessible_company_ids(request.user))
+        else:
+            profiles = filter_queryset_by_company_scope(profiles, request)
+        items = [
+            {
+                "user_id": profile.user_id,
+                "employee_id": profile.employee_id,
+                "full_name": profile.full_name,
+                "full_name_en": profile.full_name_en,
+                "full_name_ar": profile.full_name_ar,
+                "company_id": profile.company_id,
+                "company_name": profile.company.name,
+            }
+            for profile in profiles.order_by("company__name", "full_name", "id")
+        ]
+        return success({"items": items})
 
     def create(self, request, *args, **kwargs):
         if is_head_office_context(request):
@@ -558,12 +667,6 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         if not serializer.is_valid():
             return error("Validation error", errors=serializer.errors, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
         validated = dict(serializer.validated_data)
-        if validated.get("whole_company") is False:
-            return error(
-                "Validation error",
-                errors={"whole_company": [BROADCAST_AUDIENCE_ERROR]},
-                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            )
         attachment = validated.pop("attachment", None)
         attachment_bytes = attachment.read() if attachment else None
         for field in ("target_roles", "target_user", "whatsapp_group_id", "whole_company"):
