@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from django.contrib.auth import get_user_model
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 from django.utils import timezone
 
 from core.models import DelegationRule
@@ -46,7 +46,15 @@ def _active_delegation_queryset():
 def get_active_delegation(from_user):
     if not from_user:
         return None
-    return _active_delegation_queryset().filter(from_user=from_user).order_by("-updated_at", "-id").first()
+    return (
+        _active_delegation_queryset()
+        .filter(
+            from_user=from_user,
+            capabilities__contains=[DelegationRule.Capability.WORKFLOW_APPROVE],
+        )
+        .order_by("-updated_at", "-id")
+        .first()
+    )
 
 
 def get_active_delegate_for_user(from_user):
@@ -58,11 +66,21 @@ def get_delegated_from_user_ids(to_user, *, role: str | None = None) -> list[int
     if not to_user or not getattr(to_user, "is_authenticated", False):
         return []
 
-    qs = _active_delegation_queryset().filter(to_user=to_user).select_related("from_user")
+    active_rules = _active_delegation_queryset().filter(
+        capabilities__contains=[DelegationRule.Capability.WORKFLOW_APPROVE]
+    )
+    newer_rules = active_rules.filter(from_user_id=OuterRef("from_user_id")).filter(
+        Q(updated_at__gt=OuterRef("updated_at")) | Q(updated_at=OuterRef("updated_at"), id__gt=OuterRef("id"))
+    )
+    qs = (
+        active_rules.filter(to_user=to_user)
+        .annotate(has_newer_active_grant=Exists(newer_rules))
+        .filter(has_newer_active_grant=False)
+        .select_related("from_user")
+        .order_by("-updated_at", "-id")
+    )
     user_ids = []
     for rule in qs:
-        if DelegationRule.Capability.WORKFLOW_APPROVE not in (rule.capabilities or []):
-            continue
         if role and not is_user_base_approver_for_role(rule.from_user, role):
             continue
         user_ids.append(rule.from_user_id)
