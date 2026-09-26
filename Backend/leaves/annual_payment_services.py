@@ -231,6 +231,13 @@ def _locked_days_details(instance: AnnualLeavePaymentRequest) -> list[str]:
     return [f"Leave-only Days (not payable): {instance.locked_unused_days}"]
 
 
+def _preference_details(instance: AnnualLeavePaymentRequest) -> list[str]:
+    """The employee's stated preference, so approvers see it without opening the record."""
+    if not instance.employee_preference:
+        return []
+    return [f"Employee Preference: {instance.get_employee_preference_display()}"]
+
+
 def _notify_ceo(instance: AnnualLeavePaymentRequest) -> None:
     notify_users_for_pending_status(
         users=get_ceo_approver_users(),
@@ -240,6 +247,7 @@ def _notify_ceo(instance: AnnualLeavePaymentRequest) -> None:
         status_label=instance.status,
         details=[
             f"Resolution: {instance.resolution}",
+            *_preference_details(instance),
             f"Eligible Days: {instance.eligible_unused_days}",
             *_locked_days_details(instance),
             f"Payment Amount: {instance.payment_amount}",
@@ -260,6 +268,7 @@ def notify_after_annual_payment_submission(instance: AnnualLeavePaymentRequest, 
                 requester_name=leave_employee_name(instance),
                 status_label=instance.status,
                 details=[
+                    *_preference_details(instance),
                     f"Eligible Days: {instance.eligible_unused_days}",
                     *_locked_days_details(instance),
                     f"Payment Amount: {instance.payment_amount}",

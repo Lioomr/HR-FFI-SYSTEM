@@ -188,9 +188,9 @@ def send_annual_leave_settlement_window_open_notifications():
     """Tell each employee, once per contract cycle, that their Annual Leave settlement can be requested.
 
     ``build_annual_leave_eligibility`` stays the single source of truth: the employee is notified
-    only when ``window_open`` and ``can_request`` are both true. Because the task runs daily and
+    only when ``window_open`` and ``can_request`` are both true. Because the task runs hourly through the working day and
     the deduplication key is per profile and cycle end, an employee blocked on the first window day
-    (for example by a pending Annual Leave request) is notified on the first day the block clears.
+    (for example by a pending Annual Leave request) is notified within the hour the block clears, matching the dashboard prompt.
     No settlement record is created here.
     """
     today = timezone.localdate()
