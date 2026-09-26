@@ -62,3 +62,9 @@ Frontend stores `x-active-company-id` and sends it on every request. Company swi
 - Located in the main navigation layout
 - Updates the `x-active-company-id` stored in frontend state and refetches current page data
 - All API service functions in `FrontEnd/src/services/api/` automatically attach the active company header via `apiClient.ts` interceptor
+
+## Main Head Office Context
+
+`Main Head Office` (`node_type = head_office`) is not a company. Strict company-scoped endpoints (`filter_queryset_by_active_company`) answer 403 "Select an active company for this request." in head-office context by design (Tenant Isolation Security Review 2026-08-24); there is no aggregate head-office view.
+
+The frontend handles this once, in `BaseLayout`: when head office is active and `pageNeedsCompany(pathname)` (`FrontEnd/src/utils/organizationContext.ts`) is true, it renders `HeadOfficeCompanyPicker` instead of the page, so users see "Choose a company" rather than a misleading 403. Notification polling is paused in head office for the same reason. When a page is made to work in head-office context, add its path to `HEAD_OFFICE_PATHS`.

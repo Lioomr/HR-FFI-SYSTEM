@@ -549,10 +549,14 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "common.preview": "Preview",
     "common.submittedOn": "Submitted On",
     "organization.headOffice.badge": "Head Office View",
-    "organization.headOffice.bannerTitle":
-      "Main Head Office is in read-only mode",
+    "organization.headOffice.bannerTitle": "You are viewing Main Head Office",
     "organization.headOffice.bannerDescription":
-      "Review aggregate data here, then switch to a company to create, import, edit, or run company-owned actions.",
+      "Company records such as employees, leave, and job offers belong to one company. Switch to a company to see and manage them.",
+    "organization.headOffice.pickCompanyTitle": "Choose a company to continue",
+    "organization.headOffice.pickCompanyDescription":
+      "This page shows one company's records. Main Head Office has no records of its own, so pick the company you want to work in.",
+    "organization.headOffice.noCompanyAccess":
+      "This page shows one company's records, and your account is not assigned to a company yet. Ask a system administrator to give you company access.",
     "organization.headOffice.readOnlyTitle": "Main Head Office is read-only",
     "organization.headOffice.switchToUseAction":
       "Switch to a company to use this action.",
@@ -5524,9 +5528,14 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "common.preview": "معاينة",
     "common.submittedOn": "تاريخ التقديم",
     "organization.headOffice.badge": "عرض المكتب الرئيسي",
-    "organization.headOffice.bannerTitle": "المكتب الرئيسي في وضع القراءة فقط",
+    "organization.headOffice.bannerTitle": "أنت تعرض المكتب الرئيسي",
     "organization.headOffice.bannerDescription":
-      "راجع البيانات المجمعة هنا، ثم انتقل إلى شركة لإجراء الإنشاء أو الاستيراد أو التعديل أو تشغيل الإجراءات الخاصة بالشركة.",
+      "سجلات مثل الموظفين والإجازات وعروض العمل تتبع شركة واحدة. انتقل إلى شركة لعرضها وإدارتها.",
+    "organization.headOffice.pickCompanyTitle": "اختر شركة للمتابعة",
+    "organization.headOffice.pickCompanyDescription":
+      "تعرض هذه الصفحة سجلات شركة واحدة. لا توجد سجلات خاصة بالمكتب الرئيسي، لذا اختر الشركة التي تريد العمل عليها.",
+    "organization.headOffice.noCompanyAccess":
+      "تعرض هذه الصفحة سجلات شركة واحدة، وحسابك غير مرتبط بأي شركة بعد. اطلب من مدير النظام منحك صلاحية الوصول إلى شركة.",
     "organization.headOffice.readOnlyTitle": "المكتب الرئيسي للقراءة فقط",
     "organization.headOffice.switchToUseAction":
       "انتقل إلى شركة لاستخدام هذا الإجراء.",

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useAuthStore } from "../auth/authStore";
+import { isHeadOfficeOrganization } from "../utils/organizationContext";
 import { useI18nStore } from "../i18n/i18nStore";
 import { useNotificationStore } from "../stores/notificationStore";
 import { NotificationPollingManager } from "../services/notifications/notificationSocket";
@@ -21,6 +22,8 @@ export function useNotificationsRuntime(): void {
 
   const userId = user?.id ?? null;
   const companyId = user?.active_organization_id ?? null;
+  // Notifications belong to a company; the API refuses head-office context.
+  const isHeadOffice = isHeadOfficeOrganization(user);
 
   const managerRef = useRef<NotificationPollingManager | null>(null);
   const languageRef = useRef(language);
@@ -28,7 +31,7 @@ export function useNotificationsRuntime(): void {
   useEffect(() => {
     const store = useNotificationStore.getState();
 
-    if (!isAuthenticated || !userId) {
+    if (!isAuthenticated || !userId || isHeadOffice) {
       managerRef.current?.stop();
       managerRef.current = null;
       store.reset();
@@ -56,12 +59,12 @@ export function useNotificationsRuntime(): void {
     };
     // Re-run only when identity or active company changes — NOT on every render,
     // which prevents duplicate polling lifecycles. Store actions are accessed via getState().
-  }, [isAuthenticated, userId, companyId]);
+  }, [isAuthenticated, userId, companyId, isHeadOffice]);
 
   useEffect(() => {
     if (languageRef.current === language) return;
     languageRef.current = language;
-    if (!isAuthenticated || !userId) return;
+    if (!isAuthenticated || !userId || isHeadOffice) return;
     void useNotificationStore.getState().fetchRecent();
-  }, [language, isAuthenticated, userId]);
+  }, [language, isAuthenticated, userId, isHeadOffice]);
 }

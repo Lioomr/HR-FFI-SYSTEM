@@ -53,7 +53,11 @@ import { useManagerAccess } from "../hooks/useManagerAccess";
 import { isFinanceApproverEmployee } from "../utils/financeApprover";
 import { isCFOApproverEmployee } from "../utils/cfoApprover";
 import { isCEOApproverEmployee } from "../utils/ceoApprover";
-import { isHeadOfficeOrganization } from "../utils/organizationContext";
+import {
+  isHeadOfficeOrganization,
+  pageNeedsCompany,
+} from "../utils/organizationContext";
+import HeadOfficeCompanyPicker from "../components/layout/HeadOfficeCompanyPicker";
 import LoadingState from "../components/ui/LoadingState";
 import NotificationBell from "../components/notifications/NotificationBell";
 import DashboardGreeting from "../components/layout/DashboardGreeting";
@@ -550,6 +554,9 @@ export default function BaseLayout() {
     "--sb-section-color": sbTheme.sectionColor,
   } as React.CSSProperties;
   const isHeadOffice = isHeadOfficeOrganization(user);
+  // Company-owned pages cannot load in head-office context (the API answers
+  // 403 by design), so they get a company picker instead.
+  const showCompanyPicker = isHeadOffice && pageNeedsCompany(location.pathname);
   const brandTitle = useMemo(() => {
     if (!activeOrganization?.name) return "FFISYS";
     return activeOrganization.node_type === "head_office"
@@ -1980,7 +1987,7 @@ export default function BaseLayout() {
             overflowX: "hidden",
           }}
         >
-          {isHeadOffice && (
+          {isHeadOffice && !showCompanyPicker && (
             <div
               style={{
                 margin: "0 auto 20px",
@@ -2026,9 +2033,17 @@ export default function BaseLayout() {
           {/* Route pages are code-split (React.lazy); this Suspense boundary
               keeps the sidebar/header mounted while a page chunk loads
               instead of blanking the whole app shell. */}
-          <Suspense fallback={<LoadingState title={t("common.loading")} />}>
-            <Outlet />
-          </Suspense>
+          {showCompanyPicker ? (
+            <HeadOfficeCompanyPicker
+              organizations={organizations}
+              switching={isSwitchingOrganization}
+              onSelect={handleOrganizationChange}
+            />
+          ) : (
+            <Suspense fallback={<LoadingState title={t("common.loading")} />}>
+              <Outlet />
+            </Suspense>
+          )}
         </Content>
       </Layout>
     </Layout>
