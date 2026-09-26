@@ -66,7 +66,13 @@ def send_announcement_in_app(announcement):
     attachment_url = _announcement_attachment_url(announcement)
     dispatches = []
     users = list(_announcement_users(announcement))
-    dedup_key = f"announcement.created:{announcement.id}"
+    # A head-office broadcast is one company copy per company, and people with
+    # access to several companies (HR, CEO) are recipients of each copy. Keying
+    # on the broadcast gives them one notification, email and WhatsApp in total.
+    if announcement.broadcast_id:
+        dedup_key = f"announcement.broadcast:{announcement.broadcast_id}"
+    else:
+        dedup_key = f"announcement.created:{announcement.id}"
     # One batch query up front to learn which recipients already have a
     # notification for this announcement, instead of a per-recipient dedup
     # SELECT inside create_notification for every one of (potentially)

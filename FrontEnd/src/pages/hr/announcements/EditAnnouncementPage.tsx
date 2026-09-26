@@ -33,6 +33,8 @@ import {
   type CreateAnnouncementData,
 } from "../../../services/api/announcementApi";
 import { useI18n } from "../../../i18n/useI18n";
+import { useAuthStore } from "../../../auth/authStore";
+import { isHeadOfficeOrganization } from "../../../utils/organizationContext";
 
 const { Title, Text } = Typography;
 
@@ -40,6 +42,11 @@ export default function EditAnnouncementPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { t } = useI18n();
+  // In Main Head Office only broadcasts are listed; their audience is fixed to
+  // every company, so audience and WhatsApp group fields are not editable.
+  const isHeadOffice = isHeadOfficeOrganization(
+    useAuthStore((state) => state.user),
+  );
   const [form] = Form.useForm();
   const [announcement, setAnnouncement] = useState<Announcement | null>(null);
   const [loading, setLoading] = useState(false);
@@ -102,18 +109,20 @@ export default function EditAnnouncementPage() {
         title: values.title,
         content: values.content,
         announcement_type: announcement.announcement_type,
-        whole_company: values.audience === "COMPANY",
-        target_roles: values.audience === "CEO" ? ["CEO"] : [],
-        target_user_ids:
-          values.audience === "SELECTED" ? values.target_user_ids : undefined,
         publish_to_dashboard: values.publish_to_dashboard,
         publish_to_email: values.publish_to_email,
         publish_to_whatsapp: values.publish_to_whatsapp,
-        whatsapp_group_id: values.publish_to_whatsapp
-          ? values.whatsapp_group_id || ""
-          : "",
         attachment: attachmentFile,
       };
+      if (!isHeadOffice) {
+        payload.whole_company = values.audience === "COMPANY";
+        payload.target_roles = values.audience === "CEO" ? ["CEO"] : [];
+        payload.target_user_ids =
+          values.audience === "SELECTED" ? values.target_user_ids : undefined;
+        payload.whatsapp_group_id = values.publish_to_whatsapp
+          ? values.whatsapp_group_id || ""
+          : "";
+      }
 
       if (announcement.announcement_type === "MEETING") {
         payload.meeting_starts_at =
@@ -165,6 +174,17 @@ export default function EditAnnouncementPage() {
         bordered={false}
         style={{ borderRadius: 16, border: "none" }}
       >
+        {isHeadOffice && announcement?.broadcast_company_names?.length ? (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message={t("hr.announcements.broadcastTitle")}
+            description={t("hr.announcements.broadcastEditDescription", {
+              companies: announcement.broadcast_company_names.join(", "),
+            })}
+          />
+        ) : null}
         {announcement?.attachment_name ? (
           <Alert
             type="info"
@@ -215,7 +235,7 @@ export default function EditAnnouncementPage() {
             />
           </Form.Item>
 
-          <AnnouncementAudienceFields />
+          {isHeadOffice ? null : <AnnouncementAudienceFields />}
 
           {isMeeting ? (
             <>
@@ -390,7 +410,7 @@ export default function EditAnnouncementPage() {
             </Space>
           </div>
 
-          <AnnouncementWhatsAppGroupField editing />
+          {isHeadOffice ? null : <AnnouncementWhatsAppGroupField editing />}
 
           <Button
             type="primary"

@@ -68,3 +68,10 @@ Frontend stores `x-active-company-id` and sends it on every request. Company swi
 `Main Head Office` (`node_type = head_office`) is not a company. Strict company-scoped endpoints (`filter_queryset_by_active_company`) answer 403 "Select an active company for this request." in head-office context by design (Tenant Isolation Security Review 2026-08-24); there is no aggregate head-office view.
 
 The frontend handles this once, in `BaseLayout`: when head office is active and `pageNeedsCompany(pathname)` (`FrontEnd/src/utils/organizationContext.ts`) is true, it renders `HeadOfficeCompanyPicker` instead of the page, so users see "Choose a company" rather than a misleading 403. Notification polling is paused in head office for the same reason. When a page is made to work in head-office context, add its path to `HEAD_OFFICE_PATHS`.
+
+### Head-office defaults and announcements
+
+- `get_default_organization_for_user` returns Main Head Office for `HRManager` and `CEO` users who have access to it (`HEAD_OFFICE_DEFAULT_ROLES`), so they land on the company picker after login. Other roles still start in their first company.
+- Announcements are the one write allowed in head-office context. A SystemAdmin/HRManager/CEO posting from Main Head Office creates one ordinary `whole_company` announcement per accessible company, all sharing `Announcement.broadcast_id`. Employees only ever see their own company's copy.
+- Notifications for a broadcast use the dedup key `announcement.broadcast:<broadcast_id>`, so people who are recipients in several companies (HR, CEO via `UserOrganizationAccess`) get one in-app notification, email and WhatsApp in total.
+- In head office, the announcement list shows one row per broadcast (`broadcast_company_names`). Edit and delete apply to every copy and are only allowed from head office; a company-context edit or delete of a broadcast copy returns 422. Selected employees, role targets and WhatsApp groups are refused for broadcasts because they are per company.

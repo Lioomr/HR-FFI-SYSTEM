@@ -4,6 +4,10 @@ export interface Announcement {
   id: number;
   company_id?: number;
   company_name?: string;
+  /** Set when sent from Main Head Office: one copy per company, same id. */
+  broadcast_id?: string | null;
+  /** Companies a Main Head Office broadcast reached. Empty otherwise. */
+  broadcast_company_names?: string[];
   title: string;
   content: string;
   announcement_type: "GENERAL" | "MEETING";
@@ -42,6 +46,10 @@ export interface AnnouncementListItem {
   id: number;
   company_id?: number;
   company_name?: string;
+  /** Set when sent from Main Head Office: one copy per company, same id. */
+  broadcast_id?: string | null;
+  /** Companies a Main Head Office broadcast reached. Empty otherwise. */
+  broadcast_company_names?: string[];
   title: string;
   content_preview: string;
   announcement_type: "GENERAL" | "MEETING";

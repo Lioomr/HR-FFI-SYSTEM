@@ -1,6 +1,6 @@
 import AnnouncementWhatsAppGroupField from "./AnnouncementWhatsAppGroupField";
 import AnnouncementAudienceFields from "./AnnouncementAudienceFields";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Form,
   Input,
@@ -36,11 +36,20 @@ import { isHeadOfficeOrganization } from "../../../utils/organizationContext";
 
 const { Title, Text } = Typography;
 
-export default function CreateAnnouncementPage() {
+export default function CreateAnnouncementPage({
+  returnPath = "/hr/announcements",
+}: {
+  returnPath?: string;
+}) {
   const navigate = useNavigate();
   const { t } = useI18n();
   const user = useAuthStore((state) => state.user);
+  // From Main Head Office an announcement goes to every employee in every
+  // company the sender can access (one copy per company, sent once each).
   const isHeadOffice = isHeadOfficeOrganization(user);
+  const broadcastCompanies = (user?.accessible_organizations ?? [])
+    .filter((organization) => organization.node_type === "company")
+    .map((organization) => organization.name);
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
@@ -49,30 +58,26 @@ export default function CreateAnnouncementPage() {
     Form.useWatch("announcement_type", form) || "GENERAL";
   const isMeeting = announcementType === "MEETING";
 
-  useEffect(() => {
-    if (isHeadOffice) {
-      message.info(t("organization.headOffice.switchToCreateRecords"));
-    }
-  }, [isHeadOffice, t]);
-
   const onFinish = async (values: any) => {
-    if (isHeadOffice) return;
     setLoading(true);
     try {
       const data: CreateAnnouncementData = {
         title: values.title,
         content: values.content,
         announcement_type: values.announcement_type || "GENERAL",
-        whole_company: values.audience === "COMPANY",
-        target_roles: values.audience === "CEO" ? ["CEO"] : [],
+        whole_company: isHeadOffice || values.audience === "COMPANY",
+        target_roles: !isHeadOffice && values.audience === "CEO" ? ["CEO"] : [],
         target_user_ids:
-          values.audience === "SELECTED" ? values.target_user_ids : undefined,
+          !isHeadOffice && values.audience === "SELECTED"
+            ? values.target_user_ids
+            : undefined,
         publish_to_dashboard: values.publish_to_dashboard,
         publish_to_email: values.publish_to_email,
         publish_to_whatsapp: values.publish_to_whatsapp,
-        whatsapp_group_id: values.publish_to_whatsapp
-          ? values.whatsapp_group_id || ""
-          : "",
+        whatsapp_group_id:
+          !isHeadOffice && values.publish_to_whatsapp
+            ? values.whatsapp_group_id || ""
+            : "",
         meeting_starts_at: values.meeting_starts_at?.toISOString?.() || null,
         meeting_duration_minutes: values.meeting_duration_minutes ?? null,
         meeting_location: values.meeting_location || "",
@@ -84,8 +89,12 @@ export default function CreateAnnouncementPage() {
       };
 
       await createAnnouncement(data);
-      message.success(t("hr.announcements.successCreated"));
-      navigate("/hr/announcements");
+      message.success(
+        isHeadOffice
+          ? t("hr.announcements.broadcastSent")
+          : t("hr.announcements.successCreated"),
+      );
+      navigate(returnPath);
     } catch (error: any) {
       message.error(
         error.response?.data?.message || t("hr.announcements.errorCreate"),
@@ -110,7 +119,7 @@ export default function CreateAnnouncementPage() {
         <Title level={2} style={{ margin: 0 }}>
           {t("hr.announcements.createTitle")}
         </Title>
-        <Button onClick={() => navigate("/hr/announcements")}>
+        <Button onClick={() => navigate(returnPath)}>
           {t("common.cancel")}
         </Button>
       </div>
@@ -128,8 +137,10 @@ export default function CreateAnnouncementPage() {
             type="info"
             showIcon
             style={{ marginBottom: 16 }}
-            message={t("organization.headOffice.readOnlyTitle")}
-            description={t("organization.headOffice.switchToCreateRecords")}
+            message={t("hr.announcements.broadcastTitle")}
+            description={t("hr.announcements.broadcastDescription", {
+              companies: broadcastCompanies.join(", "),
+            })}
           />
         ) : null}
         <Form
@@ -196,7 +207,7 @@ export default function CreateAnnouncementPage() {
             />
           </Form.Item>
 
-          <AnnouncementAudienceFields />
+          {isHeadOffice ? null : <AnnouncementAudienceFields />}
 
           {isMeeting ? (
             <>
@@ -401,14 +412,13 @@ export default function CreateAnnouncementPage() {
             </Row>
           </div>
 
-          <AnnouncementWhatsAppGroupField />
+          {isHeadOffice ? null : <AnnouncementWhatsAppGroupField />}
 
           <Form.Item>
             <Button
               type="primary"
               htmlType="submit"
               loading={loading}
-              disabled={isHeadOffice}
               block
               size="large"
               style={{

@@ -1323,6 +1323,18 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.announcements.attachmentPreviewUnavailable":
       "Preview is unavailable, but the file can still be downloaded.",
     "hr.announcements.successCreated": "Announcement created successfully",
+    "hr.announcements.broadcastTitle": "Sent to every company",
+    "hr.announcements.broadcastDescription":
+      "This announcement goes to every employee in {companies}. Each person receives it once, even with access to several companies.",
+    "hr.announcements.broadcastEditDescription":
+      "Changes apply to every company that received it: {companies}.",
+    "hr.announcements.broadcastListDescription":
+      "Announcements sent from Main Head Office reach every employee in every company. To send to one company, a role, or selected employees, switch to that company.",
+    "hr.announcements.broadcastCreateButton": "New announcement to all companies",
+    "hr.announcements.broadcastSent": "Announcement sent to every company",
+    "hr.announcements.companiesColumn": "Companies",
+    "hr.announcements.deleteBroadcastDesc":
+      "This removes the announcement from every company.",
     "hr.announcements.successDeleted": "Announcement deleted successfully",
     "hr.announcements.errorLoad": "Failed to load announcements",
     "hr.announcements.errorDelete": "Failed to delete announcement",
@@ -6285,6 +6297,18 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.announcements.attachmentPreviewUnavailable":
       "المعاينة غير متاحة، لكن لا يزال بالإمكان تنزيل الملف.",
     "hr.announcements.successCreated": "تم إنشاء الإعلان بنجاح",
+    "hr.announcements.broadcastTitle": "يُرسل إلى جميع الشركات",
+    "hr.announcements.broadcastDescription":
+      "يصل هذا الإعلان إلى جميع الموظفين في {companies}. يستلمه كل شخص مرة واحدة حتى لو كان لديه وصول إلى عدة شركات.",
+    "hr.announcements.broadcastEditDescription":
+      "تُطبق التغييرات على جميع الشركات التي استلمته: {companies}.",
+    "hr.announcements.broadcastListDescription":
+      "الإعلانات المرسلة من المكتب الرئيسي تصل إلى جميع الموظفين في جميع الشركات. للإرسال إلى شركة واحدة أو دور أو موظفين محددين، انتقل إلى تلك الشركة.",
+    "hr.announcements.broadcastCreateButton": "إعلان جديد لجميع الشركات",
+    "hr.announcements.broadcastSent": "تم إرسال الإعلان إلى جميع الشركات",
+    "hr.announcements.companiesColumn": "الشركات",
+    "hr.announcements.deleteBroadcastDesc":
+      "سيؤدي هذا إلى حذف الإعلان من جميع الشركات.",
     "hr.announcements.successDeleted": "تم حذف الإعلان بنجاح",
     "hr.announcements.errorLoad": "فشل تحميل الإعلانات",
     "hr.announcements.errorDelete": "فشل حذف الإعلان",

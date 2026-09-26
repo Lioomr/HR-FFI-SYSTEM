@@ -77,10 +77,21 @@ def get_user_accessible_organizations(user) -> list[OrganizationNode]:
     return []
 
 
+# Roles that start in Main Head Office when they have access to it, so they
+# pick a company (or send a head-office announcement) instead of silently
+# landing in whichever company sorts first.
+HEAD_OFFICE_DEFAULT_ROLES = {"HRManager", "CEO"}
+
+
 def get_default_organization_for_user(user):
     accessible = get_user_accessible_organizations(user)
     if not accessible:
         return None
+
+    if get_role(user) in HEAD_OFFICE_DEFAULT_ROLES:
+        for org in accessible:
+            if org.node_type == OrganizationNode.NodeType.HEAD_OFFICE:
+                return org
 
     for org in accessible:
         if org.node_type == OrganizationNode.NodeType.COMPANY:
