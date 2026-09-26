@@ -52,6 +52,10 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "employee.dashboard.profileError":
       "We couldn’t load your profile. You can still use the services below.",
     "employee.dashboard.retry": "Retry",
+    "employee.dashboard.settlementOpenTitle": "Annual leave settlement is open",
+    "employee.dashboard.settlementOpenBody":
+      "Your contract year ends on {date}. You have {days} cash-eligible days. Request your settlement from Leave Balance before the window closes.",
+    "employee.dashboard.settlementOpenAction": "Open Leave Balance",
     "attendance.biotimeNotice": "Attendance is recorded through BioTime.",
     "attendance.unmapped":
       "Attendance is unavailable until your BioTime mapping is completed. Contact HR to be registered on a BioTime device.",
@@ -5008,6 +5012,11 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "employee.dashboard.profileError":
       "تعذّر تحميل ملفك الشخصي. يمكنك الاستمرار باستخدام الخدمات أدناه.",
     "employee.dashboard.retry": "إعادة المحاولة",
+    "employee.dashboard.settlementOpenTitle":
+      "تسوية الإجازة السنوية متاحة الآن",
+    "employee.dashboard.settlementOpenBody":
+      "تنتهي سنة عقدك في {date}. الأيام المستحقة للصرف النقدي: {days}. قدّم طلب التسوية من صفحة رصيد الإجازات قبل إغلاق الفترة.",
+    "employee.dashboard.settlementOpenAction": "فتح رصيد الإجازات",
     "attendance.biotimeNotice": "يتم تسجيل الحضور من خلال BioTime.",
     "attendance.unmapped":
       "الحضور غير متاح حتى يكتمل ربطك بنظام BioTime. تواصل مع الموارد البشرية لتسجيلك على جهاز BioTime.",

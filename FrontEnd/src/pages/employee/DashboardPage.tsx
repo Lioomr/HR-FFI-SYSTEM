@@ -18,6 +18,7 @@ import AnnouncementWidget from "../../components/announcements/AnnouncementWidge
 import { useI18n } from "../../i18n/useI18n";
 import "./dashboard.css";
 import CurrentRequests from "./CurrentRequests";
+import SettlementWindowPrompt from "./SettlementWindowPrompt";
 
 export default function DashboardPage() {
   const { t, language } = useI18n();
@@ -165,6 +166,7 @@ export default function DashboardPage() {
           }
         />
       )}
+      <SettlementWindowPrompt />
       <CurrentRequests />
       <section className="ed-requests" aria-labelledby="ed-request-title">
         <div className="ed-section-heading">
