@@ -23,6 +23,7 @@ vi.mock("../../../services/api/annualLeavePaymentsApi", async () => {
   };
 });
 
+import { MemoryRouter } from "react-router-dom";
 import MyLeaveBalancePage from "./MyLeaveBalancePage";
 import * as leaveApi from "../../../services/api/leaveApi";
 import * as annualApi from "../../../services/api/annualLeavePaymentsApi";
@@ -128,6 +129,15 @@ const eligibilityResponse = (eligibility: AnnualLeaveEligibility) => ({
   data: eligibility,
 });
 
+/** The page reads `?focus=settlement`, so it always renders inside a router. */
+function renderPage(path = "/employee/leave/balance") {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <MyLeaveBalancePage />
+    </MemoryRouter>,
+  );
+}
+
 /** Opens the payment dialog once the eligibility read has enabled the action. */
 async function openPaymentModal() {
   const button = await screen.findByRole(
@@ -159,7 +169,7 @@ beforeEach(() => {
 
 describe("MyLeaveBalancePage — Annual Leave accrual figures", () => {
   it("shows the requestable limit without the reserved and fractional columns", async () => {
-    render(<MyLeaveBalancePage />);
+    renderPage();
 
     // The test viewport is a phone, so each balance renders as a card.
     const card = (await screen.findByText("Annual Leave", {}, FIND)).closest(
@@ -190,7 +200,7 @@ describe("MyLeaveBalancePage — Annual Leave accrual figures", () => {
         },
       ],
     });
-    render(<MyLeaveBalancePage />);
+    renderPage();
 
     await screen.findByText("Annual Leave", {}, FIND);
     expect(screen.queryByText("Sick Leave")).not.toBeInTheDocument();
@@ -201,7 +211,7 @@ describe("MyLeaveBalancePage — Annual Leave accrual figures", () => {
       listResponse([makeSettlement()]),
     );
 
-    render(<MyLeaveBalancePage />);
+    renderPage();
 
     await screen.findByText("Pending HR", {}, FIND);
     expect(
@@ -221,7 +231,7 @@ describe("MyLeaveBalancePage — Annual Leave accrual figures", () => {
 
 describe("MyLeaveBalancePage — eligibility", () => {
   it("reads eligibility from the backend on load", async () => {
-    render(<MyLeaveBalancePage />);
+    renderPage();
 
     await waitFor(
       () => expect(getAnnualLeaveEligibility).toHaveBeenCalledTimes(1),
@@ -232,7 +242,7 @@ describe("MyLeaveBalancePage — eligibility", () => {
   });
 
   it("renders the backend figures verbatim, including the estimated amount", async () => {
-    render(<MyLeaveBalancePage />);
+    renderPage();
 
     expect(
       await screen.findByText("2025-05-02 → 2026-05-01", {}, FIND),
@@ -255,7 +265,7 @@ describe("MyLeaveBalancePage — eligibility", () => {
       ),
     );
 
-    render(<MyLeaveBalancePage />);
+    renderPage();
 
     expect(
       await screen.findByText(
@@ -281,7 +291,7 @@ describe("MyLeaveBalancePage — eligibility", () => {
       ),
     );
 
-    render(<MyLeaveBalancePage />);
+    renderPage();
 
     expect(
       await screen.findByText(
@@ -302,7 +312,7 @@ describe("MyLeaveBalancePage — eligibility", () => {
       eligibilityResponse(makeEligibility({ can_request: false, reason: "" })),
     );
 
-    render(<MyLeaveBalancePage />);
+    renderPage();
 
     expect(
       await screen.findByText(
@@ -321,7 +331,7 @@ describe("MyLeaveBalancePage — Annual Leave payment request", () => {
       data: makeSettlement(),
     });
 
-    render(<MyLeaveBalancePage />);
+    renderPage();
     expect(await openPaymentModal()).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("radio", { name: /Take as leave/ }));
@@ -368,7 +378,7 @@ describe("MyLeaveBalancePage — Annual Leave payment request", () => {
       },
     });
 
-    render(<MyLeaveBalancePage />);
+    renderPage();
     await openPaymentModal();
     fireEvent.click(screen.getByRole("radio", { name: /Cash/ }));
     fireEvent.click(
@@ -385,7 +395,7 @@ describe("MyLeaveBalancePage — Annual Leave payment request", () => {
   });
 
   it("requires a settlement preference before submitting", async () => {
-    render(<MyLeaveBalancePage />);
+    renderPage();
     await openPaymentModal();
 
     expect(
@@ -415,7 +425,7 @@ describe("MyLeaveBalancePage — Annual Leave payment request", () => {
       ]),
     );
 
-    render(<MyLeaveBalancePage />);
+    renderPage();
 
     expect(
       await screen.findByText("Your preference", {}, FIND),
@@ -431,7 +441,7 @@ describe("MyLeaveBalancePage — Annual Leave payment request", () => {
       listResponse([makeSettlement({ status: "pending_ceo" })]),
     );
 
-    render(<MyLeaveBalancePage />);
+    renderPage();
 
     expect(
       await screen.findByText("Pending CEO", {}, FIND),
@@ -457,8 +467,44 @@ describe("MyLeaveBalancePage — Annual Leave payment request", () => {
       listResponse([makeSettlement({ status })]),
     );
 
-    render(<MyLeaveBalancePage />);
+    renderPage();
 
     expect(await screen.findByText(label, {}, FIND)).toBeInTheDocument();
+  });
+});
+
+describe("MyLeaveBalancePage — settlement focus from notifications", () => {
+  const scrollIntoView = vi.fn();
+
+  beforeEach(() => {
+    scrollIntoView.mockReset();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      writable: true,
+      value: scrollIntoView,
+    });
+  });
+
+  it("scrolls the settlement card into view and highlights it for ?focus=settlement", async () => {
+    const { container } = renderPage(
+      "/employee/leave/balance?focus=settlement",
+    );
+
+    await screen.findByRole("button", { name: /Request payment/i }, FIND);
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(1), FIND);
+    const card = container.querySelector("#annual-leave-settlement");
+    expect(card).not.toBeNull();
+    expect(scrollIntoView.mock.contexts[0]).toBe(card);
+    expect(card).toHaveAttribute("data-highlighted", "true");
+  });
+
+  it("does not scroll or highlight without the focus parameter", async () => {
+    const { container } = renderPage();
+
+    await screen.findByRole("button", { name: /Request payment/i }, FIND);
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    expect(
+      container.querySelector("#annual-leave-settlement"),
+    ).not.toHaveAttribute("data-highlighted");
   });
 });

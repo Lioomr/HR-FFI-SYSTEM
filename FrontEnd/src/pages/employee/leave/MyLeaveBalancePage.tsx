@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Button, Card, Progress, Tag, Tooltip, Typography } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
+import { useLocation, useSearchParams } from "react-router-dom";
 import type { ColumnsType } from "antd/es/table";
 
 import PageHeader from "../../../components/ui/PageHeader";
@@ -32,6 +33,13 @@ export default function MyLeaveBalancePage() {
   // Bumped on every manual refresh so the settlement panel re-reads its
   // eligibility, which depends on pending Annual Leave requests.
   const [refreshToken, setRefreshToken] = useState(0);
+  // `?focus=settlement` comes from the settlement-window notification and the
+  // dashboard prompt. The location key changes on every navigation, so a second
+  // click while already on this page scrolls to the card again.
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const settlementFocusToken =
+    searchParams.get("focus") === "settlement" ? location.key : undefined;
 
   const loadBalances = useCallback(async () => {
     setLoading(true);
@@ -191,6 +199,7 @@ export default function MyLeaveBalancePage() {
 
       <AnnualLeavePaymentCard
         refreshToken={refreshToken}
+        focusToken={settlementFocusToken}
         onSubmitted={() => void loadBalances()}
       />
     </div>

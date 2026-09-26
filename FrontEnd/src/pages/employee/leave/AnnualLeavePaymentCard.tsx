@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   Button,
@@ -53,12 +53,15 @@ const PREFERENCE_HINT_KEYS: Record<AnnualLeaveEmployeePreference, string> = {
  * backend says `can_request`, and the backend's own `reason` is shown when it
  * says otherwise.
  *
- * Year-end reminders are an HR-only notification and are deliberately not
- * surfaced here.
+ * HR's year-end reminders are not surfaced here. The employee's own
+ * "settlement window is open" notification (and the dashboard prompt) link to
+ * `/employee/leave/balance?focus=settlement`; the page turns that into
+ * `focusToken`, which scrolls this card into view and highlights it briefly.
  */
 export default function AnnualLeavePaymentCard({
   onSubmitted,
   refreshToken = 0,
+  focusToken,
 }: {
   /**
    * Called after a successful submission so the page can re-read the balance.
@@ -71,6 +74,12 @@ export default function AnnualLeavePaymentCard({
    * a pending Annual Leave request is one of the things that blocks it.
    */
   refreshToken?: number;
+  /**
+   * Set when the page was opened to focus the settlement (for example from the
+   * window-open notification). Each new value scrolls the card into view once,
+   * after its data has loaded, and highlights it briefly.
+   */
+  focusToken?: string;
 }) {
   const { t } = useI18n();
 
@@ -121,6 +130,9 @@ export default function AnnualLeavePaymentCard({
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const handledFocusToken = useRef<string | undefined>(undefined);
+  const [highlighted, setHighlighted] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -158,6 +170,18 @@ export default function AnnualLeavePaymentCard({
   useEffect(() => {
     void loadData();
   }, [loadData, refreshToken]);
+
+  useEffect(() => {
+    if (!focusToken || loading || handledFocusToken.current === focusToken) {
+      return;
+    }
+    handledFocusToken.current = focusToken;
+    // jsdom and some older browsers lack scrollIntoView; the highlight still shows.
+    cardRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    setHighlighted(true);
+    const timer = window.setTimeout(() => setHighlighted(false), 2500);
+    return () => window.clearTimeout(timer);
+  }, [focusToken, loading]);
 
   const latest = requests[0];
   // A settlement already in flight blocks a new one for the same cycle; the
@@ -261,7 +285,18 @@ export default function AnnualLeavePaymentCard({
 
   return (
     <Card
-      style={{ borderRadius: 16, marginTop: 16 }}
+      ref={cardRef}
+      id="annual-leave-settlement"
+      data-highlighted={highlighted ? "true" : undefined}
+      style={{
+        borderRadius: 16,
+        marginTop: 16,
+        scrollMarginTop: 80,
+        transition: "box-shadow 0.4s ease",
+        boxShadow: highlighted
+          ? "0 0 0 3px rgba(22, 119, 255, 0.45)"
+          : undefined,
+      }}
       title={t("annualPayment.title")}
       extra={
         showRequestAction && (

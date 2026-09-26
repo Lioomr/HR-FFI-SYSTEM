@@ -50,6 +50,15 @@ app.conf.beat_schedule = {
             minute=int(os.environ.get("ANNUAL_LEAVE_REMINDER_MINUTE", "5")),
         ),
     },
+    # Employee-facing sibling of the HR reminder above: one notice per contract cycle when the
+    # Annual Leave settlement request first becomes available (deduplicated per profile and cycle).
+    "send-annual-leave-settlement-window-open-notifications-daily": {
+        "task": "leaves.tasks.send_annual_leave_settlement_window_open_notifications",
+        "schedule": crontab(
+            hour=int(os.environ.get("ANNUAL_LEAVE_REMINDER_HOUR", "8")),
+            minute=int(os.environ.get("ANNUAL_LEAVE_REMINDER_MINUTE", "5")),
+        ),
+    },
     "sync-biotime-attendance-morning": {
         "task": "attendance.tasks.sync_biotime_attendance",
         "schedule": crontab(

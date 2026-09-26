@@ -330,6 +330,27 @@ MESSAGES: dict[str, dict[str, tuple[str, str]]] = {
             "انتهت سنة الإجازة السنوية للموظف {employee_name} في {date}. حدِّد ترحيل الرصيد غير المستخدم أو صرفه.",
         ),
     },
+    # Employee-facing: sent once per contract cycle when the settlement request first becomes available.
+    "annual_leave.settlement_window_open": {
+        "title": ("Your Annual Leave settlement window is open", "فترة تسوية الإجازة السنوية مفتوحة لك الآن"),
+        "message": (
+            "You can now request your Annual Leave settlement. Your contract year ends on {cycle_end}. "
+            "Cash-eligible days: {eligible_days}. Open Leave Balance to submit your request.",
+            "يمكنك الآن تقديم طلب تسوية الإجازة السنوية. تنتهي سنة عقدك في {cycle_end}. "
+            "الأيام المستحقة للصرف النقدي: {eligible_days}. افتح صفحة رصيد الإجازات لتقديم طلبك.",
+        ),
+    },
+    "annual_leave.settlement_window_open_with_locked": {
+        "title": ("Your Annual Leave settlement window is open", "فترة تسوية الإجازة السنوية مفتوحة لك الآن"),
+        "message": (
+            "You can now request your Annual Leave settlement. Your contract year ends on {cycle_end}. "
+            "Cash-eligible days: {eligible_days}. Leave-only days (not payable, can only be taken as leave): "
+            "{locked_days}. Open Leave Balance to submit your request.",
+            "يمكنك الآن تقديم طلب تسوية الإجازة السنوية. تنتهي سنة عقدك في {cycle_end}. "
+            "الأيام المستحقة للصرف النقدي: {eligible_days}. أيام الإجازة فقط (غير قابلة للصرف، تُستخدم كإجازة فقط): "
+            "{locked_days}. افتح صفحة رصيد الإجازات لتقديم طلبك.",
+        ),
+    },
     "contract.expiry_milestone": {
         "title": ("Contract expiry: {employee_name}", "انتهاء العقد: {employee_name}"),
         "message": (
@@ -585,6 +606,10 @@ LEGACY_EVENT_KEYS: dict[str, tuple[str, ...]] = {
         "contract.manual_resolution",
     ),
     "document.expiring": ("document.expiring", "document.work_license_expiring"),
+    "annual_leave.settlement_window_open": (
+        "annual_leave.settlement_window_open_with_locked",
+        "annual_leave.settlement_window_open",
+    ),
 }
 
 #: Keys whose request type and status were also stored in metadata, which removes

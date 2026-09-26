@@ -80,6 +80,7 @@ Evolution sends rendered text, not Bird template IDs.
 | Leave delegation assigned | WhatsApp first; email fallback if WhatsApp does not send and email exists | `leave_delegation_assigned_v1` |
 | Announcement/meeting | Email when enabled | WhatsApp through Evolution when publish-to-SMS/WhatsApp flag is enabled |
 | Document expiry | Email when selected | WhatsApp through Evolution when selected |
+| Annual Leave settlement window open (employee) | Bird fallback only (generic bilingual template with settlement rows) | Generic bilingual text through Evolution first; daily 08:05 task `leaves.tasks.send_annual_leave_settlement_window_open_notifications`, sent once per profile and cycle end when `build_annual_leave_eligibility` reports `window_open` and `can_request`; links to `/employee/leave/balance?focus=settlement` |
 
 ## Required Environment Variables
 
