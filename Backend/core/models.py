@@ -184,6 +184,7 @@ class DelegationRule(models.Model):
         blank=True,
         related_name="delegation_rules_revoked",
     )
+    source_reference = models.CharField(max_length=128, null=True, blank=True, unique=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

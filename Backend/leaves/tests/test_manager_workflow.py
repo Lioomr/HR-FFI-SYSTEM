@@ -389,6 +389,49 @@ class ManagerWorkflowTests(APITestCase):
         ).latest("created_at")
         self.assertEqual(audit_log.metadata["actor_source"], "delegate")
 
+    def test_only_latest_active_manager_delegate_sees_the_delegated_queue(self):
+        current_delegate = User.objects.create_user(email="current-delegate@example.com", password="password")
+        EmployeeProfile.objects.create(
+            user=current_delegate,
+            company=self.company,
+            employee_id="EMP-CURRENT-DEL",
+            department="Operations",
+            job_title="Delegate",
+            hire_date=date(2021, 1, 1),
+        )
+        DelegationRule.objects.create(
+            from_user=self.manager_user,
+            to_user=self.delegate_user,
+            start_at=timezone.now(),
+            created_by=self.manager_user,
+        )
+        current_rule = DelegationRule.objects.create(
+            from_user=self.manager_user,
+            to_user=current_delegate,
+            start_at=timezone.now(),
+            created_by=self.manager_user,
+        )
+        DelegationRule.objects.filter(pk=current_rule.pk).update(updated_at=timezone.now() + timedelta(seconds=1))
+        request_obj = LeaveRequest.objects.create(
+            employee=self.employee_user,
+            employee_profile=self.employee_profile,
+            company=self.company,
+            leave_type=self.leave_type,
+            start_date=date(2027, 9, 1),
+            end_date=date(2027, 9, 2),
+            status=LeaveRequest.RequestStatus.PENDING_MANAGER,
+        )
+
+        self.client.force_authenticate(user=self.delegate_user)
+        old_delegate_response = self.client.get(self.manager_inbox_url)
+        self.client.force_authenticate(user=current_delegate)
+        current_delegate_response = self.client.get(self.manager_inbox_url)
+
+        self.assertEqual(old_delegate_response.status_code, status.HTTP_200_OK)
+        self.assertNotIn(request_obj.id, [item["id"] for item in old_delegate_response.data["data"]["items"]])
+        self.assertEqual(current_delegate_response.status_code, status.HTTP_200_OK)
+        self.assertIn(request_obj.id, [item["id"] for item in current_delegate_response.data["data"]["items"]])
+
     def test_manager_group_alone_cannot_approve_unrelated_request(self):
         manager_group, _ = Group.objects.get_or_create(name="Manager")
         unrelated_user = User.objects.create_user(email="unrelated-manager@example.com", password="password")

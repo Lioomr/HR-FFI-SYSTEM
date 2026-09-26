@@ -10,8 +10,45 @@ from django.utils import timezone
 
 from audit.utils import audit
 from core.models import DelegationRule, RequestObligation
+from organization.models import OrganizationScope
 
 BUSINESS_TRIP_CODE = "BUSINESS_TRIP"
+
+
+def _business_trip_delegation_reference(leave_request, delegated_to_id=None) -> str:
+    suffix = f":{delegated_to_id}" if delegated_to_id else ""
+    return f"business_trip_leave:{leave_request.pk}{suffix}"
+
+
+def _revoke_business_trip_delegations(leave_request, *, actor=None, note: str, exclude_rule_id=None) -> None:
+    employee = getattr(leave_request, "employee", None)
+    if not employee or not leave_request.pk:
+        return
+    reference = _business_trip_delegation_reference(leave_request)
+    legacy_reason = f"Business Trip leave request #{leave_request.pk}"
+    rules = DelegationRule.objects.filter(from_user=employee, is_active=True).filter(
+        Q(source_reference__startswith=f"{reference}:") | Q(reason=legacy_reason)
+    )
+    if exclude_rule_id:
+        rules = rules.exclude(pk=exclude_rule_id)
+    for rule in rules:
+        rule.is_active = False
+        rule.revoked_at = timezone.now()
+        rule.revoked_by = actor
+        rule.save(update_fields=["is_active", "revoked_at", "revoked_by", "updated_at"])
+        audit(
+            None,
+            "delegation_rule_revoked",
+            entity="delegation_rule",
+            entity_id=rule.id,
+            metadata={
+                "from_user_id": rule.from_user_id,
+                "to_user_id": rule.to_user_id,
+                "source_reference": reference,
+                "reason": note,
+            },
+            actor=actor,
+        )
 
 
 def is_business_trip_leave(leave_request) -> bool:
@@ -121,24 +158,93 @@ def ensure_leave_delegation_rule(leave_request, *, actor=None) -> DelegationRule
     end_value = leave_request.date_of_rejoin or leave_request.end_date
     end_at = _aware_end(end_value)
     reason = f"Business Trip leave request #{leave_request.pk}"
-    rule, created = DelegationRule.objects.update_or_create(
-        from_user=employee,
-        to_user=delegated_to,
-        start_at=start_at,
-        defaults={
-            "end_at": end_at,
-            "reason": reason,
-            "is_active": True,
-            "created_by": actor or employee,
-        },
-    )
-    if not created and (rule.end_at != end_at or rule.reason != reason or not rule.is_active):
+    reference = _business_trip_delegation_reference(leave_request, delegated_to.pk)
+    employee_company_id = getattr(_profile_for_leave(leave_request), "company_id", None)
+    delegate_company_id = getattr(getattr(delegated_to, "employee_profile", None), "company_id", None)
+    scope = None
+    if employee_company_id != delegate_company_id:
+        if not employee_company_id or not delegate_company_id:
+            return None
+        from core.permissions import get_role
+
+        if not actor or get_role(actor) not in {"HRManager", "SystemAdmin"}:
+            return None
+        scope = (
+            OrganizationScope.objects.filter(
+                is_active=True,
+                memberships__company_id=employee_company_id,
+            )
+            .filter(memberships__company_id=delegate_company_id)
+            .order_by("id")
+            .first()
+        )
+        # A Business Trip's alternative reviewer is not by itself authority to
+        # approve the employee's other workflows across company boundaries.
+        if scope is None:
+            return None
+    rule = DelegationRule.objects.filter(source_reference=reference).first()
+    if rule is None:
+        # Adopt the pre-reference row on existing systems so the first update
+        # after deployment does not leave its old grant active.
+        rule = (
+            DelegationRule.objects.filter(
+                from_user=employee,
+                to_user=delegated_to,
+                reason=reason,
+            )
+            .order_by("-id")
+            .first()
+        )
+    if rule is None:
+        rule = DelegationRule.objects.create(
+            from_user=employee,
+            to_user=delegated_to,
+            start_at=start_at,
+            source_reference=reference,
+            scope=scope,
+            created_by=actor or employee,
+            capabilities=[DelegationRule.Capability.WORKFLOW_APPROVE],
+            reason=reason,
+            end_at=end_at,
+        )
+    else:
+        rule.from_user = employee
+        rule.to_user = delegated_to
+        rule.start_at = start_at
         rule.end_at = end_at
+        rule.source_reference = reference
+        rule.scope = scope
         rule.reason = reason
         rule.is_active = True
+        rule.revoked_at = None
+        rule.revoked_by = None
+        rule.capabilities = [DelegationRule.Capability.WORKFLOW_APPROVE]
         if actor:
             rule.created_by = rule.created_by or actor
-        rule.save(update_fields=["end_at", "reason", "is_active", "created_by", "updated_at"])
+        rule.save(
+            update_fields=[
+                "from_user",
+                "to_user",
+                "start_at",
+                "end_at",
+                "source_reference",
+                "scope",
+                "reason",
+                "is_active",
+                "revoked_at",
+                "revoked_by",
+                "capabilities",
+                "created_by",
+                "updated_at",
+            ]
+        )
+    # Retire any duplicate legacy rows left by earlier delegate replacements.
+    _revoke_business_trip_delegations(
+        leave_request,
+        actor=actor,
+        note="Replaced by the current Business Trip delegation.",
+        exclude_rule_id=rule.pk,
+    )
     return rule
 
 
@@ -150,14 +256,7 @@ def close_leave_obligations(leave_request, *, note: str, actor=None) -> None:
         parent_content_type=parent_ct, parent_object_id=leave_request.pk
     ):
         _resolve_obligation(obligation, note=note, actor=actor)
-    employee = getattr(leave_request, "employee", None)
-    if employee and leave_request.delegated_to_id:
-        DelegationRule.objects.filter(
-            from_user=employee,
-            to_user_id=leave_request.delegated_to_id,
-            reason=f"Business Trip leave request #{leave_request.pk}",
-            is_active=True,
-        ).update(is_active=False, updated_at=timezone.now())
+    _revoke_business_trip_delegations(leave_request, actor=actor, note=note)
 
 
 def has_covering_delegation_for_leave(leave_request) -> bool:
@@ -170,6 +269,7 @@ def has_covering_delegation_for_leave(leave_request) -> bool:
         DelegationRule.objects.filter(
             from_user=employee,
             is_active=True,
+            capabilities__contains=[DelegationRule.Capability.WORKFLOW_APPROVE],
             start_at__lte=start_at,
         )
         .filter(Q(end_at__isnull=True) | Q(end_at__gte=end_at))
@@ -205,10 +305,27 @@ def sync_leave_obligations(leave_request, *, actor=None) -> dict[str, Any]:
             parent_content_type=parent_ct, parent_object_id=leave_request.pk
         ):
             _resolve_obligation(obligation, note="Not a Business Trip request.", actor=actor)
+        _revoke_business_trip_delegations(
+            leave_request,
+            actor=actor,
+            note="Leave request is no longer a Business Trip.",
+        )
         return get_obligations_summary(leave_request)
 
     if getattr(leave_request, "delegated_to_id", None):
-        ensure_leave_delegation_rule(leave_request, actor=actor)
+        trip_rule = ensure_leave_delegation_rule(leave_request, actor=actor)
+        if trip_rule is None:
+            _revoke_business_trip_delegations(
+                leave_request,
+                actor=actor,
+                note="No valid approval delegation is available for this Business Trip.",
+            )
+    else:
+        _revoke_business_trip_delegations(
+            leave_request,
+            actor=actor,
+            note="Business Trip delegation was removed.",
+        )
 
     from assets.models import AssetAssignment
 

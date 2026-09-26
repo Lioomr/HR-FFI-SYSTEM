@@ -33,7 +33,7 @@ from employees.models import EmployeeDeletionRequest, EmployeeProfile
 from hr_reference.models import Department, Position
 from leaves.models import LeaveRequest, LeaveType
 from loans.models import LoanRequest
-from organization.models import OrganizationNode, UserOrganizationAccess
+from organization.models import OrganizationNode, OrganizationScope, OrganizationScopeMembership, UserOrganizationAccess
 from organization.services import get_default_company
 
 
@@ -578,6 +578,67 @@ class WorkflowSnapshotTests(TestCase):
         self.assertEqual(len(pending), 1)
         self.assertEqual(pending[0].object_id, request_obj.id)
 
+    def test_employee_read_only_rule_does_not_override_approval_delegate(self):
+        leave_type = LeaveType.objects.create(
+            company=self.company,
+            name="Annual Leave",
+            code="ANNUAL_DELEGATE",
+            is_active=True,
+        )
+        read_only_user = self.user_model.objects.create_user(
+            email="read-only-delegate@test.com",
+            password="StrongPass123!",
+            full_name="Read Only Delegate",
+        )
+        EmployeeProfile.objects.create(
+            user=read_only_user,
+            company=self.company,
+            employee_id="EMP-READ-ONLY-DEL",
+            full_name="Read Only Delegate",
+            department_ref=self.department,
+            position_ref=self.position,
+            hire_date=date(2024, 6, 1),
+        )
+        scope = OrganizationScope.objects.create(code="CORE-READ-ONLY-SCOPE", name="Read Only Scope")
+        OrganizationScopeMembership.objects.create(scope=scope, company=self.company)
+        DelegationRule.objects.create(
+            from_user=self.manager,
+            to_user=self.delegate_user,
+            start_at=timezone.now(),
+            capabilities=[DelegationRule.Capability.WORKFLOW_APPROVE],
+            created_by=self.manager,
+        )
+        read_only_rule = DelegationRule.objects.create(
+            from_user=self.manager,
+            to_user=read_only_user,
+            start_at=timezone.now(),
+            end_at=timezone.now() + timedelta(days=1),
+            scope=scope,
+            capabilities=[DelegationRule.Capability.EMPLOYEE_READ],
+            created_by=self.manager,
+        )
+        DelegationRule.objects.filter(pk=read_only_rule.pk).update(updated_at=timezone.now() + timedelta(seconds=1))
+        request_obj = LeaveRequest.objects.create(
+            employee=self.employee,
+            employee_profile=self.employee_profile,
+            company=self.company,
+            leave_type=leave_type,
+            start_date=date(2026, 3, 20),
+            end_date=date(2026, 3, 22),
+            reason="Capability-specific delegation",
+            status=LeaveRequest.RequestStatus.PENDING_MANAGER,
+        )
+
+        delegate_snapshot = get_workflow_snapshot(request_obj, actor=self.delegate_user)
+        read_only_snapshot = get_workflow_snapshot(request_obj, actor=read_only_user)
+
+        self.assertEqual(delegate_snapshot["current_actor"]["id"], self.delegate_user.id)
+        self.assertTrue(delegate_snapshot["can_approve"])
+        self.assertFalse(read_only_snapshot["can_approve"])
+        pending = get_pending_approvals_for_user(self.delegate_user, limit=10)
+        self.assertEqual([item.object_id for item in pending], [request_obj.id])
+        self.assertEqual(get_pending_approvals_for_user(read_only_user, limit=10), [])
+
     def test_delegated_hr_sees_pending_role_item_and_can_approve(self):
         DelegationRule.objects.create(
             from_user=self.hr_user,
@@ -946,6 +1007,36 @@ class PendingRequestsApiTests(APITestCase):
         workflow.refresh_from_db()
         self.assertIsNone(workflow.current_actor_user_id)
         self.assertEqual(workflow.current_approver_role, "hr")
+
+    def test_manager_delegate_sees_approvals_in_shared_pending_inbox(self):
+        DelegationRule.objects.create(
+            from_user=self.manager_user,
+            to_user=self.other_hr_user,
+            start_at=timezone.now(),
+            capabilities=[DelegationRule.Capability.WORKFLOW_APPROVE],
+            created_by=self.manager_user,
+        )
+        leave = LeaveRequest.objects.create(
+            employee=self.employee,
+            employee_profile=self.employee_profile,
+            company=self.company,
+            leave_type=self.leave_type,
+            start_date=date(2026, 5, 20),
+            end_date=date(2026, 5, 22),
+            reason="Manager approval delegated to Sara",
+            status=LeaveRequest.RequestStatus.PENDING_MANAGER,
+        )
+        self.client.force_authenticate(user=self.other_hr_user)
+
+        response = self.client.get(
+            "/api/core/pending-requests/",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+
+        self.assertEqual(response.status_code, 200, response.get("Location"))
+        items = [item for item in response.data["data"]["items"] if item["id"] == leave.id]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["current_approver_role"], "manager")
 
     def test_pending_requests_exclude_completed_requests_with_stale_workflow(self):
         loan_request = LoanRequest.objects.create(
