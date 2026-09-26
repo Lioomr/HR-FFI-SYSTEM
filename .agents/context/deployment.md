@@ -1,18 +1,23 @@
 # Deployment Context
 
-## Docker Services
+## Docker Services and Source-of-Truth
 
-Defined in `docker-compose.yml` (prod-shaped) and `docker-compose.dev.yml` (local dev). There is no
-`docker-compose.prod.yml` — production config lives in `docker-compose.yml` itself.
+- `docker-compose.dev.yml` is the local development stack.
+- `docker-compose.yml` is a dev-compatible root configuration with optional `messaging-trial`, `memory`, and `marketing` profiles; it is not the production configuration.
+- This local checkout does not contain `docker-compose.prod.yml`; it contains only a dated `.bak` file. The AWS handoff documents the deployed EC2 stack at `/opt/hr-ffi/docker-compose.prod.yml`. Follow that handoff for production operations and verify remote state before changes.
 
 | Service | Image | Port | Notes |
 |---|---|---|---|
 | `db` | postgres:16-alpine | 5432 | Volume: `postgres_data`, health check: `pg_isready` |
-| `backend` | Custom Dockerfile | 8000 | Django app, reads `.env`; gzip is enabled via `GZipMiddleware` |
+| `redis` | redis:7-alpine | Internal | Cache, Celery broker, and results use separate Redis DBs |
+| `backend` | Custom Dockerfile | 8000 | Django ASGI app served by Daphne; startup applies migrations |
+| `frontend` | Custom Dockerfile | 5173 -> 80 | React build served by Nginx |
 | `notification-worker` | Custom Dockerfile | — | Celery worker only (no `-B` — beat is a separate service) |
 | `celery-beat` | Custom Dockerfile | — | Runs `celery beat` alone; do not recombine with the worker |
-| `frontend` | Custom Dockerfile | 5173 -> 80 | React → Nginx static build, `VITE_API_BASE_URL` env var; Nginx serves gzip + immutable-cached hashed assets |
+| `evolution-api`, `evolution-db`, `evolution-redis` | Evolution/PostgreSQL/Redis | 8080 (API) | Evolution services start by default in dev; root Compose puts them under `messaging-trial` |
 | `cinematic-site` | Custom Dockerfile | 5174 -> 80 | Separate marketing site (`CinematicSite/`); opt-in via `profiles: ["marketing"]`, not started by default |
+
+The root Compose file also defines `cognee` and `cognee-db` under the opt-in `memory` profile. See `local_dev_setup.md` for local start, stop, logs, and volume behavior.
 
 See `reliability_and_perf_fixes.md` for why the worker/beat split and the gzip config exist — both were reliability/perf fixes and should not be reverted.
 

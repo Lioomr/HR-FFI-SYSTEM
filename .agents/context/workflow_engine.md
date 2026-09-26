@@ -1,6 +1,6 @@
 # Workflow Engine Context
 
-> **TL;DR:** `core` app defines a shared approval engine. Models: `WorkflowDefinition`, `WorkflowStageDefinition`, `WorkflowInstance`, `WorkflowAction`, `DelegationRule`, `RequestObligation`. The engine is a **projection layer**: the domain request models (LeaveRequest, LoanRequest, …) own their `status` field — views transition the status per stage, then call `core.services.sync_workflow(instance, actor=request.user)` to mirror state into `WorkflowInstance`/`WorkflowAction`. Never write those two models directly. Gate actions with `can_user_act_on_instance(user, instance)` (respects delegation). Serialize workflow-backed detail responses with `context={"request": request}` so `workflow.can_approve` / `can_reject` / `current_actor` resolve — otherwise the frontend hides valid buttons. Chains: Leave Employee→Manager→HR→CEO (CEO optional), Loan →Manager→HR→CFO→CEO, Asset →Manager→CEO, Exit permission (`permission_requests`) →Manager→HR with **no CEO stage** (no valid manager starts at HR; an HR approver's own request is final after manager approval).
+> **TL;DR:** `core` provides shared workflow snapshots and approval history, while each domain service owns its request status and transitions. Use the domain transition service, sync through the workflow helpers, gate actions with `can_user_act_on_instance`, and serialize actor-specific workflow fields with request context. For employee request UX, Current Requests is a summary that links to request-specific screens; the leave list/detail is the approval-trail reference (`LeaveApprovalMap`, `ApprovalTimeline`, and current-actor banner). Before edits, trace all linked UI/API/service/permissions/delegation/scope/audit/notification/toggle/test paths. Leave requires CEO review; loans use Manager→HR→CFO→CEO; assets use Manager→CEO; exit permission uses Manager→HR with **no CEO stage**.
 
 The `core` app provides a shared approval engine used by Leave, Loan, and Asset flows.
 
@@ -17,18 +17,19 @@ The `core` app provides a shared approval engine used by Leave, Loan, and Asset 
 
 ## Standard Approval Chain
 
-Default leave/loan flow: **Employee → Manager → HRManager → CEO** (CEO stage is optional per LeaveType/LoanRequest config)
+Leave flow: alternative employee review (when selected) → manager (when valid) → HR → CEO → HR completion when applicable. CEO review is required; see the Leave Request Rules below for exceptions and exact transitions.
+
+Loan flow: **Employee → Manager → HRManager → CFO → CEO** (verify any request-specific optional stage against live service code).
 
 Asset flow: **Employee → Manager → CEO**
-
-Loan flow: **Employee → Manager → HRManager → CFO → CEO**
 
 Exit permission flow (`permission_requests`, workflow key `permission_request`): **Employee → Manager → HRManager → approved**. There is no CEO stage. No valid manager starts at HR (refused with 422 when no HR approver other than the requester exists); an HRManager/SystemAdmin requester's request is final after manager approval. See `plans/Permission Requests Backend Handoff.md`.
 
 ## Delegation Rules
 
 - `DelegationRule` allows a manager to delegate their approval authority to another user for a date range.
-- Backend must check delegation rules when resolving "who can approve this stage" — see `core/services.py`.
+- Delegation grants only workflow approval capability for the configured role and active dates. A read-only company/data-access rule does not make the delegate an approver. Backend must check delegation rules when resolving "who can approve this stage" — see `core/services/delegation.py` and `can_user_act_on_instance`.
+- Example: if Omar's active manager approval is delegated to Sara, Sara should see and act on requests waiting at Omar's manager stage in her approval inbox. The employee/request owner remains unchanged, and Sara's decision is recorded with Sara as the actor and the delegation attached. Check the actual role, date range, company scope, and workflow approval capability before diagnosing a missing item.
 - Delegated actions are recorded with the delegate as actor and the delegation FK stored in `WorkflowAction`.
 
 ## Request Obligations
@@ -97,4 +98,7 @@ record_workflow_transition(locked, start, action=WorkflowAction.Action.APPROVE, 
 - Action buttons (Approve/Reject) call the relevant API endpoint, which transitions the request status and calls `sync_workflow`.
 - After a decision, re-fetch the request details to reflect updated status.
 - Show workflow history (all `WorkflowAction` entries) in the request detail view.
+- Employee Current Requests (`FrontEnd/src/pages/employee/CurrentRequests.tsx`) is a cross-request summary for leave, permission, loan, and annual-leave settlements. Its cards link to request experiences; they do not themselves render a timeline. For leave, `MyLeaveRequestsPage` and `EmployeeLeaveRequestDetailsPage` are the concrete trail examples: `LeaveApprovalMap` shows stage progress; `ApprovalTimeline` shows recorded workflow events; `PendingActionBanner` shows who/stage currently has the request. Preserve a way for employees to reach equivalent real progress/history for the request kind being changed.
+- Before changing a request screen or adding a request kind, trace its summary/list/detail route, typed API client, serializer, domain transition service, workflow adapter and recorded-history mode, role/delegate/company permissions, audit and notifications, obligations, translations, feature toggles, and relevant tests. Inspect toggle defaults and consumers first; do not change toggles unless the task asks.
+- Do not claim the UI has approval-trail parity just because the backend has `workflow.history`. Confirm that the relevant employee detail route fetches and renders it. The annual-leave settlement shortcut currently navigates to the leave-balance page; verify whether a per-settlement detail/history view exists before treating it as equivalent to leave.
 - **Never serialize workflow-backed detail responses without request context** — actor-specific flags such as `workflow.can_approve`, `workflow.can_reject`, and `workflow.current_actor` depend on `get_workflow_snapshot(obj, actor=request.user)`. Use serializers with `context={"request": request}` on custom retrieve/action responses, otherwise the frontend may hide valid approval buttons.

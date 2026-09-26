@@ -43,24 +43,27 @@ FrontEnd/src/
 └── App.tsx
 ```
 
-## Pages (~45 total)
+## Feature navigation and linked request pages
 
-**Admin**: AdminDashboardPage, AdminUsersListPage, AdminUserCreatePage, AdminInvitesPage, AdminAuditLogsPage, AdminSettingsPage, BioTimeSettingsPage
+Page inventory changes frequently; find current routes in `FrontEnd/src/routes/` and `FrontEnd/src/pages/` instead of relying on a copied page count or stale list.
 
-**HR**: HRDashboardPage, EmployeesListPage, CreateEmployeePage, ViewEmployeePage, EditEmployeePage, ExpiringDocumentsPage, ImportEmployeesEntryPage, ImportResultPage, ImportHistoryPage, DepartmentsPage, PositionsPage, TaskGroupsPage, SponsorsPage, RentTypesPage, PayrollDashboardPage, CreatePayrollRunPage, PayrollRunDetailsPage, HRAssetsPage, HRRentsPage, LeaveInboxPage, LeaveRequestDetailsPage, LoanInboxPage, HrLoanRequestDetailsPage, DelegationRulesPage, HrLeaveBalancesPage, AnnouncementsManagementPage, CreateAnnouncementPage, RecentActivityPage
+The employee dashboard's `CurrentRequests` panel (`pages/employee/CurrentRequests.tsx`) aggregates leave, permission, loan, and annual-leave-settlement summaries through `services/api/employeeCurrentRequestsApi.ts`. Cards show the current status and link to a request-specific experience. Before changing that panel or adding a request type, trace its API source, route, detail page, backend transition/history, permissions, and tests.
 
-**Manager**: ManagerDashboardPage, ManagerTeamRequestsPage, ManagerLeaveRequestDetailsPage, ManagerTeamPage, CreateTeamAnnouncementPage, ManagerLoanRequestsPage, ManagerLoanRequestDetailsPage
+### Approval trail UX example
 
-**Employee**: DashboardPage, MyProfilePage, EmployeeLeavesPage, RequestLeavePage, MyLeaveRequestsPage, MyLeaveBalancePage, RequestLoanPage, MyLoanRequestsPage, MyAssetsPage, EmployeePayslipsListPage, EmployeePayslipDetailsPage
+- `pages/employee/leave/MyLeaveRequestsPage.tsx` renders `LeaveApprovalMap` in each leave row.
+- `pages/employee/leave/EmployeeLeaveRequestDetailsPage.tsx` shows `LeaveApprovalMap`, `ApprovalTimeline`, `PendingActionBanner`, and Business Trip obligations.
+- `pages/hr/leave/LeaveRequestDetailsPage.tsx` and the delegated leave inbox reuse parts of this pattern.
+- `components/requests/ApprovalTimeline.tsx` renders the actual `workflow.history`; `ApprovalFlowMap` renders stage progress.
 
-**CEO**: CEODashboardPage, CEOLeaveInboxPage, CEOLoanInboxPage
+Current Requests is currently a **summary with links**, not an inline approval timeline. Treat leave as the reference for what an employee can inspect after opening a request. For any request-progress UI task, ensure the employee can reach the real history and current waiting actor/stage. Use that request kind's authorized detail API and workflow snapshot; do not build history from status text. Annual-leave settlements currently link to the leave-balance page, so verify the actual settlement detail/history route before claiming it has the same trail.
 
-**Shared**: UserProfilePage, AnnouncementsPage
+Before editing a request experience, map its linked dashboard/list/detail routes, API client, backend serializer and service, workflow adapter/history, authorization/delegation, company scope, notifications/audit, obligations, feature flags, translations, and tests. Inspect toggle defaults and every relevant consumer first; do not change toggle values unless requested.
 
 ## API Service Layer Rules
 
 - All backend calls go through `services/api/<domain>Api.ts` — never put raw Axios calls in pages or components.
-- `apiClient.ts` attaches the current JWT and active-company header and performs global unauthorized cleanup. The backend now exposes tested `POST /auth/refresh`, but automatic web refresh is not yet implemented; mobile refresh handling belongs to Gate 2.
+- `apiClient.ts` attaches the current JWT and active-company header, automatically refreshes an expired access token once, retries the original request, and clears the session if refresh fails. Verify this behavior in `FrontEnd/src/services/api/apiClient.ts` before changing authentication.
 - Notifications use `NotificationPollingManager` (immediate REST hydration, then every 20 seconds). The WebSocket compatibility path is deliberately unavailable with close code `4403`; no frontend notification code constructs a WebSocket URL or places JWTs in it.
 - Every API service function should type both request params and response using `apiTypes.ts` or local types.
 - The active company header (`x-active-company-id`) is injected by the Axios instance — do not manually add it in service functions.

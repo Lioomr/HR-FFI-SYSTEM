@@ -2,11 +2,14 @@
 
 Scan this file first. Each row lists the file, size, and the exact keywords that route a task to it. Load only the files whose keywords match your task. Do not bulk-load this directory.
 
+For architecture, feature planning, or work crossing modules, read [`system_map.md`](system_map.md) after this index. For a narrow task, skip the map and load only the one or two matching context notes.
+
 ## Cross-Cutting (load when the relevant concept appears in your task)
 
 | File | Size | Load when task mentions |
 |---|---:|---|
-| `system_design.md` | ~3.5K | stack overview, domain app map, cross-cutting concerns summary |
+| `system_design.md` | ~4.2K | current stack, domain app map, linked-feature changes, company scope |
+| `system_map.md` | ~3.8K | integrated feature map, cross-module changes, choosing shared vs standalone feature |
 | `local_dev_setup.md` | ~4K | docker, `compose`, ports, migrations, `sync_biotime`, rebuild, containers |
 | `database_schema.md` | ~3.7K | models, relations, FKs, indexes, company FK, migrations |
 | `multi_company.md` | ~3K | `x-active-company-id`, `filter_queryset_by_company_scope`, tenant, scoping |
@@ -17,7 +20,7 @@ Scan this file first. Each row lists the file, size, and the exact keywords that
 | `i18n.md` | ~1.8K | `useI18n`, `translations.ts`, `name_en`/`name_ar`, bilingual |
 | `notifications.md` | ~5.1K | notifications, Bird email, Evolution WhatsApp, TextBee SMS, template, `notify_users_for_pending_status` |
 | `pdf_template_library.md` | ~2.2K | PDF templates, `/hr/templates`, blank forms, leave/loan PDF download, template overlay |
-| `workflow_engine.md` | ~4K | `WorkflowDefinition`, approval chain, `DelegationRule`, `RequestObligation`, `sync_workflow` |
+| `workflow_engine.md` | ~10.8K | `WorkflowDefinition`, approval trail/history, Current Requests, leave request detail, delegation, request obligations, `sync_workflow` |
 | `biotime_integration.md` | ~2.8K | BioTime, ZKTeme 8.5, `biotime_client.py`, `sync_biotime`, singleton |
 | `deployment.md` | ~3K | env vars, staging, prod, Gunicorn, Nginx |
 | `reliability_and_perf_fixes.md` | ~5K | gzip, compression, `select_for_update`, `transaction.atomic`, loan/leave approval race, celery beat, `known_new`, bulk_update, bulk_create, optimistic UI, CinematicSite hosting |
@@ -27,7 +30,7 @@ Scan this file first. Each row lists the file, size, and the exact keywords that
 
 | File | Size | Load when task mentions |
 |---|---:|---|
-| `frontend_architecture.md` | ~4.3K | folder layout, pages list, `apiClient.ts`, Zustand, routes |
+| `frontend_architecture.md` | ~6.4K | folder layout, request pages and linked approval-trail UI, `apiClient.ts`, Zustand, routes |
 | `frontend_design_system.md` | ~0.7K | Ant Design patterns, spacing, icons |
 | `admin_dashboard_design.md` | ~0.6K | admin UX language, density |
 

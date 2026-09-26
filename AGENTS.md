@@ -66,6 +66,23 @@ You have access to a rich context library in the `.agents/` directory. To maximi
 - **Do not guess architecture, project standards, or workflows.** 
 - **Start here:** Always read `.agents/context/INDEX.md` first to map your current task to the correct context file.
 - **Lazy Load:** Only use `view_file` to read the specific files from `.agents/context/`, `.agents/rules/`, or `.agents/skills/` that are explicitly required for your task. Do NOT bulk-load the entire folder.
+- **Cross-module map:** For architecture, feature planning, or work crossing modules, read `.agents/context/system_map.md` after the index. For a narrow task, skip it and load only the matching context note(s).
+
+## Trace Linked Features Before Changes
+
+Before editing a feature, identify its connected screens, API clients/routes, backend models/serializers/services, permissions and company scope, workflow history/delegation, notifications/audit, feature flags or runtime toggles, translations, and tests. Use source search and the repository's `graphify` map where available. Do this impact check before changing code or toggles; inspect each relevant toggle's default and consumers, and never flip a toggle unless the task explicitly asks.
+
+## Design Features to Fit the Existing System
+
+Before proposing a new feature, map the related features, shared data, users, workflows, and business rules. Prefer extending existing models, APIs, approval workflows, inboxes, notifications, and UI components when they fit. A feature may have its own pages and business rules while still using those shared capabilities. Make it standalone only when its purpose or lifecycle is genuinely separate; document why it is separate and how users reach it. Do not create parallel approval, permission, or notification systems without a clear reason.
+
+## Refresh Docker After Runtime Changes
+
+Before reporting a code or runtime change complete, rebuild and recreate the Docker service(s) that contain the changed files so the running system uses the new version. Backend code/dependency changes normally require `backend`, `notification-worker`, and `celery-beat`; frontend changes require `frontend`; Compose or shared-image changes require every affected service. Then check the selected Compose stack with `docker compose ... ps` and report the result. Use the correct Compose file/profile from `.agents/context/local_dev_setup.md`. Never use `down -v` as a routine rebuild because it deletes persistent volumes. Documentation-only changes do not need a container rebuild. If Docker is unavailable or rebuilding fails, state which service was not refreshed; do not claim it is updated.
+
+For request and approval work, read `.agents/context/workflow_engine.md`. The employee dashboard's **Current Requests** is a summary of leave, permission, loan, and annual-leave-settlement requests. Its cards link to request-specific experiences. The leave request list/detail is the current approval-trail example: `LeaveApprovalMap` shows stage progress, `ApprovalTimeline` shows recorded decisions, and `PendingActionBanner` identifies the current waiting stage/actor. Preserve or add a clear path from every affected request to its real approval trail. Do not infer a trail from status labels alone. Verify each request kind separately; annual-leave settlements currently link to the balance page, so do not assume they have the same detail/history route as leave.
+
+When a task asks for a request page to show approval progress, determine whether it means the summary card, request list, or request detail, then keep the linked experiences consistent. Confirm backend workflow history and actor-specific serializer fields are available before implementing the UI. Update the relevant tests and focused context docs with any behavior change.
 
 ## Engineering References
 

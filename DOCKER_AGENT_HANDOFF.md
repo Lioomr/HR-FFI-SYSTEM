@@ -1,5 +1,7 @@
 # Docker System Handoff for Agents
 
+> **Historical bootstrap note; verify before using.** This document's local production-Compose commands and claims are stale: `docker-compose.prod.yml` is not present in this checkout (only a dated backup exists), and root `docker-compose.yml` is dev-compatible, not production. For current local services see `.agents/context/local_dev_setup.md`; for the deployed AWS stack and production operations use `AWS_AGENT_DEPLOYMENT_HANDOFF.md` and verify the remote state.
+
 This document is for any agent working in this repository. It explains the Dockerized system structure, what has already been implemented, and how to operate it safely in development and production.
 
 ## 1) Current Docker State

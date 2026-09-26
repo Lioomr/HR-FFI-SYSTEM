@@ -1,5 +1,7 @@
 # Code Audit Findings — Agent Fix Plan
 
+> **Historical snapshot, not a current backlog:** generated 2026-08-24. Findings below have not all been revalidated against the current code. Before acting on any item, verify the cited code and mark the finding fixed, still valid, or superseded with a new review date. Do not treat the old ordering or status as current release priority.
+>
 > Generated 2026-08-24 by code inspection (backend + frontend). Each finding is a self-contained
 > work item an agent can pick up independently. Fix in priority order within each severity band.
 >

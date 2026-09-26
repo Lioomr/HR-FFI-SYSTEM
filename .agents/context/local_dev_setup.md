@@ -7,8 +7,14 @@ The system runs fully in Docker. The notification worker waits for required infr
 | Service | Container name | Port | Notes |
 |---|---|---|---|
 | Database | `ffi_hr_db` | `5432:5432` | postgres:16-alpine |
-| Backend | `ffi_hr_backend` | `8000:8000` | Django + Gunicorn |
+| Redis | `ffi_hr_redis` | Internal only | Redis databases separate broker, cache, and result data |
+| Backend | `ffi_hr_backend` | `8000:8000` | Django ASGI app served by Daphne |
 | Frontend | `ffi_hr_frontend` | `5173:80` | React built → Nginx |
+| Celery worker | `ffi_hr_notification_worker` | Internal only | Runs asynchronous notification and background tasks |
+| Celery Beat | `ffi_hr_celery_beat` | Internal only | Separate scheduler process; do not combine with worker |
+| Evolution API | `ffi_hr_evolution_api` | `8080:8080` | Local WhatsApp provider |
+| Evolution database | `ffi_hr_evolution_db` | Internal only | PostgreSQL for Evolution API |
+| Evolution Redis | `ffi_hr_evolution_redis` | Internal only | Redis for Evolution API |
 
 Dev env file: `Backend/.env.docker` (debug=true, local DB config)
 
@@ -20,6 +26,10 @@ The notification stack also includes `ffi_hr_redis`, `ffi_hr_notification_worker
 `ffi_cinematic_site` (the separate marketing site, `CinematicSite/`) is defined under
 `profiles: ["marketing"]` and does not start with a plain `docker compose up`. Start it explicitly:
 `docker compose -f docker-compose.dev.yml --profile marketing up -d cinematic-site` (port `5174:80`).
+
+The root `docker-compose.yml` is a dev-compatible configuration with Evolution services behind the `messaging-trial` profile and Cognee behind the `memory` profile. Unlike it, `docker-compose.dev.yml` starts Evolution by default and does not define Cognee. Always check which Compose file and profile started a container before assuming the service set.
+
+The local checkout does not contain `docker-compose.prod.yml`; only a dated backup exists. Production commands and container details are maintained in `AWS_AGENT_DEPLOYMENT_HANDOFF.md` for the separate EC2 checkout. Do not run the production commands in older local handoff text against this checkout without a reviewed production Compose file.
 
 ## Start / Stop
 
@@ -43,15 +53,20 @@ docker compose -f docker-compose.dev.yml ps
 ## Rebuild After Changes
 
 ```bash
-# After Python/Django changes
-docker compose -f docker-compose.dev.yml up -d --build backend
+# After backend code/dependency changes (API, worker, and scheduler share backend code)
+docker compose -f docker-compose.dev.yml up -d --build backend notification-worker celery-beat
 
-# After frontend changes
+# After frontend code/dependency changes
 docker compose -f docker-compose.dev.yml up -d --build frontend
 
 # After docker-compose.dev.yml changes
 docker compose -f docker-compose.dev.yml up -d --build
+
+# Verify rebuilt services
+docker compose -f docker-compose.dev.yml ps
 ```
+
+Before reporting a code/runtime task complete, rebuild and recreate each affected app service, then check its status. Rebuild all three backend-based services (`backend`, `notification-worker`, `celery-beat`) after backend changes because each runs code from the Backend image. Rebuild `frontend` after frontend changes. Docs-only changes do not need a rebuild. Never use `down -v` for a routine rebuild because that removes database, upload, and provider volumes.
 
 ## View Logs
 
