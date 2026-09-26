@@ -120,12 +120,73 @@ class HeadOfficeBroadcastTests(APITestCase):
             {"target_user_ids": [self.employee_a.id]},
             {"target_roles": ["CEO"]},
             {"whatsapp_group_id": "ops"},
-            {"whole_company": False},
+            {"broadcast_audience": "EVERYONE"},
+            {"broadcast_audience": "COMPANIES"},
+            {"broadcast_audience": "COMPANIES", "company_ids": [self.company_c.id]},
+            {"broadcast_audience": "EMPLOYEES"},
+            {"broadcast_audience": "EMPLOYEES", "target_user_ids": [self.employee_c.id]},
         ):
             with self.subTest(payload=payload):
                 response = self._broadcast(**payload)
                 self.assertEqual(response.status_code, 422, response.content)
         self.assertFalse(Announcement.objects.exists())
+
+    def test_broadcast_to_chosen_companies_only(self):
+        response = self._broadcast(broadcast_audience="COMPANIES", company_ids=[self.company_b.id])
+
+        self.assertEqual(response.status_code, 201, response.content)
+        copies = Announcement.objects.filter(title="Eid holiday")
+        self.assertEqual([copy.company_id for copy in copies], [self.company_b.id])
+        self.assertTrue(copies[0].whole_company)
+        self.assertEqual(Notification.objects.filter(recipient=self.employee_a).count(), 0)
+        self.assertEqual(Notification.objects.filter(recipient=self.employee_b).count(), 1)
+
+    def test_broadcast_to_chosen_employees_across_companies(self):
+        response = self._broadcast(
+            broadcast_audience="EMPLOYEES", target_user_ids=[self.employee_a.id, self.employee_b.id]
+        )
+
+        self.assertEqual(response.status_code, 201, response.content)
+        copies = Announcement.objects.filter(title="Eid holiday").order_by("company__name")
+        self.assertEqual(
+            [(copy.company_id, copy.target_user_id, copy.whole_company) for copy in copies],
+            [(self.company_a.id, self.employee_a.id, False), (self.company_b.id, self.employee_b.id, False)],
+        )
+        self.assertEqual(len({copy.broadcast_id for copy in copies}), 1)
+        self.assertEqual(Notification.objects.filter(recipient=self.employee_a).count(), 1)
+        self.assertEqual(Notification.objects.filter(recipient=self.employee_b).count(), 1)
+        self.assertEqual(Notification.objects.filter(recipient=self.hr).count(), 0)
+
+        listed = self.client.get(URL, HTTP_X_ACTIVE_COMPANY_ID=str(self.head_office.id))
+        item = listed.data["data"]["items"][0]
+        self.assertEqual(item["broadcast_recipient_count"], 2)
+        self.assertEqual(item["broadcast_company_names"], ["Alpha Co", "Beta Co"])
+
+    def test_ceo_cannot_pick_employees_from_head_office(self):
+        response = self._broadcast(user=self.ceo, broadcast_audience="EMPLOYEES", target_user_ids=[self.employee_a.id])
+
+        self.assertEqual(response.status_code, 403, response.content)
+
+    def test_recipient_candidates_cover_every_accessible_company(self):
+        self.client.force_authenticate(self.hr)
+
+        in_head_office = self.client.get(
+            f"{URL}/recipient-candidates", HTTP_X_ACTIVE_COMPANY_ID=str(self.head_office.id)
+        )
+        in_company = self.client.get(f"{URL}/recipient-candidates", HTTP_X_ACTIVE_COMPANY_ID=str(self.company_a.id))
+
+        self.assertEqual(in_head_office.status_code, 200, in_head_office.content)
+        self.assertEqual(
+            [item["user_id"] for item in in_head_office.data["data"]["items"]],
+            [self.employee_a.id, self.employee_b.id],
+        )
+        self.assertEqual(
+            [item["user_id"] for item in in_company.data["data"]["items"]],
+            [self.employee_a.id],
+        )
+        self.client.force_authenticate(self.employee_a)
+        denied = self.client.get(f"{URL}/recipient-candidates", HTTP_X_ACTIVE_COMPANY_ID=str(self.company_a.id))
+        self.assertEqual(denied.status_code, 403)
 
     def test_ceo_can_broadcast_from_head_office(self):
         response = self._broadcast(user=self.ceo)

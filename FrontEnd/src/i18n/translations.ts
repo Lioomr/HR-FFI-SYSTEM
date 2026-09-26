@@ -1323,18 +1323,30 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.announcements.attachmentPreviewUnavailable":
       "Preview is unavailable, but the file can still be downloaded.",
     "hr.announcements.successCreated": "Announcement created successfully",
-    "hr.announcements.broadcastTitle": "Sent to every company",
+    "hr.announcements.broadcastTitle": "Sending from Main Head Office",
     "hr.announcements.broadcastDescription":
       "This announcement goes to every employee in {companies}. Each person receives it once, even with access to several companies.",
     "hr.announcements.broadcastEditDescription":
-      "Changes apply to every company that received it: {companies}.",
+      "Changes apply to everyone who received it in {companies}.",
+    "hr.announcements.broadcastCompaniesDescription":
+      "This announcement goes to every employee in the companies you choose. Each person receives it once.",
+    "hr.announcements.broadcastEmployeesDescription":
+      "This announcement goes only to the employees you choose, from any of your companies.",
+    "hr.announcements.audienceAllCompanies": "All companies",
+    "hr.announcements.audienceChosenCompanies": "Chosen companies",
+    "hr.announcements.audienceChosenEmployees": "Chosen employees",
+    "hr.announcements.chosenCompaniesLabel": "Companies",
+    "hr.announcements.chosenCompaniesRequired": "Choose at least one company",
+    "hr.announcements.chosenEmployeesHelp":
+      "Search by name or employee ID. Employees are grouped by company.",
+    "hr.announcements.employeeCount": "{count} employees",
     "hr.announcements.broadcastListDescription":
-      "Announcements sent from Main Head Office reach every employee in every company. To send to one company, a role, or selected employees, switch to that company.",
-    "hr.announcements.broadcastCreateButton": "New announcement to all companies",
-    "hr.announcements.broadcastSent": "Announcement sent to every company",
+      "Send to all companies, chosen companies, or chosen employees from any company. Everyone receives each announcement once. To target a role or a WhatsApp group, switch to that company.",
+    "hr.announcements.broadcastCreateButton": "New announcement",
+    "hr.announcements.broadcastSent": "Announcement sent",
     "hr.announcements.companiesColumn": "Companies",
     "hr.announcements.deleteBroadcastDesc":
-      "This removes the announcement from every company.",
+      "This removes the announcement for everyone who received it.",
     "hr.announcements.successDeleted": "Announcement deleted successfully",
     "hr.announcements.errorLoad": "Failed to load announcements",
     "hr.announcements.errorDelete": "Failed to delete announcement",
@@ -6297,18 +6309,30 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.announcements.attachmentPreviewUnavailable":
       "المعاينة غير متاحة، لكن لا يزال بالإمكان تنزيل الملف.",
     "hr.announcements.successCreated": "تم إنشاء الإعلان بنجاح",
-    "hr.announcements.broadcastTitle": "يُرسل إلى جميع الشركات",
+    "hr.announcements.broadcastTitle": "إرسال من المكتب الرئيسي",
     "hr.announcements.broadcastDescription":
       "يصل هذا الإعلان إلى جميع الموظفين في {companies}. يستلمه كل شخص مرة واحدة حتى لو كان لديه وصول إلى عدة شركات.",
     "hr.announcements.broadcastEditDescription":
-      "تُطبق التغييرات على جميع الشركات التي استلمته: {companies}.",
+      "تُطبق التغييرات على كل من استلمه في {companies}.",
+    "hr.announcements.broadcastCompaniesDescription":
+      "يصل هذا الإعلان إلى جميع الموظفين في الشركات التي تختارها. يستلمه كل شخص مرة واحدة.",
+    "hr.announcements.broadcastEmployeesDescription":
+      "يصل هذا الإعلان فقط إلى الموظفين الذين تختارهم من أي من شركاتك.",
+    "hr.announcements.audienceAllCompanies": "جميع الشركات",
+    "hr.announcements.audienceChosenCompanies": "شركات محددة",
+    "hr.announcements.audienceChosenEmployees": "موظفون محددون",
+    "hr.announcements.chosenCompaniesLabel": "الشركات",
+    "hr.announcements.chosenCompaniesRequired": "اختر شركة واحدة على الأقل",
+    "hr.announcements.chosenEmployeesHelp":
+      "ابحث بالاسم أو الرقم الوظيفي. الموظفون مجمعون حسب الشركة.",
+    "hr.announcements.employeeCount": "{count} موظف",
     "hr.announcements.broadcastListDescription":
-      "الإعلانات المرسلة من المكتب الرئيسي تصل إلى جميع الموظفين في جميع الشركات. للإرسال إلى شركة واحدة أو دور أو موظفين محددين، انتقل إلى تلك الشركة.",
-    "hr.announcements.broadcastCreateButton": "إعلان جديد لجميع الشركات",
-    "hr.announcements.broadcastSent": "تم إرسال الإعلان إلى جميع الشركات",
+      "أرسل إلى جميع الشركات أو شركات محددة أو موظفين محددين من أي شركة. يستلم كل شخص الإعلان مرة واحدة. لاستهداف دور أو مجموعة واتساب، انتقل إلى تلك الشركة.",
+    "hr.announcements.broadcastCreateButton": "إعلان جديد",
+    "hr.announcements.broadcastSent": "تم إرسال الإعلان",
     "hr.announcements.companiesColumn": "الشركات",
     "hr.announcements.deleteBroadcastDesc":
-      "سيؤدي هذا إلى حذف الإعلان من جميع الشركات.",
+      "سيؤدي هذا إلى حذف الإعلان لدى كل من استلمه.",
     "hr.announcements.successDeleted": "تم حذف الإعلان بنجاح",
     "hr.announcements.errorLoad": "فشل تحميل الإعلانات",
     "hr.announcements.errorDelete": "فشل حذف الإعلان",

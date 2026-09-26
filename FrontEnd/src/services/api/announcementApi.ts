@@ -8,6 +8,8 @@ export interface Announcement {
   broadcast_id?: string | null;
   /** Companies a Main Head Office broadcast reached. Empty otherwise. */
   broadcast_company_names?: string[];
+  /** Employees a broadcast was sent to one by one; 0 for whole companies. */
+  broadcast_recipient_count?: number;
   title: string;
   content: string;
   announcement_type: "GENERAL" | "MEETING";
@@ -50,6 +52,8 @@ export interface AnnouncementListItem {
   broadcast_id?: string | null;
   /** Companies a Main Head Office broadcast reached. Empty otherwise. */
   broadcast_company_names?: string[];
+  /** Employees a broadcast was sent to one by one; 0 for whole companies. */
+  broadcast_recipient_count?: number;
   title: string;
   content_preview: string;
   announcement_type: "GENERAL" | "MEETING";
@@ -74,6 +78,20 @@ export interface AnnouncementListItem {
   is_active: boolean;
 }
 
+/** Every company, chosen companies, or chosen employees from any company. */
+export type HeadOfficeAudience = "ALL_COMPANIES" | "COMPANIES" | "EMPLOYEES";
+
+/** An active employee HR can pick; Main Head Office lists every company. */
+export interface AnnouncementRecipientCandidate {
+  user_id: number;
+  employee_id: string;
+  full_name: string;
+  full_name_en?: string | null;
+  full_name_ar?: string | null;
+  company_id: number;
+  company_name: string;
+}
+
 export interface CreateAnnouncementData {
   title: string;
   content: string;
@@ -83,6 +101,10 @@ export interface CreateAnnouncementData {
   target_roles?: "CEO"[];
   target_user?: number;
   target_user_ids?: number[];
+  /** Main Head Office only: who receives the announcement. */
+  broadcast_audience?: HeadOfficeAudience;
+  /** Main Head Office only, with the COMPANIES audience. */
+  company_ids?: number[];
   publish_to_dashboard: boolean;
   publish_to_email: boolean;
   /** Preferred WhatsApp delivery flag (delivery goes through WhatsApp/Evolution). */
@@ -118,6 +140,9 @@ function toAnnouncementFormData(data: Partial<CreateAnnouncementData>) {
       formData.append("target_user_ids", String(id)),
     );
   }
+  if (data.broadcast_audience !== undefined)
+    formData.append("broadcast_audience", data.broadcast_audience);
+  data.company_ids?.forEach((id) => formData.append("company_ids", String(id)));
   if (data.publish_to_dashboard !== undefined) {
     formData.append("publish_to_dashboard", String(data.publish_to_dashboard));
   }
@@ -243,6 +268,13 @@ export async function deleteAnnouncement(id: number) {
 export interface AnnouncementWhatsAppGroup {
   id: string;
   name: string;
+}
+
+export async function getAnnouncementRecipientCandidates(): Promise<
+  AnnouncementRecipientCandidate[]
+> {
+  const response = await api.get("/api/announcements/recipient-candidates");
+  return response.data.data.items;
 }
 
 export async function getAnnouncementWhatsAppGroups(): Promise<{

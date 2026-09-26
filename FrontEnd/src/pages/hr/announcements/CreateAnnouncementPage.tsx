@@ -1,5 +1,6 @@
 import AnnouncementWhatsAppGroupField from "./AnnouncementWhatsAppGroupField";
 import AnnouncementAudienceFields from "./AnnouncementAudienceFields";
+import HeadOfficeAudienceFields from "./HeadOfficeAudienceFields";
 import { useState } from "react";
 import {
   Form,
@@ -44,12 +45,15 @@ export default function CreateAnnouncementPage({
   const navigate = useNavigate();
   const { t } = useI18n();
   const user = useAuthStore((state) => state.user);
-  // From Main Head Office an announcement goes to every employee in every
-  // company the sender can access (one copy per company, sent once each).
+  // From Main Head Office an announcement goes to every company, chosen
+  // companies, or chosen employees from any company the sender can access.
+  // Each person receives it once.
   const isHeadOffice = isHeadOfficeOrganization(user);
-  const broadcastCompanies = (user?.accessible_organizations ?? [])
-    .filter((organization) => organization.node_type === "company")
-    .map((organization) => organization.name);
+  const broadcastCompanies = (user?.accessible_organizations ?? []).filter(
+    (organization) => organization.node_type === "company",
+  );
+  const canPickEmployees =
+    user?.role === "HRManager" || user?.role === "SystemAdmin";
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
@@ -57,19 +61,30 @@ export default function CreateAnnouncementPage({
   const announcementType =
     Form.useWatch("announcement_type", form) || "GENERAL";
   const isMeeting = announcementType === "MEETING";
+  const broadcastAudience =
+    Form.useWatch("broadcast_audience", form) || "ALL_COMPANIES";
 
   const onFinish = async (values: any) => {
     setLoading(true);
     try {
+      const pickedEmployees = isHeadOffice
+        ? values.broadcast_audience === "EMPLOYEES"
+        : values.audience === "SELECTED";
       const data: CreateAnnouncementData = {
         title: values.title,
         content: values.content,
         announcement_type: values.announcement_type || "GENERAL",
-        whole_company: isHeadOffice || values.audience === "COMPANY",
+        whole_company: isHeadOffice
+          ? values.broadcast_audience !== "EMPLOYEES"
+          : values.audience === "COMPANY",
         target_roles: !isHeadOffice && values.audience === "CEO" ? ["CEO"] : [],
-        target_user_ids:
-          !isHeadOffice && values.audience === "SELECTED"
-            ? values.target_user_ids
+        target_user_ids: pickedEmployees ? values.target_user_ids : undefined,
+        broadcast_audience: isHeadOffice
+          ? values.broadcast_audience || "ALL_COMPANIES"
+          : undefined,
+        company_ids:
+          isHeadOffice && values.broadcast_audience === "COMPANIES"
+            ? values.company_ids
             : undefined,
         publish_to_dashboard: values.publish_to_dashboard,
         publish_to_email: values.publish_to_email,
@@ -138,9 +153,17 @@ export default function CreateAnnouncementPage({
             showIcon
             style={{ marginBottom: 16 }}
             message={t("hr.announcements.broadcastTitle")}
-            description={t("hr.announcements.broadcastDescription", {
-              companies: broadcastCompanies.join(", "),
-            })}
+            description={
+              broadcastAudience === "EMPLOYEES"
+                ? t("hr.announcements.broadcastEmployeesDescription")
+                : broadcastAudience === "COMPANIES"
+                  ? t("hr.announcements.broadcastCompaniesDescription")
+                  : t("hr.announcements.broadcastDescription", {
+                      companies: broadcastCompanies
+                        .map((company) => company.name)
+                        .join(", "),
+                    })
+            }
           />
         ) : null}
         <Form
@@ -149,6 +172,7 @@ export default function CreateAnnouncementPage({
           onFinish={onFinish}
           initialValues={{
             audience: "COMPANY",
+            broadcast_audience: "ALL_COMPANIES",
             announcement_type: "GENERAL",
             publish_to_dashboard: true,
             publish_to_email: false,
@@ -207,7 +231,14 @@ export default function CreateAnnouncementPage({
             />
           </Form.Item>
 
-          {isHeadOffice ? null : <AnnouncementAudienceFields />}
+          {isHeadOffice ? (
+            <HeadOfficeAudienceFields
+              companies={broadcastCompanies}
+              canPickEmployees={canPickEmployees}
+            />
+          ) : (
+            <AnnouncementAudienceFields />
+          )}
 
           {isMeeting ? (
             <>

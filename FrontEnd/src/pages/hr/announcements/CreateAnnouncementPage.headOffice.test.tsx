@@ -28,6 +28,7 @@ const { createAnnouncement, listDelegationCandidates, navigate } = vi.hoisted(
 vi.mock("../../../services/api/announcementApi", () => ({
   createAnnouncement,
   getAnnouncementWhatsAppGroups: vi.fn(),
+  getAnnouncementRecipientCandidates: vi.fn().mockResolvedValue([]),
 }));
 vi.mock("../../../services/api/employeesApi", () => ({
   listDelegationCandidates,
@@ -113,11 +114,13 @@ describe("CreateAnnouncementPage in Main Head Office", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("Sent to every company")).toBeInTheDocument();
+    expect(
+      screen.getByText("Sending from Main Head Office"),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(/every employee in FFI, Aseco Pro/),
     ).toBeInTheDocument();
-    expect(screen.queryByText("Target Audience")).toBeNull();
+    expect(screen.getByText("All companies")).toBeInTheDocument();
     expect(listDelegationCandidates).not.toHaveBeenCalled();
 
     fireEvent.change(screen.getByPlaceholderText(/title/i), {
@@ -135,10 +138,12 @@ describe("CreateAnnouncementPage in Main Head Office", () => {
     expect(payload).toMatchObject({
       title: "Eid holiday",
       whole_company: true,
+      broadcast_audience: "ALL_COMPANIES",
       target_roles: [],
       whatsapp_group_id: "",
     });
     expect(payload.target_user_ids).toBeUndefined();
+    expect(payload.company_ids).toBeUndefined();
     await waitFor(() =>
       expect(navigate).toHaveBeenCalledWith("/hr/announcements"),
     );
@@ -152,7 +157,7 @@ describe("CreateAnnouncementPage in Main Head Office", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.queryByText("Sent to every company")).toBeNull();
+    expect(screen.queryByText("Sending from Main Head Office")).toBeNull();
     expect(listDelegationCandidates).toHaveBeenCalled();
   });
 });
