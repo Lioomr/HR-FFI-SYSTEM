@@ -73,7 +73,6 @@ export type LeaveBalanceLike = {
   remaining_days?: number | string;
   pending_days?: number | string;
   requestable_days?: number | string;
-  fractional_days?: number | string;
 };
 
 export type LeaveBalanceFigures = {
@@ -84,8 +83,6 @@ export type LeaveBalanceFigures = {
   pending: number;
   /** The maximum the employee may request; 0 when the backend omitted it. */
   requestable: number;
-  /** Sub-day remainder, informational only. */
-  fractional: number;
   /** False for an older payload without the accrual fields. */
   hasRequestableDays: boolean;
 };
@@ -104,7 +101,6 @@ export function readLeaveBalanceFigures(
     remaining: toNumber(balance?.remaining_days),
     pending: toNumber(balance?.pending_days),
     requestable: toNumber(balance?.requestable_days),
-    fractional: toNumber(balance?.fractional_days),
     hasRequestableDays:
       balance?.requestable_days !== undefined &&
       balance?.requestable_days !== null,

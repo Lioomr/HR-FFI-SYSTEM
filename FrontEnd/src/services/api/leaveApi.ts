@@ -110,8 +110,6 @@ export interface LeaveBalance {
   pending_days?: number | string;
   /** The only figure an employee may request against: floor(remaining) - pending. */
   requestable_days?: number | string;
-  /** Sub-day remainder of the balance; informational, never requestable. */
-  fractional_days?: number | string;
   adjustments?: number | string;
 }
 

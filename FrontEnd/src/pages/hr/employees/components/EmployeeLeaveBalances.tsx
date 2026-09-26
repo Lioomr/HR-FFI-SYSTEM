@@ -171,9 +171,6 @@ export default function EmployeeLeaveBalances({
       <Descriptions.Item label={t("hr.employees.balances.remaining")}>
         {formatLeaveDays(record.remaining_days)}
       </Descriptions.Item>
-      <Descriptions.Item label={t("leave.fractionalDays")}>
-        {formatLeaveDays(record.fractional_days)}
-      </Descriptions.Item>
       <Descriptions.Item label={t("hr.employees.balances.adjustments")}>
         {formatLeaveDays(record.adjustments)}
       </Descriptions.Item>
