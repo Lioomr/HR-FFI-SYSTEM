@@ -3,6 +3,7 @@ import { Descriptions, Tag } from "antd";
 import { useI18n } from "../../i18n/useI18n";
 import type { AnnualLeavePaymentRequest } from "../../services/api/annualLeavePaymentsApi";
 import {
+  EMPLOYEE_PREFERENCE_LABEL_KEYS,
   formatSettlementAmount,
   formatSettlementDays,
 } from "./annualLeaveSettlement";
@@ -95,6 +96,20 @@ export default function AnnualLeaveSettlementDetails({
                 ? t("annualPayment.resolution.carryForward")
                 : t("annualPayment.resolution.pay")}
             </Tag>
+          ),
+        },
+        {
+          key: "employee_preference",
+          label: showEmployee
+            ? t("annualPayment.employeePreference")
+            : t("annualPayment.yourPreference"),
+          // Advisory only; HR's resolution above is the decision.
+          children: request.employee_preference ? (
+            <Tag>
+              {t(EMPLOYEE_PREFERENCE_LABEL_KEYS[request.employee_preference])}
+            </Tag>
+          ) : (
+            t("annualPayment.preference.notRecorded")
           ),
         },
         ...(showEmployee

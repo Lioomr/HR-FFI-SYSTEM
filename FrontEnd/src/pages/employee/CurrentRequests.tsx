@@ -12,11 +12,13 @@ import {
   type CurrentRequestKind,
 } from "../../services/api/employeeCurrentRequestsApi";
 import { formatDateOnly } from "../../utils/dateTime";
+import { EMPLOYEE_PREFERENCE_LABEL_KEYS } from "../../components/leaves/annualLeaveSettlement";
 
 const kindKeys: Record<CurrentRequestKind, string> = {
   leave: "employee.dashboard.myLeaves",
   permission: "employee.dashboard.permissionTitle",
   loan: "employee.dashboard.loans",
+  settlement: "employee.dashboard.annualSettlement",
 };
 const statusKeys: Record<string, string> = {
   submitted: "status.submitted",
@@ -113,6 +115,20 @@ function CurrentRequestsContent() {
                           {t("employee.dashboard.submittedOn")}{" "}
                           {formatDateOnly(request.createdAt)}
                         </span>
+                        {request.cycle && (
+                          <span className="ed-service-description">
+                            {t("annualPayment.contractYear")}{" "}
+                            <bdi>
+                              {request.cycle.start} → {request.cycle.end}
+                            </bdi>
+                            {request.preference &&
+                              ` · ${t("annualPayment.yourPreference")}: ${t(
+                                EMPLOYEE_PREFERENCE_LABEL_KEYS[
+                                  request.preference
+                                ],
+                              )}`}
+                          </span>
+                        )}
                       </span>
                       <Tag color="orange">
                         {t(statusKeys[request.status] || "status.pending")}

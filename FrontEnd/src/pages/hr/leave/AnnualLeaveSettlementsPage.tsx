@@ -26,6 +26,7 @@ import PageHeader from "../../../components/ui/PageHeader";
 import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import AnnualLeavePaymentStatusTag from "../../../components/leaves/AnnualLeavePaymentStatusTag";
 import {
+  EMPLOYEE_PREFERENCE_LABEL_KEYS,
   formatSettlementAmount,
   formatSettlementDays,
 } from "../../../components/leaves/annualLeaveSettlement";
@@ -49,6 +50,20 @@ import { getDetailedHttpErrorMessage } from "../../../services/api/userErrorMess
 import { getFirstApiErrorMessage } from "../../../utils/formErrors";
 
 const PAGE_SIZE = 20;
+
+/**
+ * The HR decision that matches the employee's preference. Cash maps to
+ * forwarding for payment; carrying forward and taking the days as leave both
+ * keep them as leave. Without a preference HR starts from `forward`, as before.
+ */
+function preferredReviewDecision(
+  request: AnnualLeavePaymentRequest,
+): AnnualLeavePaymentReviewDecision {
+  return request.employee_preference === "carry_forward" ||
+    request.employee_preference === "take_as_leave"
+    ? "carry_forward"
+    : "forward";
+}
 
 /**
  * HR review queue for Annual Leave settlements.
@@ -177,7 +192,8 @@ export default function AnnualLeaveSettlementsPage() {
 
   const openReview = (request: AnnualLeavePaymentRequest) => {
     setReviewing(request);
-    setReviewDecision("forward");
+    // Pre-select from the employee's preference; HR can still change it.
+    setReviewDecision(preferredReviewDecision(request));
     setReviewComment("");
     setReviewPayLockedDays(
       Boolean(request.include_locked_days_in_termination_payout),
@@ -501,6 +517,20 @@ export default function AnnualLeaveSettlementsPage() {
                 required
                 style={{ marginBottom: 12 }}
               >
+                {reviewing.employee_preference && (
+                  <Alert
+                    type="info"
+                    showIcon
+                    style={{ borderRadius: 10, marginBottom: 8 }}
+                    message={t("annualPayment.hrPreferenceNotice", {
+                      preference: t(
+                        EMPLOYEE_PREFERENCE_LABEL_KEYS[
+                          reviewing.employee_preference
+                        ],
+                      ),
+                    })}
+                  />
+                )}
                 <Select<AnnualLeavePaymentReviewDecision>
                   value={reviewDecision}
                   onChange={setReviewDecision}
@@ -514,7 +544,15 @@ export default function AnnualLeaveSettlementsPage() {
                       value: "carry_forward",
                       label: t("annualPayment.carryForward"),
                     },
-                  ]}
+                  ].map((option) =>
+                    reviewing.employee_preference &&
+                    option.value === preferredReviewDecision(reviewing)
+                      ? {
+                          ...option,
+                          label: `${option.label} ${t("annualPayment.preference.suggested")}`,
+                        }
+                      : option,
+                  )}
                 />
               </Form.Item>
               {reviewing.is_termination_settlement &&

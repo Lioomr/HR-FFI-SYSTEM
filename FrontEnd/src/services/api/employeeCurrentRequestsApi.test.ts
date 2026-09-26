@@ -41,6 +41,7 @@ it("reads older pages, excludes completed requests and links ongoing requests to
           reference_no: "PER-3",
         },
       ]);
+    if (url === "/api/leaves/annual-leave-payments/") return response([]);
     throw new Error(`Unexpected endpoint: ${url}`);
   });
   const result = await getEmployeeCurrentRequests();
@@ -64,7 +65,46 @@ it("preserves successful sources and identifies failed sources including API err
   });
   const result = await getEmployeeCurrentRequests();
   expect(result.failed).toEqual(["leave", "permission"]);
-  expect(result.requests).toHaveLength(1);
+  // The loan and settlement sources both still load.
+  expect(result.requests.map((item) => item.kind)).toEqual([
+    "loan",
+    "settlement",
+  ]);
+});
+it("lists only the caller's in-flight Annual Leave settlements with cycle and preference", async () => {
+  vi.mocked(api.get).mockImplementation(async (url) => {
+    if (url !== "/api/leaves/annual-leave-payments/") return response([]);
+    return response([
+      {
+        id: 11,
+        status: "pending_ceo",
+        submitted_at: "2026-09-05T08:00:00Z",
+        cycle_start: "2025-09-10",
+        cycle_end: "2026-09-09",
+        employee_preference: "take_as_leave",
+      },
+      { id: 12, status: "pending_hr", submitted_at: "2026-09-04T08:00:00Z" },
+      { id: 13, status: "approved" },
+      { id: 14, status: "carried_forward" },
+      { id: 15, status: "rejected" },
+    ]);
+  });
+  const result = await getEmployeeCurrentRequests();
+  expect(result.failed).toEqual([]);
+  expect(result.requests).toEqual([
+    expect.objectContaining({
+      id: 11,
+      kind: "settlement",
+      status: "pending_ceo",
+      path: "/employee/leave/balance",
+      cycle: { start: "2025-09-10", end: "2026-09-09" },
+      preference: "take_as_leave",
+    }),
+    expect.objectContaining({ id: 12, kind: "settlement", preference: "" }),
+  ]);
+  expect(api.get).toHaveBeenCalledWith("/api/leaves/annual-leave-payments/", {
+    params: { page: 1, page_size: 100, mine: true },
+  });
 });
 it("stops pagination when the view or employee scope changes", async () => {
   let active = true;

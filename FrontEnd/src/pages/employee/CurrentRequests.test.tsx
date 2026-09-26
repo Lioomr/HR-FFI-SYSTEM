@@ -37,6 +37,31 @@ it("shows ongoing status and a direct details link", async () => {
   ).toHaveAttribute("href", "/employee/leave/requests/3");
   expect(screen.getByText("Pending HR completion")).toBeInTheDocument();
 });
+it("shows an in-flight Annual Leave settlement with its cycle and preference", async () => {
+  vi.mocked(getEmployeeCurrentRequests).mockResolvedValue({
+    failed: [],
+    requests: [
+      {
+        id: 11,
+        kind: "settlement",
+        reference: "#11",
+        path: "/employee/leave/balance",
+        status: "pending_ceo",
+        createdAt: "2026-09-05T08:00:00Z",
+        cycle: { start: "2025-09-10", end: "2026-09-09" },
+        preference: "take_as_leave",
+      },
+    ],
+  });
+  mount();
+  expect(
+    await screen.findByRole("link", { name: /Annual Leave settlement #11/ }),
+  ).toHaveAttribute("href", "/employee/leave/balance");
+  expect(screen.getByText("Pending CEO")).toBeInTheDocument();
+  expect(screen.getByText(/Your preference: Take as leave/)).toHaveTextContent(
+    "Contract year 2025-09-10 → 2026-09-09",
+  );
+});
 it("does not show an empty inbox when loading fails, and retries", async () => {
   vi.mocked(getEmployeeCurrentRequests)
     .mockResolvedValueOnce({ requests: [], failed: ["loan"] })
@@ -45,13 +70,13 @@ it("does not show an empty inbox when loading fails, and retries", async () => {
   expect(await screen.findByRole("alert")).toHaveTextContent("Loan requests");
   expect(
     screen.queryByText(
-      "You have no ongoing leave, exit permission, or loan requests.",
+      "You have no ongoing leave, exit permission, loan, or Annual Leave settlement requests.",
     ),
   ).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
   expect(
     await screen.findByText(
-      "You have no ongoing leave, exit permission, or loan requests.",
+      "You have no ongoing leave, exit permission, loan, or Annual Leave settlement requests.",
     ),
   ).toBeInTheDocument();
 });
@@ -67,7 +92,7 @@ it("translates the current request section into Arabic", async () => {
   ).toBeInTheDocument();
   expect(
     await screen.findByText(
-      "ليس لديك طلبات إجازة أو إذن خروج أو سلف قيد الإجراء.",
+      "ليس لديك طلبات إجازة أو إذن خروج أو سلف أو تسوية إجازة سنوية قيد الإجراء.",
     ),
   ).toBeInTheDocument();
 });

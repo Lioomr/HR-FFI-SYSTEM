@@ -260,6 +260,55 @@ describe("HR Annual Leave settlements queue", () => {
     ).toBeInTheDocument();
   });
 
+  it("pre-selects the decision from the employee preference without forcing it", async () => {
+    getAnnualLeavePaymentRequests.mockResolvedValue(
+      listResponse([makeSettlement({ employee_preference: "take_as_leave" })]),
+    );
+    reviewAnnualLeavePaymentRequest.mockResolvedValue({
+      status: "success" as const,
+      data: makeSettlement({ status: "pending_ceo" }),
+    });
+
+    renderPage();
+    await openReview();
+
+    expect(screen.getByText("Employee preference")).toBeInTheDocument();
+    expect(
+      screen.getByText(/The employee prefers: Take as leave\./),
+    ).toBeInTheDocument();
+    // Carry-forward keeps the days as leave, so it is the highlighted choice.
+    expect(
+      screen.getByTitle(
+        "Carry forward (leave only, not payable) (employee preference)",
+      ),
+    ).toBeInTheDocument();
+
+    // HR can still override it and forward the settlement for payment.
+    fireEvent.mouseDown(screen.getByLabelText("HR decision"));
+    fireEvent.click(await screen.findByTitle("Forward to CEO"));
+    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+
+    await waitFor(() =>
+      expect(reviewAnnualLeavePaymentRequest).toHaveBeenCalledWith(9, {
+        decision: "forward",
+        comment: "",
+      }),
+    );
+  });
+
+  it("starts from forwarding when the employee prefers cash", async () => {
+    getAnnualLeavePaymentRequests.mockResolvedValue(
+      listResponse([makeSettlement({ employee_preference: "pay" })]),
+    );
+
+    renderPage();
+    await openReview();
+
+    expect(
+      screen.getByTitle("Forward to CEO (employee preference)"),
+    ).toBeInTheDocument();
+  });
+
   it("shows leave-only days apart from the payable days", async () => {
     getAnnualLeavePaymentRequests.mockResolvedValue(
       listResponse([makeSettlement({ locked_unused_days: "7.00" })]),

@@ -86,7 +86,7 @@ class AnnualLeavePaymentFollowUpTests(APITestCase):
     @patch("leaves.annual_payment_services.notify_users_for_pending_status")
     def test_retrieve_uses_standard_success_envelope(self, notify):
         self.client.force_authenticate(self.employee)
-        created = self.client.post(self.url, {}, format="json", **self.headers)
+        created = self.client.post(self.url, {"employee_preference": "pay"}, format="json", **self.headers)
         self.assertEqual(created.status_code, status.HTTP_201_CREATED)
 
         response = self.client.get(f"{self.url}{created.data['data']['id']}/", **self.headers)
@@ -262,3 +262,70 @@ class AnnualLeavePaymentFollowUpTests(APITestCase):
         payment = AnnualLeavePaymentRequest.objects.get(pk=response.data["data"]["id"])
         self.assertEqual(payment.employee_profile_id, self.profile.id)
         self.assertEqual(payment.company_id, self.company.id)
+
+    # --- employee preference -----------------------------------------------------------
+
+    def test_self_service_submission_requires_an_employee_preference(self):
+        self.client.force_authenticate(self.employee)
+
+        response = self.client.post(self.url, {}, format="json", **self.headers)
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertIn("employee_preference", str(response.data["errors"]))
+        self.assertFalse(AnnualLeavePaymentRequest.objects.exists())
+
+    def test_self_service_submission_refuses_an_unknown_preference(self):
+        self.client.force_authenticate(self.employee)
+
+        response = self.client.post(self.url, {"employee_preference": "donate"}, format="json", **self.headers)
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertFalse(AnnualLeavePaymentRequest.objects.exists())
+
+    @patch("leaves.annual_payment_services.notify_users_for_pending_status")
+    def test_preference_is_stored_and_advisory_only(self, notify):
+        Preference = AnnualLeavePaymentRequest.EmployeePreference
+        for preference in (Preference.PAY, Preference.CARRY_FORWARD, Preference.TAKE_AS_LEAVE):
+            with self.subTest(preference=preference):
+                AnnualLeavePaymentRequest.objects.all().delete()
+                self.client.force_authenticate(self.employee)
+
+                response = self.client.post(
+                    self.url, {"employee_preference": preference}, format="json", **self.headers
+                )
+
+                self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+                data = response.data["data"]
+                self.assertEqual(data["employee_preference"], preference)
+                # HR still decides: the request waits for review, priced as a payment.
+                self.assertEqual(data["status"], AnnualLeavePaymentRequest.Status.PENDING_HR)
+                self.assertEqual(data["resolution"], AnnualLeavePaymentRequest.Resolution.PAY)
+                self.client.force_authenticate(self.hr)
+                detail = self.client.get(f"{self.url}{data['id']}/", **self.headers)
+                self.assertEqual(detail.data["data"]["employee_preference"], preference)
+
+    @patch("leaves.annual_payment_services.notify_users_for_pending_status")
+    def test_hr_opened_settlement_needs_no_employee_preference(self, notify):
+        self.client.force_authenticate(self.hr)
+
+        response = self.client.post(self.url, {"employee_id": self.profile.id}, format="json", **self.headers)
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(response.data["data"]["employee_preference"], "")
+
+    def test_mine_limits_hr_to_their_own_settlements(self):
+        hr_profile = EmployeeProfile.objects.create(
+            user=self.hr,
+            company=self.company,
+            employee_id="EMP-PAY-FU-HR",
+            contract_date=date.today() - timedelta(days=360),
+        )
+        own = self._create_payment(status=AnnualLeavePaymentRequest.Status.PENDING_HR, profile=hr_profile)
+        self._create_payment(status=AnnualLeavePaymentRequest.Status.PENDING_HR)
+        self.client.force_authenticate(self.hr)
+
+        everyone = self.client.get(self.url, **self.headers)
+        mine = self.client.get(self.url, {"mine": "true"}, **self.headers)
+
+        self.assertEqual(everyone.data["data"]["count"], 2)
+        self.assertEqual([item["id"] for item in mine.data["data"]["items"]], [own.id])

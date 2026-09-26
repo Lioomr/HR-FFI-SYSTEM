@@ -7,9 +7,9 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "employee.dashboard.pendingCompletion": "Pending HR completion",
     "employee.dashboard.currentTitle": "Current requests",
     "employee.dashboard.currentHint":
-      "Your leave, exit permission, and loan requests awaiting approval, completion, or payment. Select a request to view its progress.",
+      "Your leave, exit permission, loan, and Annual Leave settlement requests awaiting approval, completion, or payment. Select a request to view its progress.",
     "employee.dashboard.currentEmpty":
-      "You have no ongoing leave, exit permission, or loan requests.",
+      "You have no ongoing leave, exit permission, loan, or Annual Leave settlement requests.",
     "employee.dashboard.currentError":
       "Couldn’t load these requests. Refresh to try again:",
     "employee.dashboard.refresh": "Refresh",
@@ -25,6 +25,7 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "employee.dashboard.leaveHint":
       "Plan time off and submit your leave for approval.",
     "employee.dashboard.loans": "Loan requests",
+    "employee.dashboard.annualSettlement": "Annual Leave settlement",
     "employee.dashboard.loanHint":
       "Apply for an employee loan and follow its approval.",
     "employee.dashboard.servicesTitle": "Your everyday essentials",
@@ -102,6 +103,26 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "annualPayment.resolution": "Resolution",
     "annualPayment.resolution.pay": "Pay",
     "annualPayment.resolution.carryForward": "Carry Forward (Leave Only)",
+    "annualPayment.preference":
+      "How would you like your eligible days settled?",
+    "annualPayment.preference.help":
+      "Applies only to your eligible whole days. Leave-only days are not part of this choice and always stay leave-only. This is your preference: HR makes the final decision and the CEO approves it.",
+    "annualPayment.preference.required":
+      "Choose how you would like your eligible days settled.",
+    "annualPayment.preference.pay": "Cash",
+    "annualPayment.preference.payHint": "Receive the eligible days in cash.",
+    "annualPayment.preference.carryForward": "Carry forward as leave only",
+    "annualPayment.preference.carryForwardHint":
+      "Keep the days as leave in the next contract year. They will never be paid out later.",
+    "annualPayment.preference.takeAsLeave": "Take as leave",
+    "annualPayment.preference.takeAsLeaveHint":
+      "You plan to use these days as a leave request soon.",
+    "annualPayment.employeePreference": "Employee preference",
+    "annualPayment.yourPreference": "Your preference",
+    "annualPayment.preference.notRecorded": "Not recorded",
+    "annualPayment.preference.suggested": "(employee preference)",
+    "annualPayment.hrPreferenceNotice":
+      "The employee prefers: {preference}. The decision below is pre-selected from it; you can change it.",
     "annualPayment.lockedDays": "Leave-only days (not payable)",
     "annualPayment.lockedDaysPaidOnTermination":
       "Leave-only days (paid out on termination)",
@@ -4954,9 +4975,9 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "employee.dashboard.pendingCompletion": "بانتظار استكمال الموارد البشرية",
     "employee.dashboard.currentTitle": "الطلبات الجارية",
     "employee.dashboard.currentHint":
-      "طلبات الإجازة وإذن الخروج والسلف التي تنتظر الاعتماد أو الاستكمال أو الصرف. اختر طلبًا للاطلاع على تقدّمه.",
+      "طلبات الإجازة وإذن الخروج والسلف وتسوية الإجازة السنوية التي تنتظر الاعتماد أو الاستكمال أو الصرف. اختر طلبًا للاطلاع على تقدّمه.",
     "employee.dashboard.currentEmpty":
-      "ليس لديك طلبات إجازة أو إذن خروج أو سلف قيد الإجراء.",
+      "ليس لديك طلبات إجازة أو إذن خروج أو سلف أو تسوية إجازة سنوية قيد الإجراء.",
     "employee.dashboard.currentError":
       "تعذّر تحميل هذه الطلبات. اضغط تحديث للمحاولة مجددًا:",
     "employee.dashboard.refresh": "تحديث",
@@ -5002,6 +5023,7 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "annualPayment.hrSubtitle": "مراجعة طلبات تسوية الإجازة السنوية للموظفين.",
     "annualPayment.hrEmpty": "لا توجد تسويات بانتظار مراجعة الموارد البشرية.",
     "annualPayment.hrCreateButton": "فتح تسوية",
+    "employee.dashboard.annualSettlement": "تسوية الإجازة السنوية",
     "annualPayment.hrCreateTitle": "فتح تسوية إجازة سنوية",
     "annualPayment.hrCreateNotice": "إنشاء تسوية لموظف لم يقدّم طلباً.",
     "annualPayment.hrDecision": "قرار الموارد البشرية",
@@ -5069,6 +5091,24 @@ export const translations: Record<AppLanguage, TranslationMap> = {
       "طلب تسوية أيام الإجازة السنوية غير المستخدمة والمستحقة.",
     "annualPayment.requestButton": "طلب دفع",
     "annualPayment.requestTitle": "طلب دفع الإجازة السنوية",
+    "annualPayment.preference": "كيف تفضّل تسوية أيامك المستحقة؟",
+    "annualPayment.preference.help":
+      "ينطبق هذا على أيامك الكاملة المستحقة فقط. أيام الإجازة فقط ليست جزءًا من هذا الاختيار وتبقى إجازة فقط دائمًا. هذه رغبتك: القرار النهائي للموارد البشرية ويعتمده الرئيس التنفيذي.",
+    "annualPayment.preference.required": "اختر طريقة تسوية أيامك المستحقة.",
+    "annualPayment.preference.pay": "صرف نقدي",
+    "annualPayment.preference.payHint": "صرف الأيام المستحقة نقدًا.",
+    "annualPayment.preference.carryForward": "ترحيل كإجازة فقط",
+    "annualPayment.preference.carryForwardHint":
+      "الاحتفاظ بالأيام كإجازة في سنة العقد التالية، ولن تُصرف نقدًا لاحقًا.",
+    "annualPayment.preference.takeAsLeave": "استخدامها كإجازة",
+    "annualPayment.preference.takeAsLeaveHint":
+      "تنوي استخدام هذه الأيام في طلب إجازة قريبًا.",
+    "annualPayment.employeePreference": "رغبة الموظف",
+    "annualPayment.yourPreference": "رغبتك",
+    "annualPayment.preference.notRecorded": "غير مسجلة",
+    "annualPayment.preference.suggested": "(رغبة الموظف)",
+    "annualPayment.hrPreferenceNotice":
+      "يفضّل الموظف: {preference}. تم تحديد القرار أدناه مسبقًا بناءً عليها، ويمكنك تغييره.",
     "annualPayment.submitSuccess": "تم إرسال طلب دفع الإجازة السنوية.",
     "annualPayment.notAvailable": "دفع الإجازة السنوية غير متاح.",
     "annualPayment.reason.profileRequired": "ملف الموظف مطلوب.",

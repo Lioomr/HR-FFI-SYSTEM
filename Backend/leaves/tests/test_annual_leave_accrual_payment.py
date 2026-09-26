@@ -124,7 +124,7 @@ class AnnualLeaveAccrualPaymentTests(APITestCase):
     @patch("leaves.annual_payment_services.notify_users_for_pending_status")
     def test_payment_hr_review_and_ceo_approval_uses_year_end_salary(self, notify):
         self.client.force_authenticate(self.employee)
-        response = self.client.post("/api/leaves/annual-leave-payments/", {})
+        response = self.client.post("/api/leaves/annual-leave-payments/", {"employee_preference": "pay"})
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         payment_id = response.data["data"]["id"]
         # With calendar-month accrual and a 360-day contract, today is 5 days
@@ -151,7 +151,7 @@ class AnnualLeaveAccrualPaymentTests(APITestCase):
     @patch("leaves.annual_payment_services.notify_users_for_pending_status")
     def test_ceo_rejection_does_not_settle_balance(self, notify):
         self.client.force_authenticate(self.employee)
-        payment = self.client.post("/api/leaves/annual-leave-payments/", {}).data["data"]
+        payment = self.client.post("/api/leaves/annual-leave-payments/", {"employee_preference": "pay"}).data["data"]
         self.client.force_authenticate(self.hr)
         self.client.post(
             f"/api/leaves/annual-leave-payments/{payment['id']}/review/",
