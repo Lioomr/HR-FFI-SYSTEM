@@ -22,8 +22,6 @@ import {
   KeyOutlined,
   ApartmentOutlined,
   IdcardOutlined,
-  GroupOutlined,
-  SafetyOutlined,
   UploadOutlined,
   DollarOutlined,
   DownOutlined,
@@ -822,24 +820,13 @@ export default function BaseLayout() {
           label: <Link to="/hr/employees">{t("layout.employees")}</Link>,
         },
         {
-          key: "/hr/departments",
+          key: "/hr/organization-setup",
           icon: <ApartmentOutlined />,
-          label: <Link to="/hr/departments">{t("layout.departments")}</Link>,
-        },
-        {
-          key: "/hr/positions",
-          icon: <IdcardOutlined />,
-          label: <Link to="/hr/positions">{t("layout.positions")}</Link>,
-        },
-        {
-          key: "/hr/task-groups",
-          icon: <GroupOutlined />,
-          label: <Link to="/hr/task-groups">{t("layout.taskGroups")}</Link>,
-        },
-        {
-          key: "/hr/sponsors",
-          icon: <SafetyOutlined />,
-          label: <Link to="/hr/sponsors">{t("layout.sponsors")}</Link>,
+          label: (
+            <Link to="/hr/organization-setup">
+              {t("layout.organizationSetup")}
+            </Link>
+          ),
         },
         {
           key: "/hr/invites",

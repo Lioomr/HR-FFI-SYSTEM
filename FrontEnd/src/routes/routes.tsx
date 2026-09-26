@@ -38,10 +38,7 @@ import {
   DelegationRulesPage,
   UserProfilePage,
   MyProfilePage,
-  DepartmentsPage,
-  PositionsPage,
-  TaskGroupsPage,
-  SponsorsPage,
+  OrganizationSetupPage,
   RentTypesPage,
   EmployeesListPage,
   CreateEmployeePage,
@@ -266,10 +263,40 @@ export const routes = [
               },
 
               // Reference Data
-              { path: "hr/departments", element: <DepartmentsPage /> },
-              { path: "hr/positions", element: <PositionsPage /> },
-              { path: "hr/task-groups", element: <TaskGroupsPage /> },
-              { path: "hr/sponsors", element: <SponsorsPage /> },
+              {
+                path: "hr/organization-setup",
+                element: <OrganizationSetupPage />,
+              },
+              {
+                path: "hr/departments",
+                element: (
+                  <Navigate
+                    to="/hr/organization-setup?tab=departments"
+                    replace
+                  />
+                ),
+              },
+              {
+                path: "hr/positions",
+                element: (
+                  <Navigate to="/hr/organization-setup?tab=positions" replace />
+                ),
+              },
+              {
+                path: "hr/task-groups",
+                element: (
+                  <Navigate
+                    to="/hr/organization-setup?tab=task-groups"
+                    replace
+                  />
+                ),
+              },
+              {
+                path: "hr/sponsors",
+                element: (
+                  <Navigate to="/hr/organization-setup?tab=sponsors" replace />
+                ),
+              },
               { path: "hr/rent-types", element: <RentTypesPage /> },
               { path: "hr/rents", element: <HRRentsPage /> },
               { path: "hr/templates", element: <TemplateLibraryPage /> },

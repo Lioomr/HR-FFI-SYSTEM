@@ -106,6 +106,35 @@ describe("HR violation history filters", () => {
     ).toBeInTheDocument();
   });
 
+  it("has no free-text search and lists employees by name only", async () => {
+    vi.mocked(listEmployees).mockResolvedValue({
+      status: "success",
+      data: {
+        results: [
+          {
+            id: 7,
+            employee_number: "FFI-000007",
+            employee_id: "FFI-000007",
+            full_name_en: "Jane Doe",
+            full_name_ar: "جين دو",
+          },
+        ],
+        count: 1,
+      },
+    } as never);
+    renderPanel("?tab=violations");
+    await screen.findByText("Jane Doe");
+
+    expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
+    expect(
+      screen.queryByPlaceholderText("Employee name or code"),
+    ).not.toBeInTheDocument();
+
+    fireEvent.mouseDown(screen.getByRole("combobox", { name: "Employee" }));
+    expect(await screen.findByTitle("Jane Doe")).toBeInTheDocument();
+    expect(screen.queryByTitle(/FFI-000007/)).not.toBeInTheDocument();
+  });
+
   it("applies the Needs HR review preset through the URL", async () => {
     renderPanel("?tab=violations");
     await screen.findByText("Jane Doe");

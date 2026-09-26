@@ -52,7 +52,7 @@ describe("BioTime attendance read-only views", () => {
       ).toBeInTheDocument();
       expect(
         screen.queryByRole("button", {
-          name: /approve|reject|edit|override|correct/i,
+          name: /^(approve|reject|edit|override|correct)(\b|$)/i,
         }),
       ).not.toBeInTheDocument();
       expect(

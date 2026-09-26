@@ -7,24 +7,32 @@ import React, {
 } from "react";
 import {
   Button,
-  Card,
   DatePicker,
-  Divider,
   Input,
   Select,
   Space,
   Spin,
   Tabs,
-  Tag,
   Typography,
   message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
+  BellOutlined,
   CalculatorOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  CloseCircleOutlined,
   DownloadOutlined,
+  FileDoneOutlined,
+  HourglassOutlined,
   ReloadOutlined,
   SearchOutlined,
+  StopOutlined,
+  TableOutlined,
+  UndoOutlined,
+  UnorderedListOutlined,
+  WarningOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useSearchParams } from "react-router-dom";
@@ -57,6 +65,7 @@ import {
 } from "../../utils/dateTime";
 import { downloadBlob } from "../../utils/download";
 import { useI18n } from "../../i18n/useI18n";
+import "./AttendancePreviewPage.css";
 
 const EXPORT_PAGE_SIZE = 200;
 const EXPORT_MAX_ROWS = 10000;
@@ -76,36 +85,18 @@ interface AttendancePreviewPageProps {
   role: PreviewRole;
 }
 
-const STATUS_OPTIONS: EffectiveAttendanceStatus[] = [
-  "PRESENT",
-  "LATE",
-  "ABSENT",
-  "EXCUSED",
-  "PENDING",
-  "PENDING_HR",
-  "PENDING_MGR",
-  "PENDING_CEO",
-  "REJECTED",
-];
-
 const SOURCE_OPTIONS: AttendanceSource[] = ["SYSTEM", "EMPLOYEE", "HR"];
 
-const statusColors: Record<EffectiveAttendanceStatus, string> = {
-  PRESENT: "green",
-  ABSENT: "red",
-  EXCUSED: "blue",
-  LATE: "gold",
-  PENDING: "orange",
-  PENDING_HR: "orange",
-  PENDING_MGR: "gold",
-  PENDING_CEO: "purple",
-  REJECTED: "magenta",
-};
-
-const sourceColors: Record<string, string> = {
-  EMPLOYEE: "blue",
-  HR: "geekblue",
-  SYSTEM: "cyan",
+const statusTone: Record<EffectiveAttendanceStatus, string> = {
+  PRESENT: "positive",
+  ABSENT: "critical",
+  EXCUSED: "informational",
+  LATE: "warning",
+  PENDING: "pending",
+  PENDING_HR: "pending",
+  PENDING_MGR: "pending",
+  PENDING_CEO: "pending",
+  REJECTED: "critical",
 };
 
 const SEARCH_DEBOUNCE_MS = 400;
@@ -141,6 +132,10 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
   const [summary, setSummary] = useState<
     Partial<Record<EffectiveAttendanceStatus, number>>
   >({});
+  const [overviewTotal, setOverviewTotal] = useState(0);
+  const [overviewError, setOverviewError] = useState(false);
+  const [overviewLoading, setOverviewLoading] = useState(true);
+  const [overviewRefresh, setOverviewRefresh] = useState(0);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -199,9 +194,8 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
 
   // Filter params shared by the paged table fetch and the CSV export, minus
   // pagination — the export walks its own pages.
-  const buildBaseParams = useCallback((): AttendanceFilters => {
+  const buildScopeParams = useCallback((): AttendanceFilters => {
     const params: AttendanceFilters = {};
-    if (status !== "ALL") params.effective_status = status;
     if (dateRange) {
       params.date_from = dateRange[0].format("YYYY-MM-DD");
       params.date_to = dateRange[1].format("YYYY-MM-DD");
@@ -212,7 +206,13 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
       if (employeeId) params.employee_id = employeeId;
     }
     return params;
-  }, [dateRange, employeeId, search, source, status, supportsAdvancedFilters]);
+  }, [dateRange, employeeId, search, source, supportsAdvancedFilters]);
+
+  const buildBaseParams = useCallback((): AttendanceFilters => {
+    const params = buildScopeParams();
+    if (status !== "ALL") params.effective_status = status;
+    return params;
+  }, [buildScopeParams, status]);
 
   const fetchRecords = useCallback(async () => {
     setLoading(true);
@@ -233,7 +233,6 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
       const normalized = normalizeListData<AttendanceRecord>(data);
       setRecords(normalized.items);
       setTotal(normalized.total);
-      setSummary(data.effective_summary || data.summary || {});
       setErrorMessage(null);
     } catch (error: any) {
       const msg =
@@ -252,6 +251,38 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
   useEffect(() => {
     fetchRecords();
   }, [fetchRecords]);
+
+  useEffect(() => {
+    let active = true;
+    const loadOverview = async () => {
+      setOverviewLoading(true);
+      try {
+        const params: AttendanceFilters = {
+          ...buildScopeParams(),
+          page: 1,
+          page_size: 1,
+        };
+        const response =
+          role === "ceo"
+            ? await getCEOAttendance(params)
+            : await getGlobalAttendance(params);
+        const data = unwrapEnvelope(response) as AttendanceListResponse;
+        if (!active) return;
+        setOverviewTotal(normalizeListData<AttendanceRecord>(data).total);
+        setSummary(data.effective_summary || data.summary || {});
+        setOverviewError(false);
+      } catch {
+        if (!active) return;
+        setOverviewError(true);
+      } finally {
+        if (active) setOverviewLoading(false);
+      }
+    };
+    void loadOverview();
+    return () => {
+      active = false;
+    };
+  }, [buildScopeParams, overviewRefresh, role]);
 
   useEffect(() => {
     if (!supportsAdvancedFilters) return;
@@ -280,7 +311,7 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
   }, [employeeQuery, supportsAdvancedFilters]);
 
   const handleStatusChange = (value: EffectiveAttendanceStatus | "ALL") => {
-    setStatus(value);
+    setStatus((current) => (current === value ? "ALL" : value));
     setPagination((current) => ({ ...current, current: 1 }));
   };
 
@@ -387,6 +418,9 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
     );
   };
 
+  const getEmployeeShortName = (record: AttendanceRecord) =>
+    getEmployeeName(record).trim().split(/\s+/).slice(0, 2).join(" ");
+
   const handleExport = async () => {
     setExporting(true);
     try {
@@ -477,7 +511,7 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
           employee.email;
         return {
           value: employee.id,
-          label: `${employee.employee_number || employee.employee_id} - ${name}`,
+          label: name,
         };
       }),
     [employeeOptionsSource, language],
@@ -498,50 +532,64 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
       ? `${Math.round((onTimeOrLate / accountable) * 100)}%`
       : "—";
 
+  const ratePercent =
+    accountable > 0 ? Math.round((onTimeOrLate / accountable) * 100) : 0;
+
   const summaryItems: Array<{
     label: string;
-    value: number | string;
-    color: string;
+    value: number;
+    tone: string;
+    icon: React.ReactNode;
+    status: EffectiveAttendanceStatus | "ALL";
   }> = [
     {
       label: t("attendancePreview.summary.total"),
-      value: total,
-      color: "#0f172a",
-    },
-    {
-      label: t("attendancePreview.summary.attendanceRate"),
-      value: attendanceRate,
-      color: "#0ea5e9",
+      value: overviewTotal,
+      tone: "neutral",
+      icon: <UnorderedListOutlined />,
+      status: "ALL",
     },
     {
       label: t("attendancePreview.status.present"),
       value: summary.PRESENT || 0,
-      color: "#10b981",
+      tone: "positive",
+      icon: <CheckCircleOutlined />,
+      status: "PRESENT",
     },
     {
       label: t("attendancePreview.status.late"),
       value: summary.LATE || 0,
-      color: "#f59e0b",
+      tone: "warning",
+      icon: <ClockCircleOutlined />,
+      status: "LATE",
     },
     {
       label: t("attendancePreview.status.absent"),
       value: summary.ABSENT || 0,
-      color: "#ef4444",
+      tone: "critical",
+      icon: <CloseCircleOutlined />,
+      status: "ABSENT",
     },
     {
       label: t("attendancePreview.status.excused"),
       value: summary.EXCUSED || 0,
-      color: "#3b82f6",
+      tone: "informational",
+      icon: <FileDoneOutlined />,
+      status: "EXCUSED",
     },
     {
       label: t("attendancePreview.status.pending"),
       value: pendingTotal,
-      color: "#f97316",
+      tone: "pending",
+      icon: <HourglassOutlined />,
+      status: "PENDING",
     },
     {
       label: t("attendancePreview.status.rejected"),
       value: summary.REJECTED || 0,
-      color: "#d946ef",
+      tone: "critical",
+      icon: <StopOutlined />,
+      status: "REJECTED",
     },
   ];
 
@@ -557,7 +605,9 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
             ellipsis={{ tooltip: getEmployeeName(record) }}
             style={{ maxWidth: 220 }}
           >
-            {getEmployeeName(record)}
+            <span title={getEmployeeName(record)}>
+              {getEmployeeShortName(record)}
+            </span>
           </Text>
           <Text
             type="secondary"
@@ -605,9 +655,7 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
       width: 100,
       render: (_: unknown, record: AttendanceRecord) =>
         record.late_minutes && record.late_minutes > 0 ? (
-          <Text style={{ color: "#f59e0b", fontWeight: 600 }}>
-            +{record.late_minutes}m
-          </Text>
+          <span className="attendance-late">+{record.late_minutes}m</span>
         ) : (
           <Text type="secondary">—</Text>
         ),
@@ -619,12 +667,11 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
       width: 170,
       render: (value: EffectiveAttendanceStatus, record: AttendanceRecord) => (
         <Space size={4} wrap>
-          <Tag
-            color={statusColors[record.effective_status || value]}
-            style={{ marginInlineEnd: 0 }}
+          <span
+            className={`attendance-badge attendance-badge--${statusTone[record.effective_status || value]}`}
           >
             {getStatusLabel(record.effective_status || value, record.status)}
-          </Tag>
+          </span>
           {record.excused_by_leave_id && (
             <Text type="secondary">
               {t("attendancePreview.approvedLeaveReference")} #
@@ -632,9 +679,9 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
             </Text>
           )}
           {record.is_late_flagged && value.startsWith("PENDING") && (
-            <Tag color="gold" style={{ marginInlineEnd: 0 }}>
+            <span className="attendance-badge attendance-badge--warning">
               {t("attendancePreview.lateArrivalTag")}
-            </Tag>
+            </span>
           )}
         </Space>
       ),
@@ -645,9 +692,7 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
       key: "source",
       width: 140,
       render: (value: string) => (
-        <Tag color={sourceColors[value] || "default"}>
-          {getSourceLabel(value)}
-        </Tag>
+        <span className="attendance-source">{getSourceLabel(value)}</span>
       ),
     },
     {
@@ -690,7 +735,10 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
       </Button>
       <Button
         icon={<ReloadOutlined />}
-        onClick={fetchRecords}
+        onClick={() => {
+          void fetchRecords();
+          setOverviewRefresh((current) => current + 1);
+        }}
         loading={loading}
       >
         {t("common.refresh")}
@@ -700,76 +748,89 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
 
   const recordsView = (
     <>
-      <Card size="small" style={{ marginBottom: 16, borderRadius: 12 }}>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 20 }}>
-          {summaryItems.map((item, idx) => (
-            <React.Fragment key={item.label}>
-              <div style={{ minWidth: 96 }}>
-                <div
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: "#94a3b8",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.04em",
-                    marginBottom: 4,
-                  }}
-                >
-                  {item.label}
-                </div>
-                <div
-                  style={{
-                    fontSize: 22,
-                    fontWeight: 800,
-                    color: item.color,
-                    lineHeight: 1,
-                  }}
-                >
-                  {item.value}
-                </div>
+      <section
+        className="attendance-overview"
+        aria-label={t("attendancePreview.overview")}
+        aria-busy={overviewLoading}
+      >
+        {overviewError && (
+          <div className="attendance-overview__error" role="alert">
+            {t("attendancePreview.loadFailed")}
+          </div>
+        )}
+        <div className="attendance-overview__layout">
+          <div className="attendance-rate">
+            <div
+              className="attendance-rate__ring"
+              style={{ "--rate": `${ratePercent}%` } as React.CSSProperties}
+              aria-hidden="true"
+            >
+              <span className="attendance-rate__ring-inner" />
+            </div>
+            <div className="attendance-rate__body">
+              <div className="attendance-rate__label">
+                {t("attendancePreview.summary.attendanceRate")}
               </div>
-              {idx < summaryItems.length - 1 && (
-                <Divider
-                  type="vertical"
-                  style={{ height: "auto", margin: 0 }}
-                />
-              )}
-            </React.Fragment>
-          ))}
-        </div>
-      </Card>
+              <div className="attendance-rate__value">
+                {overviewLoading && accountable === 0 ? (
+                  <span className="attendance-skeleton attendance-skeleton--lg" />
+                ) : (
+                  attendanceRate
+                )}
+              </div>
+              <div className="attendance-rate__caption">
+                {onTimeOrLate} / {accountable}
+              </div>
+            </div>
+          </div>
 
-      <Card size="small" style={{ marginBottom: 16, borderRadius: 12 }}>
-        <div
-          className="responsive-filter-bar"
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 12,
-            alignItems: "center",
-          }}
-        >
-          <Input
-            allowClear
-            prefix={<SearchOutlined style={{ color: "#94a3b8" }} />}
-            placeholder={t("attendancePreview.filters.searchPlaceholder")}
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            style={{ flex: "1 1 240px", minWidth: 200 }}
-          />
-          <RangePicker
-            style={{ flex: "0 1 300px", minWidth: 240 }}
-            value={dateRange}
-            onChange={(value) =>
-              handleRangeChange(
-                value && value[0] && value[1] ? [value[0], value[1]] : null,
-              )
-            }
-            presets={rangePresets}
-            placeholder={[t("leave.startDate"), t("leave.endDate")]}
-          />
-          {supportsAdvancedFilters && (
-            <>
+          <div className="attendance-overview__grid">
+            {summaryItems.map((item) => {
+              const share =
+                item.status === "ALL" || overviewTotal === 0
+                  ? 100
+                  : Math.round((item.value / overviewTotal) * 100);
+              return (
+                <button
+                  type="button"
+                  className={`attendance-metric attendance-metric--${item.tone}`}
+                  key={item.label}
+                  aria-pressed={status === item.status}
+                  onClick={() => handleStatusChange(item.status)}
+                >
+                  <span className="attendance-metric__top">
+                    <span
+                      className="attendance-metric__icon"
+                      aria-hidden="true"
+                    >
+                      {item.icon}
+                    </span>
+                    <span className="attendance-metric__label">
+                      {item.label}
+                    </span>
+                  </span>
+                  <span className="attendance-metric__value">
+                    {overviewLoading && overviewTotal === 0 ? (
+                      <span className="attendance-skeleton" />
+                    ) : (
+                      item.value
+                    )}
+                  </span>
+                  <span className="attendance-metric__bar" aria-hidden="true">
+                    <span style={{ width: `${share}%` }} />
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section className="attendance-workspace">
+        <div className="attendance-workspace__toolbar">
+          <div className="attendance-filters responsive-filter-bar">
+            {/* HR picks one employee; the CEO endpoint only has free-text search. */}
+            {supportsAdvancedFilters ? (
               <Select
                 showSearch
                 allowClear
@@ -780,17 +841,39 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
                 }
                 placeholder={t("attendancePreview.filters.employeePlaceholder")}
                 aria-label={t("attendancePreview.filters.employeePlaceholder")}
-                style={{ flex: "0 1 260px", minWidth: 200 }}
+                className="attendance-filters__employee"
                 value={employeeId}
                 onSearch={setEmployeeQueryInput}
                 onChange={(value) => handleEmployeeChange(value ?? undefined)}
                 options={employeeOptions}
               />
+            ) : (
+              <Input
+                allowClear
+                prefix={<SearchOutlined style={{ color: "#94a3b8" }} />}
+                placeholder={t("attendancePreview.filters.searchPlaceholder")}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                className="attendance-filters__search"
+              />
+            )}
+            <RangePicker
+              className="attendance-filters__range"
+              value={dateRange}
+              onChange={(value) =>
+                handleRangeChange(
+                  value && value[0] && value[1] ? [value[0], value[1]] : null,
+                )
+              }
+              presets={rangePresets}
+              placeholder={[t("leave.startDate"), t("leave.endDate")]}
+            />
+            {supportsAdvancedFilters && (
               <Select
                 allowClear
                 placeholder={t("attendancePreview.filters.sourcePlaceholder")}
                 aria-label={t("attendancePreview.filters.sourcePlaceholder")}
-                style={{ flex: "0 1 200px", minWidth: 160 }}
+                className="attendance-filters__source"
                 value={source === "ALL" ? undefined : source}
                 onChange={(value) =>
                   handleSourceChange((value as AttendanceSource) ?? "ALL")
@@ -800,87 +883,75 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
                   label: getSourceLabel(value),
                 }))}
               />
-            </>
-          )}
-          <Button onClick={handleReset} disabled={!isFiltered}>
-            {t("common.reset")}
-          </Button>
+            )}
+            <Button
+              type="text"
+              icon={<UndoOutlined aria-hidden="true" />}
+              className="attendance-filters__reset"
+              onClick={handleReset}
+              disabled={!isFiltered}
+            >
+              {t("common.reset")}
+            </Button>
+          </div>
         </div>
 
-        <Divider style={{ margin: "14px 0" }} />
-
-        <Space size={[8, 8]} wrap>
-          <Tag.CheckableTag
-            checked={status === "ALL"}
-            onChange={() => handleStatusChange("ALL")}
-          >
-            {t("attendancePreview.filters.statusAll")}
-          </Tag.CheckableTag>
-          {STATUS_OPTIONS.map((value) => (
-            <Tag.CheckableTag
-              key={value}
-              checked={status === value}
-              onChange={() => handleStatusChange(value)}
-            >
-              {getStatusLabel(value)}
-            </Tag.CheckableTag>
-          ))}
-        </Space>
-      </Card>
-
-      {errorMessage ? (
-        <ErrorState
-          title={t("attendancePreview.error.title")}
-          description={errorMessage}
-          onRetry={fetchRecords}
-        />
-      ) : loading && records.length === 0 ? (
-        <Card
-          size="small"
-          style={{
-            borderRadius: 12,
-            textAlign: "center",
-            padding: "48px 24px",
-          }}
-        >
-          <Spin tip={t("common.loading")}>
-            <div style={{ minHeight: 24 }} />
-          </Spin>
-        </Card>
-      ) : !loading && records.length === 0 ? (
-        <EmptyState
-          title={t("attendancePreview.empty.title")}
-          description={t("attendancePreview.empty.description")}
-        />
-      ) : (
-        <Card size="small" style={{ borderRadius: 12 }}>
-          <ResponsiveTable
-            mobileCard={{
-              titleKey: "employee",
-              extraKey: "status",
-            }}
-            dataSource={records}
-            columns={columns}
-            rowKey="id"
-            loading={loading}
-            size="small"
-            scroll={{ x: "max-content" }}
-            pagination={{
-              current: pagination.current,
-              pageSize: pagination.pageSize,
-              total,
-              showSizeChanger: true,
-              onChange: (current, pageSize) =>
-                setPagination({ current, pageSize }),
-            }}
-          />
-        </Card>
-      )}
+        <div className="attendance-workspace__results">
+          <div className="attendance-workspace__results-heading">
+            <span>{t("attendancePolicy.hr.tabRecords")}</span>
+            <span className="attendance-workspace__count">
+              {loading && <Spin size="small" />}
+              {t("attendancePreview.resultsCount", { count: total })}
+            </span>
+          </div>
+          {errorMessage ? (
+            <ErrorState
+              title={t("attendancePreview.error.title")}
+              description={errorMessage}
+              onRetry={fetchRecords}
+            />
+          ) : loading && records.length === 0 ? (
+            <div className="attendance-workspace__loading">
+              <Spin tip={t("common.loading")}>
+                <div style={{ minHeight: 24 }} />
+              </Spin>
+            </div>
+          ) : !loading && records.length === 0 ? (
+            <EmptyState
+              title={t("attendancePreview.empty.title")}
+              description={t("attendancePreview.empty.description")}
+            />
+          ) : (
+            <div className="attendance-results-table">
+              <ResponsiveTable
+                mobileCard={{
+                  titleKey: "employee",
+                  extraKey: "status",
+                }}
+                dataSource={records}
+                columns={columns}
+                rowKey="id"
+                loading={loading}
+                size="small"
+                scroll={{ x: "max-content" }}
+                pagination={{
+                  current: pagination.current,
+                  pageSize: pagination.pageSize,
+                  total,
+                  showSizeChanger: true,
+                  onChange: (current, pageSize) =>
+                    setPagination({ current, pageSize }),
+                }}
+              />
+            </div>
+          )}
+        </div>
+      </section>
     </>
   );
 
   return (
-    <div>
+    <div className="attendance-page">
       <PageHeader
         title={
           role === "ceo"
@@ -905,6 +976,7 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
 
       {isHr ? (
         <Tabs
+          className="ffi-pill-tabs"
           activeKey={activeTab}
           onChange={(key) =>
             setSearchParams(key === "records" ? {} : { tab: key }, {
@@ -914,16 +986,19 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
           items={[
             {
               key: "records",
+              icon: <TableOutlined aria-hidden="true" />,
               label: t("attendancePolicy.hr.tabRecords"),
               children: recordsView,
             },
             {
               key: "violations",
+              icon: <WarningOutlined aria-hidden="true" />,
               label: t("attendancePolicy.hr.tabViolations"),
               children: <HrAttendanceViolationsPanel />,
             },
             {
               key: "notices",
+              icon: <BellOutlined aria-hidden="true" />,
               label: t("attendancePolicy.hr.tabNotices"),
               children: <HrAttendanceNoticesPanel />,
             },
@@ -938,7 +1013,10 @@ const AttendancePreviewPage: React.FC<AttendancePreviewPageProps> = ({
           open={recalcOpen}
           onClose={() => setRecalcOpen(false)}
           onRecalculated={() => {
-            if (activeTab === "records") void fetchRecords();
+            if (activeTab === "records") {
+              void fetchRecords();
+              setOverviewRefresh((current) => current + 1);
+            }
           }}
         />
       )}

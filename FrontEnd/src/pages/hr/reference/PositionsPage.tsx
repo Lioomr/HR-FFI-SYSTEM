@@ -26,23 +26,28 @@ export default function PositionsPage() {
       title: "ID",
       dataIndex: "id",
       key: "id",
-      width: 80,
+      width: 72,
+      className: "reference-crud__id",
     },
     {
       title: t("reference.departments.colCode"),
       dataIndex: "code",
       key: "code",
       width: 120,
+      render: (value: string) =>
+        value ? <span className="reference-crud__code">{value}</span> : "-",
     },
     {
       title: t("reference.departments.colName"),
       dataIndex: "name",
       key: "name",
+      className: "reference-crud__name",
     },
     {
       title: t("common.description"),
       dataIndex: "description",
       key: "description",
+      className: "reference-crud__muted",
     },
   ];
 
@@ -90,8 +95,9 @@ export default function PositionsPage() {
   return (
     <ReferenceCrudPage<Position, CreatePositionDto, UpdatePositionDto>
       title={t("reference.positions.title")}
-      entityName={t("reference.positions.create")}
+      entityName={t("reference.positions.entity")}
       columns={columns}
+      embedded
       rowKey="id"
       fetchList={listPositions}
       createItem={createPosition}

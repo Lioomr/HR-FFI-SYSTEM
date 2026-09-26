@@ -11,8 +11,12 @@ export type EmployeeOption = { value: number; label: string };
 /**
  * Searchable employee options for the active company. `value` is the employee
  * profile id; the employees list is already scoped by the active company header.
+ * `withCode: false` labels options by name only (the search still matches codes).
  */
-export function useEmployeeOptions(enabled = true) {
+export function useEmployeeOptions({
+  enabled = true,
+  withCode = true,
+}: { enabled?: boolean; withCode?: boolean } = {}) {
   const { language } = useI18n();
   const [queryInput, setQueryInput] = useState("");
   const [query, setQuery] = useState("");
@@ -63,10 +67,12 @@ export function useEmployeeOptions(enabled = true) {
           employee.email;
         return {
           value: employee.id,
-          label: `${employee.employee_number || employee.employee_id} - ${name}`,
+          label: withCode
+            ? `${employee.employee_number || employee.employee_id} - ${name}`
+            : name,
         };
       }),
-    [employees, language],
+    [employees, language, withCode],
   );
 
   return { options, loading, onSearch: setQueryInput };

@@ -700,7 +700,9 @@ export default function JobOfferFormPage() {
                     <Space size={8} wrap>
                       {departments.length === 0 && (
                         <Button
-                          onClick={() => navigate("/hr/departments")}
+                          onClick={() =>
+                            navigate("/hr/organization-setup?tab=departments")
+                          }
                           style={{ borderRadius: 10, fontWeight: 600 }}
                         >
                           {t("jobOffers.reference.goToDepartments")}
@@ -708,7 +710,9 @@ export default function JobOfferFormPage() {
                       )}
                       {positions.length === 0 && (
                         <Button
-                          onClick={() => navigate("/hr/positions")}
+                          onClick={() =>
+                            navigate("/hr/organization-setup?tab=positions")
+                          }
                           style={{ borderRadius: 10, fontWeight: 600 }}
                         >
                           {t("jobOffers.reference.goToPositions")}
