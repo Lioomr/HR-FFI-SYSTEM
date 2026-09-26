@@ -1,5 +1,7 @@
 # Tenant Isolation Security Review — 2026-08-24
 
+> **Historical release decision:** this report records findings and blockers as of 2026-08-24. Its NO-GO result is not a statement about the current release state. Recheck current code, database/migration state, and release evidence before using it as today's production decision.
+
 ## Release decision
 
 **NO-GO for production.** No production data or production service was changed. The tenant controls and focused PostgreSQL regression suite are passing, but production approval remains blocked until:

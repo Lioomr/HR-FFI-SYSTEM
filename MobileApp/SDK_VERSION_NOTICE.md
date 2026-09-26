@@ -1,4 +1,6 @@
-# Expo SDK 54 Compatibility Pin â€” Restored
+# Expo SDK 57 Baseline - SDK 54 Pin History
+
+This is a historical compatibility and restoration record, not the active SDK instruction. `MobileApp/AGENTS.md` and `MobileApp/README.md` identify the current SDK 57 baseline.
 
 ## Current purpose
 

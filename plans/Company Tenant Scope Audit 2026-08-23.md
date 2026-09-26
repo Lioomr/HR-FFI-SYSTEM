@@ -1,6 +1,6 @@
 # Company/Tenant Scope Audit — 2026-08-23
 
-> Superseded by `Tenant Isolation Security Review 2026-08-24.md`, which includes the database-trigger phase, current migration preflight findings, and final release gates.
+> **Archived / not current operating guidance.** Superseded by `Tenant Isolation Security Review 2026-08-24.md`, which includes the database-trigger phase, migration preflight findings, and release gates. Keep this file only as the earlier audit record; use the newer review and verify current source before making changes.
 
 ## Outcome
 

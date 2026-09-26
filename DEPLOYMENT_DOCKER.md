@@ -10,7 +10,7 @@ after release checks pass; rolling back to the previous image restores its servi
 ## 1) Files You Use
 
 - Development: `docker-compose.dev.yml` (or existing `docker-compose.yml`)
-- Production: `docker-compose.prod.yml`
+- Production: remote `/opt/hr-ffi/docker-compose.prod.yml` on the AWS host; it is not present in this local checkout
 - Dev backend env: `Backend/.env.docker`
 - Prod backend env template: `Backend/.env.production.example`
 - Prod compose env template: `.env.prod.compose.example`
@@ -48,29 +48,9 @@ docker compose -f docker-compose.dev.yml down -v
 
 ## 3) Production Version
 
-Create real env files:
+**Do not run a production Compose command from this local checkout.** The checked-out repository does not contain `docker-compose.prod.yml`; it contains only a dated backup. The root `docker-compose.yml` is dev-compatible and is not a substitute for production configuration. The current production host/configuration is documented in [`AWS_AGENT_DEPLOYMENT_HANDOFF.md`](AWS_AGENT_DEPLOYMENT_HANDOFF.md). Run production commands from `/opt/hr-ffi` on the approved AWS host and verify its current state first.
 
-1. Copy `Backend/.env.production.example` to `Backend/.env.production` and fill real secrets/domains.
-2. Copy `.env.prod.compose.example` to `.env.prod.compose` and fill values.
-
-Start production stack:
-
-```powershell
-docker compose --env-file .env.prod.compose -f docker-compose.prod.yml up -d --build
-```
-
-Check:
-
-```powershell
-docker compose --env-file .env.prod.compose -f docker-compose.prod.yml ps
-docker compose --env-file .env.prod.compose -f docker-compose.prod.yml logs -f backend
-```
-
-Stop:
-
-```powershell
-docker compose --env-file .env.prod.compose -f docker-compose.prod.yml down
-```
+Production environment templates below describe the required values. Do not create or restore production Compose files from the dated backup without reviewing it against the AWS handoff and the deployed stack.
 
 ## 4) Required Production Settings
 

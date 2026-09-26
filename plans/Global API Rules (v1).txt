@@ -1,6 +1,6 @@
 0) Global API Rules (v1)
 
-STATUS: Gate 1 reconciled implementation contract (reviewed 2026-07-20)
+STATUS: Gate 1 reconciled implementation contract. Last full API-contract review: 2026-07-20. This document has later feature-specific notes; for current route status, consult `plans/API Route Status Matrix.md` and verify the live Django URL, ViewSet, serializer, permission, and tests.
 
 Before implementing an API consumer, consult `plans/API Route Status Matrix.md` and verify the Django URL/ViewSet. Older examples are legacy where they do not match the current route tree. Backend permissions, serializers, and tests are authoritative for behavior until a documented contract update is completed.
 
