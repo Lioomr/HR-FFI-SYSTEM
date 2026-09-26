@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Button,
-  Card,
   Checkbox,
   Col,
   DatePicker,
   Descriptions,
   Form,
+  Grid,
   Input,
   InputNumber,
   Modal,
@@ -15,20 +15,31 @@ import {
   Row,
   Select,
   Space,
-  Table,
   Tabs,
   Tag,
+  Tooltip,
   Typography,
   message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { TableRowSelection } from "antd/es/table/interface";
 import {
+  AppstoreOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
   DeleteOutlined,
+  EditOutlined,
+  EyeOutlined,
   HistoryOutlined,
   PlusOutlined,
   PrinterOutlined,
+  RollbackOutlined,
+  SafetyCertificateOutlined,
   ScanOutlined,
+  UndoOutlined,
+  UserAddOutlined,
+  UserOutlined,
+  WarningOutlined,
 } from "@ant-design/icons";
 import { Link } from "react-router-dom";
 import dayjs from "dayjs";
@@ -37,6 +48,11 @@ import ErrorState from "../../../components/ui/ErrorState";
 import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import LoadingState from "../../../components/ui/LoadingState";
 import PageHeader from "../../../components/ui/PageHeader";
+import {
+  FilterChips,
+  WorkspaceCard,
+  WorkspaceViews,
+} from "../../../components/ui/workspace/Workspace";
 import {
   approveHRAssetReturnRequest,
   assignAsset,
@@ -81,46 +97,10 @@ const statusColorMap: Record<string, string> = {
 
 const ASSET_STATUSES = Object.keys(statusColorMap);
 
-function StatCard({
-  title,
-  value,
-  active = false,
-  onClick,
-}: {
-  title: string;
-  value: number;
-  active?: boolean;
-  onClick?: () => void;
-}) {
-  return (
-    <Card
-      hoverable={!!onClick}
-      onClick={onClick}
-      style={
-        onClick
-          ? {
-              cursor: "pointer",
-              borderColor: active ? "#fa8c16" : undefined,
-              boxShadow: active
-                ? "0 0 0 2px rgba(250, 140, 22, 0.12)"
-                : undefined,
-            }
-          : undefined
-      }
-      bodyStyle={{ paddingBlock: 20 }}
-    >
-      <Typography.Text type="secondary">{title}</Typography.Text>
-      <div
-        style={{ fontSize: 28, fontWeight: 700, lineHeight: 1.1, marginTop: 6 }}
-      >
-        {value}
-      </div>
-    </Card>
-  );
-}
-
 export default function HRAssetsPage() {
   const { t, language } = useI18n();
+  const screens = Grid.useBreakpoint();
+  const isPhone = screens.md === false;
   const user = useAuthStore((state) => state.user);
   const isHeadOffice = isHeadOfficeOrganization(user);
   const [apiMessage, contextHolder] = message.useMessage();
@@ -263,19 +243,7 @@ export default function HRAssetsPage() {
       dataIndex: "asset_code",
       key: "asset_code",
       width: 140,
-      render: (value: string, record) => (
-        <Button
-          type="link"
-          style={{ paddingInline: 0 }}
-          onClick={() => {
-            setActiveAsset(record);
-            setDetailsModalOpen(true);
-            void loadAssetRequestHistory(record.id);
-          }}
-        >
-          {value}
-        </Button>
-      ),
+      render: (value: string) => <span className="ffi-code">{value}</span>,
     },
     {
       title: t("common.name"),
@@ -283,10 +251,12 @@ export default function HRAssetsPage() {
       render: (_: unknown, record) => (
         <Button
           type="link"
-          style={{ paddingInline: 0 }}
-          onClick={() => {
+          style={{ paddingInline: 0, fontWeight: 600 }}
+          onClick={(e) => {
+            e.stopPropagation();
             setActiveAsset(record);
             setDetailsModalOpen(true);
+            void loadAssetRequestHistory(record.id);
           }}
         >
           {language === "ar"
@@ -295,7 +265,20 @@ export default function HRAssetsPage() {
         </Button>
       ),
     },
-    { title: t("common.type"), dataIndex: "type", key: "type", width: 120 },
+    {
+      title: t("common.type"),
+      dataIndex: "type",
+      key: "type",
+      width: 120,
+      render: (value: string) =>
+        value === "VEHICLE"
+          ? t("hr.assets.vehicle")
+          : value === "LAPTOP"
+            ? t("hr.assets.laptop")
+            : value === "OTHER"
+              ? t("hr.assets.other")
+              : value || "-",
+    },
     {
       title: t("common.status"),
       dataIndex: "status",
@@ -336,11 +319,12 @@ export default function HRAssetsPage() {
     {
       title: t("common.actions"),
       key: "actions",
-      width: 440,
+      width: 300,
       render: (_, record) => (
-        <Space wrap>
+        <Space size={4} style={{ whiteSpace: "nowrap" }}>
           <Button
             size="small"
+            icon={<EyeOutlined aria-hidden="true" />}
             onClick={(e) => {
               e.stopPropagation();
               setActiveAsset(record);
@@ -352,6 +336,8 @@ export default function HRAssetsPage() {
           </Button>
           <Button
             size="small"
+            type="text"
+            icon={<EditOutlined aria-hidden="true" />}
             disabled={isHeadOffice}
             title={
               isHeadOffice
@@ -419,52 +405,63 @@ export default function HRAssetsPage() {
           >
             {t("hr.assets.edit")}
           </Button>
-          <Button
-            size="small"
-            icon={<PrinterOutlined />}
-            onClick={(e) => {
-              e.stopPropagation();
-              openPrintModal([record.id]);
-            }}
-          >
-            {t("hr.assets.printLabel")}
-          </Button>
-          <Button
-            size="small"
-            disabled={isHeadOffice || record.status !== "AVAILABLE"}
-            title={
-              isHeadOffice
-                ? t("organization.headOffice.switchToUseAction")
-                : undefined
-            }
-            onClick={(e) => {
-              if (isHeadOffice) return;
-              e.stopPropagation();
-              setActiveAsset(record);
-              assignForm.resetFields();
-              setAssignModalOpen(true);
-            }}
-          >
-            {t("hr.assets.assign")}
-          </Button>
-          <Button
-            size="small"
-            disabled={isHeadOffice || record.status !== "ASSIGNED"}
-            title={
-              isHeadOffice
-                ? t("organization.headOffice.switchToUseAction")
-                : undefined
-            }
-            onClick={(e) => {
-              if (isHeadOffice) return;
-              e.stopPropagation();
-              setActiveAsset(record);
-              returnForm.resetFields();
-              setReturnModalOpen(true);
-            }}
-          >
-            {t("hr.assets.return")}
-          </Button>
+          <Tooltip title={t("hr.assets.printLabel")}>
+            <Button
+              size="small"
+              type="text"
+              aria-label={t("hr.assets.printLabel")}
+              icon={<PrinterOutlined aria-hidden="true" />}
+              onClick={(e) => {
+                e.stopPropagation();
+                openPrintModal([record.id]);
+              }}
+            />
+          </Tooltip>
+          {/* Only the hand-over action that fits the asset's state is shown. */}
+          {record.status === "AVAILABLE" && (
+            <Button
+              size="small"
+              type="text"
+              icon={<UserAddOutlined aria-hidden="true" />}
+              disabled={isHeadOffice}
+              title={
+                isHeadOffice
+                  ? t("organization.headOffice.switchToUseAction")
+                  : undefined
+              }
+              onClick={(e) => {
+                if (isHeadOffice) return;
+                e.stopPropagation();
+                setActiveAsset(record);
+                assignForm.resetFields();
+                setAssignModalOpen(true);
+              }}
+            >
+              {t("hr.assets.assign")}
+            </Button>
+          )}
+          {record.status === "ASSIGNED" && (
+            <Button
+              size="small"
+              type="text"
+              icon={<RollbackOutlined aria-hidden="true" />}
+              disabled={isHeadOffice}
+              title={
+                isHeadOffice
+                  ? t("organization.headOffice.switchToUseAction")
+                  : undefined
+              }
+              onClick={(e) => {
+                if (isHeadOffice) return;
+                e.stopPropagation();
+                setActiveAsset(record);
+                returnForm.resetFields();
+                setReturnModalOpen(true);
+              }}
+            >
+              {t("hr.assets.return")}
+            </Button>
+          )}
           <Popconfirm
             title={t("hr.assets.deleteAsset")}
             description={t("hr.assets.deleteConfirm")}
@@ -485,19 +482,20 @@ export default function HRAssetsPage() {
           >
             <Button
               danger
+              type="text"
               size="small"
+              aria-label={t("hr.assets.delete")}
+              icon={<DeleteOutlined aria-hidden="true" />}
               disabled={isHeadOffice}
               title={
                 isHeadOffice
                   ? t("organization.headOffice.switchToEditRecords")
-                  : undefined
+                  : t("hr.assets.delete")
               }
               onClick={(e) => {
                 e.stopPropagation();
               }}
-            >
-              {t("hr.assets.delete")}
-            </Button>
+            />
           </Popconfirm>
         </Space>
       ),
@@ -1072,64 +1070,75 @@ export default function HRAssetsPage() {
       />
 
       {summary && (
-        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-          <Col xs={24} sm={12} md={8} lg={4}>
-            <StatCard
-              title={t("hr.assets.total")}
-              value={summary.total}
-              active={activeKpi === "total"}
-              onClick={() => applyKpiFilter("total")}
-            />
-          </Col>
-          <Col xs={24} sm={12} md={8} lg={4}>
-            <StatCard
-              title={t("hr.assets.assigned")}
-              value={summary.assigned}
-              active={activeKpi === "assigned"}
-              onClick={() => applyKpiFilter("assigned")}
-            />
-          </Col>
-          <Col xs={24} sm={12} md={8} lg={4}>
-            <StatCard
-              title={t("hr.assets.available")}
-              value={summary.available}
-              active={activeKpi === "available"}
-              onClick={() => applyKpiFilter("available")}
-            />
-          </Col>
-          <Col xs={24} sm={12} md={8} lg={4}>
-            <StatCard
-              title={t("hr.assets.damaged")}
-              value={summary.damaged}
-              active={activeKpi === "damaged"}
-              onClick={() => applyKpiFilter("damaged")}
-            />
-          </Col>
-          <Col xs={24} sm={12} md={8} lg={4}>
-            <StatCard
-              title={t("hr.assets.lost")}
-              value={summary.lost}
-              active={activeKpi === "lost"}
-              onClick={() => applyKpiFilter("lost")}
-            />
-          </Col>
-          <Col xs={24} sm={12} md={8} lg={4}>
-            <StatCard
-              title={t("hr.assets.warrantySoon")}
-              value={summary.warranty_expiring_soon}
-              active={activeKpi === "warrantySoon"}
-              onClick={() => applyKpiFilter("warrantySoon")}
-            />
-          </Col>
-        </Row>
+        <WorkspaceViews>
+          <FilterChips
+            label={t("common.status")}
+            options={[
+              {
+                key: "total",
+                label: t("hr.assets.total"),
+                icon: <AppstoreOutlined />,
+                tone: "neutral" as const,
+                count: summary.total,
+              },
+              {
+                key: "assigned",
+                label: t("hr.assets.assigned"),
+                icon: <UserOutlined />,
+                tone: "informational" as const,
+                count: summary.assigned,
+              },
+              {
+                key: "available",
+                label: t("hr.assets.available"),
+                icon: <CheckCircleOutlined />,
+                tone: "positive" as const,
+                count: summary.available,
+              },
+              {
+                key: "damaged",
+                label: t("hr.assets.damaged"),
+                icon: <WarningOutlined />,
+                tone: "severe" as const,
+                count: summary.damaged,
+              },
+              {
+                key: "lost",
+                label: t("hr.assets.lost"),
+                icon: <CloseCircleOutlined />,
+                tone: "critical" as const,
+                count: summary.lost,
+              },
+              {
+                key: "warrantySoon",
+                label: t("hr.assets.warrantySoon"),
+                icon: <SafetyCertificateOutlined />,
+                tone: "warning" as const,
+                count: summary.warranty_expiring_soon,
+              },
+            ].map((chip) => ({
+              ...chip,
+              active:
+                activeKpi === chip.key ||
+                (chip.key === "total" && !activeKpi && !statusFilter),
+              onSelect: () =>
+                activeKpi === chip.key && chip.key !== "total"
+                  ? applyKpiFilter("total")
+                  : applyKpiFilter(
+                      chip.key as Parameters<typeof applyKpiFilter>[0],
+                    ),
+            }))}
+          />
+        </WorkspaceViews>
       )}
 
-      <Card style={{ marginBottom: 16 }}>
-        <Row gutter={[12, 12]}>
-          <Col xs={24} md={10}>
+      <WorkspaceCard
+        toolbar={
+          <>
             <Input.Search
               allowClear
               value={searchText}
+              className="ffi-toolbar__search"
               placeholder={t(
                 "assets.searchPlaceholder",
                 "Search by asset code, serial number, or name",
@@ -1140,13 +1149,12 @@ export default function HRAssetsPage() {
                 setAssetPage(1);
               }}
             />
-          </Col>
-          <Col xs={24} md={6}>
             <Select
               allowClear
               value={typeFilter}
-              style={{ width: "100%" }}
+              className="ffi-toolbar__field"
               placeholder={t("common.type")}
+              aria-label={t("common.type")}
               onChange={(value) => {
                 setTypeFilter(value);
                 setAssetPage(1);
@@ -1157,13 +1165,12 @@ export default function HRAssetsPage() {
                 { label: t("hr.assets.other"), value: "OTHER" },
               ]}
             />
-          </Col>
-          <Col xs={24} md={4}>
             <Select
               allowClear
               value={statusFilter}
-              style={{ width: "100%" }}
+              className="ffi-toolbar__field"
               placeholder={t("common.status")}
+              aria-label={t("common.status")}
               onChange={(value) => {
                 setStatusFilter(value);
                 setWarrantySoonOnly(false);
@@ -1176,13 +1183,12 @@ export default function HRAssetsPage() {
                 value,
               }))}
             />
-          </Col>
-          <Col xs={24} md={2}>
             <Select
               allowClear
               value={labelStatusFilter}
-              style={{ width: "100%" }}
+              className="ffi-toolbar__field"
               placeholder={t("hr.assets.labelStatusFilter")}
+              aria-label={t("hr.assets.labelStatusFilter")}
               onChange={(value) => {
                 setLabelStatusFilter(value);
                 setAssetPage(1);
@@ -1195,26 +1201,33 @@ export default function HRAssetsPage() {
                 { label: t("hr.assets.labelStatusPrinted"), value: "printed" },
               ]}
             />
-          </Col>
-          <Col xs={24} md={2}>
-            <Button block onClick={resetFilters}>
+            <Button
+              type="text"
+              icon={<UndoOutlined aria-hidden="true" />}
+              className="ffi-toolbar__reset"
+              disabled={
+                !appliedSearch &&
+                !searchText &&
+                !typeFilter &&
+                !statusFilter &&
+                !labelStatusFilter &&
+                !warrantySoonOnly
+              }
+              onClick={resetFilters}
+            >
               {t("common.reset")}
             </Button>
-          </Col>
-        </Row>
-      </Card>
-
-      <Card>
-        <Row
-          justify="space-between"
-          align="middle"
-          style={{ marginBottom: 12 }}
-          gutter={[12, 12]}
-        >
-          <Col>
-            <Space wrap>
+          </>
+        }
+        title={t("hr.assets.title")}
+        count={t("assets.count", { count: assetTotal })}
+        busy={loading && assets.length > 0}
+        headingExtra={
+          <>
+            {!isPhone && (
               <Button
-                type="primary"
+                size="small"
+                type={selectedAssetIds.length ? "primary" : "default"}
                 icon={<PrinterOutlined />}
                 disabled={selectedAssetIds.length === 0}
                 onClick={() =>
@@ -1225,32 +1238,39 @@ export default function HRAssetsPage() {
                   count: selectedAssetIds.length,
                 })}
               </Button>
-            </Space>
-          </Col>
-          <Col>
-            <Space wrap>
-              <Link to="/hr/assets/lookup">
-                <Button icon={<ScanOutlined />}>
-                  {t("hr.assets.lookup.title")}
-                </Button>
-              </Link>
-              <Link to="/hr/assets/label-jobs">
-                <Button icon={<HistoryOutlined />}>
-                  {t("hr.assets.labelJobs.title")}
-                </Button>
-              </Link>
-            </Space>
-          </Col>
-        </Row>
-        <Table
+            )}
+            <Link to="/hr/assets/lookup">
+              <Button size="small" icon={<ScanOutlined />}>
+                {t("hr.assets.lookup.title")}
+              </Button>
+            </Link>
+            <Link to="/hr/assets/label-jobs">
+              <Button size="small" icon={<HistoryOutlined />}>
+                {t("hr.assets.labelJobs.title")}
+              </Button>
+            </Link>
+          </>
+        }
+      >
+        <ResponsiveTable
+          mobileCard={{
+            titleKey: "name",
+            extraKey: "status",
+            actionsKey: "actions",
+          }}
           columns={columns}
           dataSource={dataSource}
+          // Bulk label printing is a desktop task; phones get cards, each with
+          // its own print action (the shared table only renders cards without
+          // row selection).
           rowSelection={
-            {
-              selectedRowKeys: selectedAssetIds,
-              onChange: (keys) => setSelectedAssetIds(keys),
-              preserveSelectedRowKeys: true,
-            } as TableRowSelection<Asset>
+            isPhone
+              ? undefined
+              : ({
+                  selectedRowKeys: selectedAssetIds,
+                  onChange: (keys) => setSelectedAssetIds(keys),
+                  preserveSelectedRowKeys: true,
+                } as TableRowSelection<Asset>)
           }
           pagination={{
             current: assetPage,
@@ -1272,7 +1292,7 @@ export default function HRAssetsPage() {
             style: { cursor: "pointer" },
           })}
         />
-      </Card>
+      </WorkspaceCard>
 
       <Modal
         title={

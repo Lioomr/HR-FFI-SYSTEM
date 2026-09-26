@@ -3,11 +3,9 @@ import {
   Alert,
   Button,
   Card,
-  Col,
   Descriptions,
   Empty,
   Input,
-  Row,
   Space,
   Spin,
   Tag,
@@ -15,11 +13,12 @@ import {
 } from "antd";
 import type { InputRef } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { ScanOutlined } from "@ant-design/icons";
-import { useSearchParams } from "react-router-dom";
+import { ArrowLeftOutlined, ScanOutlined } from "@ant-design/icons";
+import { Link, useSearchParams } from "react-router-dom";
 import dayjs from "dayjs";
 
 import PageHeader from "../../../components/ui/PageHeader";
+import "../../../components/ui/workspace/Workspace.css";
 import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import { useI18n } from "../../../i18n/useI18n";
 import { isApiError } from "../../../services/api/apiTypes";
@@ -214,37 +213,39 @@ export default function AssetLookupPage() {
       <PageHeader
         title={t("hr.assets.lookup.title")}
         subtitle={t("hr.assets.lookup.subtitle")}
+        actions={
+          <Link to="/hr/assets">
+            <Button icon={<ArrowLeftOutlined />}>{t("hr.assets.title")}</Button>
+          </Link>
+        }
       />
 
-      <Card style={{ marginBottom: 16 }}>
-        <Row gutter={[12, 12]} align="middle">
-          <Col flex="auto">
-            <Input
-              ref={inputRef}
-              size="large"
-              autoFocus
-              allowClear
-              prefix={<ScanOutlined />}
-              placeholder={t("hr.assets.lookup.placeholder")}
-              value={rawValue}
-              onChange={(e) => setRawValue(e.target.value)}
-              onPressEnter={() => void runLookup(rawValue)}
-              onBlur={focusInput}
-              disabled={loading}
-            />
-          </Col>
-          <Col>
-            <Button
-              type="primary"
-              size="large"
-              loading={loading}
-              onClick={() => void runLookup(rawValue)}
-            >
-              {t("hr.assets.lookup.searchButton")}
-            </Button>
-          </Col>
-        </Row>
-      </Card>
+      <section className="ffi-workspace" style={{ marginBottom: 16 }}>
+        <div className="ffi-toolbar ffi-lookup-bar">
+          <Input
+            className="ffi-toolbar__search"
+            ref={inputRef}
+            size="large"
+            autoFocus
+            allowClear
+            prefix={<ScanOutlined />}
+            placeholder={t("hr.assets.lookup.placeholder")}
+            value={rawValue}
+            onChange={(e) => setRawValue(e.target.value)}
+            onPressEnter={() => void runLookup(rawValue)}
+            onBlur={focusInput}
+            disabled={loading}
+          />
+          <Button
+            type="primary"
+            size="large"
+            loading={loading}
+            onClick={() => void runLookup(rawValue)}
+          >
+            {t("hr.assets.lookup.searchButton")}
+          </Button>
+        </div>
+      </section>
 
       {loading && (
         <Card>

@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
-import { Button, Card, Space, Tag, Tooltip, Typography, message } from "antd";
+import { Button, Space, Tag, Tooltip, Typography, message } from "antd";
+import { Link } from "react-router-dom";
 import type { ColumnsType } from "antd/es/table";
-import { DownloadOutlined } from "@ant-design/icons";
+import { ArrowLeftOutlined, DownloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 
 import ErrorState from "../../../components/ui/ErrorState";
 import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import LoadingState from "../../../components/ui/LoadingState";
 import PageHeader from "../../../components/ui/PageHeader";
+import { WorkspaceCard } from "../../../components/ui/workspace/Workspace";
 import { useI18n } from "../../../i18n/useI18n";
 import { isApiError } from "../../../services/api/apiTypes";
 import {
@@ -166,9 +168,18 @@ export default function LabelJobsHistoryPage() {
       <PageHeader
         title={t("hr.assets.labelJobs.title")}
         subtitle={t("hr.assets.labelJobs.subtitle")}
+        actions={
+          <Link to="/hr/assets">
+            <Button icon={<ArrowLeftOutlined />}>{t("hr.assets.title")}</Button>
+          </Link>
+        }
       />
 
-      <Card>
+      <WorkspaceCard
+        title={t("hr.assets.labelJobs.title")}
+        count={total}
+        busy={loading && jobs.length > 0}
+      >
         <ResponsiveTable
           mobileCard={{ titleKey: "created_at" }}
           rowKey="id"
@@ -187,7 +198,7 @@ export default function LabelJobsHistoryPage() {
           }}
           scroll={{ x: "max-content" }}
         />
-      </Card>
+      </WorkspaceCard>
     </div>
   );
 }

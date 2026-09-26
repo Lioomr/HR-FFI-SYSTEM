@@ -1826,7 +1826,9 @@ export default function BaseLayout() {
               alignItems: "center",
               gap: isMobile ? 6 : 10,
               minWidth: 0,
-              flexShrink: 1,
+              // On phones the title truncates instead: letting these controls
+              // shrink below their own width pushed the avatar off-screen.
+              flexShrink: isMobile ? 0 : 1,
               color: organizationTheme.text,
             }}
           >
