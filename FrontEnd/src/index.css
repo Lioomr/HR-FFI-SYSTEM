@@ -983,3 +983,74 @@ html[dir="rtl"] .modern-sidebar .ant-menu-item-selected::before {
     padding: 8px !important;
   }
 }
+
+/* ===========================
+   PILL TABS (segmented control)
+   Use: <Tabs className="ffi-pill-tabs" />
+   =========================== */
+.ffi-pill-tabs > .ant-tabs-nav {
+  margin-bottom: 20px !important;
+}
+
+.ffi-pill-tabs > .ant-tabs-nav::before {
+  display: none;
+}
+
+.ffi-pill-tabs > .ant-tabs-nav .ant-tabs-nav-list {
+  gap: 4px;
+  padding: 4px;
+  background: #f4f6fa;
+  border: 1px solid #e5e9f0;
+  border-radius: 12px;
+}
+
+.ffi-pill-tabs > .ant-tabs-nav .ant-tabs-tab {
+  margin: 0 !important;
+  padding: 9px 18px !important;
+  color: #475569;
+  border-radius: 9px;
+  font-size: 14px;
+  font-weight: 600;
+  transition:
+    background 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.ffi-pill-tabs > .ant-tabs-nav .ant-tabs-tab:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.ffi-pill-tabs > .ant-tabs-nav .ant-tabs-tab .anticon {
+  margin-inline-end: 8px;
+  font-size: 15px;
+}
+
+.ffi-pill-tabs > .ant-tabs-nav .ant-tabs-tab-active {
+  background: #ffffff;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.08),
+    0 2px 8px rgba(15, 23, 42, 0.06);
+}
+
+.ffi-pill-tabs > .ant-tabs-nav .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: var(--brand-primary-dark) !important;
+  text-shadow: none;
+}
+
+.ffi-pill-tabs > .ant-tabs-nav .ant-tabs-ink-bar {
+  display: none;
+}
+
+.ffi-pill-tabs .ant-tabs-tab-btn:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+@media (max-width: 600px) {
+  .ffi-pill-tabs > .ant-tabs-nav .ant-tabs-tab {
+    padding: 8px 12px !important;
+  }
+}

@@ -182,7 +182,11 @@ describe("HR attendance policy", () => {
     renderPage();
 
     expect(
-      await screen.findByLabelText("نافذة المهلة (بالدقائق)", {}, FIND),
+      await screen.findByLabelText(
+        "وقت السماح بعد بداية الدوام (بالدقائق)",
+        {},
+        FIND,
+      ),
     ).toBeInTheDocument();
     expect(screen.getByText("سياسة الحضور")).toBeInTheDocument();
   });

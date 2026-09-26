@@ -85,7 +85,7 @@ export default function RecalculateAttendanceModal({
   const [modal, contextHolder] = Modal.useModal();
   const watchedMode = Form.useWatch("mode", form);
   const mode = watchedMode ?? initialValues?.mode ?? "single";
-  const employees = useEmployeeOptions(open);
+  const employees = useEmployeeOptions({ enabled: open });
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [results, setResults] = useState<AttendanceDailyResult[] | null>(null);

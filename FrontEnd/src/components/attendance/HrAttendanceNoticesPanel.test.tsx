@@ -239,6 +239,35 @@ describe("HR late attendance notice history", () => {
     );
   });
 
+  it("toggles a single level from the quick filter chips", async () => {
+    renderPanel("?tab=notices");
+    await screen.findByText("Jane Doe");
+
+    const chips = screen.getByRole("group", { name: "Notice level" });
+    const serious = within(chips).getByRole("button", {
+      name: "Serious warning",
+    });
+    fireEvent.click(serious);
+
+    await waitFor(() =>
+      expect(getNotices).toHaveBeenLastCalledWith(
+        expect.objectContaining({ notice_level: ["3"] }),
+      ),
+    );
+    expect(serious).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(serious);
+    await waitFor(() =>
+      expect(getNotices).toHaveBeenLastCalledWith(
+        expect.not.objectContaining({ notice_level: ["3"] }),
+      ),
+    );
+    expect(within(chips).getByRole("button", { name: "All" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
   it("maps 422 filter errors onto the filter controls", async () => {
     getNotices.mockRejectedValue(
       failure(422, {

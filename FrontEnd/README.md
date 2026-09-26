@@ -1,73 +1,35 @@
-# React + TypeScript + Vite
+# FFI HR Web Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The web app is built with React 19, TypeScript, Vite, Ant Design, React Router 7, and Zustand. The actual dependency versions and scripts are in `package.json`.
 
-Currently, two official plugins are available:
+## Local development
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+From this directory:
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(["dist"]),
-  {
-    files: ["**/*.{ts,tsx}"],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ["./tsconfig.node.json", "./tsconfig.app.json"],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-]);
+```powershell
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Set the API origin using the environment configuration documented by the project (`.env.example` when present). API calls should go through `src/services/api/apiClient.ts` and typed modules under `src/services/api/`.
 
-```js
-// eslint.config.js
-import reactX from "eslint-plugin-react-x";
-import reactDom from "eslint-plugin-react-dom";
+## Quality checks
 
-export default defineConfig([
-  globalIgnores(["dist"]),
-  {
-    files: ["**/*.{ts,tsx}"],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs["recommended-typescript"],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ["./tsconfig.node.json", "./tsconfig.app.json"],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-]);
+```powershell
+npm run test -- --run
+npm run type-check
+npm run lint
+npm run format:check
+npm run build
 ```
+
+## Where to start
+
+- Routes and role guards: `src/routes/`
+- Role and feature pages: `src/pages/`
+- Shared UI: `src/components/`
+- API clients: `src/services/api/`
+- English/Arabic translations: `src/i18n/translations.ts`
+- Tests: near their page/component or service
+
+For repository rules, read `../AGENTS.md`. For the shared architecture map, start with `../.agents/context/INDEX.md`. Request workflow tasks must also read `../.agents/context/workflow_engine.md`: the employee dashboard's Current Requests panel is a summary, while leave list/detail pages show the approval-trail pattern. Trace linked screens, APIs, workflow history, permissions, toggles, notifications, and tests before making a change.

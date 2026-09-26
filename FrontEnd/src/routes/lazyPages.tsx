@@ -51,17 +51,8 @@ export const MyProfilePage = lazy(
 );
 
 // ─── HR: reference data ─────────────────────────────────────────────────────
-export const DepartmentsPage = lazy(
-  () => import("../pages/hr/reference/DepartmentsPage"),
-);
-export const PositionsPage = lazy(
-  () => import("../pages/hr/reference/PositionsPage"),
-);
-export const TaskGroupsPage = lazy(
-  () => import("../pages/hr/reference/TaskGroupsPage"),
-);
-export const SponsorsPage = lazy(
-  () => import("../pages/hr/reference/SponsorsPage"),
+export const OrganizationSetupPage = lazy(
+  () => import("../pages/hr/reference/OrganizationSetupPage"),
 );
 export const RentTypesPage = lazy(
   () => import("../pages/hr/reference/RentTypesPage"),
@@ -113,7 +104,9 @@ export const PayrollRunDetailsPage = lazy(
 );
 
 // ─── HR: assets / rents / templates ─────────────────────────────────────────
-export const HRAssetsPage = lazy(() => import("../pages/hr/assets/HRAssetsPage"));
+export const HRAssetsPage = lazy(
+  () => import("../pages/hr/assets/HRAssetsPage"),
+);
 export const AssetLookupPage = lazy(
   () => import("../pages/hr/assets/AssetLookupPage"),
 );
@@ -139,15 +132,11 @@ export const JobOfferDetailPage = lazy(
 // ─── HR: starting work acknowledgments ──────────────────────────────────────
 export const StartingWorkAcknowledgmentsListPage = lazy(
   () =>
-    import(
-      "../pages/hr/starting-work-acknowledgments/StartingWorkAcknowledgmentsListPage"
-    ),
+    import("../pages/hr/starting-work-acknowledgments/StartingWorkAcknowledgmentsListPage"),
 );
 export const StartingWorkAcknowledgmentDetailPage = lazy(
   () =>
-    import(
-      "../pages/hr/starting-work-acknowledgments/StartingWorkAcknowledgmentDetailPage"
-    ),
+    import("../pages/hr/starting-work-acknowledgments/StartingWorkAcknowledgmentDetailPage"),
 );
 
 // ─── Employee: payslips ─────────────────────────────────────────────────────
@@ -206,7 +195,9 @@ export const AnnualLeaveSettlementsPage = lazy(
 export const LeaveRequestDetailsPage = lazy(
   () => import("../pages/hr/leave/LeaveRequestDetailsPage"),
 );
-export const LoanInboxPage = lazy(() => import("../pages/hr/loan/LoanInboxPage"));
+export const LoanInboxPage = lazy(
+  () => import("../pages/hr/loan/LoanInboxPage"),
+);
 export const HrLoanRequestDetailsPage = lazy(
   () => import("../pages/hr/loan/LoanRequestDetailsPage"),
 );

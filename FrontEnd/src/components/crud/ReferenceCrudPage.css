@@ -1,0 +1,165 @@
+.reference-crud__search {
+  width: 260px;
+  max-width: 100%;
+}
+
+.reference-crud__search .ant-input-affix-wrapper,
+.reference-crud__search .ant-input {
+  min-height: 38px;
+}
+
+.reference-crud__search .ant-input-group-addon .ant-btn {
+  height: 38px;
+}
+
+/* ---------- Embedded list card ---------- */
+
+.reference-crud__card {
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #e5e9f0;
+  border-radius: 14px;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+.reference-crud__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  padding: 16px 18px;
+  background: #fafbfc;
+  border-bottom: 1px solid #e5e9f0;
+}
+
+.reference-crud__heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.reference-crud__title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.reference-crud__count {
+  padding: 3px 10px;
+  color: var(--text-secondary);
+  background: #f1f5f9;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.reference-crud__actions .ant-btn-primary {
+  height: 38px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.reference-crud--embedded .ant-table-wrapper .ant-table {
+  border-radius: 0;
+}
+
+.reference-crud--embedded .ant-table-thead > tr > th {
+  padding: 12px 16px !important;
+  color: #526179 !important;
+  background: #f8fafc !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+.reference-crud--embedded .ant-table-thead > tr > th::before {
+  display: none;
+}
+
+.reference-crud--embedded
+  .ant-table-tbody
+  > tr:not(.ant-table-measure-row)
+  > td {
+  padding: 12px 16px !important;
+  border-bottom-color: #eef1f5;
+  font-size: 13.5px;
+}
+
+.reference-crud--embedded .ant-table-tbody > tr:hover > td {
+  background: #fff8f1 !important;
+}
+
+.reference-crud--embedded .ant-table-pagination {
+  margin: 14px 18px !important;
+}
+
+.reference-crud--embedded .ant-empty {
+  padding-block: 32px;
+}
+
+/* ---------- Cells ---------- */
+
+.reference-crud__id {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.reference-crud__name {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.reference-crud__muted {
+  color: var(--text-secondary);
+}
+
+.reference-crud__code {
+  display: inline-block;
+  padding: 2px 8px;
+  color: #334155;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+.reference-crud__edit.ant-btn {
+  color: var(--text-secondary);
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+.reference-crud__edit.ant-btn:not(:disabled):hover {
+  color: var(--brand-primary-dark) !important;
+  background: #fff4ea !important;
+}
+
+@media (max-width: 600px) {
+  .reference-crud__toolbar {
+    padding: 14px;
+  }
+
+  .reference-crud__actions,
+  .reference-crud__actions .ant-space-item,
+  .reference-crud__search {
+    width: 100%;
+  }
+
+  .reference-crud__actions .ant-btn-primary {
+    width: 100%;
+  }
+}

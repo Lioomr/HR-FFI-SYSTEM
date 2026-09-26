@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Button, Card, Form, Modal, Space, Input } from "antd";
+import "./ReferenceCrudPage.css";
 import type { AnyObject } from "antd/es/_util/type";
 import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined, EditOutlined } from "@ant-design/icons";
@@ -61,6 +62,13 @@ export interface ReferenceCrudPageProps<
   // Hooks
   beforeOpenEdit?: (row: TItem) => Promise<void> | void;
   disableEdit?: (row: TItem) => boolean;
+
+  /**
+   * Rendered inside a parent page (e.g. an Organization Setup tab): the title,
+   * record count, search and create action sit in the list card's toolbar
+   * instead of a page header.
+   */
+  embedded?: boolean;
 }
 
 /**
@@ -90,6 +98,7 @@ export function ReferenceCrudPage<
   transformEditValues,
   beforeOpenEdit,
   disableEdit,
+  embedded = false,
 }: ReferenceCrudPageProps<TItem, TCreate, TUpdate>) {
   const { t } = useI18n();
   const user = useAuthStore((state) => state.user);
@@ -379,8 +388,11 @@ export function ReferenceCrudPage<
           title: t("common.actions"),
           key: "actions",
           width: 100,
+          align: "end" as const,
           render: (_, record) => (
             <Button
+              type="text"
+              className="reference-crud__edit"
               icon={<EditOutlined />}
               onClick={() => openEditModal(record)}
               disabled={
@@ -399,8 +411,8 @@ export function ReferenceCrudPage<
     return <Unauthorized403Page />;
   }
 
-  // Render loading state
-  if (loading && items.length === 0) {
+  // Render loading state (embedded lists keep their card and show a table spinner)
+  if (!embedded && loading && items.length === 0) {
     return <LoadingState title={t("loading.generic")} />;
   }
 
@@ -419,9 +431,43 @@ export function ReferenceCrudPage<
     );
   }
 
-  // Render empty state
-  if (!loading && items.length === 0) {
-    return (
+  const searchBox = (
+    <Input.Search
+      placeholder={`${t("common.search")}...`}
+      allowClear
+      onSearch={(value) => {
+        setSearchText(value);
+        setPage(1);
+        loadData(1, value);
+      }}
+      className="reference-crud__search"
+    />
+  );
+
+  const createButton = createForm && (
+    <Button
+      type="primary"
+      icon={<PlusOutlined />}
+      disabled={isHeadOffice}
+      onClick={() => {
+        createFormInstance.resetFields();
+        if (initialCreateValues) {
+          createFormInstance.setFieldsValue(initialCreateValues);
+        }
+        setCreateModalOpen(true);
+      }}
+      title={
+        isHeadOffice
+          ? t("organization.headOffice.switchToCreateRecords")
+          : undefined
+      }
+    >
+      {`${t("common.create")} ${entityName}`}
+    </Button>
+  );
+
+  const listBody =
+    !loading && items.length === 0 ? (
       <EmptyState
         title={t("common.noData")}
         description={t(
@@ -429,81 +475,66 @@ export function ReferenceCrudPage<
           { entity: entityName },
           `No ${entityName} found.`,
         )}
-        actionText={
-          createForm && !isHeadOffice
-            ? `${t("common.create")} ${entityName}`
-            : undefined
-        }
-        onAction={
-          createForm && !isHeadOffice
-            ? () => setCreateModalOpen(true)
-            : undefined
+      />
+    ) : (
+      <ResponsiveTable
+        dataSource={items}
+        columns={enhancedColumns}
+        rowKey={rowKey}
+        loading={loading}
+        scroll={{ x: "max-content" }}
+        pagination={
+          enablePagination
+            ? {
+                current: page,
+                pageSize: pageSize,
+                total: total,
+                onChange: (newPage) => setPage(newPage),
+              }
+            : false
         }
       />
     );
-  }
 
   // Render main content
   return (
-    <div>
-      <PageHeader
-        title={title}
-        actions={
-          <Space wrap>
-            <Input.Search
-              placeholder={`${t("common.search")}...`}
-              allowClear
-              onSearch={(value) => {
-                setSearchText(value);
-                setPage(1);
-                loadData(1, value);
-              }}
-              style={{ width: 250, maxWidth: "100%" }}
-            />
-            {createForm && (
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                disabled={isHeadOffice}
-                onClick={() => {
-                  createFormInstance.resetFields();
-                  if (initialCreateValues) {
-                    createFormInstance.setFieldsValue(initialCreateValues);
-                  }
-                  setCreateModalOpen(true);
-                }}
-                title={
-                  isHeadOffice
-                    ? t("organization.headOffice.switchToCreateRecords")
-                    : undefined
-                }
-              >
-                {`${t("common.create")} ${entityName}`}
-              </Button>
-            )}
-          </Space>
-        }
-      />
-
-      <Card style={{ borderRadius: 16 }}>
-        <ResponsiveTable
-          dataSource={items}
-          columns={enhancedColumns}
-          rowKey={rowKey}
-          loading={loading}
-          scroll={{ x: "max-content" }}
-          pagination={
-            enablePagination
-              ? {
-                  current: page,
-                  pageSize: pageSize,
-                  total: total,
-                  onChange: (newPage) => setPage(newPage),
-                }
-              : false
-          }
-        />
-      </Card>
+    <div
+      className={
+        embedded ? "reference-crud reference-crud--embedded" : "reference-crud"
+      }
+    >
+      {embedded ? (
+        <section className="reference-crud__card">
+          <div className="reference-crud__toolbar">
+            <div className="reference-crud__heading">
+              <h2 className="reference-crud__title">{title}</h2>
+              {!loading && (
+                <span className="reference-crud__count">
+                  {t("reference.itemsCount", { count: total }, `${total}`)}
+                </span>
+              )}
+            </div>
+            <Space wrap className="reference-crud__actions">
+              {searchBox}
+              {createButton}
+            </Space>
+          </div>
+          <div className="reference-crud__table">{listBody}</div>
+        </section>
+      ) : (
+        <>
+          <PageHeader
+            title={title}
+            actions={
+              <Space wrap>
+                {searchBox}
+                {createButton}
+              </Space>
+            }
+          />
+          <Card style={{ borderRadius: 16 }}>{listBody}</Card>
+        </>
+      )}
 
       {/* Create Modal */}
       {createForm && (

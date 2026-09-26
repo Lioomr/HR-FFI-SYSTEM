@@ -103,18 +103,18 @@ const employee = (overrides: Partial<Employee> = {}): Employee =>
     ...overrides,
   }) as Employee;
 
-/** The status chips share their labels with the summary tiles, so pick the chip. */
-const statusChip = (label: string) => {
-  const chip = screen
+/** Status filtering is now owned by the summary boxes. */
+const statusBox = (label: string) => {
+  const box = screen
     .getAllByText(label)
-    .map((node) => node.closest(".ant-tag-checkable"))
+    .map((node) => node.closest("button.attendance-metric"))
     .find(Boolean);
-  if (!chip) throw new Error(`No status chip found for "${label}"`);
-  return chip as HTMLElement;
+  if (!box) throw new Error(`No status box found for "${label}"`);
+  return box as HTMLButtonElement;
 };
 
 const lastGlobalParams = () =>
-  getGlobal.mock.calls[getGlobal.mock.calls.length - 1][0];
+  getGlobal.mock.calls.filter(([params]) => params.page_size !== 1).at(-1)?.[0];
 
 beforeEach(() => {
   getGlobal.mockReset();
@@ -168,7 +168,7 @@ describe("AttendancePreviewPage BioTime fields", () => {
     expect(within(table).getByText("Excused absence")).toBeInTheDocument();
     expect(within(table).getByText("Approved leave #75")).toBeInTheDocument();
     expect(within(table).queryByText("Absent")).not.toBeInTheDocument();
-    fireEvent.click(statusChip("Excused absence"));
+    fireEvent.click(statusBox("Excused absence"));
     await waitFor(() =>
       expect(lastGlobalParams().effective_status).toBe("EXCUSED"),
     );
@@ -247,11 +247,44 @@ describe("AttendancePreviewPage filters", () => {
     renderPreview("hr");
     await screen.findByText("Sara Ali");
 
-    fireEvent.click(statusChip("Absent"));
+    const absent = statusBox("Absent");
+    fireEvent.click(absent);
 
     await waitFor(() =>
       expect(lastGlobalParams().effective_status).toBe("ABSENT"),
     );
+    expect(absent).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByText("All statuses")).not.toBeInTheDocument();
+
+    fireEvent.click(absent);
+    await waitFor(() =>
+      expect(lastGlobalParams().effective_status).toBeUndefined(),
+    );
+    expect(absent).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("uses the combined pending box for all pending workflow states", async () => {
+    getGlobal.mockImplementation((params) => {
+      const response = listResponse([record()]);
+      return Promise.resolve({
+        ...response,
+        data: {
+          ...response.data,
+          effective_summary: params.effective_status
+            ? { PENDING: 0 }
+            : { PENDING_HR: 2, PENDING_MGR: 3, PENDING_CEO: 1 },
+        },
+      });
+    });
+    renderPreview("hr");
+    await screen.findByText("Sara Ali");
+
+    expect(statusBox("Pending")).toHaveTextContent("6");
+    fireEvent.click(statusBox("Pending"));
+    await waitFor(() =>
+      expect(lastGlobalParams().effective_status).toBe("PENDING"),
+    );
+    expect(statusBox("Pending")).toHaveTextContent("6");
   });
 
   it("filters by source so SYSTEM/BioTime records can be isolated", async () => {
@@ -272,13 +305,32 @@ describe("AttendancePreviewPage filters", () => {
     fireEvent.mouseDown(
       screen.getByRole("combobox", { name: "Filter by employee" }),
     );
-    fireEvent.click(await screen.findByTitle("E-042 - Sara Ali"));
+    // Options show the name only; the table cell also carries the name as a title.
+    const [option] = (await screen.findAllByTitle("Sara Ali")).filter((node) =>
+      node.classList.contains("ant-select-item-option"),
+    );
+    expect(option).toBeDefined();
+    expect(screen.queryByTitle(/E-042/)).not.toBeInTheDocument();
+    fireEvent.click(option);
 
     await waitFor(() => expect(lastGlobalParams().employee_id).toBe(42));
   });
 
-  it("debounces the free-text employee search", async () => {
+  it("puts the employee filter first and has no free-text search for HR", async () => {
     renderPreview("hr");
+    await screen.findByText("Sara Ali");
+
+    expect(
+      screen.queryByPlaceholderText("Search by employee name or email"),
+    ).not.toBeInTheDocument();
+    const filters = document.querySelector(".attendance-filters");
+    expect(filters?.firstElementChild).toHaveClass(
+      "attendance-filters__employee",
+    );
+  });
+
+  it("debounces the free-text employee search for the CEO", async () => {
+    renderPreview("ceo");
     await screen.findByText("Sara Ali");
 
     fireEvent.change(
@@ -288,14 +340,16 @@ describe("AttendancePreviewPage filters", () => {
       },
     );
 
-    await waitFor(() => expect(lastGlobalParams().search).toBe("omar"));
+    await waitFor(() =>
+      expect(getCEO.mock.calls.at(-1)?.[0]?.search).toBe("omar"),
+    );
   });
 
   it("resets every filter back to the defaults", async () => {
     renderPreview("hr");
     await screen.findByText("Sara Ali");
 
-    fireEvent.click(statusChip("Absent"));
+    fireEvent.click(statusBox("Absent"));
     await waitFor(() =>
       expect(lastGlobalParams().effective_status).toBe("ABSENT"),
     );
@@ -380,6 +434,40 @@ describe("AttendancePreviewPage states", () => {
 });
 
 describe("AttendancePreviewPage late + absence surfacing", () => {
+  it("shows two name parts in the table while retaining the full name on hover", async () => {
+    getGlobal.mockResolvedValue(
+      listResponse([
+        record({
+          employee_name: "Sara Ahmed Al Mansour",
+          employee_name_en: "Sara Ahmed Al Mansour",
+        }),
+      ]),
+    );
+    renderPreview("hr");
+
+    const shortName = await screen.findByText("Sara Ahmed");
+    expect(shortName).toHaveAttribute("title", "Sara Ahmed Al Mansour");
+    expect(screen.queryByText("Sara Ahmed Al Mansour")).not.toBeInTheDocument();
+  });
+
+  it("uses the first two parts of the Arabic name in Arabic mode", async () => {
+    useI18nStore.getState().setLanguage("ar");
+    getGlobal.mockResolvedValue(
+      listResponse([
+        record({
+          employee_name_ar: "سارة أحمد المنصور",
+          employee_name_en: "Sara Ahmed Al Mansour",
+        }),
+      ]),
+    );
+    renderPreview("hr");
+
+    expect(await screen.findByText("سارة أحمد")).toHaveAttribute(
+      "title",
+      "سارة أحمد المنصور",
+    );
+  });
+
   it("shows minutes late for LATE rows and a dash otherwise", async () => {
     getGlobal.mockResolvedValue(
       listResponse([
