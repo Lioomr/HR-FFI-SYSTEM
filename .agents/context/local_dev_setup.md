@@ -52,19 +52,25 @@ docker compose -f docker-compose.dev.yml ps
 
 ## Rebuild After Changes
 
+Rebuild through `tools/dev-compose.sh` (Git Bash) or `tools\dev-compose.ps1` (PowerShell). They pass arguments to `docker compose -f docker-compose.dev.yml`, stamp images with the commit/dirty flag/checkout, and refuse to change the shared stack from a git worktree. See "Shared Docker Stack" in `AGENTS.md`.
+
 ```bash
 # After backend code/dependency changes (API, worker, and scheduler share backend code)
-docker compose -f docker-compose.dev.yml up -d --build backend notification-worker celery-beat
+tools/dev-compose.sh up -d --build backend notification-worker celery-beat
 
 # After frontend code/dependency changes
-docker compose -f docker-compose.dev.yml up -d --build frontend
+tools/dev-compose.sh up -d --build frontend
 
 # After docker-compose.dev.yml changes
-docker compose -f docker-compose.dev.yml up -d --build
+tools/dev-compose.sh up -d --build
 
-# Verify rebuilt services
-docker compose -f docker-compose.dev.yml ps
+# Verify rebuilt services, and that they run your build
+tools/dev-compose.sh ps
+curl http://localhost:5173/build-info.json
+docker inspect ffi_hr_frontend --format "{{json .Config.Labels}}"
 ```
+
+A worktree that needs its own running stack sets `FFI_CONTAINER_PREFIX`, `FFI_FRONTEND_PORT`, `FFI_BACKEND_PORT`, `FFI_DB_PORT` and `EVOLUTION_API_PORT`, and passes its own `-p <project>` (example in the header of `docker-compose.dev.yml`). Defaults keep the shared `ffi_hr_*` names and 5173/8000/5432 ports.
 
 Before reporting a code/runtime task complete, rebuild and recreate each affected app service, then check its status. Rebuild all three backend-based services (`backend`, `notification-worker`, `celery-beat`) after backend changes because each runs code from the Backend image. Rebuild `frontend` after frontend changes. Docs-only changes do not need a rebuild. Never use `down -v` for a routine rebuild because that removes database, upload, and provider volumes.
 

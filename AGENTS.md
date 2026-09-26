@@ -84,6 +84,18 @@ For request and approval work, read `.agents/context/workflow_engine.md`. The em
 
 When a task asks for a request page to show approval progress, determine whether it means the summary card, request list, or request detail, then keep the linked experiences consistent. Confirm backend workflow history and actor-specific serializer fields are available before implementing the UI. Update the relevant tests and focused context docs with any behavior change.
 
+## Shared Docker Stack: Avoid Overwriting Other Sessions
+
+The local stack in `docker-compose.dev.yml` (project `hr-ffi-system`, containers `ffi_hr_*`, ports 5173/8000/5432) is shared by every Claude and Codex session on this machine. The last build wins: whichever checkout rebuilt last is what `localhost:5173` serves, even if another session built after you.
+
+- Run the stack through `tools/dev-compose.sh` (or `tools\dev-compose.ps1`) instead of calling `docker compose -f docker-compose.dev.yml` directly. It stamps each image with the git commit, a dirty flag and the checkout path, and refuses `up`/`build`/`down` and other changing commands against the shared stack from a git worktree.
+- Only rebuild the shared stack from the main checkout `D:\HR-FFI-SYSTEM`. From a worktree (`.codex/worktrees/*`, `D:\HR-FFI-SYSTEM-*`, temp worktrees), verify with tests and `npm run build`, or run a separate stack with its own `FFI_CONTAINER_PREFIX`, ports and `-p` project (see the header of `docker-compose.dev.yml`). Set `FFI_ALLOW_SHARED_STACK=1` only when the user explicitly asked for that.
+- Before rebuilding, check `git status` and recently changed files for other sessions' uncommitted work. A build ships whatever is on disk.
+- After every rebuild, confirm the running container serves your change, not only that it is up: `curl http://localhost:5173/build-info.json`, `docker inspect ffi_hr_frontend --format "{{json .Config.Labels}}"`, and a grep for a new class or string in `/usr/share/nginx/html/assets/`. For the backend, check `showmigrations` or the changed endpoint. Report the check in your summary.
+- If the user reports that a shipped change is missing, first check the container's creation time and `com.ffi.build.*` labels. Another session may have rebuilt from a different checkout; rebuild from the main checkout instead of re-editing the code.
+- Commit finished work promptly. Uncommitted changes exist in one folder only, so a build from any other checkout silently drops them.
+- Two agents must not edit the same feature files at once. If files you are about to change were edited by another agent in the last few minutes, stop and ask the user.
+
 ## Engineering References
 
 For work involving API schemas, frontend/backend type alignment, company-scoping safety, production migrations, Celery dispatch, or feature-level regression tests, read `.agents/context/engineering_references.md`. Apply the relevant PostHog and Vinta patterns incrementally in the existing FFI architecture; they do not replace FFI's plans, API rules, workflow engine, or security policy.
