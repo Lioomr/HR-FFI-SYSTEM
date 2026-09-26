@@ -31,6 +31,9 @@ class Announcement(models.Model):
     )
     whatsapp_group_id = models.CharField(max_length=64, blank=True, default="")
     whole_company = models.BooleanField(default=False)
+    # Set on every per-company copy of one Main Head Office broadcast. Each copy
+    # is an ordinary company-owned announcement; this ties the copies together.
+    broadcast_id = models.UUIDField(null=True, blank=True, db_index=True)
     target_roles = models.JSONField(help_text="List of role names that should see this announcement")
     target_user = models.ForeignKey(
         settings.AUTH_USER_MODEL,

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Button, Space, Tag, message, Tooltip, Popconfirm } from "antd";
+import { Alert, Button, Space, Tag, message, Tooltip, Popconfirm } from "antd";
 import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import {
   PlusOutlined,
@@ -22,6 +22,8 @@ export default function AnnouncementsManagementPage() {
   const navigate = useNavigate();
   const { t } = useI18n();
   const user = useAuthStore((state) => state.user);
+  // In Main Head Office this page lists and sends announcements that go to
+  // every company; company-only announcements live under each company.
   const isHeadOffice = isHeadOfficeOrganization(user);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<AnnouncementListItem[]>([]);
@@ -59,7 +61,6 @@ export default function AnnouncementsManagementPage() {
   }, [loadData]);
 
   const handleDelete = async (id: number) => {
-    if (isHeadOffice) return;
     try {
       await deleteAnnouncement(id);
       message.success(t("hr.announcements.successDeleted"));
@@ -128,11 +129,17 @@ export default function AnnouncementsManagementPage() {
     ...(isHeadOffice
       ? [
           {
-            title: t("common.company", "Company"),
-            dataIndex: "company_name",
-            key: "company_name",
-            render: (value?: string) =>
-              value ? <Tag color="blue">{value}</Tag> : "-",
+            title: t("hr.announcements.companiesColumn"),
+            dataIndex: "broadcast_company_names",
+            key: "broadcast_company_names",
+            render: (names?: string[]) =>
+              names?.length
+                ? names.map((name) => (
+                    <Tag color="blue" key={name}>
+                      {name}
+                    </Tag>
+                  ))
+                : "-",
           },
         ]
       : []),
@@ -151,33 +158,21 @@ export default function AnnouncementsManagementPage() {
             <Button
               type="text"
               icon={<EditOutlined style={{ color: "#faad14" }} />}
-              disabled={isHeadOffice}
-              title={
-                isHeadOffice
-                  ? t("organization.headOffice.switchToEditRecords")
-                  : undefined
-              }
               onClick={() => navigate(`/hr/announcements/${record.id}/edit`)}
             />
           </Tooltip>
           <Popconfirm
             title={t("hr.announcements.deletePopconfirmTitle")}
-            description={t("hr.announcements.deletePopconfirmDesc")}
+            description={
+              isHeadOffice
+                ? t("hr.announcements.deleteBroadcastDesc")
+                : t("hr.announcements.deletePopconfirmDesc")
+            }
             onConfirm={() => handleDelete(record.id)}
             okText={t("common.yes")}
             cancelText={t("common.no")}
           >
-            <Button
-              type="text"
-              danger
-              icon={<DeleteOutlined />}
-              disabled={isHeadOffice}
-              title={
-                isHeadOffice
-                  ? t("organization.headOffice.switchToEditRecords")
-                  : undefined
-              }
-            />
+            <Button type="text" danger icon={<DeleteOutlined />} />
           </Popconfirm>
         </Space>
       ),
@@ -210,18 +205,24 @@ export default function AnnouncementsManagementPage() {
             type="primary"
             icon={<PlusOutlined />}
             onClick={() => navigate("/hr/announcements/create")}
-            disabled={isHeadOffice}
-            title={
-              isHeadOffice
-                ? t("organization.headOffice.switchToCreateRecords")
-                : undefined
-            }
             style={{ background: "#FF7F3E", borderColor: "#FF7F3E" }}
           >
-            {t("hr.announcements.createButton")}
+            {isHeadOffice
+              ? t("hr.announcements.broadcastCreateButton")
+              : t("hr.announcements.createButton")}
           </Button>
         </Space>
       </div>
+
+      {isHeadOffice && (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={t("hr.announcements.broadcastTitle")}
+          description={t("hr.announcements.broadcastListDescription")}
+        />
+      )}
 
       <ResponsiveTable
         mobileCard={{ titleKey: "title" }}

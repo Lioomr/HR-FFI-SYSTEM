@@ -37,6 +37,9 @@ const HEAD_OFFICE_PATHS = [
   "/admin/whatsapp",
   "/admin/profile",
   "/hr/templates",
+  // Announcements sent from Main Head Office go to every company.
+  "/hr/announcements",
+  "/ceo/announcements",
   "/hr/activity",
   "/hr/profile",
   "/ceo/profile",

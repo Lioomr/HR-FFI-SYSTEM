@@ -25,8 +25,19 @@ import { isApiError } from "../../services/api/apiTypes";
 import { useAuthStore } from "../../auth/authStore";
 import { useI18n } from "../../i18n/useI18n";
 import { UploadOutlined } from "@ant-design/icons";
+import { isHeadOfficeOrganization } from "../../utils/organizationContext";
+import CreateAnnouncementPage from "../hr/announcements/CreateAnnouncementPage";
 
 export default function CreateTeamAnnouncementPage() {
+  const user = useAuthStore((s) => s.user);
+  // A CEO in Main Head Office sends to every company, not to a team.
+  if (user?.role === "CEO" && isHeadOfficeOrganization(user)) {
+    return <CreateAnnouncementPage returnPath="/ceo/announcements" />;
+  }
+  return <TeamAnnouncementForm />;
+}
+
+function TeamAnnouncementForm() {
   const navigate = useNavigate();
   const role = useAuthStore((s) => s.user?.role);
   const announcementsPath =

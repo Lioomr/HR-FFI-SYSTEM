@@ -28,7 +28,20 @@ class AnnouncementGroupReadMixin:
         return data
 
 
-class AnnouncementSerializer(AnnouncementGroupReadMixin, serializers.ModelSerializer):
+class BroadcastCompaniesMixin:
+    """Names of the companies a Main Head Office broadcast reached."""
+
+    def get_broadcast_company_names(self, obj):
+        if not obj.broadcast_id:
+            return []
+        return list(
+            Announcement.objects.filter(broadcast_id=obj.broadcast_id, is_active=True)
+            .order_by("company__name")
+            .values_list("company__name", flat=True)
+        )
+
+
+class AnnouncementSerializer(BroadcastCompaniesMixin, AnnouncementGroupReadMixin, serializers.ModelSerializer):
     created_by_name = serializers.SerializerMethodField()
     target_user_email = serializers.SerializerMethodField()
     attachment_name = serializers.SerializerMethodField()
@@ -37,6 +50,7 @@ class AnnouncementSerializer(AnnouncementGroupReadMixin, serializers.ModelSerial
     publish_to_whatsapp = serializers.BooleanField(source="publish_to_sms", read_only=True)
     company_id = serializers.PrimaryKeyRelatedField(source="company", read_only=True)
     company_name = serializers.CharField(source="company.name", read_only=True)
+    broadcast_company_names = serializers.SerializerMethodField()
 
     class Meta:
         model = Announcement
@@ -66,6 +80,8 @@ class AnnouncementSerializer(AnnouncementGroupReadMixin, serializers.ModelSerial
             "has_attachment",
             "company_id",
             "company_name",
+            "broadcast_id",
+            "broadcast_company_names",
             "created_by",
             "created_by_name",
             "created_at",
@@ -102,7 +118,7 @@ class AnnouncementSerializer(AnnouncementGroupReadMixin, serializers.ModelSerial
         return bool(obj.attachment)
 
 
-class AnnouncementListSerializer(AnnouncementGroupReadMixin, serializers.ModelSerializer):
+class AnnouncementListSerializer(BroadcastCompaniesMixin, AnnouncementGroupReadMixin, serializers.ModelSerializer):
     created_by_name = serializers.SerializerMethodField()
     content_preview = serializers.SerializerMethodField()
     target_user_email = serializers.SerializerMethodField()
@@ -111,6 +127,7 @@ class AnnouncementListSerializer(AnnouncementGroupReadMixin, serializers.ModelSe
     publish_to_whatsapp = serializers.BooleanField(source="publish_to_sms", read_only=True)
     company_id = serializers.PrimaryKeyRelatedField(source="company", read_only=True)
     company_name = serializers.CharField(source="company.name", read_only=True)
+    broadcast_company_names = serializers.SerializerMethodField()
 
     class Meta:
         model = Announcement
@@ -140,6 +157,8 @@ class AnnouncementListSerializer(AnnouncementGroupReadMixin, serializers.ModelSe
             "has_attachment",
             "company_id",
             "company_name",
+            "broadcast_id",
+            "broadcast_company_names",
             "created_at",
             "is_active",
         ]
