@@ -121,7 +121,9 @@ export default function ContractRatingsPage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id?: string }>();
   const isCeoRoute = location.pathname.startsWith("/ceo/");
-  const basePath = isCeoRoute ? "/ceo/contract-ratings" : "/hr/contract-ratings";
+  const basePath = isCeoRoute
+    ? "/ceo/contract-ratings"
+    : "/hr/contract-ratings";
   // Same destinations ContractDecisionsPage uses for its employee links.
   const employeeProfilePath = (employeeId: number) =>
     isCeoRoute ? `/manager/team/${employeeId}` : `/hr/employees/${employeeId}`;
@@ -316,7 +318,11 @@ export default function ContractRatingsPage() {
         render: (_, item) => (
           <Link
             to={`${basePath}/${item.id}`}
-            style={{ color: "#f97316", fontWeight: 600, textDecoration: "none" }}
+            style={{
+              color: "#f97316",
+              fontWeight: 600,
+              textDecoration: "none",
+            }}
           >
             {item.employee.full_name || item.employee.employee_id}
           </Link>
@@ -332,7 +338,10 @@ export default function ContractRatingsPage() {
         title: t("contractRatings.statusLabel"),
         dataIndex: "status",
         render: (value: ContractRatingStatus) => (
-          <ApprovalStatusTag label={statusLabel(value)} tone={statusTone(value)} />
+          <ApprovalStatusTag
+            label={statusLabel(value)}
+            tone={statusTone(value)}
+          />
         ),
       },
       {
@@ -358,7 +367,10 @@ export default function ContractRatingsPage() {
         title: t("common.actions"),
         key: "actions",
         render: (_, item) => (
-          <Button size="small" onClick={() => navigate(`${basePath}/${item.id}`)}>
+          <Button
+            size="small"
+            onClick={() => navigate(`${basePath}/${item.id}`)}
+          >
             {t("common.view")}
           </Button>
         ),
@@ -386,22 +398,26 @@ export default function ContractRatingsPage() {
           onRetry={() => void load()}
           onRefresh={() => void load()}
           refreshing={loading}
+          resultsTitle={
+            statusFilter ? statusLabel(statusFilter) : t("common.allRequests")
+          }
+          resultsCount={t("common.requestsCount", { count: records.length })}
           filters={
-            <Space wrap>
-              <Text>{t("contractRatings.filter")}</Text>
-              <Select
-                value={statusFilter}
-                onChange={(value: ContractRatingStatus | undefined) =>
-                  setStatusFilter(value)
-                }
-                allowClear
-                style={{ minWidth: 240 }}
-                aria-label={t("contractRatings.filter")}
-                options={(isCeoRoute ? CEO_STATUS_OPTIONS : HR_STATUS_OPTIONS).map(
-                  (value) => ({ value, label: statusLabel(value) }),
-                )}
-              />
-            </Space>
+            <Select
+              value={statusFilter}
+              onChange={(value: ContractRatingStatus | undefined) =>
+                setStatusFilter(value)
+              }
+              allowClear
+              placeholder={t("contractRatings.filter")}
+              className="ffi-toolbar__field"
+              style={{ maxWidth: 320 }}
+              aria-label={t("contractRatings.filter")}
+              options={(isCeoRoute
+                ? CEO_STATUS_OPTIONS
+                : HR_STATUS_OPTIONS
+              ).map((value) => ({ value, label: statusLabel(value) }))}
+            />
           }
         >
           <ResponsiveTable
@@ -462,7 +478,10 @@ export default function ContractRatingsPage() {
               </Button>
             </>
           ) : null}
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(basePath)}>
+          <Button
+            icon={<ArrowLeftOutlined />}
+            onClick={() => navigate(basePath)}
+          >
             {t("common.back")}
           </Button>
         </Space>
@@ -473,7 +492,12 @@ export default function ContractRatingsPage() {
   const alerts = (
     <>
       {loadError ? (
-        <Alert type="error" showIcon style={{ marginBottom: 16 }} message={loadError} />
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={loadError}
+        />
       ) : null}
       {record.status === "MANUAL_RESOLUTION_REQUIRED" ? (
         <Alert
@@ -560,7 +584,10 @@ export default function ContractRatingsPage() {
         </ApprovalSurface>
 
         {gateOpen && item.gate && !isCeoRoute ? (
-          <Card title={t("contractRatings.gateTitle")} style={{ marginBottom: 16 }}>
+          <Card
+            title={t("contractRatings.gateTitle")}
+            style={{ marginBottom: 16 }}
+          >
             <RatingActionErrors errors={errorsFor("gate")} />
             <Paragraph>{t("contractRatings.gateBody")}</Paragraph>
             <Space direction="vertical" size={12} style={{ width: "100%" }}>
@@ -618,15 +645,25 @@ export default function ContractRatingsPage() {
         ) : null}
 
         {item.outcome ? (
-          <Card title={t("contractRatings.outcomeSection")} style={{ marginBottom: 16 }}>
+          <Card
+            title={t("contractRatings.outcomeSection")}
+            style={{ marginBottom: 16 }}
+          >
             <RatingActionErrors errors={errorsFor("acknowledge")} />
             <RatingOutcomeDetails
               outcome={item.outcome}
               contractExpiry={item.contract_expiry}
             />
             {item.outcome.scheduled_termination ? (
-              <Descriptions bordered size="small" column={1} style={{ marginTop: 12 }}>
-                <Descriptions.Item label={t("contractRatings.employeeNotified")}>
+              <Descriptions
+                bordered
+                size="small"
+                column={1}
+                style={{ marginTop: 12 }}
+              >
+                <Descriptions.Item
+                  label={t("contractRatings.employeeNotified")}
+                >
                   {item.outcome.employee_notified_of_termination_at
                     ? formatDateTimeShort(
                         item.outcome.employee_notified_of_termination_at,
@@ -637,7 +674,9 @@ export default function ContractRatingsPage() {
             ) : null}
             {canAcknowledge ? (
               <Space direction="vertical" style={{ marginTop: 16 }}>
-                <Text type="secondary">{t("contractRatings.acknowledgeHint")}</Text>
+                <Text type="secondary">
+                  {t("contractRatings.acknowledgeHint")}
+                </Text>
                 <Button
                   type="primary"
                   icon={<CheckOutlined aria-hidden />}
@@ -684,7 +723,11 @@ export default function ContractRatingsPage() {
               rating={item}
               profileHref={employeeProfilePath(item.employee.id)}
             />
-            <Descriptions bordered size="small" column={{ xs: 1, sm: 2, md: 3 }}>
+            <Descriptions
+              bordered
+              size="small"
+              column={{ xs: 1, sm: 2, md: 3 }}
+            >
               <Descriptions.Item label={t("contractRatings.routing")}>
                 <RatingModeTag mode={item.rating_mode} />
               </Descriptions.Item>
@@ -697,7 +740,10 @@ export default function ContractRatingsPage() {
               <Descriptions.Item label={t("contractRatings.profileArchived")}>
                 {item.is_archived ? t("common.yes") : t("common.no")}
               </Descriptions.Item>
-              <Descriptions.Item label={t("contractRatings.currentSalary")} span={2}>
+              <Descriptions.Item
+                label={t("contractRatings.currentSalary")}
+                span={2}
+              >
                 <SalaryTermsTags terms={item.current_terms} />
               </Descriptions.Item>
             </Descriptions>
@@ -713,7 +759,10 @@ export default function ContractRatingsPage() {
                   key: "comparison",
                   label: t("contractRatings.comparison"),
                   children: (
-                    <RatingComparisonView rating={item} criteria={criteriaList} />
+                    <RatingComparisonView
+                      rating={item}
+                      criteria={criteriaList}
+                    />
                   ),
                 },
                 {
@@ -777,16 +826,28 @@ export default function ContractRatingsPage() {
 
         {/* Decision outcome, once recorded */}
         {item.ceo_decision ? (
-          <Card title={t("contractRatings.outcomeSection")} style={{ marginBottom: 16 }}>
+          <Card
+            title={t("contractRatings.outcomeSection")}
+            style={{ marginBottom: 16 }}
+          >
             <RatingOutcomeDetails
               outcome={{ ...item, ceo_decision: item.ceo_decision }}
               contractExpiry={item.contract_expiry}
             />
             {item.scheduled_termination ? (
-              <Descriptions bordered size="small" column={1} style={{ marginTop: 12 }}>
-                <Descriptions.Item label={t("contractRatings.employeeNotified")}>
+              <Descriptions
+                bordered
+                size="small"
+                column={1}
+                style={{ marginTop: 12 }}
+              >
+                <Descriptions.Item
+                  label={t("contractRatings.employeeNotified")}
+                >
                   {item.employee_notified_of_termination_at
-                    ? formatDateTimeShort(item.employee_notified_of_termination_at)
+                    ? formatDateTimeShort(
+                        item.employee_notified_of_termination_at,
+                      )
                     : t("contractRatings.employeeNotNotified")}
                 </Descriptions.Item>
               </Descriptions>
@@ -823,7 +884,11 @@ export default function ContractRatingsPage() {
                 }
               />
             ) : (
-              <Alert type="info" showIcon message={t("contractRatings.ceoCannotAct")} />
+              <Alert
+                type="info"
+                showIcon
+                message={t("contractRatings.ceoCannotAct")}
+              />
             )}
           </ApprovalSurface>
         ) : null}
@@ -859,20 +924,26 @@ export default function ContractRatingsPage() {
         return ceoCanRequest ? (
           <Space direction="vertical">
             <RatingActionErrors errors={errorsFor("comment")} />
-            <Text type="secondary">{t("contractRatings.requestHrCommentHint")}</Text>
+            <Text type="secondary">
+              {t("contractRatings.requestHrCommentHint")}
+            </Text>
             <Button
               icon={<MessageOutlined aria-hidden />}
               loading={actionLoading}
               onClick={() => {
                 setActionErrors([]);
-                void runAction("comment", () => requestRatingHrComment(item.id));
+                void runAction("comment", () =>
+                  requestRatingHrComment(item.id),
+                );
               }}
             >
               {t("contractRatings.requestHrComment")}
             </Button>
           </Space>
         ) : (
-          <Text type="secondary">{t("contractRatings.hrCommentNotRequested")}</Text>
+          <Text type="secondary">
+            {t("contractRatings.hrCommentNotRequested")}
+          </Text>
         );
       }
       return (
@@ -884,7 +955,11 @@ export default function ContractRatingsPage() {
             })}
           </Text>
           {commentBlock ?? (
-            <Alert type="info" showIcon message={t("contractRatings.hrCommentAwaiting")} />
+            <Alert
+              type="info"
+              showIcon
+              message={t("contractRatings.hrCommentAwaiting")}
+            />
           )}
         </Space>
       );
@@ -900,9 +975,17 @@ export default function ContractRatingsPage() {
           })}
         </Text>
         {item.status === "DECIDED" ? (
-          <Alert type="warning" showIcon message={t("contractRatings.hrCommentAfterDecision")} />
+          <Alert
+            type="warning"
+            showIcon
+            message={t("contractRatings.hrCommentAfterDecision")}
+          />
         ) : (
-          <Alert type="info" showIcon message={t("contractRatings.hrCommentAdvisory")} />
+          <Alert
+            type="info"
+            showIcon
+            message={t("contractRatings.hrCommentAdvisory")}
+          />
         )}
         {commentBlock}
         <RatingActionErrors errors={errorsFor("comment")} />

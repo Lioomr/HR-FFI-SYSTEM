@@ -1,0 +1,327 @@
+/* Shared list-page layout: see Workspace.tsx. Class names are global (ffi-*)
+   so pages can also use the toolbar field classes directly. */
+
+.ffi-views {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  margin-bottom: 14px;
+}
+
+/* ---------- Chips ---------- */
+
+.ffi-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.ffi-chip {
+  --chip-accent: #64748b;
+  --chip-soft: #f1f5f9;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 6px 14px 6px 8px;
+  color: #334155;
+  background: #fff;
+  border: 1px solid #e5e9f0;
+  border-radius: 999px;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 1px 3px rgba(15, 23, 42, 0.06);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease;
+}
+
+[dir="rtl"] .ffi-chip {
+  padding: 6px 8px 6px 14px;
+}
+
+.ffi-chip:hover {
+  border-color: var(--chip-accent);
+}
+
+.ffi-chip[aria-pressed="true"] {
+  color: var(--text-primary);
+  background: var(--chip-soft);
+  border-color: var(--chip-accent);
+}
+
+.ffi-chip:focus-visible {
+  outline: 2px solid var(--chip-accent);
+  outline-offset: 2px;
+}
+
+.ffi-chip__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  color: var(--chip-accent);
+  background: var(--chip-soft);
+  border-radius: 50%;
+  font-size: 13px;
+}
+
+.ffi-chip__dot {
+  width: 10px;
+  height: 10px;
+  margin-inline-start: 8px;
+  background: var(--chip-accent);
+  border-radius: 50%;
+}
+
+.ffi-chip[aria-pressed="true"] .ffi-chip__icon {
+  color: #fff;
+  background: var(--chip-accent);
+}
+
+.ffi-chip__count {
+  min-width: 22px;
+  padding: 1px 7px;
+  color: var(--chip-accent);
+  background: var(--chip-soft);
+  border-radius: 999px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.ffi-chip[aria-pressed="true"] .ffi-chip__count {
+  color: #fff;
+  background: var(--chip-accent);
+}
+
+.ffi-chip--positive {
+  --chip-accent: #16a34a;
+  --chip-soft: #f0fdf4;
+}
+
+.ffi-chip--informational {
+  --chip-accent: #2563eb;
+  --chip-soft: #eff6ff;
+}
+
+.ffi-chip--warning {
+  --chip-accent: #d97706;
+  --chip-soft: #fffbeb;
+}
+
+.ffi-chip--severe {
+  --chip-accent: #ea580c;
+  --chip-soft: #fff7ed;
+}
+
+.ffi-chip--critical {
+  --chip-accent: #dc2626;
+  --chip-soft: #fef2f2;
+}
+
+.ffi-chip--pending {
+  --chip-accent: #7c3aed;
+  --chip-soft: #f5f3ff;
+}
+
+/* ---------- Workspace card ---------- */
+
+.ffi-workspace {
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #e5e9f0;
+  border-radius: 14px;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+.ffi-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  background: #fafbfc;
+  border-bottom: 1px solid #e5e9f0;
+}
+
+.ffi-toolbar > * {
+  min-width: 0;
+}
+
+.ffi-toolbar .ffi-toolbar__search {
+  flex: 2 1 240px;
+}
+
+.ffi-toolbar .ffi-toolbar__field {
+  flex: 1 1 160px;
+}
+
+.ffi-toolbar .ffi-toolbar__field--wide {
+  flex: 1.4 1 240px;
+}
+
+.ffi-toolbar .ant-input-affix-wrapper,
+.ffi-toolbar .ant-picker,
+.ffi-toolbar .ant-select-selector,
+.ffi-toolbar .ant-btn {
+  min-height: 38px;
+  border-radius: 10px !important;
+}
+
+.ffi-toolbar .ant-input-affix-wrapper,
+.ffi-toolbar .ant-picker,
+.ffi-toolbar .ant-select-selector {
+  background: #fff !important;
+}
+
+.ffi-toolbar .ffi-toolbar__reset {
+  flex: 0 0 auto;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.ffi-toolbar .ffi-toolbar__reset:not(:disabled):hover {
+  color: var(--brand-primary-dark) !important;
+}
+
+.ffi-toolbar__tools {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+  margin-inline-start: auto;
+}
+
+.ffi-results__heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 14px 18px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.ffi-results__side {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.ffi-results__count {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 10px;
+  color: var(--text-secondary);
+  background: #f1f5f9;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---------- Table inside the card ---------- */
+
+.ffi-table .ant-table-container {
+  border-top: 1px solid #e5e9f0;
+}
+
+.ffi-table .ant-table-wrapper .ant-table {
+  border-radius: 0;
+}
+
+.ffi-table .ant-table-thead > tr > th {
+  padding: 11px 16px !important;
+  color: #526179 !important;
+  background: #f8fafc !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+.ffi-table .ant-table-thead > tr > th::before {
+  display: none;
+}
+
+.ffi-table .ant-table-tbody > tr:not(.ant-table-measure-row) > td {
+  padding: 12px 16px !important;
+  border-bottom-color: #eef1f5;
+  font-size: 13.5px;
+}
+
+.ffi-table .ant-table-tbody > tr:hover > td {
+  background: #fff8f1 !important;
+}
+
+.ffi-table .ant-table-pagination {
+  margin: 14px 18px !important;
+}
+
+.ffi-table .ant-empty {
+  padding-block: 28px;
+}
+
+/* Status tags read as the same pills as the attendance/employees badges. */
+.ffi-table .ant-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 2px 10px;
+  border-color: transparent;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.ffi-table .ant-tag-default {
+  color: #475569;
+  background: #f1f5f9;
+}
+
+/* Cards (phone layout) keep the same pill tags. */
+.ffi-table .ant-list .ant-tag {
+  margin-inline-end: 0;
+}
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 600px) {
+  .ffi-chips {
+    flex-wrap: nowrap;
+    width: 100%;
+    padding-bottom: 4px;
+    overflow-x: auto;
+  }
+
+  .ffi-toolbar {
+    padding: 12px;
+  }
+
+  .ffi-toolbar .ffi-toolbar__search,
+  .ffi-toolbar .ffi-toolbar__field,
+  .ffi-toolbar .ffi-toolbar__field--wide {
+    flex: 1 1 100%;
+  }
+
+  .ffi-toolbar__tools {
+    margin-inline-start: 0;
+  }
+}

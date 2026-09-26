@@ -25,6 +25,7 @@ import {
 } from "@ant-design/icons";
 
 import PageHeader from "../../components/ui/PageHeader";
+import { WorkspaceCard } from "../../components/ui/workspace/Workspace";
 import ResponsiveTable from "../../components/ui/ResponsiveTable";
 import ErrorState from "../../components/ui/ErrorState";
 import LoadingState from "../../components/ui/LoadingState";
@@ -462,7 +463,9 @@ export default function ContractDecisionsPage() {
    */
   function renderRatingSummary(item: ContractDecision) {
     const rating = item.rating;
-    const ratingsPath = isCeo ? "/ceo/contract-ratings" : "/hr/contract-ratings";
+    const ratingsPath = isCeo
+      ? "/ceo/contract-ratings"
+      : "/hr/contract-ratings";
     if (!rating) {
       return (
         <Typography.Text type="secondary">
@@ -483,11 +486,16 @@ export default function ContractDecisionsPage() {
                   : "green"
             }
           >
-            {t(`contractRatings.outcome.${rating.ceo_decision}`, rating.ceo_decision)}
+            {t(
+              `contractRatings.outcome.${rating.ceo_decision}`,
+              rating.ceo_decision,
+            )}
           </Tag>
         ) : null}
         {rating.ceo_comment ? (
-          <Typography.Text type="secondary">{rating.ceo_comment}</Typography.Text>
+          <Typography.Text type="secondary">
+            {rating.ceo_comment}
+          </Typography.Text>
         ) : null}
         <Link to={ratingsPath}>{t("contractDecisions.ratingOpen")}</Link>
       </Space>
@@ -660,7 +668,9 @@ export default function ContractDecisionsPage() {
               type="info"
               showIcon
               message={t("contractDecisions.autoRenewed")}
-              description={reasonText(item.automatic_renewal_reason) || undefined}
+              description={
+                reasonText(item.automatic_renewal_reason) || undefined
+              }
             />
           ) : null}
           {item.status === "AUTO_APPROVED" ? (
@@ -669,7 +679,9 @@ export default function ContractDecisionsPage() {
               type="info"
               showIcon
               message={t("contractDecisions.autoApprovedNotice")}
-              description={reasonText(item.automatic_renewal_reason) || undefined}
+              description={
+                reasonText(item.automatic_renewal_reason) || undefined
+              }
             />
           ) : null}
           {item.status === "AUTO_RENEWAL_FAILED" ? (
@@ -895,6 +907,26 @@ export default function ContractDecisionsPage() {
     );
   }
 
+  const statusFilterOptions: {
+    value: ContractDecisionStatus;
+    label: string;
+  }[] = [
+    { value: "PENDING_HR", label: t("contractDecisions.pendingHr") },
+    { value: "PENDING_CEO", label: t("contractDecisions.pendingCeo") },
+    { value: "APPROVED", label: t("contractDecisions.approved") },
+    { value: "AUTO_APPROVED", label: t("contractDecisions.autoApproved") },
+    { value: "AUTO_RENEWED", label: t("contractDecisions.autoRenewedShort") },
+    { value: "REJECTED", label: t("contractDecisions.rejected") },
+    {
+      value: "AUTO_RENEWAL_FAILED",
+      label: t("contractDecisions.renewalFailed"),
+    },
+    {
+      value: "MANUAL_RESOLUTION_REQUIRED",
+      label: t("contractDecisions.manualResolution"),
+    },
+  ];
+
   return (
     <>
       {messageContext}
@@ -915,49 +947,33 @@ export default function ContractDecisionsPage() {
           </Button>
         }
       />
-      <Card>
-        <Space style={{ marginBottom: 16 }} wrap>
-          <Typography.Text>{t("contractDecisions.filter")}</Typography.Text>
+      <WorkspaceCard
+        toolbar={
           <Select
             value={statusFilter}
             onChange={(value: ContractDecisionStatus | undefined) =>
               setStatusFilter(value)
             }
             allowClear
-            style={{ minWidth: 220 }}
+            placeholder={t("contractDecisions.filter")}
+            className="ffi-toolbar__field"
+            style={{ maxWidth: 320 }}
             aria-label={t("contractDecisions.filter")}
-            options={[
-              { value: "PENDING_HR", label: t("contractDecisions.pendingHr") },
-              {
-                value: "PENDING_CEO",
-                label: t("contractDecisions.pendingCeo"),
-              },
-              { value: "APPROVED", label: t("contractDecisions.approved") },
-              {
-                value: "AUTO_APPROVED",
-                label: t("contractDecisions.autoApproved"),
-              },
-              {
-                value: "AUTO_RENEWED",
-                label: t("contractDecisions.autoRenewedShort"),
-              },
-              { value: "REJECTED", label: t("contractDecisions.rejected") },
-              {
-                value: "AUTO_RENEWAL_FAILED",
-                label: t("contractDecisions.renewalFailed"),
-              },
-              {
-                value: "MANUAL_RESOLUTION_REQUIRED",
-                label: t("contractDecisions.manualResolution"),
-              },
-            ]}
+            options={statusFilterOptions}
           />
-        </Space>
+        }
+        title={
+          statusFilterOptions.find((option) => option.value === statusFilter)
+            ?.label ?? t("common.allRequests")
+        }
+        count={t("common.requestsCount", { count: records.length })}
+        busy={loading && records.length > 0}
+      >
         {loadError ? (
           <Alert
             type="error"
             showIcon
-            style={{ marginBottom: 16 }}
+            style={{ margin: "0 16px 16px" }}
             message={loadError}
             action={
               loadForbidden ? undefined : (
@@ -981,7 +997,7 @@ export default function ContractDecisionsPage() {
           locale={{ emptyText: t("contractDecisions.empty") }}
           pagination={{ pageSize: 20 }}
         />
-      </Card>
+      </WorkspaceCard>
       {renderHrModal()}
       {renderCeoModal()}
     </>

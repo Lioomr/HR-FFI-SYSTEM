@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Button,
-  Card,
   Tag,
   Tooltip,
   notification,
@@ -25,11 +25,20 @@ import {
   DeleteOutlined,
   CalendarOutlined,
   UnorderedListOutlined,
+  UndoOutlined,
+  AuditOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
 } from "@ant-design/icons";
 import type { UploadFile } from "antd/es/upload/interface";
 import dayjs from "dayjs";
 
 import PageHeader from "../../../components/ui/PageHeader";
+import {
+  FilterChips,
+  WorkspaceCard,
+  WorkspaceViews,
+} from "../../../components/ui/workspace/Workspace";
 import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import {
   createHRManualLeaveRequest,
@@ -93,7 +102,6 @@ export default function LeaveInboxPage() {
     (_, index) => currentYear + 5 - index,
   );
   const [filters, setFilters] = useState<LeaveRequestFilter>({});
-  const [form] = Form.useForm();
   const [manualForm] = Form.useForm();
 
   const [manualModalOpen, setManualModalOpen] = useState(false);
@@ -181,18 +189,54 @@ export default function LeaveInboxPage() {
     loadManualFormReferences();
   }, [loadManualFormReferences]);
 
-  const handleFilterChange = (values: any) => {
-    const newFilters: LeaveRequestFilter = {};
-    if (values.status) newFilters.status = values.status;
-    if (values.source) newFilters.source = values.source;
-    if (values.year) newFilters.year = values.year;
-    if (values.dates && values.dates[0]) {
-      newFilters.date_from = values.dates[0].format("YYYY-MM-DD");
-      newFilters.date_to = values.dates[1].format("YYYY-MM-DD");
-    }
-    setFilters(newFilters);
-    setPage(1); // Reset to first page
+  const updateFilters = (patch: Partial<LeaveRequestFilter>) => {
+    setFilters((current) => {
+      const next: LeaveRequestFilter = { ...current, ...patch };
+      (Object.keys(next) as (keyof LeaveRequestFilter)[]).forEach((key) => {
+        if (next[key] === undefined || next[key] === "") delete next[key];
+      });
+      return next;
+    });
+    setPage(1);
   };
+
+  const hasFilters = Object.keys(filters).length > 0;
+
+  const statusChips: Array<{
+    key: string;
+    status?: string;
+    label: string;
+    icon: ReactNode;
+    tone: "neutral" | "pending" | "positive" | "critical";
+  }> = [
+    {
+      key: "all",
+      label: t("common.allRequests"),
+      icon: <UnorderedListOutlined />,
+      tone: "neutral",
+    },
+    {
+      key: "pending_hr",
+      status: "pending_hr",
+      label: t("status.pendingHr"),
+      icon: <AuditOutlined />,
+      tone: "pending",
+    },
+    {
+      key: "approved",
+      status: "approved",
+      label: t("status.approved"),
+      icon: <CheckCircleOutlined />,
+      tone: "positive",
+    },
+    {
+      key: "rejected",
+      status: "rejected",
+      label: t("status.rejected"),
+      icon: <CloseCircleOutlined />,
+      tone: "critical",
+    },
+  ];
 
   const getStatusColor = (status: string) => {
     const s = status?.toLowerCase();
@@ -514,7 +558,7 @@ export default function LeaveInboxPage() {
   };
 
   return (
-    <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+    <div>
       <PageHeader
         title={t("leave.title")}
         subtitle={t("layout.leaveInbox")}
@@ -549,64 +593,116 @@ export default function LeaveInboxPage() {
         }
       />
 
-      <Card style={{ marginBottom: 16, borderRadius: 16 }}>
-        <Form form={form} layout="vertical" onValuesChange={handleFilterChange}>
-          <Row gutter={[16, 8]}>
-            <Col xs={24} md={12} lg={8}>
-              <Form.Item label={t("hr.leaveBalances.year")} name="year">
-                <Select allowClear placeholder={t("hr.leaveBalances.allYears")}>
-                  {years.map((optionYear) => (
-                    <Option key={optionYear} value={optionYear}>
-                      {optionYear}
-                    </Option>
-                  ))}
-                </Select>
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={12} lg={8}>
-              <Form.Item label={t("leave.requestSource")} name="source">
-                <Select allowClear>
-                  <Option value="hr_manual">{t("leave.manual.badge")}</Option>
-                  <Option value="employee">
-                    {t("leave.approvalMap.employeeRequest")}
-                  </Option>
-                </Select>
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={12} lg={8}>
-              <Form.Item label={t("common.status")} name="status">
-                <Select
-                  placeholder={t("employees.list.statusPlaceholder")}
-                  allowClear
-                >
-                  <Option value="submitted">{t("status.pending")}</Option>
-                  <Option value="pending_delegate">
-                    {t("leave.status.pending_delegate")}
-                  </Option>
-                  <Option value="pending_manager">
-                    {t("status.pendingManager")}
-                  </Option>
-                  <Option value="pending_hr">{t("status.pendingHr")}</Option>
-                  <Option value="pending_ceo">{t("status.pendingCeo")}</Option>
-                  <Option value="approved">{t("status.approved")}</Option>
-                  <Option value="rejected">{t("status.rejected")}</Option>
-                  <Option value="cancelled">{t("status.cancelled")}</Option>
-                </Select>
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={12} lg={8}>
-              <Form.Item
-                label={t("leave.startDate") + " - " + t("leave.endDate")}
-                name="dates"
-              >
-                <RangePicker style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-          </Row>
-        </Form>
-      </Card>
+      <WorkspaceViews>
+        <FilterChips
+          label={t("common.status")}
+          options={statusChips.map((chip) => ({
+            key: chip.key,
+            label: chip.label,
+            icon: chip.icon,
+            tone: chip.tone,
+            active: chip.status
+              ? filters.status === chip.status
+              : !filters.status,
+            onSelect: () =>
+              updateFilters({
+                status:
+                  chip.status && filters.status !== chip.status
+                    ? chip.status
+                    : undefined,
+              }),
+          }))}
+        />
+      </WorkspaceViews>
 
-      <Card style={{ borderRadius: 16 }}>
+      <WorkspaceCard
+        toolbar={
+          <>
+            <Select
+              allowClear
+              placeholder={t("hr.leaveBalances.allYears")}
+              aria-label={t("hr.leaveBalances.year")}
+              value={filters.year}
+              onChange={(value) => updateFilters({ year: value })}
+              className="ffi-toolbar__field"
+            >
+              {years.map((optionYear) => (
+                <Option key={optionYear} value={optionYear}>
+                  {optionYear}
+                </Option>
+              ))}
+            </Select>
+            <Select
+              allowClear
+              placeholder={t("leave.requestSource")}
+              aria-label={t("leave.requestSource")}
+              value={filters.source}
+              onChange={(value) => updateFilters({ source: value })}
+              className="ffi-toolbar__field"
+            >
+              <Option value="hr_manual">{t("leave.manual.badge")}</Option>
+              <Option value="employee">
+                {t("leave.approvalMap.employeeRequest")}
+              </Option>
+            </Select>
+            <Select
+              placeholder={t("employees.list.statusPlaceholder")}
+              aria-label={t("common.status")}
+              allowClear
+              value={filters.status}
+              onChange={(value) => updateFilters({ status: value })}
+              className="ffi-toolbar__field"
+            >
+              <Option value="submitted">{t("status.pending")}</Option>
+              <Option value="pending_delegate">
+                {t("leave.status.pending_delegate")}
+              </Option>
+              <Option value="pending_manager">
+                {t("status.pendingManager")}
+              </Option>
+              <Option value="pending_hr">{t("status.pendingHr")}</Option>
+              <Option value="pending_ceo">{t("status.pendingCeo")}</Option>
+              <Option value="approved">{t("status.approved")}</Option>
+              <Option value="rejected">{t("status.rejected")}</Option>
+              <Option value="cancelled">{t("status.cancelled")}</Option>
+            </Select>
+            <RangePicker
+              className="ffi-toolbar__field--wide"
+              placeholder={[t("leave.startDate"), t("leave.endDate")]}
+              value={
+                filters.date_from && filters.date_to
+                  ? [dayjs(filters.date_from), dayjs(filters.date_to)]
+                  : null
+              }
+              onChange={(value) =>
+                updateFilters({
+                  date_from: value?.[0]?.format("YYYY-MM-DD"),
+                  date_to: value?.[1]?.format("YYYY-MM-DD"),
+                })
+              }
+            />
+            <Button
+              type="text"
+              icon={<UndoOutlined aria-hidden="true" />}
+              className="ffi-toolbar__reset"
+              disabled={!hasFilters}
+              onClick={() => {
+                setFilters({});
+                setPage(1);
+              }}
+            >
+              {t("common.reset")}
+            </Button>
+          </>
+        }
+        title={
+          statusChips.find(
+            (chip) => chip.status && chip.status === filters.status,
+          )?.label ?? t("common.allRequests")
+        }
+        count={t("common.requestsCount", { count: total })}
+        busy={loading && data.length > 0}
+      >
         <ResponsiveTable
           mobileCard={{
             titleKey: "employee",
@@ -633,7 +729,7 @@ export default function LeaveInboxPage() {
             },
           }}
         />
-      </Card>
+      </WorkspaceCard>
 
       <Modal
         title={

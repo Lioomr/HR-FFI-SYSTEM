@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Select, Space, Tag, Typography } from "antd";
+import { Button, Select, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { EyeOutlined } from "@ant-design/icons";
 
@@ -239,25 +239,29 @@ export default function LoanRequestsTablePage({
       onRetry={() => load(1)}
       onRefresh={() => load(page, { isRefresh: true })}
       refreshing={refreshing}
+      resultsTitle={
+        statusFilter
+          ? approvalStatusLabel(statusFilter, t)
+          : t("common.allRequests")
+      }
+      resultsCount={t("common.requestsCount", { count: total })}
       filters={
-        <Space size={12} wrap>
-          <Typography.Text strong>{t("loans.list.colStatus")}</Typography.Text>
-          <Select
-            style={{ width: 240, maxWidth: "100%" }}
-            allowClear
-            placeholder={t("loans.inbox.allStatuses")}
-            aria-label={t("loans.list.colStatus")}
-            value={statusFilter}
-            onChange={(value) => {
-              setStatusFilter(value);
-              setPage(1);
-            }}
-            options={STATUS_OPTIONS.map((status) => ({
-              label: approvalStatusLabel(status, t),
-              value: status,
-            }))}
-          />
-        </Space>
+        <Select
+          className="ffi-toolbar__field"
+          style={{ maxWidth: 320 }}
+          allowClear
+          placeholder={t("loans.inbox.allStatuses")}
+          aria-label={t("loans.list.colStatus")}
+          value={statusFilter}
+          onChange={(value) => {
+            setStatusFilter(value);
+            setPage(1);
+          }}
+          options={STATUS_OPTIONS.map((status) => ({
+            label: approvalStatusLabel(status, t),
+            value: status,
+          }))}
+        />
       }
     >
       <ResponsiveTable
