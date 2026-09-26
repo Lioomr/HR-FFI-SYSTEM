@@ -175,3 +175,7 @@ Backend/static/pdf_templates/*
 !Backend/static/pdf_templates/employment_certificate_blank.pdf
 !Backend/static/pdf_templates/salary_certificate_blank.pdf
 !Backend/static/pdf_templates/termination_letter_blank.pdf
+
+# Local-only files kept out of the repo
+/.mcp.json
+/internship_completion_certificate_omar_reda_landscape.png
