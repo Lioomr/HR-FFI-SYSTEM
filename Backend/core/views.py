@@ -42,6 +42,7 @@ from core.services import (
 from core.services.workflow_engine import cached_workflow_definitions
 from core.tasks import send_error_report_email
 from employees.models import EmployeeDeletionRequest, EmployeeProfile
+from employees.services.visa_expiry import VISA_EXPIRY_FIELD, annotate_visa_expiry
 from leaves.models import AnnualLeavePaymentRequest, LeaveRequest
 from loans.models import LoanRequest
 from organization.models import OrganizationNode, OrganizationScope
@@ -433,14 +434,17 @@ def _build_nationality_breakdown(employee_qs):
 EXPIRING_DOCUMENTS_WINDOW_DAYS = 30
 EXPIRING_DOCUMENTS_PREVIEW_SIZE = 5
 # Same fields and window as the expiring-documents page (employees/views.py
-# ``expiries``); the ID card is split into National ID (Saudi) and Iqama, and
-# the health card is what HR tracks as health insurance.
+# ``expiries``). The ID card counts only as an Iqama: Saudi National ID
+# expiries are not tracked on the dashboard. The health card is what HR tracks
+# as health insurance, and the visa comes from the newest VISA document in the
+# employee's document archive.
 _EXPIRY_FIELDS = [
-    ("id_expiry", None),
+    ("id_expiry", "iqama"),
     ("passport_expiry", "passport"),
     ("work_license_expiry", "work_license"),
     ("health_card_expiry", "health_insurance"),
     ("contract_expiry", "contract"),
+    (VISA_EXPIRY_FIELD, "visa"),
 ]
 
 
@@ -450,19 +454,17 @@ def _build_expiring_documents(employee_qs):
     cutoff = today + timedelta(days=EXPIRING_DOCUMENTS_WINDOW_DAYS)
     window = Q()
     for field, _doc_type in _EXPIRY_FIELDS:
-        window |= Q(**{f"{field}__range": [today, cutoff]})
-    profiles = employee_qs.filter(window, is_archived=False).values(
-        "id", "full_name", "is_saudi", *[field for field, _doc_type in _EXPIRY_FIELDS]
+        in_range = Q(**{f"{field}__range": [today, cutoff]})
+        if field == "id_expiry":
+            in_range &= Q(is_saudi=False)
+        window |= in_range
+    profiles = (
+        annotate_visa_expiry(employee_qs)
+        .filter(window, is_archived=False)
+        .values("id", "full_name", "is_saudi", *[field for field, _doc_type in _EXPIRY_FIELDS])
     )
 
-    by_type = {
-        "national_id": 0,
-        "iqama": 0,
-        "passport": 0,
-        "work_license": 0,
-        "contract": 0,
-        "health_insurance": 0,
-    }
+    by_type = {doc_type: 0 for _field, doc_type in _EXPIRY_FIELDS}
     documents = []
     employee_ids = set()
     for profile in profiles:
@@ -470,8 +472,8 @@ def _build_expiring_documents(employee_qs):
             expiry_date = profile[field]
             if not expiry_date or not today <= expiry_date <= cutoff:
                 continue
-            if doc_type is None:
-                doc_type = "national_id" if profile["is_saudi"] else "iqama"
+            if field == "id_expiry" and profile["is_saudi"]:
+                continue
             by_type[doc_type] += 1
             employee_ids.add(profile["id"])
             documents.append(

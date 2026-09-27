@@ -40,12 +40,12 @@ function makeSummary(overrides: Partial<HRSummary> = {}): HRSummary {
       window_days: 30,
       employee_count: 4,
       by_type: {
-        national_id: 1,
         iqama: 2,
         passport: 1,
         work_license: 3,
         contract: 1,
         health_insurance: 1,
+        visa: 1,
       },
       soonest: [
         {
@@ -144,8 +144,8 @@ describe("HRDashboardPage", () => {
       await screen.findByText("4 employees · next 30 days"),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "National ID: 1" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: /National ID/ }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Passport: 1" }),
     ).toBeInTheDocument();
@@ -158,6 +158,9 @@ describe("HRDashboardPage", () => {
     expect(
       screen.getByRole("button", { name: "Health insurance: 1" }),
     ).toBeInTheDocument();
+    // Visa is the last box.
+    const boxes = screen.getAllByRole("button", { name: /: \d+$/ });
+    expect(boxes[boxes.length - 1]).toHaveAccessibleName("Visa: 1");
 
     fireEvent.click(screen.getByRole("button", { name: "Iqama: 2" }));
     expect(navigateMock).toHaveBeenCalledWith("/hr/employees/expiries");
@@ -185,12 +188,12 @@ describe("HRDashboardPage", () => {
             window_days: 30,
             employee_count: 0,
             by_type: {
-              national_id: 0,
               iqama: 0,
               passport: 0,
               work_license: 0,
               contract: 0,
               health_insurance: 0,
+              visa: 0,
             },
             soonest: [],
           },

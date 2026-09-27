@@ -52,12 +52,12 @@ const EMPTY_EXPIRING_DOCUMENTS: ExpiringDocumentsSummary = {
   window_days: 30,
   employee_count: 0,
   by_type: {
-    national_id: 0,
     iqama: 0,
     passport: 0,
     work_license: 0,
     contract: 0,
     health_insurance: 0,
+    visa: 0,
   },
   soonest: [],
 };
