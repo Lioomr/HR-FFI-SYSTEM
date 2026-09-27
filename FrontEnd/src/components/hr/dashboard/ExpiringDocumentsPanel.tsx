@@ -1,5 +1,6 @@
 import {
   FileProtectOutlined,
+  GlobalOutlined,
   IdcardOutlined,
   MedicineBoxOutlined,
   SafetyCertificateOutlined,
@@ -21,12 +22,12 @@ interface ExpiringDocumentsPanelProps {
 }
 
 const GROUPS: Array<{ key: ExpiringDocumentGroup; icon: ReactNode }> = [
-  { key: "national_id", icon: <IdcardOutlined /> },
   { key: "iqama", icon: <IdcardOutlined /> },
   { key: "passport", icon: <SolutionOutlined /> },
   { key: "work_license", icon: <SafetyCertificateOutlined /> },
   { key: "contract", icon: <FileProtectOutlined /> },
   { key: "health_insurance", icon: <MedicineBoxOutlined /> },
+  { key: "visa", icon: <GlobalOutlined /> },
 ];
 
 // Within a week is urgent; the rest of the window is a warning.
@@ -35,9 +36,9 @@ const URGENT_DAYS = 7;
 const { useBreakpoint } = Grid;
 
 /**
- * Expiring documents grouped the way HR tracks them (National ID, Iqama,
- * passport, work licence, contract, health insurance) plus the few expiring
- * soonest. Every part opens the full expiring-documents page.
+ * Expiring documents grouped the way HR tracks them (Iqama, passport, work
+ * licence, contract, health insurance, visa) plus the few expiring soonest.
+ * The visa date comes from the newest visa in the employee's document archive. Every part opens the full expiring-documents page.
  */
 export default function ExpiringDocumentsPanel({
   summary,

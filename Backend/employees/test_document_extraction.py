@@ -7,6 +7,7 @@ stubbed - these tests own the parsing, validation and status rules, not the
 inference engine.
 """
 
+from datetime import date
 from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -390,6 +391,21 @@ class DocumentExtractionPipelineTests(TestCase):
         self.assertEqual(document.exit_before.isoformat(), "2026-06-30")
         self.assertEqual(document.visa_duration, 45)
         self.assertEqual(document.extraction_status, EmployeeDocument.ExtractionStatus.SUCCESS)
+
+    def test_visa_expiry_entered_by_hr_is_not_replaced_by_ocr(self):
+        document = self._document(EmployeeDocument.DocumentType.VISA)
+        document.exit_before = date(2026, 12, 1)
+        document.save(update_fields=["exit_before"])
+
+        with patch(
+            "employees.ocr.pipeline._document_lines",
+            return_value=(ocr_lines(VISA_TEXT), {"source": "image", "pages": 1}),
+        ):
+            extract_visa_fields(document)
+
+        document.refresh_from_db()
+        self.assertEqual(document.exit_before, date(2026, 12, 1))
+        self.assertEqual(document.visa_number, "4455667788")
 
     def test_unreadable_document_fails_with_an_actionable_message(self):
         document = self._document(EmployeeDocument.DocumentType.PASSPORT)

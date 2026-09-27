@@ -31,12 +31,12 @@ export interface NationalityBreakdown {
 }
 
 export type ExpiringDocumentGroup =
-  | "national_id"
   | "iqama"
   | "passport"
   | "work_license"
   | "contract"
-  | "health_insurance";
+  | "health_insurance"
+  | "visa";
 
 export interface ExpiringDocumentPreview {
   /** EmployeeProfile id */

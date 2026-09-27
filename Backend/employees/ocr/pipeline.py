@@ -293,7 +293,10 @@ def _apply_visa_columns(document: EmployeeDocument, parsed: ParseResult) -> list
     duration_text = parsed.fields.pop("_visa_duration", "")
     document.visa_number = parsed.fields.get("visa_number", "")
     document.exit_before_raw = parsed.fields.get("exit_before_raw", "")
-    document.exit_before = date.fromisoformat(exit_before_iso) if exit_before_iso else None
+    # The visa's expiry date: OCR only fills it in. A date HR entered on upload
+    # (or an earlier successful read) is never replaced or cleared.
+    if document.exit_before is None and exit_before_iso:
+        document.exit_before = date.fromisoformat(exit_before_iso)
     document.visa_duration_raw = parsed.fields.get("visa_duration_raw", "")
     document.visa_duration = int(duration_text) if duration_text.isdigit() else None
     return ["visa_number", "exit_before", "exit_before_raw", "visa_duration", "visa_duration_raw"]

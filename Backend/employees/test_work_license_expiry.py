@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -11,7 +12,7 @@ from audit.models import AuditLog
 from in_app_notifications.models import Notification
 from organization.models import OrganizationNode, UserOrganizationAccess
 
-from .models import EmployeeProfile
+from .models import EmployeeDocument, EmployeeProfile
 from .notifications import notify_expiring_work_licenses
 from .serializers import EmployeeProfileReadSerializer, EmployeeProfileWriteSerializer
 
@@ -95,6 +96,34 @@ class WorkLicenseExpiryTests(TestCase):
         self.assertEqual(document["days_left"], 5)
         self.assertEqual(item["employee_id"], self.profile.employee_id)
         self.assertEqual(item["full_name"], self.profile.full_name)
+
+    @patch("employees.views._queue_document_extraction", return_value=[])
+    def test_visa_uploaded_with_expiry_date_appears_on_expiry_page(self, _extract):
+        client = APIClient()
+        client.force_authenticate(self.hr)
+        visa_expiry = self.today + timedelta(days=8)
+
+        upload = client.post(
+            f"/api/employees/{self.profile.id}/documents/",
+            {
+                "document_type": EmployeeDocument.DocumentType.VISA,
+                "exit_before": visa_expiry.isoformat(),
+                "file": SimpleUploadedFile("visa.pdf", b"%PDF-1.4\nvisa", content_type="application/pdf"),
+            },
+            format="multipart",
+            HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id),
+        )
+        self.assertEqual(upload.status_code, 201, upload.data)
+        self.assertEqual(upload.data["data"]["exit_before"], visa_expiry.isoformat())
+
+        response = client.get("/api/employees/expiries/?days=10", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id))
+
+        self.assertEqual(response.status_code, 200, response.data)
+        item = next(item for item in response.data["data"]["items"] if item["id"] == self.profile.id)
+        visa = next(doc for doc in item["documents"] if doc["document_type"] == "VISA")
+        self.assertEqual(visa["doc_type"], "visa")
+        self.assertEqual(visa["expiry_date"], visa_expiry.isoformat())
+        self.assertEqual(visa["days_left"], 8)
 
     @patch("in_app_notifications.tasks.deliver_whatsapp_notification.delay")
     def test_automatic_notification_is_hr_only_and_deduplicated(self, delay):

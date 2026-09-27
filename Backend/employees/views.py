@@ -107,6 +107,7 @@ from .services.manager_relationships import (
     reroute_pending_manager_requests,
 )
 from .services.signature import clear_signature, store_signature
+from .services.visa_expiry import VISA_EXPIRY_FIELD, annotate_visa_expiry
 from .storage import PrivateUploadStorage
 from .throttles import EmployeeImportThrottle
 
@@ -1707,6 +1708,8 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             ("health_card", "HEALTH_CARD", "Health Card", profile.health_card_expiry),
             ("contract", "CONTRACT", "Contract", profile.contract_expiry),
             ("work_license", "WORK_LICENSE", "Work License", profile.work_license_expiry),
+            # Only set where the queryset was annotated (see annotate_visa_expiry).
+            ("visa", "VISA", "Visa", getattr(profile, VISA_EXPIRY_FIELD, None)),
         ]
 
         documents = []
@@ -1751,12 +1754,13 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
 
         today = timezone.localdate()
         cutoff_date = today + timedelta(days=days)
-        qs = self.get_queryset().filter(
+        qs = annotate_visa_expiry(self.get_queryset()).filter(
             Q(passport_expiry__isnull=False, passport_expiry__range=[today, cutoff_date])
             | Q(id_expiry__isnull=False, id_expiry__range=[today, cutoff_date])
             | Q(health_card_expiry__isnull=False, health_card_expiry__range=[today, cutoff_date])
             | Q(contract_expiry__isnull=False, contract_expiry__range=[today, cutoff_date])
             | Q(work_license_expiry__isnull=False, work_license_expiry__range=[today, cutoff_date])
+            | Q(**{f"{VISA_EXPIRY_FIELD}__range": [today, cutoff_date]})
         )
 
         items = []

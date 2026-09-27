@@ -635,6 +635,8 @@ export interface UploadEmployeeDocumentPayload {
   document_type: DocumentType;
   file: File;
   custom_name?: string;
+  /** Visa expiry date (YYYY-MM-DD). When omitted, OCR reads it from the file. */
+  exit_before?: string;
 }
 
 export async function getEmployeeDocuments(
@@ -654,6 +656,7 @@ export async function uploadEmployeeDocument(
   form.append("document_type", payload.document_type);
   form.append("file", payload.file);
   if (payload.custom_name) form.append("custom_name", payload.custom_name);
+  if (payload.exit_before) form.append("exit_before", payload.exit_before);
   const { data } = await api.post<ApiResponse<EmployeeDocument>>(
     `/api/employees/${employeeId}/documents/`,
     form,

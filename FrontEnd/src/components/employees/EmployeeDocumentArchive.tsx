@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Button,
+  DatePicker,
   Tag,
   Space,
   Upload,
@@ -29,6 +30,7 @@ import {
 } from "@ant-design/icons";
 import type { ColumnsType, TableProps } from "antd/es/table";
 import type { UploadFile } from "antd/es/upload/interface";
+import type { Dayjs } from "dayjs";
 import {
   getEmployeeDocuments,
   uploadEmployeeDocument,
@@ -1282,7 +1284,11 @@ export default function EmployeeDocumentArchive({
   const handleUpload = async () => {
     // The form holds the authoritative selection, so the submitted document_type is
     // always the one the user picked (and antd reports a missing type inline).
-    let values: { document_type?: DocumentType; custom_name?: string };
+    let values: {
+      document_type?: DocumentType;
+      custom_name?: string;
+      exit_before?: Dayjs | null;
+    };
     try {
       values = await form.validateFields();
     } catch {
@@ -1316,6 +1322,12 @@ export default function EmployeeDocumentArchive({
         // selection must not ride along with a classified document.
         custom_name:
           documentType === "OTHER" ? values.custom_name?.trim() : undefined,
+        // The visa's expiry date, shown on the HR dashboard. Left empty, OCR
+        // reads it from the file.
+        exit_before:
+          documentType === "VISA" && values.exit_before
+            ? values.exit_before.format("YYYY-MM-DD")
+            : undefined,
       });
       if (isApiError(res)) {
         notification.error({
@@ -1883,6 +1895,23 @@ export default function EmployeeDocumentArchive({
                   "archive.customNamePlaceholder",
                   "e.g. Medical Certificate",
                 )}
+              />
+            </Form.Item>
+          )}
+
+          {docType === "VISA" && (
+            <Form.Item
+              name="exit_before"
+              label={t("archive.visaExpiry", "Visa expiry date")}
+              extra={t(
+                "archive.visaExpiryHint",
+                "Shown on the HR dashboard. Leave empty to read it from the file.",
+              )}
+            >
+              <DatePicker
+                data-testid="visa-expiry-input"
+                style={{ width: "100%" }}
+                format="YYYY-MM-DD"
               />
             </Form.Item>
           )}

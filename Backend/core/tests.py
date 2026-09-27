@@ -7,6 +7,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.cache import cache
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
 from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
@@ -29,7 +30,7 @@ from core.services import (
     get_workflow_snapshot,
     sync_workflow,
 )
-from employees.models import EmployeeDeletionRequest, EmployeeProfile
+from employees.models import EmployeeDeletionRequest, EmployeeDocument, EmployeeProfile
 from hr_reference.models import Department, Position
 from leaves.models import LeaveRequest, LeaveType
 from loans.models import LoanRequest
@@ -289,7 +290,7 @@ class HrSummaryViewTests(APITestCase):
         expat = self._make_profile(
             "expat", id_expiry=later, passport_expiry=soon, work_license_expiry=today, health_card_expiry=later
         )
-        self._make_profile("contract", contract_expiry=today + timedelta(days=30))
+        contract = self._make_profile("contract", contract_expiry=today + timedelta(days=30))
         # Outside the 30-day window, already expired, or archived: not counted.
         self._make_profile("far", passport_expiry=today + timedelta(days=31))
         self._make_profile("expired", passport_expiry=today - timedelta(days=1))
@@ -300,19 +301,20 @@ class HrSummaryViewTests(APITestCase):
 
         self.assertEqual(response.status_code, 200)
         data = response.data["data"]
-        self.assertEqual(data["expiring_docs"], 3)
+        # A Saudi National ID is not tracked on the dashboard.
+        self.assertEqual(data["expiring_docs"], 2)
         expiring = data["expiring_documents"]
         self.assertEqual(expiring["window_days"], 30)
-        self.assertEqual(expiring["employee_count"], 3)
+        self.assertEqual(expiring["employee_count"], 2)
         self.assertEqual(
             expiring["by_type"],
             {
-                "national_id": 1,
                 "iqama": 1,
                 "passport": 1,
                 "work_license": 1,
-                "contract": 1,
                 "health_insurance": 1,
+                "contract": 1,
+                "visa": 0,
             },
         )
         self.assertEqual(
@@ -320,12 +322,48 @@ class HrSummaryViewTests(APITestCase):
             [
                 (expat.id, "work_license", 0),
                 (expat.id, "passport", 5),
-                (saudi.id, "national_id", 5),
                 (expat.id, "iqama", 20),
                 (expat.id, "health_insurance", 20),
+                (contract.id, "contract", 30),
             ],
         )
+        self.assertNotIn(saudi.id, [item["employee_id"] for item in expiring["soonest"]])
         self.assertEqual(expiring["soonest"][0]["full_name"], "Mix Employee expat")
+
+    def _visa(self, profile, exit_before):
+        return EmployeeDocument.objects.create(
+            employee_profile=profile,
+            company=self.company,
+            document_type=EmployeeDocument.DocumentType.VISA,
+            file=SimpleUploadedFile("visa.pdf", b"%PDF-1.4\ncontent", content_type="application/pdf"),
+            exit_before=exit_before,
+        )
+
+    def test_summary_counts_visa_from_newest_archive_document(self):
+        today = timezone.localdate()
+        holder = self._make_profile("visa-holder")
+        self._visa(holder, today + timedelta(days=9))
+        # An older visa that was replaced by a newer, far-off one: not counted.
+        renewed = self._make_profile("visa-renewed")
+        self._visa(renewed, today + timedelta(days=3))
+        self._visa(renewed, today + timedelta(days=200))
+        # Visa uploaded without a date, and a passport document's date: not counted.
+        self._visa(self._make_profile("visa-undated"), None)
+        passport_doc = self._visa(self._make_profile("passport-doc"), today + timedelta(days=4))
+        passport_doc.document_type = EmployeeDocument.DocumentType.PASSPORT
+        passport_doc.save(update_fields=["document_type"])
+
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.get("/api/hr/summary/", HTTP_X_ACTIVE_COMPANY_ID=str(self.company.id))
+
+        self.assertEqual(response.status_code, 200)
+        expiring = response.data["data"]["expiring_documents"]
+        self.assertEqual(expiring["by_type"]["visa"], 1)
+        self.assertEqual(expiring["employee_count"], 1)
+        self.assertEqual(
+            [(item["employee_id"], item["doc_type"], item["days_left"]) for item in expiring["soonest"]],
+            [(holder.id, "visa", 9)],
+        )
 
 
 class HrSummaryViewCacheTests(APITestCase):
