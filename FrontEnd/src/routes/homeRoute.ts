@@ -73,3 +73,41 @@ export function getPostLoginDestination(
   }
   return requestedPath;
 }
+
+// Approval areas owned by one role. Employees and managers reach them through
+// approver capability, which the destination guard checks.
+const OWNED_APPROVAL_AREAS: Record<string, Role> = {
+  "/ceo": "CEO",
+  "/cfo": "CFO",
+};
+
+/**
+ * Where to land after switching company. Main Head Office shows a company
+ * picker in place of every company page, including pages the role's route
+ * guard would refuse (e.g. a CEO link opened by HR), so reloading the same URL
+ * after the pick can end on /unauthorized. Keep the page only when the role
+ * can use it; otherwise go to the role's home.
+ */
+export function getCompanySwitchDestination(
+  role: Role,
+  currentPath: string,
+): string {
+  const pathname = currentPath.split(/[?#]/, 1)[0];
+  const ownedArea = Object.keys(OWNED_APPROVAL_AREAS).find(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+  if (
+    ownedArea &&
+    ![
+      "SystemAdmin",
+      "Employee",
+      "Manager",
+      OWNED_APPROVAL_AREAS[ownedArea],
+    ].includes(role)
+  ) {
+    return getHomePath(role);
+  }
+  return canRoleRestorePath(role, currentPath)
+    ? currentPath
+    : getHomePath(role);
+}
