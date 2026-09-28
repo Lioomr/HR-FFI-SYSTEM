@@ -1,7 +1,11 @@
 import { isValidElement, type ReactElement } from "react";
 import { describe, expect, it } from "vitest";
 
-import { getHomePath, getPostLoginDestination } from "./homeRoute";
+import {
+  getCompanySwitchDestination,
+  getHomePath,
+  getPostLoginDestination,
+} from "./homeRoute";
 import HomeRedirect from "./HomeRedirect";
 import { routes } from "./routes";
 
@@ -92,4 +96,33 @@ it("restores a legacy HR reminder after login", () => {
   expect(getPostLoginDestination("Employee", "/employees/123")).toBe(
     "/employee/dashboard",
   );
+});
+
+describe("getCompanySwitchDestination", () => {
+  it("sends HR home from a CEO-only page picked in Main Head Office", () => {
+    expect(
+      getCompanySwitchDestination("HRManager", "/ceo/leave/requests"),
+    ).toBe("/hr/dashboard");
+    expect(getCompanySwitchDestination("CFO", "/ceo/job-offers/6")).toBe(
+      "/cfo/dashboard",
+    );
+    expect(getCompanySwitchDestination("HRManager", "/unauthorized")).toBe(
+      "/hr/dashboard",
+    );
+  });
+
+  it("keeps pages the role can use", () => {
+    expect(getCompanySwitchDestination("HRManager", "/hr/employees/87")).toBe(
+      "/hr/employees/87",
+    );
+    expect(getCompanySwitchDestination("CEO", "/ceo/job-offers/6?tab=1")).toBe(
+      "/ceo/job-offers/6?tab=1",
+    );
+    expect(getCompanySwitchDestination("Employee", "/ceo/leave/requests")).toBe(
+      "/ceo/leave/requests",
+    );
+    expect(getCompanySwitchDestination("HRManager", "/pending-inbox")).toBe(
+      "/pending-inbox",
+    );
+  });
 });

@@ -42,7 +42,7 @@ import {
 } from "@ant-design/icons";
 import type { MenuProps } from "antd";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { getHomePath } from "../routes/homeRoute";
+import { getCompanySwitchDestination, getHomePath } from "../routes/homeRoute";
 import { useAuthStore } from "../auth/authStore";
 import { logoutApi } from "../services/api/authApi";
 import { useI18n } from "../i18n/useI18n";
@@ -568,8 +568,13 @@ export default function BaseLayout() {
     if (String(organizationId) === String(activeOrganizationId)) return;
     setIsSwitchingOrganization(true);
     setActiveOrganization(organizationId);
+    const currentPath = `${location.pathname}${location.search}${location.hash}`;
+    const destination = role
+      ? getCompanySwitchDestination(role, currentPath)
+      : currentPath;
     window.setTimeout(() => {
-      window.location.reload();
+      if (destination === currentPath) window.location.reload();
+      else window.location.assign(destination);
     }, 120);
   };
 
