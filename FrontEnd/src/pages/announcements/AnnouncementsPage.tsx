@@ -29,7 +29,8 @@ import {
   VideoCameraOutlined,
 } from "@ant-design/icons";
 import { formatDateOnly, formatDateTime } from "../../utils/dateTime";
-import { openOrDownloadBlob } from "../../utils/download";
+import { downloadBlob } from "../../utils/download";
+import { useFilePreview } from "../../components/ui/useFilePreview";
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -148,23 +149,33 @@ export default function AnnouncementsPage() {
     }
   };
 
+  const { openPreview, previewModal } = useFilePreview();
+
   const handleClose = () => {
     setModalVisible(false);
     setDetail(null);
     setAttachmentLoading(false);
   };
 
-  const openAttachment = async (download: boolean) => {
+  const previewAttachment = () => {
+    if (!detail?.has_attachment) return;
+    const id = detail.id;
+    openPreview({
+      title:
+        detail.attachment_name ||
+        t("hr.announcements.attachmentLabel", "PDF Attachment"),
+      filename: detail.attachment_name || "announcement.pdf",
+      load: () => getAnnouncementAttachment(id, false),
+    });
+  };
+
+  const downloadAttachment = async () => {
     if (!detail?.has_attachment) return;
 
     try {
       setAttachmentLoading(true);
-      const blob = await getAnnouncementAttachment(detail.id, download);
-      openOrDownloadBlob(
-        blob,
-        detail.attachment_name || "announcement.pdf",
-        download,
-      );
+      const blob = await getAnnouncementAttachment(detail.id, true);
+      downloadBlob(blob, detail.attachment_name || "announcement.pdf");
     } catch (error) {
       console.error("Failed to open announcement attachment", error);
     } finally {
@@ -174,6 +185,7 @@ export default function AnnouncementsPage() {
 
   return (
     <>
+      {previewModal}
       <div
         style={{
           padding: 24,
@@ -424,8 +436,7 @@ export default function AnnouncementsPage() {
                   <Button
                     size="small"
                     icon={<EyeOutlined />}
-                    loading={attachmentLoading}
-                    onClick={() => openAttachment(false)}
+                    onClick={previewAttachment}
                   >
                     {t("common.preview")}
                   </Button>
@@ -433,7 +444,7 @@ export default function AnnouncementsPage() {
                     size="small"
                     icon={<DownloadOutlined />}
                     loading={attachmentLoading}
-                    onClick={() => openAttachment(true)}
+                    onClick={() => void downloadAttachment()}
                   >
                     {t("common.download")}
                   </Button>

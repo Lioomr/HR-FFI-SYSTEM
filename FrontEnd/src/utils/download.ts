@@ -25,24 +25,6 @@ export function downloadBlob(blob: Blob, filename: string): void {
   window.setTimeout(() => URL.revokeObjectURL(url), REVOKE_DELAY_MS);
 }
 
-export function openBlob(blob: Blob): void {
-  const url = URL.createObjectURL(blob);
-  window.open(url, "_blank", "noopener,noreferrer");
-  window.setTimeout(() => URL.revokeObjectURL(url), REVOKE_DELAY_MS);
-}
-
-export function openOrDownloadBlob(
-  blob: Blob,
-  filename: string,
-  download: boolean,
-): void {
-  if (download) {
-    downloadBlob(blob, filename);
-  } else {
-    openBlob(blob);
-  }
-}
-
 /**
  * Download endpoints often label their bytes `application/octet-stream` so the
  * browser saves rather than renders them. That defeats an in-browser preview,
@@ -85,35 +67,4 @@ export async function previewableType(blob: Blob): Promise<string | null> {
     return serverType;
   }
   return sniffInlineType(blob);
-}
-
-/**
- * Opens `blob` in a new tab for a quick look. Uses the server MIME type when it
- * is one the browser renders inline, otherwise falls back to a content sniff.
- * Returns false when nothing previewable was found, leaving the caller to
- * download instead.
- *
- * Fetching the bytes is async, so by the time the type is known the click
- * gesture has expired and `window.open` would be blocked as a popup. Callers
- * therefore open a blank tab synchronously inside the handler and pass it here;
- * this navigates that tab once the blob is ready, and closes it on a miss.
- */
-export async function previewBlob(
-  blob: Blob,
-  target?: Window | null,
-): Promise<boolean> {
-  const type = await previewableType(blob);
-  if (!type) {
-    target?.close();
-    return false;
-  }
-  const typed = type === blob.type ? blob : new Blob([blob], { type });
-  const url = URL.createObjectURL(typed);
-  if (target && !target.closed) {
-    target.location.href = url;
-  } else {
-    window.open(url, "_blank", "noopener,noreferrer");
-  }
-  window.setTimeout(() => URL.revokeObjectURL(url), REVOKE_DELAY_MS);
-  return true;
 }
