@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { useI18nStore } from "../../../i18n/i18nStore";
 import { PermissionRequestDetailPage } from "./PermissionRequestPages";
 import * as permissionApi from "../../../services/api/permissionRequestsApi";
@@ -17,6 +23,7 @@ vi.mock("../../../services/api/permissionRequestsApi", async () => {
   return {
     ...actual,
     getPermissionRequest: vi.fn(),
+    decidePermissionRequest: vi.fn(),
     downloadPermissionRequestAttachment: vi.fn(),
     addPermissionRequestAttachments: vi.fn(),
   };
@@ -176,6 +183,70 @@ describe("permission request approval trail", () => {
     expect(screen.getAllByText("اعتماد المدير المباشر").length).toBeGreaterThan(
       0,
     );
+  });
+});
+
+describe("sticky decision bar", () => {
+  it("pins the manager's approve/reject and sends the comment", async () => {
+    vi.mocked(permissionApi.getPermissionRequest).mockResolvedValue(
+      response({
+        workflow: {
+          ...base.workflow,
+          can_approve: true,
+          can_reject: true,
+          can_cancel: false,
+        },
+      }),
+    );
+    vi.mocked(permissionApi.decidePermissionRequest).mockResolvedValue(
+      response({
+        status: "pending_hr",
+        workflow: { ...base.workflow, current_stage: "hr", can_cancel: false },
+      }),
+    );
+    render(<PermissionRequestDetailPage role="manager" />);
+
+    const bar = await screen.findByRole("region", { name: "Decision actions" });
+    expect(bar).toHaveTextContent("Awaiting your decision");
+    expect(
+      screen.queryByRole("button", { name: "Cancel request" }),
+    ).not.toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText("Optional decision comment"), {
+      target: { value: "Fine" },
+    });
+    fireEvent.click(
+      within(bar).getByRole("button", { name: "Approve: Employee One" }),
+    );
+
+    await waitFor(() =>
+      expect(permissionApi.decidePermissionRequest).toHaveBeenCalledWith(
+        "1",
+        "manager",
+        "approve",
+        "Fine",
+      ),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("region", { name: "Decision actions" }),
+      ).not.toBeInTheDocument(),
+    );
+  });
+
+  it("holds only the owner's cancel, without a decision hint", async () => {
+    render(<PermissionRequestDetailPage role="employee" />);
+
+    const bar = await screen.findByRole("region", { name: "Decision actions" });
+    expect(bar).not.toHaveTextContent("Awaiting your decision");
+    expect(
+      within(bar).getByRole("button", { name: "Cancel request" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^Approve/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByPlaceholderText("Optional decision comment"),
+    ).not.toBeInTheDocument();
   });
 });
 

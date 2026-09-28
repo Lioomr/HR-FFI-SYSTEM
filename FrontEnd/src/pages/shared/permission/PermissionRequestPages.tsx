@@ -32,6 +32,8 @@ import ResponsiveTable from "../../../components/ui/ResponsiveTable";
 import ApprovalFlowMap, {
   type ApprovalFlowStage,
 } from "../../../components/requests/ApprovalFlowMap";
+import ApprovalActions from "../../../components/ceo/ApprovalActions";
+import StickyDecisionBar from "../../../components/ceo/StickyDecisionBar";
 import { formatDateTime } from "../../../utils/dateTime";
 import { fieldErrorsFromResponse } from "../../../utils/attendancePolicy";
 import { isApiError } from "../../../services/api/apiTypes";
@@ -1085,6 +1087,7 @@ export function PermissionRequestDetailPage({
   const typeLabel =
     language === "ar" ? request.exit_type_label_ar : request.exit_type_label;
   const attachments = request.attachments ?? [];
+  const canDecide = request.workflow.can_approve || request.workflow.can_reject;
   return (
     <div>
       <PageHeader
@@ -1158,50 +1161,16 @@ export function PermissionRequestDetailPage({
               t("permissionRequests.detail.none")}
           </Descriptions.Item>
         </Descriptions>
-        {(request.workflow.can_approve || request.workflow.can_reject) && (
-          <>
-            <Input.TextArea
-              value={comment}
-              onChange={(event) => setComment(event.target.value)}
-              maxLength={1000}
-              showCount
-              placeholder={t("permissionRequests.detail.decisionComment")}
-              style={{ marginTop: 16 }}
-            />
-            <Space style={{ marginTop: 12 }}>
-              <Button
-                type="primary"
-                loading={busy}
-                disabled={!request.workflow.can_approve}
-                onClick={() => void act("approve")}
-              >
-                {t("permissionRequests.detail.approve")}
-              </Button>
-              <Button
-                danger
-                loading={busy}
-                disabled={!request.workflow.can_reject}
-                onClick={() => void act("reject")}
-              >
-                {t("permissionRequests.detail.reject")}
-              </Button>
-            </Space>
-          </>
-        )}
-        {request.workflow.can_cancel && (
-          <Button
-            danger
-            loading={busy}
-            onClick={() =>
-              Modal.confirm({
-                title: t("permissionRequests.detail.cancelTitle"),
-                onOk: () => act("cancel"),
-              })
-            }
+        {canDecide && (
+          // The decision buttons live in the sticky bar below.
+          <Input.TextArea
+            value={comment}
+            onChange={(event) => setComment(event.target.value)}
+            maxLength={1000}
+            showCount
+            placeholder={t("permissionRequests.detail.decisionComment")}
             style={{ marginTop: 16 }}
-          >
-            {t("permissionRequests.detail.cancel")}
-          </Button>
+          />
         )}
         <Typography.Title level={5} style={{ marginTop: 24 }}>
           {t("permissionRequests.detail.history")}
@@ -1228,6 +1197,42 @@ export function PermissionRequestDetailPage({
         />
       )}
       <ApprovalTrail request={request} />
+      {(canDecide || request.workflow.can_cancel) && (
+        // Only the owner's cancel is not a decision, so it shows no hint.
+        <StickyDecisionBar hint={canDecide ? undefined : null}>
+          <Space size={8} wrap>
+            {canDecide && (
+              <ApprovalActions
+                size="large"
+                subjectLabel={request.employee.full_name}
+                approveLabel={t("permissionRequests.detail.approve")}
+                rejectLabel={t("permissionRequests.detail.reject")}
+                disabled={busy}
+                approveDisabled={!request.workflow.can_approve}
+                rejectDisabled={!request.workflow.can_reject}
+                onApprove={() => void act("approve")}
+                onReject={() => void act("reject")}
+              />
+            )}
+            {request.workflow.can_cancel && (
+              <Button
+                danger
+                size="large"
+                loading={busy}
+                onClick={() =>
+                  Modal.confirm({
+                    title: t("permissionRequests.detail.cancelTitle"),
+                    onOk: () => act("cancel"),
+                  })
+                }
+                style={{ borderRadius: 8, fontWeight: 600 }}
+              >
+                {t("permissionRequests.detail.cancel")}
+              </Button>
+            )}
+          </Space>
+        </StickyDecisionBar>
+      )}
     </div>
   );
 }

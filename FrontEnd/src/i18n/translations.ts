@@ -547,8 +547,10 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "common.duration": "Duration",
     "common.document": "Document",
     "common.preview": "Preview",
-    "filePreview.loadFailed": "Could not load the file. Try again or download it.",
-    "filePreview.unavailable": "This file cannot be previewed here. Download it to view.",
+    "filePreview.loadFailed":
+      "Could not load the file. Try again or download it.",
+    "filePreview.unavailable":
+      "This file cannot be previewed here. Download it to view.",
     "common.submittedOn": "Submitted On",
     "organization.switchedForLink": "Switched to {company} to open this link.",
     "organization.headOffice.badge": "Head Office View",
@@ -1109,7 +1111,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.dashboard.docGroup.health_insurance": "Health insurance",
     "hr.dashboard.docGroup.visa": "Visa",
     "hr.dashboard.soonestToExpire": "Expiring soonest",
-    "hr.dashboard.noExpiringDocs": "No documents expire in the next {days} days",
+    "hr.dashboard.noExpiringDocs":
+      "No documents expire in the next {days} days",
     "hr.dashboard.expiresToday": "Expires today",
     "hr.dashboard.daysLeft": "{days} days left",
     "hr.dashboard.status.archived": "Archived",
@@ -1437,7 +1440,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "employees.list.quick.iqama": "Iqama expiring",
     "employees.list.quick.contract": "Contract expiring",
     "employees.list.expiringWithin": "Within {days} days",
-    "employees.list.expiringHint": "Includes documents that have already expired.",
+    "employees.list.expiringHint":
+      "Includes documents that have already expired.",
     "employees.list.colIqamaExpiry": "Iqama expiry",
     "employees.list.colContractExpiry": "Contract expiry",
     "employees.list.expiry.inDays": "In {days} days",
@@ -1673,7 +1677,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "employees.form.managerScope": "Approved organization scope",
     "employees.form.managerScopePlaceholder": "Select an approved scope",
     "employees.form.managerAssignmentEnd": "Assignment expiry",
-    "employees.form.managerScopeEmpty": "No approved scope covers both companies.",
+    "employees.form.managerScopeEmpty":
+      "No approved scope covers both companies.",
     "employees.form.joiningDate": "Joining Date",
     "employees.form.jobOffer": "Job Offer",
     "employees.form.jobOfferPlaceholder": "Job offer details",
@@ -3408,6 +3413,15 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "workflow.step": "Step {number}",
     "workflow.showDetails": "Show details",
     "workflow.hideDetails": "Hide details",
+    "contractDecisions.approvalMap.title": "Decision progress",
+    "contractRatings.approvalMap.title": "Rating progress",
+    "contractRatings.stage.hr_gate": "HR routing",
+    "contractRatings.stage.responses": "Evaluations",
+    "startingWork.approvalMap.eyebrow": "BioTime Verification Workflow",
+    "startingWork.approvalMap.title": "Approval Progress",
+    "assets.damageApprovalMap.eyebrow": "Damage Report Workflow",
+    "assets.damageApprovalMap.reported": "Reported",
+    "assets.damageApprovalMap.reportSent": "Damage report submitted.",
     "workflow.handledBy": "Handled by {name}",
     "workflow.waitingFor": "Waiting for {name}",
     "workflow.updated": "Updated",
@@ -4742,11 +4756,14 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "contractDecisions.ratingHrNotApproved": "Not yet HR approved",
     "contractDecisions.ratingOpen": "Open contract ratings",
     "contractRatings.title": "Employee contract ratings",
-    "contractRatings.subtitleHr": "Route new ratings and follow their status. Rating content is visible only when the CEO requests your comment.",
-    "contractRatings.subtitleCeo": "Decide contracts: renew, renew with increase or terminate.",
+    "contractRatings.subtitleHr":
+      "Route new ratings and follow their status. Rating content is visible only when the CEO requests your comment.",
+    "contractRatings.subtitleCeo":
+      "Decide contracts: renew, renew with increase or terminate.",
     "contractRatings.detailTitle": "Contract rating",
     "contractRatings.managerTitle": "Employee contract evaluation",
-    "contractRatings.managerSubtitle": "Rate your direct report on each criterion.",
+    "contractRatings.managerSubtitle":
+      "Rate your direct report on each criterion.",
     "contractRatings.employeeTitle": "Contract self-evaluation",
     "contractRatings.employeeSubtitle":
       "Rate your own performance during this contract.",
@@ -4804,8 +4821,10 @@ export const translations: Record<AppLanguage, TranslationMap> = {
       "Your evaluation is confidential. The employee never sees it, and you never see the employee's self-evaluation.",
     "contractRatings.confidentialEmployee":
       "Your self-evaluation is confidential. Your manager never sees it, and you never see your manager's evaluation.",
-    "contractRatings.returnedNotice": "The CEO returned your evaluation for correction. Review it and resubmit all criteria.",
-    "contractRatings.lockedNotice": "Submitted. Your evaluation is locked unless the CEO returns it for correction.",
+    "contractRatings.returnedNotice":
+      "The CEO returned your evaluation for correction. Review it and resubmit all criteria.",
+    "contractRatings.lockedNotice":
+      "Submitted. Your evaluation is locked unless the CEO returns it for correction.",
     "contractRatings.closedNoResponse":
       "This rating is no longer accepting evaluations.",
     "contractRatings.yourEvaluation": "Your evaluation",
@@ -4980,63 +4999,87 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "contractRatings.accountConnected": "Employee account",
     "contractRatings.accountLinked": "Linked self-service account",
     "contractRatings.accountNotLinked": "No linked self-service account",
-    "contractRatings.accountNotConnectedHint": "This employee cannot submit a self-evaluation online. This is information only — you can still choose either option.",
+    "contractRatings.accountNotConnectedHint":
+      "This employee cannot submit a self-evaluation online. This is information only — you can still choose either option.",
     "contractRatings.gateTitle": "Routing decision",
-    "contractRatings.gateBody": "Choose once how this contract proceeds: collect manager and employee evaluations, or send it straight to the CEO with no rating. This choice cannot be changed later.",
+    "contractRatings.gateBody":
+      "Choose once how this contract proceeds: collect manager and employee evaluations, or send it straight to the CEO with no rating. This choice cannot be changed later.",
     "contractRatings.gateAction.RATE": "Rate this employee",
     "contractRatings.gateAction.SKIP_TO_CEO": "Send straight to the CEO",
     "contractRatings.gateConfirmTitle.RATE": "Start the rating cycle?",
-    "contractRatings.gateConfirmTitle.SKIP_TO_CEO": "Send to the CEO without a rating?",
-    "contractRatings.gateConfirmBody.RATE": "The manager and the employee will be notified to complete their evaluations. This cannot be undone.",
-    "contractRatings.gateConfirmBody.SKIP_TO_CEO": "No evaluation will be collected. The CEO decides the contract directly. This cannot be undone.",
-    "contractRatings.gateNotYours": "Waiting for an HR manager to route this rating.",
+    "contractRatings.gateConfirmTitle.SKIP_TO_CEO":
+      "Send to the CEO without a rating?",
+    "contractRatings.gateConfirmBody.RATE":
+      "The manager and the employee will be notified to complete their evaluations. This cannot be undone.",
+    "contractRatings.gateConfirmBody.SKIP_TO_CEO":
+      "No evaluation will be collected. The CEO decides the contract directly. This cannot be undone.",
+    "contractRatings.gateNotYours":
+      "Waiting for an HR manager to route this rating.",
     "contractRatings.coarseTitle": "Rating content is confidential",
-    "contractRatings.coarseBody": "Only the status is shown. You will see the evaluations only if the CEO asks for your comment on this rating.",
-    "contractRatings.coarseBodyCeoRoute": "Your account receives the HR view of this rating, which shows the status only.",
+    "contractRatings.coarseBody":
+      "Only the status is shown. You will see the evaluations only if the CEO asks for your comment on this rating.",
+    "contractRatings.coarseBodyCeoRoute":
+      "Your account receives the HR view of this rating, which shows the status only.",
     "contractRatings.outcomeSection": "CEO decision",
     "contractRatings.ceoDecision": "CEO decision",
     "contractRatings.outcome.RENEW": "Renew",
     "contractRatings.outcome.RENEW_WITH_CHANGES": "Renew with increase",
     "contractRatings.outcome.TERMINATE": "Terminate",
     "contractRatings.outcomeTitle.RENEW": "Renew the contract",
-    "contractRatings.outcomeTitle.RENEW_WITH_CHANGES": "Renew with a salary increase",
+    "contractRatings.outcomeTitle.RENEW_WITH_CHANGES":
+      "Renew with a salary increase",
     "contractRatings.outcomeTitle.TERMINATE": "Terminate at contract end",
     "contractRatings.ceoDecisionPrompt": "Choose the contract outcome",
-    "contractRatings.renewHint": "The contract is renewed. No salary change applies.",
-    "contractRatings.terminateHint": "Termination is scheduled for {date}. The employee stays active until then.",
-    "contractRatings.increaseHint": "Enter the new amounts. Components you leave unchanged keep their current value; the server calculates the total. The new salary is applied to the employee profile immediately.",
+    "contractRatings.renewHint":
+      "The contract is renewed. No salary change applies.",
+    "contractRatings.terminateHint":
+      "Termination is scheduled for {date}. The employee stays active until then.",
+    "contractRatings.increaseHint":
+      "Enter the new amounts. Components you leave unchanged keep their current value; the server calculates the total. The new salary is applied to the employee profile immediately.",
     "contractRatings.currentValue": "Current: {value}",
     "contractRatings.currentTotal": "Current total",
     "contractRatings.newTotalPreview": "New total (preview)",
     "contractRatings.increasePreview": "Increase (preview)",
     "contractRatings.increaseIsDecrease": "These amounts lower the salary.",
     "contractRatings.increaseNoChange": "Change at least one salary component.",
-    "contractRatings.salaryEffectiveDateDefault": "Defaults to the day after the contract expiry.",
+    "contractRatings.salaryEffectiveDateDefault":
+      "Defaults to the day after the contract expiry.",
     "contractRatings.returnPrompt": "Or send an evaluation back for correction",
     "contractRatings.returnAction.RETURN_TO_MANAGER": "Return to manager",
     "contractRatings.returnAction.RETURN_TO_EMPLOYEE": "Return to employee",
     "contractRatings.returnAction.RETURN_TO_BOTH": "Return to both",
     "contractRatings.returnConfirm": "Return for correction",
-    "contractRatings.returnHint": "This is not a final decision. The rating comes back to you once the corrected evaluation is resubmitted.",
+    "contractRatings.returnHint":
+      "This is not a final decision. The rating comes back to you once the corrected evaluation is resubmitted.",
     "contractRatings.returnReasonValue": "Reason: {reason}",
-    "contractRatings.skippedTitle": "HR sent this contract directly to you without a rating",
-    "contractRatings.skippedBody": "Routed by {name} on {date}. No manager or employee evaluation was collected for this cycle.",
+    "contractRatings.skippedTitle":
+      "HR sent this contract directly to you without a rating",
+    "contractRatings.skippedBody":
+      "Routed by {name} on {date}. No manager or employee evaluation was collected for this cycle.",
     "contractRatings.hrCommentSection": "HR comment (advisory)",
     "contractRatings.requestHrComment": "Request HR comment",
-    "contractRatings.requestHrCommentHint": "HR sees this rating's content only if you ask. Their comment is advisory; you can decide at any time.",
+    "contractRatings.requestHrCommentHint":
+      "HR sees this rating's content only if you ask. Their comment is advisory; you can decide at any time.",
     "contractRatings.hrCommentNotRequested": "No HR comment was requested.",
     "contractRatings.hrCommentRequestedAt": "Requested by {name} on {date}",
-    "contractRatings.hrCommentAwaiting": "Waiting for HR's comment. You do not need to wait for it to decide.",
-    "contractRatings.hrCommentAdvisory": "The CEO asked for your comment. It is advisory only — you cannot approve, return or change this rating.",
-    "contractRatings.hrCommentAfterDecision": "The CEO has already decided. A comment is kept for the record but does not change the outcome.",
+    "contractRatings.hrCommentAwaiting":
+      "Waiting for HR's comment. You do not need to wait for it to decide.",
+    "contractRatings.hrCommentAdvisory":
+      "The CEO asked for your comment. It is advisory only — you cannot approve, return or change this rating.",
+    "contractRatings.hrCommentAfterDecision":
+      "The CEO has already decided. A comment is kept for the record but does not change the outcome.",
     "contractRatings.hrCommentBy": "Commented by",
-    "contractRatings.hrCommentPlaceholder": "Share context the CEO may not have",
+    "contractRatings.hrCommentPlaceholder":
+      "Share context the CEO may not have",
     "contractRatings.submitHrComment": "Submit comment",
     "contractRatings.updateHrComment": "Update comment",
     "contractRatings.termination": "Termination",
-    "contractRatings.terminationProcessedAt": "Processed at contract end on {date}.",
-    "contractRatings.acknowledgeHint": "Record that the employee was told about the scheduled termination. Record-keeping only.",
-    "contractRatings.doneLeftQueue": "Recorded. This rating has left your queue and will return once the corrected evaluation is resubmitted.",
+    "contractRatings.terminationProcessedAt":
+      "Processed at contract end on {date}.",
+    "contractRatings.acknowledgeHint":
+      "Record that the employee was told about the scheduled termination. Record-keeping only.",
+    "contractRatings.doneLeftQueue":
+      "Recorded. This rating has left your queue and will return once the corrected evaluation is resubmitted.",
   },
 
   ar: {
@@ -5565,7 +5608,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "common.document": "المستند",
     "common.preview": "معاينة",
     "filePreview.loadFailed": "تعذر تحميل الملف. حاول مرة أخرى أو قم بتنزيله.",
-    "filePreview.unavailable": "لا يمكن معاينة هذا الملف هنا. قم بتنزيله لعرضه.",
+    "filePreview.unavailable":
+      "لا يمكن معاينة هذا الملف هنا. قم بتنزيله لعرضه.",
     "common.submittedOn": "تاريخ التقديم",
     "organization.switchedForLink": "تم التبديل إلى {company} لفتح هذا الرابط.",
     "organization.headOffice.badge": "عرض المكتب الرئيسي",
@@ -6020,7 +6064,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
       "وقت السماح الإضافي بعد إيقاف وقت السماح الشهري (بالدقائق)",
     "admin.settings.helpPostGraceTolerance":
       "بعد تسجيل المخالفة الثالثة في الشهر، يُوقف وقت السماح الشهري. ويُحتسب الحضور في الموعد إذا تم خلال هذه الدقائق الإضافية (0–240).",
-    "admin.settings.lblLatePermissionLimit": "عدد أذونات التأخير المعتمدة شهريًا",
+    "admin.settings.lblLatePermissionLimit":
+      "عدد أذونات التأخير المعتمدة شهريًا",
     "admin.settings.helpLatePermissionLimit":
       "الحد الأقصى لعدد أذونات التأخير المعتمدة لكل موظف خلال الشهر (0–31).",
     "admin.settings.lblDuringShiftMax":
@@ -6113,7 +6158,8 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "hr.dashboard.docGroup.health_insurance": "التأمين الصحي",
     "hr.dashboard.docGroup.visa": "التأشيرة",
     "hr.dashboard.soonestToExpire": "الأقرب انتهاءً",
-    "hr.dashboard.noExpiringDocs": "لا توجد وثائق تنتهي خلال {days} يومًا القادمة",
+    "hr.dashboard.noExpiringDocs":
+      "لا توجد وثائق تنتهي خلال {days} يومًا القادمة",
     "hr.dashboard.expiresToday": "تنتهي اليوم",
     "hr.dashboard.daysLeft": "متبقي {days} يوم",
     "hr.dashboard.status.archived": "مؤرشف",
@@ -8339,6 +8385,15 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "workflow.step": "الخطوة {number}",
     "workflow.showDetails": "عرض التفاصيل",
     "workflow.hideDetails": "إخفاء التفاصيل",
+    "contractDecisions.approvalMap.title": "تقدم القرار",
+    "contractRatings.approvalMap.title": "تقدم التقييم",
+    "contractRatings.stage.hr_gate": "توجيه الموارد البشرية",
+    "contractRatings.stage.responses": "التقييمات",
+    "startingWork.approvalMap.eyebrow": "مسار التحقق من حضور BioTime",
+    "startingWork.approvalMap.title": "تقدّم الموافقات",
+    "assets.damageApprovalMap.eyebrow": "مسار بلاغ تلف العهدة",
+    "assets.damageApprovalMap.reported": "تم الإبلاغ",
+    "assets.damageApprovalMap.reportSent": "تم تقديم بلاغ التلف.",
     "workflow.handledBy": "تمت المعالجة بواسطة {name}",
     "workflow.waitingFor": "بانتظار {name}",
     "workflow.updated": "آخر تحديث",
@@ -9698,8 +9753,10 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "contractDecisions.ratingHrNotApproved": "لم تعتمده الموارد البشرية بعد",
     "contractDecisions.ratingOpen": "فتح تقييمات العقود",
     "contractRatings.title": "تقييمات عقود الموظفين",
-    "contractRatings.subtitleHr": "وجّه التقييمات الجديدة وتابع حالتها. يظهر محتوى التقييم فقط عندما يطلب الرئيس التنفيذي تعليقك.",
-    "contractRatings.subtitleCeo": "قرر بشأن العقود: تجديد، أو تجديد مع زيادة، أو إنهاء.",
+    "contractRatings.subtitleHr":
+      "وجّه التقييمات الجديدة وتابع حالتها. يظهر محتوى التقييم فقط عندما يطلب الرئيس التنفيذي تعليقك.",
+    "contractRatings.subtitleCeo":
+      "قرر بشأن العقود: تجديد، أو تجديد مع زيادة، أو إنهاء.",
     "contractRatings.detailTitle": "تقييم العقد",
     "contractRatings.managerTitle": "تقييم عقد الموظف",
     "contractRatings.managerSubtitle": "قيّم موظفك المباشر في كل معيار.",
@@ -9755,8 +9812,10 @@ export const translations: Record<AppLanguage, TranslationMap> = {
       "تقييمك سري. لا يطّلع عليه الموظف، ولا تطّلع أنت على تقييمه الذاتي.",
     "contractRatings.confidentialEmployee":
       "تقييمك الذاتي سري. لا يطّلع عليه مديرك، ولا تطّلع أنت على تقييم مديرك.",
-    "contractRatings.returnedNotice": "أعاد الرئيس التنفيذي تقييمك للتصحيح. راجعه وأعد إرسال جميع المعايير.",
-    "contractRatings.lockedNotice": "تم الإرسال. تقييمك مقفل ما لم يُعِده الرئيس التنفيذي للتصحيح.",
+    "contractRatings.returnedNotice":
+      "أعاد الرئيس التنفيذي تقييمك للتصحيح. راجعه وأعد إرسال جميع المعايير.",
+    "contractRatings.lockedNotice":
+      "تم الإرسال. تقييمك مقفل ما لم يُعِده الرئيس التنفيذي للتصحيح.",
     "contractRatings.closedNoResponse": "لم يعد هذا التقييم يستقبل تقييمات.",
     "contractRatings.yourEvaluation": "تقييمك",
     "contractRatings.yourSelfEvaluation": "تقييمك الذاتي",
@@ -9924,62 +9983,89 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "contractRatings.accountConnected": "حساب الموظف",
     "contractRatings.accountLinked": "حساب خدمة ذاتية مرتبط",
     "contractRatings.accountNotLinked": "لا يوجد حساب خدمة ذاتية مرتبط",
-    "contractRatings.accountNotConnectedHint": "لا يستطيع هذا الموظف إرسال تقييم ذاتي إلكترونيًا. هذه معلومة فقط — ما زال بإمكانك اختيار أي من الخيارين.",
+    "contractRatings.accountNotConnectedHint":
+      "لا يستطيع هذا الموظف إرسال تقييم ذاتي إلكترونيًا. هذه معلومة فقط — ما زال بإمكانك اختيار أي من الخيارين.",
     "contractRatings.gateTitle": "قرار التوجيه",
-    "contractRatings.gateBody": "اختر مرة واحدة كيف يسير هذا العقد: جمع تقييم المدير والموظف، أو إرساله مباشرة إلى الرئيس التنفيذي دون تقييم. لا يمكن تغيير هذا الاختيار لاحقًا.",
+    "contractRatings.gateBody":
+      "اختر مرة واحدة كيف يسير هذا العقد: جمع تقييم المدير والموظف، أو إرساله مباشرة إلى الرئيس التنفيذي دون تقييم. لا يمكن تغيير هذا الاختيار لاحقًا.",
     "contractRatings.gateAction.RATE": "تقييم هذا الموظف",
-    "contractRatings.gateAction.SKIP_TO_CEO": "الإرسال مباشرة إلى الرئيس التنفيذي",
+    "contractRatings.gateAction.SKIP_TO_CEO":
+      "الإرسال مباشرة إلى الرئيس التنفيذي",
     "contractRatings.gateConfirmTitle.RATE": "بدء دورة التقييم؟",
-    "contractRatings.gateConfirmTitle.SKIP_TO_CEO": "الإرسال إلى الرئيس التنفيذي دون تقييم؟",
-    "contractRatings.gateConfirmBody.RATE": "سيتم إشعار المدير والموظف لإكمال تقييميهما. لا يمكن التراجع عن ذلك.",
-    "contractRatings.gateConfirmBody.SKIP_TO_CEO": "لن يُجمع أي تقييم. يقرر الرئيس التنفيذي بشأن العقد مباشرة. لا يمكن التراجع عن ذلك.",
-    "contractRatings.gateNotYours": "بانتظار مدير الموارد البشرية لتوجيه هذا التقييم.",
+    "contractRatings.gateConfirmTitle.SKIP_TO_CEO":
+      "الإرسال إلى الرئيس التنفيذي دون تقييم؟",
+    "contractRatings.gateConfirmBody.RATE":
+      "سيتم إشعار المدير والموظف لإكمال تقييميهما. لا يمكن التراجع عن ذلك.",
+    "contractRatings.gateConfirmBody.SKIP_TO_CEO":
+      "لن يُجمع أي تقييم. يقرر الرئيس التنفيذي بشأن العقد مباشرة. لا يمكن التراجع عن ذلك.",
+    "contractRatings.gateNotYours":
+      "بانتظار مدير الموارد البشرية لتوجيه هذا التقييم.",
     "contractRatings.coarseTitle": "محتوى التقييم سري",
-    "contractRatings.coarseBody": "تظهر الحالة فقط. سترى التقييمات فقط إذا طلب الرئيس التنفيذي تعليقك على هذا التقييم.",
-    "contractRatings.coarseBodyCeoRoute": "يتلقى حسابك عرض الموارد البشرية لهذا التقييم، والذي يُظهر الحالة فقط.",
+    "contractRatings.coarseBody":
+      "تظهر الحالة فقط. سترى التقييمات فقط إذا طلب الرئيس التنفيذي تعليقك على هذا التقييم.",
+    "contractRatings.coarseBodyCeoRoute":
+      "يتلقى حسابك عرض الموارد البشرية لهذا التقييم، والذي يُظهر الحالة فقط.",
     "contractRatings.outcomeSection": "قرار الرئيس التنفيذي",
     "contractRatings.ceoDecision": "قرار الرئيس التنفيذي",
     "contractRatings.outcome.RENEW": "تجديد",
     "contractRatings.outcome.RENEW_WITH_CHANGES": "تجديد مع زيادة",
     "contractRatings.outcome.TERMINATE": "إنهاء",
     "contractRatings.outcomeTitle.RENEW": "تجديد العقد",
-    "contractRatings.outcomeTitle.RENEW_WITH_CHANGES": "التجديد مع زيادة الراتب",
+    "contractRatings.outcomeTitle.RENEW_WITH_CHANGES":
+      "التجديد مع زيادة الراتب",
     "contractRatings.outcomeTitle.TERMINATE": "الإنهاء عند نهاية العقد",
     "contractRatings.ceoDecisionPrompt": "اختر نتيجة العقد",
-    "contractRatings.renewHint": "يُجدَّد العقد. لا يُطبَّق أي تغيير على الراتب.",
-    "contractRatings.terminateHint": "يُجدوَل الإنهاء بتاريخ {date}. يبقى الموظف نشطًا حتى ذلك الحين.",
-    "contractRatings.increaseHint": "أدخل المبالغ الجديدة. تحتفظ المكونات غير المعدلة بقيمتها الحالية؛ ويحسب الخادم الإجمالي. يُطبَّق الراتب الجديد على ملف الموظف فورًا.",
+    "contractRatings.renewHint":
+      "يُجدَّد العقد. لا يُطبَّق أي تغيير على الراتب.",
+    "contractRatings.terminateHint":
+      "يُجدوَل الإنهاء بتاريخ {date}. يبقى الموظف نشطًا حتى ذلك الحين.",
+    "contractRatings.increaseHint":
+      "أدخل المبالغ الجديدة. تحتفظ المكونات غير المعدلة بقيمتها الحالية؛ ويحسب الخادم الإجمالي. يُطبَّق الراتب الجديد على ملف الموظف فورًا.",
     "contractRatings.currentValue": "الحالي: {value}",
     "contractRatings.currentTotal": "الإجمالي الحالي",
     "contractRatings.newTotalPreview": "الإجمالي الجديد (معاينة)",
     "contractRatings.increasePreview": "الزيادة (معاينة)",
     "contractRatings.increaseIsDecrease": "هذه المبالغ تخفض الراتب.",
-    "contractRatings.increaseNoChange": "غيّر مكونًا واحدًا على الأقل من مكونات الراتب.",
-    "contractRatings.salaryEffectiveDateDefault": "القيمة الافتراضية هي اليوم التالي لانتهاء العقد.",
+    "contractRatings.increaseNoChange":
+      "غيّر مكونًا واحدًا على الأقل من مكونات الراتب.",
+    "contractRatings.salaryEffectiveDateDefault":
+      "القيمة الافتراضية هي اليوم التالي لانتهاء العقد.",
     "contractRatings.returnPrompt": "أو أعد تقييمًا للتصحيح",
     "contractRatings.returnAction.RETURN_TO_MANAGER": "إعادة إلى المدير",
     "contractRatings.returnAction.RETURN_TO_EMPLOYEE": "إعادة إلى الموظف",
     "contractRatings.returnAction.RETURN_TO_BOTH": "إعادة إلى الطرفين",
     "contractRatings.returnConfirm": "إعادة للتصحيح",
-    "contractRatings.returnHint": "هذا ليس قرارًا نهائيًا. يعود التقييم إليك بعد إعادة إرسال التقييم المصحح.",
+    "contractRatings.returnHint":
+      "هذا ليس قرارًا نهائيًا. يعود التقييم إليك بعد إعادة إرسال التقييم المصحح.",
     "contractRatings.returnReasonValue": "السبب: {reason}",
-    "contractRatings.skippedTitle": "أرسلت الموارد البشرية هذا العقد إليك مباشرة دون تقييم",
-    "contractRatings.skippedBody": "وجّهه {name} بتاريخ {date}. لم يُجمع تقييم من المدير أو الموظف لهذه الدورة.",
+    "contractRatings.skippedTitle":
+      "أرسلت الموارد البشرية هذا العقد إليك مباشرة دون تقييم",
+    "contractRatings.skippedBody":
+      "وجّهه {name} بتاريخ {date}. لم يُجمع تقييم من المدير أو الموظف لهذه الدورة.",
     "contractRatings.hrCommentSection": "تعليق الموارد البشرية (استشاري)",
     "contractRatings.requestHrComment": "طلب تعليق الموارد البشرية",
-    "contractRatings.requestHrCommentHint": "لا ترى الموارد البشرية محتوى هذا التقييم إلا إذا طلبت ذلك. تعليقها استشاري؛ ويمكنك اتخاذ القرار في أي وقت.",
-    "contractRatings.hrCommentNotRequested": "لم يُطلب تعليق من الموارد البشرية.",
+    "contractRatings.requestHrCommentHint":
+      "لا ترى الموارد البشرية محتوى هذا التقييم إلا إذا طلبت ذلك. تعليقها استشاري؛ ويمكنك اتخاذ القرار في أي وقت.",
+    "contractRatings.hrCommentNotRequested":
+      "لم يُطلب تعليق من الموارد البشرية.",
     "contractRatings.hrCommentRequestedAt": "طلبه {name} بتاريخ {date}",
-    "contractRatings.hrCommentAwaiting": "بانتظار تعليق الموارد البشرية. لا حاجة لانتظاره لاتخاذ القرار.",
-    "contractRatings.hrCommentAdvisory": "طلب الرئيس التنفيذي تعليقك. التعليق استشاري فقط — لا يمكنك اعتماد هذا التقييم أو إعادته أو تعديله.",
-    "contractRatings.hrCommentAfterDecision": "اتخذ الرئيس التنفيذي قراره بالفعل. يُحفظ التعليق للسجل لكنه لا يغيّر النتيجة.",
+    "contractRatings.hrCommentAwaiting":
+      "بانتظار تعليق الموارد البشرية. لا حاجة لانتظاره لاتخاذ القرار.",
+    "contractRatings.hrCommentAdvisory":
+      "طلب الرئيس التنفيذي تعليقك. التعليق استشاري فقط — لا يمكنك اعتماد هذا التقييم أو إعادته أو تعديله.",
+    "contractRatings.hrCommentAfterDecision":
+      "اتخذ الرئيس التنفيذي قراره بالفعل. يُحفظ التعليق للسجل لكنه لا يغيّر النتيجة.",
     "contractRatings.hrCommentBy": "علّق",
-    "contractRatings.hrCommentPlaceholder": "شارك سياقًا قد لا يعرفه الرئيس التنفيذي",
+    "contractRatings.hrCommentPlaceholder":
+      "شارك سياقًا قد لا يعرفه الرئيس التنفيذي",
     "contractRatings.submitHrComment": "إرسال التعليق",
     "contractRatings.updateHrComment": "تحديث التعليق",
     "contractRatings.termination": "الإنهاء",
-    "contractRatings.terminationProcessedAt": "تمت المعالجة عند نهاية العقد بتاريخ {date}.",
-    "contractRatings.acknowledgeHint": "سجّل أن الموظف أُبلغ بالإنهاء المجدول. للتوثيق فقط.",
-    "contractRatings.doneLeftQueue": "تم التسجيل. غادر هذا التقييم قائمتك وسيعود بعد إعادة إرسال التقييم المصحح.",
+    "contractRatings.terminationProcessedAt":
+      "تمت المعالجة عند نهاية العقد بتاريخ {date}.",
+    "contractRatings.acknowledgeHint":
+      "سجّل أن الموظف أُبلغ بالإنهاء المجدول. للتوثيق فقط.",
+    "contractRatings.doneLeftQueue":
+      "تم التسجيل. غادر هذا التقييم قائمتك وسيعود بعد إعادة إرسال التقييم المصحح.",
   },
 };

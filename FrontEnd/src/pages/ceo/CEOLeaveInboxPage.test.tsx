@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 
 vi.mock("../../services/api/leaveApi", () => ({
@@ -29,6 +35,8 @@ const approveCEOLeaveRequest =
   leaveApi.approveCEOLeaveRequest as unknown as ReturnType<typeof vi.fn>;
 const rejectCEOLeaveRequest =
   leaveApi.rejectCEOLeaveRequest as unknown as ReturnType<typeof vi.fn>;
+const getLeaveRequestDocumentBlob =
+  leaveApi.getLeaveRequestDocumentBlob as unknown as ReturnType<typeof vi.fn>;
 
 function makeRequest(overrides: Partial<LeaveRequest> = {}): LeaveRequest {
   return {
@@ -65,6 +73,7 @@ beforeEach(() => {
   getCEOLeaveRequests.mockReset();
   approveCEOLeaveRequest.mockReset();
   rejectCEOLeaveRequest.mockReset();
+  getLeaveRequestDocumentBlob.mockReset();
   useI18nStore.getState().setLanguage("en");
   useAuthStore.setState({
     isAuthenticated: true,
@@ -132,6 +141,33 @@ describe("CEOLeaveInboxPage", () => {
     expect(
       screen.getByRole("button", { name: "Reject: Sara Ahmed" }),
     ).toBeInTheDocument();
+  });
+
+  it("views a supporting document inside the app, not in a new tab", async () => {
+    const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
+    getCEOLeaveRequests.mockResolvedValue(
+      listResponse([makeRequest({ document: "/media/leave/41.txt" })]),
+    );
+    // Not a PDF or image, so the modal falls back to its download notice.
+    getLeaveRequestDocumentBlob.mockResolvedValue(
+      new Blob(["plain"], { type: "text/plain" }),
+    );
+
+    renderPage();
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "View: Sara Ahmed" }),
+    );
+
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      await within(dialog).findByText(
+        "This file cannot be previewed here. Download it to view.",
+      ),
+    ).toBeInTheDocument();
+    expect(getLeaveRequestDocumentBlob).toHaveBeenCalledWith(41, false);
+    expect(openSpy).not.toHaveBeenCalled();
+    openSpy.mockRestore();
   });
 
   it("renders an empty state when nothing is awaiting the CEO", async () => {

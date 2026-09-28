@@ -22,6 +22,7 @@ import {
   formatSettlementDays,
   isActiveAnnualPayment,
 } from "../../../components/leaves/annualLeaveSettlement";
+import AnnualLeaveSettlementApprovalMap from "../../../components/leaves/AnnualLeaveSettlementApprovalMap";
 import AnnualLeaveSettlementDetails from "../../../components/leaves/AnnualLeaveSettlementDetails";
 import { useI18n } from "../../../i18n/useI18n";
 import {
@@ -382,6 +383,12 @@ export default function AnnualLeavePaymentCard({
                   <Typography.Text strong>#{request.id}</Typography.Text>
                   <AnnualLeavePaymentStatusTag status={request.status} />
                 </Space>
+                {/* The latest settlement is the one the dashboard links here. */}
+                {request === latest && (
+                  <div style={{ marginBottom: 12 }}>
+                    <AnnualLeaveSettlementApprovalMap request={request} t={t} />
+                  </div>
+                )}
                 <AnnualLeaveSettlementDetails request={request} />
               </div>
             ))
