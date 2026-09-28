@@ -1,9 +1,9 @@
 import { Link } from "react-router-dom";
 import {
-  ClockCircleOutlined,
-  DashboardOutlined,
-  FileSearchOutlined,
-  InboxOutlined,
+  ContainerOutlined,
+  FieldTimeOutlined,
+  FundProjectionScreenOutlined,
+  HourglassOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
 import type { MenuProps } from "antd";
@@ -31,7 +31,7 @@ export function buildManagerNavGroup(t: Translate): MenuItemGroup {
     children: [
       {
         key: "/manager/dashboard",
-        icon: <DashboardOutlined />,
+        icon: <FundProjectionScreenOutlined />,
         label: (
           <Link to="/manager/dashboard">
             {t("layout.teamDashboard", "Team Dashboard")}
@@ -41,7 +41,7 @@ export function buildManagerNavGroup(t: Translate): MenuItemGroup {
       // Everything currently waiting on this user, across request types.
       {
         key: "/pending-inbox",
-        icon: <InboxOutlined />,
+        icon: <HourglassOutlined />,
         label: (
           <Link to="/pending-inbox">
             {t("layout.pendingInbox", "Pending Inbox")}
@@ -56,7 +56,7 @@ export function buildManagerNavGroup(t: Translate): MenuItemGroup {
       // Leave, loan, permission and asset-return queues are tabs of this page.
       {
         key: "/manager/team-requests",
-        icon: <FileSearchOutlined />,
+        icon: <ContainerOutlined />,
         label: (
           <Link to="/manager/team-requests">
             {t("layout.teamRequests", "Team Requests")}
@@ -65,7 +65,7 @@ export function buildManagerNavGroup(t: Translate): MenuItemGroup {
       },
       {
         key: "/manager/attendance",
-        icon: <ClockCircleOutlined />,
+        icon: <FieldTimeOutlined />,
         label: (
           <Link to="/manager/attendance">{t("attendance.managerTitle")}</Link>
         ),

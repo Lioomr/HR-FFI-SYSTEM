@@ -1,16 +1,20 @@
 import {
   AppstoreOutlined,
-  BellOutlined,
   CalendarOutlined,
-  ClockCircleOutlined,
-  DashboardOutlined,
-  DollarOutlined,
-  FileSearchOutlined,
-  FileTextOutlined,
+  ContainerOutlined,
+  FieldTimeOutlined,
+  FileProtectOutlined,
+  FundProjectionScreenOutlined,
+  HourglassOutlined,
   IdcardOutlined,
-  InboxOutlined,
+  MoneyCollectOutlined,
+  NotificationOutlined,
   SolutionOutlined,
+  StarOutlined,
   TeamOutlined,
+  ToolOutlined,
+  TransactionOutlined,
+  UserDeleteOutlined,
 } from "@ant-design/icons";
 import type { MenuProps } from "antd";
 import { Link } from "react-router-dom";
@@ -53,12 +57,12 @@ export function buildCeoMenuItems(t: TranslateFn): MenuProps["items"] {
       children: [
         {
           key: "/ceo/dashboard",
-          icon: <DashboardOutlined />,
+          icon: <AppstoreOutlined />,
           label: <Link to="/ceo/dashboard">{t("layout.dashboard")}</Link>,
         },
         {
           key: "/pending-inbox",
-          icon: <InboxOutlined />,
+          icon: <HourglassOutlined />,
           label: (
             <Link to="/pending-inbox">
               {t("layout.pendingInbox", "Pending Inbox")}
@@ -67,7 +71,7 @@ export function buildCeoMenuItems(t: TranslateFn): MenuProps["items"] {
         },
         {
           key: "/manager/dashboard",
-          icon: <DashboardOutlined />,
+          icon: <FundProjectionScreenOutlined />,
           label: (
             <Link to="/manager/dashboard">
               {t("layout.teamDashboard", "Team Dashboard")}
@@ -91,7 +95,7 @@ export function buildCeoMenuItems(t: TranslateFn): MenuProps["items"] {
         },
         {
           key: "/ceo/annual-leave-payments",
-          icon: <DollarOutlined />,
+          icon: <TransactionOutlined />,
           label: (
             <Link to="/ceo/annual-leave-payments">
               {t("layout.nav.leaveSettlements", "Leave Settlements")}
@@ -100,7 +104,7 @@ export function buildCeoMenuItems(t: TranslateFn): MenuProps["items"] {
         },
         {
           key: "/ceo/loan-requests",
-          icon: <DollarOutlined />,
+          icon: <MoneyCollectOutlined />,
           label: (
             <Link to="/ceo/loan-requests">
               {t("layout.loanRequests", "Loan Requests")}
@@ -118,7 +122,7 @@ export function buildCeoMenuItems(t: TranslateFn): MenuProps["items"] {
         },
         {
           key: "/ceo/employees/deletion-requests",
-          icon: <TeamOutlined />,
+          icon: <UserDeleteOutlined />,
           label: (
             <Link to="/ceo/employees/deletion-requests">
               {t("employees.removalInbox.menu", "Employee Removals")}
@@ -127,7 +131,7 @@ export function buildCeoMenuItems(t: TranslateFn): MenuProps["items"] {
         },
         {
           key: "/ceo/contract-decisions",
-          icon: <FileTextOutlined />,
+          icon: <FileProtectOutlined />,
           label: (
             <Link to="/ceo/contract-decisions">
               {t("layout.contractDecisions", "Contract Decisions")}
@@ -136,7 +140,7 @@ export function buildCeoMenuItems(t: TranslateFn): MenuProps["items"] {
         },
         {
           key: "/ceo/contract-ratings",
-          icon: <FileTextOutlined />,
+          icon: <StarOutlined />,
           label: (
             <Link to="/ceo/contract-ratings">
               {t("layout.contractRatings", "Contract Ratings")}
@@ -145,7 +149,7 @@ export function buildCeoMenuItems(t: TranslateFn): MenuProps["items"] {
         },
         {
           key: "ceo-assets-sub",
-          icon: <AppstoreOutlined />,
+          icon: <ToolOutlined />,
           label: t("layout.assetReviews", "Asset Reviews"),
           children: [
             {
@@ -174,7 +178,7 @@ export function buildCeoMenuItems(t: TranslateFn): MenuProps["items"] {
       children: [
         {
           key: "/ceo/attendance",
-          icon: <ClockCircleOutlined />,
+          icon: <FieldTimeOutlined />,
           label: <Link to="/ceo/attendance">{t("layout.attendance")}</Link>,
         },
       ],
@@ -192,7 +196,7 @@ export function buildCeoMenuItems(t: TranslateFn): MenuProps["items"] {
         },
         {
           key: "/ceo/team-requests",
-          icon: <FileSearchOutlined />,
+          icon: <ContainerOutlined />,
           label: (
             <Link to="/ceo/team-requests">
               {t("layout.teamRequests", "Team Requests")}
@@ -201,7 +205,7 @@ export function buildCeoMenuItems(t: TranslateFn): MenuProps["items"] {
         },
         {
           key: "ceo-announcements-sub",
-          icon: <BellOutlined />,
+          icon: <NotificationOutlined />,
           label: t("layout.announcements", "Announcements"),
           children: [
             {
