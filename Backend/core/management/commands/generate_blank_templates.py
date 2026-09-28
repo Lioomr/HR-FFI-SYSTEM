@@ -36,6 +36,8 @@ from core.pdf import (
 )
 from core.views_templates import _get_templates_dir
 
+COMPANY_NAME = "FFI"
+
 
 def _blank_employee_block() -> EmployeeBlock:
     return EmployeeBlock(
@@ -249,7 +251,7 @@ def _render_letter(title_en: str, title_ar: str, body_lines_en: list[str], body_
     pdf.rect(36, 56, width - 72, 2, fill=1, stroke=0)
     pdf.setFillColorRGB(*PALETTE_RGB["muted_text"])
     pdf.setFont(regular, 8)
-    pdf.drawString(36, 40, "FFI HR System")
+    pdf.drawString(36, 40, f"{COMPANY_NAME} HR")
     pdf.drawRightString(width - 36, 40, "Template")
 
     pdf.showPage()
@@ -265,7 +267,7 @@ def _render_employment_certificate() -> bytes:
             "To Whom It May Concern,",
             "",
             "This is to certify that Mr./Ms. ______________________ has been",
-            "employed with FFI as a ______________________ since ____-__-__.",
+            f"employed with {COMPANY_NAME} as a ______________________ since ____-__-__.",
             "",
             "He/She is currently employed on a ______________________ contract.",
             "",
@@ -292,7 +294,7 @@ def _render_salary_certificate() -> bytes:
             "To Whom It May Concern,",
             "",
             "This is to certify that Mr./Ms. ______________________ is",
-            "employed with FFI as a ______________________ since ____-__-__,",
+            f"employed with {COMPANY_NAME} as a ______________________ since ____-__-__,",
             "with a monthly gross salary of ______________________.",
             "",
             "This certificate is issued upon the employee's request.",
@@ -316,7 +318,7 @@ def _render_termination_letter() -> bytes:
         [
             "Dear ______________________,",
             "",
-            "We regret to inform you that your employment with FFI will be",
+            f"We regret to inform you that your employment with {COMPANY_NAME} will be",
             "terminated effective ____-__-__, for the following reason:",
             "",
             "______________________________________________________________",

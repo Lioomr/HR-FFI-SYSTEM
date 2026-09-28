@@ -18,6 +18,8 @@ from .models import (
     AttendanceGraceUse,
     AttendanceLateViolation,
     BioTimeEmployeeMap,
+    BioTimeRawPunch,
+    NormalizedAttendanceEvent,
 )
 from .policy import AttendancePolicyService, penalty_percent, union_permission_minutes
 from .serializers import AttendanceLateViolationSerializer
@@ -225,9 +227,7 @@ class AttendanceViolationLifecycleTests(AttendancePolicyTestBase):
         self.assertEqual((june_first.occurrence_number, june_first.penalty_amount), (2, Decimal("5.00")))
         self.assertEqual((june_second.occurrence_number, june_second.penalty_amount), (3, Decimal("10.00")))
         self.assertEqual(
-            list(
-                AttendancePayrollDeduction.objects.order_by("violation__date").values_list("violation", "amount")
-            ),
+            list(AttendancePayrollDeduction.objects.order_by("violation__date").values_list("violation", "amount")),
             [(june_first.id, Decimal("5.00")), (june_second.id, Decimal("10.00"))],
         )
 
@@ -262,6 +262,62 @@ class AttendancePolicyRawPunchTests(AttendancePolicyTestBase):
             approved_minutes=0,
             reason=f"{kind}:TEST",
         )
+
+    @override_settings(LATE_POLICY_EFFECTIVE_FROM="")
+    def test_later_same_day_check_ins_keep_first_on_time_arrival_and_checkout(self):
+        day = date(2026, 4, 1)
+        SyncBioTimeService.ingest_transactions([self._punch(9, 0, "door-first", punch_state=0)])
+        SyncBioTimeService.ingest_transactions(
+            [
+                self._punch(9, 30, "door-again", punch_state=0),
+                self._punch(18, 0, "door-exit", punch_state=1),
+            ]
+        )
+
+        result = AttendanceDailyResult.objects.get(employee_profile=self.profile, date=day)
+        self.assertEqual(timezone.localtime(result.first_check_in_at).time(), time(9, 0))
+        self.assertEqual(timezone.localtime(result.final_check_out_at).time(), time(18, 0))
+        self.assertEqual(result.physical_work_minutes, 540)
+        self.assertEqual(result.status_input, "PRESENT")
+        self.assertFalse(AttendanceLateViolation.objects.filter(employee_profile=self.profile, date=day).exists())
+        self.assertEqual(BioTimeRawPunch.objects.filter(employee_profile=self.profile, attendance_date=day).count(), 3)
+        self.assertEqual(
+            list(
+                NormalizedAttendanceEvent.objects.filter(
+                    employee_profile=self.profile, attendance_date=day
+                ).values_list("event_type", flat=True)
+            ),
+            ["CHECK_IN", "CHECK_IN", "CHECK_OUT"],
+        )
+
+    @override_settings(LATE_POLICY_EFFECTIVE_FROM="")
+    def test_later_same_day_check_ins_do_not_create_more_violations(self):
+        day = date(2026, 4, 1)
+        SyncBioTimeService.ingest_transactions(
+            [
+                self._punch(9, 30, "late-first", punch_state=0),
+                self._punch(18, 0, "late-exit", punch_state=1),
+            ]
+        )
+        violation = AttendanceLateViolation.objects.get(employee_profile=self.profile, date=day)
+
+        SyncBioTimeService.ingest_transactions([self._punch(10, 0, "late-again", punch_state=0)])
+
+        result = AttendanceDailyResult.objects.get(employee_profile=self.profile, date=day)
+        self.assertEqual(timezone.localtime(result.first_check_in_at).time(), time(9, 30))
+        self.assertEqual(timezone.localtime(result.final_check_out_at).time(), time(18, 0))
+        self.assertEqual(result.physical_work_minutes, 510)
+        self.assertEqual(result.status_input, "LATE")
+        self.assertEqual(
+            list(
+                AttendanceLateViolation.objects.filter(employee_profile=self.profile, date=day).values_list(
+                    "id", flat=True
+                )
+            ),
+            [violation.id],
+        )
+        self.assertEqual(BioTimeRawPunch.objects.filter(employee_profile=self.profile, attendance_date=day).count(), 3)
+        self.assertEqual(AuditLog.objects.filter(action="attendance_late_violation_created").count(), 1)
 
     def test_policy_recalculation_from_raw_punches_is_idempotent(self):
         SyncBioTimeService.ingest_transactions(

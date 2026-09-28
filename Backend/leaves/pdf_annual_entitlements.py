@@ -17,7 +17,13 @@ from typing import Any, Callable
 
 from django.utils import timezone
 
-from core.pdf_forms import FormAssets, load_form_assets, log_signature_diagnostics, render_mapped_form
+from core.pdf_forms import (
+    FormAssets,
+    load_form_assets,
+    log_signature_diagnostics,
+    render_mapped_form,
+    request_company_code,
+)
 from core.pdf_signers import display_name, signer_signatures
 
 FIELD_MAP_FILENAME = "annual_entitlements_disbursement_blank_field_map.json"
@@ -111,14 +117,21 @@ def build_annual_entitlements_values(instance: Any) -> dict[str, Any]:
     }
 
 
-def load_annual_entitlements_form_assets() -> FormAssets | None:
-    return load_form_assets(TEMPLATE_FILENAME, FIELD_MAP_FILENAME, required_keys=REQUIRED_FIELD_KEYS)
+def load_annual_entitlements_form_assets(*, company_code: str | None = None) -> FormAssets | None:
+    return load_form_assets(
+        TEMPLATE_FILENAME, FIELD_MAP_FILENAME, required_keys=REQUIRED_FIELD_KEYS, company_code=company_code
+    )
 
 
 def build_annual_entitlements_pdf(instance: Any, fallback: Callable[[Any], bytes] | None = None) -> bytes:
     """Render the mapped form, falling back only when its paired asset is absent."""
 
-    assets = load_annual_entitlements_form_assets()
+    company_code = request_company_code(instance)
+    assets = (
+        load_annual_entitlements_form_assets(company_code=company_code)
+        if company_code
+        else load_annual_entitlements_form_assets()
+    )
     if assets is None:
         if fallback:
             return fallback(instance)

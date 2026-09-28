@@ -199,7 +199,7 @@ def test_missing_pair_takes_the_documented_fallback(monkeypatch):
 
 
 def _settlement_fixture():
-    company = OrganizationNode.objects.create(code="AED-A", name="AED A", node_type="company")
+    company = OrganizationNode.objects.get(code="FFI")
     foreign = OrganizationNode.objects.create(code="AED-B", name="AED B", node_type="company")
     users = {}
     for role in ("owner", "other", "foreign_hr", "hr"):
