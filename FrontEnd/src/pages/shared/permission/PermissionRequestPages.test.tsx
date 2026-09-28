@@ -122,6 +122,10 @@ describe("permission request approval trail", () => {
       }),
     );
     render(<PermissionRequestDetailPage role="employee" />);
+    // jsdom reports a phone-sized screen, where the trail starts compact.
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Show details" }),
+    );
     expect(await screen.findByText("Skipped")).toBeInTheDocument();
     expect(
       screen.getByText("Not required for this employee"),
@@ -155,6 +159,10 @@ describe("permission request approval trail", () => {
     );
     render(<PermissionRequestDetailPage role="employee" />);
     expect(await screen.findByText("30 minutes")).toBeInTheDocument();
+    // jsdom reports a phone-sized screen, where the trail starts compact.
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Show details" }),
+    );
     expect(screen.getByText("HR Reviewer")).toBeInTheDocument();
     expect(screen.getByText(/Approved for appointment/)).toBeInTheDocument();
     expect(screen.getByText(/2026-09-12 17:00/)).toBeInTheDocument();

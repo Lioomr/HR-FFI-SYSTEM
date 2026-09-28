@@ -71,6 +71,23 @@ export async function sniffInlineType(blob: Blob): Promise<string | null> {
 }
 
 /**
+ * The MIME type `blob` can be previewed as (a PDF or an image), preferring the
+ * server's type and falling back to a content sniff; null when neither is
+ * previewable.
+ */
+export async function previewableType(blob: Blob): Promise<string | null> {
+  const serverType =
+    blob.type && blob.type !== "application/octet-stream" ? blob.type : null;
+  if (
+    serverType &&
+    (serverType === "application/pdf" || serverType.startsWith("image/"))
+  ) {
+    return serverType;
+  }
+  return sniffInlineType(blob);
+}
+
+/**
  * Opens `blob` in a new tab for a quick look. Uses the server MIME type when it
  * is one the browser renders inline, otherwise falls back to a content sniff.
  * Returns false when nothing previewable was found, leaving the caller to
@@ -85,14 +102,7 @@ export async function previewBlob(
   blob: Blob,
   target?: Window | null,
 ): Promise<boolean> {
-  const serverType =
-    blob.type && blob.type !== "application/octet-stream" ? blob.type : null;
-  const inlineServerType =
-    serverType &&
-    (serverType === "application/pdf" || serverType.startsWith("image/"))
-      ? serverType
-      : null;
-  const type = inlineServerType ?? (await sniffInlineType(blob));
+  const type = await previewableType(blob);
   if (!type) {
     target?.close();
     return false;

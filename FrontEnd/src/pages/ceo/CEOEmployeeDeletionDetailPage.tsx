@@ -7,6 +7,7 @@ import PageHeader from "../../components/ui/PageHeader";
 import LoadingState from "../../components/ui/LoadingState";
 import ErrorState from "../../components/ui/ErrorState";
 import ApprovalActions from "../../components/ceo/ApprovalActions";
+import StickyDecisionBar from "../../components/ceo/StickyDecisionBar";
 import ApprovalStatusTag, {
   type ApprovalStatusTone,
 } from "../../components/ceo/ApprovalStatusTag";
@@ -212,34 +213,6 @@ export default function CEOEmployeeDeletionDetailPage() {
         }
       />
 
-      {/* ─── Decision first: the reason this page was opened ─────────────── */}
-      {isPending && (
-        <ApprovalSurface padding={18} style={{ marginBottom: 16 }}>
-          <SectionTitle>
-            {t("employees.removalDetail.decisionTitle")}
-          </SectionTitle>
-          <Paragraph type="secondary" style={{ marginBottom: 14 }}>
-            {t("employees.removalDetail.decisionHint")}
-          </Paragraph>
-          <ApprovalActions
-            size="middle"
-            subjectLabel={displayName}
-            approveDisabled={!canApprove}
-            rejectDisabled={!canReject}
-            approveLabel={t("employees.removalDetail.approveButton")}
-            rejectLabel={t("employees.removalDetail.rejectButton")}
-            onApprove={() => {
-              setApproveOpen(true);
-              setActionError(null);
-            }}
-            onReject={() => {
-              setRejectOpen(true);
-              setActionError(null);
-            }}
-          />
-        </ApprovalSurface>
-      )}
-
       {data.status === "EXECUTED" && (
         <Alert
           type="success"
@@ -359,6 +332,27 @@ export default function CEOEmployeeDeletionDetailPage() {
       )}
 
       {/* Approve confirmation */}
+      {isPending && (
+        <StickyDecisionBar>
+          <ApprovalActions
+            size="large"
+            subjectLabel={displayName}
+            approveDisabled={!canApprove}
+            rejectDisabled={!canReject}
+            approveLabel={t("employees.removalDetail.approveButton")}
+            rejectLabel={t("employees.removalDetail.rejectButton")}
+            onApprove={() => {
+              setApproveOpen(true);
+              setActionError(null);
+            }}
+            onReject={() => {
+              setRejectOpen(true);
+              setActionError(null);
+            }}
+          />
+        </StickyDecisionBar>
+      )}
+
       <Modal
         open={approveOpen}
         title={t("employees.removalDetail.approveModalTitle")}

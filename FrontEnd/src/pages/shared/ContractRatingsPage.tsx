@@ -60,7 +60,7 @@ import {
   isValidationError,
 } from "../../services/api/httpErrors";
 import { triggerBlobDownload } from "../../services/api/downloads";
-import { previewBlob } from "../../utils/download";
+import { useFilePreview } from "../../components/ui/useFilePreview";
 import {
   acknowledgeRatingTerminationNotice,
   downloadContractRatingPdf,
@@ -140,9 +140,8 @@ export default function ContractRatingsPage() {
   const [actionErrors, setActionErrors] = useState<string[]>([]);
   const [errorScope, setErrorScope] = useState<ActionScope | null>(null);
   const [hrComment, setHrComment] = useState("");
-  const [pdfAction, setPdfAction] = useState<"preview" | "download" | null>(
-    null,
-  );
+  const [pdfDownloading, setPdfDownloading] = useState(false);
+  const { openPreview, previewModal } = useFilePreview();
   const [messageApi, messageContext] = message.useMessage();
   const [modal, modalContext] = Modal.useModal();
 
@@ -250,31 +249,31 @@ export default function ContractRatingsPage() {
     }
   };
 
-  const runPdf = async (action: "preview" | "download") => {
+  const previewPdf = () => {
     if (!id) return;
-    const tab =
-      action === "preview" ? window.open("about:blank", "_blank") : null;
-    setPdfAction(action);
+    openPreview({
+      title: t("contractRatings.previewPdf"),
+      filename: `contract_rating_${id}.pdf`,
+      load: () => downloadContractRatingPdf(id),
+    });
+  };
+
+  const downloadPdf = async () => {
+    if (!id) return;
+    setPdfDownloading(true);
     try {
-      const blob = await downloadContractRatingPdf(id);
-      if (action === "download") {
-        triggerBlobDownload(blob, `contract_rating_${id}.pdf`);
-      } else if (!(await previewBlob(blob, tab))) {
-        messageApi.error(t("contractRatings.pdfPreviewFailed"));
-      }
+      triggerBlobDownload(
+        await downloadContractRatingPdf(id),
+        `contract_rating_${id}.pdf`,
+      );
     } catch (error) {
-      tab?.close();
       messageApi.error(
         isForbidden(error)
           ? getHttpErrorMessage(error)
-          : t(
-              action === "preview"
-                ? "contractRatings.pdfPreviewFailed"
-                : "contractRatings.pdfFailed",
-            ),
+          : t("contractRatings.pdfFailed"),
       );
     } finally {
-      setPdfAction(null);
+      setPdfDownloading(false);
     }
   };
 
@@ -462,17 +461,13 @@ export default function ContractRatingsPage() {
           </Button>
           {canDownloadPdf ? (
             <>
-              <Button
-                icon={<EyeOutlined />}
-                loading={pdfAction === "preview"}
-                onClick={() => void runPdf("preview")}
-              >
+              <Button icon={<EyeOutlined />} onClick={previewPdf}>
                 {t("contractRatings.previewPdf")}
               </Button>
               <Button
                 icon={<FilePdfOutlined />}
-                loading={pdfAction === "download"}
-                onClick={() => void runPdf("download")}
+                loading={pdfDownloading}
+                onClick={() => void downloadPdf()}
               >
                 {t("contractRatings.downloadPdf")}
               </Button>
@@ -552,6 +547,7 @@ export default function ContractRatingsPage() {
     <>
       {messageContext}
       {modalContext}
+      {previewModal}
       {header}
       {alerts}
       {renderFull(record)}
