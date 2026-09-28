@@ -417,10 +417,14 @@ describe("map picker in the modal", () => {
     );
     await screen.findByRole("dialog", {}, FIND);
 
-    const stub = screen.getByTestId("map-picker-stub");
-    expect(stub).toHaveAttribute("data-latitude", "24.713600");
-    expect(stub).toHaveAttribute("data-longitude", "46.675300");
-    expect(stub).toHaveAttribute("data-radius", "100");
+    // Form.useWatch hands the edited values to the map a render after the
+    // dialog mounts, which can lag on slow CI runners.
+    await waitFor(() => {
+      const stub = screen.getByTestId("map-picker-stub");
+      expect(stub).toHaveAttribute("data-latitude", "24.713600");
+      expect(stub).toHaveAttribute("data-longitude", "46.675300");
+      expect(stub).toHaveAttribute("data-radius", "100");
+    }, FIND);
   });
 
   it("writes a map pick into the latitude and longitude fields at six decimals", async () => {
