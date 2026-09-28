@@ -9,7 +9,9 @@ export type PendingRequestType =
   | "EMPLOYEE_DELETION"
   | "CONTRACT_DECISION"
   | "CONTRACT_RATING"
-  | "ANNUAL_LEAVE_PAYMENT";
+  | "ANNUAL_LEAVE_PAYMENT"
+  | "JOB_OFFER"
+  | "STARTING_WORK";
 
 export interface PendingRequestItem {
   id: number;
