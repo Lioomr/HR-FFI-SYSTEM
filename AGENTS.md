@@ -67,6 +67,7 @@ You have access to a rich context library in the `.agents/` directory. To maximi
 - **Start here:** Always read `.agents/context/INDEX.md` first to map your current task to the correct context file.
 - **Lazy Load:** Only use `view_file` to read the specific files from `.agents/context/`, `.agents/rules/`, or `.agents/skills/` that are explicitly required for your task. Do NOT bulk-load the entire folder.
 - **Cross-module map:** For architecture, feature planning, or work crossing modules, read `.agents/context/system_map.md` after the index. For a narrow task, skip it and load only the matching context note(s).
+- **Ponytail (required for coding tasks):** Read and apply `.agents/rules/ponytail.md` before changing code and when reviewing the resulting diff. It supplements these repository rules; it never overrides explicit task requirements, security, API, workflow, testing, or deployment guidance.
 
 ## Trace Linked Features Before Changes
 
@@ -112,6 +113,8 @@ Rules:
 - If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
 - Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+
+Use Graphify to locate and trace relevant code before applying Ponytail's minimal-change guidance. Understand the actual flow first, then choose the smallest correct change.
 
 ## AWS Guidance
 

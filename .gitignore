@@ -52,13 +52,21 @@ FrontEnd/.codex-*
 tmp/
 /tmp_*.py
 ai_evals/
+.archify/
 .github/copilot-instructions.md
 /.agents/agents/
 /.agents/ecc-install-state.json
 /.agents/rules/
+!/.agents/rules/
+/.agents/rules/*
+!/.agents/rules/ponytail.md
 /.agents/skills/
 /.agents/workflows/
 /tmp_ecc*.json
+
+# Uploaded logo source copies are kept in Backend/static/pdf_templates/company_logos/
+/ASICO PRO Infinity Engineering Logo.png
+/althroya no bg.png
 /tmp_opencode.json
 /job_offer_*.pdf
 /*.docx
@@ -137,6 +145,16 @@ Backend/static/pdf_templates/*
 # Starting work acknowledgment pair
 !Backend/static/pdf_templates/starting_work_acknowledgment_blank.pdf
 !Backend/static/pdf_templates/starting_work_acknowledgment_blank_field_map.json
+
+# Per-company request PDF template pairs and their logo source assets
+!Backend/static/pdf_templates/company_templates/
+Backend/static/pdf_templates/company_templates/*
+!Backend/static/pdf_templates/company_templates/*/
+!Backend/static/pdf_templates/company_templates/*/*.pdf
+!Backend/static/pdf_templates/company_templates/*/*.json
+!Backend/static/pdf_templates/company_logos/
+Backend/static/pdf_templates/company_logos/*
+!Backend/static/pdf_templates/company_logos/*.png
 
 # Late attendance notice pairs (approved version 1, one pair per level)
 !Backend/static/pdf_templates/late_attendance_level_1_blank.pdf

@@ -18,6 +18,7 @@ from core.pdf_forms import (
     load_form_assets,
     log_signature_diagnostics,
     render_mapped_form,
+    request_company_code,
 )
 from core.pdf_signers import signer_signatures
 from core.views_templates import resolve_template_path
@@ -280,7 +281,9 @@ def build_leave_request_values(instance) -> dict[str, Any]:
     }
 
 
-def load_leave_form_assets(template_path: str | Path | None = None) -> FormAssets | None:
+def load_leave_form_assets(
+    template_path: str | Path | None = None, *, company_code: str | None = None
+) -> FormAssets | None:
     """Resolve the template and the map deployed beside it.
 
     ``template_path`` lets a caller render a specific template file while still
@@ -293,6 +296,7 @@ def load_leave_form_assets(template_path: str | Path | None = None) -> FormAsset
         FIELD_MAP_FILENAME,
         aliases=TEMPLATE_ALIASES,
         required_keys=REQUIRED_FIELD_KEYS,
+        company_code=company_code,
     )
     if assets is None or template_path is None:
         return assets
@@ -322,7 +326,8 @@ def render_leave_request_pdf(
 def build_leave_request_pdf(instance, fallback: Callable[[Any], bytes] | None = None) -> bytes:
     """Render the mapped leave form, falling back only when its pair is absent."""
 
-    assets = load_leave_form_assets()
+    company_code = request_company_code(instance)
+    assets = load_leave_form_assets(company_code=company_code) if company_code else load_leave_form_assets()
     if assets is None:
         if fallback:
             return fallback(instance)

@@ -854,7 +854,7 @@ class LateNoticeDeliveryTests(LateAttendanceNoticeTestBase):
                 "reference_number": notice.reference_number,
                 "policy_result": "Formal caution - 5% daily-rate deduction.",
                 "policy_result_ar": "تنبيه رسمي - خصم بنسبة ٥٪ من الأجر اليومي.",
-                "action_url": "/employee/attendance",
+                "action_url": "/employee/permission-requests/new",
             },
         )
 
@@ -890,7 +890,7 @@ class LateNoticeDeliveryTests(LateAttendanceNoticeTestBase):
         self.assertIn("• *Notice type:* Formal Caution", caption)
         for old in ("إشعار تأخر في الحضور", "مستوى", "*Level:*"):
             self.assertNotIn(old, caption)
-        self.assertIn("🔗 https://app.example.com/employee/attendance", caption)
+        self.assertIn("🔗 https://app.example.com/employee/permission-requests/new", caption)
         self.assertNotIn("/api/attendance/notices", caption)
         self.assertNotIn("attendance_late_notices/", caption)
 
@@ -964,7 +964,7 @@ class LateNoticeWhatsAppTemplateTests(TestCase):
                     "reference_number": f"LAN-FFI-00000{level}",
                     "policy_result": result_en,
                     "policy_result_ar": result_ar,
-                    "action_url": "/employee/attendance",
+                    "action_url": "/employee/permission-requests/new",
                 }
                 with override_settings(FRONTEND_URL="https://app.example.com"):
                     text, error = service.render_template(template_name=WHATSAPP_TEMPLATE, template_variables=variables)
@@ -987,7 +987,7 @@ class LateNoticeWhatsAppTemplateTests(TestCase):
                 for old in ("إشعار تأخر في الحضور", "إشعار التأخر", "إشعار توعوي", "مستوى", "Level"):
                     self.assertNotIn(old, text)
                 self.assertTrue(text.endswith(SIGNATURE))
-                self.assertIn("🔗 https://app.example.com/employee/attendance", text)
+                self.assertIn("🔗 https://app.example.com/employee/permission-requests/new", text)
                 for forbidden in ("/api/", "download", ".pdf", "attendance_late_notices"):
                     self.assertNotIn(forbidden, text)
                 self.assertLessEqual(len(text), CAPTION_MAX_CHARS)

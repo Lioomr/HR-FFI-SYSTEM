@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 vi.mock("../../services/api/contractRatingsApi", async (importOriginal) => ({
@@ -119,9 +125,15 @@ function renderAt(path: string) {
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="/hr/contract-ratings" element={<ContractRatingsPage />} />
-        <Route path="/hr/contract-ratings/:id" element={<ContractRatingsPage />} />
+        <Route
+          path="/hr/contract-ratings/:id"
+          element={<ContractRatingsPage />}
+        />
         <Route path="/ceo/contract-ratings" element={<ContractRatingsPage />} />
-        <Route path="/ceo/contract-ratings/:id" element={<ContractRatingsPage />} />
+        <Route
+          path="/ceo/contract-ratings/:id"
+          element={<ContractRatingsPage />}
+        />
       </Routes>
     </MemoryRouter>,
   );
@@ -140,7 +152,9 @@ describe("ContractRatingsPage — HR", () => {
       },
     });
     renderAt("/hr/contract-ratings/1");
-    expect(await screen.findByText("You are a rater on this evaluation")).toBeTruthy();
+    expect(
+      await screen.findByText("You are a rater on this evaluation"),
+    ).toBeTruthy();
     expect(screen.queryByText("Comparison")).toBeNull();
   });
 
@@ -163,13 +177,24 @@ describe("ContractRatingsPage — HR", () => {
       },
     });
     renderAt("/hr/contract-ratings/1");
-    expect(await screen.findByRole("button", { name: /Rate this employee/ })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Send straight to the CEO/ })).toBeTruthy();
+    const bar = await screen.findByRole("region", { name: "Decision actions" });
+    expect(
+      within(bar).getByRole("button", { name: /Rate this employee/ }),
+    ).toBeTruthy();
+    expect(
+      within(bar).getByRole("button", { name: /Send straight to the CEO/ }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: /Send straight to the CEO/ }),
+    ).toBeTruthy();
     expect(screen.getByText("No linked self-service account")).toBeTruthy();
     // Decision support only: both options stay available without an account.
     expect(
-      (screen.getByRole("button", { name: /Rate this employee/ }) as HTMLButtonElement)
-        .disabled,
+      (
+        screen.getByRole("button", {
+          name: /Rate this employee/,
+        }) as HTMLButtonElement
+      ).disabled,
     ).toBe(false);
   });
 
@@ -187,9 +212,13 @@ describe("ContractRatingsPage — HR", () => {
       },
     });
     renderAt("/hr/contract-ratings/1");
-    expect(await screen.findByText("Rating content is confidential")).toBeTruthy();
+    expect(
+      await screen.findByText("Rating content is confidential"),
+    ).toBeTruthy();
     expect(screen.queryByText("Comparison")).toBeNull();
-    expect(screen.queryByRole("button", { name: /Rate this employee/ })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /Rate this employee/ }),
+    ).toBeNull();
     expect(screen.queryByRole("button", { name: /Renew/ })).toBeNull();
   });
 
@@ -253,24 +282,79 @@ describe("ContractRatingsPage — CEO", () => {
     renderAt("/ceo/contract-ratings/1");
     expect(await screen.findByText("Comparison")).toBeTruthy();
     for (const name of ["Renew", "Renew with increase", "Terminate"]) {
-      expect(screen.getByRole("button", { name: new RegExp(`^\\S* ?${name}$`) })).toBeTruthy();
+      expect(
+        screen.getByRole("button", { name: new RegExp(`^\\S* ?${name}$`) }),
+      ).toBeTruthy();
     }
-    expect(screen.getByRole("button", { name: /Return to manager/ })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Return to employee/ })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Return to both/ })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Request HR comment/ })).toBeTruthy();
+    // The outcomes and returns are pinned to the sticky decision bar.
+    const bar = screen.getByRole("region", { name: "Decision actions" });
+    expect(within(bar).getByRole("button", { name: /Terminate/ })).toBeTruthy();
+    fireEvent.click(
+      within(bar).getByRole("button", { name: /Return for correction/ }),
+    );
+    expect(
+      await screen.findByRole("menuitem", { name: /Return to manager/ }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("menuitem", { name: /Return to employee/ }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("menuitem", { name: /Return to both/ }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: /Request HR comment/ }),
+    ).toBeTruthy();
+  });
+
+  it("maps the rating stages from the workflow snapshot above the history", async () => {
+    getRating.mockResolvedValue({
+      status: "success",
+      data: {
+        ...ratedFull,
+        workflow: {
+          status: "in_review" as const,
+          current_stage: "ceo",
+          can_approve: true,
+          history: [
+            {
+              action: "advance",
+              from_stage: "hr_gate",
+              to_stage: "responses",
+              actor: { id: 8, full_name: "Hana HR" },
+              at: "2026-09-10T08:00:00Z",
+            },
+            {
+              action: "advance",
+              from_stage: "responses",
+              to_stage: "ceo",
+              at: "2026-09-12T08:00:00Z",
+            },
+          ],
+        },
+      },
+    });
+    renderAt("/ceo/contract-ratings/1");
+    expect(await screen.findByText("Rating progress")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Show details/ }));
+    expect(screen.getByText("HR routing")).toBeTruthy();
+    expect(screen.getByText("Evaluations")).toBeTruthy();
+    expect(screen.getByText("Handled by Hana HR")).toBeTruthy();
   });
 
   it("replaces evaluation panels with a banner and hides returns on a skipped cycle", async () => {
     getRating.mockResolvedValue({ status: "success", data: skippedFull });
     renderAt("/ceo/contract-ratings/1");
     expect(
-      await screen.findByText("HR sent this contract directly to you without a rating"),
+      await screen.findByText(
+        "HR sent this contract directly to you without a rating",
+      ),
     ).toBeTruthy();
     expect(screen.queryByText("Comparison")).toBeNull();
     expect(screen.queryByText("Manager evaluation")).toBeNull();
     expect(screen.queryByRole("button", { name: /Return to/ })).toBeNull();
-    expect(screen.getByRole("button", { name: /Renew with increase/ })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: /Renew with increase/ }),
+    ).toBeTruthy();
     // The banner names who routed it, from hr_gate_decided_by_name.
     expect(screen.getByText(/Routed by Hana HR/)).toBeTruthy();
   });
@@ -284,7 +368,10 @@ describe("ContractRatingsPage — CEO", () => {
     });
     renderAt("/ceo/contract-ratings/1");
     fireEvent.click(
-      await screen.findByRole("button", { name: /Return to employee/ }),
+      await screen.findByRole("button", { name: /Return for correction/ }),
+    );
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: /Return to employee/ }),
     );
     const dialog = await screen.findByRole("dialog");
     fireEvent.change(dialog.querySelector("textarea")!, {
@@ -311,7 +398,9 @@ describe("ContractRatingsPage — CEO", () => {
     await screen.findByRole("button", { name: /Renew with increase/ });
     expect(screen.queryByLabelText("Basic salary")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: /Renew with increase/ }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /Renew with increase/ }),
+    );
     expect(await screen.findByLabelText("Basic salary")).toBeTruthy();
     expect(screen.getByText(/Current: 5000.00/)).toBeTruthy();
   });
@@ -319,7 +408,9 @@ describe("ContractRatingsPage — CEO", () => {
   it("sends a plain Renew decision without salary keys", async () => {
     getRating.mockResolvedValue({ status: "success", data: skippedFull });
     renderAt("/ceo/contract-ratings/1");
-    fireEvent.click(await screen.findByRole("button", { name: /^\S* ?Renew$/ }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /^\S* ?Renew$/ }),
+    );
     const dialog = await screen.findByRole("dialog");
     fireEvent.click(
       Array.from(dialog.querySelectorAll("button")).find(
@@ -327,7 +418,10 @@ describe("ContractRatingsPage — CEO", () => {
       )!,
     );
     await waitFor(() =>
-      expect(decide).toHaveBeenCalledWith(1, { ceo_decision: "RENEW", comment: "" }),
+      expect(decide).toHaveBeenCalledWith(1, {
+        ceo_decision: "RENEW",
+        comment: "",
+      }),
     );
   });
 
@@ -345,7 +439,9 @@ describe("ContractRatingsPage — CEO", () => {
       },
     });
     renderAt("/ceo/contract-ratings/1");
-    fireEvent.click(await screen.findByRole("button", { name: /^\S* ?Terminate$/ }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /^\S* ?Terminate$/ }),
+    );
     const dialog = await screen.findByRole("dialog");
     fireEvent.click(
       Array.from(dialog.querySelectorAll("button")).find(

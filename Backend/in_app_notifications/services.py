@@ -137,10 +137,11 @@ def create_notification(
         related_object_id = related_object_id if related_object_id is not None else related_object.pk
         company = company or getattr(related_object, "company", None)
 
-    resolved_company = _recipient_company(recipient, company)
-    action_url = with_company_param(action_url, link_company_id(company=company, company_id=company_id))
+    # File it under the company it is about; only fall back to the recipient's own company.
+    stated_company_id = link_company_id(company=company, company_id=company_id)
+    action_url = with_company_param(action_url, stated_company_id)
     values = {
-        "company_id": getattr(resolved_company, "pk", None) or company_id,
+        "company_id": stated_company_id or getattr(_recipient_company(recipient), "pk", None),
         "event_key": str(event_key)[:120],
         "title": str(title)[:255],
         "message": str(message),

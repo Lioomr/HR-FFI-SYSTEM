@@ -324,14 +324,30 @@ describe("ContractDecisionsPage detail", () => {
 
     renderAt("/hr/contract-decisions/7");
 
-    expect(await screen.findByText("Workflow history")).toBeInTheDocument();
+    const history = within(
+      (await screen.findByText("Workflow history")).closest(
+        ".ant-card",
+      ) as HTMLElement,
+    );
     // Both HR attempts and both CEO attempts survive, not just the latest pair.
-    expect(screen.getByText("First submission")).toBeInTheDocument();
-    expect(screen.getByText("First CEO look")).toBeInTheDocument();
-    expect(screen.getByText("Second submission")).toBeInTheDocument();
-    expect(screen.getByText("Second CEO look")).toBeInTheDocument();
+    expect(history.getByText("First submission")).toBeInTheDocument();
+    expect(history.getByText("First CEO look")).toBeInTheDocument();
+    expect(history.getByText("Second submission")).toBeInTheDocument();
+    expect(history.getByText("Second CEO look")).toBeInTheDocument();
     // Action codes render through the dictionary ("submit" → "Submitted").
-    expect(screen.getAllByText("Submitted")).toHaveLength(2);
+    expect(history.getAllByText("Submitted")).toHaveLength(2);
+    // The progress map above the history names both workflow stages.
+    expect(screen.getByText("Decision progress")).toBeInTheDocument();
+    // Compact (phone) layout: the waiting CEO stage keeps its full card.
+    expect(screen.getByRole("button", { name: /Show details/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Show details/ }));
+    const map = within(
+      screen.getByText("Decision progress").closest(".ant-card") as HTMLElement,
+    );
+    expect(map.getAllByText("HR").length).toBeGreaterThan(0);
+    expect(map.getAllByText("CEO").length).toBeGreaterThan(0);
+    // Each stage carries its latest recorded note.
+    expect(map.getByText("Second submission")).toBeInTheDocument();
   });
 
   it("explains an automatic renewal and its reason", async () => {
@@ -676,6 +692,15 @@ describe("ContractDecisionsPage CEO decision", () => {
     ).toBeInTheDocument();
   });
 
+  it("pins the CEO decision to the sticky decision bar", async () => {
+    renderAt("/ceo/contract-decisions/7");
+
+    const bar = await screen.findByRole("region", { name: "Decision actions" });
+    expect(within(bar).getByRole("button", { name: /Approve/ })).toBeTruthy();
+    expect(within(bar).getByRole("button", { name: /Reject/ })).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: /Approve/ })).toHaveLength(1);
+  });
+
   it("hides both actions when the workflow says the CEO cannot act", async () => {
     getMock.mockResolvedValue(
       detailPayload(
@@ -697,6 +722,9 @@ describe("ContractDecisionsPage CEO decision", () => {
     await screen.findByText("Pending CEO approval");
     expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Reject" })).toBeNull();
+    expect(
+      screen.queryByRole("region", { name: "Decision actions" }),
+    ).toBeNull();
   });
 });
 

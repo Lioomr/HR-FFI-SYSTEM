@@ -14,6 +14,8 @@ from audit.utils import audit
 from core.pdf import encrypt_pdf
 from core.responses import error, success
 from employees.permissions import IsHRManagerOrAdmin
+from organization.models import OrganizationNode
+from organization.services import get_active_organization_for_request
 
 SENSITIVE_TEMPLATE_KEYS = {"salary_certificate", "termination_letter", "employment_certificate"}
 
@@ -171,8 +173,24 @@ def _templates_by_key() -> dict:
     return {entry["key"]: entry for entry in TEMPLATE_CATALOG}
 
 
-def _template_file_path(template: dict) -> str:
-    return resolve_template_path(template["filename"]) or os.path.join(_get_templates_dir(), template["filename"])
+def _template_file_path(template: dict, company_code: str) -> str:
+    """Resolve a template for the selected company without cross-company fallback."""
+    if company_code == "FFI":
+        return resolve_template_path(template["filename"]) or os.path.join(_get_templates_dir(), template["filename"])
+    if not company_code or not all(char.isalnum() or char in "-_" for char in company_code):
+        return ""
+    for directory in get_template_search_dirs():
+        path = os.path.join(directory, "company_templates", company_code, template["filename"])
+        if os.path.isfile(path):
+            return path
+    return ""
+
+
+def _active_company_code(request) -> str | None:
+    organization = get_active_organization_for_request(request)
+    if not organization or organization.node_type != OrganizationNode.NodeType.COMPANY:
+        return None
+    return organization.code
 
 
 def _template_updated_at(path: str) -> str | None:
@@ -187,9 +205,12 @@ class TemplateListView(APIView):
     permission_classes = [IsAuthenticated, IsHRManagerOrAdmin]
 
     def get(self, request):
+        company_code = _active_company_code(request)
+        if company_code is None:
+            return error("Select a company", errors=["Select an active company for this request."], status=403)
         items = []
         for entry in TEMPLATE_CATALOG:
-            path = _template_file_path(entry)
+            path = _template_file_path(entry, company_code)
             items.append(
                 {
                     "key": entry["key"],
@@ -213,11 +234,14 @@ class TemplateDownloadView(APIView):
         template = _templates_by_key().get(key)
         if not template:
             return error("Not found", errors=["Unknown template."], status=404)
-        path = _template_file_path(template)
+        company_code = _active_company_code(request)
+        if company_code is None:
+            return error("Select a company", errors=["Select an active company for this request."], status=403)
+        path = _template_file_path(template, company_code)
         if not os.path.exists(path):
             return error(
                 "Not available",
-                errors=["Template file is missing. Run generate_blank_templates."],
+                errors=[f"No {company_code} version of this template is available."],
                 status=404,
             )
         password = request.query_params.get("password", "").strip()
@@ -231,7 +255,7 @@ class TemplateDownloadView(APIView):
             "template_downloaded",
             entity="Template",
             entity_id=0,
-            metadata={"template_key": key, "encrypted": encrypted},
+            metadata={"template_key": key, "company_code": company_code, "encrypted": encrypted},
         )
         if encrypted:
             response = HttpResponse(pdf_bytes, content_type="application/pdf")

@@ -80,7 +80,7 @@ def make_employee(company, tag, *, with_signature=True, manager_profile=None):
 
 @pytest.fixture
 def signed_world():
-    company = OrganizationNode.objects.create(code="PDFSIG", name="PDF Sig Co", node_type="company")
+    company = OrganizationNode.objects.get(code="FFI")
     manager_user, manager_profile = make_employee(company, "PDFSIG-MGR")
     employee_user, employee_profile = make_employee(company, "PDFSIG-EMP", manager_profile=manager_profile)
     unsigned_user, unsigned_profile = make_employee(company, "PDFSIG-NOSIG", with_signature=False)

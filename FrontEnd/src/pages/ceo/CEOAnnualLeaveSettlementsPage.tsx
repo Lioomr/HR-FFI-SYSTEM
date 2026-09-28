@@ -1,15 +1,27 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Modal, Space, Table, Typography, notification } from "antd";
+import { useNavigate, useParams } from "react-router-dom";
+import {
+  Alert,
+  Button,
+  Card,
+  Modal,
+  Space,
+  Table,
+  Typography,
+  notification,
+} from "antd";
 import type { ColumnsType } from "antd/es/table";
 
 import ApprovalActions from "../../components/ceo/ApprovalActions";
 import ApprovalQueuePage from "../../components/ceo/ApprovalQueuePage";
 import RejectReasonModal from "../../components/ceo/RejectReasonModal";
+import StickyDecisionBar from "../../components/ceo/StickyDecisionBar";
 import AnnualLeavePaymentStatusTag from "../../components/leaves/AnnualLeavePaymentStatusTag";
 import {
   formatSettlementAmount,
   formatSettlementDays,
 } from "../../components/leaves/annualLeaveSettlement";
+import AnnualLeaveSettlementApprovalMap from "../../components/leaves/AnnualLeaveSettlementApprovalMap";
 import AnnualLeaveSettlementDetails from "../../components/leaves/AnnualLeaveSettlementDetails";
 import { useI18n } from "../../i18n/useI18n";
 import {
@@ -34,6 +46,8 @@ const PAGE_SIZE = 20;
  */
 export default function CEOAnnualLeaveSettlementsPage() {
   const { t } = useI18n();
+  const navigate = useNavigate();
+  const { id: routeId } = useParams<{ id?: string }>();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -85,6 +99,11 @@ export default function CEOAnnualLeaveSettlementsPage() {
   useEffect(() => {
     void loadData(page);
   }, [loadData, page]);
+
+  // Deep link from the CEO notification: /ceo/annual-leave-payments/:id
+  const deepLinked = routeId
+    ? requests.find((request) => String(request.id) === routeId)
+    : undefined;
 
   const employeeName = (record: AnnualLeavePaymentRequest) =>
     record.employee_name || `#${record.employee_id ?? record.id}`;
@@ -272,6 +291,32 @@ export default function CEOAnnualLeaveSettlementsPage() {
         onRefresh={() => loadData(page, { isRefresh: true })}
         refreshing={refreshing}
       >
+        {deepLinked && (
+          <div style={{ padding: 16 }}>
+            <Card
+              style={{ borderRadius: 16 }}
+              title={t("annualPayment.requestNumber", {
+                id: String(deepLinked.id),
+              })}
+              extra={
+                <Button
+                  size="small"
+                  onClick={() => navigate("/ceo/annual-leave-payments")}
+                >
+                  {t("common.close")}
+                </Button>
+              }
+            >
+              <Space direction="vertical" size={16} style={{ width: "100%" }}>
+                <AnnualLeaveSettlementApprovalMap request={deepLinked} t={t} />
+                <AnnualLeaveSettlementDetails
+                  request={deepLinked}
+                  showEmployee
+                />
+              </Space>
+            </Card>
+          </div>
+        )}
         <Table
           columns={columns}
           dataSource={requests}
@@ -293,6 +338,25 @@ export default function CEOAnnualLeaveSettlementsPage() {
           }}
         />
       </ApprovalQueuePage>
+
+      {deepLinked?.status === "pending_ceo" && (
+        <StickyDecisionBar>
+          <ApprovalActions
+            size="large"
+            subjectLabel={employeeName(deepLinked)}
+            approveLoading={processing && approving?.id === deepLinked.id}
+            disabled={processing}
+            onApprove={() => {
+              setActionError(null);
+              setApproving(deepLinked);
+            }}
+            onReject={() => {
+              setActionError(null);
+              setRejecting(deepLinked);
+            }}
+          />
+        </StickyDecisionBar>
+      )}
 
       <Modal
         open={Boolean(approving)}

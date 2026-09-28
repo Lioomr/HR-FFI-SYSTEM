@@ -31,6 +31,9 @@ import ResponsiveTable from "../../components/ui/ResponsiveTable";
 import ErrorState from "../../components/ui/ErrorState";
 import LoadingState from "../../components/ui/LoadingState";
 import ApprovalTimeline from "../../components/requests/ApprovalTimeline";
+import ApprovalFlowMap from "../../components/requests/ApprovalFlowMap";
+import { buildStagesFromWorkflow } from "../../components/requests/workflowPresentation";
+import StickyDecisionBar from "../../components/ceo/StickyDecisionBar";
 import ApprovalQueuePage from "../../components/ceo/ApprovalQueuePage";
 import ApprovalSurface from "../../components/ceo/ApprovalSurface";
 import ApprovalStatusTag, {
@@ -60,7 +63,7 @@ import {
   isValidationError,
 } from "../../services/api/httpErrors";
 import { triggerBlobDownload } from "../../services/api/downloads";
-import { previewBlob } from "../../utils/download";
+import { useFilePreview } from "../../components/ui/useFilePreview";
 import {
   acknowledgeRatingTerminationNotice,
   downloadContractRatingPdf,
@@ -140,9 +143,8 @@ export default function ContractRatingsPage() {
   const [actionErrors, setActionErrors] = useState<string[]>([]);
   const [errorScope, setErrorScope] = useState<ActionScope | null>(null);
   const [hrComment, setHrComment] = useState("");
-  const [pdfAction, setPdfAction] = useState<"preview" | "download" | null>(
-    null,
-  );
+  const [pdfDownloading, setPdfDownloading] = useState(false);
+  const { openPreview, previewModal } = useFilePreview();
   const [messageApi, messageContext] = message.useMessage();
   const [modal, modalContext] = Modal.useModal();
 
@@ -250,31 +252,31 @@ export default function ContractRatingsPage() {
     }
   };
 
-  const runPdf = async (action: "preview" | "download") => {
+  const previewPdf = () => {
     if (!id) return;
-    const tab =
-      action === "preview" ? window.open("about:blank", "_blank") : null;
-    setPdfAction(action);
+    openPreview({
+      title: t("contractRatings.previewPdf"),
+      filename: `contract_rating_${id}.pdf`,
+      load: () => downloadContractRatingPdf(id),
+    });
+  };
+
+  const downloadPdf = async () => {
+    if (!id) return;
+    setPdfDownloading(true);
     try {
-      const blob = await downloadContractRatingPdf(id);
-      if (action === "download") {
-        triggerBlobDownload(blob, `contract_rating_${id}.pdf`);
-      } else if (!(await previewBlob(blob, tab))) {
-        messageApi.error(t("contractRatings.pdfPreviewFailed"));
-      }
+      triggerBlobDownload(
+        await downloadContractRatingPdf(id),
+        `contract_rating_${id}.pdf`,
+      );
     } catch (error) {
-      tab?.close();
       messageApi.error(
         isForbidden(error)
           ? getHttpErrorMessage(error)
-          : t(
-              action === "preview"
-                ? "contractRatings.pdfPreviewFailed"
-                : "contractRatings.pdfFailed",
-            ),
+          : t("contractRatings.pdfFailed"),
       );
     } finally {
-      setPdfAction(null);
+      setPdfDownloading(false);
     }
   };
 
@@ -462,17 +464,13 @@ export default function ContractRatingsPage() {
           </Button>
           {canDownloadPdf ? (
             <>
-              <Button
-                icon={<EyeOutlined />}
-                loading={pdfAction === "preview"}
-                onClick={() => void runPdf("preview")}
-              >
+              <Button icon={<EyeOutlined />} onClick={previewPdf}>
                 {t("contractRatings.previewPdf")}
               </Button>
               <Button
                 icon={<FilePdfOutlined />}
-                loading={pdfAction === "download"}
-                onClick={() => void runPdf("download")}
+                loading={pdfDownloading}
+                onClick={() => void downloadPdf()}
               >
                 {t("contractRatings.downloadPdf")}
               </Button>
@@ -552,6 +550,7 @@ export default function ContractRatingsPage() {
     <>
       {messageContext}
       {modalContext}
+      {previewModal}
       {header}
       {alerts}
       {renderFull(record)}
@@ -561,6 +560,7 @@ export default function ContractRatingsPage() {
   /** HR without a CEO comment request: status, routing gate, outcome only. */
   function renderCoarse(item: HrCoarseContractRatingView) {
     const gateOpen = item.status === "PENDING_HR_GATE";
+    const canGate = gateOpen && Boolean(item.gate) && !isCeoRoute;
     const canAcknowledge =
       !isCeoRoute &&
       item.status === "DECIDED" &&
@@ -583,7 +583,7 @@ export default function ContractRatingsPage() {
           </Space>
         </ApprovalSurface>
 
-        {gateOpen && item.gate && !isCeoRoute ? (
+        {canGate && item.gate ? (
           <Card
             title={t("contractRatings.gateTitle")}
             style={{ marginBottom: 16 }}
@@ -602,23 +602,6 @@ export default function ContractRatingsPage() {
                   message={t("contractRatings.accountNotConnectedHint")}
                 />
               ) : null}
-              <Space wrap>
-                <Button
-                  type="primary"
-                  icon={<StarOutlined aria-hidden />}
-                  loading={actionLoading}
-                  onClick={() => confirmGate(item.id, "RATE")}
-                >
-                  {t("contractRatings.gateAction.RATE")}
-                </Button>
-                <Button
-                  icon={<SendOutlined aria-hidden />}
-                  disabled={actionLoading}
-                  onClick={() => confirmGate(item.id, "SKIP_TO_CEO")}
-                >
-                  {t("contractRatings.gateAction.SKIP_TO_CEO")}
-                </Button>
-              </Space>
             </Space>
           </Card>
         ) : gateOpen ? (
@@ -689,6 +672,30 @@ export default function ContractRatingsPage() {
             ) : null}
           </Card>
         ) : null}
+
+        {canGate ? (
+          <StickyDecisionBar>
+            <Space wrap size={8}>
+              <Button
+                type="primary"
+                size="large"
+                icon={<StarOutlined aria-hidden />}
+                loading={actionLoading}
+                onClick={() => confirmGate(item.id, "RATE")}
+              >
+                {t("contractRatings.gateAction.RATE")}
+              </Button>
+              <Button
+                size="large"
+                icon={<SendOutlined aria-hidden />}
+                disabled={actionLoading}
+                onClick={() => confirmGate(item.id, "SKIP_TO_CEO")}
+              >
+                {t("contractRatings.gateAction.SKIP_TO_CEO")}
+              </Button>
+            </Space>
+          </StickyDecisionBar>
+        ) : null}
       </>
     );
   }
@@ -704,6 +711,29 @@ export default function ContractRatingsPage() {
       item.ceo_decision === "TERMINATE" &&
       item.scheduled_termination &&
       !item.employee_notified_of_termination_at;
+    // Stage keys and order come from the backend `contract_rating` workflow
+    // template; a cycle HR sent straight to the CEO has no evaluation stage.
+    const hasWorkflowData = Boolean(
+      item.workflow?.history?.length || item.workflow?.current_stage,
+    );
+    const stages = hasWorkflowData
+      ? buildStagesFromWorkflow(
+          item.workflow,
+          item.rating_mode === "SKIP_TO_CEO"
+            ? ["hr_gate", "ceo"]
+            : ["hr_gate", "responses", "ceo"],
+          t,
+        )?.map((stage) => ({
+          ...stage,
+          // "ceo" is labelled by the shared `workflow.role.ceo` key.
+          title:
+            stage.key === "hr_gate"
+              ? t("contractRatings.stage.hr_gate", "HR routing")
+              : stage.key === "responses"
+                ? t("contractRatings.stage.responses", "Evaluations")
+                : stage.title,
+        }))
+      : null;
 
     return (
       <>
@@ -868,29 +898,26 @@ export default function ContractRatingsPage() {
           </Card>
         ) : null}
 
-        {/* CEO decision */}
-        {ceoPending ? (
+        {/* CEO decision: the controls live in the sticky bar below */}
+        {ceoPending && !canCeoAct ? (
           <ApprovalSurface padding={16} style={{ marginBottom: 16 }}>
-            {canCeoAct ? (
-              <CeoRatingDecisionPanel
-                rating={item}
-                loading={actionLoading}
-                errors={errorsFor("decision")}
-                onClearErrors={() => setActionErrors([])}
-                onDecide={(payload: CeoDecisionPayload) =>
-                  runAction("decision", () =>
-                    submitRatingCeoDecision(item.id, payload),
-                  )
-                }
-              />
-            ) : (
-              <Alert
-                type="info"
-                showIcon
-                message={t("contractRatings.ceoCannotAct")}
-              />
-            )}
+            <Alert
+              type="info"
+              showIcon
+              message={t("contractRatings.ceoCannotAct")}
+            />
           </ApprovalSurface>
+        ) : null}
+
+        {stages ? (
+          <div style={{ marginBottom: 16 }}>
+            <ApprovalFlowMap
+              eyebrow={t("leave.approvalMap.eyebrow")}
+              title={t("contractRatings.approvalMap.title", "Rating progress")}
+              stages={stages}
+              t={t}
+            />
+          </div>
         ) : null}
 
         {/* G. Workflow history */}
@@ -901,6 +928,20 @@ export default function ContractRatingsPage() {
             <Text type="secondary">{t("contractRatings.historyEmpty")}</Text>
           )}
         </Card>
+
+        {canCeoAct ? (
+          <CeoRatingDecisionPanel
+            rating={item}
+            loading={actionLoading}
+            errors={errorsFor("decision")}
+            onClearErrors={() => setActionErrors([])}
+            onDecide={(payload: CeoDecisionPayload) =>
+              runAction("decision", () =>
+                submitRatingCeoDecision(item.id, payload),
+              )
+            }
+          />
+        ) : null}
       </>
     );
   }

@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 vi.mock("../../../services/api/annualLeavePaymentsApi", async () => {
@@ -549,5 +555,40 @@ describe("HR Annual Leave settlements queue", () => {
     renderPage("/hr/annual-leave-payments/9");
 
     expect(await screen.findByText("Request #9")).toBeInTheDocument();
+  });
+
+  it("shows the deep-linked settlement's approval trail and pins its review action", async () => {
+    renderPage("/hr/annual-leave-payments/9");
+
+    expect(await screen.findByText("Request #9", {}, FIND)).toBeInTheDocument();
+    expect(screen.getByText("Request Progress")).toBeInTheDocument();
+
+    const bar = screen.getByRole("region", { name: "Decision actions" });
+    fireEvent.click(
+      within(bar).getByRole("button", { name: "Review: Sara Ahmed" }),
+    );
+    expect(
+      await screen.findByText("Review Annual Leave Settlement", {}, FIND),
+    ).toBeInTheDocument();
+  });
+
+  it("offers no pinned review once the settlement has left HR", async () => {
+    getAnnualLeavePaymentRequests.mockResolvedValue(
+      listResponse([
+        makeSettlement({
+          status: "pending_ceo",
+          hr_reviewed_at: "2026-08-28T09:00:00Z",
+          hr_review_note: "Forwarded by HR.",
+        }),
+      ]),
+    );
+    renderPage("/hr/annual-leave-payments/9");
+
+    expect(await screen.findByText("Request #9", {}, FIND)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show details" }));
+    expect(screen.getAllByText("Forwarded by HR.").length).toBeGreaterThan(0);
+    expect(
+      screen.queryByRole("region", { name: "Decision actions" }),
+    ).not.toBeInTheDocument();
   });
 });

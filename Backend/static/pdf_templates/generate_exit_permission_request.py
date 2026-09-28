@@ -159,6 +159,8 @@ def build(logo_path: Path) -> None:
 
     logo = ImageReader(str(logo_path))
     logo_width = 220
+    if logo_path.stem.lower() == "athroya":
+        logo_width = min(logo_width, 58 * logo.getSize()[0] / logo.getSize()[1])
     logo_height = logo_width * logo.getSize()[1] / logo.getSize()[0]
     pdf.drawImage(logo, 15, bottom(14, logo_height), logo_width, logo_height, mask="auto")
     text(pdf, PAGE_W - 15, 14, "EXIT PERMISSION REQUEST", size=17.5, bold=True, right=True)

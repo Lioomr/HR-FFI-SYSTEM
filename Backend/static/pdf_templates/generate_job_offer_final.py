@@ -68,10 +68,12 @@ def approval_panel(c, x, top, width, role_en, role_ar, name_key, date_key, signa
     input(c,date_key,x+48,top+85,width-142,14,font_size=6.8,shrink=True)
 
 
-def build(logo: Path):
+def build(logo: Path, *, company_specific: bool = False):
     if not logo.exists(): raise FileNotFoundError(logo)
     FIELDS.clear(); c=canvas.Canvas(str(PDF),pagesize=A4,pageCompression=1); c.setTitle("FFI Job Offer Blank Template")
-    image=ImageReader(str(logo)); lw=220; lh=lw*image.getSize()[1]/image.getSize()[0]; c.drawImage(image,15,bot(14,lh),lw,lh,mask="auto")
+    image=ImageReader(str(logo)); lw=220
+    if logo.stem.lower() == "athroya": lw=min(lw,58*image.getSize()[0]/image.getSize()[1])
+    lh=lw*image.getSize()[1]/image.getSize()[0]; c.drawImage(image,15,bot(14,lh),lw,lh,mask="auto")
     txt(c,W-15,14,"Job Offer",18,True,True); artxt(c,W-15,42,"عرض عمل",18,bold=True); c.setStrokeColor(ORANGE); c.setLineWidth(.8); c.line(15,bot(73),W-15,bot(73))
     box(c,15,81,273,28,CELL); box(c,297,81,283,28,CELL); txt(c,23,91,"Reference No.",7.3,True); input(c,"reference_no",89,86,78,18,font_size=8); txt(c,305,91,"Offer Date",7.3,True); input(c,"offer_date",390,86,120,18,font_size=7.4)
     section(c,122,"Applicant Details","بيانات المتقدم")
@@ -84,7 +86,9 @@ def build(logo: Path):
     section(c,482,"Benefits / Contract Details","تفاصيل المزايا / العقد")
     left=[("vacation_days","Vacation","مدة الإجازة"),("contract_status","Contract Status","حالة العقد"),("medical_insurance","Medical Insurance","العلاج الطبي")]; right=[("tickets","Tickets","تذاكر السفر"),("contract_type","Contract Type","نوع العقد"),("contract_duration","Contract Duration","مدة العقد")]
     for i in range(3): halfrow(c,15,501+i*21,*left[i]); halfrow(c,306,501+i*21,*right[i])
-    section(c,567,"Validity Note","ملاحظة صلاحية العرض"); box(c,15,586,W-30,35,DATA); txt(c,28,594,"This offer is not binding on Fathi Fouad Itani Contracting Co. until the employment contract is signed and recruitment procedures are completed.",6.1,color=MUTED); txt(c,28,607,"This offer is valid for one week from its date.",6.1,color=MUTED); artxt(c,W-28,610,"هذا العرض غير ملزم للشركة حتى توقيع عقد العمل واستكمال إجراءات التعيين.",6.1,color=MUTED)
+    section(c,567,"Validity Note","ملاحظة صلاحية العرض"); box(c,15,586,W-30,35,DATA)
+    validity = "This offer is not binding until the employment contract is signed and recruitment procedures are completed." if company_specific else "This offer is not binding on Fathi Fouad Itani Contracting Co. until the employment contract is signed and recruitment procedures are completed."
+    txt(c,28,594,validity,6.1,color=MUTED); txt(c,28,607,"This offer is valid for one week from its date.",6.1,color=MUTED); artxt(c,W-28,610,"هذا العرض غير ملزم للشركة حتى توقيع عقد العمل واستكمال إجراءات التعيين.",6.1,color=MUTED)
     section(c,628,"Approval Signatures","توقيعات الاعتماد"); c.setStrokeColor(ORANGE); c.setLineWidth(.9); c.line(15,bot(647),W-15,bot(647))
     approval_panel(c,15,650,274,"HR","الموارد البشرية","hr_name","hr_signature_date","hr_signature_image","job_offer.hr.signature")
     approval_panel(c,306,650,274,"CEO","الرئيس التنفيذي","ceo_name","ceo_signature_date","ceo_signature_image","job_offer.ceo.signature")

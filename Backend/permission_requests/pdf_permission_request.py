@@ -12,7 +12,13 @@ from typing import Any
 
 from django.utils import timezone
 
-from core.pdf_forms import FormAssets, load_form_assets, log_signature_diagnostics, render_mapped_form
+from core.pdf_forms import (
+    FormAssets,
+    load_form_assets,
+    log_signature_diagnostics,
+    render_mapped_form,
+    request_company_code,
+)
 from core.pdf_signers import display_name, signer_signatures
 
 from .labels import EXIT_TYPE_LABELS, STATUS_LABELS, profile_department, profile_employee_number, profile_job_title
@@ -55,10 +61,12 @@ SIGNATURE_STAGES = (
 )
 
 
-def load_permission_form_assets() -> FormAssets | None:
+def load_permission_form_assets(*, company_code: str | None = None) -> FormAssets | None:
     """Resolve the template and the map deployed beside it, or ``None`` when the pair is broken."""
 
-    return load_form_assets(TEMPLATE_FILENAME, FIELD_MAP_FILENAME, required_keys=REQUIRED_FIELD_KEYS)
+    return load_form_assets(
+        TEMPLATE_FILENAME, FIELD_MAP_FILENAME, required_keys=REQUIRED_FIELD_KEYS, company_code=company_code
+    )
 
 
 def _format_date(value: Any) -> str:
@@ -200,7 +208,8 @@ def build_permission_request_pdf_fallback(instance: Any) -> bytes:
 def build_permission_request_pdf(instance: Any) -> bytes:
     """Build the mapped form, falling back only when its paired asset is absent."""
 
-    assets = load_permission_form_assets()
+    company_code = request_company_code(instance)
+    assets = load_permission_form_assets(company_code=company_code) if company_code else load_permission_form_assets()
     if assets is None:
         return build_permission_request_pdf_fallback(instance)
     signatures = signer_signatures(build_permission_request_signers(instance))

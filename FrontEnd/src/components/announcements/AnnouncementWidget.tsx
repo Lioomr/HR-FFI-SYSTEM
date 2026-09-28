@@ -26,7 +26,8 @@ import {
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { useI18n } from "../../i18n/useI18n";
-import { openOrDownloadBlob } from "../../utils/download";
+import { downloadBlob } from "../../utils/download";
+import { useFilePreview } from "../ui/useFilePreview";
 import { formatDateOnly, formatDateTime } from "../../utils/dateTime";
 
 const { Text, Paragraph } = Typography;
@@ -79,25 +80,35 @@ export default function AnnouncementWidget({ role }: { role?: string }) {
     }
   };
 
+  const { openPreview, previewModal } = useFilePreview();
+
   const handleClose = () => {
     setModalVisible(false);
     setDetail(null);
     setAttachmentLoading(false);
   };
 
-  const openAttachment = async (download: boolean) => {
+  const previewAttachment = () => {
+    if (!detail?.has_attachment) return;
+    const id = detail.id;
+    openPreview({
+      title:
+        detail.attachment_name ||
+        t("hr.announcements.attachmentLabel", "PDF Attachment"),
+      filename: detail.attachment_name || "announcement.pdf",
+      load: () => getAnnouncementAttachment(id, false),
+    });
+  };
+
+  const downloadAttachment = async () => {
     if (!detail?.has_attachment) {
       return;
     }
 
     try {
       setAttachmentLoading(true);
-      const blob = await getAnnouncementAttachment(detail.id, download);
-      openOrDownloadBlob(
-        blob,
-        detail.attachment_name || "announcement.pdf",
-        download,
-      );
+      const blob = await getAnnouncementAttachment(detail.id, true);
+      downloadBlob(blob, detail.attachment_name || "announcement.pdf");
     } catch (error) {
       console.error("Failed to open announcement attachment", error);
     } finally {
@@ -124,6 +135,7 @@ export default function AnnouncementWidget({ role }: { role?: string }) {
 
   return (
     <>
+      {previewModal}
       <Card
         title={
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -264,8 +276,7 @@ export default function AnnouncementWidget({ role }: { role?: string }) {
                   <Button
                     size="small"
                     icon={<EyeOutlined />}
-                    loading={attachmentLoading}
-                    onClick={() => openAttachment(false)}
+                    onClick={previewAttachment}
                   >
                     {t("common.preview")}
                   </Button>
@@ -273,7 +284,7 @@ export default function AnnouncementWidget({ role }: { role?: string }) {
                     size="small"
                     icon={<DownloadOutlined />}
                     loading={attachmentLoading}
-                    onClick={() => openAttachment(true)}
+                    onClick={() => void downloadAttachment()}
                   >
                     {t("common.download")}
                   </Button>
