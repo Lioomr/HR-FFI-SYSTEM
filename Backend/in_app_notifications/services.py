@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterable
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError, transaction
 from django.db.models import Prefetch
@@ -23,6 +25,37 @@ def _recipient_company(recipient, company=None):
     except (AttributeError, ObjectDoesNotExist):
         profile = None
     return getattr(profile, "company", None) if profile else None
+
+
+# Signed-in app areas whose pages load company-scoped data.
+_COMPANY_LINK_PREFIXES = ("/admin/", "/hr/", "/manager/", "/ceo/", "/cfo/", "/finance/", "/employee/")
+
+
+def link_company_id(*, company=None, company_id=None, related_object=None) -> int | None:
+    """The company a notification is about, when the caller stated it (never the recipient's fallback)."""
+    company = company or getattr(related_object, "company", None)
+    return getattr(company, "pk", None) or company_id
+
+
+def with_company_param(url: str | None, company_id: int | None) -> str | None:
+    """Tag an app link with its company so opening it selects that company first.
+
+    Only a hint for the frontend: it switches only to a company the user can already
+    access, and the API still checks access on every request. External, public, or
+    other-origin links are returned unchanged.
+    """
+    if not url or not company_id:
+        return url
+    parts = urlsplit(url)
+    if parts.scheme or parts.netloc:
+        frontend = urlsplit(getattr(settings, "FRONTEND_URL", "") or "")
+        if (parts.scheme, parts.netloc) != (frontend.scheme, frontend.netloc):
+            return url
+    if not parts.path.startswith(_COMPANY_LINK_PREFIXES):
+        return url
+    query = [(key, value) for key, value in parse_qsl(parts.query, keep_blank_values=True) if key != "company"]
+    query.append(("company", str(company_id)))
+    return urlunsplit(parts._replace(query=urlencode(query)))
 
 
 def notification_group_name(user_id: int) -> str:
@@ -105,6 +138,7 @@ def create_notification(
         company = company or getattr(related_object, "company", None)
 
     resolved_company = _recipient_company(recipient, company)
+    action_url = with_company_param(action_url, link_company_id(company=company, company_id=company_id))
     values = {
         "company_id": getattr(resolved_company, "pk", None) or company_id,
         "event_key": str(event_key)[:120],

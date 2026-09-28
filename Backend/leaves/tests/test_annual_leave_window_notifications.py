@@ -119,7 +119,7 @@ class SettlementWindowOpenNotificationTests(TestCase):
         self.assertEqual(result, {"window_open_sent": 1, "failed": 0})
         notice = self._notices().get()
         self.assertEqual(notice.category, Notification.Category.LEAVE)
-        self.assertEqual(notice.action_url, "/employee/leave/balance?focus=settlement")
+        self.assertEqual(notice.action_url, f"/employee/leave/balance?focus=settlement&company={self.company.id}")
         self.assertEqual(notice.company_id, self.company.id)
         self.assertEqual(notice.deduplication_key, f"{SETTLEMENT_WINDOW_OPEN_EVENT}:{self.profile.id}:2027-02-23")
         self.assertEqual(notice.metadata["cycle_start"], CYCLE_START.isoformat())

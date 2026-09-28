@@ -795,7 +795,11 @@ class LateNoticeDeliveryTests(LateAttendanceNoticeTestBase):
 
         self.assertEqual(
             (notification.event_key, notification.action_url, notification.metadata["download_path"]),
-            ("attendance.late_notice", "/employee/attendance", f"/api/attendance/notices/{notice.id}/download/"),
+            (
+                "attendance.late_notice",
+                f"/employee/attendance?company={notice.company_id}",
+                f"/api/attendance/notices/{notice.id}/download/",
+            ),
         )
         self.assertEqual(notice.delivery_status, AttendanceLateNotice.DeliveryStatus.SCHEDULED)
         self.assertFalse(Notification.objects.filter(event_key="attendance.late_violation").exists())
