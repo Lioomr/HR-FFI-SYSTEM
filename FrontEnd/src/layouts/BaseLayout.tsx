@@ -364,14 +364,17 @@ function getOrganizationTheme(code?: string, nodeType?: string) {
         shellBorder: "rgba(148, 163, 184, 0.16)",
         shellShadow: "0 18px 38px rgba(15, 23, 42, 0.28)",
         shellInset: "inset 0 1px 0 rgba(255,255,255,0.08)",
-        text: "#f8fafc",
-        muted: "rgba(226,232,240,0.72)",
+        // The header itself is transparent over the light page, so its text
+        // stays dark; only the company pill is dark with light text.
+        text: "#0f172a",
+        muted: "#64748b",
+        selectText: "#f8fafc",
         selectBg:
           "linear-gradient(135deg, rgba(30,41,59,0.98), rgba(15,23,42,0.98))",
         selectBorder: "rgba(226, 232, 240, 0.14)",
         selectShadow: "0 10px 22px rgba(2, 6, 23, 0.32)",
         accent: "#f8fafc",
-        accentSoft: "rgba(248, 250, 252, 0.10)",
+        accentSoft: "rgba(148, 163, 184, 0.18)",
         divider: "rgba(226, 232, 240, 0.12)",
       };
     case "FFI":
@@ -1894,7 +1897,8 @@ export default function BaseLayout() {
                     flex: "1 1 auto",
                     fontWeight: 700,
                     fontSize: 13,
-                    color: organizationTheme.text,
+                    color:
+                      organizationTheme.selectText ?? organizationTheme.text,
                   }}
                 />
               </div>
