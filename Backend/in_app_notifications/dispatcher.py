@@ -19,7 +19,7 @@ from core.services.whatsapp_template_library import render_generic_notification
 
 from .i18n import render as render_i18n
 from .models import Notification, NotificationDelivery
-from .services import _broadcast_created, create_notification
+from .services import _broadcast_created, create_notification, link_company_id, with_company_param
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +143,17 @@ def _load_whatsapp_document(document: dict) -> dict | None:
     except (TypeError, ValueError):
         return None
     return None
+
+
+def _with_company_links(values: dict | None, company_id: int | None) -> dict | None:
+    if not values or not company_id:
+        return values
+    return {
+        key: with_company_param(value, company_id)
+        if key in {"action_url", "action_path"} and isinstance(value, str)
+        else value
+        for key, value in values.items()
+    }
 
 
 def _send_whatsapp(
@@ -306,6 +317,11 @@ def dispatch_notification_channels(
         )
         if notification is None:
             return {"notification": None, "created": False, "whatsapp": None, "email": None}
+
+        # Template links are built by callers, so tag them like the stored in-app link.
+        link_company = link_company_id(company=company, company_id=company_id, related_object=related_object)
+        whatsapp_variables = _with_company_links(whatsapp_variables, link_company)
+        email_context = _with_company_links(email_context, link_company)
 
         if i18n and not email_template:
             email_context = {

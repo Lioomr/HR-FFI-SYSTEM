@@ -548,6 +548,7 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "common.document": "Document",
     "common.preview": "Preview",
     "common.submittedOn": "Submitted On",
+    "organization.switchedForLink": "Switched to {company} to open this link.",
     "organization.headOffice.badge": "Head Office View",
     "organization.headOffice.bannerTitle": "You are viewing Main Head Office",
     "organization.headOffice.bannerDescription":
@@ -5558,6 +5559,7 @@ export const translations: Record<AppLanguage, TranslationMap> = {
     "common.document": "المستند",
     "common.preview": "معاينة",
     "common.submittedOn": "تاريخ التقديم",
+    "organization.switchedForLink": "تم التبديل إلى {company} لفتح هذا الرابط.",
     "organization.headOffice.badge": "عرض المكتب الرئيسي",
     "organization.headOffice.bannerTitle": "أنت تعرض المكتب الرئيسي",
     "organization.headOffice.bannerDescription":

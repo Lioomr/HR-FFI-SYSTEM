@@ -28,7 +28,7 @@ from organization.models import OrganizationNode, UserOrganizationAccess
 from .dispatcher import dispatch_notification_channels
 from .models import Notification, NotificationDelivery
 from .serializers import NotificationSerializer
-from .services import create_notification, with_delivery_details
+from .services import create_notification, with_company_param, with_delivery_details
 from .tasks import deliver_email_notification, deliver_whatsapp_notification
 
 User = get_user_model()
@@ -44,6 +44,28 @@ def make_user(email, company):
     user.groups.add(Group.objects.get_or_create(name="HRManager")[0])
     UserOrganizationAccess.objects.create(user=user, organization=company)
     return user
+
+
+@override_settings(FRONTEND_URL="https://hr.example.com")
+class CompanyLinkTests(SimpleTestCase):
+    def test_tags_app_links_with_the_company(self):
+        self.assertEqual(with_company_param("/hr/leave/requests/5", 3), "/hr/leave/requests/5?company=3")
+        self.assertEqual(
+            with_company_param("https://hr.example.com/manager/loan-requests/7?tab=x&company=9", 3),
+            "https://hr.example.com/manager/loan-requests/7?tab=x&company=3",
+        )
+
+    def test_leaves_other_links_unchanged(self):
+        for url in (
+            "https://evil.example.com/hr/leave/requests/5",
+            "/login",
+            "/public/job-offers/abc",
+            "/hr",
+            "",
+            None,
+        ):
+            self.assertEqual(with_company_param(url, 3), url)
+        self.assertEqual(with_company_param("/hr/leave/requests/5", None), "/hr/leave/requests/5")
 
 
 @override_settings(CHANNEL_LAYERS=IN_MEMORY_CHANNELS)
@@ -229,6 +251,41 @@ class NotificationDispatcherTests(TestCase):
             {self.user.id},
         )
         delay.assert_called_once()
+
+    @patch("in_app_notifications.tasks.deliver_whatsapp_notification.delay")
+    def test_pending_approval_links_open_the_request_company(self, delay):
+        # The reviewer's own company differs from the request's; the link must name the request's.
+        request_company = make_company("LINK-REQUEST")
+        UserOrganizationAccess.objects.create(user=self.user, organization=request_company)
+        requester = User.objects.create_user(email="link-requester@example.com", password="StrongPassword123!")
+        requester_profile = EmployeeProfile.objects.create(
+            user=requester, company=request_company, employee_id="LINK-REQUEST-1"
+        )
+        leave_type = LeaveType.objects.create(company=request_company, name="Link Annual", code="LINK_ANNUAL")
+        leave_request = LeaveRequest.objects.create(
+            employee=requester,
+            employee_profile=requester_profile,
+            company=request_company,
+            leave_type=leave_type,
+            start_date=timezone.localdate() + timedelta(days=1),
+            end_date=timezone.localdate() + timedelta(days=2),
+        )
+
+        with self.captureOnCommitCallbacks(execute=True):
+            notify_users_for_pending_status(
+                users=[self.user],
+                request_type="Leave Request",
+                request_id=leave_request.id,
+                requester_name="Requester",
+                status_label="Pending HR",
+                action_path=f"/hr/leave/requests/{leave_request.id}",
+            )
+
+        link = f"/hr/leave/requests/{leave_request.id}?company={request_company.id}"
+        self.assertEqual(Notification.objects.get(event_key="approval.pending").action_url, link)
+        payload = delay.call_args.kwargs
+        self.assertTrue(payload["whatsapp_variables"]["action_url"].endswith(link))
+        self.assertEqual(payload["email_payload"]["context"]["action_path"], link)
 
     @patch("in_app_notifications.tasks.deliver_whatsapp_notification.delay")
     def test_leave_approval_flow_queues_importable_email_helper(self, delay):

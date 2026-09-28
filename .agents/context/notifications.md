@@ -142,6 +142,18 @@ pre-check yourself, or you can create duplicate notifications on a redelivery. F
 - Keep WhatsApp text Arabic first, English second.
 - Do not reintroduce Bird WhatsApp provider paths or Bird WhatsApp env vars.
 
+## Company in Notification Links
+
+- `create_notification()` and `dispatch_notification_channels()` add `?company=<id>` to app links (`/hr/`, `/manager/`,
+  `/employee/`, `/ceo/`, `/cfo/`, `/finance/`, `/admin/`, relative or on `FRONTEND_URL`), including `action_url` and
+  `action_path` in WhatsApp variables and email context. The id is the company the caller passed (`company`,
+  `company_id`, or `related_object.company`), never the recipient's fallback company. Helper: `with_company_param()`
+  in `Backend/in_app_notifications/services.py`.
+- The frontend (`RequireAuth` + `resolveCompanyLink()` in `FrontEnd/src/utils/organizationContext.ts`) switches to that
+  company before the page loads, then reloads without the parameter and shows a notice. It only switches to a company
+  in `accessible_organizations`, never to the head office, and never on `new`/`create`/`edit` pages; otherwise it just
+  strips the parameter. The API still checks company access on every call.
+
 ## Frontend Notification UI
 
 - The persistent notification inbox uses authenticated REST polling; WebSocket delivery is deferred and every handshake is rejected with `4403`.

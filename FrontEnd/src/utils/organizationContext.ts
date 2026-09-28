@@ -16,6 +16,51 @@ export function getActiveOrganization(
   );
 }
 
+/** Query parameter that notification links use to name their request's company. */
+export const LINK_COMPANY_PARAM = "company";
+
+// Forms never switch company, so a crafted link cannot move one to another company.
+const FORM_PAGE = /\/(new|create|edit)(\/|$)/;
+
+export type CompanyLinkResolution = {
+  /** Company to select before the page loads; null keeps the current one. */
+  switchTo: OrganizationNodeDto | null;
+  /** The same location without the company parameter. */
+  cleanPath: string;
+};
+
+/**
+ * Reads the `?company=` hint on notification links (WhatsApp, email, bell) so
+ * the request opens in its own company. It is only a hint: it selects a company
+ * the user can already access, and the API still checks access on every call.
+ * Returns null when the location has no hint.
+ */
+export function resolveCompanyLink(
+  location: { pathname: string; search: string; hash: string },
+  user?: AuthUser | null,
+): CompanyLinkResolution | null {
+  const params = new URLSearchParams(location.search);
+  if (!params.has(LINK_COMPANY_PARAM)) return null;
+  const values = params.getAll(LINK_COMPANY_PARAM);
+  params.delete(LINK_COMPANY_PARAM);
+  const query = params.toString();
+  const cleanPath = `${location.pathname}${query ? `?${query}` : ""}${location.hash}`;
+
+  const requestedId =
+    values.length === 1 && /^\d+$/.test(values[0]) ? values[0] : null;
+  const target =
+    requestedId && !FORM_PAGE.test(location.pathname)
+      ? (user?.accessible_organizations ?? []).find(
+          (organization) =>
+            organization.node_type === "company" &&
+            String(organization.id) === requestedId,
+        )
+      : undefined;
+  const isActive =
+    target && String(target.id) === String(getActiveOrganization(user)?.id);
+  return { switchTo: target && !isActive ? target : null, cleanPath };
+}
+
 export function isHeadOfficeOrganization(user?: AuthUser | null): boolean {
   return getActiveOrganization(user)?.node_type === "head_office";
 }
