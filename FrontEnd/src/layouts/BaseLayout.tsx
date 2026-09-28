@@ -12,33 +12,50 @@ import {
   Tooltip,
 } from "antd";
 import {
-  DashboardOutlined,
+  ApartmentOutlined,
+  ApiOutlined,
+  AppstoreOutlined,
+  AuditOutlined,
+  CloudUploadOutlined,
+  ClusterOutlined,
+  ContainerOutlined,
+  DatabaseOutlined,
+  DownOutlined,
+  EnvironmentOutlined,
+  FieldTimeOutlined,
+  FileProtectOutlined,
+  FormOutlined,
+  FundProjectionScreenOutlined,
+  GlobalOutlined,
+  HomeOutlined,
+  HourglassOutlined,
+  IdcardOutlined,
+  InboxOutlined,
+  KeyOutlined,
+  LaptopOutlined,
+  LockOutlined,
+  LogoutOutlined,
+  MenuOutlined,
+  MoneyCollectOutlined,
+  NotificationOutlined,
+  ReconciliationOutlined,
+  RollbackOutlined,
+  ScanOutlined,
+  ScheduleOutlined,
+  SendOutlined,
+  SettingOutlined,
+  SnippetsOutlined,
+  SolutionOutlined,
+  StarOutlined,
+  SwapOutlined,
   TeamOutlined,
   UserAddOutlined,
-  FileSearchOutlined,
-  SettingOutlined,
-  EnvironmentOutlined,
-  LogoutOutlined,
-  KeyOutlined,
-  ApartmentOutlined,
-  IdcardOutlined,
-  UploadOutlined,
-  DollarOutlined,
-  DownOutlined,
-  MenuOutlined,
-  ClockCircleOutlined,
-  BellOutlined,
+  UserDeleteOutlined,
   UserOutlined,
-  AppstoreOutlined,
   UserSwitchOutlined,
-  LockOutlined,
-  FileTextOutlined,
-  FileDoneOutlined,
-  HomeOutlined,
-  InboxOutlined,
+  WalletOutlined,
+  WarningOutlined,
   WhatsAppOutlined,
-  SafetyCertificateOutlined,
-  GlobalOutlined,
 } from "@ant-design/icons";
 import type { MenuProps } from "antd";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -104,11 +121,11 @@ function BrandLogo({
         textDecoration: "none",
         color: "inherit",
         cursor: "pointer",
-        padding: collapsed ? "16px 0" : "18px 16px",
+        padding: collapsed ? "18px 0" : "20px 18px",
         display: "flex",
         alignItems: "center",
         justifyContent: collapsed ? "center" : "flex-start",
-        gap: 11,
+        gap: 12,
         transition: "padding 0.25s cubic-bezier(0.4,0,0.2,1)",
         borderBottom: "1px solid rgba(255,255,255,0.07)",
         marginBottom: 2,
@@ -118,15 +135,15 @@ function BrandLogo({
       {/* Logo icon */}
       <div
         style={{
-          width: 34,
-          height: 34,
+          width: 38,
+          height: 38,
           background: `linear-gradient(135deg, ${accent}e6, ${accentGlow}b3)`,
-          borderRadius: 9,
+          borderRadius: 10,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           color: "white",
-          fontSize: 15,
+          fontSize: 17,
           flexShrink: 0,
           boxShadow: `0 0 0 1px ${accent}33, 0 4px 12px ${accent}30`,
         }}
@@ -139,7 +156,7 @@ function BrandLogo({
           <div
             style={{
               fontWeight: 700,
-              fontSize: 14,
+              fontSize: 15.5,
               color: titleColor,
               letterSpacing: "-0.01em",
               lineHeight: 1.25,
@@ -152,7 +169,7 @@ function BrandLogo({
           </div>
           <div
             style={{
-              fontSize: 10.5,
+              fontSize: 11.5,
               color: `${accentGlow}bb`,
               marginTop: 2,
               letterSpacing: "0.02em",
@@ -627,12 +644,12 @@ export default function BaseLayout() {
       children: [
         {
           key: "/admin/dashboard",
-          icon: <DashboardOutlined />,
+          icon: <AppstoreOutlined />,
           label: <Link to="/admin/dashboard">{t("layout.dashboard")}</Link>,
         },
         {
           key: "/admin/announcements",
-          icon: <BellOutlined />,
+          icon: <NotificationOutlined />,
           label: (
             <Link to="/admin/announcements">
               {t("layout.announcements", "Announcements")}
@@ -641,7 +658,7 @@ export default function BaseLayout() {
         },
         {
           key: "/admin/audit-logs",
-          icon: <FileSearchOutlined />,
+          icon: <AuditOutlined />,
           label: <Link to="/admin/audit-logs">{t("layout.auditLogs")}</Link>,
         },
         {
@@ -667,7 +684,7 @@ export default function BaseLayout() {
         },
         {
           key: "/admin/biotime",
-          icon: <SettingOutlined />,
+          icon: <ApiOutlined />,
           label: (
             <Link to="/admin/biotime">
               {t("layout.nav.biotimeSettings", "BioTime Settings")}
@@ -701,7 +718,7 @@ export default function BaseLayout() {
         },
         {
           key: "/admin/invites",
-          icon: <UserAddOutlined />,
+          icon: <SendOutlined />,
           label: <Link to="/admin/invites">{t("layout.invites")}</Link>,
         },
       ],
@@ -722,7 +739,7 @@ export default function BaseLayout() {
   const hrItems: MenuProps["items"] = [
     {
       key: "/hr/dashboard",
-      icon: <DashboardOutlined />,
+      icon: <AppstoreOutlined />,
       label: <Link to="/hr/dashboard">{t("layout.dashboard")}</Link>,
     },
     {
@@ -731,7 +748,7 @@ export default function BaseLayout() {
       children: [
         {
           key: "/pending-inbox",
-          icon: <InboxOutlined />,
+          icon: <HourglassOutlined />,
           label: (
             <Link to="/pending-inbox">
               {t("layout.pendingInbox", "Pending Inbox")}
@@ -793,7 +810,7 @@ export default function BaseLayout() {
         },
         {
           key: "hr-attendance-sub",
-          icon: <ClockCircleOutlined />,
+          icon: <FieldTimeOutlined />,
           label: t("layout.attendance"),
           children: [
             {
@@ -836,7 +853,7 @@ export default function BaseLayout() {
         },
         {
           key: "/hr/organization-setup",
-          icon: <ApartmentOutlined />,
+          icon: <ClusterOutlined />,
           label: (
             <Link to="/hr/organization-setup">
               {t("layout.organizationSetup")}
@@ -845,12 +862,12 @@ export default function BaseLayout() {
         },
         {
           key: "/hr/invites",
-          icon: <UserAddOutlined />,
+          icon: <SendOutlined />,
           label: <Link to="/hr/invites">{t("layout.invites")}</Link>,
         },
         {
           key: "/hr/import/employees",
-          icon: <UploadOutlined />,
+          icon: <CloudUploadOutlined />,
           label: (
             <Link to="/hr/import/employees">{t("layout.importEmployees")}</Link>
           ),
@@ -863,7 +880,7 @@ export default function BaseLayout() {
       children: [
         {
           key: "/hr/job-offers",
-          icon: <FileDoneOutlined />,
+          icon: <SolutionOutlined />,
           label: (
             <Link to="/hr/job-offers">
               {t("layout.jobOffers", "Job Offers")}
@@ -872,7 +889,7 @@ export default function BaseLayout() {
         },
         {
           key: "/hr/starting-work-acknowledgments",
-          icon: <SafetyCertificateOutlined />,
+          icon: <ScanOutlined />,
           label: (
             <Link to="/hr/starting-work-acknowledgments">
               {t("layout.startingWorkAcknowledgments", "BioTime Verifications")}
@@ -881,7 +898,7 @@ export default function BaseLayout() {
         },
         {
           key: "/hr/templates",
-          icon: <FileTextOutlined />,
+          icon: <SnippetsOutlined />,
           label: (
             <Link to="/hr/templates">
               {t("layout.templateLibrary", "Template Library")}
@@ -896,12 +913,12 @@ export default function BaseLayout() {
       children: [
         {
           key: "/hr/payroll",
-          icon: <DollarOutlined />,
+          icon: <WalletOutlined />,
           label: <Link to="/hr/payroll">{t("layout.payroll")}</Link>,
         },
         {
           key: "hr-assets-sub",
-          icon: <AppstoreOutlined />,
+          icon: <DatabaseOutlined />,
           label: t("layout.assets", "Assets"),
           children: [
             {
@@ -955,7 +972,7 @@ export default function BaseLayout() {
       children: [
         {
           key: "hr-announcements-sub",
-          icon: <BellOutlined />,
+          icon: <NotificationOutlined />,
           label: t("layout.announcements", "Announcements"),
           children: [
             {
@@ -984,7 +1001,7 @@ export default function BaseLayout() {
       children: [
         {
           key: "/employee/delegated-approvals",
-          icon: <UserSwitchOutlined />,
+          icon: <SwapOutlined />,
           label: (
             <Link to="/employee/delegated-approvals">
               {t("layout.nav.alternateApprovals", "Alternate Approvals")}
@@ -993,7 +1010,7 @@ export default function BaseLayout() {
         },
         {
           key: "/employee/attendance",
-          icon: <ClockCircleOutlined />,
+          icon: <ScheduleOutlined />,
           label: (
             <Link to="/employee/attendance">
               {t("layout.nav.myAttendance", "My Attendance")}
@@ -1002,7 +1019,7 @@ export default function BaseLayout() {
         },
         {
           key: "/employee/assets",
-          icon: <AppstoreOutlined />,
+          icon: <LaptopOutlined />,
           label: (
             <Link to="/employee/assets">
               {t("layout.myAssets", "My Assets")}
@@ -1027,7 +1044,7 @@ export default function BaseLayout() {
   const employeeItems: MenuProps["items"] = [
     {
       key: "/employee/home",
-      icon: <DashboardOutlined />,
+      icon: <HomeOutlined />,
       label: <Link to="/employee/home">{t("layout.home")}</Link>,
     },
     {
@@ -1036,7 +1053,7 @@ export default function BaseLayout() {
       children: [
         {
           key: "/employee/attendance",
-          icon: <ClockCircleOutlined />,
+          icon: <ScheduleOutlined />,
           label: (
             <Link to="/employee/attendance">
               {t("layout.nav.myAttendance", "My Attendance")}
@@ -1045,7 +1062,7 @@ export default function BaseLayout() {
         },
         {
           key: "emp-requests-sub",
-          icon: <FileSearchOutlined />,
+          icon: <FormOutlined />,
           label: t("layout.requests", "Requests"),
           children: [
             {
@@ -1092,7 +1109,7 @@ export default function BaseLayout() {
         },
         {
           key: "/employee/delegated-approvals",
-          icon: <UserSwitchOutlined />,
+          icon: <SwapOutlined />,
           label: (
             <Link to="/employee/delegated-approvals">
               {t("layout.nav.alternateApprovals", "Alternate Approvals")}
@@ -1101,7 +1118,7 @@ export default function BaseLayout() {
         },
         {
           key: "/employee/assets",
-          icon: <AppstoreOutlined />,
+          icon: <LaptopOutlined />,
           label: (
             <Link to="/employee/assets">
               {t("layout.myAssets", "My Assets")}
@@ -1110,7 +1127,7 @@ export default function BaseLayout() {
         },
         {
           key: "/employee/payslips",
-          icon: <FileTextOutlined />,
+          icon: <ReconciliationOutlined />,
           label: <Link to="/employee/payslips">{t("layout.myPayslips")}</Link>,
         },
       ],
@@ -1125,7 +1142,7 @@ export default function BaseLayout() {
             children: [
               {
                 key: "/pending-inbox",
-                icon: <InboxOutlined />,
+                icon: <HourglassOutlined />,
                 label: (
                   <Link to="/pending-inbox">
                     {t("layout.pendingInbox", "Pending Inbox")}
@@ -1145,7 +1162,7 @@ export default function BaseLayout() {
             children: [
               {
                 key: "/finance/loan-requests",
-                icon: <DollarOutlined />,
+                icon: <MoneyCollectOutlined />,
                 label: (
                   <Link to="/finance/loan-requests">
                     {t("layout.loanInbox", "Loan Inbox")}
@@ -1164,7 +1181,7 @@ export default function BaseLayout() {
             children: [
               {
                 key: "/cfo/loan-requests",
-                icon: <DollarOutlined />,
+                icon: <MoneyCollectOutlined />,
                 label: (
                   <Link to="/cfo/loan-requests">
                     {t("layout.cfoLoanInbox", "CFO Loan Inbox")}
@@ -1183,7 +1200,7 @@ export default function BaseLayout() {
             children: [
               {
                 key: "/ceo/loan-requests",
-                icon: <DollarOutlined />,
+                icon: <MoneyCollectOutlined />,
                 label: (
                   <Link to="/ceo/loan-requests">
                     {t("layout.loanRequests", "Loan Requests")}
@@ -1192,14 +1209,14 @@ export default function BaseLayout() {
               },
               {
                 key: "/ceo/attendance",
-                icon: <ClockCircleOutlined />,
+                icon: <FieldTimeOutlined />,
                 label: (
                   <Link to="/ceo/attendance">{t("layout.attendance")}</Link>
                 ),
               },
               {
                 key: "/ceo/assets/damage-reports",
-                icon: <AppstoreOutlined />,
+                icon: <WarningOutlined />,
                 label: (
                   <Link to="/ceo/assets/damage-reports">
                     {t("assets.damageReports", "Damage Reports")}
@@ -1208,7 +1225,7 @@ export default function BaseLayout() {
               },
               {
                 key: "/ceo/assets/return-requests",
-                icon: <AppstoreOutlined />,
+                icon: <RollbackOutlined />,
                 label: (
                   <Link to="/ceo/assets/return-requests">
                     {t("assets.returnRequests", "Return Requests")}
@@ -1217,7 +1234,7 @@ export default function BaseLayout() {
               },
               {
                 key: "/ceo/employees/deletion-requests",
-                icon: <TeamOutlined />,
+                icon: <UserDeleteOutlined />,
                 label: (
                   <Link to="/ceo/employees/deletion-requests">
                     {t("employees.removalInbox.menu", "Employee Removals")}
@@ -1226,7 +1243,7 @@ export default function BaseLayout() {
               },
               {
                 key: "/ceo/contract-decisions",
-                icon: <FileTextOutlined />,
+                icon: <FileProtectOutlined />,
                 label: (
                   <Link to="/ceo/contract-decisions">
                     {t("layout.contractDecisions", "Contract Decisions")}
@@ -1235,7 +1252,7 @@ export default function BaseLayout() {
               },
               {
                 key: "/ceo/contract-ratings",
-                icon: <FileTextOutlined />,
+                icon: <StarOutlined />,
                 label: (
                   <Link to="/ceo/contract-ratings">
                     {t("layout.contractRatings", "Contract Ratings")}
@@ -1252,7 +1269,7 @@ export default function BaseLayout() {
       children: [
         {
           key: "/employee/announcements",
-          icon: <BellOutlined />,
+          icon: <NotificationOutlined />,
           label: (
             <Link to="/employee/announcements">
               {t("layout.announcements", "Announcements")}
@@ -1271,7 +1288,7 @@ export default function BaseLayout() {
   const managerItems: MenuProps["items"] = [
     {
       key: "/employee/home",
-      icon: <DashboardOutlined />,
+      icon: <HomeOutlined />,
       label: <Link to="/employee/home">{t("layout.home")}</Link>,
     },
     {
@@ -1280,7 +1297,7 @@ export default function BaseLayout() {
       children: [
         {
           key: "/employee/attendance",
-          icon: <ClockCircleOutlined />,
+          icon: <ScheduleOutlined />,
           label: (
             <Link to="/employee/attendance">
               {t("layout.nav.myAttendance", "My Attendance")}
@@ -1289,7 +1306,7 @@ export default function BaseLayout() {
         },
         {
           key: "mgr-requests-sub",
-          icon: <FileSearchOutlined />,
+          icon: <FormOutlined />,
           label: t("layout.requests", "Requests"),
           children: [
             {
@@ -1352,7 +1369,7 @@ export default function BaseLayout() {
         },
         {
           key: "/employee/delegated-approvals",
-          icon: <UserSwitchOutlined />,
+          icon: <SwapOutlined />,
           label: (
             <Link to="/employee/delegated-approvals">
               {t("layout.nav.alternateApprovals", "Alternate Approvals")}
@@ -1361,7 +1378,7 @@ export default function BaseLayout() {
         },
         {
           key: "/employee/assets",
-          icon: <AppstoreOutlined />,
+          icon: <LaptopOutlined />,
           label: (
             <Link to="/employee/assets">
               {t("layout.myAssets", "My Assets")}
@@ -1370,7 +1387,7 @@ export default function BaseLayout() {
         },
         {
           key: "/employee/payslips",
-          icon: <FileTextOutlined />,
+          icon: <ReconciliationOutlined />,
           label: <Link to="/employee/payslips">{t("layout.myPayslips")}</Link>,
         },
       ],
@@ -1385,7 +1402,7 @@ export default function BaseLayout() {
             children: [
               {
                 key: "/pending-inbox",
-                icon: <InboxOutlined />,
+                icon: <HourglassOutlined />,
                 label: (
                   <Link to="/pending-inbox">
                     {t("layout.pendingInbox", "Pending Inbox")}
@@ -1402,7 +1419,7 @@ export default function BaseLayout() {
       children: [
         {
           key: "mgr-announcements-sub",
-          icon: <BellOutlined />,
+          icon: <NotificationOutlined />,
           label: t("layout.announcements", "Announcements"),
           children: [
             {
@@ -1450,7 +1467,7 @@ export default function BaseLayout() {
   const cfoItems: MenuProps["items"] = [
     {
       key: "/cfo/dashboard",
-      icon: <DashboardOutlined />,
+      icon: <AppstoreOutlined />,
       label: <Link to="/cfo/dashboard">{t("layout.dashboard")}</Link>,
     },
     {
@@ -1459,7 +1476,7 @@ export default function BaseLayout() {
       children: [
         {
           key: "/pending-inbox",
-          icon: <InboxOutlined />,
+          icon: <HourglassOutlined />,
           label: (
             <Link to="/pending-inbox">
               {t("layout.pendingInbox", "Pending Inbox")}
@@ -1474,7 +1491,7 @@ export default function BaseLayout() {
       children: [
         {
           key: "/cfo/loan-requests",
-          icon: <DollarOutlined />,
+          icon: <MoneyCollectOutlined />,
           label: (
             <Link to="/cfo/loan-requests">
               {t("layout.loanRequests", "Loan Requests")}
@@ -1489,7 +1506,7 @@ export default function BaseLayout() {
       children: [
         {
           key: "/manager/dashboard",
-          icon: <DashboardOutlined />,
+          icon: <FundProjectionScreenOutlined />,
           label: (
             <Link to="/manager/dashboard">
               {t("layout.teamDashboard", "Team Dashboard")}
@@ -1505,7 +1522,7 @@ export default function BaseLayout() {
         },
         {
           key: "/manager/team-requests",
-          icon: <FileSearchOutlined />,
+          icon: <ContainerOutlined />,
           label: (
             <Link to="/manager/team-requests">
               {t("layout.teamRequests", "Team Requests")}
@@ -1653,7 +1670,7 @@ export default function BaseLayout() {
       {/* Bottom user card */}
       <div
         style={{
-          padding: collapsed ? "10px 0" : "10px 12px",
+          padding: collapsed ? "12px 0" : "12px 14px",
           borderTop: `1px solid ${sbTheme.border}`,
           display: "flex",
           alignItems: "center",
@@ -1670,11 +1687,11 @@ export default function BaseLayout() {
           placement="right"
         >
           <Avatar
-            size={32}
+            size={36}
             icon={<UserOutlined />}
             style={{
               background: `linear-gradient(135deg, ${roleColor(role)}, ${roleColor(role)}88)`,
-              fontSize: 13,
+              fontSize: 14,
               fontWeight: 700,
               flexShrink: 0,
               boxShadow: `0 0 0 2px ${sbTheme.bg}, 0 0 0 4px ${sbTheme.accent}44`,
@@ -1689,7 +1706,7 @@ export default function BaseLayout() {
             <div
               style={{
                 fontWeight: 600,
-                fontSize: 12.5,
+                fontSize: 14,
                 color: "rgba(255,255,255,0.82)",
                 whiteSpace: "nowrap",
                 overflow: "hidden",
@@ -1700,7 +1717,7 @@ export default function BaseLayout() {
             </div>
             <div
               style={{
-                fontSize: 11,
+                fontSize: 12,
                 color: sbTheme.sectionColor,
                 whiteSpace: "nowrap",
               }}
@@ -1718,10 +1735,10 @@ export default function BaseLayout() {
       {/* ── Desktop Sidebar ── */}
       {!isMobile && (
         <Sider
-          width={240}
+          width={264}
           collapsible
           collapsed={collapsed}
-          collapsedWidth={64}
+          collapsedWidth={70}
           onCollapse={(value) => {
             setCollapsed(value);
             localStorage.setItem("ffi_sidebar_collapsed", String(value));
@@ -1749,7 +1766,7 @@ export default function BaseLayout() {
           placement={direction === "rtl" ? "right" : "left"}
           onClose={() => setMobileMenuOpen(false)}
           open={mobileMenuOpen}
-          width={260}
+          width={286}
           bodyStyle={{ padding: 0, background: sbTheme.bg, ...sidebarCSSVars }}
           styles={{ header: { display: "none" } }}
           className="modern-sidebar"
