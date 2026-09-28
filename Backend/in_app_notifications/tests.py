@@ -282,7 +282,10 @@ class NotificationDispatcherTests(TestCase):
             )
 
         link = f"/hr/leave/requests/{leave_request.id}?company={request_company.id}"
-        self.assertEqual(Notification.objects.get(event_key="approval.pending").action_url, link)
+        notification = Notification.objects.get(event_key="approval.pending")
+        self.assertEqual(notification.action_url, link)
+        # The bell lists it under the request's company, not the reviewer's own.
+        self.assertEqual(notification.company_id, request_company.id)
         payload = delay.call_args.kwargs
         self.assertTrue(payload["whatsapp_variables"]["action_url"].endswith(link))
         self.assertEqual(payload["email_payload"]["context"]["action_path"], link)
