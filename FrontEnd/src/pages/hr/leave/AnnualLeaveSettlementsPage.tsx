@@ -28,6 +28,7 @@ import {
 } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 
+import StickyDecisionBar from "../../../components/ceo/StickyDecisionBar";
 import PageHeader from "../../../components/ui/PageHeader";
 import {
   FilterChips,
@@ -42,6 +43,7 @@ import {
   formatSettlementAmount,
   formatSettlementDays,
 } from "../../../components/leaves/annualLeaveSettlement";
+import AnnualLeaveSettlementApprovalMap from "../../../components/leaves/AnnualLeaveSettlementApprovalMap";
 import AnnualLeaveSettlementDetails from "../../../components/leaves/AnnualLeaveSettlementDetails";
 import { useI18n } from "../../../i18n/useI18n";
 import {
@@ -493,7 +495,10 @@ export default function AnnualLeaveSettlementsPage() {
             </Button>
           }
         >
-          <AnnualLeaveSettlementDetails request={deepLinked} showEmployee />
+          <Space direction="vertical" size={16} style={{ width: "100%" }}>
+            <AnnualLeaveSettlementApprovalMap request={deepLinked} t={t} />
+            <AnnualLeaveSettlementDetails request={deepLinked} showEmployee />
+          </Space>
         </Card>
       )}
 
@@ -531,6 +536,22 @@ export default function AnnualLeaveSettlementsPage() {
           }}
         />
       </WorkspaceCard>
+
+      {/* HR's only decision on the open settlement is its review. */}
+      {deepLinked?.status === "pending_hr" && (
+        <StickyDecisionBar>
+          <Button
+            type="primary"
+            size="large"
+            disabled={processing}
+            onClick={() => openReview(deepLinked)}
+            aria-label={`${t("annualPayment.review")}: ${deepLinked.employee_name || deepLinked.id}`}
+            style={{ borderRadius: 8, fontWeight: 600 }}
+          >
+            {t("annualPayment.review")}
+          </Button>
+        </StickyDecisionBar>
+      )}
 
       <Modal
         open={Boolean(reviewing)}

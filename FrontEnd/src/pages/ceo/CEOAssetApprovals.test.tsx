@@ -205,6 +205,29 @@ describe("CEO asset approval queues", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows the HR review a damage report passed before the CEO", async () => {
+    getDamage.mockResolvedValue(
+      ok([
+        {
+          ...damageRow,
+          hr_decision_at: "2026-08-02T10:00:00Z",
+          hr_decision_note: "Checked with the site lead.",
+        },
+      ]),
+    );
+
+    renderPage(<CEOAssetDamageReportsPage />);
+
+    expect(await screen.findByText("LAP-004")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Expand row/i }));
+    expect(
+      await screen.findByText("Damage Report Workflow"),
+    ).toBeInTheDocument();
+    // jsdom is phone-sized, so the map starts compact; expand it for notes.
+    fireEvent.click(screen.getByRole("button", { name: "Show details" }));
+    expect(screen.getByText("Checked with the site lead.")).toBeInTheDocument();
+  });
+
   it("renders Arabic decision labels in Arabic", async () => {
     useI18nStore.getState().setLanguage("ar");
     getDamage.mockResolvedValue(ok([damageRow]));

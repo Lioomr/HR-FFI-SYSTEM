@@ -26,9 +26,10 @@ vi.mock("../../../services/api/downloads", () => ({
   triggerBlobDownload: vi.fn(),
 }));
 
+// The in-app preview modal reads the type and saves through these helpers.
 vi.mock("../../../utils/download", () => ({
-  openBlob: vi.fn(),
-  previewBlob: vi.fn().mockResolvedValue(true),
+  downloadBlob: vi.fn(),
+  previewableType: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock("../../../services/api/employeesApi", () => ({
@@ -60,8 +61,7 @@ const downloadJobOfferCv =
   jobOffersApi.downloadJobOfferCv as unknown as ReturnType<typeof vi.fn>;
 const triggerBlobDownload =
   downloads.triggerBlobDownload as unknown as ReturnType<typeof vi.fn>;
-const openBlob = downloadUtils.openBlob as unknown as ReturnType<typeof vi.fn>;
-const previewBlob = downloadUtils.previewBlob as unknown as ReturnType<
+const downloadBlob = downloadUtils.downloadBlob as unknown as ReturnType<
   typeof vi.fn
 >;
 const getEmployeeDocuments =
@@ -120,8 +120,7 @@ beforeEach(() => {
   submitJobOffer.mockReset();
   downloadJobOfferCv.mockReset();
   triggerBlobDownload.mockReset();
-  openBlob.mockReset();
-  previewBlob.mockReset().mockResolvedValue(true);
+  downloadBlob.mockReset();
   vi.spyOn(window, "open").mockReturnValue(null);
   getEmployeeDocuments
     .mockReset()
@@ -207,7 +206,7 @@ describe("JobOfferDetailPage", () => {
     expect(triggerBlobDownload).toHaveBeenCalledWith(blob, "job_offer_11.pdf");
   });
 
-  it("previews the offer PDF in the browser instead of downloading it", async () => {
+  it("previews the offer PDF in-app instead of a new tab or a download", async () => {
     getJobOffer.mockResolvedValue({ status: "success", data: draftOffer });
     const blob = new Blob(["pdf"], { type: "application/pdf" });
     downloadJobOfferPdf.mockResolvedValue(blob);
@@ -218,33 +217,34 @@ describe("JobOfferDetailPage", () => {
       await screen.findByRole("button", { name: /Preview PDF/i }),
     );
 
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Preview PDF")).toBeInTheDocument();
     await waitFor(() => expect(downloadJobOfferPdf).toHaveBeenCalledWith("11"));
-    expect(previewBlob).toHaveBeenCalled();
-    expect(previewBlob.mock.calls[0][0]).toBe(blob);
+    expect(window.open).not.toHaveBeenCalled();
     // A preview must never fall through to a file download.
     expect(triggerBlobDownload).not.toHaveBeenCalled();
   });
 
-  it("previews the CV in a new tab, without downloading, when it is renderable", async () => {
+  it("previews the CV in-app without opening a tab or downloading", async () => {
     getJobOffer.mockResolvedValue({
       status: "success",
       data: { ...draftOffer, has_cv: true },
     });
     const blob = new Blob(["%PDF-1.7"], { type: "application/octet-stream" });
     downloadJobOfferCv.mockResolvedValue(blob);
-    previewBlob.mockResolvedValue(true);
 
     render(<JobOfferDetailPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Preview CV/i }));
 
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Preview CV")).toBeInTheDocument();
     await waitFor(() => expect(downloadJobOfferCv).toHaveBeenCalledWith("11"));
-    expect(previewBlob).toHaveBeenCalled();
-    expect(previewBlob.mock.calls[0][0]).toBe(blob);
+    expect(window.open).not.toHaveBeenCalled();
     expect(triggerBlobDownload).not.toHaveBeenCalled();
   });
 
-  it("falls back to downloading the CV when it cannot be previewed", async () => {
+  it("offers a download from the preview when the CV cannot render", async () => {
     getJobOffer.mockResolvedValue({
       status: "success",
       data: { ...draftOffer, has_cv: true },
@@ -253,15 +253,38 @@ describe("JobOfferDetailPage", () => {
       type: "application/octet-stream",
     });
     downloadJobOfferCv.mockResolvedValue(blob);
-    previewBlob.mockResolvedValue(false);
 
     render(<JobOfferDetailPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Preview CV/i }));
 
-    await waitFor(() =>
-      expect(triggerBlobDownload).toHaveBeenCalledWith(blob, "job_offer_11_cv"),
-    );
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      await within(dialog).findByText(
+        "This file cannot be previewed here. Download it to view.",
+      ),
+    ).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: /Download/i }));
+    expect(downloadBlob).toHaveBeenCalledWith(blob, "job_offer_11_cv");
+  });
+
+  it("pins HR's offer actions in the sticky decision bar", async () => {
+    getJobOffer.mockResolvedValue({ status: "success", data: draftOffer });
+
+    render(<JobOfferDetailPage />);
+    await findCandidateName();
+
+    const bar = screen.getByRole("region", { name: "Decision actions" });
+    expect(
+      within(bar).getByRole("button", { name: /Submit to CEO/i }),
+    ).toBeInTheDocument();
+    expect(
+      within(bar).getByRole("button", { name: /Cancel Offer/i }),
+    ).toBeInTheDocument();
+    // Each action appears once: the header no longer carries a copy.
+    expect(
+      screen.getAllByRole("button", { name: /Submit to CEO/i }),
+    ).toHaveLength(1);
   });
 
   it("hides send and cancel once the offer is accepted", async () => {
@@ -289,6 +312,10 @@ describe("JobOfferDetailPage", () => {
     ).not.toBeInTheDocument();
     expect(screen.getByText("Offer accepted")).toBeInTheDocument();
     expect(screen.getByText("System invitation sent")).toBeInTheDocument();
+    // With nothing left for HR to do, the decision bar is gone too.
+    expect(
+      screen.queryByRole("region", { name: "Decision actions" }),
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -812,6 +839,8 @@ describe("JobOfferDetailPage workflow history and CV", () => {
 
     expect(screen.getByText("Submitted for CEO approval")).toBeInTheDocument();
     expect(screen.getAllByText("Approved").length).toBeGreaterThan(0);
+    // jsdom is phone-sized, so the map starts compact; expand it for notes.
+    fireEvent.click(screen.getByRole("button", { name: "Show details" }));
     expect(screen.getByText("Looks right.")).toBeInTheDocument();
   });
 

@@ -32,7 +32,7 @@ import {
 } from "../../services/api/httpErrors";
 import { collectApiErrorMessages } from "../../utils/formErrors";
 import { triggerBlobDownload } from "../../services/api/downloads";
-import { previewBlob } from "../../utils/download";
+import { useFilePreview } from "../ui/useFilePreview";
 import {
   RESPONSE_STATUSES,
   downloadContractRatingPdf,
@@ -104,9 +104,8 @@ export default function RaterEvaluationPage({ rater }: { rater: Rater }) {
   const [errors, setErrors] = useState<string[]>([]);
   const [form] = Form.useForm<RatingFormValues>();
   const [messageApi, messageContext] = message.useMessage();
-  const [pdfAction, setPdfAction] = useState<"preview" | "download" | null>(
-    null,
-  );
+  const [pdfDownloading, setPdfDownloading] = useState(false);
+  const { openPreview, previewModal } = useFilePreview();
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -145,28 +144,27 @@ export default function RaterEvaluationPage({ rater }: { rater: Rater }) {
     (!own || own.status === "RETURNED"),
   );
 
-  const runPdf = async (action: "preview" | "download") => {
+  const previewPdf = () => {
     if (!id) return;
-    const tab = action === "preview" ? window.open("about:blank", "_blank") : null;
-    setPdfAction(action);
+    openPreview({
+      title: t("contractRatings.previewPdf"),
+      filename: `contract_rating_${id}.pdf`,
+      load: () => downloadContractRatingPdf(id),
+    });
+  };
+
+  const downloadPdf = async () => {
+    if (!id) return;
+    setPdfDownloading(true);
     try {
-      const blob = await downloadContractRatingPdf(id);
-      if (action === "download") {
-        triggerBlobDownload(blob, `contract_rating_${id}.pdf`);
-      } else if (!(await previewBlob(blob, tab))) {
-        messageApi.error(t("contractRatings.pdfPreviewFailed"));
-      }
-    } catch {
-      tab?.close();
-      messageApi.error(
-        t(
-          action === "preview"
-            ? "contractRatings.pdfPreviewFailed"
-            : "contractRatings.pdfFailed",
-        ),
+      triggerBlobDownload(
+        await downloadContractRatingPdf(id),
+        `contract_rating_${id}.pdf`,
       );
+    } catch {
+      messageApi.error(t("contractRatings.pdfFailed"));
     } finally {
-      setPdfAction(null);
+      setPdfDownloading(false);
     }
   };
 
@@ -196,7 +194,10 @@ export default function RaterEvaluationPage({ rater }: { rater: Rater }) {
         setErrors(messages.length ? messages : [getHttpErrorMessage(error)]);
       } else if (isForbidden(error)) {
         // Surface the server's reason (e.g. no longer this employee's manager).
-        setErrors([getHttpErrorMessage(error), t("contractRatings.staleAction")]);
+        setErrors([
+          getHttpErrorMessage(error),
+          t("contractRatings.staleAction"),
+        ]);
         await load();
       } else {
         setErrors([getHttpErrorMessage(error)]);
@@ -213,7 +214,9 @@ export default function RaterEvaluationPage({ rater }: { rater: Rater }) {
     return (
       <ErrorState
         title={t("common.error")}
-        description={loadError ?? criteriaError ?? t("contractRatings.notFound")}
+        description={
+          loadError ?? criteriaError ?? t("contractRatings.notFound")
+        }
         onRetry={() => {
           void load();
           void reloadCriteria();
@@ -225,6 +228,7 @@ export default function RaterEvaluationPage({ rater }: { rater: Rater }) {
   return (
     <>
       {messageContext}
+      {previewModal}
       <PageHeader
         title={t(copy.title)}
         subtitle={t(copy.subtitle)}
@@ -235,17 +239,13 @@ export default function RaterEvaluationPage({ rater }: { rater: Rater }) {
             </Button>
             {own ? (
               <>
-                <Button
-                  icon={<EyeOutlined />}
-                  loading={pdfAction === "preview"}
-                  onClick={() => void runPdf("preview")}
-                >
+                <Button icon={<EyeOutlined />} onClick={previewPdf}>
                   {t("contractRatings.previewPdf")}
                 </Button>
                 <Button
                   icon={<FilePdfOutlined />}
-                  loading={pdfAction === "download"}
-                  onClick={() => void runPdf("download")}
+                  loading={pdfDownloading}
+                  onClick={() => void downloadPdf()}
                 >
                   {t("contractRatings.downloadPdf")}
                 </Button>
@@ -350,7 +350,10 @@ export default function RaterEvaluationPage({ rater }: { rater: Rater }) {
               showIcon
               message={t("contractRatings.lockedNotice")}
             />
-            <RatingResponseDetails response={own} criteria={criteria.criteria} />
+            <RatingResponseDetails
+              response={own}
+              criteria={criteria.criteria}
+            />
           </Space>
         </Card>
       ) : (

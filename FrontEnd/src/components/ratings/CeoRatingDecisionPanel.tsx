@@ -4,7 +4,7 @@ import {
   Button,
   DatePicker,
   Descriptions,
-  Divider,
+  Dropdown,
   Form,
   Input,
   Modal,
@@ -19,6 +19,7 @@ import {
 } from "@ant-design/icons";
 import dayjs, { type Dayjs } from "dayjs";
 
+import StickyDecisionBar from "../ceo/StickyDecisionBar";
 import { useI18n } from "../../i18n/useI18n";
 import {
   CONTRACT_SALARY_COMPONENTS,
@@ -39,7 +40,7 @@ import {
   previewSalaryIncrease,
 } from "./ratingHelpers";
 
-const { Paragraph, Text } = Typography;
+const { Paragraph } = Typography;
 
 type SimpleOutcome = "RENEW" | "TERMINATE";
 
@@ -77,6 +78,9 @@ function changedTerms(
  * Salary inputs exist only inside the Renew with Increase dialog, and only
  * that submission builds a payload carrying `ceo_approved_terms` /
  * `salary_effective_date` (the payload type forbids them elsewhere).
+ *
+ * The outcome and return controls sit in a StickyDecisionBar, so render this
+ * panel as the last element of the page.
  */
 export default function CeoRatingDecisionPanel({
   rating,
@@ -96,7 +100,9 @@ export default function CeoRatingDecisionPanel({
   const [simple, setSimple] = useState<SimpleOutcome | null>(null);
   const [comment, setComment] = useState("");
   const [increaseOpen, setIncreaseOpen] = useState(false);
-  const [returnAction, setReturnAction] = useState<CeoReturnAction | null>(null);
+  const [returnAction, setReturnAction] = useState<CeoReturnAction | null>(
+    null,
+  );
   const [returnReason, setReturnReason] = useState("");
   const [returnError, setReturnError] = useState<string | null>(null);
 
@@ -118,61 +124,6 @@ export default function CeoRatingDecisionPanel({
   return (
     <>
       {!dialogOpen ? <RatingActionErrors errors={errors} /> : null}
-      <Text strong style={{ display: "block", marginBottom: 8 }}>
-        {t("contractRatings.ceoDecisionPrompt")}
-      </Text>
-      <Space wrap size={8}>
-        <Button
-          type="primary"
-          icon={<CheckOutlined aria-hidden />}
-          disabled={loading}
-          onClick={() => openSimple("RENEW")}
-        >
-          {t("contractRatings.outcome.RENEW")}
-        </Button>
-        <Button
-          icon={<RiseOutlined aria-hidden />}
-          disabled={loading}
-          onClick={openIncrease}
-        >
-          {t("contractRatings.outcome.RENEW_WITH_CHANGES")}
-        </Button>
-        <Button
-          danger
-          icon={<CloseOutlined aria-hidden />}
-          disabled={loading}
-          onClick={() => openSimple("TERMINATE")}
-        >
-          {t("contractRatings.outcome.TERMINATE")}
-        </Button>
-      </Space>
-
-      {rated ? (
-        <>
-          <Divider style={{ margin: "16px 0 12px" }} />
-          <Text type="secondary" style={{ display: "block", marginBottom: 8 }}>
-            {t("contractRatings.returnPrompt")}
-          </Text>
-          <Space wrap size={8}>
-            {RETURN_ACTIONS.map((action) => (
-              <Button
-                key={action}
-                icon={<RollbackOutlined aria-hidden />}
-                disabled={loading}
-                onClick={() => {
-                  onClearErrors();
-                  setReturnReason("");
-                  setReturnError(null);
-                  setReturnAction(action);
-                }}
-              >
-                {t(`contractRatings.returnAction.${action}`)}
-              </Button>
-            ))}
-          </Space>
-        </>
-      ) : null}
-
       {/* Renew / Terminate: comment optional, no salary data */}
       <Modal
         open={simple !== null}
@@ -256,13 +207,18 @@ export default function CeoRatingDecisionPanel({
             setReturnError(t("contractRatings.reasonRequired"));
             return;
           }
-          const ok = await onDecide({ ceo_decision: returnAction, comment: reason });
+          const ok = await onDecide({
+            ceo_decision: returnAction,
+            comment: reason,
+          });
           if (ok) setReturnAction(null);
         }}
         destroyOnHidden
       >
         <RatingActionErrors errors={errors} />
-        <Paragraph type="secondary">{t("contractRatings.returnHint")}</Paragraph>
+        <Paragraph type="secondary">
+          {t("contractRatings.returnHint")}
+        </Paragraph>
         <Form layout="vertical">
           <Form.Item
             label={t("contractRatings.returnReason")}
@@ -282,6 +238,59 @@ export default function CeoRatingDecisionPanel({
           </Form.Item>
         </Form>
       </Modal>
+
+      <StickyDecisionBar hint={t("contractRatings.ceoDecisionPrompt")}>
+        <Space wrap size={8}>
+          <Button
+            type="primary"
+            size="large"
+            icon={<CheckOutlined aria-hidden />}
+            disabled={loading}
+            onClick={() => openSimple("RENEW")}
+          >
+            {t("contractRatings.outcome.RENEW")}
+          </Button>
+          <Button
+            size="large"
+            icon={<RiseOutlined aria-hidden />}
+            disabled={loading}
+            onClick={openIncrease}
+          >
+            {t("contractRatings.outcome.RENEW_WITH_CHANGES")}
+          </Button>
+          <Button
+            danger
+            size="large"
+            icon={<CloseOutlined aria-hidden />}
+            disabled={loading}
+            onClick={() => openSimple("TERMINATE")}
+          >
+            {t("contractRatings.outcome.TERMINATE")}
+          </Button>
+          {rated ? (
+            <Dropdown
+              disabled={loading}
+              trigger={["click"]}
+              menu={{
+                items: RETURN_ACTIONS.map((action) => ({
+                  key: action,
+                  label: t(`contractRatings.returnAction.${action}`),
+                })),
+                onClick: ({ key }) => {
+                  onClearErrors();
+                  setReturnReason("");
+                  setReturnError(null);
+                  setReturnAction(key as CeoReturnAction);
+                },
+              }}
+            >
+              <Button size="large" icon={<RollbackOutlined aria-hidden />}>
+                {t("contractRatings.returnConfirm")}
+              </Button>
+            </Dropdown>
+          ) : null}
+        </Space>
+      </StickyDecisionBar>
     </>
   );
 }
@@ -300,7 +309,10 @@ function IncreaseForm({
   contractExpiry: string | null;
   loading: boolean;
   onSubmit: (
-    payload: Extract<CeoDecisionPayload, { ceo_decision: "RENEW_WITH_CHANGES" }>,
+    payload: Extract<
+      CeoDecisionPayload,
+      { ceo_decision: "RENEW_WITH_CHANGES" }
+    >,
   ) => Promise<void>;
 }) {
   const { t } = useI18n();
@@ -340,7 +352,9 @@ function IncreaseForm({
 
   return (
     <>
-      <Paragraph type="secondary">{t("contractRatings.increaseHint")}</Paragraph>
+      <Paragraph type="secondary">
+        {t("contractRatings.increaseHint")}
+      </Paragraph>
       <Form<IncreaseValues>
         form={form}
         layout="vertical"
@@ -371,7 +385,12 @@ function IncreaseForm({
             <Input inputMode="decimal" autoComplete="off" />
           </Form.Item>
         ))}
-        <Descriptions bordered size="small" column={1} style={{ marginBottom: 16 }}>
+        <Descriptions
+          bordered
+          size="small"
+          column={1}
+          style={{ marginBottom: 16 }}
+        >
           <Descriptions.Item label={t("contractRatings.currentTotal")}>
             {current.total_salary ?? preview?.currentTotal.toFixed(2) ?? "—"}
           </Descriptions.Item>
@@ -381,7 +400,9 @@ function IncreaseForm({
           <Descriptions.Item label={t("contractRatings.increasePreview")}>
             {preview
               ? `${preview.amount.toFixed(2)}${
-                  preview.percent != null ? ` (${preview.percent.toFixed(2)}%)` : ""
+                  preview.percent != null
+                    ? ` (${preview.percent.toFixed(2)}%)`
+                    : ""
                 }`
               : "—"}
           </Descriptions.Item>
@@ -398,7 +419,9 @@ function IncreaseForm({
           name="salary_effective_date"
           label={t("contractRatings.salaryEffectiveDate")}
           extra={t("contractRatings.salaryEffectiveDateDefault")}
-          rules={[{ required: true, message: t("contractRatings.fieldRequired") }]}
+          rules={[
+            { required: true, message: t("contractRatings.fieldRequired") },
+          ]}
         >
           <DatePicker style={{ width: "100%" }} />
         </Form.Item>
@@ -406,7 +429,12 @@ function IncreaseForm({
           <Input.TextArea rows={2} />
         </Form.Item>
         {error ? (
-          <Alert type="error" showIcon style={{ marginBottom: 16 }} message={error} />
+          <Alert
+            type="error"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message={error}
+          />
         ) : null}
         <Button type="primary" htmlType="submit" loading={loading} block>
           {t("contractRatings.outcome.RENEW_WITH_CHANGES")}
