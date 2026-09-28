@@ -35,11 +35,9 @@ class LeaveManagementTests(TestCase):
         self.hr_group, _ = Group.objects.get_or_create(name="HRManager")
         self.employee_group, _ = Group.objects.get_or_create(name="Employee")
 
-        self.company = OrganizationNode.objects.create(
-            code="LEAVE_MANAGEMENT_TEST",
-            name="Leave Management Test Company",
-            node_type=OrganizationNode.NodeType.COMPANY,
-        )
+        # Non-FFI companies need their own branded PDF templates, so use the
+        # seeded FFI company for the leave PDF download.
+        self.company = OrganizationNode.objects.get(code="FFI")
 
         # Admin User
         self.admin = User.objects.create_user(email="admin@ffi.com", password="password")
